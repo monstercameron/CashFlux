@@ -78,11 +78,14 @@ func goalsWaterfallCard() ui.Node {
 		hidden.Set(true)
 	})
 
-	// Priority-ordered funding lines.
+	// Priority-ordered funding lines. Name on the left, amount right-aligned in its own
+	// column (tabular figures) so the dollar amounts line up regardless of goal-name
+	// length — no ragged trailing edge.
 	lineNodes := make([]ui.Node, 0, len(proposal.Lines))
 	for _, l := range proposal.Lines {
-		lineNodes = append(lineNodes, Li(css.Class("t-body"),
-			uistate.T("goals.waterfallLine", l.GoalName, waterfallAmount(l.AmountMinor, base))))
+		lineNodes = append(lineNodes, Li(css.Class("wf-line"),
+			Span(css.Class("wf-line-name"), l.GoalName),
+			Span(css.Class("wf-line-amt"), waterfallAmount(l.AmountMinor, base))))
 	}
 
 	var remainderNode ui.Node = Fragment()
@@ -107,7 +110,7 @@ func goalsWaterfallCard() ui.Node {
 					P(uistate.T("goals.waterfallBody", incomeStr)),
 				),
 			),
-			Ul(css.Class(tw.Mt2, tw.FlexCol, tw.Gap1), Attr("data-testid", "goals-waterfall-lines"), lineNodes),
+			Ul(css.Class("wf-lines", tw.Mt2, tw.FlexCol, tw.Gap1), Attr("data-testid", "goals-waterfall-lines"), lineNodes),
 			remainderNode,
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"),

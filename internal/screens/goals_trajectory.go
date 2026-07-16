@@ -5,13 +5,12 @@
 package screens
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/goaltrajectory"
-	"github.com/monstercameron/CashFlux/internal/money"
-	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -34,7 +33,6 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		return Fragment()
 	}
 
-	cur := g.TargetAmount.Currency
 	monthly, ok, _ := goalsvc.MonthlyAssignment(g, now)
 	hasContribution := ok && monthly.Amount > 0
 
@@ -57,38 +55,21 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		TargetDate:   g.TargetDate,
 	})
 
-	// Convert the int64 minor-unit series into the AreaChart's float64 Values, with
-	// per-point money ValueLabels for hover and sparse month captions for the axis.
-	n := len(res.Series)
-	values := make([]float64, n)
-	valueLabels := make([]string, n)
-	labels := make([]string, n)
-	labelStep := (n - 1) / 4
-	if labelStep < 1 {
-		labelStep = 1
-	}
-	for i, p := range res.Series {
-		values[i] = float64(p.BalanceMinor)
-		valueLabels[i] = fmtMoney(money.New(p.BalanceMinor, cur))
-		// Sparse captions: first, last, and every labelStep in between — the rest are
-		// empty spans so the axis row stays uncluttered on long projections.
-		if i == 0 || i == n-1 || i%labelStep == 0 {
-			labels[i] = p.Month.Format("Jan '06")
-		}
-	}
-
 	targetStr := fmtMoney(g.TargetAmount)
+	nowStr := fmtMoney(g.CurrentAmount)
 	hasTargetDate := !g.TargetDate.IsZero()
+	monthsToGoal := res.MonthsToGoal
+	reached := res.Reachable && monthsToGoal == 0
+
+	// The plain-language ETA sentence (wording unchanged) — the precise, screen-reader
+	// friendly summary beneath the rail.
 	var readout ui.Node
 	switch {
-	case res.Reachable && res.MonthsToGoal == 0:
+	case reached:
 		readout = Span(uistate.T("goaltrajectory.reachedNow", targetStr))
 	case !res.Reachable:
 		readout = Span(uistate.T("goaltrajectory.beyond", targetStr))
 	case hasTargetDate:
-		// A target DATE is already shown in the card's stat row, so foreground the
-		// slack against it rather than restating the date. Positive slack = the pace
-		// lands ahead of the target; negative = behind.
 		tMonth := g.TargetDate.Format("Jan 2006")
 		slack := monthsBetween(res.ProjectedDate, g.TargetDate)
 		switch {
@@ -104,27 +85,123 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 			readout = Span(uistate.T("goaltrajectory.behind", -slack, tMonth))
 		}
 	default:
-		// Reachable, no target date set — the projection supplies the landing month.
-		if res.MonthsToGoal == 1 {
+		if monthsToGoal == 1 {
 			readout = Span(uistate.T("goaltrajectory.onTrackOneMonth", targetStr,
 				res.ProjectedDate.Format("January 2006")))
 		} else {
 			readout = Span(uistate.T("goaltrajectory.onTrack", targetStr,
-				res.ProjectedDate.Format("January 2006"), res.MonthsToGoal))
+				res.ProjectedDate.Format("January 2006"), monthsToGoal))
 		}
 	}
 
+	// A fixed monthly contribution grows the balance LINEARLY, so a chart is just a big
+	// diagonal triangle — large and dull. Show a compact "now → horizon" pace rail
+	// instead: a fill up to the month the goal is reached, a flag at that point, and,
+	// when a deadline exists, the target-date tick — so ahead/behind reads spatially
+	// (flag left of the tick = ahead) in ~a third of the height.
+	clamp01 := func(f float64) float64 {
+		if f < 0 {
+			return 0
+		}
+		if f > 1 {
+			return 1
+		}
+		return f
+	}
+	// railPos keeps a marker inside a safe inner band so it never clips at the edges.
+	railPos := func(f float64) string { return fmt.Sprintf("%.1f%%", 4+clamp01(f)*92) }
+
+	tone, pillTone, pillText := "is-ahead", "is-ahead", ""
+	fillFrac := 1.0
+	flagFrac, targFrac := -1.0, -1.0 // <0 => marker not drawn
+	horizonMonth := res.ProjectedDate
+
+	switch {
+	case reached:
+		tone, pillTone, pillText = "is-done", "is-done", uistate.T("goaltrajectory.pillReached")
+		fillFrac = 1
+		if hasTargetDate {
+			horizonMonth = g.TargetDate
+		} else {
+			horizonMonth = now
+		}
+	case !res.Reachable:
+		// No landing point at this pace: show current progress as an amber sliver and the
+		// deadline tick, so the shortfall is visible without a fake projection.
+		tone, pillTone, pillText = "is-behind", "is-behind", uistate.T("goaltrajectory.pillOffPace")
+		fillFrac = clamp01(float64(g.CurrentAmount.Amount) / float64(g.TargetAmount.Amount))
+		if hasTargetDate {
+			targFrac, horizonMonth = 1, g.TargetDate
+		}
+	case hasTargetDate:
+		monthsToTarget := monthsBetween(now, g.TargetDate)
+		if monthsToTarget < 0 {
+			monthsToTarget = 0
+		}
+		span := monthsToGoal
+		if monthsToTarget > span {
+			span = monthsToTarget
+		}
+		if span < 1 {
+			span = 1
+		}
+		flagFrac = clamp01(float64(monthsToGoal) / float64(span))
+		targFrac = clamp01(float64(monthsToTarget) / float64(span))
+		fillFrac = flagFrac
+		slack := monthsBetween(res.ProjectedDate, g.TargetDate)
+		if monthsToGoal <= monthsToTarget {
+			tone, pillTone = "is-ahead", "is-ahead"
+			switch {
+			case slack <= 0:
+				pillText = uistate.T("goaltrajectory.pillOnPace")
+			case slack == 1:
+				pillText = uistate.T("goaltrajectory.pillAheadOne")
+			default:
+				pillText = uistate.T("goaltrajectory.pillAhead", slack)
+			}
+		} else {
+			tone, pillTone = "is-behind", "is-behind"
+			if slack == -1 {
+				pillText = uistate.T("goaltrajectory.pillBehindOne")
+			} else {
+				pillText = uistate.T("goaltrajectory.pillBehind", -slack)
+			}
+		}
+		if res.ProjectedDate.After(g.TargetDate) {
+			horizonMonth = res.ProjectedDate
+		} else {
+			horizonMonth = g.TargetDate
+		}
+	default: // reachable, no deadline — the runway simply lands on the projected month
+		tone, pillTone = "is-ahead", "is-neutral"
+		pillText = uistate.T("goaltrajectory.pillHits", res.ProjectedDate.Format("Jan 2006"))
+		fillFrac, horizonMonth = 1, res.ProjectedDate
+	}
+
+	railKids := []any{css.Class("gtj-rail")}
+	railKids = append(railKids, Div(ClassStr("gtj-rail-fill "+tone),
+		Attr("style", fmt.Sprintf("width:%.1f%%", clamp01(fillFrac)*100))))
+	if targFrac >= 0 {
+		railKids = append(railKids, Div(css.Class("gtj-rail-target"), Attr("style", "left:"+railPos(targFrac)),
+			Attr("aria-hidden", "true"), Title(uistate.T("goaltrajectory.legendTarget"))))
+	}
+	if flagFrac >= 0 {
+		railKids = append(railKids, Div(ClassStr("gtj-rail-flag "+tone), Attr("style", "left:"+railPos(flagFrac)),
+			Attr("aria-hidden", "true"), Title(uistate.T("goaltrajectory.legendHits"))))
+	}
+
+	horizonStr := horizonMonth.Format("Jan '06")
+
 	return Div(css.Class("gtj"), Attr("data-testid", "goal-trajectory-"+g.ID),
-		heading,
-		Div(css.Class("gtj-chart"),
-			uiw.AreaChart(uiw.AreaChartProps{
-				Values:      values,
-				Labels:      labels,
-				ValueLabels: valueLabels,
-				Stroke:      uistate.CurrentAccent(),
-				GradientID:  "gtj-" + g.ID,
-				Label:       uistate.T("goaltrajectory.chartLabel", g.Name),
-			}),
+		Attr("aria-label", uistate.T("goaltrajectory.railAria", nowStr, targetStr, pillText)),
+		Div(css.Class("gtj-head2"),
+			Span(css.Class("gtj-head"), uistate.T("goaltrajectory.heading")),
+			Span(ClassStr("gtj-pill "+pillTone), pillText),
+		),
+		Div(railKids...),
+		Div(css.Class("gtj-rail-ends"), Attr("aria-hidden", "true"),
+			Span(uistate.T("goaltrajectory.railNow", nowStr)),
+			Span(uistate.T("goaltrajectory.railTarget", targetStr, horizonStr)),
 		),
 		Div(css.Class("gtj-eta"), Attr("data-testid", "goal-trajectory-eta-"+g.ID), readout),
 	)

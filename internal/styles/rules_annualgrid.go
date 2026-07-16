@@ -22,6 +22,51 @@ func registerAnnualGridSurface() {
 		gap("0.75rem"),
 		flexWrap("wrap"),
 	)
+	// The toggle reads as a full-width collapsible-section header, not a stray button:
+	// a rotating disclosure caret, the title, and a right-aligned hint of what it opens.
+	rule(".budget-annualgrid-toggle",
+		prop("appearance", "none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		flex("1 1 auto"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		padding("0.5rem 0.8rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
+		color("var(--text)"),
+		textAlign("left"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".budget-annualgrid-toggle:hover",
+		borderColor("var(--text-dim)"),
+		background("color-mix(in srgb, var(--bg-elev) 65%, transparent)"),
+	)
+	rule(".budget-annualgrid-toggle:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	// The disclosure caret points right when closed, rotates down when open.
+	rule(".budget-annualgrid-caret",
+		display("inline-flex"),
+		flexShrink("0"),
+		color("var(--text-dim)"),
+		transition("transform 0.15s ease"),
+	)
+	rule(".budget-annualgrid-caret.is-open",
+		transform("rotate(90deg)"),
+	)
+	rule(".budget-annualgrid-toggle-label",
+		fontWeight("600"),
+	)
+	rule(".budget-annualgrid-toggle-hint",
+		marginLeft("auto"),
+		color("var(--text-dim)"),
+		fontSize("0.8rem"),
+		whiteSpace("nowrap"),
+	)
 	rule(".budget-annualgrid-year",
 		display("inline-flex"),
 		alignItems("center"),

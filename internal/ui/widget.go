@@ -438,14 +438,22 @@ func widget(props WidgetProps) uic.Node {
 	if !props.Preview {
 		grip = Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))) // six-dot drag grip
 	}
-	args = append(args,
-		Div(css.Class("wh"),
-			grip,
-			titleNode,
-			gear,
-		),
-		Div(ClassStr(bodyClass), props.Body),
-	)
+	// A title-less PREVIEW surface tile (no grip, no gear, no leading icon) would render
+	// an empty header — ~20px of pure dead space at the top of the tile, which is the
+	// recurring gap above surface-page content (todo/goals/budgets/accounts/notifications).
+	// Skip the empty header and let the body own a little top padding instead.
+	if props.Preview && props.Title == "" && !widgetIcon(props.ID).Valid() {
+		args = append(args, Div(ClassStr(bodyClass+" wbody-nohead"), props.Body))
+	} else {
+		args = append(args,
+			Div(css.Class("wh"),
+				grip,
+				titleNode,
+				gear,
+			),
+			Div(ClassStr(bodyClass), props.Body),
+		)
+	}
 	if props.Resizable {
 		id := props.ID
 		// Current intrinsic spans from the item sequence.

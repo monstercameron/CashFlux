@@ -61,6 +61,10 @@ func Register() {
 	registerRecapSurface()
 	registerReviewInboxSurface()
 	registerTxcFieldsSurface()
+	registerNotifySurface()
+	registerTodoPrioSurface()
+	registerDashHeroSurface()
+	registerR4Surface()
 	inject(Build())
 }
 

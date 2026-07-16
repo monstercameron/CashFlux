@@ -19,6 +19,32 @@ func registerGoalsSurface() {
 		track = "color-mix(in srgb, var(--text) 9%, transparent)"
 	)
 
+	// Payday waterfall funding lines: goal name on the left, amount right-aligned in a
+	// tabular column so the figures line up regardless of name length (no ragged edge).
+	rule(".wf-lines",
+		width("100%"),
+	)
+	rule(".wf-line",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("1rem"),
+		width("100%"),
+	)
+	rule(".wf-line-name",
+		minWidth("0"),
+		overflow("hidden"),
+		prop("text-overflow", "ellipsis"),
+		whiteSpace("nowrap"),
+		color("var(--text)"),
+	)
+	rule(".wf-line-amt",
+		flexShrink("0"),
+		prop("font-variant-numeric", "tabular-nums"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+
 	// --- Task 1: FULL-WIDTH goal cards -------------------------------------------
 	// One card per row (was a 2-col auto-fill grid). Full width lets each card breathe
 	// and lay its figures out as a scannable stat row.

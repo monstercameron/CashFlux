@@ -75,15 +75,51 @@ func notifSummaryWidget(props notifProps) ui.Node {
 		subLabel = uistate.T("notifications.unreadCount", unread)
 	}
 
-	sevChip := func(cls, label string, n int) ui.Node {
-		if n == 0 {
-			return Fragment()
+	// The severity chips ARE the filter: clicking one narrows the feed to that tier,
+	// clicking "All" (or the active chip again) resets. This unifies the severity
+	// breakdown with the control that used to live in a separate, near-empty strip.
+	filter := uistate.UseNotifyFilter()
+	f := filter.Get()
+	pick := func(sev string) func() { return func() { filter.Set(sev) } }
+	toggle := func(sev string) func() {
+		return func() {
+			if filter.Get() == sev {
+				filter.Set("")
+				return
+			}
+			filter.Set(sev)
 		}
-		return Span(ClassStr("notif-sev-chip "+cls),
-			Span(css.Class("notif-sev-dot")),
-			Span(css.Class("notif-sev-n"), fmt.Sprintf("%d", n)),
-			Span(css.Class("notif-sev-name"), label))
 	}
+
+	chips := []ui.Node{
+		ui.CreateElement(notifSevChip, notifSevChipProps{
+			Kind: "all", Label: uistate.T("notifications.filterAll"), Count: -1,
+			Active: f == "", OnPick: pick(""),
+		}),
+	}
+	if crit > 0 {
+		chips = append(chips, ui.CreateElement(notifSevChip, notifSevChipProps{
+			Kind: "sev-critical", Label: notifySeverityLabel("critical"), Count: crit,
+			Active: f == "critical", OnPick: toggle("critical"),
+		}))
+	}
+	if warn > 0 {
+		chips = append(chips, ui.CreateElement(notifSevChip, notifSevChipProps{
+			Kind: "sev-warning", Label: notifySeverityLabel("warning"), Count: warn,
+			Active: f == "warning", OnPick: toggle("warning"),
+		}))
+	}
+	if info > 0 {
+		chips = append(chips, ui.CreateElement(notifSevChip, notifSevChipProps{
+			Kind: "sev-info", Label: notifySeverityLabel("info"), Count: info,
+			Active: f == "info", OnPick: toggle("info"),
+		}))
+	}
+
+	clearAll := ui.UseEvent(Prevent(func() {
+		feedAtom.Set(nil)
+		uistate.PersistNotifyFeed(nil)
+	}))
 
 	var catchUp ui.Node = Fragment()
 	if newCount > 0 && seen.Get() > 0 {
@@ -96,6 +132,12 @@ func notifSummaryWidget(props notifProps) ui.Node {
 			Span(css.Class("notif-catchup-text"), label))
 	}
 
+	filtersArgs := []any{css.Class("notif-summary-filters"), Attr("role", "group"),
+		Attr("aria-label", uistate.T("notifications.showLabel"))}
+	for _, c := range chips {
+		filtersArgs = append(filtersArgs, c)
+	}
+
 	body := Div(css.Class("notif-summary"),
 		Div(css.Class("notif-summary-lead"),
 			Span(css.Class("notif-summary-count"), fmt.Sprintf("%d", len(visible))),
@@ -103,10 +145,11 @@ func notifSummaryWidget(props notifProps) ui.Node {
 				Span(css.Class("notif-summary-word"), uistate.T("notifications.alertsWord")),
 				Span(css.Class("notif-summary-sub"), subLabel)),
 		),
-		Div(css.Class("notif-summary-sevs"),
-			sevChip("sev-critical", notifySeverityLabel("critical"), crit),
-			sevChip("sev-warning", notifySeverityLabel("warning"), warn),
-			sevChip("sev-info", notifySeverityLabel("info"), info),
+		Div(css.Class("notif-summary-actions"),
+			Div(filtersArgs...),
+			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-clear-all"),
+				Attr("aria-label", uistate.T("notifications.clearAllAria")), OnClick(clearAll),
+				Text(uistate.T("notifications.clearAll"))),
 		),
 		catchUp,
 	)
@@ -116,41 +159,42 @@ func notifSummaryWidget(props notifProps) ui.Node {
 	})
 }
 
-// --- notif-toolbar ---------------------------------------------------------------
+// notifSevChipProps drives one interactive severity filter chip in the summary header.
+// The parent passes a plain OnPick closure; the chip owns its own event hook (never
+// registered inside the parent's chip loop — CLAUDE.md "CRITICAL gotchas").
+type notifSevChipProps struct {
+	Kind   string // "all" | "sev-critical" | "sev-warning" | "sev-info"
+	Label  string
+	Count  int // -1 => no count badge (the "All" chip)
+	Active bool
+	OnPick func()
+}
 
-// notifToolbarWidget is the shared filter strip: a severity filter on the left and the
-// destructive "Clear all" on the right. (Opening the center already marks everything
-// read, so there's no redundant "mark all read" control.)
-func notifToolbarWidget(props notifProps) ui.Node {
-	_ = props
-	feedAtom := uistate.UseNotifyFeed()
-	filter := uistate.UseNotifyFilter()
-	onFilter := ui.UseEvent(func(e ui.Event) { filter.Set(e.GetValue()) })
-	clearAll := ui.UseEvent(Prevent(func() {
-		feedAtom.Set(nil)
-		uistate.PersistNotifyFeed(nil)
+// notifSevChip renders one filter chip: a severity dot + count + label as a pressable
+// toggle. The active chip reads as selected (aria-pressed + tinted) so the header
+// doubles as the current-filter indicator.
+func notifSevChip(props notifSevChipProps) ui.Node {
+	on := ui.UseEvent(Prevent(func() {
+		if props.OnPick != nil {
+			props.OnPick()
+		}
 	}))
-	f := filter.Get()
-
-	toolbar := Div(css.Class("filter-strip"),
-		Div(css.Class("filter-strip-controls"),
-			Label(css.Class("todo-ctrl"),
-				Span(css.Class("todo-ctrl-label"), uistate.T("notifications.showLabel")),
-				Select(css.Class("todo-select"), Attr("data-testid", "notif-filter"), Attr("aria-label", uistate.T("notifications.showLabel")), OnChange(onFilter),
-					Option(Value(""), SelectedIf(f == ""), uistate.T("notifications.filterAll")),
-					Option(Value("critical"), SelectedIf(f == "critical"), notifySeverityLabel("critical")),
-					Option(Value("warning"), SelectedIf(f == "warning"), notifySeverityLabel("warning")),
-					Option(Value("info"), SelectedIf(f == "info"), notifySeverityLabel("info")),
-				),
-			),
-		),
-		Button(css.Class("strip-toggle notif-clear"), Type("button"), Attr("data-testid", "notif-clear-all"),
-			Attr("aria-label", uistate.T("notifications.clearAllAria")), OnClick(clearAll), Text(uistate.T("notifications.clearAll"))),
-	)
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "notif-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: toolbar,
-	})
+	cls := "notif-sev-chip " + props.Kind
+	if props.Active {
+		cls += " is-active"
+	}
+	args := []any{ClassStr(cls), Type("button"),
+		Attr("aria-pressed", ariaBool(props.Active)),
+		Attr("data-testid", "notif-filter-"+props.Kind),
+		OnClick(on)}
+	if props.Kind != "all" {
+		args = append(args, Span(css.Class("notif-sev-dot")))
+	}
+	if props.Count >= 0 {
+		args = append(args, Span(css.Class("notif-sev-n"), fmt.Sprintf("%d", props.Count)))
+	}
+	args = append(args, Span(css.Class("notif-sev-name"), props.Label))
+	return Button(args...)
 }
 
 // --- notif-list ------------------------------------------------------------------
@@ -217,10 +261,13 @@ func notifListWidget(props notifProps) ui.Node {
 	return notifListTile(Div(listArgs...))
 }
 
-// notifListTile wraps the list body in the standard surface-host widget shell.
+// notifListTile wraps the list body in the standard surface-host widget shell. The
+// tile carries no heading of its own — the page title already says "Notifications",
+// and the summary header above it owns the count + filter — so the feed reads as one
+// continuous triage log rather than a card-titled-inside-a-titled-page.
 func notifListTile(body ui.Node) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "notif-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: uiw.EntityListSection(uiw.EntityListSectionProps{Title: uistate.T("nav.notifications"), Body: body}),
+		Body: body,
 	})
 }

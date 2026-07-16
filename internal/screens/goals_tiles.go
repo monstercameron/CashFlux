@@ -286,16 +286,10 @@ func goalListWidget(props goalListProps) ui.Node {
 			smartEmptyStateFor(smartSettings, smart.PageGoals, in),
 		)
 	} else {
-		// Each active goal card is followed by its savings-trajectory chart, grouped in
-		// a wrapper so the projection reads as part of the card rather than a detached
-		// grid row. goalTrajectoryNode self-gates (renders nothing unless the goal is
-		// financial with a target + contribution), so it never adds an empty box; it
-		// registers no hooks, so calling it in this keyed render is loop-safe.
+		// Each active goal card now renders its savings-pace rail INSIDE its own metadata
+		// block (see goals_row.go), so the list is just the cards — no trajectory wrapper.
 		rows := MapKeyed(activeSorted, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
-			return Div(css.Class("goal-card-wrap"),
-				rowFor(g, 0, ""),
-				goalTrajectoryNode(g, now),
-			)
+			return rowFor(g, 0, "")
 		})
 		listBody = Div(css.Class("goal-list"), rows)
 	}

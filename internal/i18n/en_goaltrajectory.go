@@ -29,6 +29,24 @@ var goalTrajectoryKeys = Catalog{
 	"goaltrajectory.empty": "Add a monthly contribution to see a savings projection.",
 	// Accessible label for the chart itself. %s = goal name.
 	"goaltrajectory.chartLabel": "Projected balance over time for %s",
+
+	// Compact pace-horizon design: a status pill + the "now → horizon" rail ends.
+	"goaltrajectory.pillReached":  "Reached",
+	"goaltrajectory.pillOnPace":   "On pace",
+	"goaltrajectory.pillAhead":    "%d mo ahead",   // %d ≥ 1
+	"goaltrajectory.pillAheadOne": "1 mo ahead",
+	"goaltrajectory.pillBehind":   "%d mo behind",  // %d ≥ 1
+	"goaltrajectory.pillBehindOne": "1 mo behind",
+	"goaltrajectory.pillOffPace":  "Off pace",
+	"goaltrajectory.pillHits":     "Hits %s",       // %s = landing month, no target date
+	// Rail end captions. %s = amount; %s = a month ("Nov '26").
+	"goaltrajectory.railNow":    "Now · %s",
+	"goaltrajectory.railTarget": "%s · %s",
+	// Accessible summary of the whole rail. %s = current, %s = target, %s = readout.
+	"goaltrajectory.railAria": "Savings pace: %s of %s. %s",
+	// Marker legend beneath the rail.
+	"goaltrajectory.legendHits":   "reaches goal",
+	"goaltrajectory.legendTarget": "target date",
 }
 
 func init() {

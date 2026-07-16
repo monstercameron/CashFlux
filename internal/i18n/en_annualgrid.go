@@ -7,6 +7,9 @@ package i18n
 // so this change doesn't touch the concurrent-WIP catalog. Registered at init.
 var annualGridKeys = Catalog{
 	"budgets.annualGridTitle":     "Annual grid",
+	"budgets.annualGridHint":      "Plan vs actual, month by month",
+	"budgets.annualGridShowAria":  "Show the annual grid",
+	"budgets.annualGridHideAria":  "Hide the annual grid",
 	"budgets.annualGridBudgetCol": "Budget",
 	"budgets.annualGridTotalCol":  "Total",
 	"budgets.annualGridPrevYear":  "Previous year",

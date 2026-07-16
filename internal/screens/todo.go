@@ -111,8 +111,11 @@ func TaskRow(props taskRowProps) ui.Node {
 	done := t.Status == domain.StatusDone
 	plabel, _ := priorityMeta(t.Priority)
 
-	// The signature move: PRIORITY is encoded in the checkbox RING colour (red high /
-	// accent medium / faint low) rather than a badge — you scan urgency by the rings.
+	// PRIORITY reads as a small neutral tag on the headline (High / Low; Medium is the
+	// quiet default). It is deliberately NOT colour-coded: the checkbox ring is reserved
+	// for the done state (fills green when complete) and red is reserved for "Overdue", so
+	// encoding priority in red/green too would put contradictory signals in one row (a
+	// green "looks-done" ring beside red "Overdue" text). Kept off the red/green scale.
 	itemClass := "todo-item"
 	if done {
 		itemClass += " is-done"
@@ -230,13 +233,19 @@ func TaskRow(props taskRowProps) ui.Node {
 		rowArgs = append(rowArgs, Span(css.Class("todo-disclose-spacer"), Attr("aria-hidden", "true")))
 	}
 	rowArgs = append(rowArgs,
-		Button(ClassStr("todo-check p-"+string(t.Priority)+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
+		Button(ClassStr("todo-check"+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
 			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
 			Attr("aria-label", uistate.T("todo.toggle")+" — "+plabel), Attr("data-testid", "task-check-"+t.ID),
 			Title(uistate.T("todo.toggle")), OnClick(toggle), checkGlyph),
 		Div(css.Class("todo-main"),
 			Div(css.Class("todo-headline"),
-				Span(css.Class("todo-title"), t.Title),
+				Div(css.Class("todo-headline-lead"),
+					// A fixed-width slot so every title starts at the same x whether or not the
+					// row carries a High/Low priority tag (Medium leaves the slot empty) — no
+					// ragged left edge down the list.
+					Span(css.Class("todo-prio-slot"), todoPriorityTag(t.Priority)),
+					Span(css.Class("todo-title"), t.Title),
+				),
 				dueNode,
 			),
 			metaLine,
@@ -290,6 +299,22 @@ func linkChipClass(rt domain.RelatedType) string {
 		return "is-txn"
 	default:
 		return ""
+	}
+}
+
+// todoPriorityTag renders the neutral priority marker shown on the row headline: a
+// quiet uppercase "High"/"Low" tag (Medium — the default — gets none, keeping most
+// rows clean). It carries no colour on the red/green scale so it never contradicts the
+// overdue-red / done-green signals; the checkbox's aria-label already announces the
+// priority, so the tag is aria-hidden to avoid double-reading.
+func todoPriorityTag(p domain.TaskPriority) ui.Node {
+	switch p {
+	case domain.PriorityHigh:
+		return Span(css.Class("todo-prio is-high"), Attr("aria-hidden", "true"), uistate.T("priority.high"))
+	case domain.PriorityLow:
+		return Span(css.Class("todo-prio is-low"), Attr("aria-hidden", "true"), uistate.T("priority.low"))
+	default:
+		return Fragment()
 	}
 }
 

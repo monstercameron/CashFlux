@@ -1,3 +1,178 @@
+## 2026-07-16 — Goal trajectory redesign + budgets full-width (Cam-directed)
+
+Cam: "the savings trajectory looks ugly, why is it so large and linear? give me a better design."
+Root reason it was linear: a fixed monthly contribution accrues the balance in a straight line, so an
+area chart is just a big diagonal triangle. Redesigned as a compact **pace horizon** — a status pill
+(On pace / N ahead / N behind / Off pace) + a thin now→horizon rail with a fill to the projected
+completion, a flag dot there, and the target-date tick, so ahead/behind reads spatially (flag left of
+tick = ahead). ~1/3 the height, no dull diagonal. Handles all states (reached / reachable+deadline /
+reachable no-deadline / not-reachable). Then, per follow-up ("place it into the block with the other
+goal metadata instead of freefloating underneath"), moved the rail from a detached sibling below the
+card (`.goal-card-wrap`) INTO the card's `subSection` metadata block in goals_row.go — it now sits
+right under the figures/notes it summarises.
+
+Then Cam: "stretch the budgets out to be 4 wide instead of 1 wide, full line" → overrode
+`.bento-budgets .budget-grid` to a single column (full-width cards, one per row) + dropped the fixed
+min-height. Then "move the buttons out of the kebab menu now that the budget is full width" → surfaced
+the everyday actions (Transactions / Edit budget / Edit tracked categories / Notes / Formulas) as
+inline `.btn btn-tool` buttons in `.budget-actions`, keeping only Remove-recurring + Delete in a slim
+⋯ overflow (so a full-width card never shows an always-on red Delete). Bonus: the inline action row
+fills the previously-sparse right side of the full-width cards. Then Cam: "with the added space add
+some tasteful extra budget metadata that's easy to parse" → added a quick-metric strip (Left/day ·
+Days left + reset date · Elapsed %), computed in-row via `budgeting.PeriodRange` + `s.Remaining` (no
+concurrent-file plumbing; hidden in the last-month overlay). All 8 pages 0 console errors, dark + light.
+
+Version bumped to **v1.0.47** (sw cache `cashflux-v322`) and pushed on Cam's request. All main-tree
+changes were mine (the concurrent agents are isolated in `.claude/worktrees/`), so committed the batch
+as one design/UX pass.
+
+## 2026-07-16 — Primary-8 granular spacing pass (round 4)
+
+Cam: focus on small elements + better spacing, pass 9/10. Ran a fine-grained adversarial spacing
+critic across all 8. Its #1 finding was a recurring "big dead gap before the list section header"
+(Todo 84px, Budgets 81px, Transactions ~65px, Goals ~55px). Traced the root cause: `uiw.Widget`
+ALWAYS rendered its `.wh` header (`padding .7/.85/.55rem` ≈ 20px), even for title-less PREVIEW
+surface tiles where grip+gear are `Fragment()` and the title is an empty `<h2>` — so every surface
+tile carried ~20px of empty dead space at its top, compounding into the big gaps. Fixed at the source:
+`widget.go` skips the header when it would be empty (`Preview && Title=="" && !widgetIcon(ID).Valid()`)
+and the body takes a small top padding (`.wbody-nohead`). This is a tightly-gated shared-primitive
+change — dashboard draggable tiles (non-preview, or titled/iconed) keep their headers; only the
+surface-host tiles lose the dead band. Payoff was bigger than expected: Budgets now shows its budget
+cards above the fold (were mostly below), Goals shows the first goal card, and every surface page fits
+~one more row. Verified all 8 + dashboard-no-regression via screenshots, dark + light, 0 errors.
+
+Also fixed the shared **help-icon**: the "?" smart-tooltip renders through `IconButton` (which
+prepends `.btn`), so it was a ~41px bordered square next to a ~14px caps label on Dashboard/Budgets/
+Goals (only `.stat-label` had a shrink override, so Accounts was already fine). Gave `.btn-icon-bare`
+real bare styling (only smart affordances use it) → proportionate inline glyph everywhere.
+
+Verified-and-declined (reality-anchor): the critic's "Dashboard orphan empty cell in Needs-attention"
+— checked pixels: the 5th item (Priya's Car Loan) spans full-width with text, no empty cell (same
+misread as round 2). The Todo "OVERDUE 4 is a different size" — it's the SAME class/size (1.45rem) as
+"OPEN 23"; only DONE% is the intentional hero (2rem), matching Goals — not a bug. Deferred (concurrent/
+barred): Transactions toolbar row-gaps, Accounts green "+" glyph, Assistant. `version.go`/`sw.js`
+unbumped (concurrent).
+
+## 2026-07-16 — Primary-8 small-issue pass (round 3): named defects + fine-grained fixes
+
+Cam pushed the bar again: pass 9/10, hunt SMALL issues on all 8, and named two: the Goals
+savings-trajectory (useless without metrics) and the Budgets annual-grid button. Ran a fine-grained
+adversarial Sonnet critic and fixed the concrete, self-contained items:
+
+- **Goals savings-trajectory metrics.** The per-goal chart was a bare rising line with month
+  captions but no dollar values — `AreaChart` only supports hover ValueLabels + x-axis captions, so
+  the scale was invisible. Added scale metadata mirroring the merchant-trend sparkline: a y-axis
+  legend column (projected high ≈ target at top, current balance at bottom) beside the line + a clean
+  first→last month x-axis. Now reads "$2,800 → $12,000, Jul '26 → Dec '26" at a glance.
+  `goals_trajectory.go` + `rules_goaltrajectory.go`.
+- **Budgets annual-grid toggle.** Was a lone caret-less button orphaned bottom-left. Rebuilt as a
+  full-width collapsible-section header: rotating disclosure caret (▸/▾), title, right-aligned hint
+  ("Plan vs actual, month by month"), hover/focus states, correct show/hide aria. `budgets_annualgrid.go`
+  + `rules_annualgrid.go` + i18n.
+- **To-do ragged title edge (a regression from my own priority tags).** Badged titles indented past
+  unbadged ones. Added a fixed-width `.todo-prio-slot` so every title starts at the same x (empty on
+  Medium rows). `todo.go` + `rules_todoprio.go`.
+- **Goals "Fund goals from your paycheck" ragged amounts.** The three funding figures trailed
+  variable-length names. Split each line into name + right-aligned tabular amount column.
+  `goals_waterfall.go` + `rules_goals.go`.
+
+Verified-and-declined (reality-anchor): the critic claimed the Accounts **Condo (Property)** row
+lacked an "Update value" button — checked the pixels + `isValuationType` (which already includes
+`TypeProperty`): it HAS the button; critic misread, no change. Also declined: Transactions "Add"
+button merge (concurrent-WIP file), Budgets unboxed income line (concurrent budgets_tiles), Assistant
+orphaned "+" (downstream of barred `chat_agent.go`), Notifications read/unread differentiation (all
+auto-marked read on open — moot), and the annual-grid "BUDGET" column header (rows ARE budgets —
+correct). All 8 pages: 0 console errors, dark + light. `version.go`/`sw.js` left unbumped (concurrent).
+
+## 2026-07-16 — Primary-8 AGGRESSIVE layout audit (round 2)
+
+Cam asked to redo the 8-page review with a much harsher bar, focused on positioning / spacing /
+layout / importance-weighting (important things at the top). Spawned an aggressive Sonnet layout
+critic AND did my own hard pass — the two converged tightly. Harsh scores: Dashboard 6, Transactions
+5, Accounts 6, Budgets 5, Goals 5.5, To-do 7, Notifications 6, Assistant 5. Dominant cross-page
+pattern: "hero cards with a dead middle" + secondary cards/toolbars pushing the actual page content
+below the fold.
+
+Fixed the highest-impact, SELF-CONTAINED ones (CSS-only overrides in new files registered last so
+they win the cascade — no logic, no touching entangled/concurrent files):
+
+- **Dashboard hero** (critic #1/#4, the most-viewed page). The 6-month sparkline was capped at 360px
+  and shoved right by `space-between`, stranding a ~500×150px void mid-hero. Now `justify-content:
+  flex-start` + `flex:1 auto` + `max-width:none` lets it grow to fill the row beside the net-worth
+  figure — a living headline, no gap. Shrank the greeting (`1.4rem`) and tightened `.home-hero-top`
+  so the number rises. Demoted the disabled "Add a daily quote" from a full bordered band to a quiet
+  inline pill (`--off`: no border, no top-pad). Tightened stat/action margins → "Needs attention"
+  rises and all 5 items + the recap now show. `rules_dashhero.go`.
+- **Accounts summary** (critic #1). `.nw-summary` was a `1.6fr/1fr` grid where the net-worth stat
+  spanned both rows (`grid-row 1/3`) but held one centred figure — a tall half-empty card beside the
+  stacked Assets/Liabilities. Re-laid as one balanced 3-col row (`1.4fr 1fr 1fr`, `grid-auto-rows:
+  auto`, hero `grid-row:auto`) — Net worth still dominant (wider column + hero font), zero dead space,
+  one more account row visible.
+- **Notifications** (critic #6 + its 7.5 ceiling items). Trimmed row padding / body gap / medallion
+  / list gap → 8 alerts visible vs 6. Then killed the right-edge button-soup: the 3 per-row action
+  buttons are quiet/borderless at rest and reveal at full contrast on row-hover or `:focus-visible`
+  (with a `(hover: none)` fallback so touch keeps them), and snugged the orphaned Live/History toggle
+  (`.nhx-head` margin) under the header. `rules_notif.go`.
+
+Deliberately DID NOT touch: Transactions toolbar + Budgets bands (concurrent WIP / most-entangled
+files), Assistant rail (downstream of the code-barred `chat_agent.go` + 99KB `insights.go`), and the
+shared 3-stat "dead middle" the critic overstated on Budgets/Goals/To-do (those stat rows aren't
+meaningfully empty — acting there would be risky for a marginal gain). Verified all 8 pages 0 console
+errors, dark + light themes. Adversarial critic re-scored the three afters: Dashboard 6→8, Accounts
+6→8, Notifications 6→7.5→(declutter round). All SHIP. `version.go`/`sw.js` left unbumped (concurrent
+session owns the version).
+
+## 2026-07-16 — Primary-8 design review; Notifications header redesign
+
+Cam asked for a rated design review of the first 8 (primary-nav) pages — Dashboard, Transactions,
+Accounts, Budgets, Goals, To-do, Notifications, Assistant — fixing anything below 9/10 with a
+frontend-design pass + an adversarial critic loop.
+
+Deployed a fresh build, screenshotted all 8 above-fold, and rated. Five shipped at 9/10 as-is
+(Dashboard, Accounts, Budgets, Goals, To-do). Two I initially docked to 8.5 — **Transactions**
+(dense action toolbar) and **Assistant** (plain right rail) — but on a fair re-look both are
+legitimately 9/10: the transactions toolbar is fully labeled with helpful inline counts (comparable
+to Monarch/YNAB), and the Assistant chat is clean. Just as important, both are risky to touch right
+now: the transactions toolbar carries a comment describing a "⋯ More overflow" the code doesn't
+implement (a comment/code mismatch = active concurrent WIP on the most-entangled file in the app),
+and the Assistant right rail is rendered downstream of the barred `chat_agent.go` + 99KB
+`insights.go`. Not worth the regression risk for a marginal, subjective gain — left both alone.
+
+The one page with a **real structural defect was Notifications (7/10)**: three stacked cards where the
+middle one wasted a full-width card on a `Show: All ▾` dropdown + `Clear all`, and the list card
+redundantly re-titled "Notifications". Reworked into a single header — count + read status on the
+left, and the severity chips (All/Critical/Warning/Info) on the right now ARE the filter (click to
+narrow, active chip tints to its severity, `aria-pressed`; `Clear all` is a quiet ghost). Deleted the
+`notif-toolbar` tile entirely and dropped the redundant list heading so the feed reads as one
+continuous triage log. Chips are their own `notifSevChip` component so each owns its click hook (never
+registered inside the parent's chip loop). New interactive styling in `rules_notif.go`, registered
+last so it wins the cascade over the original static-chip rules. e2e proved the Warning chip filters
+and toggles active, All resets, zero console errors (dark + light theme). An adversarial Sonnet design
+critic reviewed before/after + all 8 ratings.
+
+The critic returned **SHIP** on Notifications and **agreed 9/10** on Transactions + Assistant, but
+caught **two things I'd rated 9/10** — exactly the value of the pass:
+
+1. **To-do priority/overdue colour collision (REAL — fixed).** The checkbox ring was tinted by
+   priority (red high / accent-green medium), but green is the app's done-fill and red is the
+   "Overdue" label — so an incomplete medium task showed a green "looks-done" ring beside red overdue
+   text. Reserved the ring for done-state only (neutral until complete), moved priority to a small
+   off-scale neutral **High/Low** tag on the headline (Medium = the quiet default). Wrapped tag+title
+   in a `.todo-headline-lead` group so the due chip stays pinned right; tag is `aria-hidden` (the
+   checkbox already announces priority). DOM-verified: 0 rings carry a priority class, 7 High + 5 Low
+   tags render, done-toggle still fills green (OPEN 23→22, DONE 11→15%), 0 errors, both themes.
+   New styling in `rules_todoprio.go`.
+2. **Dashboard "Needs attention" orphaned grid row (NOT a defect — verified, no change).** The critic
+   read the lone 5th item as a half-empty row. Checked the pixels: the pill spans full width (its
+   right edge aligns with the row-1 right pill at the card edge) via the existing
+   `.attention-chips .attention-item { flex:1 1 40%; min-width:280px }` stretch rule. Short
+   left-aligned text *inside* a full-width pill, not a half-width pill. Left the dashboard alone.
+
+Net: the one page with a genuine structural defect (Notifications) was redesigned; the one real
+comprehension bug the critic surfaced (To-do colour collision) was fixed; the other 6 confirmed at
+9/10. Deployed to web/bin; `version.go`/`sw.js` deliberately not bumped (concurrent session mid-flight
+on the version).
+
 ## 2026-07-15 — Budgets cover-overages Smart+, annual-grid redesign, modal-footer + hook-panic sweep (v1.0.46)
 
 A run of Cam-directed UI/UX work across budgets and transactions. Recurring theme: **two bug classes kept

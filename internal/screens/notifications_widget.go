@@ -22,9 +22,8 @@ import (
 // /todo and /goals. It renders a fixed set of native tiles through the shared
 // spec/render pipeline:
 //
-//   - notif-summary (Native): alert count + severity breakdown + "N new since last visit"
+//   - notif-summary (Native): alert count + interactive severity filter chips + Clear all
 //     (also marks everything read on open); hides itself when the feed is empty
-//   - notif-toolbar (Native): the severity filter strip + Clear all
 //   - notif-list    (Native): the severity-sorted feed of notifyRow cards (⋯ per item)
 func NotificationCenter() ui.Node {
 	app := appstate.Default
@@ -49,7 +48,6 @@ func NotificationCenter() ui.Node {
 
 	specs := []domain.WidgetSpec{
 		notifNativeSpec("notif-summary"),
-		notifNativeSpec("notif-toolbar"),
 		notifNativeSpec("notif-list"),
 	}
 
@@ -76,9 +74,6 @@ func init() {
 	R := widgetrender.Register
 	R("notif-summary", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(notifSummaryWidget, notifProps{App: c.App})
-	})
-	R("notif-toolbar", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(notifToolbarWidget, notifProps{App: c.App})
 	})
 	R("notif-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(notifListWidget, notifProps{App: c.App})

@@ -52,11 +52,23 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	prevYear := ui.UseEvent(Prevent(func() { year.Set(year.Get() - 1) }))
 	nextYear := ui.UseEvent(Prevent(func() { year.Set(year.Get() + 1) }))
 
+	// A proper collapsible-section toggle: a rotating disclosure caret (▸ closed / ▾
+	// open) makes the expand/collapse behaviour obvious, a hint line says what it opens,
+	// and the full-width bar reads as a section header rather than a stray button.
+	caretCls := "budget-annualgrid-caret"
+	toggleAria := uistate.T("budgets.annualGridShowAria")
+	if open.Get() {
+		caretCls += " is-open"
+		toggleAria = uistate.T("budgets.annualGridHideAria")
+	}
 	header := Div(css.Class("budget-annualgrid-head"),
-		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-toggle"),
-			Attr("aria-expanded", ariaBool(open.Get())), OnClick(toggle),
-			uiw.Icon(icon.Budgets, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			uistate.T("budgets.annualGridTitle")),
+		Button(css.Class("budget-annualgrid-toggle"), Type("button"), Attr("data-testid", "budget-annualgrid-toggle"),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", toggleAria), OnClick(toggle),
+			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
+				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+			Span(css.Class("budget-annualgrid-toggle-label"), uistate.T("budgets.annualGridTitle")),
+			Span(css.Class("budget-annualgrid-toggle-hint"), uistate.T("budgets.annualGridHint")),
+		),
 	)
 
 	if !open.Get() {

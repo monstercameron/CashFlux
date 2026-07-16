@@ -285,6 +285,9 @@ func GoalRow(props goalRowProps) ui.Node {
 				overfundNote, whatNext, linkedLine, catLine, earmarkLine,
 				goalInterestEtaLine(g, props.Accounts, now),
 			),
+			// The savings-pace rail lives INSIDE the card's metadata block (right below the
+			// figures/notes it summarises), not as a detached section underneath the card.
+			goalTrajectoryNode(g, now),
 		)
 	} else {
 		var line string
