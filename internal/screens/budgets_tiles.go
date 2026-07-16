@@ -1236,6 +1236,10 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		v.Statuses = sorted
 	}
 	smartSettings := uistate.LoadSmartSettings()
+	// A local name filter so a long budget list stays navigable. Kept as tile-local
+	// state (no atom / no data-revision bump): typing only re-renders this tile.
+	search := ui.UseState("")
+	onSearch := ui.UseEvent(func(v string) { search.Set(v) })
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
 	// category (mirrors Accounts→Transactions, C30/C50).
@@ -1249,24 +1253,6 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		default:
 			f.Categories = strings.Join(categoryIDs, ",") // multi: OR across all tracked categories
 		}
-		f = f.Normalize()
-		txFilter.Set(f)
-		uistate.PersistTxFilter(f)
-		nav.Navigate(uistate.RoutePath("/transactions"))
-	}
-
-	// BG9: drill from an annual-grid cell to that month's filtered transactions.
-	drillMonth := func(categoryIDs []string, from, to string) {
-		var f uistate.TxFilter
-		switch len(categoryIDs) {
-		case 0:
-			// no tracked category — open the ledger windowed to the month only
-		case 1:
-			f.Category = categoryIDs[0]
-		default:
-			f.Categories = strings.Join(categoryIDs, ",")
-		}
-		f.From, f.To = from, to
 		f = f.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
@@ -1289,7 +1275,44 @@ func budgetListWidget(props budgetListProps) ui.Node {
 			}
 		}
 		viewTodos := func() { nav.Navigate(uistate.RoutePath("/todo")) }
-		rows := MapKeyed(v.Statuses,
+
+		// Name filter: narrow the visible cards to those whose category name (or any tracked
+		// category name) contains the query, case-insensitive. The full v.Statuses still
+		// feeds the summary + annual-grid tiles — this only narrows what the list shows.
+		q := strings.ToLower(strings.TrimSpace(search.Get()))
+		visible := v.Statuses
+		if q != "" {
+			filtered := make([]budgeting.Status, 0, len(v.Statuses))
+			for _, s := range v.Statuses {
+				hay := strings.ToLower(v.CatName[s.Budget.CategoryID])
+				for _, id := range s.Budget.CategoryIDs {
+					hay += " " + strings.ToLower(v.CatName[id])
+				}
+				if strings.Contains(hay, q) {
+					filtered = append(filtered, s)
+				}
+			}
+			visible = filtered
+		}
+		// The search field appears only once the list is long enough to be worth scanning,
+		// so short lists stay clean. Gated on the total count, not the filtered one, so it
+		// doesn't vanish mid-search.
+		var searchBar ui.Node = Fragment()
+		if len(v.Statuses) >= 6 {
+			searchBar = Div(css.Class("budget-search"),
+				uiw.Icon(icon.Search, css.Class("budget-search-icon", tw.ShrinkO, tw.W4, tw.H4)),
+				Input(css.Class("field budget-search-input"), Type("text"),
+					Attr("data-testid", "budgets-search"),
+					Attr("aria-label", uistate.T("budgets.searchLabel")),
+					Placeholder(uistate.T("budgets.searchPlaceholder")),
+					Value(search.Get()), OnInput(onSearch)))
+		}
+		var matchNote ui.Node = Fragment()
+		if q != "" && len(visible) == 0 {
+			matchNote = Div(css.Class("budget-search-empty"), Attr("data-testid", "budgets-search-empty"),
+				Attr("role", "status"), uistate.T("budgets.searchNoMatch", strings.TrimSpace(search.Get())))
+		}
+		rows := MapKeyed(visible,
 			func(s budgeting.Status) any { return s.Budget.ID },
 			func(s budgeting.Status) ui.Node {
 				tracked := ""
@@ -1317,24 +1340,6 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				})
 			},
 		)
-		// Lay the budget cards out in a responsive grid so each is a compact 1-column
-		// block (several per row) rather than a full-width bar — budgets don't need the
-		// whole width, and a grid shows far more at a glance.
-		// BG9: the view-only annual plan-vs-actual grid, a collapsible section below the
-		// cards. It projects the same per-month evaluations the engine already computes.
-		budgetsForGrid := make([]domain.Budget, 0, len(v.Statuses))
-		for _, s := range v.Statuses {
-			budgetsForGrid = append(budgetsForGrid, s.Budget)
-		}
-		annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
-			Budgets:   budgetsForGrid,
-			Txns:      app.Transactions(),
-			Cats:      app.Categories(),
-			Rates:     currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
-			WeekStart: pr.WeekStartWeekday(),
-			Now:       time.Now(),
-			OnCell:    drillMonth,
-		})
 		// C9: a page-level cue whenever the view axis deviates from the default — the
 		// last-month overlay reshapes every card's figures, so name it above the grid
 		// (the per-card LAST MONTH tags detail it) instead of leaving numbers that
@@ -1349,7 +1354,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		// G8: contextual creation — categories with real spending this month and no
 		// budget, each one click from a pre-filled add form (category + suggested limit).
 		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{App: app, Base: v.Base, CatName: v.CatName})
-		body = Fragment(viewStatus, Div(css.Class("budget-grid"), rows), unbudgeted, annualGrid)
+		body = Fragment(searchBar, viewStatus, matchNote, Div(css.Class("budget-grid"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -1360,6 +1365,61 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: section,
+	})
+}
+
+// budgetAnnualGridWidget (BG9) is the year-at-a-glance plan-vs-actual grid as its OWN
+// full-width surface cell, below the list — a view-only collapsible section — rather than
+// squeezed into the bottom of the list tile. Self-gates to nothing when there are no
+// budgets (the list tile owns the first-run CTA).
+func budgetAnnualGridWidget(props budgetListProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := props.App
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	activeMemberID := uistate.UseActiveMember().Get()
+	vw := uistate.UsePeriod().Get()
+	pr := uistate.UsePrefs().Get()
+	showLastMonth := uistate.UseBudgetsLastMonth().Get()
+	v := computeBudgetView(app, activeMemberID, vw, pr, showLastMonth)
+	if len(v.Statuses) == 0 {
+		return Fragment() // no budgets → no grid cell (matches the summary tile's self-gate)
+	}
+
+	// Drill from an annual-grid cell to that month's filtered transactions.
+	drillMonth := func(categoryIDs []string, from, to string) {
+		var f uistate.TxFilter
+		switch len(categoryIDs) {
+		case 0:
+			// no tracked category — open the ledger windowed to the month only
+		case 1:
+			f.Category = categoryIDs[0]
+		default:
+			f.Categories = strings.Join(categoryIDs, ",")
+		}
+		f.From, f.To = from, to
+		f = f.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+
+	budgetsForGrid := make([]domain.Budget, 0, len(v.Statuses))
+	for _, s := range v.Statuses {
+		budgetsForGrid = append(budgetsForGrid, s.Budget)
+	}
+	annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
+		Budgets:   budgetsForGrid,
+		Txns:      app.Transactions(),
+		Cats:      app.Categories(),
+		Rates:     currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
+		WeekStart: pr.WeekStartWeekday(),
+		Now:       time.Now(),
+		OnCell:    drillMonth,
+	})
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "budget-annualgrid", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: annualGrid,
 	})
 }
 

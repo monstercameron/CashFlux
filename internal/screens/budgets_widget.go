@@ -67,6 +67,9 @@ func Budgets() ui.Node {
 		budgetNativeSpec("budget-summary"),
 		budgetNativeSpec("budget-toolbar"),
 		budgetNativeSpec("budget-list"),
+		// BG9: the annual plan-vs-actual grid as its own full-width cell below the list
+		// (self-gates to nothing when there are no budgets).
+		budgetNativeSpec("budget-annualgrid"),
 		// Self-gating: renders nothing unless the method is zero-based (savings/
 		// investment goals counted toward the assigned total).
 		budgetNativeSpec("budget-savings"),
@@ -119,6 +122,9 @@ func init() {
 	})
 	R("budget-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetListWidget, budgetListProps{App: c.App})
+	})
+	R("budget-annualgrid", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(budgetAnnualGridWidget, budgetListProps{App: c.App})
 	})
 	R("budget-savings", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetSavingsWidget, budgetSummaryProps{App: c.App})

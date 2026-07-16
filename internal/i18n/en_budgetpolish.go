@@ -11,6 +11,11 @@ var budgetPolishKeys = Catalog{
 	"budgets.tmplConfirm":      "Create %s from the 50/30/20 template? You can edit or delete them afterward.",
 	"budgets.tmplConfirmBtn":   "Create budgets",
 	"budgets.tmplNothingToAdd": "Every 50/30/20 category already has a budget — nothing to add.",
+
+	// Budget list name filter (shown when the list is long enough to be worth searching).
+	"budgets.searchLabel":       "Filter budgets by name",
+	"budgets.searchPlaceholder": "Filter budgets…",
+	"budgets.searchNoMatch":     "No budgets match “%s”.",
 }
 
 func init() {

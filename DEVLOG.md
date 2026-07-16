@@ -1,3 +1,22 @@
+## 2026-07-16 — Budgets: annual grid in its own cell + a name filter for long lists
+
+Two budget-list asks from Cam. (1) "The annual grid should be in its own cell, not squeezing beneath the
+list of budgets." It was appended inside `budgetListWidget`'s body (after the cards + unbudgeted strip),
+so it read as an afterthought crammed into the list tile. Extracted it into its own Native surface tile
+`budgetAnnualGridWidget` ("budget-annualgrid"), registered + added to the budgets specs after
+"budget-list"; it self-gates to nothing when there are no budgets. Gotcha: the tiles are ordered by
+per-`data-widget` CSS `order` rules in the generated `rules_gen.go` (summary1/toolbar2/list3/savings4/
+formula5) — a new tile isn't covered so it defaulted to `order:0` and jumped to the TOP of the surface.
+Fixed with override rules in `rules_r4.go` (registered after registerGenerated, wins the cascade):
+annualgrid→4, savings→5, formula→6. Verified the grid tile now sits below the list (its own `.w`, top
+3932 vs list 695) and still toggles/drills. (2) "Add a search input to filter down the budgets in case a
+user has a large list." Added a tile-local name filter (`ui.UseState`, no atom / no data-revision bump —
+typing only re-renders the list tile) shown once there are 6+ budgets; it narrows the visible cards by
+category or tracked-category name (case-insensitive substring), with a quiet "No budgets match …" note on
+an empty result. The full `v.Statuses` still feeds the summary + annual-grid tiles. e2e: grid in its own
+cell, search filters ("Gro"→1 card), no-match note, 0 console errors. `budgets_tiles.go`, `budgets_widget.go`,
+`rules_r4.go`, `en_budgetpolish.go`.
+
 ## 2026-07-16 — Spending-trend chip: drop the native tooltip (fights the hover popover)
 
 Cam: "the tool tips are fighting the trend popover as well." Same clash the follow-up chip hit once its

@@ -78,4 +78,33 @@ func registerR4Surface() {
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
 	)
+	// Budget list name filter: a compact search field with a leading magnifier, sitting
+	// above the card grid. Shown only for longer lists (gated in the tile).
+	rule(".budget-search",
+		position("relative"),
+		display("flex"),
+		alignItems("center"),
+		marginBottom("0.75rem"),
+	)
+	rule(".budget-search-icon",
+		position("absolute"),
+		left("0.6rem"),
+		color("var(--text-faint)"),
+		pointerEvents("none"),
+	)
+	rule(".budget-search-input",
+		width("100%"),
+		paddingLeft("2rem"),
+	)
+	rule(".budget-search-empty",
+		padding("0.75rem 0.25rem"),
+		color("var(--text-dim)"),
+		fontSize("0.9rem"),
+	)
+	// Place the annual-grid cell after the budget list (the generated per-tile `order`
+	// rules only cover summary/toolbar/list/savings/formula, so a new tile would default
+	// to order:0 and jump to the top). Renumber savings/formula to sit after it.
+	rule(".bento-budgets > .w[data-widget=\"budget-annualgrid\"]", order("4"))
+	rule(".bento-budgets > .w[data-widget=\"budget-savings\"]", order("5"))
+	rule(".bento-budgets > .w[data-widget=\"budget-formula\"]", order("6"))
 }
