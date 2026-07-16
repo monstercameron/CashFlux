@@ -53,6 +53,18 @@ func TestSampleDatasetIntegrity(t *testing.T) {
 	for _, m := range ds.Members {
 		members[m.ID] = true
 	}
+	transactions := idSet(len(ds.Transactions))
+	for _, tx := range ds.Transactions {
+		transactions[tx.ID] = true
+	}
+	budgets := idSet(len(ds.Budgets))
+	for _, b := range ds.Budgets {
+		budgets[b.ID] = true
+	}
+	goals := idSet(len(ds.Goals))
+	for _, g := range ds.Goals {
+		goals[g.ID] = true
+	}
 
 	owns := func(id string) bool { return id == domain.GroupOwnerID || members[id] }
 
@@ -110,9 +122,26 @@ func TestSampleDatasetIntegrity(t *testing.T) {
 		}
 	}
 
+	// Every linked task points at a real entity of its related type (a follow-up chip /
+	// drill-through with a dangling id would render nowhere).
 	for _, tk := range ds.Tasks {
-		if tk.RelatedType == domain.RelatedAccount && !accounts[tk.RelatedID] {
-			t.Errorf("task %s: unknown related account %q", tk.ID, tk.RelatedID)
+		switch tk.RelatedType {
+		case domain.RelatedAccount:
+			if !accounts[tk.RelatedID] {
+				t.Errorf("task %s: unknown related account %q", tk.ID, tk.RelatedID)
+			}
+		case domain.RelatedTransaction:
+			if !transactions[tk.RelatedID] {
+				t.Errorf("task %s: unknown related transaction %q", tk.ID, tk.RelatedID)
+			}
+		case domain.RelatedBudget:
+			if !budgets[tk.RelatedID] {
+				t.Errorf("task %s: unknown related budget %q", tk.ID, tk.RelatedID)
+			}
+		case domain.RelatedGoal:
+			if !goals[tk.RelatedID] {
+				t.Errorf("task %s: unknown related goal %q", tk.ID, tk.RelatedID)
+			}
 		}
 	}
 }

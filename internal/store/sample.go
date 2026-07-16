@@ -853,6 +853,21 @@ func SampleDataset() Dataset {
 			{ID: "task-maternity-leave", Title: "Check maternity-leave pay and budget for the gap", Status: domain.StatusOpen, Priority: domain.PriorityMedium, Due: date(2026, time.September, 1), MemberID: priya, Source: domain.SourceManual},
 			{ID: "task-done-refi", Title: "Looked into refinancing the car loan", Status: domain.StatusDone, Priority: domain.PriorityMedium, RelatedType: domain.RelatedAccount, RelatedID: carM, MemberID: marcus, Source: domain.SourceManual},
 
+			// Follow-ups pinned to a specific CHARGE (RelatedType=transaction) — the errata
+			// above become actionable: each shows on the ledger as an "open/total" chip that
+			// hover-previews these to-dos and links back here. A couple of charges carry more
+			// than one so the chip reads "1/2" / "2/2" and the popover lists several.
+			{ID: "task-fu-masterclass", Title: "Dispute the MasterClass charge — we cancelled in January", Notes: "It billed a month after we cancelled. Screenshot the cancellation email before disputing.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.July, 10), RelatedType: domain.RelatedTransaction, RelatedID: "tx-masterclass-late-2025-02", MemberID: marcus, Source: domain.SourceAI},
+			{ID: "task-fu-doordash", Title: "Get the duplicate DoorDash charge reversed", Notes: "Wingstop hit the card twice on the same day — dispute the second one.", Status: domain.StatusOpen, Priority: domain.PriorityMedium, Due: date(2026, time.July, 8), RelatedType: domain.RelatedTransaction, RelatedID: "tx-dup-doordash-2026-06-a", MemberID: marcus, Source: domain.SourceNudge},
+			{ID: "task-fu-pharmacy", Title: "Submit the prenatal-vitamin receipt to the HSA", Notes: "Riverside Pharmacy — reimbursable from the HSA. Receipt is attached to the charge.", Status: domain.StatusOpen, Priority: domain.PriorityMedium, Due: date(2026, time.July, 15), RelatedType: domain.RelatedTransaction, RelatedID: "tx-receipt-pharmacy-2026-06", MemberID: priya, Source: domain.SourceManual},
+			{ID: "task-fu-amazon", Title: "Confirm the Amazon refund landed on the card", Status: domain.StatusDone, Priority: domain.PriorityLow, RelatedType: domain.RelatedTransaction, RelatedID: "tx-return-2026-03", MemberID: priya, Source: domain.SourceManual},
+			// Two follow-ups on the Nobu dinner → the ledger chip reads "1/2".
+			{ID: "task-fu-nobu-amex", Title: "Claim the Nobu dinner for the Amex dining credit", Status: domain.StatusOpen, Priority: domain.PriorityLow, RelatedType: domain.RelatedTransaction, RelatedID: "tx-anniv-dinner-2026-02", MemberID: marcus, Source: domain.SourceManual},
+			{ID: "task-fu-nobu-album", Title: "Add the anniversary photos to the shared album", Status: domain.StatusDone, Priority: domain.PriorityLow, RelatedType: domain.RelatedTransaction, RelatedID: "tx-anniv-dinner-2026-02", MemberID: priya, Source: domain.SourceManual},
+			// Two open follow-ups on the mystery Venmo import → the chip reads "2/2".
+			{ID: "task-fu-venmo-who", Title: "Figure out who the $32 Venmo payment was to", Status: domain.StatusOpen, Priority: domain.PriorityMedium, RelatedType: domain.RelatedTransaction, RelatedID: "tx-2026-07-raw1", MemberID: marcus, Source: domain.SourceAI},
+			{ID: "task-fu-venmo-rule", Title: "Add a payee rule so future Venmo imports auto-categorize", Status: domain.StatusOpen, Priority: domain.PriorityLow, RelatedType: domain.RelatedTransaction, RelatedID: "tx-2026-07-raw1", MemberID: marcus, Source: domain.SourceAI},
+
 			// Priya keeps an exhaustive, slightly obsessive list of house to-dos — she's
 			// deep in "nesting" mode with the baby coming. A big, mixed-status batch that
 			// makes the to-do system feel lived-in (open/done, every priority, due dates).

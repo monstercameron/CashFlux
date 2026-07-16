@@ -1,3 +1,22 @@
+## 2026-07-16 — Seed: transaction follow-up links (populate the new chip out of the box)
+
+Cam: "refine the seed to add more links between the main 8 pages and more interesting links and errata."
+The seed already had rich cross-links (tasks→account/goal/budget, earmarks goal→account, receipts→docs,
+audit log) but ZERO tasks linked to a transaction — so the follow-up chip I'd just built (+ its hover
+popover) rendered on nothing in the sample data. Added eight `RelatedType=transaction` to-dos hung off
+existing errata charges, which is the highest-value new link: it lights up the Transactions↔To-do
+connection on first run. Chose charges that make the follow-up feel earned — the MasterClass charge that
+billed after cancellation, the duplicate DoorDash, the prenatal-vitamin receipt (→ HSA reimbursement),
+the Amazon refund (marked done, so a "done" follow-up shows). Two charges carry multiples to exercise the
+count chip + multi-item popover: Nobu dinner → "1/2" (one open, one done), and the mystery $32 Venmo
+import → "2/2" — and the Venmo sits on July 4 (page 1 of the default ledger), so the chip + popover are
+visible without paging. Safety: tasks don't touch balances, so the five-year balance/limit guard tests
+are untouched; every new RelatedID points at a real existing transaction id. Strengthened
+`sample_test.go` — the task integrity check only validated `RelatedAccount`; now it switches over the
+related type and validates transaction/budget/goal/account ids alike (a dangling follow-up id would
+render a chip pointing at nothing). `go test ./internal/store/... ./internal/tasklink/` green; e2e: Venmo
+"2/2" chip + popover on page 1, To-do lists the linked tasks, 0 console errors. `sample.go`, `sample_test.go`.
+
 ## 2026-07-16 — Budgets: annual grid in its own cell + a name filter for long lists
 
 Two budget-list asks from Cam. (1) "The annual grid should be in its own cell, not squeezing beneath the
