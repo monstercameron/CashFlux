@@ -129,21 +129,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	rolloverS := ui.UseState(b.Rollover)
 	rolloverCapS := ui.UseState(strconv.Itoa(b.RolloverCapPeriods)) // BG5: rollover cap, "0" = no cap
 	methodologyS := ui.UseState(b.Methodology)
-	// Tracked categories (multi-category budgets), seeded from the budget's current set.
-	trackSeed := make(map[string]bool)
-	for _, id := range b.TrackedCategoryIDs() {
-		trackSeed[id] = true
-	}
-	trackCats := ui.UseState(trackSeed)
-	toggleTrack := func(id string) {
-		m := trackCats.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[id] = !nm[id]
-		trackCats.Set(nm)
-	}
+	// C1 (one editor per concept): tracked categories are managed ONLY in the dedicated
+	// searchable modal — this closes the edit form and opens it, instead of embedding a
+	// second, slightly-different picker here.
+	openCats := ui.UseEvent(Prevent(func() {
+		done()
+		uistate.SetBudgetCategoriesEdit(props.BudgetID)
+	}))
+	// C6: the engine-facing variable name is plumbing most edits never touch — it lives
+	// behind this disclosure rather than between Name and Limit.
+	advEditOpen := ui.UseState(false)
+	toggleAdvEdit := ui.UseEvent(Prevent(func() { advEditOpen.Set(!advEditOpen.Get()) }))
 	customEditVals := ui.UseState(customMapToStrings(b.Custom))
 	topupAmt := ui.UseState("")
 	// Top-up: whether the raise is permanent (changes the base Limit) or just this period
@@ -343,6 +339,11 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			break
 		}
 		uistate.BumpDataRevision()
+		// G5: money moves are reversible — the toast offers a one-click Undo backed by
+		// the global snapshot stack.
+		if amt > 0 {
+			uistate.PostUndoable(uistate.T("budgets.coveredUndoToast", fmtMoney(money.New(amt, cur))))
+		}
 		done()
 	}))
 	cancel := ui.UseEvent(Prevent(func() { done() }))
@@ -438,23 +439,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				bb.TargetDate = time.Time{}
 				bb.LinkedGoalID = ""
 			}
-			// Tracked categories: rebuild from the picker (single → CategoryID, many →
-			// CategoryIDs). If the user cleared every box, keep the existing category
-			// rather than leave the budget tracking nothing.
-			var sel []string
-			for _, c := range app.Categories() {
-				if c.Kind == domain.KindExpense && trackCats.Get()[c.ID] {
-					sel = append(sel, c.ID)
-				}
-			}
-			if len(sel) > 0 {
-				bb.CategoryID = sel[0]
-				if len(sel) > 1 {
-					bb.CategoryIDs = sel
-				} else {
-					bb.CategoryIDs = nil
-				}
-			}
+			// Tracked categories are managed in their own editor (C1) — this save leaves
+			// CategoryID/CategoryIDs untouched.
 			if err := app.PutBudget(bb); err != nil {
 				errS.Set(err.Error())
 				return
@@ -573,7 +559,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if permanent {
 			toastKey = "budgets.toppedUpToast"
 		}
-		uistate.PostNotice(uistate.T(toastKey, fmtMoney(money.New(amt, cur))), false)
+		// G5: undoable — a mis-sized or mis-funded top-up reverts in one click.
+		uistate.PostUndoable(uistate.T(toastKey, fmtMoney(money.New(amt, cur))))
 		done()
 	}))
 
@@ -823,14 +810,20 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// --- Full edit. Single-column form (.acct-edit-form) — a clean vertical stack so
 	// the rollover explanation and Method sit full-width beneath their controls, and the
 	// action row's margin-top:auto pins Save/Cancel to the modal's bottom. ---
+	// G6: consequence previews — when the period or method is CHANGED from the saved
+	// value, say what will happen before the user commits, instead of reshaping the
+	// current period's figures silently on save.
+	periodChanged := periodS.Get() != string(b.Period)
+	methodChanged := methodologyS.Get() != b.Methodology
+	advEditLabel := uistate.T("budgets.advancedShow")
+	if advEditOpen.Get() {
+		advEditLabel = uistate.T("budgets.advancedHide")
+	}
+
 	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),
 		Div(css.Class("modal-scroll"),
 			labeledField(uistate.T("common.name"),
 				Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(ev.OnName))),
-			// Variable name: an optional explicit handle for this budget in formulas/widgets.
-			// Empty falls back to the display name; the resolved variable is previewed live.
-			labeledField(uistate.T("budgets.varNameLabel"),
-				entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName)),
 			// The core budget params pair into two columns so the form reads calmly and fits
 			// the panel instead of a long single stack: amount + cadence, then owner + method.
 			Div(css.Class("budget-edit-row"),
@@ -841,6 +834,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
 						OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
 					}))),
+			If(periodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-period-hint"),
+				Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeHint"))),
 			// BG4: one-tap fill chips (last month, 3/6-mo average, last period, to target).
 			budgetQuickFillRow(app, b, selfStatus, budgetTargetDraft{
 				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
@@ -862,10 +857,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
 						OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
 					}))),
-			// Tracked categories: pick the 1..n categories this budget counts (a bounded,
-			// scrollable list box so it can't balloon the form).
-			labeledField(uistate.T("budgets.catsField"),
-				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: trackCats.Get(), OnToggle: toggleTrack, ExcludeBudgetID: props.BudgetID})),
+			// C5: owner silently set the budget's shared/individual scope — say what it means.
+			If(len(app.Members()) > 0, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-edit-owner-hint"),
+				Style(map[string]string{"margin": "0"}), budgetOwnerScopeHint(app.Members(), ownerS.Get()))),
+			If(methodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-method-hint"),
+				Style(map[string]string{"margin": "0"}), uistate.T("budgets.methodChangeHint"))),
+			// C1: tracked categories are managed in their own searchable editor — one
+			// concept, one place. This closes the edit form and opens it.
+			Div(css.Class("budget-edit-cats-link"),
+				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.editCatsElsewhere")),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budget-edit-open-cats"),
+					OnClick(openCats), uistate.T("budgets.editCatsOpen"))),
 			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
 				Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
 				Span(uistate.T("budgets.rollover")),
@@ -886,6 +888,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
 			}),
+			// C6: the formula-engine variable name — plumbing, behind a disclosure.
+			Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-edit-advanced"),
+				Attr("aria-expanded", ariaBool(advEditOpen.Get())), OnClick(toggleAdvEdit), Text(advEditLabel)),
+			If(advEditOpen.Get(),
+				labeledField(uistate.T("budgets.varNameLabel"),
+					entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName))),
 			errLine,
 		),
 		Div(css.Class("modal-foot"),
@@ -1273,6 +1281,22 @@ func resolveCoverWeights(app *appstate.App, ctx coverformula.Context, srcs []bud
 		out[sc.ID] = w
 	}
 	return out, errStr
+}
+
+// budgetOwnerScopeHint spells out the owner picker's silent scope consequence (C5):
+// group = shared (counts everyone's spending), a member = individual (theirs only).
+func budgetOwnerScopeHint(members []domain.Member, ownerID string) string {
+	if ownerID == domain.GroupOwnerID {
+		return uistate.T("budgets.ownerSharedHint")
+	}
+	name := ""
+	for _, m := range members {
+		if m.ID == ownerID {
+			name = m.Name
+			break
+		}
+	}
+	return uistate.T("budgets.ownerIndividualHint", name)
 }
 
 // budgetCategoryName resolves a category's display name (for the top-up hint), or ""

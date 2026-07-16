@@ -8959,15 +8959,9 @@ func registerGenerated() {
 		flexShrink("0"),
 		whiteSpace("nowrap"),
 	)
-	// The destructive group (Remove recurring, Delete) is pushed to the far right and set
-	// apart from the constructive actions, so a full-width card surfaces them inline without
-	// letting a red control sit amid the everyday buttons. It wraps as a unit on a narrow card.
-	rule(".bento-budgets .budget-actions .budget-actions-danger",
-		display("flex"),
-		alignItems("center"),
-		gap("0.35rem"),
+	// The ⋯ overflow (destructive actions) anchors the far right of the action row.
+	rule(".bento-budgets .budget-actions .add-wrap",
 		marginLeft("auto"),
-		flexShrink("0"),
 	)
 	// Name-first hierarchy: the category name is the card title.
 	rule(".bento-budgets .budget .row-desc",

@@ -51,7 +51,8 @@ type budgetView struct {
 	PaceMark          map[string]budgetPaceMark        // budgetID → even-pace tick + caption (BG3, in-progress only)
 	RollCarry         map[string]string                // budgetID → previous-period carry phrase
 	RollNeg           map[string]bool                  // budgetID → carry is negative
-	RollEffCap        map[string]string                // budgetID → effective cap (rollover, when it differs)
+	RollEffCap        map[string]string                // budgetID → effective cap (when it differs from the base limit)
+	RollEffCapMath    map[string]string                // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
 	ProratedRest      map[string]string                // budgetID → even-pace amount left
 	EnvAvail          map[string]string                // budgetID → envelope balance (envelope method)
 	EnvNeg            map[string]bool                  // budgetID → envelope overdrawn
@@ -358,6 +359,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	rollCarry := map[string]string{}
 	rollNeg := map[string]bool{}
 	rollEffCap := map[string]string{}
+	rollEffCapMath := map[string]string{}
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
 	committedMap := map[string]budgetCommitted{}
@@ -378,6 +380,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 			covered[b.ID] = true
 		}
 		eval := b
+		carryDelta := int64(0) // how much rollover carry-in moved the cap off the base limit
 		if b.Rollover {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
@@ -387,9 +390,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 				// preserving the historical behavior; a carried-in DEFICIT is never clamped.
 				if eff, cerr := budgeting.CappedCarryover(prev.Remaining, b.Limit, b.RolloverCapPeriods); cerr == nil {
 					eval.Limit = eff
-					if eff.Amount != b.Limit.Amount {
-						rollEffCap[b.ID] = fmtMoney(eff)
-					}
+					carryDelta = eff.Amount - b.Limit.Amount
 				}
 				rollCarry[b.ID] = budgetRemainPhrase(prev.Remaining)
 				rollNeg[b.ID] = prev.Remaining.IsNegative()
@@ -407,8 +408,28 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		// This-month top-up: a one-time boost recorded for THIS period only raises the
 		// effective cap without touching the base Limit (so it reverts next period). It
 		// stacks on any rollover carry-in already folded into eval.Limit above.
-		if boost := eval.PeriodBoost(bs); boost != 0 {
-			eval.Limit = money.New(eval.Limit.Amount+boost, eval.Limit.Currency)
+		boostAmt := eval.PeriodBoost(bs)
+		if boostAmt != 0 {
+			eval.Limit = money.New(eval.Limit.Amount+boostAmt, eval.Limit.Currency)
+		}
+		// C3 (opacity fix): whenever the effective cap differs from the base limit —
+		// rollover carry-in, a this-month top-up, or money boosted away to fund another
+		// budget — surface the cap AND its arithmetic so the number is explainable.
+		if eval.Limit.Amount != b.Limit.Amount {
+			rollEffCap[b.ID] = fmtMoney(eval.Limit)
+			cur := eval.Limit.Currency
+			parts := []string{uistate.T("budgets.capMathLimit", fmtMoney(b.Limit))}
+			if carryDelta > 0 {
+				parts = append(parts, uistate.T("budgets.capMathCarryPlus", fmtMoney(money.New(carryDelta, cur))))
+			} else if carryDelta < 0 {
+				parts = append(parts, uistate.T("budgets.capMathCarryMinus", fmtMoney(money.New(-carryDelta, cur))))
+			}
+			if boostAmt > 0 {
+				parts = append(parts, uistate.T("budgets.capMathBoost", fmtMoney(money.New(boostAmt, cur))))
+			} else if boostAmt < 0 {
+				parts = append(parts, uistate.T("budgets.capMathBoostMinus", fmtMoney(money.New(-boostAmt, cur))))
+			}
+			rollEffCapMath[b.ID] = strings.Join(parts, " ")
 		}
 		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
@@ -611,7 +632,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 
 	return budgetView{
 		Base: base, Method: method, Statuses: statuses, CatName: catName,
-		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap,
+		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap, RollEffCapMath: rollEffCapMath,
 		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EnvDebtStart: envDebtStart, Covered: covered, EffMethod: effMethod,
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
@@ -783,7 +804,8 @@ type budgetRowProps struct {
 	PaceHot           bool                  // BG3: spending has outrun the even-pace line → caution tone
 	RolloverCarry     string                // formatted previous-period carry for per-budget rollover; "" hides the line
 	RolloverNeg       bool                  // previous-period carry is negative → danger tone
-	EffectiveCap      string                // C136: formatted effective cap for this period on rollover budgets; "" = not rollover
+	EffectiveCap      string                // C136: formatted effective cap for this period when it differs from the base limit; "" = no difference
+	EffectiveCapMath  string                // the cap's arithmetic ("$250 limit + $50 top-up"); shown beside EffectiveCap
 	ProratedRest      string                // C143: formatted even-pace amount left for the rest of the period; "" hides the line
 	EffectiveMethod   budgeting.Methodology // C118: this budget's resolved method (own override or global fallback)
 	Covered           bool                  // received one-time cover money this period

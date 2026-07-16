@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -27,13 +29,70 @@ import (
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
 
-	// A full-width budget card has the horizontal room to surface every action inline,
-	// so there is no "⋯" overflow menu: the everyday actions are labelled tool buttons,
-	// and the destructive ones (Remove recurring, Delete) sit in a right-aligned, danger-
-	// tinted group — visible but quiet, and set apart from the constructive actions.
+	// The everyday actions are labelled tool buttons surfaced inline (the full-width
+	// card has the room); the DESTRUCTIVE actions (Remove recurring, Delete) live in a
+	// "⋯" overflow menu — a standing directive: delete always stays in the kebab, never
+	// as an always-visible row button. Escape + outside-pointerdown dismiss the menu;
+	// AnchorPopover flips it near the viewport edge.
+	menuOpen := ui.UseState(false)
+	menuID := ui.UseId()
+	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
+	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
+	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
+	uiw.AnchorPopover(menuOpen.Get(), menuID)
 	prefs := uistate.UsePrefs().Get()
 
-	del := ui.UseEvent(Prevent(func() { props.OnDelete(s.Budget.ID) }))
+	// G1: inline limit editing — clicking the limit figure swaps it for a compact
+	// number input (Enter/✓ saves, ✕ cancels), so the single most frequent budget
+	// edit never costs a modal round-trip. Edits the BASE limit; the effective-cap
+	// line explains any carry/boost delta.
+	limitEditing := ui.UseState(false)
+	limitDraft := ui.UseState("")
+	limitDec := currency.Decimals(s.Budget.Limit.Currency)
+	startLimitEdit := ui.UseEvent(Prevent(func() {
+		// Seed from the STORED base limit — s.Budget here is the evaluation copy whose
+		// Limit has rollover carry / period boosts folded in (the effective cap). If the
+		// draft seeded from that, an untouched save would silently rewrite the base
+		// limit to the cap, destroying the carry distinction. Look up the real budget.
+		seed := s.Budget.Limit
+		if app := appstate.Default; app != nil {
+			for _, bb := range app.Budgets() {
+				if bb.ID == s.Budget.ID {
+					seed = bb.Limit
+					break
+				}
+			}
+		}
+		limitDraft.Set(money.FormatMinor(seed.Amount, limitDec))
+		limitEditing.Set(true)
+	}))
+	cancelLimitEdit := ui.UseEvent(Prevent(func() { limitEditing.Set(false) }))
+	onLimitDraft := ui.UseEvent(func(v string) { limitDraft.Set(v) })
+	saveLimitEdit := ui.UseEvent(Prevent(func() {
+		amt, perr := money.ParseMinor(strings.TrimSpace(limitDraft.Get()), limitDec)
+		if perr != nil || amt <= 0 {
+			limitEditing.Set(false)
+			return
+		}
+		if app := appstate.Default; app != nil {
+			for _, bb := range app.Budgets() {
+				if bb.ID != s.Budget.ID {
+					continue
+				}
+				if bb.Limit.Amount != amt {
+					bb.Limit = money.New(amt, bb.Limit.Currency)
+					if err := app.PutBudget(bb); err == nil {
+						uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
+						uistate.BumpDataRevision()
+					}
+				}
+				break
+			}
+		}
+		limitEditing.Set(false)
+	}))
+
+	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
 			// Pass EVERY tracked category so a multi-category budget drills to
@@ -87,6 +146,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 	}))
 	removeRecurring := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
 			props.OnRemoveRecurring(s.Budget.ID)
 		}
@@ -224,12 +284,17 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
 
-	// C136: show the effective cap (carry-in limit) on rollover budgets so the user
-	// can see at a glance the maximum they can spend this period, not just their
-	// base limit. Hidden when the carry is zero (cap == base limit, no note needed).
+	// C136: show the effective cap when it differs from the base limit — WITH its
+	// arithmetic (base limit ± carry-over ± top-up), so the number is explainable at a
+	// glance instead of an opaque figure. Hidden when cap == base limit (no note needed).
 	var effectiveCapLine ui.Node = Fragment()
 	if props.EffectiveCap != "" {
-		effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.effectiveCap", props.EffectiveCap))
+		if props.EffectiveCapMath != "" {
+			effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-capmath-"+s.Budget.ID),
+				uistate.T("budgets.effectiveCapMath", props.EffectiveCap, props.EffectiveCapMath))
+		} else {
+			effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.effectiveCap", props.EffectiveCap))
+		}
 	}
 
 	// C143: even-pace guidance — how much of what's left can be spent over the days
@@ -268,15 +333,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
-	// card reads top-to-bottom: title → amount → bar → status → actions. A full-width card
-	// has room to surface EVERY action inline (no ⋯ overflow): the everyday actions are
-	// labelled tool buttons, and the destructive ones (Remove recurring, Delete) are pushed
-	// into a right-aligned, danger-tinted group — visible but quiet, set apart from the rest.
-	var removeRecurringBtn ui.Node = Fragment()
-	if hasRecurring {
-		removeRecurringBtn = Button(css.Class("btn btn-tool bt-danger"), Type("button"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID),
-			Title(uistate.T("budgets.removeRecurring")), OnClick(removeRecurring),
-			uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.removeRecurring")))
+	// card reads top-to-bottom: title → amount → bar → status → actions. The everyday
+	// actions are labelled inline tool buttons; the destructive ones (Remove recurring,
+	// Delete) stay in the ⋯ overflow at the end — delete never sits exposed on the row.
+	menuHidden := ""
+	if !menuOpen.Get() {
+		menuHidden = " hidden-menu"
 	}
 	actionsRow := Div(css.Class("budget-actions"),
 		coverBtn,
@@ -291,11 +353,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.notesAction"))),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas),
 			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.formulasAction"))),
-		// Destructive group, right-aligned (margin-left:auto) and danger-tinted.
-		Div(css.Class("budget-actions-danger"),
-			removeRecurringBtn,
-			Button(css.Class("btn btn-tool bt-danger"), Type("button"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del),
-				uiw.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.deleteAction"))),
+		// Destructive actions live in the ⋯ overflow at the end (standing directive:
+		// delete always stays in the kebab).
+		Div(css.Class("add-wrap"), Attr("id", menuID),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
+				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
+			),
 		),
 	)
 
@@ -391,7 +457,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.55;pointer-events:none", props.PaceMarkerPct)))),
 			Div(css.Class("budget-card-loader-figs"),
 				// Spent carries foreground weight; the "/ limit" reads as muted context.
-				Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), barSpent), " / "+fmtMoney(limit)),
+				// The limit figure is a direct affordance: click it to edit in place (G1) —
+				// the most frequent budget change never costs a modal round-trip.
+				IfElse(limitEditing.Get(),
+					Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(saveLimitEdit),
+						Span(css.Class("budget-spent"), barSpent), Span(" / "),
+						// When carry/boost make the cap differ from the base limit, the button
+						// face shows the CAP but this input edits the BASE — label it so the
+						// number swap on open doesn't read as a glitch (the capmath line below
+						// carries the arithmetic).
+						If(props.EffectiveCap != "", Span(css.Class("budget-limit-basetag"), Attr("data-testid", "budget-limit-basetag-"+s.Budget.ID), uistate.T("budgets.baseLimitTag"))),
+						Input(css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")),
+							Value(limitDraft.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)),
+						Button(css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
+							Attr("aria-label", uistate.T("action.save")), Title(uistate.T("action.save")), uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))),
+						Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+s.Budget.ID),
+							Attr("aria-label", uistate.T("action.cancel")), Title(uistate.T("action.cancel")), OnClick(cancelLimitEdit), uiw.Icon(icon.Close, css.Class(tw.W35, tw.H35))),
+					),
+					Span(css.Class("budget-amount"),
+						Span(css.Class("budget-spent"), barSpent), Span(" / "),
+						Button(css.Class("budget-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
+							Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")),
+							OnClick(startLimitEdit), fmtMoney(limit)),
+					)),
 				// Percent-used, capped for display (e.g. "112%" when over).
 				Span(css.Class("budget-pct"), strconv.Itoa(barPct)+"%"),
 			),

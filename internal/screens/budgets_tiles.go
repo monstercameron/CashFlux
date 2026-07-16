@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -1084,6 +1085,54 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 
 	// Open the add-budget modal (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
+	// G2: bulk adjust — raise/lower every visible budget's limit by a percentage, with
+	// a count preview before applying and an undoable toast after. The one escape from
+	// editing ten budgets one modal at a time.
+	adjustAll := ui.UseEvent(Prevent(func() {
+		uistate.PromptModal(uistate.T("budgets.adjustAllPrompt"), "", func(v string) {
+			v = strings.TrimSuffix(strings.TrimSpace(v), "%")
+			if v == "" {
+				return
+			}
+			pct, perr := strconv.ParseFloat(v, 64)
+			if perr != nil || pct == 0 || pct < -90 || pct > 500 {
+				uistate.PostNotice(uistate.T("budgets.adjustAllBadPct"), true)
+				return
+			}
+			var targets []domain.Budget
+			for _, b := range app.Budgets() {
+				if ownerVisibleTo(b.OwnerID, activeMemberID) && b.Limit.Amount > 0 {
+					targets = append(targets, b)
+				}
+			}
+			if len(targets) == 0 {
+				return
+			}
+			verb := uistate.T("budgets.adjustAllRaise")
+			if pct < 0 {
+				verb = uistate.T("budgets.adjustAllLower")
+			}
+			absPct := strconv.FormatFloat(math.Abs(pct), 'f', -1, 64)
+			uistate.ConfirmModalLabeled(uistate.T("budgets.adjustAllConfirm", verb, plural(len(targets), "budget"), absPct), verb, false, func(ok bool) {
+				if !ok {
+					return
+				}
+				n := 0
+				for _, b := range targets {
+					nl := b.Limit.Amount + int64(math.Round(float64(b.Limit.Amount)*pct/100))
+					if nl < 1 {
+						nl = 1 // a lower can shrink a budget, never delete it
+					}
+					b.Limit = money.New(nl, b.Limit.Currency)
+					if err := app.PutBudget(b); err == nil {
+						n++
+					}
+				}
+				uistate.BumpDataRevision()
+				uistate.PostUndoable(uistate.T("budgets.adjustAllApplied", plural(n, "budget"), absPct))
+			})
+		})
+	}))
 	// Open the "Auto budget" review modal (suggests budgets from spending history).
 	autoBudgetAtom := uistate.UseBudgetAutoOpen()
 	openAutoBudget := ui.UseEvent(Prevent(func() { autoBudgetAtom.Set(true) }))
@@ -1142,6 +1191,10 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
 			// XC6: open the leftover-sweep config (own component so its click hook is stable).
 			sweepConfigToolbarButton(),
+			// G2: percent-based bulk limit adjustment across every visible budget.
+			If(hasBudgets, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "budgets-adjust-all"), Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
+				uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
 			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -1253,7 +1306,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					Status: s, Category: v.CatName[s.Budget.CategoryID], TrackedCats: tracked, Members: members, BudgetDefs: budgetDefs,
 					Envelope: v.EnvAvail[s.Budget.ID], EnvelopeNeg: v.EnvNeg[s.Budget.ID], EnvelopeDebtStart: v.EnvDebtStart[s.Budget.ID], PaceOver: v.PaceOver[s.Budget.ID],
 					PaceMarkerPct: v.PaceMark[s.Budget.ID].MarkerPct, PaceCaption: v.PaceMark[s.Budget.ID].Caption, PaceHot: v.PaceMark[s.Budget.ID].Hot,
-					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID],
+					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID], EffectiveCapMath: v.RollEffCapMath[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
 					Covered:        v.Covered[s.Budget.ID],
 					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
@@ -1282,7 +1335,21 @@ func budgetListWidget(props budgetListProps) ui.Node {
 			Now:       time.Now(),
 			OnCell:    drillMonth,
 		})
-		body = Fragment(Div(css.Class("budget-grid"), rows), annualGrid)
+		// C9: a page-level cue whenever the view axis deviates from the default — the
+		// last-month overlay reshapes every card's figures, so name it above the grid
+		// (the per-card LAST MONTH tags detail it) instead of leaving numbers that
+		// silently disagree with other surfaces.
+		var viewStatus ui.Node = Fragment()
+		if showLastMonth {
+			viewStatus = Div(css.Class("budget-viewstatus"), Attr("data-testid", "budgets-viewstatus"),
+				Attr("role", "status"),
+				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(uistate.T("budgets.viewingStatus", uistate.T("budgets.viewingLastMonth"))))
+		}
+		// G8: contextual creation — categories with real spending this month and no
+		// budget, each one click from a pre-filled add form (category + suggested limit).
+		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{App: app, Base: v.Base, CatName: v.CatName})
+		body = Fragment(viewStatus, Div(css.Class("budget-grid"), rows), unbudgeted, annualGrid)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

@@ -348,10 +348,12 @@ test.describe("budget category picker", () => {
     expect(await app.locator('[data-testid^="budgetcat-pick-"]').count()).toBeLessThan(before);
     await app.getByTestId("budgetcats-cancel").click();
 
-    // The add-budget form embeds the same picker.
-    await app.getByTestId("budgets-add").click();
+    // The add-budget form embeds the same picker — behind the "More options"
+    // disclosure (the essentials-first layout keeps the default form two fields).
+    await app.getByTestId("budgets-add").first().click();
     await expect(app.getByTestId("budget-add-form")).toBeVisible();
     await app.waitForTimeout(650);
+    await app.getByTestId("budget-add-advanced").click();
     await expect(app.getByTestId("budgetcats-search")).toBeVisible();
   });
 });

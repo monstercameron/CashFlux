@@ -25,6 +25,7 @@ func AddHost() uic.Node {
 	taskParent := uistate.UseTaskAddParent() // hook — must run every render, before the early return
 	taskDue := uistate.UseTaskAddDue()       // hook — likewise (calendar day-click preset)
 	taskSeed := uistate.UseTaskAddSeed()     // hook — the cross-surface pre-fill (e.g. txn → follow-up task)
+	budgetSeed := uistate.UseBudgetAddSeed() // hook — pre-fill for "Budget this" / copy-an-existing-budget
 	uistate.UseTodoFilterLink()              // hook — capture the to-do link filter so SetTodoFilterLink works app-wide (txn "N follow-ups" chip → filtered /todo)
 
 	if target.Get() == "" {
@@ -38,6 +39,7 @@ func AddHost() uic.Node {
 		uistate.SetTaskAddParent("")
 		uistate.SetTaskAddDue("")
 		uistate.SetTaskAddSeed(uistate.TaskAddSeed{})
+		uistate.SetBudgetAddSeed(uistate.BudgetAddSeed{})
 	}
 
 	switch target.Get() {
@@ -73,7 +75,7 @@ func AddHost() uic.Node {
 			NoFooter:  true,
 			FlushBody: true,
 			OnClose:   close,
-			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close}),
+			Back:      uic.CreateElement(screens.BudgetAddForm, screens.BudgetAddFormProps{OnDone: close, Seed: budgetSeed.Get()}),
 		})
 	case "task":
 		// NoFooter: the form is a two-zone "compose slip" that bleeds to the panel edges

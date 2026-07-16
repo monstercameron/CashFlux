@@ -1,3 +1,19 @@
+## 2026-07-16 — Fix: follow-up popover z-index/clipping after the pill move
+
+Cam: "you broke the z-index of the popover." The pill-move wrapped the description cell content in a
+`.row-desc-inner` flex div — and that quietly broke a generated lift rule I hadn't accounted for:
+`td:has(> .add-wrap > .add-menu:not(.hidden-menu):not(.hidden))` (rules_gen.go:10590) uses a *direct-
+child* chain, and lifts the open cell to `z-index:51` + `overflow:visible` so a row-menu popover wins
+the hit-test and isn't clipped by the cell. With `.add-wrap` now a grandchild of the td, that selector
+stopped matching, so the cell kept `overflow:hidden` + default stacking and the popover was clipped and
+painted behind the rows beneath it. A DOM probe nailed it: popover positioned fine (top 486, z 41,
+visible) but `elementFromPoint` at its centre returned a sibling `TD` (`popContainsTop:false`). Fix:
+add a rule for the new nesting — `.txn-table td.row-desc-cell:has(.add-wrap > .add-menu…)` →
+`position:relative; z-index:51; overflow:visible`. Safe to un-clip the cell because I'd moved the
+description truncation onto `.row-desc-text`, so the td no longer needs `overflow:hidden` to ellipsize.
+Re-probe: `overflow:visible`, `z-index:51`, `elementFromPoint` → `.txnfu-item-title`,
+`popContainsTop:true`; screenshot shows the popover cleanly over the rows below. `rules_txcfields.go`.
+
 ## 2026-07-16 — Follow-up pill moved to the right of the description
 
 Cam: "move the todos pill to the right of the description." It had been LEADING (before the desc text)
@@ -12,6 +28,44 @@ column alignment is untouched; the flex lives on the inner div. Re-probe: `chipV
 `chipRight` 687 < `tdRight` 704 — the pill sits right after the truncated "Car paym…" and the popover
 still opens on hover (verified, 0 console errors). Files: `transactions_widget.go`, `.row-desc-*` in
 `rules_txcfields.go`.
+
+## 2026-07-16 — Budgets UX overhaul: all 18 audit items corrected (v1.0.52)
+
+Cam ran a click-by-click workflow analysis on budget create/update, had me list the gaps (8) and
+confounding issues (10), then set a `/goal`: correct all 18 and pass an adversarial review. Landed as
+one coordinated pass across `budgetaddform.go` (rewritten: essentials-first + Advanced disclosure +
+category-collision resolution + in-modal 50/30/20 review + copy-existing), `budgets_edit_form.go`
+(consequence hints, owner-scope hints, category-editor dedupe → link-out, varname disclosure, undoable
+cover/top-up), `budgets_row.go` (inline limit edit in the bar, cap-math line), `budgets.go` (the
+effective-cap arithmetic viewmodel — now also covers boost-only and boost-away cases, which previously
+showed NO cap note at all), `budgets_tiles.go` (Adjust-all, view-status banner, unbudgeted strip),
+new `budgets_unbudgeted.go` + `uistate/budgetaddseed.go` (the "Budget this" seed seam, mirroring
+TaskAddSeed).
+
+Design decisions worth remembering: (1) "reached for existing category name → reuse it" kills three
+birds — the silent-duplicate-category trap, the dead limit-suggestion on the default path, and the
+duplicate-budget-guard bypass; the form says which fate applies live. (2) Undo rides the existing
+global snapshot stack — `PostUndoable` instead of `PostNotice` was the entire cost of G5. (3) The
+inline limit button shows the EFFECTIVE cap while the input edits the BASE limit; the cap-math line
+directly beneath explains the delta — watched for in review, judged acceptable. (4) Mid-pass, Cam:
+"delete should always stay in the kebab menu" — reversing yesterday's full inline move for the
+destructive pair only; now a standing rule (memory: cashflux-delete-stays-in-kebab). Everyday actions
+stay inline; ⋯ holds Delete + Remove recurring.
+
+Verified: all 18 items live-driven in one Playwright pass (0 console errors), budgets.spec updated to
+the kebab contract + 8/9 affected regression tests green (the 9th is the pre-existing
+`.budgets-toolbar-actions` drift from concurrent work).
+
+**Adversarial review: ITERATE → fix → SHIP.** The Sonnet critic's first pass found a REAL critical bug
+I'd shipped in G1: `Status.Budget` is the evaluation copy whose `.Limit` has carry/boost folded in, so
+the inline editor seeded with the *effective cap* and an untouched save silently rewrote the base
+limit to it (live-reproduced: groceries $450 base → $205.20, the carried-debt distinction destroyed;
+only Undo could recover). Fixed by seeding the draft from the STORED budget's limit (same lookup the
+save path uses — seed and compare now share one source of truth by construction) plus a small "base
+limit" tag while editing whenever cap ≠ base, so the $205.20→$450.00 swap on open reads as labeled
+intent. Critic re-verified the repro, a real change + Undo, and the no-carry case → **SHIP**. Lesson
+logged: any edit affordance fed from `budgeting.Status.Budget` is reading post-evaluation numbers, not
+stored ones.
 
 ## 2026-07-16 — Budget rows: all actions inline, kebab removed (v1.0.51)
 

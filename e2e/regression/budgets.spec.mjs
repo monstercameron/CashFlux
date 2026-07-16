@@ -12,18 +12,19 @@ async function firstBudgetId(app) {
   return (await edit.getAttribute("data-testid")).replace("edit-budget-btn-", "");
 }
 
-test.describe("budgets: inline row actions (no kebab)", () => {
-  test("every action is surfaced inline in the footer — there is no ⋯ overflow menu", async ({ app }) => {
+test.describe("budgets: inline row actions + destructive kebab", () => {
+  test("everyday actions are inline; Delete lives ONLY in the ⋯ menu", async ({ app }) => {
     await nav(app, "/budgets");
     const bid = await firstBudgetId(app);
-    // The everyday + destructive actions are all direct children of the footer.
+    // The everyday actions are direct, visible footer buttons.
     for (const t of ["budget-view-txns", "edit-budget-btn", "edit-budget-cats-btn", "budget-notes-btn", "budget-formulas-btn"]) {
       await expect(app.locator(`.budget-actions [data-testid="${t}-${bid}"]`)).toBeVisible();
     }
-    // Delete is inline (in the right-aligned danger group), not hidden in a menu.
-    await expect(app.locator(`.budget-actions .budget-actions-danger [data-testid="delete-budget-btn-${bid}"]`)).toBeVisible();
-    // The ⋯ kebab is gone entirely.
-    await expect(app.locator('[data-testid^="budget-kebab-"]')).toHaveCount(0);
+    // Delete is NOT an always-visible row button (standing directive: delete stays in
+    // the kebab) — it only appears after opening the ⋯ menu.
+    await expect(app.locator(`[data-testid="delete-budget-btn-${bid}"]`)).not.toBeVisible();
+    await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
+    await expect(app.locator(`.add-menu [data-testid="delete-budget-btn-${bid}"]`)).toBeVisible();
   });
 });
 

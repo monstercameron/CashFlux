@@ -404,6 +404,59 @@ func registerBudgetsSurface() {
 		color("var(--text)"),
 	)
 	rule(".budget-add-tmpl .btn", flexShrink("0"))
+	// The banner's start-from actions: the 50/30/20 button + the copy-existing select
+	// stack as one right-aligned group.
+	rule(".budget-add-tmpl-actions",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("stretch"),
+		gap("0.4rem"),
+		flexShrink("0"),
+	)
+	// Category-fate + owner-scope hints: quiet one-liners directly under their fields.
+	rule(".budget-cat-fate, .budget-owner-hint",
+		display("block"),
+		fontSize("0.78rem"),
+		lineHeight("1.35"),
+		marginTop("-0.35rem"),
+	)
+	// 50/30/20 review list: one checkbox row per proposal, amount right-aligned.
+	rule(".budget-tmpl-rows",
+		display("flex"),
+		flexDirection("column"),
+		margin("0.35rem 0"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		overflow("hidden"),
+	)
+	rule(".budget-tmpl-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		padding("0.55rem 0.8rem"),
+		cursor("pointer"),
+		borderBottom("1px solid color-mix(in srgb, var(--border) 55%, transparent)"),
+	)
+	rule(".budget-tmpl-row:last-child", borderBottom("0"))
+	rule(".budget-tmpl-row:hover", background("var(--hover)"))
+	rule(".budget-tmpl-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-tmpl-amt",
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("600"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-tmpl-total",
+		margin("0.25rem 0 0"),
+		textAlign("right"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
 	rule(".budget-add-or",
 		display("flex"),
 		alignItems("center"),
@@ -419,6 +472,144 @@ func registerBudgetsSurface() {
 		flex("1"),
 		height("1px"),
 		background("var(--border)"),
+	)
+
+	// G1: the inline limit editor inside the card's loader bar. The limit figure is a
+	// quiet button (dotted underline on hover signals "editable in place"); editing
+	// swaps it for a compact number input + save/cancel.
+	rule(".budget-limit-btn",
+		prop("appearance", "none"),
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		color("inherit"),
+		cursor("pointer"),
+		borderRadius("4px"),
+		textDecoration("underline"),
+		prop("text-decoration-style", "dotted"),
+		prop("text-decoration-color", "transparent"),
+		prop("text-underline-offset", "3px"),
+		transition("text-decoration-color 0.12s ease"),
+	)
+	rule(".budget-limit-btn:hover",
+		prop("text-decoration-color", "var(--text-dim)"),
+	)
+	rule(".budget-limit-btn:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	rule(".budget-limit-editform",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+	)
+	rule(".budget-limit-editform .budget-limit-input",
+		width("110px"),
+		minHeight("28px"),
+		padding("0.15rem 0.45rem"),
+		fontSize("0.9rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".budget-limit-editform .btn",
+		minHeight("28px"),
+		padding("0.15rem 0.4rem"),
+	)
+	// The "base limit" tag: shown while editing when carry/boost make the cap differ
+	// from the base, so the button→input number swap reads as intentional.
+	rule(".budget-limit-basetag",
+		fontSize("0.62rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
+	)
+
+	// C1: the edit form's link-out to the dedicated tracked-categories editor.
+	rule(".budget-edit-cats-link",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+		padding("0.5rem 0.7rem"),
+		border("1px dashed var(--border)"),
+		borderRadius("8px"),
+	)
+
+	// C9: page-level view-status cue — named whenever the last-month overlay reshapes
+	// every card's figures, so the deviation from the default view is unmistakable.
+	rule(".budget-viewstatus",
+		display("flex"),
+		alignItems("center"),
+		gap("0.45rem"),
+		padding("0.45rem 0.75rem"),
+		marginBottom("0.6rem"),
+		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		borderRadius("8px"),
+		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
+		color("var(--text)"),
+		fontSize("0.82rem"),
+	)
+
+	// G8: the "Unbudgeted spending" strip — an invitation to budget the categories
+	// that are actually taking money this month. Quiet dashed frame so it reads as an
+	// offer, not another data card.
+	rule(".budget-unbudgeted",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+		margin("0.85rem 0 0.35rem"),
+		padding("0.7rem 0.85rem"),
+		border("1px dashed var(--border)"),
+		borderRadius("10px"),
+	)
+	rule(".budget-unbudgeted-head",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+	)
+	rule(".budget-unbudgeted-title",
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".budget-unbudgeted-chips",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.45rem"),
+	)
+	rule(".budget-unbudgeted-chip",
+		prop("appearance", "none"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.55rem"),
+		padding("0.4rem 0.7rem"),
+		border("1px solid var(--border)"),
+		borderRadius("999px"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		font("inherit"),
+		fontSize("0.85rem"),
+		cursor("pointer"),
+		transition("border-color 0.12s ease, background 0.12s ease"),
+	)
+	rule(".budget-unbudgeted-chip:hover",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 10%, var(--bg-elev))"),
+	)
+	rule(".budget-unbudgeted-chip:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	rule(".budget-unbudgeted-cta",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		fontWeight("600"),
+		color("var(--accent)"),
+		whiteSpace("nowrap"),
 	)
 
 	// Budget-card notes line reuses the /accounts .acct-notes treatment; a touch of
