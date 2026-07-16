@@ -32,6 +32,13 @@ import (
 // re-proposing.
 const waterfallStampKVKey = "gl1.waterfall.lastHandled"
 
+// waterfallWindowDays bounds how far back "income that just landed" reaches when
+// there is no handled stamp yet (a fresh install or the seeded sample). Without
+// it, the since-stamp detector sums EVERY income transaction in the ledger — years
+// of paychecks — and proposes funding goals from an absurd, clearly-broken pool
+// (e.g. "$385,373 just landed"). One month captures the most recent real paycheck.
+const waterfallWindowDays = 35
+
 // WaterfallProposal is the preview a caller renders: the priority-ordered funding
 // lines, the income that triggered it, and the remainder left after every quota.
 type WaterfallProposal struct {
@@ -106,7 +113,15 @@ func (a *App) incomeSinceStamp(stamp time.Time, base string, rates currency.Rate
 func (a *App) WaterfallPlan(now time.Time) WaterfallProposal {
 	base := a.baseCurrency()
 	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
-	income := a.incomeSinceStamp(a.waterfallLastHandled(), base, rates)
+	// Clamp the detection floor to the recent past so a never-handled waterfall (fresh
+	// install / sample data) proposes funding from the LAST paycheck, not the sum of
+	// all historical income. Once the user handles one, the stamp advances past this
+	// window and the since-stamp semantics take over unchanged.
+	floor := a.waterfallLastHandled()
+	if windowStart := now.AddDate(0, 0, -waterfallWindowDays); floor.Before(windowStart) {
+		floor = windowStart
+	}
+	income := a.incomeSinceStamp(floor, base, rates)
 
 	proposal := WaterfallProposal{IncomeMinor: income, Currency: base, RemainderMinor: income}
 	if income <= 0 {
