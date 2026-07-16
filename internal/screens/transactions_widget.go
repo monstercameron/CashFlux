@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/state"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
@@ -293,6 +294,16 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	previewAtom := uistate.UseTxnPreview()
 	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
 
+	// A row's "N follow-ups" chip links to the To-do list pre-filtered to transaction-
+	// linked tasks (the closest the shared link filter gets to "this charge's tasks").
+	nav := router.UseNavigate()
+	// Plain closure (the row component owns the click hook — never register On* here in
+	// the row loop). Filters the To-do list to transaction-linked tasks, then navigates.
+	openFollowUps := func() {
+		uistate.SetTodoFilterLink(uistate.TodoLinkTransaction)
+		nav.Navigate(uistate.RoutePath("/todo"))
+	}
+
 	// Register mode (TX12): when the ledger is scoped to exactly one account and the
 	// toggle is on, compute each transaction's running balance from the account's FULL
 	// chronological history (ledger.RegisterBalances), so a paginated/filtered slice
@@ -518,6 +529,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// route-settle so the ledger paints as fast as before, then the chips fade in.
 	trendReady := useAfterSettle("txn-trend")
 
+	// Follow-up tasks linked to each transaction (open + total), so a row can surface a
+	// "N follow-ups" chip. Built once from the task list, read O(1) per row.
+	followUps := followUpCountsByTxn(props.App.Tasks())
+
 	// rowPropsAt builds one row's display props from the frame on demand. Factored out
 	// so the paginated body and the virtualized window build rows identically — and so
 	// the window only materializes the slice it actually shows.
@@ -615,6 +630,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			ShowBalance:         showBalance,
 			Balance:             balanceStr(runBal, rid),
 			BalTone:             balanceTone(runBal, rid),
+			FollowUpOpen:        followUps[rid].Open,
+			FollowUpTotal:       followUps[rid].Total,
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -634,6 +651,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnUnpair = unpairRow
 		r.OnUngroup = ungroupRow
 		r.OnUnlinkBill = unlinkBillRow
+		r.OnOpenFollowUps = openFollowUps
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -768,6 +786,11 @@ type txnFrameRowProps struct {
 	ExcludedFromReports bool
 	HasNote             bool
 	OnToggleExclude     func(txnID string)
+	// Follow-up tasks linked to this transaction: a row chip shows "open/total" and
+	// links to the To-do list filtered to transaction-linked tasks. Total 0 = no chip.
+	FollowUpOpen     int
+	FollowUpTotal    int
+	OnOpenFollowUps  func()
 	// Split-into-categories (the ⋯ row menu): HasSplits shows a ✓ when the
 	// transaction already carries a category breakdown; OnOpenSplit opens the split
 	// flip modal. IsTransfer hides the entry — a transfer leg has no category to
@@ -833,6 +856,15 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			props.OnViewReceipt(props.Attachment)
 		}
 	})
+	// Follow-up chip click: don't open the edit modal (the row's OnClick) — jump to the
+	// filtered To-do list instead. Hook declared unconditionally; the chip renders only
+	// when there are follow-ups.
+	openFollowUps := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		if props.OnOpenFollowUps != nil {
+			props.OnOpenFollowUps()
+		}
+	})
 
 	rowClass := "row"
 	if props.Selected {
@@ -896,6 +928,16 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				Attr("title", uistate.T("transactions.excludeHint")), uistate.T("transactions.excludedBadge"))),
 			If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
 				Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
+			// Follow-up indicator (LEADING so it's never clipped by a long description):
+			// how many linked to-dos this charge has (open/total), and a one-click jump to
+			// the To-do list filtered to transaction-linked tasks.
+			If(props.FollowUpTotal > 0, Button(ClassStr("txn-followup-chip"+followUpChipMod(props.FollowUpOpen)), Type("button"),
+				Attr("data-testid", "txn-followup-chip-"+props.ID),
+				Attr("title", uistate.T("transactions.followUpsTitle", props.FollowUpOpen, props.FollowUpTotal)),
+				Attr("aria-label", uistate.T("transactions.followUpsAria", props.FollowUpOpen)),
+				OnClick(openFollowUps),
+				uiw.Icon(icon.CheckCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(followUpChipText(props.FollowUpOpen, props.FollowUpTotal)))),
 			props.Desc,
 			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
@@ -1052,4 +1094,41 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		TriggerLabel:  uistate.T("transactions.rowActions"),
 		TriggerTestID: "txn-kebab-" + props.ID,
 	})
+}
+
+// followUpCount is a transaction's linked-task tally: how many are still open and the
+// total attached.
+type followUpCount struct{ Open, Total int }
+
+// followUpChipText renders the chip figure: "open/total" (e.g. "1/2"), so an unfinished
+// follow-up is obvious at a glance.
+func followUpChipText(open, total int) string {
+	return strconv.Itoa(open) + "/" + strconv.Itoa(total)
+}
+
+// followUpChipMod tones the chip: accented while any follow-up is still open, muted once
+// they're all done.
+func followUpChipMod(open int) string {
+	if open > 0 {
+		return " has-open"
+	}
+	return " all-done"
+}
+
+// followUpCountsByTxn tallies follow-up tasks per linked transaction id (open + total)
+// from the task list, so each row can show its indicator in O(1).
+func followUpCountsByTxn(tasks []domain.Task) map[string]followUpCount {
+	m := make(map[string]followUpCount)
+	for _, t := range tasks {
+		if t.RelatedType != domain.RelatedTransaction || t.RelatedID == "" {
+			continue
+		}
+		c := m[t.RelatedID]
+		c.Total++
+		if t.Status != domain.StatusDone {
+			c.Open++
+		}
+		m[t.RelatedID] = c
+	}
+	return m
 }

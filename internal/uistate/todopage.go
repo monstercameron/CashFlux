@@ -96,17 +96,40 @@ func UseTodoSearch() state.Atom[string] { return state.UseAtom("todo:search", ""
 // Linked-feature filter values for the to-do surface. "" = all; "none" = only unlinked
 // tasks; otherwise a domain.RelatedType string (goal / budget / account / transaction).
 const (
-	TodoLinkAll     = ""     // every task, linked or not
-	TodoLinkNone    = "none" // only tasks not linked to any feature
-	TodoLinkGoal    = "goal"
-	TodoLinkBudget  = "budget"
-	TodoLinkAccount = "account"
+	TodoLinkAll         = ""     // every task, linked or not
+	TodoLinkNone        = "none" // only tasks not linked to any feature
+	TodoLinkGoal        = "goal"
+	TodoLinkBudget      = "budget"
+	TodoLinkAccount     = "account"
+	TodoLinkTransaction = "transaction"
+)
+
+// capturedTodoFilterLink lets another surface (e.g. a transaction's "N follow-ups" chip)
+// deep-link into the to-do list pre-filtered to a link type, without calling UseAtom
+// outside a render. Captured whenever UseTodoFilterLink runs — the to-do surface and
+// the always-mounted AddHost both call it, so the ref is live app-wide.
+var (
+	capturedTodoFilterLink state.Atom[string]
+	todoFilterLinkCaptured bool
 )
 
 // UseTodoFilterLink is the shared "linked to" filter for the to-do surface — show only
-// tasks tied to a given feature (goals / budgets / accounts), only unlinked ones, or all.
-// Read by both the toolbar and list tiles.
-func UseTodoFilterLink() state.Atom[string] { return state.UseAtom("todo:filterLink", TodoLinkAll) }
+// tasks tied to a given feature (goals / budgets / accounts / transactions), only
+// unlinked ones, or all. Read by both the toolbar and list tiles.
+func UseTodoFilterLink() state.Atom[string] {
+	a := state.UseAtom("todo:filterLink", TodoLinkAll)
+	capturedTodoFilterLink = a
+	todoFilterLinkCaptured = true
+	return a
+}
+
+// SetTodoFilterLink sets the to-do "linked to" filter from a click handler on another
+// page (uses the captured atom, not UseAtom). No-op until the atom has been captured.
+func SetTodoFilterLink(v string) {
+	if todoFilterLinkCaptured {
+		capturedTodoFilterLink.Set(v)
+	}
+}
 
 // UseTodoPage is the shared 1-based current page for the to-do list (pagination is by
 // top-level task, so sub-trees stay together). Reset to 1 when the sort/filter changes.

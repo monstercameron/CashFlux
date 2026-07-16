@@ -37,6 +37,42 @@ func registerTxcFieldsSurface() {
 		verticalAlign("middle"),
 	)
 
+	// Follow-up chip: a small "open/total" pill after the description that links to the
+	// filtered To-do list. Accented while any follow-up is open, muted once all are done.
+	rule(".txn-followup-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		marginRight("0.45rem"),
+		flexShrink("0"),
+		padding("0.03rem 0.4rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		fontVariantNumeric("tabular-nums"),
+		cursor("pointer"),
+		verticalAlign("middle"),
+		transition("border-color .12s ease, color .12s ease, background .12s ease"),
+	)
+	rule(".txn-followup-chip:hover",
+		borderColor("var(--text-dim)"),
+		color("var(--text)"),
+	)
+	rule(".txn-followup-chip.has-open",
+		color("var(--accent)"),
+		borderColor("color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
+	)
+	rule(".txn-followup-chip.has-open:hover",
+		background("color-mix(in srgb, var(--accent) 16%, transparent)"),
+	)
+	rule(".txn-followup-chip.all-done",
+		opacity("0.65"),
+	)
+
 	// TXC-3: quick-filter preset chips above the ledger.
 	rule(".txn-presets",
 		display("flex"),

@@ -33,6 +33,12 @@ var txcFieldKeys = Catalog{
 	// Transaction → follow-up task (kebab): create a to-do linked to this charge.
 	"transactions.followUpTask":      "Add follow-up task…",
 	"transactions.followUpTaskTitle": "Follow up: %s",
+	// Per-row follow-up indicator + quick link to the filtered to-dos.
+	// %d open, %d total.
+	"transactions.followUpsTitle": "%d open of %d follow-up task(s) — view in To-do",
+	"transactions.followUpsAria":  "%d open follow-up tasks, view in To-do",
+	// New "Transactions" option in the To-do link filter.
+	"todo.linkTransactionPl": "Linked to transactions",
 
 	// TXC-3 quick-filter presets.
 	"transactions.presetsLabel":        "Quick filters",

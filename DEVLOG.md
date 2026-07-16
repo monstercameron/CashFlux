@@ -1,3 +1,17 @@
+## 2026-07-16 — Transactions surface their follow-up tasks + quick link
+
+Follow-on to the txn→follow-up-task feature: Cam wanted it apparent on the transactions which charges
+have follow-ups (open/total) with a quick link to the filtered to-dos. Added a leading "open/total"
+chip on each row (leading so a long payee never clips it), accent while any linked to-do is open,
+muted when all done. Counts come from `followUpCountsByTxn(app.Tasks())` — one pass keyed by the linked
+txn id, O(1) per row. Clicking the chip deep-links to /todo pre-filtered to transaction-linked tasks:
+added `TodoLinkTransaction` + a "Linked to transactions" option to the To-do link filter, and a captured
+`SetTodoFilterLink` (captured by the always-mounted AddHost, same seam as the task-add seed) so a click
+handler on the transactions page can set the filter before navigating. The row is a component so it owns
+the chip's click hook (StopPropagation, so the chip doesn't also open the edit modal). e2e-verified end
+to end (chip "1/1" → click → /todo with LINKED=transaction showing the linked task), 0 errors on all 8
+pages. Left version.go/sw.js to the concurrent goals session (they own the bump to v1.0.50).
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly

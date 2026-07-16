@@ -25,6 +25,7 @@ func AddHost() uic.Node {
 	taskParent := uistate.UseTaskAddParent() // hook — must run every render, before the early return
 	taskDue := uistate.UseTaskAddDue()       // hook — likewise (calendar day-click preset)
 	taskSeed := uistate.UseTaskAddSeed()     // hook — the cross-surface pre-fill (e.g. txn → follow-up task)
+	uistate.UseTodoFilterLink()              // hook — capture the to-do link filter so SetTodoFilterLink works app-wide (txn "N follow-ups" chip → filtered /todo)
 
 	if target.Get() == "" {
 		return Fragment()

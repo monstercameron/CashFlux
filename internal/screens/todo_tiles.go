@@ -223,6 +223,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 					Option(Value(uistate.TodoLinkGoal), SelectedIf(lf == uistate.TodoLinkGoal), uistate.T("todo.linkGoalPl")),
 					Option(Value(uistate.TodoLinkBudget), SelectedIf(lf == uistate.TodoLinkBudget), uistate.T("todo.linkBudgetPl")),
 					Option(Value(uistate.TodoLinkAccount), SelectedIf(lf == uistate.TodoLinkAccount), uistate.T("todo.linkAccountPl")),
+					Option(Value(uistate.TodoLinkTransaction), SelectedIf(lf == uistate.TodoLinkTransaction), uistate.T("todo.linkTransactionPl")),
 					Option(Value(uistate.TodoLinkNone), SelectedIf(lf == uistate.TodoLinkNone), uistate.T("todo.linkFilterNone")),
 				),
 			),
