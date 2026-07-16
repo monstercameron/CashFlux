@@ -41,6 +41,7 @@ func Register() {
 	registerBudgetFlexSurface()
 	registerCoverAllSurface()
 	registerAnnualGridSurface()
+	registerGoalStatesWidget()
 	registerBudgetTargets()
 	registerTierSystem()
 	registerImportWizard()

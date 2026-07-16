@@ -187,6 +187,7 @@ func init() {
 	RF("breakdown", breakdownFrame)
 
 	R("goals", func(c widgetrender.RenderCtx) ui.Node { return goalsWidget(c.App, c.Spec.Settings) })
+	R("goal-states", func(c widgetrender.RenderCtx) ui.Node { return goalStatesWidget(c.App) })
 	R("todo", func(c widgetrender.RenderCtx) ui.Node { return todoWidget(c.App, c.Spec.Settings) })
 	R("health", func(c widgetrender.RenderCtx) ui.Node { return ui.CreateElement(healthWidgetNode, struct{}{}) })
 	R("freshness", func(c widgetrender.RenderCtx) ui.Node {

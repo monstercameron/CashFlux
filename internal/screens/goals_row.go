@@ -105,7 +105,17 @@ func GoalRow(props goalRowProps) ui.Node {
 	// a binary done for milestone, check-ins/streak for habit.
 	prog := goalsvc.EvaluateProgress(g, props.Tasks, now)
 	pct := prog.Percent
-	complete := prog.Complete
+	// First-class earmarks: "reached" now counts committed savings PLUS reserved
+	// earmarks (CoverageMinor), so grounding a goal in real set-aside money completes
+	// it — not only money that has moved. For non-financial kinds Reached == the
+	// kind's own completion, so this is a no-op there. coveragePct drives the loader
+	// and headline; savedPct (pct) is the moved portion drawn as the solid segment,
+	// with the earmarked gap between them shown as a second, hatched tone.
+	complete := goalsvc.Reached(g, props.Tasks, now)
+	coveragePct := pct
+	if financial {
+		coveragePct = goalsvc.CoveragePercent(g)
+	}
 	pace := goalsvc.ClassifyPace(g, now) // money-based; used only on the financial path
 
 	redirect := ui.UseEvent(Prevent(func() {
@@ -146,8 +156,11 @@ func GoalRow(props goalRowProps) ui.Node {
 		pctFig = Fragment() // 0/100 adds nothing next to the label
 	case domain.GoalKindHabit:
 		mainFig = Span(css.Class("budget-amount"), uistate.T("goals.checkInsFmt", prog.Done, prog.Total))
-	default: // financial
-		mainFig = Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(g.CurrentAmount)), " / "+fmtMoney(g.TargetAmount))
+	default: // financial — lead with the BACKED figure: coverage (saved + earmarked)
+		// against the target, so reserved money reads as real progress at a glance.
+		cov := money.New(goalsvc.CoverageMinor(g), g.TargetAmount.Currency)
+		mainFig = Span(css.Class("budget-amount"), Span(css.Class("budget-spent"), fmtMoney(cov)), " / "+fmtMoney(g.TargetAmount))
+		pctFig = Span(css.Class("budget-pct"), fmt.Sprintf("%d%%", coveragePct))
 	}
 
 	// Header chips. Financial: pace badge + monthly-needed + sinking-fund set-aside.
@@ -208,15 +221,22 @@ func GoalRow(props goalRowProps) ui.Node {
 	// financial goals get a compact deadline / complete line.
 	var subSection ui.Node
 	if financial {
-		rem, _ := goalsvc.Remaining(g)
 		overfund, _ := goalsvc.Overfund(g)
 		// Figures grid (redesign): the key numbers as scannable stat cells instead of a
 		// run-on "$X to go · by date · save $X/mo" sentence. Only cells with real data
 		// appear, so the grid stays honest and adapts per goal. A completed goal drops the
 		// figures entirely — its loader already reads 100% and the meta strip says what's next.
+		// "To go" is measured against COVERAGE (target − saved − earmarked), so a goal
+		// grounded in earmarks reads as closer to done — consistent with the backed
+		// headline. rem (savings-only) still feeds over-fund/what-next below.
+		toGoMinor := g.TargetAmount.Amount - goalsvc.CoverageMinor(g)
+		if toGoMinor < 0 {
+			toGoMinor = 0
+		}
+		toGo := money.New(toGoMinor, g.TargetAmount.Currency)
 		var figs []ui.Node
 		if !complete {
-			figs = append(figs, goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(rem)))
+			figs = append(figs, goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(toGo)))
 			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
 				figs = append(figs, goalFig(uistate.T("goalsredesign.figMonthly"), fmtMoney(per)))
 			} else if g.MonthlyContribution.Amount > 0 {
@@ -319,7 +339,12 @@ func GoalRow(props goalRowProps) ui.Node {
 	if !g.Archived {
 		switch kind {
 		case domain.GoalKindFinancial:
-			primaryAction = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-contribute-"+g.ID), Attr("aria-label", uistate.T("goals.contributeTitle")), Title(uistate.T("goals.contributeTitle")), OnClick(openContribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.contribute")))
+			// Earmark-first: "Set aside" (reserve real balances, no money moves) is the
+			// primary planning gesture; logging money already saved is the quiet secondary.
+			primaryAction = Fragment(
+				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
+				Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-contribute-"+g.ID), Attr("aria-label", uistate.T("goals.logSavedTitle")), Title(uistate.T("goals.logSavedTitle")), OnClick(openContribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.logSaved"))),
+			)
 		case domain.GoalKindMilestone:
 			if complete {
 				primaryAction = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))
@@ -473,7 +498,13 @@ func GoalRow(props goalRowProps) ui.Node {
 			reviewChip,
 		),
 		// The card's "loader": a progress bar with a kind-appropriate label + percent inside it.
-		Div(css.Class("goal-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(pct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")),
+		Div(css.Class("goal-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(coveragePct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")),
+			// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
+			// saved segment, so the gap between "saved" and "backed" is legible at a glance.
+			// Rendered first → painted under the saved fill (same stacking context, later
+			// DOM node wins), leaving only the pct..coverage slice showing through.
+			If(financial && coveragePct > pct,
+				Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
 			Div(ClassStr("bar-fill "+barClass), Attr("style", barFillStyle(pct))),
 			Div(css.Class("goal-card-loader-figs"),
 				mainFig,

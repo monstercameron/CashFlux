@@ -1,3 +1,35 @@
+## 2026-07-16 — Earmarking as a first-class goal workflow (v1.0.49)
+
+Cam: "I want earmarking to be a first-class workflow so planning is less aspirational." Then a `/goal`:
+define when a goal is *reached*, offer archive/delete/see-archived, add a dashboard widget for
+current/missed/completed, and do the 6 earmark refinements I'd proposed. This commit lands the
+foundation + the first three refinements + the widget + the reached definition.
+
+**Reached, redefined (`internal/goals/state.go`).** The pure layer: `Reached(g, tasks, now)` — a
+financial goal is reached when `CoverageMinor` (CurrentAmount + earmarks) ≥ target, so reserving real
+money counts as completing, not only money that has moved; non-financial kinds defer to their own
+completion. `Classify` → Current / Missed (dated, past-due, unpaused, short) / Completed. `CountByState`
+tallies via Classify, excludes sinking funds, optional include-archived. Table-tested (earmarks reach
+it; paused-overdue is Current not Missed; funds excluded).
+
+**Card reframe (`goals_row.go`).** `complete` now = `Reached` (so tint/figures/archive/what-next all
+key off the earmark-aware definition). The financial headline leads with **coverage** (saved +
+earmarked) / target; "to go" is measured against coverage; the loader bar is **two-tone** — a hatched
+earmark band drawn out to coverage *behind* the solid saved fill (later DOM node paints on top, so only
+the saved→coverage slice shows through) — new `.bar-earmark` CSS. Primary action flipped to **"Set
+aside"** (earmark, `GoalEditModeAllocate`) with **"Log saved"** as a quiet ghost secondary. No
+regression for goals without earmarks (coverage == saved → identical to before).
+
+**Dashboard widget (`dashboard_goalstates.go` + `rules_goalstates.go`).** `goal-states` native tile: a
+three-count Current/Missed/Completed strip from `CountByState`, each cell a button to /goals. Only
+Missed takes a red tone and only when >0; Completed reads green. Registered in `dashlayout` (catalog +
+curated full-width in tier 2, placed after the full KPI row to keep the gap-free packing invariant),
+`widgetregistry` (name/icon), and the render registry. Verified: sample data shows 5 current, 0/0.
+
+Archive/delete/see-archived (the Achieved section on /goals) already existed — they now gate on the
+earmark-aware `Reached`. Remaining from the `/goal`: money map (balances→earmarked→free), under-funding
+alerts, drag-to-fund (#4-#6), then the full e2e + light/dark polish pass.
+
 ## 2026-07-16 — Transaction → follow-up task (v1.0.48)
 
 Cam asked whether it makes sense to link todos to transactions. Turned out the task side already

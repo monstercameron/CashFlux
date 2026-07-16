@@ -57,6 +57,10 @@ func DefaultItems() []Item {
 		// layout (icon + heading + side-by-side figures + divider + templated caption),
 		// rendered by the content-layout engine — demonstrates fully custom widgets.
 		{ID: "spotlight", ColSpan: 2, RowSpan: 2},
+		// goal-states: a compact current / missed / completed goals summary. Appended last
+		// in the catalog so it never shifts the arrangement above it; the curated default
+		// layout places its own (full-width) copy up in tier 2.
+		{ID: "goal-states", ColSpan: 2, RowSpan: 1},
 	}
 }
 
@@ -92,6 +96,11 @@ func DefaultLayoutItems() []Item {
 		{ID: "kpi-assets", ColSpan: 1, RowSpan: 1, Importance: 92},
 		{ID: "kpi-liabilities", ColSpan: 1, RowSpan: 1, Importance: 91},
 		{ID: "kpi-safetospend", ColSpan: 2, RowSpan: 1, Importance: 90},
+		// Goals at a glance: a full-width current / missed / completed strip. Full width
+		// (not the catalog's compact 2-wide) so the three counts breathe as a banner, and
+		// so it lands as a complete row right after the full KPI row above — keeping the
+		// default layout gap-free (see TestDefaultLayoutPacksGapFree).
+		{ID: "goal-states", ColSpan: 4, RowSpan: 1, Importance: 88},
 		// Tier 3 — how I'm doing.
 		{ID: "health", ColSpan: 2, RowSpan: 1, Importance: 82},
 		{ID: "trend", ColSpan: 2, RowSpan: 2, Importance: 80},

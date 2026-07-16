@@ -8024,6 +8024,27 @@ func registerGenerated() {
 		boxShadow("none"),
 		zIndex("0"),
 	)
+	// The earmark band: the reserved-but-not-moved slice, drawn as a quiet diagonal
+	// hatch in the accent so it reads as "backed, pledged" rather than solid cash. It
+	// runs out to COVERAGE beneath the solid saved fill; only the saved..coverage gap
+	// shows through. Deliberately muted so the committed segment still leads.
+	rule(".bento-goals .goal-card-loader .bar-fill.bar-earmark",
+		background("repeating-linear-gradient(-45deg, color-mix(in srgb, var(--accent) 30%, transparent) 0, color-mix(in srgb, var(--accent) 30%, transparent) 5px, color-mix(in srgb, var(--accent) 12%, transparent) 5px, color-mix(in srgb, var(--accent) 12%, transparent) 10px)"),
+		borderRight("1px solid color-mix(in srgb, var(--accent) 45%, transparent)"),
+	)
+	// Secondary goal-card action ("Log saved"): a quiet ghost next to the primary
+	// "Set aside" — transparent, dim, no border weight, so it defers to the primary.
+	rule(".bento-goals .goal-action-ghost",
+		background("transparent"),
+		borderColor("transparent"),
+		color("var(--text-dim)"),
+		fontWeight("500"),
+	)
+	rule(".bento-goals .goal-action-ghost:hover",
+		background("var(--hover)"),
+		color("var(--text)"),
+		filter("none"),
+	)
 	rule(".bento-goals .goal-card-loader-figs",
 		position("relative"),
 		zIndex("1"),
