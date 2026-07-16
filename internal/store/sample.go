@@ -641,28 +641,28 @@ func SampleDataset() Dataset {
 
 	// Bad decision #1: crypto bought at the very top (Nov 2021) — one green sale
 	// near the peak, then the bags capitulated into the June 2022 crash.
-	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-out", AccountID: hysa, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(-300000), MemberID: marcus, TransferAccountID: wsb, Cleared: true})
-	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-in", AccountID: wsb, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(300000), MemberID: marcus, TransferAccountID: hysa, Cleared: true})
+	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-out", AccountID: hysa, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(-300000), MemberID: marcus, TransferAccountID: wsb, Cleared: true, Tags: []string{"crypto", "regret"}})
+	add(domain.Transaction{ID: "tx-crypto-fund-2021-11-in", AccountID: wsb, Date: date(2021, time.November, 8), Payee: "Deposit to brokerage", Desc: "Deposit to brokerage (raided savings for crypto)", Amount: usd(300000), MemberID: marcus, TransferAccountID: hysa, Cleared: true, Tags: []string{"crypto", "regret"}})
 	add(domain.Transaction{ID: "tx-crypto-gain-2021-12", AccountID: wsb, Date: date(2021, time.December, 3), Payee: "Coinbase", Desc: "Sold some ETH near the top — should have stopped here", CategoryID: catInvestInc, Amount: usd(45000), MemberID: marcus, Cleared: true, Tags: []string{"crypto"}})
 	add(domain.Transaction{ID: "tx-crypto-loss-2022-06", AccountID: wsb, Date: date(2022, time.June, 16), Payee: "Coinbase", Desc: "Capitulated — sold the BTC/ETH bags (-70%)", CategoryID: catInvestLoss, Amount: usd(-420000), MemberID: marcus, Cleared: true, Tags: []string{"crypto", "loss-porn"}})
 
 	// The layoff (end of Jan 2023): two months' severance up front; the monthly
 	// unemployment checks, COBRA, and savings drawdowns live in the loop above.
-	add(domain.Transaction{ID: "tx-severance-2023-02", AccountID: checking, Date: date(2023, time.February, 3), Payee: "Cohere Systems", Desc: "Severance (2 months)", CategoryID: catSalary, Amount: usd(550000), MemberID: marcus, Cleared: true, Tags: []string{"layoff"}})
+	add(domain.Transaction{ID: "tx-severance-2023-02", AccountID: checking, Date: date(2023, time.February, 3), Payee: "Cohere Systems", Desc: "Severance (2 months)", CategoryID: catSalary, Amount: usd(550000), MemberID: marcus, Cleared: true, Tags: []string{"layoff", "windfall"}})
 
 	// The lucky streak's coda (Jun 2024): for once, he actually took profits —
 	// $8k out of the brokerage into savings. Plus a scratch-off in the middle of
 	// the hot spring, because luck compounds.
-	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-out", AccountID: wsb, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(-800000), MemberID: marcus, TransferAccountID: hysa, Cleared: true})
-	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-in", AccountID: hysa, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(800000), MemberID: marcus, TransferAccountID: wsb, Cleared: true})
+	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-out", AccountID: wsb, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(-800000), MemberID: marcus, TransferAccountID: hysa, Cleared: true, Tags: []string{"wsb", "win"}})
+	add(domain.Transaction{ID: "tx-wsb-cashout-2024-06-in", AccountID: hysa, Date: date(2024, time.June, 7), Payee: "Took profits — to savings", Desc: "Took profits — to savings", Amount: usd(800000), MemberID: marcus, TransferAccountID: wsb, Cleared: true, Tags: []string{"wsb", "win"}})
 	add(domain.Transaction{ID: "tx-scratch-2024-03", AccountID: cash, Date: date(2024, time.March, 16), Payee: "FL Lottery", Desc: "Scratch-off win", CategoryID: catOtherInc, Amount: usd(15000), MemberID: marcus, Cleared: true, Tags: []string{"lucky"}})
 
 	// Errata the tools exist for: the same DoorDash charge imported TWICE (the
 	// /duplicates screen has a real catch), and a parking charge mis-filed under
 	// Dining (bulk-recategorize / rules bait).
-	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-a", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
-	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-b", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
-	add(domain.Transaction{ID: "tx-misfiled-parking-2026-05", AccountID: checking, Date: date(2026, time.May, 14), Payee: "PWP*CITYPARKING 866-330-3444", Desc: "PWP*CITYPARKING 866-330-3444", CategoryID: catDining, Amount: usd(-1400), MemberID: marcus, Cleared: true, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-a", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Tags: []string{"duplicate", "dispute"}, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-b", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Tags: []string{"duplicate", "dispute"}, Source: domain.TxnSourceImported})
+	add(domain.Transaction{ID: "tx-misfiled-parking-2026-05", AccountID: checking, Date: date(2026, time.May, 14), Payee: "PWP*CITYPARKING 866-330-3444", Desc: "PWP*CITYPARKING 866-330-3444", CategoryID: catDining, Amount: usd(-1400), MemberID: marcus, Cleared: true, Tags: []string{"needs-review"}, Source: domain.TxnSourceImported})
 
 	// The current month (July 2026) is mid-flight: the first few days have
 	// posted — pending, uncleared — which is what a real ledger looks like on
@@ -682,7 +682,7 @@ func SampleDataset() Dataset {
 	add(domain.Transaction{ID: "tx-honeymoon-flight-2022-09", AccountID: card, Date: date(2022, time.September, 10), Payee: "SkyJet", Desc: "Honeymoon flights", CategoryID: catTravel, Amount: usd(-110000), MemberID: marcus, Cleared: true, Tags: []string{"vacation", "honeymoon"}})
 	add(domain.Transaction{ID: "tx-honeymoon-hotel-2022-09", AccountID: card, Date: date(2022, time.September, 12), Payee: "Amalfi Resort", Desc: "Honeymoon hotel", CategoryID: catTravel, Amount: usd(-145000), MemberID: marcus, Cleared: true, Tags: []string{"vacation", "honeymoon"}})
 	add(domain.Transaction{ID: "tx-bonus-2022-12", AccountID: checking, Date: date(2022, time.December, 20), Payee: "Cohere Systems", Desc: "Year-end bonus", CategoryID: catSalary, Amount: usd(120000), MemberID: marcus, Cleared: true, Tags: []string{"bonus"}})
-	add(domain.Transaction{ID: "tx-refund-2023-04", AccountID: checking, Date: date(2023, time.April, 12), Payee: "IRS", Desc: "Tax refund", CategoryID: catOtherInc, Amount: usd(85000), MemberID: marcus, Cleared: true})
+	add(domain.Transaction{ID: "tx-refund-2023-04", AccountID: checking, Date: date(2023, time.April, 12), Payee: "IRS", Desc: "Tax refund", CategoryID: catOtherInc, Amount: usd(85000), MemberID: marcus, Cleared: true, Tags: []string{"tax-refund"}})
 	add(domain.Transaction{ID: "tx-trip-2023-07", AccountID: card, Date: date(2023, time.July, 6), Payee: "Seaside Resort", Desc: "Summer trip", CategoryID: catTravel, Amount: usd(-120000), MemberID: marcus, Cleared: true, Tags: []string{"vacation"}})
 	add(domain.Transaction{ID: "tx-anniv-2024-06", AccountID: card, Date: date(2024, time.June, 18), Payee: "Mountain Lodge", Desc: "Anniversary trip", CategoryID: catTravel, Amount: usd(-95000), MemberID: marcus, Cleared: true, Tags: []string{"vacation"}})
 	// A trip to Rome charged in euros on a EUR travel card — exercises multi-currency
@@ -695,18 +695,18 @@ func SampleDataset() Dataset {
 	add(domain.Transaction{ID: "tx-return-2026-03", AccountID: card, Date: date(2026, time.March, 20), Payee: "Amazon", Desc: "Refund — returned item", CategoryID: catShopping, Amount: usd(6500), MemberID: priya, Cleared: true, Tags: []string{"refund"}})
 	// One stray MasterClass charge AFTER they cancelled it (Jan 2025) — engages the
 	// "charged after cancellation" alert on the Subscriptions page.
-	add(domain.Transaction{ID: "tx-masterclass-late-2025-02", AccountID: card, Date: date(2025, time.February, 16), Payee: "MasterClass", Desc: "MasterClass", CategoryID: catSubs, Amount: usd(-1800), MemberID: marcus, Cleared: true})
+	add(domain.Transaction{ID: "tx-masterclass-late-2025-02", AccountID: card, Date: date(2025, time.February, 16), Payee: "MasterClass", Desc: "MasterClass", CategoryID: catSubs, Amount: usd(-1800), MemberID: marcus, Cleared: true, Tags: []string{"subscription", "cancelled", "dispute"}})
 	add(domain.Transaction{ID: "tx-bonus-2024-12", AccountID: checking, Date: date(2024, time.December, 20), Payee: "Cohere Systems", Desc: "Year-end bonus", CategoryID: catSalary, Amount: usd(140000), MemberID: marcus, Cleared: true, Tags: []string{"bonus"}})
 	// Marcus's expensive car: a down payment out of savings the month it's financed.
 	add(domain.Transaction{ID: "tx-cardown-2025-01", AccountID: hysa, Date: date(2025, time.January, 10), Payee: "Apex Auto Finance", Desc: "Car down payment (Marcus)", CategoryID: catTransport, Amount: usd(-300000), MemberID: marcus, Cleared: true, Tags: []string{"big-purchase"}})
-	add(domain.Transaction{ID: "tx-refund-2025-04", AccountID: checking, Date: date(2025, time.April, 12), Payee: "IRS", Desc: "Tax refund", CategoryID: catOtherInc, Amount: usd(70000), MemberID: marcus, Cleared: true})
+	add(domain.Transaction{ID: "tx-refund-2025-04", AccountID: checking, Date: date(2025, time.April, 12), Payee: "IRS", Desc: "Tax refund", CategoryID: catOtherInc, Amount: usd(70000), MemberID: marcus, Cleared: true, Tags: []string{"tax-refund"}})
 	// Priya's car down payment.
 	add(domain.Transaction{ID: "tx-cardown-2025-09", AccountID: hysa, Date: date(2025, time.September, 15), Payee: "Apex Auto Finance", Desc: "Car down payment (Priya)", CategoryID: catTransport, Amount: usd(-180000), MemberID: priya, Cleared: true, Tags: []string{"big-purchase"}})
 	add(domain.Transaction{ID: "tx-bonus-2025-12", AccountID: checking, Date: date(2025, time.December, 19), Payee: "Cohere Systems", Desc: "Year-end bonus", CategoryID: catSalary, Amount: usd(150000), MemberID: marcus, Cleared: true, Tags: []string{"bonus"}})
 	// A Costco run split across two categories (exercises CategorySplit).
-	add(domain.Transaction{ID: "tx-costco-2026-02", AccountID: checking, Date: date(2026, time.February, 15), Payee: "Costco", Desc: "Costco run", Amount: usd(-28000), MemberID: priya, Cleared: true, Splits: []domain.CategorySplit{{CategoryID: catGroceries, Amount: usd(-18000)}, {CategoryID: catShopping, Amount: usd(-10000)}}})
+	add(domain.Transaction{ID: "tx-costco-2026-02", AccountID: checking, Date: date(2026, time.February, 15), Payee: "Costco", Desc: "Costco run", Amount: usd(-28000), MemberID: priya, Cleared: true, Tags: []string{"costco", "bulk"}, Splits: []domain.CategorySplit{{CategoryID: catGroceries, Amount: usd(-18000)}, {CategoryID: catShopping, Amount: usd(-10000)}}})
 	// A pricey anniversary dinner (more dining excess) — linked to a receipt doc + artifact.
-	add(domain.Transaction{ID: "tx-anniv-dinner-2026-02", AccountID: card, Date: date(2026, time.February, 22), Payee: "Nobu", Desc: "Anniversary dinner", CategoryID: catDining, Amount: usd(-24000), MemberID: marcus, Cleared: true, Tags: []string{"big-purchase"}, Source: domain.TxnSourceScanned, SourceDocID: "doc-receipt", Attachments: []domain.AttachmentRef{{ArtifactID: "art-receipt", Name: "nobu-receipt.png", Kind: "image", MIME: "image/png"}}})
+	add(domain.Transaction{ID: "tx-anniv-dinner-2026-02", AccountID: card, Date: date(2026, time.February, 22), Payee: "Nobu", Desc: "Anniversary dinner", CategoryID: catDining, Amount: usd(-24000), MemberID: marcus, Cleared: true, Tags: []string{"anniversary", "date-night", "splurge", "big-purchase"}, Source: domain.TxnSourceScanned, SourceDocID: "doc-receipt", Attachments: []domain.AttachmentRef{{ArtifactID: "art-receipt", Name: "nobu-receipt.png", Kind: "image", MIME: "image/png"}}})
 
 	// --- Recent scanned receipts (document-sourced) ---------------------------------
 	// These demonstrate the "Scanned" provenance end-to-end: each is tagged
@@ -726,7 +726,7 @@ func SampleDataset() Dataset {
 	add(domain.Transaction{ID: "tx-ob-2026-06", AccountID: card, Date: date(2026, time.June, 11), Payee: "Riverside OB-GYN", Desc: "Prenatal visit", CategoryID: catBaby, Amount: usd(-18000), MemberID: priya, Cleared: false, Tags: []string{"baby"}})
 
 	// A shared dinner the couple splits (settles via the SharedExpense ledger).
-	add(domain.Transaction{ID: "tx-dinner-shared-2026-05", AccountID: card, Date: date(2026, time.May, 24), Payee: "Trattoria Nove", Desc: "Dinner with friends (our half)", CategoryID: catDining, Amount: usd(-11000), MemberID: marcus, Cleared: true})
+	add(domain.Transaction{ID: "tx-dinner-shared-2026-05", AccountID: card, Date: date(2026, time.May, 24), Payee: "Trattoria Nove", Desc: "Dinner with friends (our half)", CategoryID: catDining, Amount: usd(-11000), MemberID: marcus, Cleared: true, Tags: []string{"shared", "friends"}})
 
 	// --- Holdings: what the investment accounts actually hold (the Investments
 	// surface's data) — the retirement funds are boring on purpose; the WSB

@@ -1,3 +1,16 @@
+## 2026-07-16 — Seed: tags on the important transactions
+
+Cam: "add some txn tags to important txns in the seed." The five-year narrative charges mostly already
+carried tags (bonus/vacation/honeymoon/wsb/crypto/big-purchase/layoff), and the baby tail was tagged too
+— so I filled the untagged milestones: the crypto raid + capitulation (`crypto`, `regret`), the layoff
+severance (`layoff`, `windfall`), the profit-take (`wsb`, `win`), both IRS refunds (`tax-refund`), the
+duplicate DoorDash + misfiled parking + MasterClass-after-cancel errata (`duplicate`/`dispute`,
+`needs-review`, `cancelled` — these also carry the follow-up to-dos now, so tag + task reinforce each
+other), Costco (`costco`,`bulk`), the shared dinner (`shared`,`friends`), and the Nobu anniversary dinner
+bumped to FOUR tags (`anniversary`,`date-night`,`splurge`,`big-purchase`) specifically so the "+1"
+overflow chip renders in the sample data. Tags don't touch balances, so the guard tests stay green.
+`sample.go`.
+
 ## 2026-07-16 — Transaction tags inline in the description column (no overflow / no stretch)
 
 Cam: "append tags attached to the transaction in the description col without overflowing or stretching the
