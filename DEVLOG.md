@@ -1,3 +1,23 @@
+## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
+
+Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly
+built already — the Earmarks tab has per-account exposure (earmarked / free of balance, over-earmarked
+danger flag) and `overbookedGoals` under-funding alerts (#5). What was missing was the top-level
+reconciliation: added a **Money map** card at the head of the tab — In accounts (Σ eligible balances) →
+Earmarked (Σ allocations) → Free to assign (the difference, flagged red if negative), over a single
+earmarked-share bar. Now the tab reads balances → reserved → free at a glance, then details it per
+account and per goal. e2e: $48,070 in accounts, $2,000 earmarked across 2 goals, $46,070 free, 0
+console errors.
+
+Also refined the goal card: a **reached** financial goal (saved + earmarked cover the target) now leads
+with an **Archive** primary button (`goals.archiveReachedTitle` — "Reached! Move to your Achieved
+list"), since archiving is the useful next step; Set aside drops to the quiet secondary. Archive/delete/
+see-archived (the collapsible Achieved section on /goals) already existed — they now gate on the
+earmark-aware `Reached`.
+
+**Still open from the six:** drag-to-fund (#6, extend the surplus waterfall) — deferred as a separate,
+larger interaction piece rather than faked; noted to Cam. Everything else in the `/goal` is landed.
+
 ## 2026-07-16 — Earmarking as a first-class goal workflow (v1.0.49)
 
 Cam: "I want earmarking to be a first-class workflow so planning is less aspirational." Then a `/goal`:

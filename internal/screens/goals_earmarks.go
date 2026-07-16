@@ -94,6 +94,50 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		}
 	}
 
+	// Money map: the household-level reconciliation — everything in earmark-eligible
+	// accounts, how much of it is reserved (earmarked), and what's still free to assign.
+	// This is the "where does my money stand" answer the per-account cards below detail.
+	var totalBal int64
+	for _, a := range accounts {
+		if !earmarkEligibleType(a.Type) {
+			continue
+		}
+		bal, _ := ledger.Balance(a, txns)
+		totalBal += toBase(bal)
+	}
+	totalFree := totalBal - grandTotal
+	freeMod := ""
+	if totalFree < 0 { // more earmarked than money on hand — over-committed
+		freeMod = " " + tw.Fold(tw.TextWarn)
+	}
+	// Earmarked share of the whole, for the split bar (clamped 0..100).
+	earmarkedShare := 0
+	if totalBal > 0 {
+		earmarkedShare = int(grandTotal * 100 / totalBal)
+		if earmarkedShare > 100 {
+			earmarkedShare = 100
+		}
+	}
+	moneyMap := uiw.Card(uiw.CardProps{
+		Attrs:  []any{Attr("data-testid", "earmarks-moneymap")},
+		Header: H2(css.Class("card-title"), uistate.T("goals.mapTitle")),
+		Body: Div(css.Class("ea-map"),
+			Div(css.Class("ea-map-figs"),
+				goalFig(uistate.T("goals.mapTotal"), fmtMoney(money.New(totalBal, base))),
+				goalFig(uistate.T("goals.mapEarmarked"), fmtMoney(money.New(grandTotal, base))),
+				Div(css.Class("goal-fig"),
+					Span(css.Class("goal-fig-k"), uistate.T("goals.mapFree")),
+					Span(ClassStr("goal-fig-v"+freeMod), fmtMoney(money.New(totalFree, base))),
+				),
+			),
+			// A single stacked bar: the earmarked share solid, the free remainder quiet.
+			Div(css.Class("ea-map-bar"), Attr("role", "img"),
+				Attr("aria-label", uistate.T("goals.mapBarLabel", fmtMoney(money.New(grandTotal, base)), fmtMoney(money.New(totalBal, base)))),
+				Div(css.Class("ea-map-bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", earmarkedShare))),
+			),
+		),
+	})
+
 	if len(goalsWithEarmarks) == 0 {
 		return uiw.Card(uiw.CardProps{
 			Attrs: []any{Attr("data-testid", "earmarks-empty")},
@@ -168,6 +212,7 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	})
 
 	return Div(css.Class("earmarks-mgr"),
+		moneyMap,
 		exposureCard,
 		uiw.Card(uiw.CardProps{
 			Header: H2(css.Class("card-title"), uistate.T("goals.earmarksByGoal")),

@@ -339,12 +339,22 @@ func GoalRow(props goalRowProps) ui.Node {
 	if !g.Archived {
 		switch kind {
 		case domain.GoalKindFinancial:
-			// Earmark-first: "Set aside" (reserve real balances, no money moves) is the
-			// primary planning gesture; logging money already saved is the quiet secondary.
-			primaryAction = Fragment(
-				Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
-				Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-contribute-"+g.ID), Attr("aria-label", uistate.T("goals.logSavedTitle")), Title(uistate.T("goals.logSavedTitle")), OnClick(openContribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.logSaved"))),
-			)
+			if complete {
+				// Reached (saved + earmarked cover the target): the useful next step is to
+				// archive it (or keep topping up). Lead with Archive; keep Set aside as a
+				// quiet secondary for over-funding.
+				primaryAction = Fragment(
+					Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive"))),
+					Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
+				)
+			} else {
+				// Earmark-first: "Set aside" (reserve real balances, no money moves) is the
+				// primary planning gesture; logging money already saved is the quiet secondary.
+				primaryAction = Fragment(
+					Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
+					Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-contribute-"+g.ID), Attr("aria-label", uistate.T("goals.logSavedTitle")), Title(uistate.T("goals.logSavedTitle")), OnClick(openContribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.logSaved"))),
+				)
+			}
 		case domain.GoalKindMilestone:
 			if complete {
 				primaryAction = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))

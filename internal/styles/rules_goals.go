@@ -258,6 +258,35 @@ func registerGoalsSurface() {
 	rule(".ea-bar-fill.is-over",
 		background("var(--danger)"),
 	)
+	// Money map: the household reconciliation strip at the top of the Earmarks tab —
+	// three figures (in accounts / earmarked / free) over one stacked share bar.
+	rule(".ea-map",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.7rem"),
+	)
+	rule(".ea-map-figs",
+		display("grid"),
+		gridTemplateColumns("repeat(3, 1fr)"),
+		gap("0.75rem"),
+	)
+	// The split bar: earmarked share solid in accent, the free remainder the quiet track.
+	rule(".ea-map-bar",
+		position("relative"),
+		height("12px"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background(track),
+	)
+	rule(".ea-map-bar-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		height("100%"),
+		borderRadius("999px"),
+		background("var(--accent)"),
+		transition("width 0.25s ease"),
+	)
 	// Per-goal coverage bar in each goal's earmark block header, beside the % chip.
 	rule(".ea-cover",
 		// Same bar treatment as .ea-acct-bar (10px, same track/fill) — one coverage-bar
