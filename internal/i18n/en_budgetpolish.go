@@ -30,6 +30,18 @@ var budgetPolishKeys = Catalog{
 	"budgets.editCatsOpen":      "Edit what this budget tracks…",
 	"budgets.editCatsElsewhere": "Categories and tags are managed in their own editor.",
 	"budgets.tracksCount":       "%s · %s", // "2 categories · 1 tag"
+
+	// This-month selection metadata in the tracked-categories/tags editor.
+	"budgets.tagsNoneThisMonth": "none this month",
+	"budgets.trackMetaHint":     "Figures show this month so far — transactions · total.",
+
+	// The redesigned "What this budget tracks" editor: category + tag sections.
+	"budgets.catsSection":  "Categories",
+	"budgets.tagsSection":  "Tags (cross-category)",
+	"budgets.tagsSearchPh": "Search tags, or type a new one…",
+	"budgets.tagsNoneYet":  "No tags used yet — type one to add it.",
+	"budgets.tagsAddNew":   "＋ Track a new tag: #%s",
+	"budgets.tracksSave":   "Save",
 }
 
 func init() {

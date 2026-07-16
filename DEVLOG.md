@@ -1,3 +1,18 @@
+## 2026-07-16 — Redesign the tracked cats/tags editor: searchable tag picker + this-month meta
+
+Cam on the first cut: "the ui is dogshit, also allow for pre-existing tag searching," and "add a little
+metadata … transaction count and transaction total for the current month." Rebuilt the editor
+(`BudgetCategoriesBody`): two labelled sections (Categories / Tags), each a searchable checklist capped
+at 30vh so both + the footer stay in view (the flat one-column layout had pushed Tags below the fold).
+Tags went from a free-text comma field to a real picker mirroring the category one — `budgetTagPicker`
+over `distinctTxnTags(app)` (every tag in the ledger), each row checkable with its this-month reach; a
+tag typed that isn't in use yet gets an "＋ Track a new tag" row (`budgetTagAddRow`). State moved from a
+string to a `pickedTags` set. Metadata: `budgetTrackMeta(app)` aggregates THIS month's expense spend by
+category (splits per line) and by tag (whole charge once per tag), FX-converted to base, pre-formatted
+"N · $X"; threaded into every category row (`Meta`) and tag row. Footer now "Save" (overrode the base
+"Save categories"). Verified: 36 existing tags searchable, "vac"→vacation, "roadtrip"→add-new row, both
+sections visible, 0 console errors. `budgets_categories.go`, `rules_r4.go`, `en_budgetpolish.go`.
+
 ## 2026-07-16 — Create/edit budget tracked tags in the UI; rename the editor
 
 Cam: add a way to set tags on a budget, "the button says edit tracked categories, but what if I want to

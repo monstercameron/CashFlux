@@ -126,4 +126,54 @@ func registerR4Surface() {
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
+	// This-month selection metadata in the tracked-categories/tags editor.
+	rule(".budgetcat-meta",
+		marginLeft("auto"),
+		fontSize("0.72rem"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+		whiteSpace("nowrap"),
+	)
+	// A checked/also tag can push the meta; keep the also-note after it.
+	rule(".budgetcat-row .budgetcat-meta + .budgetcat-also",
+		marginLeft("0.5rem"),
+	)
+	// The tracked-categories/tags editor: two labelled sections (Categories, Tags).
+	rule(".budgettrack-section",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	rule(".budgettrack-head",
+		fontSize("0.72rem"),
+		fontWeight("700"),
+		textTransform("uppercase"),
+		letterSpacing("0.04em"),
+		color("var(--text-faint)"),
+	)
+	// Cap each section's checklist so BOTH the categories and tags sections (and the
+	// footer) stay visible — each list scrolls internally instead of one long column that
+	// pushes the tags section off-screen.
+	rule(".budgettrack-section .budgetcats-list",
+		maxHeight("30vh"),
+		overflowY("auto"),
+	)
+	// "Add a new tag" row when the search matches no existing tag.
+	rule(".budgettag-add",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		width("100%"),
+		padding("0.45rem 0.5rem"),
+		borderRadius("8px"),
+		border("1px dashed var(--border-strong)"),
+		background("transparent"),
+		color("var(--accent)"),
+		fontSize("0.85rem"),
+		cursor("pointer"),
+		textAlign("left"),
+	)
+	rule(".budgettag-add:hover, .budgettag-add:focus-visible",
+		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
+	)
 }
