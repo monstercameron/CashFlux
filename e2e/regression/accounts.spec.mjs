@@ -22,23 +22,24 @@ test.describe("accounts: transfer flip modal", () => {
 });
 
 test.describe("accounts: labeled toolbar buttons", () => {
-  test("toolbar actions carry a visible text label + a behavior badge (modal vs navigation)", async ({ app }) => {
+  test("toolbar actions carry a visible text label; Add account anchors the group", async ({ app }) => {
     await nav(app, "/accounts");
     // Transfer is a standard labeled button (.btn-tool) that opens a flip modal: it
-    // shows its text label inline (no hover needed), a ⧉ behavior badge, and
-    // aria-haspopup="dialog".
+    // shows its text label inline (no hover needed) and aria-haspopup="dialog".
     const transfer = app.getByTestId("page-transfer-btn");
     await expect(transfer).toHaveClass(/btn-tool/);
     await expect(transfer).not.toHaveClass(/tbar-btn/);
     await expect(transfer).toContainText("Transfer money"); // label is visible, not hover-only
     await expect(transfer).toHaveAttribute("aria-haspopup", "dialog");
-    await expect(transfer.locator(".bt-kind")).toHaveText("⧉");
-    // Manage exchange rates is a labeled button that NAVIGATES: ↗ badge, no dialog popup.
+    // Page-local creation: "+ Add account" is the primary at the group's right end.
+    const add = app.getByTestId("accounts-add");
+    await expect(add).toBeVisible();
+    await expect(add).toHaveClass(/btn-primary/);
+    // Manage exchange rates is a labeled button that NAVIGATES: no dialog popup.
     const fx = app.getByTestId("acct-fx-btn");
     if (await fx.count()) {
       await expect(fx).toHaveClass(/btn-tool/);
       await expect(fx).toContainText("Manage exchange rates");
-      await expect(fx.locator(".bt-kind")).toHaveText("↗");
       await expect(fx).not.toHaveAttribute("aria-haspopup", "dialog");
       await fx.click();
       await expect(app.locator('#main[data-route="/settings"]').first()).toBeVisible();
@@ -46,21 +47,60 @@ test.describe("accounts: labeled toolbar buttons", () => {
   });
 });
 
-test.describe("accounts: kebab + quick actions", () => {
-  test("Transactions lives in the ⋯ menu; no inline Transactions button", async ({ app }) => {
+test.describe("accounts: row actions + type-aware kebab", () => {
+  test("Transactions is inline; the balance figure opens the update editor", async ({ app }) => {
     await nav(app, "/accounts");
     const row = app.locator(".bento-accounts .row").first();
     await row.scrollIntoViewIfNeeded();
-    // The inline quick actions are Edit (+ Update value for stale/valuation) — never a
-    // standalone Transactions button.
-    await expect(row.getByRole("button", { name: /^Transactions$/ })).toHaveCount(0);
-    await expect(row.locator('[data-testid^="edit-account-btn-"]')).toBeVisible();
-    // Open the ⋯ menu — the Transactions drill is now a menu item.
-    await row.locator('.add-wrap > button[aria-haspopup="menu"]').click();
+    // Transactions (high-frequency navigation) is a visible row button, beside Edit.
     const drill = row.locator('[data-testid^="acct-view-txns-"]');
     await expect(drill).toBeVisible();
+    await expect(row.locator('[data-testid^="edit-account-btn-"]')).toBeVisible();
+    // G2/C4: the balance figure itself is the one consistent update affordance.
+    const balBtn = row.locator('[data-testid^="acct-balance-btn-"]');
+    await expect(balBtn).toBeVisible();
+    await balBtn.click();
+    await app.waitForTimeout(650);
+    await expect(app.locator('[role="dialog"]')).toBeVisible();
+    await app.keyboard.press("Escape");
+    await app.waitForTimeout(300);
+    // Navigation still works from the inline button.
     await drill.click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+  });
+
+  test("a property row offers no Reconcile/Transfer; a cash row offers both", async ({ app }) => {
+    await nav(app, "/accounts");
+    // The Condo (property): reconciling a valuation to a statement is nonsense.
+    await app.locator('[data-testid="edit-account-btn-acct-home"] ~ .add-wrap > button').click();
+    await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-home"]')).toHaveCount(0);
+    await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-home"]')).toHaveCount(0);
+    await app.keyboard.press("Escape");
+    await app.waitForTimeout(200);
+    // Joint Checking (cash): both rituals available, plus quick institution assignment.
+    await app.locator('[data-testid="edit-account-btn-acct-checking"] ~ .add-wrap > button').click();
+    await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-checking"]')).toBeVisible();
+    await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-checking"]')).toBeVisible();
+    await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="set-institution-acct-checking"]')).toBeVisible();
+  });
+
+  test("the page transfer form filters sources to liquid cash and previews FX", async ({ app }) => {
+    await nav(app, "/accounts");
+    await app.getByTestId("page-transfer-btn").click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    const fromOpts = await dialog.getByTestId("page-xfer-from-select").locator("option").allInnerTexts();
+    // No 401(k)/loans/property/brokerage as transfer sources.
+    expect(fromOpts.join("|")).not.toMatch(/401|Mortgage|Condo|Car Loan|Roth|Stonks|Student/i);
+    // Liability destinations read as payments.
+    const toOpts = await dialog.getByTestId("page-xfer-to-select").locator("option").allInnerTexts();
+    expect(toOpts.some((s) => /payment/.test(s))).toBeTruthy();
+    // USD → EUR shows the denomination + converted preview before anything posts.
+    await dialog.getByTestId("page-xfer-from-select").selectOption({ label: fromOpts.find((s) => /Joint Checking/.test(s)) });
+    const eur = (await dialog.getByTestId("page-xfer-to-select").locator("option").allInnerTexts()).find((s) => /Travel/.test(s));
+    await dialog.getByTestId("page-xfer-to-select").selectOption({ label: eur });
+    await dialog.getByTestId("page-xfer-amt").fill("100");
+    await expect(dialog.locator('[data-testid="xfer-fx-note"]')).toContainText(/lands in EUR/i);
   });
 
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
@@ -93,8 +133,9 @@ test.describe("accounts: merged edit + readable notes", () => {
     await dialog.locator('button[type="submit"]').click();
     await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
 
-    // The row now shows the note as a readable line (not a hover-only glyph), collapsed
-    // by default and expandable on click.
+    // The note renders as a readable line inside the row's details fold (the AC-series
+    // disclosure) — expand it first, then the line itself expands on click.
+    await app.locator(`[data-testid="acct-details-toggle-${acctId}"]`).click();
     const notesLine = app.locator(`[data-testid="acct-notes-${acctId}"]`);
     await expect(notesLine).toBeVisible();
     await expect(notesLine).toContainText("Refi locked at 5.9%");

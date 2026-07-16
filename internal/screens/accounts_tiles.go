@@ -151,15 +151,29 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 					return
 				}
 			}
-			restoreFocus := captureRowFocus(".rows", ".row")
-			if err := app.DeleteAccount(accountID); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				return
+			name := ""
+			for _, ac := range app.Accounts() {
+				if ac.ID == accountID {
+					name = ac.Name
+					break
+				}
 			}
-			uistate.BumpDataRevision()
-			restoreFocus()
-			auditview.CaptureNow()
-			uistate.PostUndoable(uistate.T("toast.accountDeleted"))
+			// C8: confirm THEN undo — the same destructive-action contract as goals and
+			// budgets, so delete behaves identically across sibling pages.
+			uistate.ConfirmModal(uistate.T("accounts.deleteConfirm", name), true, func(ok bool) {
+				if !ok {
+					return
+				}
+				restoreFocus := captureRowFocus(".rows", ".row")
+				if err := app.DeleteAccount(accountID); err != nil {
+					uistate.PostNotice(err.Error(), true)
+					return
+				}
+				uistate.BumpDataRevision()
+				restoreFocus()
+				auditview.CaptureNow()
+				uistate.PostUndoable(uistate.T("toast.accountDeleted"))
+			})
 		},
 		OnArchive: func(ac domain.Account) {
 			ac.Archived = !ac.Archived
@@ -168,6 +182,13 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				return
 			}
 			uistate.BumpDataRevision()
+			// G4: archiving used to be silent — the row just vanished. Name what
+			// happened and offer the one-click way back.
+			if ac.Archived {
+				uistate.PostUndoable(uistate.T("accounts.archivedToast", ac.Name))
+			} else {
+				uistate.PostUndoable(uistate.T("accounts.restoredToast", ac.Name))
+			}
 		},
 		OnRefresh: func(ac domain.Account) {
 			ac.BalanceAsOf = time.Now()
@@ -176,6 +197,7 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				return
 			}
 			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("accounts.markUpdatedToast", ac.Name), false)
 		},
 		OnSave: func(ac domain.Account) {
 			if err := app.PutAccount(ac); err != nil {
@@ -210,12 +232,86 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				return
 			}
 			uistate.BumpDataRevision()
-			uistate.PostNotice(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))), false)
+			// G3: a balance set posts a REAL adjustment transaction — one-click reversible.
+			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))))
 		},
 		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {
 			doAccountTransfer(app, fromID, toID, amountStr, dateStr, desc)
 		},
 	}
+}
+
+// acctTransferOptions builds the From/To pickers for BOTH transfer forms with one
+// eligibility rule (C2): money moves FROM liquid cash only (a 401(k) or the condo
+// can't be a source of a spending transfer), and it lands anywhere except a
+// valuation-only holding (property/vehicle) — a transfer TO a liability is a payment
+// and says so on the option label. Each side still excludes the other's selection.
+func acctTransferOptions(accounts []domain.Account, fromID, toID string) (fromOpts, toOpts []uiw.SelectOption) {
+	fromOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
+	toOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
+	for _, ac := range accounts {
+		if ac.Archived {
+			continue
+		}
+		// Annotate the currency — unless the account NAME already carries it (e.g. the
+		// sample "Travel Card (EUR)"), which would read as "Travel Card (EUR) (EUR)".
+		lbl := ac.Name
+		if !strings.Contains(strings.ToUpper(ac.Name), "("+strings.ToUpper(ac.Currency)+")") {
+			lbl += " (" + ac.Currency + ")"
+		}
+		if ac.ID != toID && earmarkEligibleType(ac.Type) {
+			fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
+		}
+		if ac.ID != fromID && ac.Type != domain.TypeProperty && ac.Type != domain.TypeVehicle {
+			toLbl := lbl
+			if ac.Class == domain.ClassLiability {
+				toLbl += uistate.T("accounts.transferPaymentSuffix")
+			}
+			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: toLbl})
+		}
+	}
+	return fromOpts, toOpts
+}
+
+// acctTransferFXNote surfaces the cross-currency semantics BEFORE the transfer is
+// posted (G7): the amount is denominated in the source currency, and either lands
+// converted at the saved rate (with a live ≈ preview of the typed amount) or — when
+// no rate exists — a warning that it would land unconverted, pointing at Manage
+// exchange rates. Renders nothing for same-currency pairs or incomplete picks.
+func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.Node {
+	if app == nil || fromID == "" || toID == "" {
+		return Fragment()
+	}
+	var fromAc, toAc domain.Account
+	for _, ac := range app.Accounts() {
+		if ac.ID == fromID {
+			fromAc = ac
+		}
+		if ac.ID == toID {
+			toAc = ac
+		}
+	}
+	if fromAc.ID == "" || toAc.ID == "" || fromAc.Currency == toAc.Currency {
+		return Fragment()
+	}
+	s := app.Settings()
+	rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
+	dec := currency.Decimals(fromAc.Currency)
+	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), dec)
+	if perr != nil || amtMinor <= 0 {
+		amtMinor = int64(1)
+		for i := 0; i < dec; i++ {
+			amtMinor *= 10
+		} // preview 1.00 until an amount is typed
+	}
+	conv, cerr := rates.Convert(money.New(amtMinor, fromAc.Currency), toAc.Currency)
+	if cerr != nil {
+		return P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "xfer-fx-norate"),
+			uistate.T("accounts.fxNoteNoRate", fromAc.Currency, toAc.Currency))
+	}
+	return P(css.Class("budget-sub"), Attr("data-testid", "xfer-fx-note"),
+		Style(map[string]string{"margin": "0"}),
+		uistate.T("accounts.fxNoteAmountIn", fromAc.Currency, toAc.Currency, fmtMoney(conv)))
 }
 
 // doAccountTransfer creates a transfer pair from the page/row transfer forms. Pure
@@ -248,7 +344,8 @@ func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, dateStr, desc
 		return
 	}
 	uistate.BumpDataRevision()
-	uistate.PostNotice(uistate.T("accounts.transferDone"), false)
+	// G3: a transfer posts two real transactions — one-click reversible.
+	uistate.PostUndoable(uistate.T("accounts.transferDone"))
 }
 
 // acctViewTransactions returns an OnView handler that pins the ledger filter to one
@@ -452,6 +549,8 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	onToggleArch := ui.UseEvent(Prevent(func() { setFilter(func(x *uistate.AccountsFilter) { x.ShowArchived = !x.ShowArchived }) }))
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 	openTransfer := ui.UseEvent(Prevent(func() { transferAtom.Set(true) }))
+	// G1: page-local account creation — every sibling page anchors its toolbar with Add.
+	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
 	// AC1: open the account-group manager. When at least one group exists, jump
 	// straight to editing the first (its header carries per-group edit too); with
 	// none, start a new group.
@@ -590,9 +689,12 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				uistate.T("accounts.institutionsAction"), "modal", "", institutionsAtom.Get(), openInstitutions)),
 			If(len(accounts) >= 2, acctToolbarGlyph("acct-sweep-btn", icon.TrendingUp,
 				uistate.T("acctSweepCfg.title"), "modal", "", sweepAtom.Get(), openSweep)),
-			// Primary action last → right end of the left-justified group.
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
-				uistate.T("accounts.transferMoney"), "modal", "primary", transferAtom.Get(), openTransfer)),
+				uistate.T("accounts.transferMoney"), "modal", "", transferAtom.Get(), openTransfer)),
+			// G1 + primary-last convention: "+ Add account" anchors the right end, exactly
+			// like the budgets and goals toolbars.
+			acctToolbarGlyph("accounts-add", icon.Plus,
+				uistate.T("accounts.addTitle"), "modal", "primary", false, openAdd),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{
@@ -634,20 +736,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	}))
 
 	pfrom, pto := fromS.Get(), toS.Get()
-	fromOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
-	toOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
-	for _, ac := range app.Accounts() {
-		if ac.Archived {
-			continue
-		}
-		lbl := ac.Name + " (" + ac.Currency + ")"
-		if ac.ID != pto {
-			fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
-		}
-		if ac.ID != pfrom {
-			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: lbl})
-		}
-	}
+	// C2: one shared eligibility rule for both transfer forms (liquid sources; no
+	// property/vehicle destinations; liabilities labelled as payments).
+	fromOpts, toOpts := acctTransferOptions(app.Accounts(), pfrom, pto)
 	sameAcct := pfrom != "" && pto != "" && pfrom == pto
 	submitDisabled := sameAcct || pfrom == "" || pto == ""
 
@@ -665,6 +756,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")), Value(amtS.Get()),
 					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt))),
+			// G7: cross-currency semantics said out loud — denomination + live converted
+			// preview at the saved rate, or a no-rate warning before anything posts.
+			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(dateS.Get()), OnInput(onDate))),

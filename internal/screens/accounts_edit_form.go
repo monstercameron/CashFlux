@@ -162,7 +162,20 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onToggleExclNW := ui.UseEvent(func() { exclNWS.Set(!exclNWS.Get()) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
 	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
-	onInstID := func(v string) { instIDS.Set(v) }
+	// C6: ONE institution concept. Picking a directory entry also fills the free-text
+	// label from it (so the two storage fields agree and only one control shows);
+	// clearing the pick re-reveals the free-text fallback.
+	onInstID := func(v string) {
+		instIDS.Set(v)
+		if v != "" && app != nil {
+			for _, in := range sortedInstitutions(app) {
+				if in.ID == v {
+					institutionS.Set(in.TrimmedName())
+					break
+				}
+			}
+		}
+	}
 	onBeneficiaryNote := ui.UseEvent(func(v string) { beneficiaryNoteS.Set(v) })
 	onRevalueDays := ui.UseEvent(func(v string) { revalueDaysS.Set(v) })
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
@@ -295,7 +308,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	case uistate.AcctEditModeReconcile:
 		return reconcileForm(a, curCleared, dec, stmtBalS, onStmtBal, cancel, cbs.OnRefresh, app)
 	case uistate.AcctEditModeTransfer:
-		return transferForm(a, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
+		return transferForm(a, app, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
 		// The edit and "update value / balance" actions share one merged editor: it can
 		// update the current value AND edit the account's details in a single save. When
@@ -423,23 +436,12 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS u
 	)
 }
 
-// transferForm is the transfer-between-accounts editor.
-func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferToS, xferAmtS, xferDateS, xferDescS ui.State[string], onXferAmt, onXferDate, onXferDesc, doTransfer, cancel ui.Handler) ui.Node {
+// transferForm is the transfer-between-accounts editor. It shares the eligibility
+// rule (C2) and the cross-currency note (G7) with the page-level form via
+// acctTransferOptions / acctTransferFXNote, so both entry points behave identically.
+func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account, xferFromS, xferToS, xferAmtS, xferDateS, xferDescS ui.State[string], onXferAmt, onXferDate, onXferDesc, doTransfer, cancel ui.Handler) ui.Node {
 	fromID, toID := xferFromS.Get(), xferToS.Get()
-	fromOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
-	toOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
-	for _, ac := range accounts {
-		if ac.Archived {
-			continue
-		}
-		label := ac.Name + " (" + ac.Currency + ")"
-		if ac.ID != toID {
-			fromOpts = append(fromOpts, uiw.SelectOption{Value: ac.ID, Label: label})
-		}
-		if ac.ID != fromID {
-			toOpts = append(toOpts, uiw.SelectOption{Value: ac.ID, Label: label})
-		}
-	}
+	fromOpts, toOpts := acctTransferOptions(accounts, fromID, toID)
 	sameAcct := fromID != "" && toID != "" && fromID == toID
 	submitDisabled := sameAcct || fromID == "" || toID == ""
 	return Form(css.Class("acct-edit-form"), Attr("id", "acct-transfer-form-"+a.ID),
@@ -456,6 +458,8 @@ func transferForm(a domain.Account, accounts []domain.Account, xferFromS, xferTo
 				Input(css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")), Value(xferAmtS.Get()),
 					Step("0.01"), Attr("min", "0.01"), OnInput(onXferAmt))),
+			// G7: cross-currency semantics — denomination + converted preview / no-rate warning.
+			acctTransferFXNote(app, fromID, toID, xferAmtS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(xferDateS.Get()), OnInput(onXferDate))),
@@ -527,9 +531,6 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 			// (record a new value) is the fast path; leaving it blank keeps the balance as-is.
 			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, onSetBalAmt, categories, focusValue),
 			labeledField(uistate.T("common.name"), Input(nameInput...)),
-			// Optional explicit variable name for formulas/widgets, with a live chip + collision warning.
-			labeledField(uistate.T("accounts.varNameLabel"),
-				entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName)),
 			labeledField(uistate.T("accounts.typeLabel"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options:   typeOptions,
@@ -592,39 +593,47 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), Value(x.stmtDayS.Get()), OnInput(x.onStmtDay)))),
 			If(isLiab, labeledField(uistate.T("accounts.lender"),
 				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
+			// C6: ONE Institution section. The directory picker leads (it colors the row
+			// and powers multi-institution analytics); picking an entry also sets the
+			// free-text label, which only shows as a fallback input while nothing is
+			// picked — so the modal never presents two competing "Institution" fields.
 			labeledField(uistate.T("accounts.institution"),
-				uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
-					AriaLabel: uistate.T("accounts.institution"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID})),
-			// AC10: the structured institution directory — separate from the free-text
-			// field above — colors this account's row and grounds the ★★
-			// Multi-Institution Analytics feature with a real entity. "Manage
-			// institutions" opens the shell-root directory modal to add a new one.
-			labeledField(uistate.T("accounts.institutionDirectoryLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 					uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: x.instIDS.Get(),
-						OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institutionDirectoryLabel"), TestID: "acct-edit-institution-select"}),
+						OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institution"), TestID: "acct-edit-institution-select"}),
 					Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-edit-manage-institutions"),
 						OnClick(x.openInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
+			If(x.instIDS.Get() == "", labeledField(uistate.T("accounts.institutionFreeLabel"),
+				uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
+					AriaLabel: uistate.T("accounts.institutionFreeLabel"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID}))),
 			// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
 			// go in the encrypted credential vault, never here.
 			labeledField(uistate.T("accounts.notes"),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
 					AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
+			// C7: the mega-form is grouped — identity + money essentials stay visible;
+			// plumbing (variable name), estate planning, and tuning live behind ONE
+			// disclosure, available for every class (a mortgage has a beneficiary too).
+			Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "acct-edit-more"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
+				IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
+			// Optional explicit variable name for formulas/widgets (engine plumbing).
+			If(editAdvOpen.Get(), labeledField(uistate.T("accounts.varNameLabel"),
+				entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName))),
 			// AC16: who inherits this account — a plain beneficiary / transfer-on-death
 			// note surfaced (compassionately, never with a password) in the estate
 			// emergency pack.
-			labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
-				uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
-					AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
-			// AC11: keep this account visible in its class views but out of net worth.
-			Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
-				Div(css.Class("row-main"),
-					Span(uistate.T("accountsstmt.excludeNetWorth")),
-					Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
-			If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
-				IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced"))))),
+			If(editAdvOpen.Get(), Fragment(
+				labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
+					uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
+						AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
+				// AC11: keep this account visible in its class views but out of net worth.
+				Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
+					Div(css.Class("row-main"),
+						Span(uistate.T("accountsstmt.excludeNetWorth")),
+						Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
+			)),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),

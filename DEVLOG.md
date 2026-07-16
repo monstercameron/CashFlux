@@ -1,3 +1,37 @@
+## 2026-07-16 — Accounts UX overhaul: all 18 audit items corrected (v1.0.54)
+
+Third audit-fix-grade cycle (after budgets and goals), Cam-directed. The accounts audit's sharpest
+findings were TYPE-BLINDNESS: the Condo offered "Reconcile to statement" (its modal read "Difference:
+−304000.00 … Adjust the statement balance to match" — actively inviting a six-figure adjustment), and
+the transfer pickers offered 401(k)s/mortgages/property as sources and destinations with only
+archived-filtering. Fixed with type-aware gating: reconcile hidden on isValuationType, transfers via
+one shared acctTransferOptions (liquid sources; no property/vehicle destinations; "· payment" suffix
+on liabilities). Also surfaced the engine's dangerous cross-currency fallback (CreateTransferPair
+silently posts UNCONVERTED minor units when no FX rate exists) as a UI guard: both transfer forms show
+"amount is in X, lands in Y as ≈ Z at your saved rate" or a no-rate warning.
+
+Structural: balance figure = click-to-edit on every row (the one consistent update affordance; kebab
+duplicate removed), Transactions inline (was buried beside Delete), kebab regrouped rituals →
+security/lifecycle with differentiating tooltips (the three balance rituals finally explain
+themselves), credentials vault beside Archive/Delete with an "encrypted, device-local" tooltip.
+Delete now confirms then offers Undo (cross-entity consistency); archive/restore/balance-set/transfer
+all undoable; "+ Add account" joins the toolbar; copy-existing prefill; friendly name-required copy;
+ONE Institution control in the edit modal (directory picker fills the free-text label; combobox only
+as fallback); mega-form grouped behind "More options" (liabilities included — a mortgage has a
+beneficiary too).
+
+Notable non-defects discovered while updating the spec: accounts.spec had TWO pre-existing failures
+(the `.bt-kind` toolbar badges were intentionally removed in an earlier redesign; the notes line moved
+inside the AC-series details fold) — updated to current contracts alongside my own kebab-contract
+change. 9/9 accounts tests green. A concurrent agent's WIP kept tripping the gwc dev overlay during
+live verification — worked around with an overlay-strip initScript rather than touching their files.
+**Adversarial grade: 8/10 → fix → 9/10 (pass).** The critic passed all 18 items first try but held
+the grade at 8 on one real naming defect my shared option-builder introduced: the " (CUR)" annotation
+duplicated when an account's NAME already embeds its currency ("Travel Card (EUR) (EUR) · payment").
+Fixed with a name-carries-currency check; re-verified live on both transfer forms (zero duplicates,
+FX note intact) → 9/10. The critic's residual notes (the check is a heuristic; the institution prompt
+is plainer than a picker) were judged defensible, not defects.
+
 ## 2026-07-16 — Redesign the tracked cats/tags editor: searchable tag picker + this-month meta
 
 Cam on the first cut: "the ui is dogshit, also allow for pre-existing tag searching," and "add a little

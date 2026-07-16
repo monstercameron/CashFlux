@@ -196,6 +196,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	// The encrypted credential vault opens in its own shell-root modal (CredentialVaultHost).
 	acctCredsAtom := uistate.UseAccountCredentials()
 	startCredentials := ui.UseEvent(Prevent(func() { menuOpen.Set(false); acctCredsAtom.Set(a.ID) }))
+	// G8: quick institution assignment from the row — a prompt seeded with the current
+	// value, normalised the same way the add form normalises it. No modal round-trip.
+	setInstitution := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		uistate.PromptModal(uistate.T("accounts.setInstitutionPrompt", a.Name), a.Institution, func(v string) {
+			ac := a
+			ac.Institution = titleCaseWords(strings.TrimSpace(v))
+			props.OnSave(ac)
+			if ac.Institution == "" {
+				uistate.PostNotice(uistate.T("accounts.institutionCleared"), false)
+			} else {
+				uistate.PostNotice(uistate.T("accounts.institutionSet", ac.Institution), false)
+			}
+		})
+	}))
 	archLabel, archTitle := uistate.T("accounts.archive"), uistate.T("accounts.archiveTitle")
 	if a.Archived {
 		archLabel, archTitle = uistate.T("accounts.restore"), uistate.T("accounts.restoreTitle")
@@ -397,38 +412,51 @@ func AccountRow(props accountRowProps) ui.Node {
 						OnClick(toggleDetails), detailsLabel),
 				),
 			),
-			// L100-T1: the headline balance sits near the dim "cleared (…)" figure in the meta line and both
-			// render parenthesized for liabilities, so give the current balance an explicit accessible name
-			// (tooltip + aria-label) — it disambiguates "what I owe now" from the cleared balance for hover
-			// and screen-reader users without cluttering the row with a visible label.
-			Span(ClassStr(amountClass(dispBal)+" acct-row-figure"),
-				Title(uistate.T("accounts.balanceTitle")),
-				Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
-				fmtMoney(dispBal)),
+			// L100-T1: the headline balance carries an explicit accessible name to
+			// disambiguate it from the dim "cleared (…)" figure. G2/C4: the figure is
+			// also the ONE consistent update affordance on every row — click it to open
+			// the update-balance editor (dotted underline on hover signals editability);
+			// archived rows keep a plain, non-interactive figure.
+			IfElse(!a.Archived,
+				Button(ClassStr(amountClass(dispBal)+" acct-row-figure budget-limit-btn"), Type("button"),
+					Attr("data-testid", "acct-balance-btn-"+a.ID),
+					Title(uistate.T("accounts.balanceEditTitle")),
+					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+					OnClick(setBal),
+					fmtMoney(dispBal)),
+				Span(ClassStr(amountClass(dispBal)+" acct-row-figure"),
+					Title(uistate.T("accounts.balanceTitle")),
+					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
+					fmtMoney(dispBal))),
 			// Quick actions inline: "Update value/balance" for stale/valuation accounts
-			// (emphasized when stale), then "Edit" (always). Everything else — including
-			// Transactions — lives in the ⋯ menu.
+			// (emphasized when stale), Transactions (the highest-frequency navigation —
+			// no longer buried beside Delete), then "Edit". The ⋯ menu holds the money
+			// rituals (type-gated) and, grouped last, security + lifecycle.
 			Div(css.Class("acct-row-actions"),
 				If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID), Title(uistate.T("accounts.viewTxnsTitle")), OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 				Div(css.Class("add-wrap"), Attr("id", menuID),
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-						// Transactions moved into the menu (it's navigation, not a per-row edit).
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), OnClick(view), uistate.T("nav.transactions")),
-						// "Update value" lives in the menu only when it's not already an inline
-						// quick action (i.e. fresh cash accounts), so it's never duplicated.
-						If(!a.Archived && !showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-menu-"+a.ID), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
-						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
-						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-							Attr("data-testid", "transfer-start-btn-"+a.ID), OnClick(startTransfer),
-							uistate.T("accounts.transferAction"))),
-						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), OnClick(refresh), uistate.T("accounts.markUpdated"))),
-						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
+						// C1: reconcile-to-statement only where statements + transactions exist —
+						// a valuation account (property/vehicle/investment/…) uses Update value.
+						If(!a.Archived && !isValuationType(a.Type), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
+						// C2: money moves FROM liquid cash — a property or 401(k) row doesn't
+						// offer an outgoing transfer. (The page-level Transfer money picks any
+						// eligible source.) C9: one name for the action everywhere.
+						If(!a.Archived && earmarkEligibleType(a.Type), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+							Attr("data-testid", "transfer-start-btn-"+a.ID), Title(uistate.T("accounts.transferWhen")), OnClick(startTransfer),
+							uistate.T("accounts.transferMoney"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Title(uistate.T("accounts.markUpdatedWhen")), OnClick(refresh), uistate.T("accounts.markUpdated"))),
+						If(!a.Archived, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "set-institution-"+a.ID), OnClick(setInstitution), uistate.T("accounts.setInstitution"))),
+						// Security + lifecycle, grouped last: the encrypted vault sits beside
+						// Archive/Delete, not amid everyday money actions.
+						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Title(uistate.T("creds.menuItemTitle")), Attr("data-testid", "creds-start-btn-"+a.ID), OnClick(startCredentials), uistate.T("creds.menuItem")),
 						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("title", archTitle), OnClick(arch), archLabel),
-						// Delete moved out of the standalone ✕ column and into the menu as a
-						// destructive item (last, red) so a row's actions are all in one place.
+						// Delete stays in the menu as the last, destructive item (standing rule:
+						// delete never sits exposed on a row).
 						Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-account-btn-"+a.ID), Attr("aria-label", uistate.T("accounts.deleteTitle")), Title(uistate.T("accounts.deleteTitle")), OnClick(del), uistate.T("accounts.deleteAction")),
 					),
 				),

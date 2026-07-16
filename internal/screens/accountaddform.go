@@ -39,6 +39,18 @@ func AccountAddForm(props AccountAddFormProps) ui.Node {
 	return ui.CreateElement(accountAddForm, props)
 }
 
+// acctCopyOptions builds the "Copy an existing account…" starter options (G5): a
+// placeholder action label first, then every unarchived account.
+func acctCopyOptions(accounts []domain.Account) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.copyExisting")}}
+	for _, ac := range accounts {
+		if !ac.Archived {
+			opts = append(opts, uiw.SelectOption{Value: ac.ID, Label: ac.Name})
+		}
+	}
+	return opts
+}
+
 func accountAddForm(props AccountAddFormProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -126,7 +138,44 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		customVals.Set(nm)
 	}
 
+	// G5: copy an existing account — prefills the form (name gets a "copy" suffix; type,
+	// currency, owner, institution, and the class-appropriate figures carry over) so a
+	// second card at the same bank never means retyping everything.
+	copyFrom := func(aid string) {
+		for _, ac := range app.Accounts() {
+			if ac.ID != aid {
+				continue
+			}
+			name.Set(uistate.T("budgets.copySuffix", ac.Name))
+			accType.Set(string(ac.Type))
+			owner.Set(ac.OwnerID)
+			institution.Set(ac.Institution)
+			if ac.Currency != "" && ac.Currency != baseCur {
+				curr.Set(ac.Currency)
+				revealCurr.Set(true)
+			}
+			asLiab.Set(ac.Type == domain.TypeOther && ac.Class == domain.ClassLiability)
+			if ac.Class == domain.ClassLiability {
+				creditLimit.Set(moneyMajorOrEmpty(ac.CreditLimit, currency.Decimals(ac.Currency)))
+				apr.Set(floatOrEmpty(ac.InterestRateAPR))
+				minPayment.Set(moneyMajorOrEmpty(ac.MinPayment, currency.Decimals(ac.Currency)))
+				dueDay.Set(intOrEmpty(ac.DueDayOfMonth))
+				lender.Set(ac.Lender)
+			} else {
+				expReturn.Set(floatOrEmpty(ac.ExpectedReturnAPR))
+				liquidity.Set(intOrEmpty(ac.LiquidityScore))
+				stability.Set(intOrEmpty(ac.StabilityScore))
+			}
+			return
+		}
+	}
+
 	add := ui.UseEvent(Prevent(func() {
+		// G6: product copy, not a leaked validator string.
+		if strings.TrimSpace(name.Get()) == "" {
+			errMsg.Set(uistate.T("accounts.nameRequired"))
+			return
+		}
 		c := strings.ToUpper(strings.TrimSpace(curr.Get()))
 		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(c))
 		if err != nil {
@@ -256,16 +305,15 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		If(len(app.Accounts()) == 0,
 			P(css.Class("notice", tw.Text12), Attr("data-testid", "account-firstrun-hint"),
 				uistate.T("accounts.firstRunHint"))),
-		// Name + Variable name stack full-width at the top (the account's identity), so the
-		// var-name field reads directly under the name rather than in the grid's 2nd column.
+		// G5: the copy-existing starter (only once accounts exist to copy).
+		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: acctCopyOptions(app.Accounts()), Selected: "", TestID: "account-copy-existing",
+				OnChange: func(v string) { copyFrom(v) }, AriaLabel: uistate.T("accounts.copyExisting"),
+			}))),
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
 				Input(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...)...))),
-		// Optional explicit variable name for formulas/widgets (autosuggested from the
-		// name), with a live chip showing the generated handle + a collision warning.
-		Div(Attr("style", "grid-column:1 / -1"),
-			labeledField(uistate.T("accounts.varNameLabel"),
-				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
 		labeledField(uistate.T("accounts.typeLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   typeOptions,
@@ -377,8 +425,13 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 				Options:     domain.UniqueInstitutions(app.Accounts()),
 				ListID:      "inst-list-add",
 			})),
-		If(!isLiab, Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
-			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced"))))),
+		Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "account-add-advanced"), Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(onToggleAdv),
+			IfElse(advOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
+		// Optional explicit variable name for formulas/widgets — engine plumbing, behind
+		// the disclosure (same convention as the budgets and goals add forms).
+		If(advOpen.Get(), Div(Attr("style", "grid-column:1 / -1"),
+			labeledField(uistate.T("accounts.varNameLabel"),
+				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 			Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
