@@ -17,6 +17,18 @@
       "avgPageScore": 98,
       "loadScore": 51,
       "capturedAt": "2026-07-12T03:00:36.782Z"
+    },
+    {
+      "version": "1.0.43",
+      "avgPageScore": 95,
+      "loadScore": 50,
+      "capturedAt": "2026-07-15T15:55:10.565Z"
+    },
+    {
+      "version": "1.0.44",
+      "avgPageScore": 88,
+      "loadScore": 50,
+      "capturedAt": "2026-07-15T17:44:37.404Z"
     }
   ]
 }

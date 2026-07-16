@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/router"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -42,6 +43,7 @@ func init() {
 		return ui.CreateElement(savedViewPinnedTile, savedViewTileProps{
 			App: c.App, Txns: c.Txns, Rates: c.Rates, Base: c.Base,
 			ViewID: c.Spec.Settings[savedViewSettingsKey], SpecID: c.Spec.ID,
+			Preview: c.Preview,
 		})
 	})
 }
@@ -229,16 +231,21 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 
 	openAtom := uistate.UseSavedViewsOpen()
 	dismissAtom := uistate.UseSavedViewThresholdDismissals()
+	// Resolve every shared atom here in render — UseLayoutItems / UseTxFilter are
+	// hooks and must never be called inside an event handler; the handlers below
+	// only read/set the captured atoms.
+	layoutAtom := uistate.UseLayoutItems()
+	txFilterAtom := uistate.UseTxFilter()
 
 	apply := ui.UseEvent(Prevent(func() {
-		next := v.Criteria.ResetPageIfScopeChanged(uistate.UseTxFilter().Get())
-		uistate.UseTxFilter().Set(next)
+		next := v.Criteria.ResetPageIfScopeChanged(txFilterAtom.Get())
+		txFilterAtom.Set(next)
 		uistate.PersistTxFilter(next)
 		uistate.BumpDataRevision()
 		openAtom.Set(false)
 	}))
 	pin := ui.UseEvent(Prevent(func() {
-		pinSavedView(props.App, v)
+		pinSavedView(props.App, v, layoutAtom)
 		uistate.PostNotice(uistate.T("savedViews.pinned", v.Name), false)
 		openAtom.Set(false)
 	}))
@@ -250,7 +257,7 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 	toggleAlert := ui.UseEvent(Prevent(func() { alertOpen.Set(!alertOpen.Get()) }))
 
 	summary := uistate.T("savedViews.rowSummary",
-		fmtMoney(money.New(props.Total, props.Base)), plural(props.Count, "match"))
+		fmtMoney(money.New(props.Total, props.Base)), savedViewMatches(props.Count))
 
 	alertLabel := uistate.T("savedViews.setAlert")
 	if v.Threshold > 0 {
@@ -362,7 +369,10 @@ func savedViewAlertForm(props savedViewAlertFormProps) ui.Node {
 // layout and rendered by the shared savedViewNativeID renderer. Mirrors the
 // Studio "publish to dashboard" flow (userSpecPrefix id + PutPlacements + layout
 // append).
-func pinSavedView(app *appstate.App, v savedtxnview.SavedTxnView) {
+// pinSavedView takes the bento layout atom (resolved by the caller during render —
+// UseLayoutItems is a hook and must never be called inside an event handler) and
+// only reads/sets it here, so pinning stays a safe guarded update from a callback.
+func pinSavedView(app *appstate.App, v savedtxnview.SavedTxnView, layoutAtom state.Atom[[]dashlayout.Item]) {
 	wid := userSpecPrefix + id.New()
 	spec := domain.WidgetSpec{
 		SchemaVersion: domain.WidgetSpecVersion,
@@ -380,7 +390,6 @@ func pinSavedView(app *appstate.App, v savedtxnview.SavedTxnView) {
 	if err := app.PutPlacements([]domain.Placement{pl}); err != nil {
 		return
 	}
-	layoutAtom := uistate.UseLayoutItems()
 	next := append([]dashlayout.Item(nil), layoutAtom.Get()...)
 	next = append(next, item)
 	layoutAtom.Set(next)
@@ -396,6 +405,9 @@ type savedViewTileProps struct {
 	Base   string
 	ViewID string
 	SpecID string
+	// Preview marks a non-interactive render (Studio live preview): the tile drops
+	// its drag/resize/gear affordances, matching every other dashboard widget.
+	Preview bool
 }
 
 // savedViewPinnedTile renders a pinned saved view on the dashboard: the view's
@@ -410,28 +422,51 @@ func savedViewPinnedTile(props savedViewTileProps) ui.Node {
 	if !ok {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: props.SpecID, Title: uistate.T("savedViews.title"),
+			Draggable: !props.Preview, Resizable: !props.Preview, Preview: props.Preview,
 			Body: P(css.Class("empty"), uistate.T("savedViews.empty")),
 		})
 	}
 
 	count, total := v.Summary(props.Txns, baseAmountFunc(props.Rates, props.Base))
+	// Resolve the filter atom in render — UseTxFilter is a hook; the handler only
+	// reads/sets the captured atom.
+	txFilterAtom := uistate.UseTxFilter()
 	go2 := ui.UseEvent(Prevent(func() {
-		next := v.Criteria.ResetPageIfScopeChanged(uistate.UseTxFilter().Get())
-		uistate.UseTxFilter().Set(next)
+		next := v.Criteria.ResetPageIfScopeChanged(txFilterAtom.Get())
+		txFilterAtom.Set(next)
 		uistate.PersistTxFilter(next)
 		uistate.BumpDataRevision()
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}))
 
-	summary := uistate.T("savedViews.rowSummary",
-		fmtMoney(money.New(total, props.Base)), plural(count, "match"))
-
+	// The tile is one click-through card: an eyebrow that names it as a saved view
+	// (with the filter icon for identity), the live total as the hero figure, the
+	// match count, and an "Open" affordance that reads as tappable.
 	return uiw.Widget(uiw.WidgetProps{
-		ID: props.SpecID, Title: v.Name, ChromeHover: true,
+		ID: props.SpecID, Title: v.Name,
+		Draggable: !props.Preview, Resizable: !props.Preview, Preview: props.Preview,
+		BodyClass: tw.Fold(tw.Flex, tw.FlexCol, tw.MinH0),
 		Body: Button(css.Class("saved-view-tile"), Type("button"), Attr("data-testid", "saved-view-tile"),
 			Attr("aria-label", uistate.T("savedViews.applyAria", v.Name)), OnClick(go2),
-			Span(css.Class("saved-view-tile-total"), Text(fmtMoney(money.New(total, props.Base)))),
-			Span(css.Class("saved-view-tile-sub t-caption"), Text(summary)),
+			Div(css.Class("saved-view-tile-eyebrow"),
+				uiw.Icon(icon.List, css.Class("saved-view-tile-ico")),
+				Span(Text(uistate.T("savedViews.eyebrow")))),
+			Div(css.Class("saved-view-tile-body"),
+				Div(css.Class("saved-view-tile-figs"),
+					Span(css.Class("saved-view-tile-total"), Text(fmtMoney(money.New(total, props.Base)))),
+					Span(css.Class("saved-view-tile-sub"), Text(savedViewMatches(count)))),
+				Span(css.Class("saved-view-tile-go"),
+					Span(Text(uistate.T("savedViews.open"))),
+					uiw.Icon(icon.ChevronRight, css.Class("saved-view-tile-go-ico")))),
 		),
 	})
+}
+
+// savedViewMatches returns the correctly pluralized match-count phrase for a saved
+// view ("1 match" / "N matches") — the generic plural() helper mangles "match".
+func savedViewMatches(n int) string {
+	if n == 1 {
+		return uistate.T("savedViews.matchesOne")
+	}
+	return uistate.T("savedViews.matchesMany", n)
 }

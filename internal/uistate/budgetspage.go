@@ -112,6 +112,11 @@ func UseDebtShowFormulas() state.Atom[bool] { return state.UseAtom("debt:showFor
 // AutoBudgetHost renders the modal when true.
 func UseBudgetAutoOpen() state.Atom[bool] { return state.UseAtom("budgets:autoOpen", false) }
 
+// UseCoverAllOpen returns the shared atom controlling whether the "Cover overages"
+// flip modal is open (SMART-B14). The over-banner's "Cover all" button sets it; the
+// shell-root budgetsCoverAllModal renders the modal when true.
+func UseCoverAllOpen() state.Atom[bool] { return state.UseAtom("budgets:coverAllOpen", false) }
+
 // UseBudgetBasisOpen returns the shared atom controlling whether the "Income to budget
 // with" flip modal is open. The budget summary's income button sets it; the shell-root
 // BudgetBasisHost renders the modal (the income-source picker + rules) when true. Lives
@@ -162,6 +167,10 @@ func CommitBudgetBasisDraft(d BudgetBasisDraft) {
 	p.BudgetIncomeAvgMonths = d.AvgMonths
 	p.BudgetRolloverLeftover = d.Rollover
 	SetPrefs(p)
+	// Flush the dataset now so the choice survives a refresh right after Save — SetPrefs
+	// writes to the store, but the autosave only reaches IndexedDB on its ticker/pagehide,
+	// and a fire-and-forget write can be lost if the reload beats it (C2).
+	RequestPersist()
 }
 
 // Budget sort keys the budget list can be ordered by (the toolbar's Sort control sets

@@ -6,18 +6,21 @@ package screens
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nlfilter"
+	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -177,6 +180,34 @@ type txnToolbarProps struct {
 // and the import / review-duplicates sub-view toggles), plus a select-all control, a
 // duplicate notice, and a screen-reader live summary of the filtered set. It writes
 // the shared filter / view / selection atoms so the table and bulk tiles react in step.
+// txnLargeThreshold is the absolute-amount floor (major units) the "Large" quick
+// filter applies via AmountMin (TXC-3).
+const txnLargeThreshold = "100"
+
+// txnPresetProps configures one quick-filter preset chip.
+type txnPresetProps struct {
+	Label    string
+	TestID   string
+	Active   bool
+	Count    int // matching-transaction count, shown like the toolbar's "Review N"
+	OnToggle func()
+}
+
+// txnPresetChip is one quick-filter chip (its own component so its OnClick hook is
+// never registered inside a loop). Clicking toggles the preset's filter; a trailing
+// count communicates the payoff before the click.
+func txnPresetChip(props txnPresetProps) ui.Node {
+	on := ui.UseEvent(func() { props.OnToggle() })
+	cls := "txn-preset"
+	if props.Active {
+		cls += " on"
+	}
+	return Button(css.Class(cls), Type("button"), Attr("data-testid", props.TestID),
+		Attr("aria-pressed", ariaBool(props.Active)), OnClick(on),
+		Span(props.Label),
+		Span(css.Class("txn-preset-count"), strconv.Itoa(props.Count)))
+}
+
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseTxFilter()
@@ -184,6 +215,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	colsModalAtom := uistate.UseTxnColsModalOpen()
 	smartCatAtom := uistate.UseTxnSmartCatOpen()
 	openSmartCat := ui.UseEvent(Prevent(func() { smartCatAtom.Set(true) }))
+	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	importPanelAtom := uistate.UseImportPanelOpen()
 	openImportPanel := ui.UseEvent(Prevent(func() { importPanelAtom.Set(true) }))
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
@@ -212,6 +244,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	categories := app.Categories()
 	members := app.Members()
 	txns := app.Transactions()
+	reviewN := reviewqueue.Count(txns)
 
 	accName := make(map[string]string, len(accounts))
 	for _, a := range accounts {
@@ -573,6 +606,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// needing a hover to decode a bare icon. All left-justified as one group, with the
 		// primary "+ Add transaction" LAST so it anchors the right end of the group.
 		Actions: []ui.Node{
+			// Review inbox (CG-S2): the guided triage entry point, shown only when
+			// something needs review, with a live count so the backlog is visible.
+			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
 			toolbarIconBtnOpen("txn-import-btn", icon.Upload, importBtnLabel, openImportPanel, "", importPanelAtom.Get()),
 			toolbarIconBtnOpen("txn-dupes-btn", icon.Copy, dupBtnLabel, openDuplicates, "", dupModalAtom.Get()),
@@ -622,9 +658,75 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}
 	statusLine := P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus))
 
+	// TXC-3: quick-filter preset chips — one-tap common filters that write the
+	// persisted criteria (each shows "on" when its filter is engaged, toggles off).
+	monthStart := dateutil.MonthStart(time.Now())
+	monthFrom := dateutil.FormatDate(monthStart)
+	monthEndEx := dateutil.AddMonths(monthStart, 1)
+	monthTo := dateutil.FormatDate(monthEndEx.AddDate(0, 0, -1))
+	// Preset match counts (one pass) — like the toolbar's "Review N", so each chip
+	// shows its payoff before the click.
+	var uncatN, reviewN2, largeN, monthN int
+	for _, t := range txns {
+		if !t.IsTransfer() && t.CategoryID == "" {
+			uncatN++
+		}
+		for _, tag := range t.Tags {
+			if tag == reviewqueue.ReviewTag {
+				reviewN2++
+				break
+			}
+		}
+		if txnfilter.AbsAmount(t) >= currency.MinorFromMajor(100, t.Amount.Currency) {
+			largeN++
+		}
+		if dateutil.InRange(t.Date, monthStart, monthEndEx) {
+			monthN++
+		}
+	}
+	presetsRow := Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
+		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetUncategorized"), TestID: "txn-preset-uncat", Active: f.Uncategorized, Count: uncatN,
+			OnToggle: func() { setFilter(func(x *uistate.TxFilter) { x.Uncategorized = !x.Uncategorized }) }}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetNeedsReview"), TestID: "txn-preset-review", Active: f.Tag == reviewqueue.ReviewTag, Count: reviewN2,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.Tag == reviewqueue.ReviewTag {
+						x.Tag = ""
+					} else {
+						x.Tag = reviewqueue.ReviewTag
+					}
+				})
+			}}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetLarge"), TestID: "txn-preset-large", Active: f.AmountMin == txnLargeThreshold, Count: largeN,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.AmountMin == txnLargeThreshold {
+						x.AmountMin = ""
+					} else {
+						x.AmountMin = txnLargeThreshold
+					}
+				})
+			}}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetThisMonth"), TestID: "txn-preset-month", Active: f.From == monthFrom && f.To == monthTo, Count: monthN,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.From == monthFrom && x.To == monthTo {
+						x.From, x.To = "", ""
+					} else {
+						x.From, x.To = monthFrom, monthTo
+					}
+				})
+			}}),
+	)
+
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(toolbar, interpretRow, statusLine),
+		Body: Div(toolbar, presetsRow, interpretRow, statusLine),
 	})
 }
 
@@ -691,15 +793,17 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				prior = append(prior, t)
 			}
 		}
-		for _, t := range app.Transactions() {
-			if !sel[t.ID] || t.Cleared == val {
-				continue
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || t.Cleared == val {
+					continue
+				}
+				t.Cleared = val
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(uistate.T("transactions.bulkClearErr", err.Error()), true)
+				}
 			}
-			t.Cleared = val
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(uistate.T("transactions.bulkClearErr", err.Error()), true)
-			}
-		}
+		})
 		opKey := "transactions.bulkOpCleared"
 		if !val {
 			opKey = "transactions.bulkOpUncleared"
@@ -711,6 +815,39 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	bulkMarkCleared := ui.UseEvent(Prevent(func() { bulkSetCleared(true) }))
 	bulkMarkUncleared := ui.UseEvent(Prevent(func() { bulkSetCleared(false) }))
 
+	// TXC-1: bulk exclude / include the selected transactions in budgets & reports —
+	// the main use case (a batch of reimbursements or internal transfers), so it
+	// doesn't have to be done one row at a time.
+	bulkSetExclude := func(val bool) {
+		sel := selAtom.Get()
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && t.ExcludeFromReports != val {
+				prior = append(prior, t)
+			}
+		}
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || t.ExcludeFromReports == val {
+					continue
+				}
+				t.ExcludeFromReports = val
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(err.Error(), true)
+				}
+			}
+		})
+		opKey := "transactions.bulkOpExcluded"
+		if !val {
+			opKey = "transactions.bulkOpIncluded"
+		}
+		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T(opKey, len(prior)), Prior: prior})
+		clearSel()
+		uistate.BumpDataRevision()
+	}
+	bulkExclude := ui.UseEvent(Prevent(func() { bulkSetExclude(true) }))
+	bulkInclude := ui.UseEvent(Prevent(func() { bulkSetExclude(false) }))
+
 	bulkRecategorize := ui.UseEvent(Prevent(func() {
 		sel := selAtom.Get()
 		cid := bulkCatAtom.Get()
@@ -720,15 +857,17 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				prior = append(prior, t)
 			}
 		}
-		for _, t := range app.Transactions() {
-			if !sel[t.ID] || t.IsTransfer() {
-				continue
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || t.IsTransfer() {
+					continue
+				}
+				t.CategoryID = cid
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(uistate.T("transactions.bulkRecatErr", err.Error()), true)
+				}
 			}
-			t.CategoryID = cid
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(uistate.T("transactions.bulkRecatErr", err.Error()), true)
-			}
-		}
+		})
 		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpRecategorized", len(prior)), Prior: prior})
 		clearSel()
 		bulkCatAtom.Set("")
@@ -744,15 +883,17 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				prior = append(prior, t)
 			}
 		}
-		for _, t := range app.Transactions() {
-			if !sel[t.ID] || t.MemberID == mid {
-				continue
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || t.MemberID == mid {
+					continue
+				}
+				t.MemberID = mid
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
+				}
 			}
-			t.MemberID = mid
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
-			}
-		}
+		})
 		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpAssigned", len(prior)), Prior: prior})
 		clearSel()
 		bulkMemAtom.Set("")
@@ -820,10 +961,12 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 					prior = append(prior, t)
 				}
 			}
+			ids := make([]string, 0, len(sel))
 			for id := range sel {
-				if err := app.DeleteTransactionWithTransferPair(id); err != nil {
-					uistate.PostNotice(err.Error(), true)
-				}
+				ids = append(ids, id)
+			}
+			if err := app.DeleteTransactionsBulk(ids); err != nil {
+				uistate.PostNotice(err.Error(), true)
 			}
 			undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpDeleted", len(prior)), Prior: prior})
 			clearSel()
@@ -834,34 +977,41 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 
 	clearSelection := ui.UseEvent(Prevent(clearSel))
 
-	bulkCatOpts := withAllOption(uistate.T("transactions.bulkNoCategory"),
-		uiw.OptionsFrom(app.Categories(), func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
-	bulkMemOpts := withAllOption(uistate.T("transactions.bulkNoMember"),
-		uiw.OptionsFrom(app.Members(), func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
-
 	n := len(selAtom.Get())
-	// Bulk-action bar: a single flat row — the category/member pickers stay as selects,
-	// the actions are sleek glyph buttons with hover labels (matching the toolbar), and it
-	// scrolls horizontally rather than wrapping. "Clear selection" is the escape action,
-	// kept as a plain text link.
-	body := Div(css.Class("bulk-bar", tw.Flex, tw.Gap2, tw.ItemsCenter),
-		Span(css.Class("muted", tw.Text13, tw.ShrinkO), uistate.T("transactions.selected", plural(n, "transaction"))),
-		uiw.SelectInput(uiw.SelectInputProps{
-			Options: bulkCatOpts, Selected: bulkCatAtom.Get(), AriaLabel: uistate.T("transactions.categoryToApply"),
-			OnChange: func(v string) { bulkCatAtom.Set(v) },
-		}),
-		toolbarIconBtn("", icon.Check, uistate.T("transactions.applyCategoryTitle"), bulkRecategorize, ""),
-		If(len(app.Members()) > 0, uiw.SelectInput(uiw.SelectInputProps{
-			Options: bulkMemOpts, Selected: bulkMemAtom.Get(), AriaLabel: uistate.T("transactions.memberToAssign"), TestID: "bulk-member-select",
-			OnChange: func(v string) { bulkMemAtom.Set(v) },
-		})),
-		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.assignMemberTitle"), bulkAssignMember, "")),
-		toolbarIconBtn("", icon.CheckCircle, uistate.T("transactions.markClearedTitle"), bulkMarkCleared, ""),
-		toolbarIconBtn("", icon.Ban, uistate.T("transactions.markUnclearedTitle"), bulkMarkUncleared, ""),
-		toolbarIconBtn("bulk-group-order", icon.Box, uistate.T("txnlinks.groupAction"), bulkGroupOrder, ""),
-		toolbarIconBtn("bulk-export-selected", icon.ArrowDown, uistate.T("transactions.exportSelectedTitle"), exportSelected, ""),
-		toolbarIconBtn("", icon.Close, uistate.T("transactions.deleteSelectedTitle"), bulkDelete, "danger"),
-		Button(css.Class("btn-link"), Type("button"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+	onBulkCat := ui.UseEvent(func(e ui.Event) { bulkCatAtom.Set(e.GetValue()) })
+	onBulkMem := ui.UseEvent(func(e ui.Event) { bulkMemAtom.Set(e.GetValue()) })
+
+	// Standard `.field` selects for the category / member to apply.
+	catSel := bulkCatAtom.Get()
+	catOpts := []any{css.Class("field"), Attr("data-testid", "bulk-category-select"), Attr("aria-label", uistate.T("transactions.categoryToApply")), OnChange(onBulkCat),
+		Option(Value(""), SelectedIf(catSel == ""), uistate.T("transactions.bulkNoCategory"))}
+	for _, c := range app.Categories() {
+		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catSel == c.ID), c.Name))
+	}
+	memSel := bulkMemAtom.Get()
+	memOpts := []any{css.Class("field"), Attr("data-testid", "bulk-member-select"), Attr("aria-label", uistate.T("transactions.memberToAssign")), OnChange(onBulkMem),
+		Option(Value(""), SelectedIf(memSel == ""), uistate.T("transactions.bulkNoMember"))}
+	for _, m := range app.Members() {
+		memOpts = append(memOpts, Option(Value(m.ID), SelectedIf(memSel == m.ID), m.Name))
+	}
+
+	// Bulk-action bar: the app's standard toolbar buttons (glyph + short label — the same
+	// `.btn btn-tool` the toolbar above uses) and standard `.field` selects. It wraps to a
+	// second row on narrow widths rather than scrolling or stacking into paragraphs.
+	body := Div(css.Class("bulk-bar", tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2),
+		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
+		Select(catOpts...),
+		toolbarIconBtn("bulk-apply-category", icon.Check, uistate.T("transactions.bulkCatShort"), bulkRecategorize, ""),
+		If(len(app.Members()) > 0, Select(memOpts...)),
+		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.bulkAssignShort"), bulkAssignMember, "")),
+		toolbarIconBtn("bulk-mark-cleared", icon.CheckCircle, uistate.T("transactions.bulkClearedShort"), bulkMarkCleared, ""),
+		toolbarIconBtn("bulk-mark-uncleared", icon.Ban, uistate.T("transactions.bulkUnclearedShort"), bulkMarkUncleared, ""),
+		toolbarIconBtn("bulk-exclude", icon.Ban, uistate.T("transactions.bulkExcludeShort"), bulkExclude, ""),
+		toolbarIconBtn("bulk-include", icon.Check, uistate.T("transactions.bulkIncludeShort"), bulkInclude, ""),
+		toolbarIconBtn("bulk-group-order", icon.Box, uistate.T("transactions.bulkGroupShort"), bulkGroupOrder, ""),
+		toolbarIconBtn("bulk-export-selected", icon.ArrowDown, uistate.T("transactions.bulkExportShort"), exportSelected, ""),
+		toolbarIconBtn("bulk-delete", icon.Close, uistate.T("transactions.bulkDeleteShort"), bulkDelete, "danger"),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "bulk-clear-selection"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-bulkbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

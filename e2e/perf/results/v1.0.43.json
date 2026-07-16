@@ -1,0 +1,171 @@
+{
+  "version": "1.0.43",
+  "capturedAt": "2026-07-15T15:55:10.563Z",
+  "generatedWith": {
+    "passes": 3,
+    "viewport": "1440x900",
+    "server": "e2e/serve.mjs (uncompressed static)",
+    "reducer": "best-of-N for CPU-time metrics (mount/TBT/settle) to filter OS-scheduler contention; median for CLS/DOM",
+    "note": "warm SPA navigation from '/'; cold-load section is the one-time wasm boot"
+  },
+  "summary": {
+    "avgPageScore": 95,
+    "loadScore": 50,
+    "rated": 1,
+    "unrated": 0,
+    "worst": [
+      {
+        "route": "/todo",
+        "score": 95
+      }
+    ],
+    "best": [
+      {
+        "route": "/todo",
+        "score": 95
+      }
+    ]
+  },
+  "coldLoad": {
+    "metrics": {
+      "appReadyMs": 4479,
+      "fcpMs": 44,
+      "lcpMs": 964,
+      "tbtMs": 4443,
+      "cls": 0.00006314019097222222,
+      "ttfbMs": 4.5,
+      "domContentLoadedMs": 126.39999999850988,
+      "loadEventMs": 127.80000000074506,
+      "transferMB": 19.833938598632812,
+      "wasmMB": 16.148194313049316
+    },
+    "score": 50,
+    "parts": {
+      "appReadyMs": {
+        "value": 4479,
+        "sub": 0.4412567636824123,
+        "weight": 30,
+        "p10": 1500,
+        "median": 4000,
+        "label": "Time to interactive",
+        "unit": "ms",
+        "hint": "Cold boot: wasm download + instantiate + seed + first mount, until the app signals ready."
+      },
+      "fcpMs": {
+        "value": 44,
+        "sub": 0.9999999919676583,
+        "weight": 15,
+        "p10": 1000,
+        "median": 2500,
+        "label": "First Contentful Paint",
+        "unit": "ms",
+        "hint": "When the first pixels of content paint."
+      },
+      "lcpMs": {
+        "value": 964,
+        "sub": 0.9438377484980902,
+        "weight": 20,
+        "p10": 1200,
+        "median": 3000,
+        "label": "Largest Contentful Paint",
+        "unit": "ms",
+        "hint": "When the largest content element paints."
+      },
+      "tbtMs": {
+        "value": 4443,
+        "sub": 0.009757296607722399,
+        "weight": 20,
+        "p10": 200,
+        "median": 600,
+        "label": "Blocking time (boot)",
+        "unit": "ms",
+        "hint": "Total blocking time from long tasks during boot — wasm instantiate/seed jank."
+      },
+      "transferMB": {
+        "value": 19.833938598632812,
+        "sub": 0.20063592790706064,
+        "weight": 15,
+        "p10": 2,
+        "median": 8,
+        "label": "Transfer weight",
+        "unit": "MB",
+        "hint": "Total bytes over the wire on cold load — dominated by the wasm binary."
+      }
+    }
+  },
+  "pages": [
+    {
+      "route": "/todo",
+      "label": "/todo",
+      "score": 95,
+      "grade": {
+        "letter": "A",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 110,
+        "tbtMs": 53,
+        "stableMs": 124.2,
+        "cls": 0.001,
+        "domNodes": 739,
+        "totalNodes": 1104,
+        "heapMB": 14.1
+      },
+      "parts": {
+        "mountMs": {
+          "value": 110,
+          "sub": 0.9140173196549313,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 53,
+          "sub": 0.9494003528334065,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 124.2,
+          "sub": 0.9677789900647988,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0.001,
+          "sub": 0.9992810175850944,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 739,
+          "sub": 0.912839922491116,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 3,
+      "errored": 0
+    }
+  ]
+}

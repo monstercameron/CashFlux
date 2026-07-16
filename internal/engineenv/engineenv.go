@@ -343,7 +343,7 @@ func computeAtoms(d Data) map[string]float64 {
 	// Period transaction counts (by sign), for "N deposits / N transactions" labels.
 	incCount, expCount := 0, 0
 	for _, t := range d.Transactions {
-		if !dateutil.InRange(t.Date, start, end) {
+		if !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		switch {

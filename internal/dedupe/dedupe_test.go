@@ -213,3 +213,38 @@ func TestCountIncomingDuplicates(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeIsNonLossy guards TXC-4: merging duplicates unions receipts and fills
+// empty identity/link fields from the removed rows, so nothing is silently lost.
+func TestMergeIsNonLossy(t *testing.T) {
+	survivor := domain.Transaction{
+		ID: "s", CategoryID: "", Payee: "", Tags: []string{"keep"},
+		Attachments: []domain.AttachmentRef{{ArtifactID: "r1"}},
+	}
+	other := domain.Transaction{
+		ID: "o", CategoryID: "food", Payee: "Corner Store", Note: "split w/ Priya",
+		BillAccountID: "cc", MemberID: "m1", Cleared: true, Tags: []string{"KEEP", "extra"},
+		Attachments: []domain.AttachmentRef{{ArtifactID: "r1"}, {ArtifactID: "r2"}},
+	}
+	m := Merge(survivor, []domain.Transaction{other})
+
+	if m.CategoryID != "food" {
+		t.Errorf("CategoryID = %q, want food (filled from the removed dup)", m.CategoryID)
+	}
+	if m.Payee != "Corner Store" || m.Note != "split w/ Priya" {
+		t.Errorf("payee/note not filled: %q / %q", m.Payee, m.Note)
+	}
+	if m.BillAccountID != "cc" || m.MemberID != "m1" {
+		t.Errorf("bill/member link not preserved: %q / %q", m.BillAccountID, m.MemberID)
+	}
+	if !m.Cleared {
+		t.Error("Cleared should be true (either side cleared)")
+	}
+	if len(m.Attachments) != 2 {
+		t.Errorf("attachments = %d, want 2 (r1 + r2, deduped)", len(m.Attachments))
+	}
+	// Tags unioned case-insensitively: keep, extra (KEEP deduped against keep).
+	if len(m.Tags) != 2 {
+		t.Errorf("tags = %v, want 2 (case-insensitive union)", m.Tags)
+	}
+}

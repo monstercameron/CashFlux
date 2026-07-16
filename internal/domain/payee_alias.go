@@ -26,4 +26,17 @@ type PayeeAlias struct {
 	Display string `json:"display"`
 	// CreatedAt records when the alias was learned.
 	CreatedAt time.Time `json:"createdAt"`
+	// History is the rename lineage: each PRIOR display name this merchant was shown
+	// as, oldest first (the current Display is not repeated). Appended whenever the
+	// display changes, so the cleanup UI can show what it used to be called.
+	History []PayeeAliasRename `json:"history,omitempty"`
+}
+
+// PayeeAliasRename is one entry in a payee alias's rename history: a display name the
+// merchant was previously shown as, and when it was replaced.
+type PayeeAliasRename struct {
+	// Display is the prior clean name.
+	Display string `json:"display"`
+	// At records when this name was superseded by a newer one.
+	At time.Time `json:"at"`
 }

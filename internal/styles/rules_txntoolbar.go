@@ -181,11 +181,25 @@ func registerTxnToolbar() {
 	// narrow so the whole row fits without needing to scroll — and crucially WITHOUT an
 	// overflow clip, which would cut off the glyph buttons' hover tooltips (they sit
 	// just below each button).
+	// Bulk-action bar: the app's standard toolbar buttons (.btn/.btn-tool) + standard
+	// .field selects, wrapping to a second row on narrow widths rather than scrolling or
+	// stacking. Nothing here overrides the shared button styling.
 	rule(".bulk-bar",
-		flexWrap("nowrap"),
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.5rem"),
+		padding("0.1rem 0"),
 	)
-	rule(".bulk-bar select",
-		maxWidth("150px"),
+	rule(".bulk-count",
+		flexShrink("0"),
+		whiteSpace("nowrap"),
+		fontSize("0.85rem"),
+		fontWeight("500"),
+		color("var(--text-dim)"),
+	)
+	rule(".bulk-bar select, .bulk-bar .field",
+		maxWidth("190px"),
 		minWidth("0"),
 	)
 

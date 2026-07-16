@@ -232,6 +232,17 @@ type Transaction struct {
 	// auto-review workflows (ActionFlagReview) skip tagging it "needs-review"
 	// (L43 — suppress the auto-tag on confident manual entry).
 	Reviewed bool `json:"reviewed,omitempty"`
+	// ExcludeFromReports, when true, keeps this transaction in account balances
+	// and net worth (it IS a real money movement) but drops it from budget spend,
+	// income/expense totals, category spend, and reports — for reimbursements,
+	// cash-back, a gift, or a one-off that would otherwise skew the analysis.
+	// (TXC-1.) The exclusion is applied at the analytics aggregation layer
+	// (ledger.PeriodTotals, reports, budgeting.Spent), never in balance math.
+	ExcludeFromReports bool `json:"excludeFromReports,omitempty"`
+	// Note is free-text the user attaches to a single transaction (a memo — e.g.
+	// "split with Priya, she owes half"), distinct from Desc (the payee/what) and
+	// Tags. Empty = none. (TXC-2.)
+	Note string `json:"note,omitempty"`
 	// BillAccountID marks this transaction as a recurring BILL PAYMENT toward a
 	// liability account (id). The Debt page reads the most recent such payment as
 	// the account's actual monthly payment (distinct from its minimum), and links
@@ -522,6 +533,12 @@ func (t Transaction) IsIncome() bool { return !t.IsTransfer() && t.Amount.IsPosi
 // IsExpense reports whether the transaction counts as an expense (negative,
 // non-transfer).
 func (t Transaction) IsExpense() bool { return !t.IsTransfer() && t.Amount.IsNegative() }
+
+// CountsInReports reports whether this transaction should feed budget spend,
+// income/expense totals, category spend, and reports. Excluded transactions
+// (TXC-1) still count toward account balances and net worth — the exclusion is
+// only for the analytical layer, never balance math.
+func (t Transaction) CountsInReports() bool { return !t.ExcludeFromReports }
 
 // Budget is a spending limit for a category, owned by a member (individual) or
 // the group (shared).

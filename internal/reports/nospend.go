@@ -31,7 +31,7 @@ func NoSpendDays(txns []domain.Transaction, start, end, now time.Time) int {
 
 	spent := map[string]bool{}
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		spent[t.Date.Format("2006-01-02")] = true

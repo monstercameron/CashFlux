@@ -23,14 +23,15 @@ import (
 func AddHost() uic.Node {
 	target := uistate.UseAddTarget()
 	taskParent := uistate.UseTaskAddParent() // hook — must run every render, before the early return
+	taskDue := uistate.UseTaskAddDue()       // hook — likewise (calendar day-click preset)
 
 	if target.Get() == "" {
 		return Fragment()
 	}
 
-	// Closing the add modal also clears any pending sub-task parent so the next plain "Add
-	// task" starts at the top level.
-	close := func() { uistate.SetAddTarget(""); uistate.SetTaskAddParent("") }
+	// Closing the add modal also clears any pending sub-task parent and calendar due
+	// preset so the next plain "Add task" starts at the top level with an empty date.
+	close := func() { uistate.SetAddTarget(""); uistate.SetTaskAddParent(""); uistate.SetTaskAddDue("") }
 
 	switch target.Get() {
 	case "goal":
@@ -81,7 +82,7 @@ func AddHost() uic.Node {
 			Height:   uiw.FlipMediumH,
 			NoFooter: true,
 			OnClose:  close,
-			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close, ParentID: taskParent.Get()}),
+			Back:     uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{OnDone: close, ParentID: taskParent.Get(), PresetDue: taskDue.Get()}),
 		})
 	case "category":
 		return uiw.FlipPanel(uiw.FlipPanelProps{

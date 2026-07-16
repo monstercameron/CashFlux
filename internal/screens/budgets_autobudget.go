@@ -184,7 +184,10 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		})
 	})
 
-	return Div(css.Class(tw.FlexCol),
+	// Use the standard modal shell (.acct-edit-form: min-height:100% flex column) so the
+	// .modal-scroll body fills the FlushBody panel and the .modal-foot stays pinned to
+	// the bottom even when few categories are listed — matching the Add-budget modal.
+	return Div(css.Class("acct-edit-form"),
 		Div(css.Class("modal-scroll"),
 			seg,
 			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),

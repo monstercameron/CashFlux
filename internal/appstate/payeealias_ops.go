@@ -35,8 +35,10 @@ func (a *App) ResolvePayee(raw string) string {
 
 // PutPayeeAlias validates and persists a payee alias, creating an id and stamping
 // CreatedAt when the alias is new. When an alias already exists for the same raw
-// payee (case-insensitively) its display name is updated in place rather than
-// creating a duplicate row, so re-learning a name is idempotent.
+// payee (case-insensitively) or the same id its display name is updated in place
+// rather than creating a duplicate row, so re-learning a name is idempotent — and
+// the PRIOR display is appended to the rename History so the cleanup UI can show the
+// lineage.
 //
 // Validation:
 //   - RawPayee and Display are non-empty after trimming.
@@ -50,15 +52,36 @@ func (a *App) PutPayeeAlias(p domain.PayeeAlias) error {
 		return fmt.Errorf("appstate: a payee alias needs a display name")
 	}
 
-	// Merge onto any existing alias for the same raw payee (case-insensitive).
-	if strings.TrimSpace(p.ID) == "" {
-		key := strings.ToLower(p.RawPayee)
-		for _, ex := range a.PayeeAliases() {
-			if strings.ToLower(strings.TrimSpace(ex.RawPayee)) == key {
-				p.ID = ex.ID
-				p.CreatedAt = ex.CreatedAt
+	// Find any existing alias for this mapping — by id (a /rules inline edit) or by raw
+	// payee (a fresh cleanup with no id) — so the row is updated in place, CreatedAt and
+	// History are preserved, and a genuine rename is recorded in the lineage.
+	all := a.PayeeAliases()
+	var existing *domain.PayeeAlias
+	if pid := strings.TrimSpace(p.ID); pid != "" {
+		for i := range all {
+			if all[i].ID == pid {
+				existing = &all[i]
 				break
 			}
+		}
+	}
+	if existing == nil {
+		key := strings.ToLower(p.RawPayee)
+		for i := range all {
+			if strings.ToLower(strings.TrimSpace(all[i].RawPayee)) == key {
+				existing = &all[i]
+				break
+			}
+		}
+	}
+	if existing != nil {
+		p.ID = existing.ID
+		p.CreatedAt = existing.CreatedAt
+		p.History = existing.History
+		// Record the previous display only when it actually changed, so re-saving the
+		// same name doesn't pad the history with duplicates.
+		if prev := strings.TrimSpace(existing.Display); prev != "" && !strings.EqualFold(prev, p.Display) {
+			p.History = append(p.History, domain.PayeeAliasRename{Display: prev, At: a.clock()})
 		}
 	}
 	if strings.TrimSpace(p.ID) == "" {
@@ -70,7 +93,7 @@ func (a *App) PutPayeeAlias(p domain.PayeeAlias) error {
 	if err := a.store.PutPayeeAlias(p); err != nil {
 		return fmt.Errorf("appstate: save payee alias: %w", err)
 	}
-	a.log.Info("payee alias saved", "id", p.ID, "raw", p.RawPayee, "display", p.Display)
+	a.log.Info("payee alias saved", "id", p.ID, "raw", p.RawPayee, "display", p.Display, "renames", len(p.History))
 	return nil
 }
 

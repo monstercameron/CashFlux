@@ -45,7 +45,7 @@ func TopPayeesTrailing(txns []domain.Transaction, days int, asOf time.Time, rate
 	}
 	groups := map[string]*agg{}
 	for _, t := range txns {
-		if !t.IsExpense() || t.Date.Before(cutoff) {
+		if !t.IsExpense() || !t.CountsInReports() || t.Date.Before(cutoff) {
 			continue
 		}
 		name := strings.TrimSpace(t.Payee)
@@ -98,7 +98,7 @@ func TopPayees(txns []domain.Transaction, start, end time.Time, rates currency.R
 	}
 	groups := map[string]*agg{}
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)

@@ -103,10 +103,11 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 					"border": "1px solid var(--border)", "border-radius": "8px", "background": "var(--bg-elev)"}),
 				P(css.Class("t-body"), proposedNote.Get()))),
 		ui.CreateElement(SplitEditor, splitEditorProps{
-			Txn:        editorTxn,
-			Categories: app.Categories(),
-			Members:    app.Members(),
-			OnSave:     save,
+			Txn:          editorTxn,
+			Categories:   app.Categories(),
+			Members:      app.Members(),
+			OnSave:       save,
+			FooterFormID: SplitModalFormID,
 		}),
 	)
 }

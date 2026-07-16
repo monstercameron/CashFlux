@@ -103,6 +103,29 @@ func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Tran
 			unified = append(unified, tag)
 		}
 	}
+	// Attachments (receipts) union: keep the survivor's, then append any receipt
+	// from an "other" not already present (dedupe by artifact id), so a merge never
+	// drops a receipt that lived on the row being removed. (TXC-4.)
+	attSeen := make(map[string]struct{}, len(survivor.Attachments))
+	for _, a := range survivor.Attachments {
+		attSeen[a.ArtifactID] = struct{}{}
+	}
+
+	// fill takes a value from the first "other" that has one, when the survivor's
+	// field is empty — so merging never silently loses a category, payee, memo,
+	// member, or a bill/subscription link that only the removed duplicate carried.
+	fill := func(dst *string, pick func(domain.Transaction) string) {
+		if *dst != "" {
+			return
+		}
+		for _, o := range others {
+			if v := pick(o); v != "" {
+				*dst = v
+				return
+			}
+		}
+	}
+
 	for _, other := range others {
 		if other.Cleared {
 			out.Cleared = true
@@ -114,10 +137,26 @@ func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Tran
 				unified = append(unified, tag)
 			}
 		}
+		for _, a := range other.Attachments {
+			if _, ok := attSeen[a.ArtifactID]; !ok {
+				attSeen[a.ArtifactID] = struct{}{}
+				out.Attachments = append(out.Attachments, a)
+			}
+		}
 	}
 	if len(unified) > 0 {
 		out.Tags = unified
 	}
+
+	// Fill empty identity/link fields from the removed duplicates (survivor wins
+	// when it already has a value).
+	fill(&out.CategoryID, func(t domain.Transaction) string { return t.CategoryID })
+	fill(&out.Payee, func(t domain.Transaction) string { return t.Payee })
+	fill(&out.Note, func(t domain.Transaction) string { return t.Note })
+	fill(&out.MemberID, func(t domain.Transaction) string { return t.MemberID })
+	fill(&out.BillAccountID, func(t domain.Transaction) string { return t.BillAccountID })
+	fill(&out.SubscriptionName, func(t domain.Transaction) string { return t.SubscriptionName })
+	fill(&out.SourceDocID, func(t domain.Transaction) string { return t.SourceDocID })
 
 	return out
 }

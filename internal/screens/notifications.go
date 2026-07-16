@@ -7,6 +7,7 @@ package screens
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -14,12 +15,65 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/router"
+	"github.com/monstercameron/GoWebComponents/v4/state"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
 // notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second
 // timestamp of the last time the user viewed the Notification Center (C271).
 const notifyLastSeenKey = "cashflux:notify:lastSeen"
+
+// UseNotifyView is the shared Live/History view selector for the Notifications
+// surface ("live" = the current feed, the default; "history" = the persisted
+// archive). Read by notifSurfaceShell.
+func UseNotifyView() state.Atom[string] { return state.UseAtom("notify:view", "live") }
+
+// notifSurfaceShellProps carries the app handle plus the already-built live
+// surface node so the shell can swap it for the archive view without rebuilding.
+type notifSurfaceShellProps struct {
+	App  *appstate.App
+	Live ui.Node
+}
+
+// notifSurfaceShell wraps the Notifications surface with a Live/History view
+// toggle: "Live" shows the existing feed (props.Live); "History" shows the
+// persisted archive (notificationHistoryView). On mount it folds the current
+// live feed into the archive so past alerts accumulate — idempotent, since the
+// seam dedupes by feed ID.
+func notifSurfaceShell(props notifSurfaceShellProps) ui.Node {
+	view := UseNotifyView()
+	cur := view.Get()
+
+	// Fill the archive from the live feed whenever the surface mounts. This is the
+	// least-invasive RecordNotification hook: it runs once per mount, off the live
+	// persisted feed, and dedupe-by-ID makes re-mounting safe (no double records).
+	ui.UseEffect(func() func() {
+		uistate.SyncFeedToArchive()
+		return nil
+	}, "notif-archive-sync")
+
+	setLive := ui.UseEvent(Prevent(func() { view.Set("live") }))
+	setHistory := ui.UseEvent(Prevent(func() { view.Set("history") }))
+
+	toggle := Div(css.Class("nhx-toggle"), Attr("role", "tablist"), Attr("aria-label", uistate.T("nav.notifications")),
+		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
+			Attr("data-testid", "notif-view-live"), Attr("aria-selected", ariaBool(cur != "history")),
+			OnClick(setLive), Text(uistate.T("notifHistory.live"))),
+		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
+			Attr("data-testid", "notif-view-history"), Attr("aria-selected", ariaBool(cur == "history")),
+			OnClick(setHistory), Text(uistate.T("notifHistory.history"))),
+	)
+
+	var content ui.Node = props.Live
+	if cur == "history" {
+		content = ui.CreateElement(notificationHistoryView, notifHistoryProps{App: props.App})
+	}
+
+	return Div(css.Class("nhx-surface"),
+		Div(css.Class("nhx-head"), toggle),
+		content,
+	)
+}
 
 // routeForNotify resolves a notification's link from the persisted route config
 // (uistate.NotifyRoutes — a store-backed, runtime-editable table, defaults seeded on

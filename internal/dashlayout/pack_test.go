@@ -35,20 +35,21 @@ func assertNoOverlap(t *testing.T, l Layout, cols int) {
 func TestPackDefaultReproducesArrangement(t *testing.T) {
 	got := Pack(DefaultItems(), 4)
 	want := map[string][2]int{ // id -> {col, row} (1-based)
-		"attention":    {1, 1}, // full-width digest at the top
-		"kpi-networth": {1, 2}, "kpi-income": {2, 2}, "kpi-spending": {3, 2}, "kpi-liabilities": {4, 2},
-		"kpi-assets": {1, 3}, "kpi-safetospend": {2, 3}, "recent": {3, 3},
-		"budgets": {1, 4}, "trend": {2, 4},
-		"goals": {3, 5}, "todo": {4, 5},
-		"accounts": {1, 6}, "cashflow": {3, 6},
-		"bills": {1, 7}, "savings": {3, 7},
-		"health":       {1, 8},
-		"breakdown":    {3, 8},
-		"freshness":    {1, 9},
-		"highlight":    {3, 9},
-		"smart-digest": {1, 10},
-		"anomaly-hub":  {3, 10}, // R25 always-on anomaly hub (added to DefaultItems)
-		"spotlight":    {3, 11}, // compound content-layout demo (backfills beside smart-digest's 2nd row)
+		"attention":     {1, 1}, // full-width digest at the top
+		"monthly-recap": {1, 2}, // full-width month-in-review banner (CG-S1) — pushes all below down one row
+		"kpi-networth":  {1, 3}, "kpi-income": {2, 3}, "kpi-spending": {3, 3}, "kpi-liabilities": {4, 3},
+		"kpi-assets": {1, 4}, "kpi-safetospend": {2, 4}, "recent": {3, 4},
+		"budgets": {1, 5}, "trend": {2, 5},
+		"goals": {3, 6}, "todo": {4, 6},
+		"accounts": {1, 7}, "cashflow": {3, 7},
+		"bills": {1, 8}, "savings": {3, 8},
+		"health":       {1, 9},
+		"breakdown":    {3, 9},
+		"freshness":    {1, 10},
+		"highlight":    {3, 10},
+		"smart-digest": {1, 11},
+		"anomaly-hub":  {3, 11}, // R25 always-on anomaly hub (added to DefaultItems)
+		"spotlight":    {3, 12}, // compound content-layout demo (backfills beside smart-digest's 2nd row)
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]

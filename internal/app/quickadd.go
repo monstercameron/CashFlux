@@ -195,6 +195,59 @@ func QuickAddHost() uic.Node {
 		}
 	}
 
+	// TXT: transaction quick-templates ("favourites"). onPick pre-fills the add
+	// form's existing state atoms from a chosen template (account, kind, amount,
+	// payee, description, category) so a frequent manual entry lands in one click.
+	// The amount atom holds a plain positive string, so we format the template's
+	// magnitude with its currency's decimals and carry the sign via the kind toggle.
+	onPick := func(t domain.TxnTemplate) {
+		if t.AccountID != "" {
+			acctID.Set(t.AccountID)
+		}
+		if t.IsExpense() {
+			kind.Set("Expense")
+		} else {
+			kind.Set("Income")
+		}
+		if t.AmountMinor != 0 {
+			mag := t.AmountMinor
+			if mag < 0 {
+				mag = -mag
+			}
+			amount.Set(money.FormatMinor(mag, currency.Decimals(t.Currency)))
+		}
+		payee.Set(t.Payee)
+		if t.Note != "" {
+			desc.Set(t.Note)
+		}
+		catID.Set(t.CategoryID)
+	}
+
+	// Build the draft field set the "Save as template" action snapshots from the
+	// live form. AmountMinor is the parsed magnitude against the effective account's
+	// currency; the sign is carried by Direction (from the Expense/Income toggle).
+	var draftCurrency string
+	var draftAmountMinor int64
+	if acc, ok := accountByID(accounts, effAcct); ok {
+		draftCurrency = acc.Currency
+		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr == nil {
+			draftAmountMinor = v
+		}
+	}
+	draftDir := domain.DirectionExpense
+	if kind.Get() == "Income" {
+		draftDir = domain.DirectionIncome
+	}
+	saveTemplateBtn := screens.SaveAsTemplateButton(screens.TxnTemplateDraft{
+		Payee:       strings.TrimSpace(payee.Get()),
+		CategoryID:  catID.Get(),
+		AccountID:   effAcct,
+		AmountMinor: draftAmountMinor,
+		Currency:    draftCurrency,
+		Direction:   draftDir,
+		Note:        strings.TrimSpace(desc.Get()),
+	}, nil)
+
 	acctOpts := make([]uic.Node, 0, len(accounts))
 	for _, a := range accounts {
 		// C41: don't offer archived accounts as a destination for a NEW transaction —
@@ -328,6 +381,13 @@ func QuickAddHost() uic.Node {
 	// matching the .labeled-field pattern used by all entity add modals.
 	body := Div(css.Class("form-grid"),
 		payeeDatalist,
+		// TXT: the templates zone — chips one-click pre-fill the form below, and "Save
+		// as template" (disabled until an amount is present) snapshots the current form.
+		// Kept together at the top so the feature it teaches is visible without scrolling.
+		Div(css.Class("txt-zone"),
+			screens.TxnTemplatePicker(onPick),
+			saveTemplateBtn,
+		),
 		ui.FormField(uistate.T("quickAdd.account"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
 		ui.Segmented(ui.SegmentedProps{

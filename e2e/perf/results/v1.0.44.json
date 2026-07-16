@@ -1,0 +1,171 @@
+{
+  "version": "1.0.44",
+  "capturedAt": "2026-07-15T17:44:37.403Z",
+  "generatedWith": {
+    "passes": 5,
+    "viewport": "1440x900",
+    "server": "e2e/serve.mjs (uncompressed static)",
+    "reducer": "best-of-N for CPU-time metrics (mount/TBT/settle) to filter OS-scheduler contention; median for CLS/DOM",
+    "note": "warm SPA navigation from '/'; cold-load section is the one-time wasm boot"
+  },
+  "summary": {
+    "avgPageScore": 88,
+    "loadScore": 50,
+    "rated": 1,
+    "unrated": 0,
+    "worst": [
+      {
+        "route": "/transactions",
+        "score": 88
+      }
+    ],
+    "best": [
+      {
+        "route": "/transactions",
+        "score": 88
+      }
+    ]
+  },
+  "coldLoad": {
+    "metrics": {
+      "appReadyMs": 4700,
+      "fcpMs": 52,
+      "lcpMs": 976,
+      "tbtMs": 4721,
+      "cls": 0.00006314019097222222,
+      "ttfbMs": 4.600000001490116,
+      "domContentLoadedMs": 130.20000000298023,
+      "loadEventMs": 131.70000000298023,
+      "transferMB": 19.854594230651855,
+      "wasmMB": 16.16884994506836
+    },
+    "score": 50,
+    "parts": {
+      "appReadyMs": {
+        "value": 4700,
+        "sub": 0.4165556583616607,
+        "weight": 30,
+        "p10": 1500,
+        "median": 4000,
+        "label": "Time to interactive",
+        "unit": "ms",
+        "hint": "Cold boot: wasm download + instantiate + seed + first mount, until the app signals ready."
+      },
+      "fcpMs": {
+        "value": 52,
+        "sub": 0.9999999695614152,
+        "weight": 15,
+        "p10": 1000,
+        "median": 2500,
+        "label": "First Contentful Paint",
+        "unit": "ms",
+        "hint": "When the first pixels of content paint."
+      },
+      "lcpMs": {
+        "value": 976,
+        "sub": 0.9418538775465763,
+        "weight": 20,
+        "p10": 1200,
+        "median": 3000,
+        "label": "Largest Contentful Paint",
+        "unit": "ms",
+        "hint": "When the largest content element paints."
+      },
+      "tbtMs": {
+        "value": 4721,
+        "sub": 0.008056440933744635,
+        "weight": 20,
+        "p10": 200,
+        "median": 600,
+        "label": "Blocking time (boot)",
+        "unit": "ms",
+        "hint": "Total blocking time from long tasks during boot — wasm instantiate/seed jank."
+      },
+      "transferMB": {
+        "value": 19.854594230651855,
+        "sub": 0.20036613186072627,
+        "weight": 15,
+        "p10": 2,
+        "median": 8,
+        "label": "Transfer weight",
+        "unit": "MB",
+        "hint": "Total bytes over the wire on cold load — dominated by the wasm binary."
+      }
+    }
+  },
+  "pages": [
+    {
+      "route": "/transactions",
+      "label": "/transactions",
+      "score": 88,
+      "grade": {
+        "letter": "B",
+        "band": "good",
+        "color": "green"
+      },
+      "metrics": {
+        "mountMs": 147.2,
+        "tbtMs": 141,
+        "stableMs": 152.9,
+        "cls": 0,
+        "domNodes": 884,
+        "totalNodes": 1249,
+        "heapMB": 14.3
+      },
+      "parts": {
+        "mountMs": {
+          "value": 147.2,
+          "sub": 0.8606990048776074,
+          "weight": 25,
+          "p10": 120,
+          "median": 450,
+          "label": "Route mount",
+          "unit": "ms",
+          "hint": "Time from navigation to the route's body appearing — the SPA analog of FCP."
+        },
+        "tbtMs": {
+          "value": 141,
+          "sub": 0.7850751487225603,
+          "weight": 30,
+          "p10": 80,
+          "median": 350,
+          "label": "Blocking time",
+          "unit": "ms",
+          "hint": "Total blocking time from long tasks (>50ms) during the transition — main-thread jank."
+        },
+        "stableMs": {
+          "value": 152.9,
+          "sub": 0.9497812883533032,
+          "weight": 15,
+          "p10": 220,
+          "median": 800,
+          "label": "Settle time",
+          "unit": "ms",
+          "hint": "Time until the page is visually stable (fonts + images + two frames) — the SPA analog of LCP/TTI."
+        },
+        "cls": {
+          "value": 0,
+          "sub": 1,
+          "weight": 15,
+          "p10": 0.02,
+          "median": 0.15,
+          "label": "Layout shift",
+          "unit": "",
+          "hint": "Cumulative layout shift during the transition — content jumping as it renders."
+        },
+        "domNodes": {
+          "value": 884,
+          "sub": 0.881940450587414,
+          "weight": 15,
+          "p10": 800,
+          "median": 3000,
+          "label": "DOM size",
+          "unit": "nodes",
+          "hint": "Interactive + element nodes in the page body — render weight the browser must lay out."
+        }
+      },
+      "passes": 5,
+      "errored": 0
+    }
+  ]
+}

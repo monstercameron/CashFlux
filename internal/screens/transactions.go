@@ -348,13 +348,16 @@ func transactionsLegacy() ui.Node {
 		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
 	}
 
-	// XC2: open the refund-pairing picker for a positive transaction.
+	// XC2: open the refund-pairing picker for a positive transaction. The target
+	// atom is resolved here in render (UseRefundPairTarget is a hook) so the row
+	// action only sets the captured atom, never calls the hook from a callback.
+	refundPairTarget := uistate.UseRefundPairTarget()
 	pairRefund := func(t domain.Transaction) {
 		if !t.IsIncome() {
 			notifyErr(uistate.T("txnlinks.notARefund"))
 			return
 		}
-		uistate.UseRefundPairTarget().Set(t.ID)
+		refundPairTarget.Set(t.ID)
 	}
 	// XC1: release the order group a transaction belongs to (keeps the atoms).
 	ungroupTxn := func(t domain.Transaction) {
@@ -680,6 +683,11 @@ func transactionsLegacy() ui.Node {
 				refundOf[l.TxnIDs[1]] = true
 			}
 		}
+		// TX6b: one cheap pass to count charges per merchant, so each row can decide in
+		// O(1) whether to show the spending-trend chip (the full stats compute lazily on
+		// open). Resolver shared across rows.
+		merchantCounts := merchantChargeCounts(app)
+		trendResolver := app.PayeeResolver()
 		rows := MapKeyed(page,
 			func(t domain.Transaction) any { return t.ID },
 			func(t domain.Transaction) ui.Node {
@@ -690,6 +698,13 @@ func transactionsLegacy() ui.Node {
 					groupSize = len(members)
 					groupTotal = txnlinks.GroupSum(members)
 				}
+				trendMerchant := ""
+				if !t.IsTransfer() && t.Amount.IsNegative() {
+					if m := strings.TrimSpace(trendResolver.Resolve(firstNonEmpty(t.Payee, t.Desc))); m != "" &&
+						merchantCounts[strings.ToLower(m)] >= minTrendChipCharges {
+						trendMerchant = m
+					}
+				}
 				return ui.CreateElement(TransactionRow, transactionRowProps{
 					Txn: t, Account: acc.Name, Category: catName[t.CategoryID], Categories: categories,
 					Members:  app.Members(),
@@ -699,6 +714,7 @@ func transactionsLegacy() ui.Node {
 					OnAttach: attachReceipt, OnViewReceipt: viewReceipt, OnSaveSplits: saveSplits,
 					SmartSettings: txnSmartSettings,
 					SmartByEntity: txnByEntity,
+					TrendMerchant: trendMerchant,
 					GroupSize:     groupSize,
 					GroupTotal:    groupTotal,
 					IsRefund:      refundOf[t.ID],

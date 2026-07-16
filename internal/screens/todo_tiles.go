@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/pagination"
+	"github.com/monstercameron/CashFlux/internal/taskboard"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -112,6 +113,8 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	search := uistate.UseTodoSearch()
 	linkFilter := uistate.UseTodoFilterLink()
 	page := uistate.UseTodoPage()
+	view := uistate.UseTodoView()
+	boardGroup := uistate.UseTodoBoardGroup()
 
 	// Changing any filter/search/sort resets to the first page so the view can't land on a
 	// now-empty page.
@@ -122,6 +125,40 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	onLink := ui.UseEvent(func(e ui.Event) { linkFilter.Set(e.GetValue()); page.Set(1) })
 	clearSearch := ui.UseEvent(Prevent(func() { search.Set(""); page.Set(1) }))
 	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
+	// View switch (list / board / calendar) + the board's group-by. Fixed set of
+	// controls, so their handlers sit at stable hook positions (no loop).
+	setViewList := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewList) }))
+	setViewBoard := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewBoard) }))
+	setViewCal := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewCalendar) }))
+	onBoardGroup := ui.UseEvent(func(e ui.Event) { boardGroup.Set(e.GetValue()) })
+	curView := view.Get()
+	tvwCls := func(on bool) string {
+		if on {
+			return "tvw-btn is-active"
+		}
+		return "tvw-btn"
+	}
+	viewSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.viewLabel")),
+		Button(ClassStr(tvwCls(curView == uistate.TodoViewList)), Type("button"), Attr("data-testid", "todo-view-list"),
+			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewList)), OnClick(setViewList), uistate.T("todo.viewList")),
+		Button(ClassStr(tvwCls(curView == uistate.TodoViewBoard)), Type("button"), Attr("data-testid", "todo-view-board"),
+			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewBoard)), OnClick(setViewBoard), uistate.T("todo.viewBoard")),
+		Button(ClassStr(tvwCls(curView == uistate.TodoViewCalendar)), Type("button"), Attr("data-testid", "todo-view-calendar"),
+			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewCalendar)), OnClick(setViewCal), uistate.T("todo.viewCalendar")),
+	)
+	// The board group-by pill appears only in board view (irrelevant elsewhere).
+	var boardGroupCtrl ui.Node = Fragment()
+	if curView == uistate.TodoViewBoard {
+		bg := boardGroup.Get()
+		boardGroupCtrl = Label(css.Class("todo-ctrl"),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+			Span(css.Class("todo-ctrl-label"), uistate.T("todo.boardGroupLabel")),
+			Select(css.Class("todo-select"), Attr("data-testid", "todo-board-group"), Attr("aria-label", uistate.T("todo.boardGroupLabel")), OnChange(onBoardGroup),
+				Option(Value("status"), SelectedIf(bg == "status"), uistate.T("todo.boardGroupStatus")),
+				Option(Value("priority"), SelectedIf(bg == "priority"), uistate.T("todo.boardGroupPriority")),
+			),
+		)
+	}
 
 	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
@@ -146,6 +183,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 		// transactions/accounts/budgets). Row 2 holds the sort/priority/linked selects,
 		// the hide-done toggle, and the primary Add task.
 		Div(css.Class("filter-toolbar-primary"),
+			viewSwitch,
 			Label(ClassStr(searchCls),
 				uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
@@ -156,6 +194,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			),
 		),
 		Div(css.Class("filter-toolbar-actions"),
+			boardGroupCtrl,
 			Label(css.Class("todo-ctrl"),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
@@ -207,7 +246,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 // CTA / all-done note). It owns the task mutation closures (toggle/complete, cascade
 // delete, add sub-task) and reads the shared hide-done + priority filter atoms.
 func todoListWidget(props todoListProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
+	dataRev := uistate.UseDataRevision().Get()
 	app := props.App
 	hideDone := uistate.UseTodoHideDone()
 	filterPrio := uistate.UseTodoFilterPrio()
@@ -217,6 +256,10 @@ func todoListWidget(props todoListProps) ui.Node {
 	pageAtom := uistate.UseTodoPage()
 	pageSizeAtom := uistate.UseTodoPageSize()
 	collapsed := uistate.UseTodoCollapsed()
+	viewAtom := uistate.UseTodoView()
+	boardGroupAtom := uistate.UseTodoBoardGroup()
+	calOffsetAtom := uistate.UseTodoCalOffset()
+	prefsAtom := uistate.UsePrefs()
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the task currently being dragged (Custom order)
 
@@ -321,6 +364,74 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 		filtered = kept
 	}
+
+	// Board / calendar views are alternate projections of the SAME filtered set (search +
+	// priority + link + hide-done all still apply). They don't paginate or nest, so they
+	// return here, before the list-only tree/pagination work. All hooks are above, so
+	// these early returns are hook-safe.
+	openTask := func(taskID string) { uistate.SetTaskEdit(uistate.TaskEdit{ID: taskID}) }
+	errNode := If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get()))
+	wrapTodoList := func(body ui.Node) ui.Node {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "todo-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+			Body: uiw.EntityListSection(uiw.EntityListSectionProps{Title: uistate.T("todo.listTitle"), Body: body}),
+		})
+	}
+	switch viewAtom.Get() {
+	case uistate.TodoViewBoard:
+		by := taskboard.GroupByStatus
+		if boardGroupAtom.Get() == "priority" {
+			by = taskboard.GroupByPriority
+		}
+		moveTask := func(taskID, toKey string) {
+			t, ok := byID[taskID]
+			if !ok {
+				return
+			}
+			if by == taskboard.GroupByPriority {
+				p := domain.TaskPriority(toKey)
+				if !p.Valid() {
+					return
+				}
+				t.Priority = p
+				if err := app.PutTask(t); err != nil {
+					errMsg.Set(err.Error())
+					return
+				}
+			} else if toKey == string(domain.StatusDone) {
+				if t.Status != domain.StatusDone {
+					if err := app.CompleteTask(taskID, id.New(), time.Now()); err != nil {
+						errMsg.Set(err.Error())
+						return
+					}
+				}
+			} else {
+				t.Status = domain.StatusOpen
+				if err := app.PutTask(t); err != nil {
+					errMsg.Set(err.Error())
+					return
+				}
+			}
+			uistate.BumpDataRevision()
+		}
+		board := ui.CreateElement(TaskBoardView, TaskBoardProps{Tasks: filtered, By: by, OnOpen: openTask, OnMove: moveTask, Rev: dataRev})
+		return wrapTodoList(Fragment(errNode, board))
+	case uistate.TodoViewCalendar:
+		off := calOffsetAtom.Get()
+		month := dateutil.AddMonths(dateutil.MonthStart(time.Now()), off)
+		cal := todoCalendarView(todoCalendarProps{
+			Tasks:      filtered,
+			Month:      month,
+			Today:      time.Now(),
+			WeekStart:  prefsAtom.Get().WeekStartWeekday(),
+			OnPrev:     func() { calOffsetAtom.Set(off - 1) },
+			OnNext:     func() { calOffsetAtom.Set(off + 1) },
+			OnOpenTask: openTask,
+			OnAddOnDay: func(day time.Time) { uistate.SetTaskAddDue(dateutil.FormatDate(day)); uistate.SetAddTarget("task") },
+		})
+		return wrapTodoList(Fragment(errNode, cal))
+	}
+
 	// Direct-children tally (over ALL tasks, ignoring view filters) for the collapsible
 	// parent summary, plus the collapsed set that prunes hidden sub-trees.
 	childStats := tasktree.ChildStats(tasks)

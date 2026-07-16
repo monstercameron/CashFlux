@@ -103,6 +103,9 @@ type TaskAddFormProps struct {
 	// ParentID, when set, makes the created task a sub-task of that parent — so the
 	// full compose form (not a bare prompt) can create a nested to-do.
 	ParentID string
+	// PresetDue, when set (ISO yyyy-mm-dd), seeds the Due date field — used by the
+	// To-do calendar view so clicking a day starts a task already scheduled for it.
+	PresetDue string
 }
 
 // TaskAddForm is the standalone add-a-task form. It owns all its state and
@@ -130,7 +133,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	title := ui.UseState("")
 	priority := ui.UseState(string(domain.PriorityMedium))
-	dueStr := ui.UseState("")
+	dueStr := ui.UseState(props.PresetDue)
 	notes := ui.UseState("")
 	errMsg := ui.UseState("")
 	addLinkType := ui.UseState(string(domain.RelatedNone))

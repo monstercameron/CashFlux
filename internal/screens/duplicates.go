@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -98,6 +99,16 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 		),
 	)
 
+	// TXC-4: preview what the non-lossy merge will carry over from the removed rows
+	// onto the kept one, so a receipt/note appearing after a merge is never a surprise.
+	var mergePreview ui.Node = Fragment()
+	if len(g.IDs) >= 2 {
+		if items := dupMergeCarryItems(props.Txns, g.IDs); len(items) > 0 {
+			mergePreview = P(css.Class("t-caption", tw.TextDim, tw.Mb2), Attr("data-testid", "dup-merge-preview"),
+				uistate.T("duplicates.mergeCarry", strings.Join(items, " · ")))
+		}
+	}
+
 	// Per-transaction rows — each is its own component (dupeRow) so that
 	// UseEvent hooks are not inside a variable-length loop body.
 	rows := MapKeyed(
@@ -123,10 +134,62 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 	return uiw.Card(uiw.CardProps{
 		Body: Div(
 			titleRow,
+			mergePreview,
 			header,
 			Div(css.Class(tw.Mt3, tw.Flex, tw.FlexCol, tw.Gap2), rows),
 		),
 	})
+}
+
+// dupMergeCarryItems lists, in plain English, what a non-lossy merge (dedupe.Merge)
+// will carry onto the kept (first) entry from the removed duplicates: receipts it
+// doesn't already have, and any empty identity/link field a removed row can fill.
+// Empty result = the entries carry the same details, so nothing is surprising.
+func dupMergeCarryItems(txns map[string]domain.Transaction, ids []string) []string {
+	if len(ids) < 2 {
+		return nil
+	}
+	survivor := txns[ids[0]]
+	others := make([]domain.Transaction, 0, len(ids)-1)
+	for _, id := range ids[1:] {
+		if t, ok := txns[id]; ok {
+			others = append(others, t)
+		}
+	}
+	var items []string
+	have := make(map[string]bool, len(survivor.Attachments))
+	for _, a := range survivor.Attachments {
+		have[a.ArtifactID] = true
+	}
+	newAtt := 0
+	for _, o := range others {
+		for _, a := range o.Attachments {
+			if !have[a.ArtifactID] {
+				have[a.ArtifactID] = true
+				newAtt++
+			}
+		}
+	}
+	if newAtt > 0 {
+		items = append(items, uistate.T("duplicates.carryReceipts", plural(newAtt, "receipt")))
+	}
+	fill := func(surv string, pick func(domain.Transaction) string, label string) {
+		if surv != "" {
+			return
+		}
+		for _, o := range others {
+			if pick(o) != "" {
+				items = append(items, label)
+				return
+			}
+		}
+	}
+	fill(survivor.CategoryID, func(t domain.Transaction) string { return t.CategoryID }, uistate.T("duplicates.carryCategory"))
+	fill(survivor.Note, func(t domain.Transaction) string { return t.Note }, uistate.T("duplicates.carryNote"))
+	fill(survivor.Payee, func(t domain.Transaction) string { return t.Payee }, uistate.T("duplicates.carryPayee"))
+	fill(survivor.BillAccountID, func(t domain.Transaction) string { return t.BillAccountID }, uistate.T("duplicates.carryLink"))
+	fill(survivor.SubscriptionName, func(t domain.Transaction) string { return t.SubscriptionName }, uistate.T("duplicates.carryLink"))
+	return items
 }
 
 // dupeRowProps is the props bag for a single transaction entry within a group.

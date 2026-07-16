@@ -164,6 +164,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
 		Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
 		Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
+		// SMART-B14: one-tap entry to cover every overage at once (Free, opt-out).
+		If(smartSettings.IsEnabled(coverAllFeatureCode),
+			ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
 	))
 	pills := If(v.OverCount > 0 || v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
 		If(v.OverCount > 0, Span(css.Class("pill is-danger"), uistate.T("budgets.overBadge", v.OverCount))),

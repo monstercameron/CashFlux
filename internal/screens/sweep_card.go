@@ -177,13 +177,16 @@ func budgetsSweepConfigModal() ui.Node {
 	if !openAtom.Get() {
 		return Fragment()
 	}
+	// Match the Add-budget standard: NoFooter + FlushBody so the form's .modal-scroll
+	// body scrolls while its .modal-foot Save/Cancel bar stays pinned to the bottom.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("sweep.configTitle"),
-		Width:    uiw.FlipMediumW,
-		Height:   uiw.FlipMediumH,
-		NoFooter: true,
-		OnClose:  func() { openAtom.Set(false) },
-		Back:     ui.CreateElement(sweepConfigForm, sweepConfigFormProps{OnDone: func() { openAtom.Set(false) }}),
+		Title:     uistate.T("sweep.configTitle"),
+		Width:     uiw.FlipMediumW,
+		Height:    uiw.FlipMediumH,
+		NoFooter:  true,
+		FlushBody: true,
+		OnClose:   func() { openAtom.Set(false) },
+		Back:      ui.CreateElement(sweepConfigForm, sweepConfigFormProps{OnDone: func() { openAtom.Set(false) }}),
 	})
 }
 
@@ -282,8 +285,9 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 		})
 	}
 
-	// Standard config-modal shell: an .acct-edit-form with a scrolling body and a pinned
-	// Save/Cancel foot, identical-in-kind to the budget edit modal.
+	// Standard config-modal shell (matches Add-budget): an .acct-edit-form with a
+	// scrolling .modal-scroll body and a pinned .modal-foot Save/Cancel bar. The host
+	// sets FlushBody so the foot stays put while the participation list scrolls.
 	return Form(css.Class("acct-edit-form"), OnSubmit(onSave),
 		Div(css.Class("modal-scroll"),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),

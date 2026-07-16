@@ -49,7 +49,7 @@ func DeductibleTotals(
 
 	totals := map[string]int64{}
 	for _, t := range txns {
-		if !t.IsExpense() {
+		if !t.IsExpense() || !t.CountsInReports() {
 			continue
 		}
 		if !dateutil.InRange(t.Date, start, end) {

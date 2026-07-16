@@ -53,7 +53,7 @@ func NotificationCenter() ui.Node {
 		notifNativeSpec("notif-list"),
 	}
 
-	return Div(css.Class("bento bento-notif"),
+	live := Div(css.Class("bento bento-notif"),
 		MapKeyed(specs,
 			func(sp domain.WidgetSpec) any { return sp.ID },
 			func(sp domain.WidgetSpec) ui.Node {
@@ -66,6 +66,9 @@ func NotificationCenter() ui.Node {
 			},
 		),
 	)
+	// Wrap the live feed in the Live/History view shell (notifications.go), which
+	// adds the two-way toggle and the persisted archive view.
+	return ui.CreateElement(notifSurfaceShell, notifSurfaceShellProps{App: app, Live: live})
 }
 
 // init registers the notifications-surface widget bodies with the engine render registry.

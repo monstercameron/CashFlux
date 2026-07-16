@@ -20,7 +20,7 @@ import (
 func LargestIncome(txns []domain.Transaction, start, end time.Time, rates currency.Rates, n int) ([]ExpenseItem, error) {
 	var out []ExpenseItem
 	for _, t := range txns {
-		if !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsIncome() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)
@@ -54,7 +54,7 @@ func LargestIncome(txns []domain.Transaction, start, end time.Time, rates curren
 func IncomeByCategory(txns []domain.Transaction, start, end time.Time, rates currency.Rates) ([]CategorySpend, error) {
 	totals := map[string]int64{}
 	for _, t := range txns {
-		if !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsIncome() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)

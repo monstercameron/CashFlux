@@ -115,7 +115,12 @@ func Transactions() ui.Node {
 	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
-	shown := txnfilter.ApplyWithLabels(app.Transactions(), f, txnfilter.Labels{Account: accName, Category: catName})
+	// Pass the payee-alias resolver so text search matches the CLEANED merchant name
+	// (TX1/SM-1), not just the raw payee/desc — otherwise a renamed merchant's charges
+	// wouldn't surface when you search the clean name you now see in the ledger.
+	shown := txnfilter.ApplyWithLabels(app.Transactions(), f, txnfilter.Labels{
+		Account: accName, Category: catName, Payee: app.PayeeResolver().Resolve,
+	})
 
 	// The engine render context: the live data every tile body reads from (§6). The
 	// SCOPED slices are the filtered ledger, so the table frame and the toolbar/bulk
@@ -280,7 +285,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// Subscribe to the data revision: link changes (XC1/XC2 group/pair badges)
 	// mutate no row content, so without this the memoized table body renders
 	// stale badges after an ungroup/unpair.
-	_ = uistate.UseDataRevision().Get()
+	txnDataRev := uistate.UseDataRevision().Get()
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
 	selAtom := uistate.UseTxnSelection()
@@ -369,6 +374,17 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	}
 	openEdit := func(id string) { uistate.SetTxnEdit(id) }
 	openSplit := func(id string) { uistate.SetTxnSplit(id) }
+	// TXC-1: flip a transaction's exclude-from-reports flag from the row kebab.
+	toggleExclude := func(id string) {
+		for _, t := range props.App.Transactions() {
+			if t.ID == id {
+				t.ExcludeFromReports = !t.ExcludeFromReports
+				_ = props.App.PutTransaction(t)
+				uistate.BumpDataRevision()
+				return
+			}
+		}
+	}
 	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
 
 	frame := props.Frame
@@ -492,6 +508,16 @@ func txnTableWidget(props txnTableProps) ui.Node {
 
 	sel := selAtom.Get()
 
+	// TX6b: per-merchant charge counts (memoized on the data revision), so each row can
+	// decide in O(1) whether to show the spending-trend chip without rescanning the
+	// ledger on every sort / select / pagination re-render (the full stats still compute
+	// lazily only when a chip is opened).
+	merchantCounts := merchantChargeCountsMemo(props.App, txnDataRev)
+	// The trend chips are a secondary affordance, so mount them just AFTER the table has
+	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
+	// route-settle so the ledger paints as fast as before, then the chips fade in.
+	trendReady := useAfterSettle("txn-trend")
+
 	// rowPropsAt builds one row's display props from the frame on demand. Factored out
 	// so the paginated body and the virtualized window build rows identically — and so
 	// the window only materializes the slice it actually shows.
@@ -499,10 +525,17 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		rid := idCol.Str(i)
 		amt := money.New(amtCol.Int64(i), curCol.Str(i))
 		desc := descFull.Str(i)
-		if strings.TrimSpace(desc) == "" {
-			// Show the cleaned payee name (TX1) in the ledger, not the raw
-			// processor string. Raw payee is preserved on the transaction.
-			desc = payeeResolver.Resolve(payeeCol.Str(i))
+		payee := payeeCol.Str(i)
+		switch {
+		case strings.TrimSpace(payee) != "" && payeeResolver.HasLearned(payee):
+			// A learned merchant-cleanup alias (TX1/SM-1: "always show this merchant
+			// as X") is a deliberate rename that must cascade to EVERY charge, so it
+			// wins over the raw import description — cleaning a merchant once updates
+			// all of its transaction titles at display time. The raw payee is preserved.
+			desc = payeeResolver.Resolve(payee)
+		case strings.TrimSpace(desc) == "":
+			// No description: show the cleaned payee name, not the raw processor string.
+			desc = payeeResolver.Resolve(payee)
 		}
 		cat := catCol.Str(i)
 		if strings.TrimSpace(cat) == "" {
@@ -539,37 +572,49 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				firstAtt = t.Attachments[0]
 			}
 		}
+		trendMerchant := ""
+		if t, ok := txByID[rid]; ok && !t.IsTransfer() && t.Amount.IsNegative() {
+			if m := strings.TrimSpace(payeeResolver.Resolve(firstNonEmpty(t.Payee, t.Desc))); m != "" &&
+				merchantCounts[strings.ToLower(m)] >= minTrendChipCharges {
+				trendMerchant = m
+			}
+		}
 		return txnFrameRowProps{
-			ID: rid,
+			ID:            rid,
+			AmountMoney:   amt,
+			TrendMerchant: trendMerchant,
+			ShowTrend:     trendReady,
 			// .UTC() is load-bearing: txn dates are UTC-midnight calendar dates
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
 			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
 			// while /reports showed Jul 1 for the same transaction (C339).
-			Date:             time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
-			Amount:           fmtMoney(amt),
-			AmtTone:          figTone(amt),
-			Desc:             desc,
-			Account:          accCol.Str(i),
-			Category:         cat,
-			Source:           srcCol.Str(i),
-			Member:           memberName[txByID[rid].MemberID],
-			Cleared:          cleared,
-			Selected:         sel[rid],
-			Receipts:         nAtt,
-			Attachment:       firstAtt,
-			Vis:              colVis,
-			BillAccountID:    txByID[rid].BillAccountID,
-			SubscriptionName: txByID[rid].SubscriptionName,
-			HasSplits:        txByID[rid].HasSplits(),
-			IsTransfer:       txByID[rid].IsTransfer(),
-			IsIncome:         txByID[rid].IsIncome(),
-			IsRefund:         refundSide[rid],
-			IsRefunded:       refundedSide[rid],
-			IsBillMatched:    billMatched[rid],
-			EventName:        eventName[rid],
-			ShowBalance:      showBalance,
-			Balance:          balanceStr(runBal, rid),
-			BalTone:          balanceTone(runBal, rid),
+			Date:                time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
+			Amount:              fmtMoney(amt),
+			AmtTone:             figTone(amt),
+			Desc:                desc,
+			Account:             accCol.Str(i),
+			Category:            cat,
+			Source:              srcCol.Str(i),
+			Member:              memberName[txByID[rid].MemberID],
+			Cleared:             cleared,
+			Selected:            sel[rid],
+			Receipts:            nAtt,
+			Attachment:          firstAtt,
+			Vis:                 colVis,
+			BillAccountID:       txByID[rid].BillAccountID,
+			SubscriptionName:    txByID[rid].SubscriptionName,
+			ExcludedFromReports: txByID[rid].ExcludeFromReports,
+			HasNote:             txByID[rid].Note != "",
+			HasSplits:           txByID[rid].HasSplits(),
+			IsTransfer:          txByID[rid].IsTransfer(),
+			IsIncome:            txByID[rid].IsIncome(),
+			IsRefund:            refundSide[rid],
+			IsRefunded:          refundedSide[rid],
+			IsBillMatched:       billMatched[rid],
+			EventName:           eventName[rid],
+			ShowBalance:         showBalance,
+			Balance:             balanceStr(runBal, rid),
+			BalTone:             balanceTone(runBal, rid),
 		}
 	}
 	renderRow := func(i int) ui.Node {
@@ -583,6 +628,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnViewReceipt = viewReceipt
 		r.OnOpenLink = openLink
 		r.OnOpenSplit = openSplit
+		r.OnToggleExclude = toggleExclude
 		r.OnReceiptSplit = func(id string) { startReceiptSplitFlow(props.App, txByID[id]) }
 		r.OnPairRefund = pairRefundRow
 		r.OnUnpair = unpairRow
@@ -693,24 +739,35 @@ func txnTableWidget(props txnTableProps) ui.Node {
 // Display strings are pre-formatted; the callbacks are plain funcs (not hooks) so
 // they pass safely through MapKeyed. The row owns its own interaction hooks.
 type txnFrameRowProps struct {
-	ID       string
-	Date     string
-	Amount   string
-	AmtTone  string // color token for the amount figure (e.g. "text-down")
-	Desc     string
-	Account  string
-	Category string
-	Source   string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
-	Member   string          // assigned household member's name ("" if unassigned)
-	Vis      uistate.TxnCols // which optional columns to render (must match the header)
-	Cleared  bool
-	Selected bool
+	ID      string
+	Date    string
+	Amount  string
+	AmtTone string // color token for the amount figure (e.g. "text-down")
+	// AmountMoney is the raw amount (for the merchant-trend delta); TrendMerchant is the
+	// resolved merchant name when this row's merchant has enough history to show the
+	// spending-trend chip (TX6b), else "".
+	AmountMoney   money.Money
+	TrendMerchant string
+	ShowTrend     bool // defer chip mount until after the table settles (perf)
+	Desc          string
+	Account       string
+	Category      string
+	Source        string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
+	Member        string          // assigned household member's name ("" if unassigned)
+	Vis           uistate.TxnCols // which optional columns to render (must match the header)
+	Cleared       bool
+	Selected      bool
 	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
 	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
 	// this transaction, pre-set to the chosen mode (uistate.TxnLinkMode*).
 	BillAccountID    string
 	SubscriptionName string
 	OnOpenLink       func(txnID, mode string)
+	// TXC-1 / TXC-2: excluded-from-reports state (drives the kebab toggle label + a
+	// muted row affordance) and whether the row carries a memo (drives a note glyph).
+	ExcludedFromReports bool
+	HasNote             bool
+	OnToggleExclude     func(txnID string)
 	// Split-into-categories (the ⋯ row menu): HasSplits shows a ✓ when the
 	// transaction already carries a category breakdown; OnOpenSplit opens the split
 	// flip modal. IsTransfer hides the entry — a transfer leg has no category to
@@ -784,6 +841,9 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	if props.Cleared {
 		rowClass += " cleared"
 	}
+	if props.ExcludedFromReports {
+		rowClass += " txn-excluded" // TXC-1: muted, marked out of budgets/reports
+	}
 
 	// XC1/XC2: link badges beside the description, mirroring the classic view.
 	var linkBadge ui.Node = Fragment()
@@ -831,14 +891,25 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		Td(props.Date),
 		If(props.Vis.Amount, Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
 		If(props.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(props.BalTone)), props.Balance)),
-		Td(props.Desc,
+		Td(
+			If(props.ExcludedFromReports, Span(css.Class("badge txn-excluded-badge"), Attr("data-testid", "txn-excluded-badge"),
+				Attr("title", uistate.T("transactions.excludeHint")), uistate.T("transactions.excludedBadge"))),
+			If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
+				Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
+			props.Desc,
 			If(props.Receipts > 0, Button(css.Class("btn btn-icon", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
 				Attr("data-testid", "txn-row-receipt"), OnClick(view),
 				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
 			linkBadge,
 			If(props.EventName != "", Span(css.Class("badge"), Attr("data-testid", "txn-event-chip"),
-				Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName))),
+				Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName)),
+			// TX6b: spending-trend chip when this merchant has history — opens the merchant
+			// story (sparkline + this-vs-typical) that used to hide inside the edit modal.
+			// Deferred past route-settle (ShowTrend) so it never slows the ledger paint.
+			If(props.TrendMerchant != "" && props.ShowTrend, ui.CreateElement(merchantTrendChip, merchantTrendChipProps{
+				Merchant: props.TrendMerchant, TxnID: props.ID, Amount: props.AmountMoney,
+			}))),
 		If(props.Vis.Account, Td(props.Account)),
 		If(props.Vis.Category, Td(props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
@@ -886,6 +957,28 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label:    splitLabel,
 			TestID:   "txn-split-open",
 			OnSelect: func() { props.OnOpenSplit(props.ID) },
+		})
+	}
+	// SM-1: clean up / map this merchant name — a per-transaction entry to the payee
+	// mapping that also lives on /rules. Opens the payee-cleanup flip modal.
+	if !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    uistate.T("payeeClean.menuAction"),
+			TestID:   "txn-cleanname-open",
+			OnSelect: func() { uistate.SetPayeeClean(props.ID) },
+		})
+	}
+	// TXC-1: exclude / include this transaction in budgets & reports (still counts
+	// toward account balances either way). The label states the action to perform.
+	if props.OnToggleExclude != nil {
+		excLabel := uistate.T("transactions.kebabExclude")
+		if props.ExcludedFromReports {
+			excLabel = uistate.T("transactions.kebabInclude")
+		}
+		items = append(items, uiw.OverflowMenuItem{
+			Label:    excLabel,
+			TestID:   "txn-toggle-exclude",
+			OnSelect: func() { props.OnToggleExclude(props.ID) },
 		})
 	}
 	// XC11: propose a split from a receipt image (BYO-key AI). Same transfer-leg

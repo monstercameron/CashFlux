@@ -50,6 +50,11 @@ type transactionRowProps struct {
 	// The badge key is the transaction ID (Action.RelatedID set by transaction engines).
 	SmartSettings smart.Settings
 	SmartByEntity map[string][]smart.Insight
+	// TrendMerchant is the resolved merchant name when this row's merchant has enough
+	// charge history to show the spending-trend chip (TX6b); "" hides the chip. The
+	// caller precomputes eligibility once per page (merchantChargeCounts) so the row
+	// never scans the ledger itself.
+	TrendMerchant string
 	// Transaction-link overlays (XC1/XC2). GroupSize > 0 marks this row as a
 	// member of an N-charge order group; GroupTotal is the group's summed amount.
 	// IsRefund marks the row as the refund side of a refund pair; IsRefunded marks
@@ -336,7 +341,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			// breakdown, so the user can see at a glance which rows are split without
 			// having to open the inline editor.
 			If(t.HasSplits(), Span(css.Class("badge badge-split"), Attr("data-testid", "txn-split-badge"), Attr("title", "Split across categories"), "⑂ Split")),
-			smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID), linkBadge),
+			smartBadgeFor(props.SmartSettings, props.SmartByEntity, t.ID), linkBadge,
+			// TX6b: a spending-trend chip when this merchant has history — opens the
+			// merchant story (sparkline + this-vs-typical) that used to hide in the editor.
+			If(props.TrendMerchant != "", ui.CreateElement(merchantTrendChip, merchantTrendChipProps{
+				Merchant: props.TrendMerchant, TxnID: t.ID, Amount: props.Txn.Amount,
+			}))),
 		Td(css.Class("td-cat"), cat),
 		Td(css.Class("td-acct"), props.Account),
 		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),

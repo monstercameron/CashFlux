@@ -15,8 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/merchantstats"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -41,100 +41,19 @@ func merchantContextPanel(app *appstate.App, txn domain.Transaction) ui.Node {
 	if txn.IsTransfer() {
 		return Fragment()
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	resolver := app.PayeeResolver()
-	merchant := strings.TrimSpace(resolver.Resolve(firstNonEmpty(txn.Payee, txn.Desc)))
+	merchant := strings.TrimSpace(app.PayeeResolver().Resolve(firstNonEmpty(txn.Payee, txn.Desc)))
 	if merchant == "" {
 		return Fragment()
 	}
-	target := strings.ToLower(merchant)
-
-	toBase := func(m money.Money) (int64, bool) {
-		if m.Currency == "" || m.Currency == base {
-			return absMinor(m.Amount), true
-		}
-		v, err := currency.ConvertBetween(m.Amount, m.Currency, base, rates)
-		if err != nil {
-			return 0, false
-		}
-		return absMinor(v), true
+	// Shared with the row trend chip (merchant_trend.go): compute once, render the
+	// same story. Returns ok=false for a one-off merchant with too little history.
+	stats, base, ok := computeMerchantStats(app, merchant)
+	if !ok {
+		return Fragment()
 	}
-
-	var charges []merchantstats.Charge
-	for _, t := range app.Transactions() {
-		if t.IsTransfer() || !t.Amount.IsNegative() {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(resolver.Resolve(firstNonEmpty(t.Payee, t.Desc)))) != target {
-			continue
-		}
-		mag, ok := toBase(t.Amount)
-		if !ok {
-			continue
-		}
-		charges = append(charges, merchantstats.Charge{Date: t.Date, Minor: mag})
-	}
-
-	stats := merchantstats.Compute(charges, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
-	if !stats.Enough {
-		return Fragment() // one-off merchant — nothing worth showing
-	}
-
-	// Delta of THIS charge vs the merchant's typical amount.
-	var deltaLine ui.Node = Fragment()
-	if txnMag, ok := toBase(txn.Amount); ok {
-		delta := stats.DeltaVsTypical(txnMag)
-		switch {
-		case delta > 0:
-			deltaLine = Span(css.Class("badge"), uistate.T("merchantPanel.aboveUsual", "+"+fmtMoney(money.New(delta, base))))
-		case delta < 0:
-			// Mirror the "+$4.00" styling used above rather than fmtMoney's
-			// accounting parens — "($4.00) vs your usual" reads like a ledger
-			// figure, not a sentence a person wrote.
-			deltaLine = Span(css.Class("muted"), uistate.T("merchantPanel.belowUsual", "-"+fmtMoney(money.New(-delta, base))))
-		default:
-			deltaLine = Span(css.Class("muted"), uistate.T("merchantPanel.atUsual"))
-		}
-	}
-
-	// Visit frequency: "3rd visit this week · 5 this month".
-	var visitLine ui.Node = Fragment()
-	if stats.VisitsThisWeek > 0 {
-		freq := uistate.T("merchantPanel.visitThisWeek", ordinalDay(stats.VisitsThisWeek))
-		if stats.VisitsThisMonth > 0 {
-			freq += " · " + uistate.T("merchantPanel.visitsThisMonth", stats.VisitsThisMonth)
-		}
-		visitLine = Span(css.Class("muted"), freq)
-	} else if stats.VisitsThisMonth > 0 {
-		visitLine = Span(css.Class("muted"), uistate.T("merchantPanel.visitsThisMonth", stats.VisitsThisMonth))
-	}
-
-	// TypicalMonth is 0 only when there's no prior completed month to compare
-	// against (every charge on record falls in the current calendar month) —
-	// every real prior month has a positive total, so this is a safe proxy.
-	// Comparing to a "typical $0.00" in that case would misread as "you're
-	// spending way over usual" when there's simply no history yet.
-	var monthLine string
-	if stats.TypicalMonth > 0 {
-		monthLine = uistate.T("merchantPanel.monthVsTypical",
-			fmtMoney(money.New(stats.SpentThisMonth, base)), fmtMoney(money.New(stats.TypicalMonth, base)))
-	} else {
-		monthLine = uistate.T("merchantPanel.monthSpentOnly", fmtMoney(money.New(stats.SpentThisMonth, base)))
-	}
-
+	thisMag, hasThis := toBaseMag(app, txn.Amount, base)
 	return Div(css.Class("card", tw.P3, tw.FlexCol, tw.Gap15), Attr("data-testid", "merchant-context-panel"),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2),
-			Strong(uistate.T("merchantPanel.title", merchant)),
-			deltaLine,
-		),
-		visitLine,
-		Span(css.Class("muted"), monthLine),
-		sparklineSVG(stats.Last12),
-	)
+		merchantStoryNodes(stats, merchant, base, thisMag, hasThis))
 }
 
 // sparklineSVG draws a tiny polyline of the last-N charge magnitudes with no
@@ -273,6 +192,8 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	memberS := ui.UseState(txn.MemberID)
 	tagsS := ui.UseState(strings.Join(txn.Tags, ", "))
 	clearedS := ui.UseState(txn.Cleared)
+	noteS := ui.UseState(txn.Note)                  // TXC-2: free-text memo
+	excludeS := ui.UseState(txn.ExcludeFromReports) // TXC-1: keep in balance, drop from budgets/reports
 	errMsg := ui.UseState("")
 	// TX7: after a category change is saved, hold the similar-transaction candidates
 	// so the inline "N more look like this" offer can render. Empty means no offer.
@@ -306,6 +227,57 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
 	onCleared := ui.UseEvent(func(e ui.Event) { clearedS.Set(e.IsChecked()) })
+	onNote := ui.UseEvent(func(v string) { noteS.Set(v) })
+	onExclude := ui.UseEvent(func(e ui.Event) { excludeS.Set(e.IsChecked()) })
+
+	// Quick-add a category right from the picker — faster than leaving to /categories.
+	// A toggle reveals a name field; adding creates the category (matching the
+	// transaction's income/expense flow) and immediately selects it on this form.
+	addingCat := ui.UseState(false)
+	newCatName := ui.UseState("")
+	onNewCatName := ui.UseEvent(func(v string) { newCatName.Set(v) })
+	toggleAddCat := ui.UseEvent(func() {
+		addingCat.Set(!addingCat.Get())
+		newCatName.Set("")
+		errMsg.Set("")
+	})
+	// doAddCat creates the typed category and selects it. A plain closure so both the
+	// Add button and the Enter key (which must NOT submit the outer edit form) run it.
+	doAddCat := func() {
+		n := strings.TrimSpace(newCatName.Get())
+		if n == "" {
+			errMsg.Set(uistate.T("categories.nameRequired"))
+			return
+		}
+		kind := domain.KindExpense
+		if txn.IsIncome() {
+			kind = domain.KindIncome
+		}
+		c := domain.Category{ID: id.New(), Name: n, Kind: kind}
+		if err := app.PutCategory(c); err != nil {
+			errMsg.Set(err.Error())
+			return
+		}
+		catS.Set(c.ID) // select the just-created category on this form
+		newCatName.Set("")
+		addingCat.Set(false)
+		errMsg.Set("")
+		uistate.RequestPersist()
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("categories.addedToast", n), false)
+	}
+	addCat := ui.UseEvent(Prevent(func() { doAddCat() }))
+	onNewCatKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		switch e.GetKey() {
+		case "Enter":
+			e.PreventDefault() // add the category instead of submitting the edit form
+			doAddCat()
+		case "Escape":
+			e.PreventDefault()
+			addingCat.Set(false)
+			newCatName.Set("")
+		}
+	})
 
 	save := ui.UseEvent(Prevent(func() {
 		t := txn
@@ -332,6 +304,8 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 		t.Tags = textutil.CommaFields(tagsS.Get())
 		t.Cleared = clearedS.Get()
+		t.Note = strings.TrimSpace(noteS.Get())
+		t.ExcludeFromReports = excludeS.Get()
 		// C58: an amount edit must not silently desync an existing category breakdown —
 		// budgets attribute per split line, so a mismatched total would misreport. Block
 		// and point at the split section below instead of quietly dropping the split.
@@ -591,12 +565,31 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		labeledField(uistate.T("transactions.amountPlaceholder"),
 			Input(css.Class("field"), Type("number"), Step("0.01"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
 		uiw.FormField(uistate.T("transactions.categoryLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   catOpts,
-				Selected:  catS.Get(),
-				AriaLabel: uistate.T("transactions.categoryLabel"),
-				OnChange:  func(v string) { catS.Set(v) },
-			})),
+			Div(css.Class("txn-cat-picker"),
+				Div(css.Class("txn-cat-row"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   catOpts,
+						Selected:  catS.Get(),
+						AriaLabel: uistate.T("transactions.categoryLabel"),
+						OnChange:  func(v string) { catS.Set(v) },
+					}),
+					Button(css.Class("btn btn-tool txn-cat-new", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+						Attr("data-testid", "txn-edit-newcat-toggle"), Attr("aria-expanded", ariaBool(addingCat.Get())),
+						Title(uistate.T("transactions.newCategory")), OnClick(toggleAddCat),
+						uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+						Span(uistate.T("transactions.newCategory")))),
+				// Inline create: name field + Add; creates the category (typed to the
+				// transaction's flow) and selects it without leaving the modal.
+				If(addingCat.Get(),
+					Div(css.Class("txn-cat-add"),
+						Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
+							Attr("aria-label", uistate.T("transactions.newCategoryName")),
+							Placeholder(uistate.T("transactions.newCategoryName")),
+							Value(newCatName.Get()), OnInput(onNewCatName), OnKeyDown(onNewCatKey)),
+						Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"),
+							OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
+						Button(css.Class("btn btn-ghost"), Type("button"),
+							OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")))))),
 		labeledField(uistate.T("transactions.dateLabel"),
 			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
 		labeledField(uistate.T("transactions.tagsLabel"),
@@ -611,6 +604,21 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		Label(css.Class("txn-check"),
 			Input(Type("checkbox"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")), CheckedIf(clearedS.Get()), OnChange(onCleared)),
 			Span(uistate.T("txnwidget.clearedLabel"))),
+		// TXC-2: a free-text memo for this transaction (distinct from the description).
+		uiw.FormField(uistate.T("transactions.noteLabel"),
+			Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
+				Attr("aria-label", uistate.T("transactions.noteLabel")),
+				Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
+		// TXC-1: exclude from budgets & reports (still counts toward account balances).
+		// The hint sits on its own line BELOW the checkbox row so it never runs into
+		// the label; a hairline separates this "reporting" control from the "Cleared
+		// (reconciled)" checkbox above so the two aren't mistaken for each other.
+		Div(css.Class("txn-exclude-field", tw.FlexCol, tw.Gap1),
+			Label(css.Class("txn-check"),
+				Input(Type("checkbox"), Attr("data-testid", "txn-edit-exclude"), Attr("aria-label", uistate.T("transactions.excludeLabel")),
+					CheckedIf(excludeS.Get()), OnChange(onExclude)),
+				Span(uistate.T("transactions.excludeLabel"))),
+			Span(css.Class("muted", tw.Text12), uistate.T("transactions.excludeHint"))),
 		// TX6: the merchant context panel — the merchant's story (typical amount,
 		// this charge vs typical, visits this week/month, this month vs a typical
 		// month, a tiny sparkline). Read-only, omitted for transfers and one-off

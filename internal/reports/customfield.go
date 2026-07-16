@@ -76,7 +76,7 @@ func trimFloat(f float64) string {
 func ByCustomField(txns []domain.Transaction, fieldKey string, start, end time.Time, rates currency.Rates) ([]CustomFieldSpend, error) {
 	totals := map[string]int64{}
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)

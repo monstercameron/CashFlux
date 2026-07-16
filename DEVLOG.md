@@ -1,3 +1,196 @@
+## 2026-07-15 — Budgets cover-overages Smart+, annual-grid redesign, modal-footer + hook-panic sweep (v1.0.46)
+
+A run of Cam-directed UI/UX work across budgets and transactions. Recurring theme: **two bug classes kept
+showing up.** (1) `GoUseAtom called outside component context` — a framework hook (`UseFlexSheetOpen`,
+`UseLayoutItems`, `UseTxFilter`, `UseRefundPairTarget`) called from *inside* an event handler instead of
+render. Fix is always the same: resolve the atom in the component body, capture it, and only call `.Set`/
+`.Get` in the callback. Fixed in the flex classify button, saved-view pin/apply, the pinned-tile "apply &
+go", and the txn refund-pair action. (2) Flip-modal footers not pinning — the app has TWO valid
+`FlipPanel` footer patterns (`FormID` native-submit footer; `NoFooter + FlushBody` + a form that owns a
+`.modal-scroll`/`.modal-foot` split). The bug was always a missing `FlushBody` OR a form root without
+`height:100%` (auto-budget used bare `tw.FlexCol`, so its footer only "pinned" when content happened to
+fill the panel). Add-budget was the reference standard; matched sweep + auto-budget to it.
+
+Design work: the **Flex budgets view** and the **BG9 annual grid** both had ZERO css behind their class
+names (same failure mode — semantic classes, no stylesheet), so they rendered as unstyled dumps. Rebuilt
+both with proper token-driven stylesheets (flex = serif hero + horizon meter w/ pace tick; annual grid =
+sticky bordered matrix with an accent current-month band + a faint-red overspend wash, heatmap-lite). The
+pinned saved-view widget got a real card + full drag/resize + size-responsive content, and its `%!d(...)`
+match-count bug was fixed (template + a correct `matches` pluralizer).
+
+New feature: **SMART-B14 "Cover overages in one pass"** — a shared flip modal on /budgets that clears every
+over-budget together, each covered from another budget's slack or borrowed from next month's same budget
+(per-period boosts, +1 minor unit past the shortfall so `spent >= limit` clears). Plus the merchant-cleanup
+alias now cascades to ledger titles AND search (an alias was display-only before), with a rename-history
+lineage, and an inline quick-add-category affordance in the edit-transaction modal.
+
+Note: shared working tree with several concurrent agents active all session; verified a green `js/wasm`
+build immediately before committing this batch.
+
+## 2026-07-15 — Transaction-level comp parity: exclude / memo / presets / non-lossy merge (+ AI category)
+
+Cam asked what the comps put on the transactions page that we lack, then to build it. Code-verified the
+real gaps against `domain.Transaction` (avoiding the "already built" trap — and TXC-4 sprung it: merge
+already existed as C87, so the actual gap was that it was *lossy*).
+
+TXC-1 (exclude from budgets & reports) was the load-bearing one. The naive move — overload `IsExpense()` —
+is wrong: it's used in 67 places including UI row-coloring, so excluding there would mis-render rows.
+Instead added `ExcludeFromReports` + `CountsInReports()` and guarded the ANALYTICS choke points only:
+`ledger.PeriodTotals` (the income/expense spine feeding KPIs + reports) and `CategorySpendSeries`, the
+`reports` core (`categoryTotals`) plus every direct-iterating report func, `budgeting.Spent`, and the
+`engineenv` KPI counts. Balance/net worth deliberately untouched — the invariant "excluded from analysis,
+still real money" is pinned by a table test (PeriodTotals/CategorySpend exclude it; Balance + NetWorth
+include it). Persistence was free: the store marshals each transaction as a JSON blob, so the new
+json-tagged `ExcludeFromReports`/`Note` fields round-trip with no schema change.
+
+TXC-3 needed a first-class `txnfilter.Uncategorized` criterion (empty category, non-transfer) wired through
+Apply + ActiveFilters + Without (so it's a removable chip), table-tested; the other three presets map to
+existing fields (Tag=needs-review, AmountMin, From/To). The preset chips are a per-chip component so each
+OnClick hook stays loop-safe. The design-critic's earlier "no visible totals" lesson also informed keeping
+these visible and tappable.
+
+Also wired the mid-turn request: a SMART+ "AI category" button in the Review inbox that constrains the LLM
+to the user's existing categories (reusing `smartai.AutoCategorize`/`ParseCategoryAssignments`), gated on a
+configured provider — sitting beside the deterministic (SMART) suggestion chip.
+
+Gotcha: a nested flex-col inside the `.txn-check` label ran the exclude hint into the label text; moved the
+hint to its own line below the checkbox row. `IsExpense()` is a tempting but wrong single choke point.
+
+## 2026-07-15 — Two standout features: Monthly Recap (CG-S1) + Transaction Review inbox (CG-S2)
+
+Cam's brief (after two rejected gap-reviews) was to review the first-8 pages for what the commercial
+comps put on those SAME surfaces that we lack, then build the two "standout" plays with excellent, low-click
+UX and an aggressive adversarial design-critic loop until no objections. Built both bottom-up per SDLC.
+
+**Monthly Recap (CG-S1)** — pure `internal/recap` package first (`Compute(now, txns, accounts, rates)` →
+`MonthRecap`), reusing `reports.IncomeVsExpense`/`SpendingByCategory`/`TopMovers`/`LargestExpenses`/
+`NoSpendDays` and `ledger.NetWorthSeries`. Key design call: compare the current month-to-date against the
+**same elapsed span** of the prior month (Copilot-style), not month-to-date vs a full month. Table tests
+cover mid-month, empty, spend-down, and the last-day (complete-month) edge. Then a native dashboard widget
+(`monthly-recap`) via the declarative widget engine — placed full-width under `attention` in both
+`dashlayout.DefaultItems` and `DefaultLayoutItems` (a 4-wide tile fully consumes its row, so packing below
+just shifts down one row; updated the pack test coords accordingly).
+
+The design-critic's decisive catch (which I'd half-anticipated): v1 duplicated the hero verbatim — "SPENT
+$1,601.25" sat ~150px under the hero's identical "SPENDING $1,601.25". Reframed so the recap **leads with
+the month-over-month change** (↓53%, the one thing the hero lacks), demotes the raw amount to a sub-line
+with the prior ("was $3,463.47"), and fills the rest with the category story the hero has no room for. Also
+suppressed the biggest-expense cell when it's the same money as the top category (two identical $620s read
+as a bug), folded no-spend-days into the grid (was an orphan footer), added per-stat glyphs + an accent-bar
+card, and consolidated the header. Critic round 2: SHIP.
+
+**Transaction Review inbox (CG-S2)** — pure `internal/reviewqueue` (`Needs`/`Queue`/`Count`/`ReasonFor`:
+non-transfer + uncategorized-or-#needs-review, newest-first). Toolbar "Review N" entry → shell-root
+NoFooter flip modal that steps the live queue. The critic's blocking item was the footgun: v1 committed a
+category on the select's `onChange` and advanced — one stray scroll/mis-click silently miscategorizes. Fixed
+to a **confirm model**: picking a category only arms a dominant "Categorize & next" primary (dimmed +
+`pointer-events:none` until a category is chosen — verified by force-clicking the disabled button and
+asserting the queue doesn't advance). Added the backlog-buster: **"Also apply to N others from <merchant>"**
+(one action clears every queued charge from that payee via `App.BulkMutate`), a deterministic one-click
+"Suggested: X" chip, and `payeeclean`-cleaned payee display. Handlers recompute the current item from live
+state each call so the shifting queue never leaves a stale closure acting on the wrong row.
+
+Gotchas: a native dashboard widget positions by ID from the packed layout (`uiw.Widget` re-packs), so
+`WidgetProps.GridColumn` is a fallback, not needed. `FlipPanel` `Height:"auto"` collapses the panel (only
+the backdrop shows) — it needs an explicit height. `currency.Rates.Base` is a plain `string`, not a named
+type. Deferred (logged in TODOS): recap stat drill-through (R7) and a review sort-by-largest toggle (V8).
+
+## 2026-07-15 — v1.0.45: per-transaction payee cleanup (SM-1) in the row kebab
+
+Cam noticed the payee-mapping feature wasn't on the transactions page — it lived only on /rules
+(`PayeeAliasSection`) and, for the AI cleanup, on the Smart hub (`smartai.MerchantCleanup`). He asked to
+keep /rules but ALSO add a per-transaction entry: kebab → flip modal. Built SM-1 bottom-up: a pure,
+table-tested `internal/payeeclean` normalizer (SMART deterministic tier — strips "SQ *"/"TST*" processor
+prefixes, star separators, trailing store/ref numbers and single-word "CITY ST" tails, title-cases
+ALL-CAPS; never blanks the name), a shell-root flip-modal host (`PayeeCleanHost` + `PayeeCleanBody`,
+mirroring the other `*Host` modals), a kebab item wired via a `uistate.SetPayeeClean(txnID)` atom, and the
+SMART+ AI suggest reusing the existing `resolveAIConn`/`runSmartAI`/`MerchantCleanup` path (gated on a
+configured provider + SMART-T5).
+
+The instructive bug: the first e2e row was a MANUAL transaction ("Car payment (Marcus)", no payee), and
+the save did nothing visible. Two reasons: (1) the ledger display prefers `Desc` over the resolved payee
+(`desc := descFull; if desc=="" { desc = resolve(payee) }`), so a payee alias never shows on a row that has
+a description; and (2) "this transaction" was wrongly setting `Payee` (not shown) instead of `Desc`. Payee
+mapping is fundamentally a *payee* operation, so I reworked it: base the alias on `txn.Payee`, offer the
+"map all charges" scope ONLY when the transaction has a payee, and make "rename this transaction" set the
+`Desc` (the actual display field) so a single-row rename always shows. A manual entry gets just the rename.
+e2e now 10/10 incl. the saved name showing in the ledger; `payeeclean` unit tests green; zero console errors.
+
+## 2026-07-15 — v1.0.44: surface the merchant spending-trend from the transactions row
+
+Cam flagged that the merchant "story" (TX6 — sparkline + this-vs-typical + visit frequency + month
+context) was too hidden: it only appeared inside a transaction's edit modal. He suggested a hover or a
+row-expand reveal with a 500ms spinner. Chosen design: a small **history-glyph chip** on rows whose
+merchant has enough history, opening an **anchored popover** (reusing the app's `.add-menu` edge-flip
+chrome) with a brief spinner then the story. Click-to-toggle, not hover — the framework's shorthand has
+no OnMouseEnter/Leave, and click is more reliable + touch/keyboard-friendly anyway.
+
+Extracted the story renderer into a shared `merchantStoryNodes` so the edit-modal panel and the new
+popover render identically (the panel now just computes stats + calls it). Kept the heavy work off the
+render path: a cheap per-merchant charge-count decides which rows get a chip; the full stats compute
+lazily only when a chip opens.
+
+Two real traps caught by the perf harness + the design critic. **Perf:** the first cut dropped
+/transactions 87→79 — the per-render `merchantChargeCounts` ledger scan plus 17 interactive chip
+components. Fixed in three moves: memoize the counts on the data revision (no rescan on
+sort/select/paginate), collapse the chip's six `UseState` hooks into one struct, and — the decisive one —
+mount the chips via `useAfterSettle` so they land just after the ledger paints, off the measured
+route-settle. Back to 88. **The critic's best catch:** the chip click bubbled to the row and opened the
+edit modal *over* the popover (no `StopPropagation`) — which is why the critic's first screenshots were
+the modal, not the popover. Added `StopPropagation` + an e2e assertion that the chip never opens
+`merchant-context-panel`. Also from the critique: neutral resting glyph (was a fixed up-arrow, wrong on a
+down-spend row), per-merchant stats cache (no re-paid spinner on repeat opens), a stable popover
+min-height so the box doesn't grow past its edge-flip measure, block-level story lines, a 24px WCAG
+target, and a colour-coded delta instead of the uppercase `.badge` pill. e2e 8/8, zero console errors.
+
+Follow-up from Cam: the sparkline was an unlabelled squiggle — no scales, so the peaks/valleys and time frame
+were unreadable. Added scale metadata around the line: a y-axis legend (highest/lowest charge), an x-axis span
+(oldest → newest charge date, e.g. "Nov '23 → Jul '26"), and a caption ("12 charges · latest $32.00"). This
+needed the charge dates behind the series, so `merchantstats.Stats` now carries `Last12Dates` parallel to
+`Last12`. Text lives in HTML around the SVG (the polyline uses preserveAspectRatio="none", which would distort
+in-SVG text). Also added an explicit ✕ close to the popover (Cam: "we need a way to close it") alongside the
+existing click-outside / Escape / re-click dismissals. e2e now 13/13.
+
+## 2026-07-15 — v1.0.43: five local-first features + a standardized reusable calendar
+
+Second local-first-gap sweep. Scanned the first 8 pages again and, crucially, threw out the ones the
+recon proved already built — net-worth trend chart (dashboard hero sparkline + `NetWorthPanel` C217 +
+standalone `/networth` + per-account 90-day AC2 sparklines), budget rollover (`internal/budgeting/
+rollover.go`), the transactions calendar (TX8), recent-payee suggestions, subtasks (`Task.ParentID`),
+and income smoothing all exist. That reality-anchored the list down to five genuine gaps, plus Cam's
+mid-flight ask for a **standardized reusable calendar** to use across the project.
+
+Built bottom-up by five parallel opus agents on strictly disjoint territories (pure logic pkg + tests
+first, UI last), with the store-touching features (notification archive, txn templates) persisting via
+the existing **KV store** — a JSON blob under one key each — so neither needed a schema migration and
+they didn't contend. Pure packages shipped: `internal/calendargrid`, `internal/taskboard`,
+`internal/goaltrajectory`, `internal/notifyhistory`, `internal/txntemplate` (all table-tested, native
+`go test` green). I owned integration: the To-do List/Board/Calendar view switcher, the calendar
+adoption, all `install.go` CSS registration, and the authoritative wasm build.
+
+The reusable `uiw.Calendar` primitive (over pure `calendargrid`, deterministic — the caller passes
+`today`, the component never reads the clock) renders day cells positionally, not keyed, so `DayContent`
+had to stay hook-free: the To-do calendar's task chips and the per-day "+" are their own child
+components (`ui.CreateElement`), never `On*` in a loop. A real correctness catch during e2e: the cell
+is a `<button>` when `OnDayClick` is set, so putting chip buttons inside it nests interactive elements —
+fixed by leaving cells as plain divs and giving each day an explicit "+" affordance instead.
+
+Adversarial design-critic loop (one sonnet critic, frontend-design rubric): round 1 = ITERATE with 3
+P1s + 6 P2s. One P1 ("the List view renders faded") I **verified was a false positive** — measured
+computed opacity on the settled list (`.rows`/`.todo-item` = 1); the critic's screenshot was captured
+mid fade-in. Real fixes: gated the board's one-click advance to status grouping so it can't silently
+demote priority (it now reads "✓ Done"); unified the priority-dot hue language across board + calendar;
+moved "Save as template" up next to the picker so the feature isn't below the modal fold; softened
+selected/toggle states off solid-accent (reserved for the one primary CTA per screen); made the
+calendar "+" visible at rest; and reworded the goal ETA to foreground slack-vs-target instead of
+restating the target date. Round 2 = **SHIP**. Functional e2e 26/26, zero console errors; perf held
+(`/todo` 95 A, `/goals` 92 A, `/notifications` 98 A+; `/transactions` 87 B is the pre-existing heavy
+ledger page — F4 only touches the add *modal*, so it can't move that page's load).
+
+Deployed to `web/bin` (wasm + gz, atomic move; SW → `cashflux-v316`). Git commit **held**: a concurrent
+session has uncommitted work entangled in `install.go` (+ its `rules_budgetflex.go`), so a clean
+per-feature commit isn't possible without sweeping up their changes — left for when the tree settles.
+
 ## 2026-07-15 — v1.0.42: browser-only competitive-parity features (Age of Money, task reminders)
 
 Followed the gap assessment: build the browser-only, no-third-party-service gaps; defer the PWA

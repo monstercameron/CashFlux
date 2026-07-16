@@ -195,6 +195,7 @@ func init() {
 	R("highlight", func(c widgetrender.RenderCtx) ui.Node {
 		return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates)
 	})
+	R("monthly-recap", monthlyRecapWidget)
 	R("smart-digest", func(c widgetrender.RenderCtx) ui.Node { return smartDigestWidget(c.App) })
 	R("anomaly-hub", func(c widgetrender.RenderCtx) ui.Node { return ui.CreateElement(anomalyHubWidget, c.App) })
 }

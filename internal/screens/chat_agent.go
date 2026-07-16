@@ -66,6 +66,8 @@ You can change data with these tools (each asks the user to approve first): add/
 
 DUPLICATES: when the user reports a possible duplicate (or a flag mentions one), call find_duplicate_transactions to see the exact entries, then merge_duplicate_transactions to keep one and remove the identical extras — for an exact duplicate, "merge" and "remove the extra" are the same thing, so just do it. Use delete_transaction to remove one specific entry. Always pass the amount and date so you target the right entries.
 
+FLAGGED ACTIVITY: to clear/dismiss the flags under Flagged activity (possible duplicates, spikes, missing transactions, balance anomalies) without changing any data, use dismiss_flagged_activity — omit match to clear them all, or pass a phrase to dismiss specific ones.
+
 CATEGORIZING: call list_uncategorized_transactions, group by merchant, create_category for anything not covered, then categorize_transactions(match, category) per merchant. To fix mis-categorized ones, pass only_uncategorized=false.
 
 FORMULAS: the app derives every figure from named engine variables — ATOMS (indivisible reductions like assets, income, liquid_cash) and MOLECULES (formulas over atoms, like net_worth = assets - liabilities). Call list_formula_metrics to see what's available (with live values and molecule formulas), and evaluate_formula to compute any expression over them (e.g. net_worth * 0.04 / 12). Prefer these for derived math over guessing.
@@ -1376,6 +1378,35 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				return fmt.Sprintf("%d transactions match “%s” and they differ. Tell me the amount and date of the one to delete:\n%s", len(m), strings.TrimSpace(a.Match), strings.TrimRight(b.String(), "\n"))
 			},
 		},
+		{
+			spec: ai.FunctionTool("dismiss_flagged_activity",
+				"Dismiss (clear) flagged activities — the 'possible duplicate', spending-spike, missing-transaction, and balance-anomaly flags shown under Flagged activity. Omit match to clear ALL current flags; pass a phrase to dismiss only flags whose title or detail contains it. Dismissing hides a flag until its underlying situation changes; it does NOT delete or alter any transaction (use merge/delete for that).",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"optional phrase matched on a flag's title/detail; omit to clear all flags"}}}`)),
+			mutates: true,
+			preview: func(raw json.RawMessage) string {
+				var a struct {
+					Match string `json:"match"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				n := len(flaggedActivityKeys(app, a.Match))
+				if n == 0 {
+					return "No flagged activities to dismiss."
+				}
+				return fmt.Sprintf("Dismiss %d flagged %s.", n, ifStr(n == 1, "activity", "activities"))
+			},
+			run: func(raw json.RawMessage) string {
+				var a struct {
+					Match string `json:"match"`
+				}
+				_ = json.Unmarshal(raw, &a)
+				keys := flaggedActivityKeys(app, a.Match)
+				if len(keys) == 0 {
+					return "No flagged activities to dismiss."
+				}
+				uistate.DismissAllSmartInsights(keys)
+				return fmt.Sprintf("Dismissed %d flagged %s — they'll stay hidden until the situation changes.", len(keys), ifStr(len(keys) == 1, "activity", "activities"))
+			},
+		},
 	}
 	// AG series — the assistant tool groups built in the ag_*.go / chat_agent_*.go
 	// sidecar files (registered here so those files never touched this one):
@@ -1389,6 +1420,20 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 	tools = append(tools, agToolsTax(app, base, rates)...)
 	tools = append(tools, agToolsDocQA(app, base, rates)...)
 	return tools
+}
+
+// flaggedActivityKeys returns the dismissal keys of the current flagged activities
+// (the SMART anomaly flags) whose title/detail contains match — or all of them when
+// match is empty. Backs the dismiss_flagged_activity tool.
+func flaggedActivityKeys(app *appstate.App, match string) []string {
+	q := strings.ToLower(strings.TrimSpace(match))
+	var keys []string
+	for _, f := range runAnomalyDetectors(app, uistate.LoadPrefs().WeekStartWeekday()) {
+		if q == "" || strings.Contains(strings.ToLower(f.Title+" "+f.Detail), q) {
+			keys = append(keys, f.Key)
+		}
+	}
+	return keys
 }
 
 // distinctSignatures counts how many distinct canonical duplicate signatures

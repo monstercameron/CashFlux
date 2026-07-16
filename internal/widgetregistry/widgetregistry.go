@@ -140,6 +140,7 @@ func DefaultPlacement(id, surface string) (domain.Placement, bool) {
 // nameKeys maps each built-in id to its display-name i18n key.
 var nameKeys = map[string]string{
 	"attention":       "dashboard.attention",
+	"monthly-recap":   "dashboard.monthlyRecap",
 	"kpi-networth":    "dashboard.netWorth",
 	"kpi-income":      "dashboard.income",
 	"kpi-spending":    "dashboard.spending",
@@ -166,6 +167,7 @@ var nameKeys = map[string]string{
 
 // iconIDs maps each built-in id to its header glyph id (resolved in the UI).
 var iconIDs = map[string]string{
+	"monthly-recap":   "reports",
 	"kpi-networth":    "accounts",
 	"kpi-liabilities": "creditCard",
 	"kpi-income":      "arrowDownCircle",

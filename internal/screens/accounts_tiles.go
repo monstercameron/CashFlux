@@ -412,21 +412,13 @@ func acctToolbarGlyph(testID string, ic icon.Name, label, kind, variant string, 
 	if open {
 		cls += " is-open"
 	}
-	// Muted trailing badge conveys the button's behaviour without a hover: a dialog
-	// glyph for modal openers, a diagonal arrow for page navigations.
-	var kindBadge ui.Node = Fragment()
-	switch kind {
-	case "modal":
-		kindBadge = Span(css.Class("bt-kind"), Attr("aria-hidden", "true"), "⧉")
-	case "nav":
-		kindBadge = Span(css.Class("bt-kind"), Attr("aria-hidden", "true"), "↗")
-	}
+	// A single leading glyph + the text label — no trailing kind badge (the button's
+	// behaviour is conveyed by aria + the label, not a second glyph on the right).
 	args := []any{
 		css.Class(cls), Type("button"), Attr("data-testid", testID),
 		Attr("aria-label", label), OnClick(onClick),
 		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(label),
-		kindBadge,
 	}
 	if kind == "modal" {
 		args = append(args, Attr("aria-haspopup", "dialog"), Attr("aria-expanded", boolStr(open)))

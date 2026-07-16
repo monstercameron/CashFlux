@@ -120,6 +120,9 @@ type Criteria struct {
 	// ignored (treated as unset) so a half-typed number never hides everything.
 	AmountMin string `json:"amountMin,omitempty"`
 	AmountMax string `json:"amountMax,omitempty"`
+	// Uncategorized, when true, keeps only non-transfer transactions with no
+	// category — the "needs categorizing" quick-filter preset (TXC-3).
+	Uncategorized bool `json:"uncategorized,omitempty"`
 	// Pagination (persisted with the rest). Page is 1-based; PageSize 0 means the
 	// default, PageSizeAll (negative) means "show all".
 	Page     int `json:"page,omitempty"`
@@ -183,8 +186,10 @@ const (
 	FieldCleared   FilterField = "cleared"
 	FieldFlow      FilterField = "flow"
 	FieldAmountMin FilterField = "amountMin"
-	FieldAmountMax FilterField = "amountMax"
-	FieldCustom    FilterField = "custom"
+	// FieldUncategorized is the "no category yet" quick filter (TXC-3).
+	FieldUncategorized FilterField = "uncategorized"
+	FieldAmountMax     FilterField = "amountMax"
+	FieldCustom        FilterField = "custom"
 )
 
 // ActiveFilter describes one engaged filter for the toolbar's count badge and
@@ -224,6 +229,9 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	}
 	if c.Flow == "in" || c.Flow == "out" {
 		out = append(out, ActiveFilter{Field: FieldFlow, Value: c.Flow})
+	}
+	if c.Uncategorized {
+		out = append(out, ActiveFilter{Field: FieldUncategorized, Value: "1"})
 	}
 	if c.CustomKey != "" && c.CustomVal != "" {
 		out = append(out, ActiveFilter{Field: FieldCustom, Value: c.CustomVal})
@@ -269,6 +277,8 @@ func (c Criteria) Without(f FilterField) Criteria {
 		c.Cleared = ""
 	case FieldFlow:
 		c.Flow = ""
+	case FieldUncategorized:
+		c.Uncategorized = false
 	case FieldCustom:
 		c.CustomKey, c.CustomVal = "", ""
 	}
@@ -443,6 +453,11 @@ func (c Criteria) RemoveValue(f FilterField, value string) Criteria {
 type Labels struct {
 	Account  map[string]string
 	Category map[string]string
+	// Payee, when set, resolves a raw payee to its cleaned display name (the TX1/SM-1
+	// merchant-cleanup alias). Text search then also matches the cleaned name, so a
+	// search for the clean merchant name finds every charge even though the raw payee
+	// on the transaction is unchanged. Nil = match raw fields only (the pure default).
+	Payee func(raw string) string
 }
 
 func (l Labels) account(t domain.Transaction) string {
@@ -504,6 +519,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		// domain/category_split.go; fix = also match any Splits[i].CategoryID.
 		case c.Categories != "" && !csvHas(c.Categories, t.CategoryID):
 		case c.Categories == "" && c.Category != "" && t.CategoryID != c.Category:
+		case c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()):
 		case c.Members != "" && !csvHas(c.Members, t.MemberID):
 		case c.Members == "" && c.Member != "" && t.MemberID != c.Member:
 		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
@@ -514,7 +530,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
 		case !fromT.IsZero() && t.Date.Before(fromT):
 		case !toT.IsZero() && t.Date.After(toT):
-		case ft != "" && !matchText(t, ft):
+		case ft != "" && !matchText(t, ft, labels.Payee):
 		case c.Cleared == "yes" && !t.Cleared:
 		case c.Cleared == "no" && t.Cleared:
 		// Flow keeps only expenses ("out", a negative amount) or only income ("in",
@@ -586,15 +602,22 @@ func AbsAmount(t domain.Transaction) int64 {
 }
 
 // matchText reports whether the (already-lowercased) query appears in a
-// transaction's payee, description, or any of its tags. Payee is a first-class
-// field used by the rules engine and the activity screen, so a payee that differs
-// from the description (e.g. a cleaned-up merchant name) must still be findable.
-func matchText(t domain.Transaction, q string) bool {
+// transaction's payee, description, cleaned display name, or any of its tags. Payee
+// is a first-class field used by the rules engine and the activity screen, so a payee
+// that differs from the description (e.g. a cleaned-up merchant name) must still be
+// findable. resolve (optional) maps the raw payee to its cleaned alias so a search for
+// the clean merchant name matches every charge even though the raw payee is unchanged.
+func matchText(t domain.Transaction, q string, resolve func(string) string) bool {
 	if strings.Contains(strings.ToLower(t.Payee), q) {
 		return true
 	}
 	if strings.Contains(strings.ToLower(t.Desc), q) {
 		return true
+	}
+	if resolve != nil {
+		if strings.Contains(strings.ToLower(resolve(t.Payee)), q) {
+			return true
+		}
 	}
 	for _, tag := range t.Tags {
 		if strings.Contains(strings.ToLower(tag), q) {

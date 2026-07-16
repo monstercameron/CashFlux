@@ -87,31 +87,41 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	return Div(css.Class("budget-annualgrid"),
 		header,
 		yearControls,
-		// Horizontal scroll lives INSIDE the card so the page body never scrolls sideways.
-		Div(css.Class("budget-annualgrid-scroll"), Attr("style", "overflow-x:auto;max-width:100%"),
+		// Horizontal scroll lives INSIDE the card so the page body never scrolls sideways
+		// (the .budget-annualgrid-scroll frame owns overflow-x + max-width).
+		Div(css.Class("budget-annualgrid-scroll"),
 			annualGridTable(grid, props)),
 	)
 }
 
+// gridColClass returns the modifier classes for a data/header column at month index i:
+// the current-month accent band and the leading-divider Total column. Empty for a
+// plain month column. (i == 12 is the Total column.)
+func gridColClass(i, current int) string {
+	switch {
+	case i == 12:
+		return " is-total"
+	case i == current:
+		return " is-current"
+	default:
+		return ""
+	}
+}
+
 // annualGridTable renders the matrix itself. A sticky header row and sticky first
-// column keep the month labels and budget names visible while scrolling.
+// column keep the month labels and budget names visible while scrolling; all styling
+// is class-driven (see rules_annualgrid.go), so cells read as one designed grid.
 func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps) ui.Node {
-	// Header row: "Budget", the twelve months (current one highlighted), then "Total".
+	// Header row: "Budget", the twelve months (current one banded), then "Total".
 	headCells := []ui.Node{
 		Th(css.Class("budget-annualgrid-corner"), Attr("scope", "col"),
-			Attr("style", "position:sticky;left:0;z-index:2;background:var(--bg-elev)"),
 			uistate.T("budgets.annualGridBudgetCol")),
 	}
 	for i, name := range annualGridMonths {
-		cls := "budget-annualgrid-th"
-		style := "text-align:right"
-		if i == grid.CurrentMonth {
-			style += ";background:var(--bg-elev);font-weight:600"
-		}
-		headCells = append(headCells, Th(css.Class(cls), Attr("scope", "col"), Attr("style", style), name))
+		headCells = append(headCells, Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth)), Attr("scope", "col"), name))
 	}
-	headCells = append(headCells, Th(css.Class("budget-annualgrid-th"), Attr("scope", "col"),
-		Attr("style", "text-align:right;font-weight:600"), uistate.T("budgets.annualGridTotalCol")))
+	headCells = append(headCells, Th(css.Class("budget-annualgrid-th", "is-total"), Attr("scope", "col"),
+		uistate.T("budgets.annualGridTotalCol")))
 
 	// Map each budget to its tracked categories so a cell click can filter Transactions.
 	catsByBudget := map[string][]string{}
@@ -127,23 +137,17 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps) ui.
 
 	// Footer: column totals across all budgets + the grand total.
 	footCells := []ui.Node{
-		Th(css.Class("budget-annualgrid-corner"), Attr("scope", "row"),
-			Attr("style", "position:sticky;left:0;z-index:1;background:var(--bg-elev);text-align:left"),
+		Th(css.Class("budget-annualgrid-corner", "is-foot"), Attr("scope", "row"),
 			uistate.T("budgets.annualGridTotalCol")),
 	}
 	for i := 0; i < 12; i++ {
-		style := "text-align:right;font-weight:600"
-		if i == grid.CurrentMonth {
-			style += ";background:var(--bg-elev)"
-		}
-		footCells = append(footCells, Td(css.Class("budget-annualgrid-td"), Attr("style", style),
+		footCells = append(footCells, Td(ClassStr("budget-annualgrid-td is-foot"+gridColClass(i, grid.CurrentMonth)),
 			fmtMoney(grid.MonthActualTotals[i])))
 	}
-	footCells = append(footCells, Td(css.Class("budget-annualgrid-td"),
-		Attr("style", "text-align:right;font-weight:700"), fmtMoney(grid.GrandActual)))
+	footCells = append(footCells, Td(css.Class("budget-annualgrid-td", "is-foot", "is-total"), fmtMoney(grid.GrandActual)))
 
-	return Table(css.Class("budget-annualgrid-table"), Attr("style", "border-collapse:collapse;width:max-content"),
-		Thead(Attr("style", "position:sticky;top:0;z-index:3"), Tr(headCells)),
+	return Table(css.Class("budget-annualgrid-table"),
+		Thead(Tr(headCells)),
 		Tbody(bodyRows),
 		Tfoot(Tr(footCells)),
 	)
@@ -162,33 +166,19 @@ type annualGridRowProps struct {
 // stable hook position (never a raw On* inside a variable-length loop).
 func annualGridRow(props annualGridRowProps) ui.Node {
 	row := props.Row
-	// The budget's tracked categories drive the drill filter; captured once per row.
-	// (AnnualGridRow carries only the ID/name, so drill uses the budget ID's cats via
-	// the caller — here we pass through the row's categories embedded by the builder.)
 	cells := []ui.Node{
-		Th(css.Class("budget-annualgrid-rowhead"), Attr("scope", "row"),
-			Attr("style", "position:sticky;left:0;z-index:1;background:var(--bg-card);text-align:left;white-space:nowrap"),
-			row.Name),
+		Th(css.Class("budget-annualgrid-rowhead"), Attr("scope", "row"), row.Name),
 	}
 	for m := 0; m < 12; m++ {
 		cell := row.Cells[m]
-		tone := ""
-		if cell.Over {
-			tone = " " + tw.Fold(tw.TextDown)
-		}
-		style := "text-align:right;white-space:nowrap"
-		if m == props.CurrentMonth {
-			style += ";background:var(--bg-elev)"
-		}
 		from := time.Date(props.Year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		to := time.Date(props.Year, time.Month(m+2), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		cells = append(cells, ui.CreateElement(annualGridCell, annualGridCellProps{
-			BudgetID: row.BudgetID, CategoryIDs: props.CategoryIDs, Cell: cell, ToneClass: tone, Style: style, From: from, To: to,
-			OnCell: props.OnCell,
+			BudgetID: row.BudgetID, CategoryIDs: props.CategoryIDs, Cell: cell,
+			Current: m == props.CurrentMonth, From: from, To: to, OnCell: props.OnCell,
 		}))
 	}
-	cells = append(cells, Td(css.Class("budget-annualgrid-td"),
-		Attr("style", "text-align:right;font-weight:600"), fmtMoney(row.ActualTotal)))
+	cells = append(cells, Td(css.Class("budget-annualgrid-td", "is-total"), fmtMoney(row.ActualTotal)))
 	return Tr(css.Class("budget-annualgrid-tr"), cells)
 }
 
@@ -197,31 +187,34 @@ type annualGridCellProps struct {
 	BudgetID    string
 	CategoryIDs []string
 	Cell        budgeting.AnnualGridCell
-	ToneClass   string
-	Style       string
+	Current     bool // in the current-month column (gets the accent band)
 	From, To    string
 	OnCell      func(categoryIDs []string, from, to string)
 }
 
 // annualGridCell renders one cell (actual over plan) as a button that drills to the
 // month's filtered transactions. Its own component so the click handler is a stable
-// hook. It carries no category list; the drill re-derives the budget's categories at
-// the callback (the caller closes over the budget set), so a click passes the
-// budget-scoped window on.
+// hook. All styling is class-driven: .is-current bands the current month, .is-over
+// tints an overspent cell and reddens its actual figure (see rules_annualgrid.go).
 func annualGridCell(props annualGridCellProps) ui.Node {
 	click := ui.UseEvent(Prevent(func() {
 		if props.OnCell != nil {
 			props.OnCell(props.CategoryIDs, props.From, props.To)
 		}
 	}))
-	return Td(css.Class("budget-annualgrid-td"), Attr("style", props.Style),
+	cls := "budget-annualgrid-td"
+	if props.Current {
+		cls += " is-current"
+	}
+	if props.Cell.Over {
+		cls += " is-over"
+	}
+	return Td(ClassStr(cls),
 		Button(css.Class("budget-annualgrid-cell"), Type("button"),
 			Attr("data-testid", "annualgrid-cell-"+props.BudgetID+"-"+props.From),
-			Attr("style", "background:transparent;border:0;padding:2px 6px;font:inherit;color:inherit;cursor:pointer;text-align:right;width:100%"),
 			OnClick(click),
-			Span(ClassStr("budget-annualgrid-actual"+props.ToneClass), fmtMoney(props.Cell.Actual)),
-			Span(css.Class("budget-annualgrid-plan", tw.TextFaint),
-				Attr("style", "display:block;font-size:0.75em"), fmtMoney(props.Cell.Plan)),
+			Span(css.Class("budget-annualgrid-actual"), fmtMoney(props.Cell.Actual)),
+			Span(css.Class("budget-annualgrid-plan"), fmtMoney(props.Cell.Plan)),
 		),
 	)
 }

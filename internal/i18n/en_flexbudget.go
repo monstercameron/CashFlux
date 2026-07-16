@@ -21,6 +21,24 @@ var flexBudgetKeys = Catalog{
 	"flex.editTarget":  "Set flex number",
 	"flex.saveTarget":  "Save",
 
+	// Redesigned flex hero: eyebrow, the split number + word, the context line, and
+	// the pace read that turns the meter into an instrument.
+	"flex.eyebrow":     "Flex spending",
+	"flex.thisMonth":   "this month",
+	"flex.leftWord":    "left to spend",
+	"flex.overWord":    "over your flex budget",
+	"flex.spentTarget": "%s spent of %s",
+	"flex.daysLeft":    "%d days left",
+	"flex.dayLeft":     "1 day left",
+	"flex.paceOnTrack": "On track",
+	"flex.paceTight":   "Getting tight",
+	"flex.paceFast":    "Spending fast",
+	"flex.paceOver":    "Over budget",
+	"flex.emptyTitle":  "One number for day-to-day spending",
+	"flex.emptyBody":   "Set a flex budget and every everyday purchase counts against it — no envelopes to juggle. Fixed bills and irregular costs stay tracked separately below.",
+	"flex.setNumber":   "Set your flex number",
+	"flex.editShort":   "Edit",
+
 	// Classify action + assignment sheet.
 	"flex.classify":       "Classify categories",
 	"flex.classifyTitle":  "Sort each category into flex, fixed, or non-monthly",
@@ -36,6 +54,7 @@ var flexBudgetKeys = Catalog{
 	// Fixed-commitment checklist.
 	"flex.fixedHeading": "Fixed commitments",
 	"flex.fixedEmpty":   "No fixed commitments yet — classify a bill category as fixed.",
+	"flex.fixedCount":   "%d of %d paid",
 	"flex.expected":     "Expected %s",
 	"flex.paid":         "Paid",
 	"flex.unpaid":       "Not yet paid",
@@ -44,8 +63,9 @@ var flexBudgetKeys = Catalog{
 	// Non-monthly set-asides.
 	"flex.nonMonthHeading": "Non-monthly set-asides",
 	"flex.nonMonthEmpty":   "No non-monthly costs yet — classify an irregular category as non-monthly.",
-	"flex.setAside":        "Set aside %s / mo",
-	"flex.spentThisPeriod": "Spent %s",
+	"flex.nonMonthCount":   "%s / mo set aside",
+	"flex.setAside":        "%s / mo",
+	"flex.spentThisPeriod": "%s spent",
 }
 
 func init() {

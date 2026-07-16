@@ -48,6 +48,9 @@ type Stats struct {
 	SpentThisMonth  int64   // total spent this calendar month
 	TypicalMonth    int64   // median of prior complete months' totals
 	Last12          []int64 // up to 12 most recent magnitudes, oldest → newest
+	// Last12Dates are the charge dates parallel to Last12 (same length/order), so a
+	// sparkline can label its time span and mark which point is which charge.
+	Last12Dates []time.Time
 }
 
 // Compute derives the merchant story from its charges as of now. Charges may be
@@ -70,9 +73,11 @@ func Compute(charges []Charge, now time.Time, weekStart time.Weekday) Stats {
 	}
 	recent := sorted[from:]
 	s.Last12 = make([]int64, len(recent))
+	s.Last12Dates = make([]time.Time, len(recent))
 	mags := make([]int64, len(recent))
 	for i, c := range recent {
 		s.Last12[i] = c.Minor
+		s.Last12Dates[i] = c.Date
 		mags[i] = c.Minor
 	}
 	s.TypicalMinor = median(mags)

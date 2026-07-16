@@ -17,7 +17,7 @@ var merchantPanelKeys = Catalog{
 
 	// Visit frequency. %s is an ordinal ("3rd"); %d a count.
 	"merchantPanel.visitThisWeek":   "%s visit this week",
-	"merchantPanel.visitsThisMonth": "%d this month",
+	"merchantPanel.visitsThisMonth": "%d× this month",
 
 	// This-month spend vs a typical month. %[1]s spent, %[2]s typical.
 	"merchantPanel.monthVsTypical": "%s this month · typical %s",
@@ -25,6 +25,10 @@ var merchantPanelKeys = Catalog{
 	// This-month spend with no prior-month baseline to compare against yet
 	// (every charge on record is in the current calendar month).
 	"merchantPanel.monthSpentOnly": "%s this month",
+
+	// No charge in the current calendar month yet, but the merchant has a monthly
+	// pattern — so "$0.00 this month" would misread. %s = typical monthly amount.
+	"merchantPanel.noneThisMonth": "No charge yet this month · typically %s",
 
 	// Accessible label for the tiny spend sparkline.
 	"merchantPanel.sparklineAlt": "Recent charges at this merchant",

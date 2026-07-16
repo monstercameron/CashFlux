@@ -14,17 +14,22 @@ var savedViewKeys = Catalog{
 	"savedViews.saveCurrent":  "Save current view…",
 	"savedViews.saveDisabled": "Add at least one filter to save it as a view.",
 
-	// Per-view row: %d = matching count, %s = formatted total.
-	"savedViews.rowSummary": "%s across %d",
-	"savedViews.apply":      "Apply",
-	"savedViews.applyAria":  "Apply the view “%s” to the ledger",
-	"savedViews.pin":        "Pin to dashboard",
-	"savedViews.pinned":     "“%s” is now on your dashboard.",
-	"savedViews.rowMenu":    "More actions for “%s”",
-	"savedViews.setAlert":   "Set amount alert…",
-	"savedViews.editAlert":  "Edit amount alert…",
-	"savedViews.delete":     "Delete view",
-	"savedViews.deleted":    "Deleted “%s”.",
+	// Per-view row: %s = formatted total, %s = match-count phrase.
+	"savedViews.rowSummary": "%s · %s",
+	// Match count, correctly pluralized (%s across is not usable with %d).
+	"savedViews.matchesOne":  "1 match",
+	"savedViews.matchesMany": "%d matches",
+	"savedViews.open":        "Open",
+	"savedViews.eyebrow":     "Saved view",
+	"savedViews.apply":       "Apply",
+	"savedViews.applyAria":   "Apply the view “%s” to the ledger",
+	"savedViews.pin":         "Pin to dashboard",
+	"savedViews.pinned":      "“%s” is now on your dashboard.",
+	"savedViews.rowMenu":     "More actions for “%s”",
+	"savedViews.setAlert":    "Set amount alert…",
+	"savedViews.editAlert":   "Edit amount alert…",
+	"savedViews.delete":      "Delete view",
+	"savedViews.deleted":     "Deleted “%s”.",
 
 	// Save form.
 	"savedViews.nameLabel":       "Name this view",

@@ -14,6 +14,87 @@ packages have no `syscall/js` and ship with table-driven tests.
 > Note: C-IDs are unique and continuous (C1–C329); R1-R72 = research/spec. Full evidence + fix
 > detail for each is in the Claude Code task list; these are the durable one-line backlog entries.
 
+### Local-first parity — v1.0.43 (shipped) + deferred polish
+Shipped 2026-07-15 (v1.0.43), each built bottom-up with a pure table-tested package and passing the
+adversarial design-critic loop (SHIP): standardized reusable `uiw.Calendar` primitive
+(`internal/calendargrid`), To-do Board (kanban) + Calendar (schedule) views, per-goal savings-trajectory
+chart (`internal/goaltrajectory`), notification history/archive (`internal/notifyhistory`, KV-backed),
+transaction quick-templates (`internal/txntemplate`, KV-backed).
+- [ ] **DP-F5a — Empty board column add:** an empty board column (e.g. Done, or a Low-priority lane) is
+  dead-end text; add an in-column "+ Add task" (needs a small wrapper component to satisfy the
+  no-`On*`-in-loop rule). *(design-critic P3, deferred)*
+- [ ] **DP-F5b — Calendar day-add confirmation:** the add-task modal opened from a calendar day relies
+  on the native date field to show which day; add a "Scheduling for &lt;date&gt;" subtitle. *(P3)*
+- [ ] **DP-F5c — Save-as-template IA:** "Save as template" is grouped with the top-of-form picker, so it
+  reads before the fields it snapshots; consider a subtitle or mirroring it beside the footer Save. *(P3)*
+
+### SMART / SMART+ micro-features (curated with Cam, 2026-07-15)
+**Tier definitions:** **SMART** = clever *deterministic* code (rules/heuristics, no LLM, 100% local).
+**SMART+** = *LLM-driven* contextual output (opt-in, BYO-key, cost-capped). Many features have both: SMART
+does the common case, SMART+ upgrades the ambiguous one. Philosophy: **small, single-purpose, item-scoped**
+— a "✨ suggest → apply/dismiss" affordance on ONE row/card. NO chat agent, NO orchestration. Writes go
+through the changeset-review confirm. Build bottom-up (pure scorer pkg + tests → row affordance → wire).
+
+Agreed (Cam picked these):
+- [x] **SM-1 Clean this name** — DONE 2026-07-15 (v1.0.45). Per-transaction kebab → flip modal
+  (`PayeeCleanHost`/`PayeeCleanBody`): pure `internal/payeeclean` normalizer (SMART) + `smartai.MerchantCleanup`
+  (SMART+); scope = map-all-charges (payee alias — same `store/payeealias` the /rules manager writes) or
+  rename-this-transaction. The /rules manager stays. *(catalog SMART-T5)*
+- [ ] **SM-2 Categorize this** — suggest a category for one uncategorized txn. **SMART** = rules + payee
+  history; **SMART+** = LLM. Surface it as a one-click row affordance AND **add it to the txn-row kebab
+  menu as a secondary per-txn entry point.** *(catalog SMART-T1)*
+- [ ] **SM-3 Split suggestion (subtle)** — for a big multi-category merchant, quietly offer a proposed
+  category split to speed entry; non-intrusive (a faint hint, not a modal). **SMART** = merchant→typical
+  split heuristics; **SMART+** = LLM from line-items/receipt. Builds on `domain/category_split`.
+- [ ] **SM-4 Why over? (one line)** — for one over-budget category, a single sentence + the top-3
+  contributing txns. **SMART** = deterministic (delta vs pace + top contributors); **SMART+** = contextual
+  narrative. Static output, not a thread.
+- [ ] **SM-5 Balance anomaly flag** — per-account badge + one-sentence reason when a balance move is
+  unusual. **SMART** = statistical (z-score vs the account's own history); **SMART+** = explanation.
+  *(catalog SMART-A1)*
+- [ ] **SM-6 Recurring charges here** — list the repeats detected on one account, with one-click "make it
+  a recurring rule / template" (feeds the v1.0.43 txn-templates). **SMART** = periodicity detection.
+  *(catalog SMART-A7)*
+- [ ] **SM-7 Explain this notification** — a one-sentence plain-English gloss on a single alert (what it
+  means + what to do). **SMART+** (LLM adds the useful context). *(pairs with the v1.0.43 notif archive)*
+
+More candidates (brainstormed 2026-07-15 — for review, not yet agreed):
+- [ ] **SM-8 Duplicate nudge** (SMART) — flag a likely duplicate txn on entry/import. *(catalog SMART-T2)*
+- [ ] **SM-9 Missing-transaction gap** (SMART) — spot a gap in a normally-regular series (a bill that
+  didn't post). *(catalog SMART-T7)*
+- [ ] **SM-10 Spending-spike alert** (SMART) — one category spiked vs its baseline. *(catalog SMART-T6)*
+- [ ] **SM-11 Low-balance / overdraft forecast** (SMART) — "at this burn your balance dips below $0 by
+  <date>" on one account. *(catalog SMART-A9)*
+- [ ] **SM-12 Suggested budget amount** (SMART) — set one category to its 3-month average, one-click.
+- [ ] **SM-13 Goal pace nudge** (SMART+) — one line on the v1.0.43 trajectory card: "add $X/mo to hit
+  your <month> target." Augments the deterministic ETA.
+- [ ] **SM-14 Parse this task** (SMART+) — `pay rent friday` → title + due date (+ recurring guess) into
+  the To-do add form. One parse.
+- [ ] **SM-15 NL transaction entry** (SMART+) — "spent 40 at whole foods yesterday" → a filled txn draft.
+- [ ] **SM-16 Fee-bleed / dormant-account nudge** (SMART) — a fee-charging account with no activity.
+  *(catalog SMART-A10 / A3)*
+
+### Local-first (non-AI) gaps + nice-to-haves (curated 2026-07-15)
+- [ ] **LF-1 Command palette fix + expand** — the Ctrl+K palette exists but has a known crash (theme-toggle
+  panic per notes — confirm still open); fix it, then make it a real quick-action/nav launcher (jump to
+  page, add txn, run a saved view). Highest low-click leverage. ★
+- [ ] **LF-2 Encrypted local backup/restore** — passphrase-encrypted backup file (today's export is plain
+  JSON/CSV). Dovetails with the encrypted-sync vision; crypto primitives already exist (vault/artifactcrypto).
+- [ ] **LF-3 Universal Undo** — a consistent "Deleted — Undo" toast on destructive actions everywhere,
+  backed by the existing `mutationrev` + `auditlog`.
+- [ ] **LF-4 Global spotlight search** — one instant local substring search across accounts / txns /
+  budgets / goals / tasks (confirm no first-class one exists; NL search is the separate SMART+ path).
+- [ ] **LF-5 Notification delivery prefs + quiet hours** — finish `internal/notify` (was CP3).
+- [ ] **LF-6 Cash-runway + savings-rate tiles** (Dashboard) — "your balance lasts N days at current burn";
+  savings rate this month. Deterministic, local.
+- [ ] **LF-7 Bill/due-date calendar** — reuse the v1.0.43 `uiw.Calendar` primitive for bills + recurring
+  cash flows (dogfoods the standardized calendar further).
+- [ ] **LF-8 Data health check** — a small "12 uncategorized · 3 stale accounts · 2 unreconciled" panel
+  with one-click jumps to fix each.
+- [ ] **LF-9 Print / PDF-friendly report view** — a browser-native print stylesheet; fully local.
+- [ ] **LF-10 Recurring-transaction detection → create rule** (deterministic sibling of SM-6, surfaced on
+  /transactions or /recurring).
+
 ### UX polish backlog (deferred from the v1.0.33 design-review loop)
 - [ ] **DP1 — Recurring "Next 30 days" overdue grouping:** already-overdue occurrences (dates in the
   past) surface under the forward-looking "Next 30 days" heading, disambiguated only by the small
@@ -58,6 +139,188 @@ portfolio (`internal/portfolio` + `domain.Holding`, Investments page), OFX/QFX i
   store → state → UI (recurrence controls in the task add/edit form + a recurring chip on rows).
 - [ ] **CP3 — Notification delivery preferences.** The Notifications page has no per-type thresholds /
   quiet-hours UI; fold this into CP1's prefs.
+
+### First-8-pages competitive gaps + standout polish (2026-07-15)
+What the market leaders put ON these same 8 surfaces (Dashboard/Transactions/Accounts/Budgets/Goals/
+Todo/Notifications/Assistant) that CashFlux lacks — plus the two "make us stand out" plays. Verified
+against code (not already built). Local-first + deterministic; build bottom-up.
+
+**★ Standout plays (differentiators, data already exists):**
+- [x] **CG-S1 — Monthly Recap / "Month in Review." DONE 2026-07-15.** Full-width dashboard banner (native
+  `monthly-recap` widget) over a pure table-tested `internal/recap` package. Leads with the MoM spend change
+  (deliberately NOT repeating the hero), then the category story (top category, biggest expense w/ dedup,
+  biggest mover, no-spend days). Passed 2-round design-critic loop (SHIP). *Deferred polish:* **R7 — stat
+  drill-through** (click Top category / Biggest expense → filtered /transactions; Copilot/Monarch deep-link
+  every stat). Optional: Assistant narration of the recap.
+- [x] **CG-S2 — Transaction Review inbox. DONE 2026-07-15.** "Review N" toolbar entry → shell-root flip modal
+  stepping the live queue (pure `internal/reviewqueue`). Confirm-model (no auto-commit footgun), one-click
+  deterministic suggestion, `payeeclean`-cleaned payee, and an "Also apply to N others from <merchant>"
+  batch action. Passed the design-critic loop (gating verified). *Deferred polish:* **V8 — sort/priority
+  toggle** (largest-amount-first vs newest) for triaging a big queue by dollar impact.
+
+**Per-page competitive gaps:**
+- [ ] **CG-1 Dashboard — Investments/portfolio tile.** Monarch/Empower show portfolio balance + change on
+  home; `dashboard_widgets.go` has no invest/portfolio/holding widget (verified). Add one off `internal/portfolio`.
+- [ ] **CG-2 Dashboard — Projected cash-flow / "left to spend this month" tile.** Simplifi's flagship home
+  widget (forward curve). We have a single safe-to-spend KPI; surface the `runway`/`cashflow` forward
+  projection on the dashboard, not just /planning.
+- [ ] **CG-3 Accounts — Net-worth-over-time chart on the page.** Monarch graphs it above the account list;
+  we show only a MTD delta. `ledger.NetWorthSeries` already exists (used for the 2-point delta only).
+- [ ] **CG-4 Accounts — Investment-account holdings drill.** On /accounts an investment account is a bare
+  balance; let it expand to positions (reuse `holdingRow`/`portfolio`).
+- [ ] **CG-5 Budgets — "Move money between categories."** YNAB's defining gesture: pull from an overfunded
+  category to an underfunded one. We only have "cover an overspend from budget X" — add a general reallocate
+  (from/to/amount) gesture. Verified: no move-money/reallocate in `budgets*.go`.
+- [ ] **CG-6 Budgets — Fund next month / budget ahead.** Comps let you assign to future months; our annual
+  grid is view-only (see G2-C4).
+- [ ] **CG-7 Goals — Per-goal auto-fund rules.** Qapital/Monarch schedule a recurring auto-contribution or
+  per-goal round-up; we have a single round-up jar. Add per-goal recurring-contribution rules.
+- [ ] **CG-8 Notifications — Customizable alert center.** Rocket Money/Monarch tune every alert type
+  (per-type thresholds + quiet hours); we have a fixed feed. (Folds in CP3/LF-5.)
+- [ ] **CG-9 Todo — reframe as a financial action center.** No comp has a household finance task manager —
+  lean into it: auto-generate tasks from bills due / budgets over / stale accounts / the CG-S2 review queue.
+  Differentiator, not parity.
+- [ ] **CG-10 Transactions — inline recurring detection.** Rocket Money/Copilot flag a row that looks
+  recurring with one-click "track it" (feeds txn-templates/recurring). Sibling of SM-6.
+
+**Transactions page — transaction-level comp gaps (2026-07-15, code-verified against `domain.Transaction`):**
+- [x] **TXC-1 — Exclude a transaction from budgets & reports. DONE 2026-07-15.** `ExcludeFromReports` flag
+  + `CountsInReports()`; honored in `ledger.PeriodTotals`/`CategorySpendSeries`, all `reports` funcs,
+  `budgeting.Spent`, and `engineenv` (NOT balance/net worth — guard-tested); edit-modal checkbox + kebab
+  toggle + muted/struck row + "Excluded" badge.
+- [x] **TXC-2 — Per-transaction note / memo. DONE 2026-07-15.** `domain.Transaction.Note` + edit-modal
+  textarea + row note glyph.
+- [x] **TXC-3 — Quick-filter presets. DONE 2026-07-15.** Uncategorized · Needs review · Large · This month
+  chip row over the pure filter engine (new first-class `txnfilter` `Uncategorized` criterion, table-tested).
+- [x] **TXC-4 — Merge duplicates. DONE 2026-07-15.** Merge already existed (C87) but was lossy (tags +
+  cleared only); made `dedupe.Merge` NON-LOSSY — unions attachments + fills empty category/payee/note/member/
+  bill/subscription links from the removed rows (table-tested). *(Correction: the original gap note wrongly
+  said merge didn't exist; it did — the real gap was losslessness.)*
+- [x] **Review inbox — AI category (SMART+). DONE 2026-07-15.** LLM picks from existing categories, gated on
+  a configured provider; reuses `smartai.AutoCategorize`.
+- [x] **TXC design-critic refinements. DONE 2026-07-15.** Two-round adversarial critic on the TXC batch;
+  fixed: leading (un-clippable) Excluded badge + note glyph; **bulk exclude/include** in the bulk bar (the
+  main use case); preset **counts + "Large ($100+)"** threshold; edit-modal hairline separating Exclude from
+  Cleared; **non-lossy merge preview** ("Merge also keeps: a receipt · a note"). *Deferred (low priority):*
+  duplicate-merge **swap-primary** (choose which entry is kept) — less critical now that merge is non-lossy
+  and the survivor absorbs the others' empty fields.
+
+### Finance-capability parity vs commercial comps (2026-07-15 audit)
+Code-verified audit of the four finance domains where the paid apps typically win, benchmarked against
+YNAB / Monarch / Copilot / Empower / Quicken / Simplifi / Undebt.it. **Verdict:** core budgeting, debt
+payoff, short-horizon cash-flow, and reporting are AT/ABOVE the comps — do not rebuild them. The real
+losses are three missing *domains* + a set of "engine built, UI missing" cheap wins. All items below are
+deterministic + local-first (fits the house rules; the only exception is FP-T3d Monte Carlo). Build
+bottom-up per SDLC.
+
+**Tier 1 — whole domains the comps own that CashFlux lacks:**
+- [ ] **FP-T1a — Retirement / long-horizon projection engine.** `TypeRetirement` is only an account
+  type; there is NO projection. Add a pure `internal/retirement` engine: monthly/annual compounding of
+  balances + contributions to a retirement age, expected-return + inflation assumptions, real-vs-nominal
+  output; then a `/planning` (or dedicated) surface. Empower/Quicken's flagship. ★ (pairs with FP-T1b/FP-T2d)
+- [ ] **FP-T1b — Retirement drawdown / "will it last" + FIRE number.** Decumulation engine (nest egg,
+  withdrawal rate/amount, return, inflation → depletion age) reusing the `cashflow` depletion pattern at
+  annual granularity; FIRE target = annual-expenses ÷ SWR, solve years-to-FI at current savings rate.
+- [ ] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
+  line (`ledger.NetWorthSeries`), not a return. Add money-/time-weighted return (IRR/TWR) over dated
+  contributions + holding values. Empower/Monarch/Copilot lead here. (`internal/portfolio` is the seam.)
+- [ ] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
+  (`investments_tiles.go:292`). Model per-lot acquisitions (qty/date/price), relieve basis on sale,
+  compute realized P&L + short/long-term holding period. Unblocks investment tax reporting.
+- [ ] **FP-T1e — Tax depth for the small-business persona.** Today a category is a single `Deductible`
+  bool. Add (1) Schedule C line taxonomy (`TaxLine` on Category + grouped export), (2) realized
+  capital-gains report (needs FP-T1d), (3) estimated quarterly tax (income × rate + safe-harbor). Quicken's
+  signature small-biz area; `reports/deductible.go`+`yeartax.go`+`taxgather.go` already exist to build on.
+- [ ] **FP-T1f — Dividend / investment-income tracking.** No field/flow today; tag income txns to a holding
+  + roll up investment income. Pillar of the Empower/Monarch investment view.
+
+**Tier 2 — engine already built + tested, only the UI is missing (highest leverage/$):**
+- [ ] **FP-T2a — Loan amortization schedule table.** `payoff.AmortizeFixed`/`AmortizeWithExtra` return
+  every principal/interest/balance row; NO screen renders them (`loanCard` shows summary tiles only). Add a
+  schedule table/disclosure. Also **persist loan term** (`TermMonths`/origination date) — today it's
+  session-only UI state (`termS`), which weakens payoff-date accuracy and the R21 aggregate double-count.
+- [ ] **FP-T2b — Surface category/payee trend sparklines.** `reports.CategoryTrends` + `PayeeTrends` are
+  written + unit-tested but wired into zero screens; just render the existing series on `/reports`.
+- [ ] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
+  delete + re-add, so current value is stale-by-design. Add an Edit form reusing `PutHolding`'s replace-by-ID
+  + a `PriceAsOf` field.
+- [ ] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(nominal,years,infl)`
+  threaded through forecast/goal/retirement projections — cross-cutting prerequisite so every long-horizon
+  figure stops being misleadingly nominal. Low effort, high leverage.
+
+**Tier 3 — differentiators (more effort, valued by power users):**
+- [ ] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,
+  per-scenario start balances, rate-of-return; scaffolding (Plan + overlay-compare) already exists.
+- [ ] **FP-T3b — Reports: recurring-vs-discretionary split + budget-variance view.** `domain.CategoryClass`
+  already classifies Fixed/NonMonthly/Flex and budgeting has pace/variance math — reuse both as `/reports` cards.
+- [ ] **FP-T3c — Debt: biweekly/accelerated payments + consolidation/refinance modeling.** Both absent, both
+  buildable on `payoff` primitives (26 half-payments/yr; "combine N debts at new APR/term vs keep-separate").
+- [ ] **FP-T3d — Portfolio power features:** rebalancing suggestions (target weights + drift — nearest
+  PARTIAL→HAVE since allocation already computed), expense-ratio/fee analysis, benchmark comparison,
+  sector/geography breakdown. Plus styled PDF export + a visual custom-report builder (today PDF = `window.print()`).
+  Monte Carlo probability-of-success is here too but strains the determinism rule (needs a fixed seed + shown method).
+
+**Cleanup:** a stray file `CUsersmrecaDesktopCashFluxcmd_biweekly_check.go` sits in the repo ROOT (accidental
+path-mangled scratch file, not part of `payoff`/`loans`) — verify + remove.
+
+### First-8-pages gap review — 2nd pass (2026-07-15)
+Fresh per-page scan (Dashboard, Transactions, Accounts, Budgets, Goals, Todo, Notifications, Assistant).
+These pages are the most-reviewed in the app (F1–F9 + competitive pass); depth confirmed at/above the
+leaders, so the durable findings are a few **half-built/unreachable features** (real defects), some
+**consistent cross-page gaps**, and page-specific nice-to-haves. Build bottom-up per SDLC; research-only
+until picked.
+
+**Tier A — started but dead (finish or remove; these read as bugs, not features):**
+- [ ] **G2-A1 — Goal member pledges are display-only/unreachable.** `GoalPledgeBar` (GL5) renders a
+  read-only split and its own doc says pledges are "edited in the goal editor," but neither
+  `goaladdform.go` nor `goals_edit_form.go` has any pledge input. Add per-member pledge inputs to the
+  goal editor, or remove the bar. ★
+- [ ] **G2-A2 — Task member assignment has no UI.** `domain.Task.MemberID` exists but there's no assignee
+  picker in add/edit, no member filter, and no assignee chip on rows — a household app can't say who a
+  to-do is for. Add picker + row chip + Todo member filter. ★
+- [ ] **G2-A3 — Notification history read-state is uneditable.** History rows store `Read` but are
+  navigate-only; can't mark read/unread, dismiss, snooze, or delete a single archived item (only global
+  "Clear history"). Add per-item actions to history rows.
+
+**Tier B — consistent cross-page gaps:**
+- [ ] **G2-B1 — Manual ordering / pin on Accounts, Budgets, Goals.** All three sort algorithmically only
+  (balance / health / pace); no way to hand-order or pin a primary item. Todo's list already has manual
+  drag — reuse that pattern. (Accounts has *groups* but no in-group order/pin.)
+- [ ] **G2-B2 — Multi-select bulk actions on Todo + Notifications.** Transactions has a full bulk bar;
+  Todo (complete/delete/reprioritize/reschedule) and the Notifications live feed (dismiss/snooze/mark)
+  are one-row-at-a-time only. *(partly R66 list-standardization)*
+
+**Tier C — page-specific (most valuable first):**
+- [ ] **G2-C1 — Transactions filtered-set totals are invisible.** The count + net summary is rendered
+  `tw.SrOnly` (`transactions_tiles.go:623`) — sighted users filtering the ledger see no total. Show a
+  visible totals bar with **sum-in / sum-out / net** (only a combined net is computed today). Cheap, high value.
+- [ ] **G2-C2 — Dashboard headline KPIs lack period-over-period delta.** Only Net worth shows a
+  "▲/▼ % this month"; Income / Spending / Savings-rate tiles carry no vs-last-period context.
+- [ ] **G2-C3 — Dashboard spending-breakdown not clickable.** Segments + category legend don't drill into
+  a filtered transaction view (unlike the Budgets over-rows).
+- [ ] **G2-C4 — Budgets: no forward/future-month assignment.** The annual grid is view-only; can't
+  pre-assign amounts to upcoming months or plan a future period.
+- [ ] **G2-C5 — Budgets: no income-target budgets.** Budgets track expense categories only; can't set/track
+  a target for an income category.
+- [ ] **G2-C6 — Goals: no contribution history view.** `Goal.Contributions` is stored (drives undo-last)
+  but there's no per-goal log of past contributions; also no goal notes/description field, no intermediate
+  sub-milestones, and habit check-ins are append-only (no undo / streak-calendar).
+- [ ] **G2-C7 — Assistant chat polish.** No response streaming (long answers read as a stall), no manual
+  conversation rename, no search across/within conversations, no chat export, can't edit-and-resend a
+  prior message, no per-response feedback.
+- [ ] **G2-C8 — Assistant keyless Q&A is narrow (7 intents)** and the Insights briefing has no time-range
+  control (fixed month-to-date + 6-month trend). Add budget-status / recent-txns / subscriptions /
+  largest-expense intents + a period selector.
+- [ ] **G2-C9 — Transactions smaller gaps:** bulk tag add/remove; Quick-Add can't create a transfer
+  (Expense/Income only); no in-ledger keyboard nav (j/k move, e edit, x select — separate from the
+  command palette).
+- [ ] **G2-C10 — Notifications filtering + snooze.** Snooze is hardcoded to +1 day (no duration choice);
+  filtering is severity-only (no type/source filter, no unread-only view); history has no date-range filter.
+- [ ] **G2-C11 — Todo board/list/calendar depth:** board cards can't be dragged between columns and
+  priority-grouping has no move affordance; the list has no Overdue/Today/This-week agenda grouping;
+  calendar is month-only with no drag-to-reschedule.
+- [ ] **G2-C12 — Accounts: interest/APY accrual is never posted** (APY/expected-return feed projections
+  only), so savings/investment balances don't grow between manual updates.
 
 ### Review F1 — Frictionless signup / first-run (6/10)
 - [x] **C1 [MAJOR]** Sample banner permanently cleared after first reload — DONE: `persist.go` hydrateImport no longer force-clears `SetSampleActive(false)`. Autosave persists the seeded sample, so a reload lands on hydrateImport even when un-personalised; clearing the flag there made the "viewing sample data" chip vanish forever after one reload. The IndexedDB-backed flag is authoritative (set on seed; cleared on personalise/dismiss/wipe/own-import) so it now stands. MEASURED live: load sample → reload → `sample-data-banner` still mounted (before & after), 0 console errors; `go test ./internal/app` ok, build rc=0.

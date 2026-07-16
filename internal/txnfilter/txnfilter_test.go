@@ -433,3 +433,25 @@ func TestSingleAccount(t *testing.T) {
 		}
 	}
 }
+
+// TestApplyUncategorized guards the TXC-3 "Uncategorized" quick filter: it keeps
+// only non-transfer transactions with no category (a transfer with no category is
+// excluded — it isn't "needs categorizing").
+func TestApplyUncategorized(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "u", CategoryID: "", Amount: money.New(-500, "USD"), Date: d("2026-06-01")},
+		{ID: "c", CategoryID: "food", Amount: money.New(-500, "USD"), Date: d("2026-06-02")},
+		{ID: "x", CategoryID: "", TransferAccountID: "a2", Amount: money.New(-500, "USD"), Date: d("2026-06-03")},
+	}
+	got := Apply(txns, Criteria{Uncategorized: true})
+	if len(got) != 1 || got[0].ID != "u" {
+		t.Fatalf("Uncategorized filter = %d rows (want 1: only the non-transfer uncategorized 'u')", len(got))
+	}
+	// It surfaces as a removable active filter and Without clears it.
+	if af := (Criteria{Uncategorized: true}).ActiveFilters(); len(af) != 1 || af[0].Field != FieldUncategorized {
+		t.Errorf("ActiveFilters = %+v, want one FieldUncategorized", af)
+	}
+	if (Criteria{Uncategorized: true}).Without(FieldUncategorized).Uncategorized {
+		t.Error("Without(FieldUncategorized) did not clear the flag")
+	}
+}

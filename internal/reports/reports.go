@@ -39,7 +39,7 @@ func categoryTotals(txns []domain.Transaction, start, end time.Time, rates curre
 	txns = netted(txns) // XC2: fold refund-pair netting into per-category totals
 	out := map[string]int64{}
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		// Split transactions (C58) attribute each line's amount to its own

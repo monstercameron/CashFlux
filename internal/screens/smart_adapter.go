@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // smartInputCache memoizes buildSmartInput. Gathering the Input copies nine dataset
@@ -88,9 +89,13 @@ func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insi
 		"SMART-T6": true,
 		"SMART-T7": true,
 	}
+	// Honour dismissed flags: the detectors run unconditionally (no opt-in gate), but a
+	// flag the user (or the agent, on request) has dismissed should stay hidden until its
+	// situation changes. Dismissals persist in the Smart settings, keyed by insight key.
+	dismissed := uistate.LoadSmartSettings()
 	var flagged []smart.Insight
 	for _, ins := range all {
-		if anomalyCodes[ins.Feature] {
+		if anomalyCodes[ins.Feature] && !dismissed.IsDismissed(ins.Key) {
 			flagged = append(flagged, ins)
 		}
 	}

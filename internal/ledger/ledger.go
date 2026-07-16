@@ -113,7 +113,7 @@ func PeriodTotals(all []domain.Transaction, start, end time.Time, rates currency
 	income = money.Zero(rates.Base)
 	expense = money.Zero(rates.Base)
 	for _, t := range all {
-		if t.IsTransfer() || !dateutil.InRange(t.Date, start, end) {
+		if t.IsTransfer() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)
@@ -150,7 +150,7 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 		return out, nil
 	}
 	for _, t := range all {
-		if !t.IsExpense() {
+		if !t.IsExpense() || !t.CountsInReports() {
 			continue
 		}
 		idx := -1

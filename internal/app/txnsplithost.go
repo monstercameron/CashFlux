@@ -18,9 +18,11 @@ import (
 // category amounts from the row's ⋯ menu. When the atom is empty no overlay is
 // shown.
 //
-// NoFooter: the SplitEditor owns its own Save/Clear buttons and inline error; a
-// successful save calls OnDone (clearing the atom), closing the modal, while a
-// validation error keeps it open.
+// The editor renders as a body <form> (screens.SplitModalFormID); the FlipPanel's
+// standard pinned footer supplies Save (a native submit for that form) and Cancel,
+// so Save/Cancel stay fixed at the bottom while the split rows scroll. On a valid
+// submit the form calls OnDone (clearing the atom) which closes the modal; a
+// validation error keeps it open. "Clear split" remains a body action inside the form.
 func TxnSplitHost() uic.Node {
 	split := uistate.UseTxnSplit()
 	id := split.Get()
@@ -29,11 +31,13 @@ func TxnSplitHost() uic.Node {
 	}
 	close := func() { uistate.SetTxnSplit("") }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:    uistate.T("splitEditor.title"),
-		Width:    uiw.FlipMediumW,
-		Height:   uiw.FlipMediumH,
-		NoFooter: true,
-		OnClose:  close,
-		Back:     uic.CreateElement(screens.TransactionSplitForm, screens.TransactionSplitFormProps{TxnID: id, OnDone: close}),
+		Title:      uistate.T("splitEditor.title"),
+		Width:      uiw.FlipMediumW,
+		Height:     uiw.FlipMediumH,
+		FormID:     screens.SplitModalFormID,
+		SaveLabel:  uistate.T("splitEditor.save"),
+		SaveTestID: "split-save",
+		OnClose:    close,
+		Back:       uic.CreateElement(screens.TransactionSplitForm, screens.TransactionSplitFormProps{TxnID: id, OnDone: close}),
 	})
 }

@@ -28,6 +28,12 @@ type splitDraft struct {
 	Owner string
 }
 
+// SplitModalFormID is the id shared by the split modal's body <form> and the
+// FlipPanel footer's Save (type=submit form=…) button, so the pinned footer drives
+// the editor's save. Only used by the modal host (TxnSplitHost); the inline uses
+// leave FooterFormID empty and keep their own buttons.
+const SplitModalFormID = "txn-split-form"
+
 type splitEditorProps struct {
 	Txn        domain.Transaction
 	Categories []domain.Category
@@ -38,6 +44,12 @@ type splitEditorProps struct {
 	// OnSave persists the transaction with its Splits set (empty slice clears the
 	// breakdown). The parent (transactions screen) wires it to PutTransaction.
 	OnSave func(domain.Transaction)
+	// FooterFormID, when set, renders the editor as a modal body <form> with that id
+	// (submitted by the FlipPanel's pinned Save footer) and drops the editor's own
+	// title, card border, and inline Save button — the modal chrome supplies them.
+	// Empty (the default) keeps the self-contained inline layout for the edit-form
+	// and classic-table uses.
+	FooterFormID string
 }
 
 // SplitEditor (C58) is the split-transaction UI: it lets a single transaction be
@@ -120,7 +132,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	txnAbs := absMinor(props.Txn.Amount.Amount)
 	remainder := txnAbs - total
 
-	save := ui.UseEvent(func() {
+	save := ui.UseEvent(Prevent(func() {
 		cur := splits.Get()
 		built := make([]domain.CategorySplit, 0, len(cur))
 		var sum int64
@@ -154,7 +166,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		if props.OnSave != nil {
 			props.OnSave(t)
 		}
-	})
+	}))
 
 	clear := ui.UseEvent(func() {
 		t := props.Txn
@@ -216,16 +228,45 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		remText = uistate.T("splitEditor.over", money.FormatMinor(-remainder, dec))
 	}
 
+	// The shared body: the hint, the split rows, and the "Add split" + live-remainder
+	// line, plus any validation error. Both layouts render these.
+	hint := P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}),
+		uistate.T("splitEditor.hint", fmtMoney(money.New(txnAbs, props.Txn.Amount.Currency))))
+	rowsNode := Div(css.Class("split-rows"), rows)
+	addRow2 := Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
+		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
+		Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), remText),
+	)
+	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))
+
+	// Modal layout: a body <form> whose id the FlipPanel's pinned Save footer submits.
+	// No inner title/border (the panel's chrome supplies them) and no inline Save
+	// button (the footer owns it); "Clear split" stays as a quiet body action since
+	// the standard footer is only Cancel + Save.
+	if props.FooterFormID != "" {
+		return Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
+			Attr("data-testid", "split-editor"), OnSubmit(save),
+			hint,
+			rowsNode,
+			addRow2,
+			errNode,
+			If(props.Txn.HasSplits(),
+				Div(css.Class("split-editor-clear"),
+					Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}),
+					Button(css.Class("btn", "btn-sm", "btn-ghost"), Type("button"), Attr("data-testid", "split-clear"),
+						OnClick(clear), uistate.T("splitEditor.clear")))),
+		)
+	}
+
+	// Inline layout (edit-form / classic table): the self-contained bordered card with
+	// its own title and Save/Clear buttons.
 	return Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
-		P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}), uistate.T("splitEditor.hint", money.FormatMinor(txnAbs, dec))),
-		Div(css.Class("split-rows"), rows),
-		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
-			Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
-			Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), remText),
-		),
-		If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get())),
+		hint,
+		rowsNode,
+		addRow2,
+		errNode,
 		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}),
 			Button(css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), OnClick(save), uistate.T("splitEditor.save")),
 			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),

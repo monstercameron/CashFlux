@@ -87,6 +87,12 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 		return err
 	}
 	for _, t := range all {
+		// TXC-1: a transaction excluded from reports doesn't count toward budget
+		// spend either (reimbursements, cash-back, one-offs) — but still affects the
+		// account balance elsewhere.
+		if !t.CountsInReports() {
+			continue
+		}
 		if !matchesScope(budget, t, start, end) {
 			continue
 		}

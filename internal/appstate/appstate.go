@@ -2458,6 +2458,23 @@ func (a *App) WithoutTriggers(fn func()) {
 		a.RunTriggered(workflow.TriggerTxnAdded, nil)
 	}
 }
+// BulkMutate runs fn with BOTH per-row workflow triggers and per-row txn-mutated
+// observers suppressed, then fires the observers exactly once at the end. This is the
+// primitive for bulk ledger edits (recategorize / clear / assign / delete / group over
+// a selection): without it, every PutTransaction/DeleteTransaction in the loop fires
+// fireTxnMutated, re-rendering the whole (thousands-of-rows) surface per row — O(N²)
+// work that froze/aborted the app on a large selection. With it, the surface re-renders
+// once. Nested calls stay safe (the inner fireTxnMutated no-ops while still suppressed).
+func (a *App) BulkMutate(fn func()) {
+	prevT, prevO := a.triggersSuspended, a.suppressTxnObservers
+	a.triggersSuspended = true
+	a.suppressTxnObservers = true
+	fn()
+	a.triggersSuspended = prevT
+	a.suppressTxnObservers = prevO
+	a.fireTxnMutated() // once; no-ops if still suppressed (nested)
+}
+
 func (a *App) DeleteTransaction(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -2474,17 +2491,53 @@ func (a *App) DeleteTransaction(id string) error {
 // re-created and mutated transactions are reverted to the supplied copies.
 // This is the undo primitive for bulk operations on the Transactions ledger.
 func (a *App) RestoreTransactions(txns []domain.Transaction) error {
-	for _, t := range txns {
-		if err := a.PutTransaction(t); err != nil {
-			return fmt.Errorf("restore transaction %s: %w", t.ID, err)
+	var firstErr error
+	a.BulkMutate(func() {
+		for _, t := range txns {
+			if err := a.PutTransaction(t); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("restore transaction %s: %w", t.ID, err)
+			}
 		}
-	}
-	return nil
+	})
+	return firstErr
 }
 
 // DeleteTransactionWithTransferPair removes a transaction and, when it is one
 // leg of a transfer, also removes the reciprocal leg so balances stay paired.
 // The txnMutated observers fire exactly once after the full pair is removed.
+// DeleteTransactionsBulk deletes many transactions efficiently: it resolves reciprocal
+// transfer legs ONCE from a single ledger snapshot (instead of re-fetching the whole
+// ledger per id, which made a large bulk delete O(N²) and appear frozen), then deletes
+// them all inside BulkMutate so the surface re-renders once.
+func (a *App) DeleteTransactionsBulk(ids []string) error {
+	all := a.Transactions()
+	byID := make(map[string]domain.Transaction, len(all))
+	for _, t := range all {
+		byID[t.ID] = t
+	}
+	toDel := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		toDel[id] = true
+		if t, ok := byID[id]; ok && t.IsTransfer() {
+			for _, u := range all {
+				if isReciprocalTransferLeg(t, u) {
+					toDel[u.ID] = true
+					break
+				}
+			}
+		}
+	}
+	var firstErr error
+	a.BulkMutate(func() {
+		for id := range toDel {
+			if err := a.DeleteTransaction(id); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	})
+	return firstErr
+}
+
 func (a *App) DeleteTransactionWithTransferPair(id string) error {
 	all := a.Transactions()
 	var target domain.Transaction

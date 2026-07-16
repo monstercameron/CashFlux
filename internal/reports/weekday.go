@@ -18,7 +18,7 @@ import (
 func SpendingByWeekday(txns []domain.Transaction, start, end time.Time, rates currency.Rates) ([7]int64, error) {
 	var totals [7]int64
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)

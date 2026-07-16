@@ -29,6 +29,7 @@ type Item struct {
 func DefaultItems() []Item {
 	return []Item{
 		{ID: "attention", ColSpan: 4, RowSpan: 1},
+		{ID: "monthly-recap", ColSpan: 4, RowSpan: 1},
 		{ID: "kpi-networth", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-income", ColSpan: 1, RowSpan: 1},
 		{ID: "kpi-spending", ColSpan: 1, RowSpan: 1},
@@ -82,6 +83,9 @@ func DefaultLayoutItems() []Item {
 	return []Item{
 		// Tier 1 — what needs me.
 		{ID: "attention", ColSpan: 4, RowSpan: 1, Importance: 100},
+		// The month in review: a full-width recap banner right under the attention
+		// digest, the "here's how your month went" headline (CG-S1).
+		{ID: "monthly-recap", ColSpan: 4, RowSpan: 1, Importance: 96},
 		// Tier 2 — snapshot figures the hero does not already show. assets(1) +
 		// liabilities(1) + safe-to-spend(2) fills the row exactly; safe-to-spend takes
 		// the double width because it carries the longest sub-label.

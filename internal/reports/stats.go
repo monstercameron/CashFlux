@@ -28,7 +28,7 @@ func SpendingStats(txns []domain.Transaction, start, end time.Time, rates curren
 	var amounts []int64
 	var total int64
 	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := rates.Convert(t.Amount.Abs(), rates.Base)
