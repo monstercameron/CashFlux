@@ -244,4 +244,14 @@ func registerTxcFieldsSurface() {
 	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text)",
 		flex("none"),
 	)
+	// When a follow-up popover is open, lift the description cell above sibling cells/rows
+	// and stop it clipping the popover. The generated `td:has(> .add-wrap > .add-menu)` rule
+	// can't reach us — the `.row-desc-inner` wrapper makes `.add-wrap` a grandchild, breaking
+	// its direct-child chain — so match the nested structure here. Safe to un-clip the cell
+	// because the description truncation lives on `.row-desc-text`, not the `td`.
+	rule(".txn-table td.row-desc-cell:has(.add-wrap > .add-menu:not(.hidden-menu):not(.hidden))",
+		position("relative"),
+		zIndex("51"),
+		overflow("visible"),
+	)
 }
