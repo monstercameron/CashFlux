@@ -41,6 +41,8 @@ var txcFieldKeys = Catalog{
 	"transactions.followUpsPopLink": "Open in To-do →",
 	"transactions.followUpMarkDone": "Mark done",
 	"transactions.followUpMarkOpen": "Mark not done",
+	"transactions.followUpsMore":    "+%d more open — see all in To-do",
+	"transactions.followUpsAllDone": "All follow-ups done ✓",
 	// New "Transactions" option in the To-do link filter.
 	"todo.linkTransactionPl": "Linked to transactions",
 

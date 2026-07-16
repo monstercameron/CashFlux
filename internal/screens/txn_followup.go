@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"sort"
 	"strconv"
 	"syscall/js"
 	"time"
@@ -26,7 +27,8 @@ type followUpItem struct {
 	ID    string
 	Title string
 	Done  bool
-	Due   string // pre-formatted due date; "" when none
+	Due   string    // pre-formatted due date; "" when none
+	dueT  time.Time // raw due, for sorting (zero = no due date)
 }
 
 // followUpInfo is a transaction's follow-up tally plus the items behind it.
@@ -53,8 +55,22 @@ func followUpInfoByTxn(tasks []domain.Task, formatDue func(time.Time) string) ma
 		if !t.Due.IsZero() {
 			due = formatDue(t.Due)
 		}
-		info.Items = append(info.Items, followUpItem{ID: t.ID, Title: t.Title, Done: done, Due: due})
+		info.Items = append(info.Items, followUpItem{ID: t.ID, Title: t.Title, Done: done, Due: due, dueT: t.Due})
 		m[t.RelatedID] = info
+	}
+	// Order each list so the popover can show the most relevant follow-ups first: open
+	// before done, then soonest-due first (no due date last).
+	for k := range m {
+		sort.SliceStable(m[k].Items, func(i, j int) bool {
+			a, b := m[k].Items[i], m[k].Items[j]
+			if a.Done != b.Done {
+				return !a.Done // open first
+			}
+			if a.dueT.IsZero() != b.dueT.IsZero() {
+				return !a.dueT.IsZero() // dated before undated
+			}
+			return a.dueT.Before(b.dueT) // soonest first
+		})
 	}
 	return m
 }
@@ -208,10 +224,25 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			OnMouseEnter(onEnter), OnMouseLeave(onLeave),
 			Div(css.Class("txnfu-pop-head"), uistate.T("transactions.followUpsPopHead", props.Open, props.Total)),
 		}
+		// Show at most the top 3 OPEN follow-ups (items are pre-sorted open-first by due),
+		// so a charge with many linked to-dos never floods the glance. Done items and any
+		// overflow live in the full To-do list behind the footer link.
+		const maxShown = 3
+		shown := 0
 		for _, it := range props.Items {
+			if it.Done || shown >= maxShown {
+				continue
+			}
 			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{
 				ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due,
 			}))
+			shown++
+		}
+		switch {
+		case props.Open == 0:
+			kids = append(kids, Div(css.Class("txnfu-empty"), uistate.T("transactions.followUpsAllDone")))
+		case props.Open > shown:
+			kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", props.Open-shown)))
 		}
 		kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"),
 			Attr("data-testid", "txn-followup-pop-link-"+props.TxnID), OnClick(onClick),

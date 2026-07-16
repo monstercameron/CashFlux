@@ -140,6 +140,15 @@ func registerTxcFieldsSurface() {
 		background("var(--accent)"),
 		borderColor("var(--accent)"),
 	)
+	// "+N more open" / "all done" — a quiet closing line under the capped list.
+	rule(".txnfu-more, .txnfu-empty",
+		padding("0.25rem 0.35rem"),
+		fontSize("0.74rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".txnfu-empty",
+		color("var(--accent)"),
+	)
 	rule(".txnfu-item-title",
 		flex("1 1 auto"),
 		minWidth("0"),

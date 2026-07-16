@@ -56,6 +56,12 @@ across the keyed reconcile, the popover STAYS OPEN and the item's strike-through
 (chip "0/1" and the "0 open · 1 total" header) update live. e2e-verified: mark done → popover open, head
 0/1, chip 0/1, item struck; un-mark → back to 1/1; route never leaves /transactions. 0 errors.
 
+Then Cam: cap it to the top 3 open so it doesn't overwhelm. Added a raw `dueT` to `followUpItem` and
+sorted each list open-first, soonest-due-first, in `followUpInfoByTxn`; the popover then renders at most
+3 open items, a "+N more open — see all in To-do" line for the overflow, and "All follow-ups done ✓" when
+`Open == 0`. Marking one of the shown items done surfaces the next open one (still 3 shown) — verified:
+5 follow-ups → 3 shown + "+2 more", mark one → 3 shown + "+1 more", chip 5/5 → 4/5, all on /transactions.
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly
