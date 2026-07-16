@@ -1,3 +1,28 @@
+## 2026-07-16 — Reports rebuilt from scratch: the Annual Review
+
+Cam: "make it a long dense page, redesign from scratch, keep and enhance the money flow diagram,
+start with good health on top and delve into problem spots later … a report is a year of
+transactions reviewed and trended … it needs to give excellent details to help making plans."
+Design thesis: a *document*, not a dashboard — one continuous read ordered healthy→unhealthy→plan,
+so the page itself argues "here's what carried the year, here's what's working against you, here's
+what to do about it, sized in dollars." Structure: verdict masthead (healthscore band + four year
+figures) → sticky 01–08 index → zone-toned sections (`rpta-z-up/neutral/warn/down/plan`, a 3px left
+border carries the tone). The Sankey grew a third level (income sources → Income → top-10 cats +
+everything else + Savings) with a per-$100 table beside it — "each $100 bought…" reads better than
+percentages. The plan section is the payoff: healthscore.Steps routed to their fixing surfaces,
+median-reversion trim targets, highest-APR-first debt math ($/1,000/yr), recurring-charge review.
+New pure layer `internal/reports/annual.go` (MonthsNegative/SeasonalExtremes/Per100/TrimTargets,
+table-tested) keeps every computation out of view code. Two content bugs caught by reading my own
+screenshots: TrimTargets suggested "Hold Baby & Childcare at about $0.00/mo" (median of a
+mostly-zero series) — now skips med<=0 ("that's not a plan, it's a scold"); and the subscription
+detector counts mortgage/salary, so all copy says "recurring charges," never "subscriptions."
+Old tabbed Reports + orphans (tableau10, reportsCatRow, donut/accent helpers) excised; shared
+pieces (reportsBarSpec, rptTile/Section/Chip, deductible + custom-field sections) kept — networth
+takes a local `trendBuckets`. Kept testids: scope/formulas toggles, exports, cat drill/rollup,
+moneyflow-drill. Verified live both themes (8,290px, verdict "74 · Good", 0 console errors);
+smoke + a11y ratchet green on /reports (the /budgets + /goals a11y failures are concurrent-session
+WIP, not this change). v1.0.57, SW v332.
+
 ## 2026-07-16 — Notes on goals + goal actions moved out of the kebab
 
 Cam: "add notes to goals as well" + "move the non-delete menu opts outside of the kebab menu." Notes:

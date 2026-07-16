@@ -68,6 +68,8 @@ func NetWorthPanel(p NetWorthPanelProps) ui.Node {
 	// Net-worth snapshot: assets, liabilities, net worth as of now.
 	nwNet, nwAssets, nwLiab, _ := ledger.NetWorth(accounts, txns, rates)
 
+	// trendBuckets is how many consecutive months the NW trend spans.
+	const trendBuckets = 6
 	// NW trend: always monthly, last trendBuckets months, full unscoped txns
 	// so the household balance-sheet is always complete regardless of scope.
 	curMonth := dateutil.MonthStart(time.Now())

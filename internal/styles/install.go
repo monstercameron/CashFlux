@@ -42,6 +42,7 @@ func Register() {
 	registerCoverAllSurface()
 	registerAnnualGridSurface()
 	registerGoalStatesWidget()
+	registerReportsAnnual()
 	registerBudgetTargets()
 	registerTierSystem()
 	registerImportWizard()
