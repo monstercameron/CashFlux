@@ -66,4 +66,29 @@ func registerDashHeroSurface() {
 		gridRow("auto"),
 		justifyContent("flex-start"),
 	)
+
+	// First-paint skeleton band: while the bento grid is deferred (dashReady), a
+	// full-width 4-column sub-grid of shimmer placeholder tiles reserves the grid's
+	// space so the dashboard reads as loading instead of flashing empty and then
+	// popping the real tiles in ~300ms later.
+	rule(".dash-skeleton",
+		gridColumn("1 / -1"),
+		display("grid"),
+		gridTemplateColumns("repeat(4, 1fr)"),
+		gap("0.75rem"),
+	)
+	rule(".dash-skel-tile",
+		minHeight("128px"),
+		borderRadius("var(--radius)"),
+		background("linear-gradient(100deg, var(--bg-card) 30%, color-mix(in srgb, var(--text) 6%, var(--bg-card)) 50%, var(--bg-card) 70%)"),
+		backgroundSize("200% 100%"),
+		animation("dashSkelShimmer 1.4s ease-in-out infinite"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".dash-skel-tile",
+		animation("none"),
+	)
+	keyframes("dashSkelShimmer",
+		at("from", backgroundPosition("200% 0")),
+		at("to", backgroundPosition("-200% 0")),
+	)
 }

@@ -922,6 +922,13 @@ func Dashboard() ui.Node {
 		}
 	}
 
+	// First paint (grid deferred until dashReady): reserve the space below the hero
+	// with a calm skeleton band so the page doesn't show an empty void that then
+	// pops the real tiles in ~300ms later. Replaced wholesale once dashReady flips.
+	if !dashReady && (len(accounts) > 0 || len(txns) > 0) {
+		tiles = append(tiles, dashGridSkeleton())
+	}
+
 	// The dashboard welcome/hero is a widget too: a full-width placement rendered
 	// above the bento (not a packed grid cell) with ChromeHover, so it reads as clean
 	// content but is a configurable, persisted widget like any tile.
@@ -987,6 +994,25 @@ func Dashboard() ui.Node {
 		// grid returns the moment there's any real data to summarise.
 		If(len(accounts) > 0 || len(txns) > 0, Div(tiles...)),
 	)
+}
+
+// dashGridSkeleton renders a transient placeholder band shown in the bento grid
+// during the first-paint window while the real tiles are deferred (dashReady).
+// It reserves roughly the grid's height with a few shimmer blocks at
+// representative spans so the dashboard reads as "loading", not "empty then
+// suddenly full". aria-hidden — it carries no information, only reassurance.
+func dashGridSkeleton() ui.Node {
+	spans := []string{"1 / span 4", "1 / span 2", "3 / span 2", "1 / span 2", "3 / span 2"}
+	blocks := make([]any, 0, len(spans)+2)
+	blocks = append(blocks,
+		css.Class("dash-skeleton"),
+		Attr("data-testid", "dash-skeleton"),
+		Attr("aria-hidden", "true"),
+	)
+	for _, gc := range spans {
+		blocks = append(blocks, Div(css.Class("dash-skel-tile"), Style(map[string]string{"grid-column": gc})))
+	}
+	return Div(blocks...)
 }
 
 // dashCatchUpCard is a dismissible "While you were away" bento-adjacent card
