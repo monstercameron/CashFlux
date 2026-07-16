@@ -96,6 +96,19 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 		if !matchesScope(budget, t, start, end) {
 			continue
 		}
+		// Cross-category tag tracking: a transaction carrying one of the budget's tracked
+		// tags counts in FULL and counts ONCE — regardless of how many of those tags it
+		// carries, and taking priority over category/split matching so a charge that matches
+		// both a tracked tag and a tracked category is never double-counted.
+		if budget.TracksAnyTag(t.Tags) {
+			if !ownsScope(budget, t.MemberID) {
+				continue
+			}
+			if err := add(t.Amount); err != nil {
+				return money.Money{}, err
+			}
+			continue
+		}
 		if t.HasSplits() {
 			for _, s := range t.Splits {
 				if !covers(s.CategoryID) {

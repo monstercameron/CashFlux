@@ -57,6 +57,14 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 		if !matchesScope(budget, t, start, end) {
 			continue
 		}
+		// Mirror spentCovered's cross-category tag tracking: a tag-matched charge attributes
+		// in full to its payer, once, ahead of category/split matching (no double count).
+		if budget.TracksAnyTag(t.Tags) {
+			if err := addTo(t.MemberID, t.Amount); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if t.HasSplits() {
 			for _, s := range t.Splits {
 				if !tracks(s.CategoryID) {

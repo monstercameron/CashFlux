@@ -578,6 +578,13 @@ type Budget struct {
 	// Empty = a single-category budget tracking CategoryID (the historical shape). New
 	// field, additive — existing budgets load with nil and behave exactly as before.
 	CategoryIDs []string `json:"categoryIds,omitempty"`
+	// TrackedTags, when non-empty, additionally counts any transaction carrying one of these
+	// tags toward the budget — regardless of its category — so a budget can track spend that
+	// cuts across categories (e.g. a "#vacation" budget spanning travel, dining, and shopping).
+	// A tag-matched transaction counts in FULL (tags are transaction-level, not per-split) and
+	// only once, no matter how many of these tags it carries. Additive/JSON-persisted; existing
+	// budgets load with nil and behave exactly as before.
+	TrackedTags []string `json:"trackedTags,omitempty"`
 	// Notes is a free-text note attached to the budget (why it exists, review reminders).
 	// Plain text; rides the dataset export/sync. Empty = no note. Additive.
 	Notes string `json:"notes,omitempty"`
@@ -703,6 +710,42 @@ func (b Budget) TrackedCategoryIDs() []string {
 func (b Budget) TracksCategory(categoryID string) bool {
 	for _, id := range b.TrackedCategoryIDs() {
 		if id == categoryID {
+			return true
+		}
+	}
+	return false
+}
+
+// TracksTags reports whether the budget is (also) tracking any tags — a cross-category
+// budget.
+func (b Budget) TracksTags() bool { return len(b.TrackedTags) > 0 }
+
+// TrackedTagSet returns the budget's tracked tags as a deduped, lowercased, blank-free set.
+// De-duping here means a transaction is never double-counted just because the same tag was
+// listed twice (or in a different case) on the budget.
+func (b Budget) TrackedTagSet() map[string]bool {
+	if len(b.TrackedTags) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(b.TrackedTags))
+	for _, t := range b.TrackedTags {
+		if t = strings.ToLower(strings.TrimSpace(t)); t != "" {
+			set[t] = true
+		}
+	}
+	return set
+}
+
+// TracksAnyTag reports whether a transaction carrying txnTags matches this budget's tracked
+// tags. A single intersection is enough — the caller counts the transaction once, so
+// overlapping tags never inflate the total.
+func (b Budget) TracksAnyTag(txnTags []string) bool {
+	set := b.TrackedTagSet()
+	if len(set) == 0 {
+		return false
+	}
+	for _, t := range txnTags {
+		if set[strings.ToLower(strings.TrimSpace(t))] {
 			return true
 		}
 	}

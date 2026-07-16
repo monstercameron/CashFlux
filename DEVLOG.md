@@ -1,3 +1,21 @@
+## 2026-07-16 — Budgets track tags for cross-category precision (engine + tests)
+
+Cam: "budgets can also track tags for cross-cat, precision tracking" + "add a dedupe layer as sometimes
+the tags may overlap multiple times if multiple are selected." Built the engine bottom-up. Domain:
+`Budget.TrackedTags []string` (additive, JSON — the store puts budgets via putJSON so no migration), plus
+`TracksTags` / `TrackedTagSet` (deduped, lowercased, blank-free set) / `TracksAnyTag`. Engine: a
+tag-priority branch at the top of `spentCovered`'s per-txn loop (mirrored in `AttributeByMember`) — if the
+charge carries any tracked tag, count the WHOLE charge once and `continue`, ahead of the category/split
+logic. That ordering is the dedupe: overlapping tags can't inflate (single add + continue), and a charge
+matching both a tracked category and a tracked tag isn't double-counted (tag branch wins, skips the
+category branch). Tags are transaction-level so a tag-matched split charge counts in full to its payer,
+respecting scope (`ownsScope`) and reports-exclusion like everything else. Tests: overlap-dedupe (3 tags
+on one charge → 1×), duplicate/mixed-case tags on the budget → 1×, category+tag on one charge → 1×,
+excluded-from-reports ignored, individual scope. `go test ./internal/budgeting/ ./internal/domain/
+./internal/store/` green. Next: seed a tag budget + the add/edit-form input + card display.
+`internal/domain/entities.go`, `internal/budgeting/budgeting.go`, `internal/budgeting/attribution.go`,
+`internal/budgeting/budgeting_tags_test.go`.
+
 ## 2026-07-16 — Clickable tag chips filter the ledger; tag search confirmed
 
 Cam: "make sure tags are searchable in the search input and clicking on a tag filters the list for other
