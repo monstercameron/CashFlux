@@ -1,3 +1,21 @@
+## 2026-07-16 — Spending-trend popover: hover open/close, drop the ✕
+
+Cam: "remove the close button from the spending trend popover and close in on mouse out too, handle it
+like we do the linked todos." The merchant trend chip (`merchant_trend.go`) opened on click and had an
+explicit ✕; dismissal was click-outside / Escape / re-click — never on mouse-out. Ported it to the exact
+hover-intent pattern the follow-up chip uses: a `hovering` UseRef flag, `enter()` opens after a 500ms
+continuous-hover timer (re-checks the flag, so a pass-over never flashes it), `leave()` closes on a
+240ms grace timer (re-checks the flag), and both the wrap span and the popover carry the enter/leave
+handlers so the pointer bridges the gap. Factored the open-with-lazy-compute logic out of the old
+`toggle` into an idempotent `ensureOpen()` shared by hover-open and click-open — click still opens (touch
+has no hover), and the async first-compute now only reveals its result if the popover is still open (the
+grace-close may have shut it during the 400ms compute). Removed the ✕ button + its `.mtrend-close` CSS
+and `merchantTrend.close` key (dead now). DismissPopover (click-outside/Escape) stays as the touch/kbd
+dismiss. e2e: pass-over doesn't open, sustained hover opens with no close button, hovering the popover
+keeps it open, mouse-out closes — 0 console errors. Bonus: because this popover is also `.add-wrap >
+.add-menu` inside the same `.row-desc-cell`, it inherits today's z-index/overflow lift fix and paints
+over the rows below. `merchant_trend.go`, `rules_merchanttrend.go`, `en_merchanttrend.go`.
+
 ## 2026-07-16 — Fix: follow-up popover z-index/clipping after the pill move
 
 Cam: "you broke the z-index of the popover." The pill-move wrapped the description cell content in a

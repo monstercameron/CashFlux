@@ -12,8 +12,6 @@ var merchantTrendKeys = Catalog{
 	"merchantTrend.loading": "Loading spending trend…",
 	// Fallback if there turns out to be too little history to show.
 	"merchantTrend.none": "Not enough history yet.",
-	// Close the trend popover.
-	"merchantTrend.close": "Close",
 	// Sparkline caption. %d = number of charges plotted, %s = the latest charge amount.
 	"merchantTrend.sparkMeta": "%d charges · latest %s",
 }

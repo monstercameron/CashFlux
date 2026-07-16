@@ -267,6 +267,7 @@ const minTrendChipCharges = 5
 // component so its hooks sit at stable positions, never inside the row's map loop.
 func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 	st := ui.UseState(mtrendState{})
+	hovering := ui.UseRef(false) // pointer over the chip OR the popover (one hover region)
 	wrapID := "mtrend-" + props.TxnID
 
 	uiw.DismissPopover(st.Get().Open, wrapID, func() { st.Set(mtrendState{}) })
@@ -285,13 +286,11 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		return ns
 	}
 
-	// toggle stops propagation so clicking the chip never also triggers the row's
-	// open-edit handler (which would open the edit modal over the popover).
-	toggle := ui.UseEvent(func(e ui.Event) {
-		e.PreventDefault()
-		e.StopPropagation()
+	// ensureOpen opens the popover, computing this merchant's stats lazily on the first
+	// open (brief spinner) and reading the cache thereafter. Idempotent — a no-op when
+	// already open, so hover-open and click-open (touch) share one path.
+	ensureOpen := func() {
 		if st.Get().Open {
-			st.Set(mtrendState{})
 			return
 		}
 		if c, ok := mtrendStatsCache[props.Merchant]; ok {
@@ -308,19 +307,60 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 				}
 			}
 			mtrendStatsCache[props.Merchant] = c
-			st.Set(openWith(c))
+			// Only reveal the computed content if the popover is still open — the pointer
+			// may have left during the 400ms compute (the grace-close would have shut it).
+			if st.Get().Open {
+				st.Set(openWith(c))
+			}
 			cb.Release()
 			return nil
 		})
 		js.Global().Call("setTimeout", cb, 400)
-	})
+	}
 
-	// Explicit close (the ✕) — in addition to click-outside / Escape / re-clicking the
-	// chip — so the popover has an obvious dismiss affordance.
-	closePop := ui.UseEvent(func(e ui.Event) {
+	// Hover-driven open/close, mirroring the transaction follow-up chip. `hovering` is the
+	// pointer being over the chip OR the popover, so the same handlers wire to both and the
+	// mouse can bridge the small gap between them without the popover despawning.
+	//
+	// enter: open only after 500ms of continuous hover (a pointer merely passing over the
+	// row never flashes it), and cancel any pending grace-close.
+	enter := func() {
+		hovering.Set(true)
+		if st.Get().Open {
+			return
+		}
+		var cb js.Func
+		cb = js.FuncOf(func(js.Value, []js.Value) any {
+			if hovering.Get() {
+				ensureOpen()
+			}
+			cb.Release()
+			return nil
+		})
+		js.Global().Call("setTimeout", cb, 500)
+	}
+	// leave: don't despawn instantly — wait a short grace period so the pointer can bridge
+	// the chip→popover gap; the callback re-reads the live flag, so re-entering keeps it open.
+	leave := func() {
+		hovering.Set(false)
+		var cb js.Func
+		cb = js.FuncOf(func(js.Value, []js.Value) any {
+			if !hovering.Get() {
+				st.Set(mtrendState{})
+			}
+			cb.Release()
+			return nil
+		})
+		js.Global().Call("setTimeout", cb, 240)
+	}
+	onEnter := ui.UseEvent(func(e ui.Event) { enter() })
+	onLeave := ui.UseEvent(func(e ui.Event) { leave() })
+	// Click also opens (touch has no hover), and stops propagation so it never triggers the
+	// row's open-edit handler. Dismissal is hover-out / click-outside / Escape — no ✕ button.
+	onClick := ui.UseEvent(func(e ui.Event) {
 		e.PreventDefault()
 		e.StopPropagation()
-		st.Set(mtrendState{})
+		ensureOpen()
 	})
 
 	s := st.Get()
@@ -339,21 +379,20 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		}
 		pop = Div(ClassStr("add-menu mtrend-pop"), Attr("role", "dialog"),
 			Attr("data-testid", "mtrend-pop-"+props.TxnID),
-			Button(css.Class("mtrend-close"), Type("button"),
-				Attr("data-testid", "mtrend-close-"+props.TxnID),
-				Attr("aria-label", uistate.T("merchantTrend.close")),
-				Title(uistate.T("merchantTrend.close")), OnClick(closePop),
-				uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3))),
+			// Hovering the popover keeps it open (cancels the grace-close), so the pointer
+			// can move off the chip and read the trend.
+			OnMouseEnter(onEnter), OnMouseLeave(onLeave),
 			body)
 	}
 
 	return Span(ClassStr("mtrend-wrap add-wrap"), Attr("id", wrapID),
+		OnMouseEnter(onEnter), OnMouseLeave(onLeave),
 		Button(css.Class("mtrend-chip"), Type("button"),
 			Attr("data-testid", "mtrend-chip-"+props.TxnID),
 			Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(s.Open)),
 			Attr("aria-label", uistate.T("merchantTrend.label", props.Merchant)),
 			Title(uistate.T("merchantTrend.label", props.Merchant)),
-			OnClick(toggle),
+			OnClick(onClick),
 			// A neutral history glyph — direction (up/down/flat) isn't known until the
 			// lazy compute, so the resting chip must not imply "spending increased".
 			uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W35, tw.H35))),

@@ -92,33 +92,6 @@ func registerMerchantTrendSurface() {
 		opacity("0.6"),
 	)
 
-	// Close ✕ — an explicit dismiss in the popover's top-right corner (in addition to
-	// click-outside / Escape / re-clicking the chip).
-	rule(".mtrend-close",
-		position("absolute"),
-		top("6px"),
-		right("6px"),
-		display("inline-flex"),
-		alignItems("center"),
-		justifyContent("center"),
-		width("22px"),
-		height("22px"),
-		padding("0"),
-		border("1px solid transparent"),
-		borderRadius("6px"),
-		background("transparent"),
-		color("color-mix(in srgb, var(--text) 55%, transparent)"),
-		cursor("pointer"),
-		transition("color 0.12s ease, background 0.12s ease"),
-	)
-	rule(".mtrend-close:hover, .mtrend-close:focus-visible",
-		color("var(--text)"),
-		background("color-mix(in srgb, var(--text) 8%, transparent)"),
-	)
-	// Reserve room on the title row so the delta never sits under the close ✕.
-	rule(".mtrend-card > div:first-child",
-		paddingRight("1.4rem"),
-	)
 
 	// --- Sparkline scale metadata (so the line is readable, not a bare squiggle) ----
 	rule(".mtrend-spark",
