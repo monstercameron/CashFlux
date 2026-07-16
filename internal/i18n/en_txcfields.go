@@ -30,9 +30,11 @@ var txcFieldKeys = Catalog{
 	"duplicates.carryPayee":    "a payee",
 	"duplicates.carryLink":     "a linked bill/subscription",
 
-	// Transaction → follow-up task (kebab): create a to-do linked to this charge.
+	// Transaction → follow-up task (kebab): create a to-do linked to this charge. The
+	// title is just the merchant/description (no "Follow up:" prefix) — the transaction
+	// link already says it's a follow-up, and the prefix wastes the popover's limited room.
 	"transactions.followUpTask":      "Add follow-up task…",
-	"transactions.followUpTaskTitle": "Follow up: %s",
+	"transactions.followUpTaskTitle": "%s",
 	// Per-row follow-up indicator + quick link to the filtered to-dos.
 	// %d open, %d total.
 	"transactions.followUpsTitle":   "%d open of %d follow-up task(s) — view in To-do",

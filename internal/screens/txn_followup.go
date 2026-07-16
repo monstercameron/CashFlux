@@ -7,6 +7,7 @@ package screens
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -55,7 +56,14 @@ func followUpInfoByTxn(tasks []domain.Task, formatDue func(time.Time) string) ma
 		if !t.Due.IsZero() {
 			due = formatDue(t.Due)
 		}
-		info.Items = append(info.Items, followUpItem{ID: t.ID, Title: t.Title, Done: done, Due: due, dueT: t.Due})
+		// Drop a redundant "Follow up:" prefix (tasks created before that prefix was
+		// removed): in this popover — already under a charge's follow-up chip — it just
+		// wastes the limited width.
+		title := strings.TrimSpace(strings.TrimPrefix(t.Title, "Follow up:"))
+		if title == "" {
+			title = t.Title
+		}
+		info.Items = append(info.Items, followUpItem{ID: t.ID, Title: title, Done: done, Due: due, dueT: t.Due})
 		m[t.RelatedID] = info
 	}
 	// Order each list so the popover can show the most relevant follow-ups first: open

@@ -62,6 +62,11 @@ sorted each list open-first, soonest-due-first, in `followUpInfoByTxn`; the popo
 `Open == 0`. Marking one of the shown items done surfaces the next open one (still 3 shown) — verified:
 5 follow-ups → 3 shown + "+2 more", mark one → 3 shown + "+1 more", chip 5/5 → 4/5, all on /transactions.
 
+Then Cam: don't prepend "Follow up:" — space is limited. Changed the seeded title from "Follow up: %s"
+to just "%s" (the transaction link chip already says it's a follow-up), and strip a leading "Follow up:"
+in the popover item build so any tasks created before this show concisely there too. Verified: popover
+item reads "Car payment (Marcus)" (no prefix), 0 errors.
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly
