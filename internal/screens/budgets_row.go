@@ -138,9 +138,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			props.OnDrill(s.Budget.TrackedCategoryIDs())
 		}
 	}))
-	// Notes render as a readable, clickable-to-expand line on the card (like /accounts).
-	notesExpanded := ui.UseState(false)
-	toggleNotes := ui.UseEvent(Prevent(func() { notesExpanded.Set(!notesExpanded.Get()) }))
 	// Jump to the To-dos page when this budget has linked to-dos (Task.RelatedType=budget).
 	openTodos := ui.UseEvent(Prevent(func() {
 		if props.OnViewTodos != nil {
@@ -370,30 +367,19 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
 	// card when the budget has a note — mirrors the /accounts notes affordance.
 	var notesNode ui.Node = Fragment()
+	hasNotes := strings.TrimSpace(s.Budget.Notes) != ""
 	if notes := strings.TrimSpace(s.Budget.Notes); notes != "" {
-		notesCls := "acct-notes budget-notes"
-		toggleLabel := uistate.T("accounts.notesReadMore")
-		if notesExpanded.Get() {
-			notesCls += " open"
-			toggleLabel = uistate.T("accounts.notesReadLess")
-		}
-		notesNode = Button(ClassStr(notesCls), Type("button"), Attr("data-testid", "budget-notes-"+s.Budget.ID),
-			Attr("aria-expanded", ariaBool(notesExpanded.Get())), Attr("aria-label", uistate.T("budgets.notesAction")),
-			Title(toggleLabel), OnClick(toggleNotes),
+		// Clicking the note opens the full note in the flip modal (handy when it's long) —
+		// the card shows a clamped preview.
+		notesNode = Button(ClassStr("acct-notes budget-notes"), Type("button"), Attr("data-testid", "budget-notes-"+s.Budget.ID),
+			Attr("aria-label", uistate.T("budgets.notesAction")),
+			Title(uistate.T("budgets.notesTitle")), OnClick(openNotes),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-notes-text"), notes),
 		)
 	}
 
 	// A quiet link to the To-dos page when this budget has linked to-dos.
-	var todosLine ui.Node = Fragment()
-	if props.LinkedTodos > 0 {
-		todosLine = Span(css.Class("budget-sub"),
-			Button(css.Class("budget-drill"), Type("button"), Attr("data-testid", "budget-todos-link-"+s.Budget.ID), OnClick(openTodos),
-				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "cursor": "pointer", "text-decoration": "underline", "text-decoration-style": "dotted", "text-underline-offset": "3px"}),
-				uistate.T("budgets.viewTodos", props.LinkedTodos)))
-	}
-
 	// A quick, scannable metric strip — the full-width card has room for the TIME
 	// dimension the prose lines don't make glanceable: how much is left to spend per
 	// remaining day, how many days remain (and when it resets), and how far through the
@@ -426,15 +412,44 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		)
 	}
 
-	// A composite budget (multi-category, cats+tags, or multi-tag) gets a right-side
-	// spend-composition donut; a single-dimension budget shows none (the bar suffices).
+	// A composite budget (multi-category, cats+tags, or multi-tag) gets a spend-composition
+	// donut UNDER the full-width status bar; a single-dimension budget shows none.
 	pieNode, hasPie := budgetPie(s.Budget)
 	cardCls := "budget " + budgetRowStateClass(s, props.PaceOver)
 	if hasPie {
 		cardCls += " budget-has-pie"
 	}
+
+	// The right column holds the note (if any) and the budget's linked follow-up to-dos (if
+	// any) — check-off in place, like the transaction follow-ups. Shown whenever either
+	// exists; otherwise the column is omitted and the main content fills the width.
+	linkedTodos := budgetLinkedTodos(s.Budget.ID)
+	var todosPanel ui.Node = Fragment()
+	if len(linkedTodos) > 0 {
+		const maxTodos = 5
+		open := 0
+		for _, it := range linkedTodos {
+			if !it.Done {
+				open++
+			}
+		}
+		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-" + s.Budget.ID),
+			Span(css.Class("budget-todos-head"), uistate.T("budgets.followUpsHead", open, len(linkedTodos)))}
+		for i, it := range linkedTodos {
+			if i >= maxTodos {
+				break
+			}
+			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due}))
+		}
+		if extra := len(linkedTodos) - maxTodos; extra > 0 {
+			kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"), Attr("data-testid", "budget-todos-more-"+s.Budget.ID),
+				OnClick(openTodos), uistate.T("budgets.followUpsMore", extra)))
+		}
+		todosPanel = Div(kids...)
+	}
+	hasSide := hasNotes || len(linkedTodos) > 0
+
 	return Div(css.Class(cardCls),
-		Div(css.Class("budget-main"),
 		Div(css.Class("budget-head"),
 			// The title gets the whole header line now (the spent/limit amount and the
 			// percent moved INTO the bar below), so a long budget name has room to breathe.
@@ -495,44 +510,53 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("budget-pct"), strconv.Itoa(barPct)+"%"),
 			),
 		),
-		// One quiet metadata line beneath the bar. In last-month mode it reads the over/
-		// under-budget gap + period; otherwise the health status · money left · period.
-		IfElse(lastMonthMode,
-			Span(css.Class("budget-sub"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta+" · "+periodLabel(s.Budget.Period)),
-			Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period))),
-		// Multi-category budgets: list the tracked categories so the combined total reads clearly.
-		If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
-			uistate.T("budgets.catsTracking", props.TrackedCats))),
-		// Cross-category tag tracking: the tags this budget also counts, whatever the category.
-		If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
-		// XC4: quiet committed-vs-free caption; XC3: the plain-English set-aside explainer.
-		// (A landing-month entry may carry only the explainer — no committed split.)
-		If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
-			Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
-				uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
-		If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
-			Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
-				props.Committed.SetAsideNote)),
-		// BG1: funding-target summary ("Refill to $200 · $60 to go").
-		budgetTargetLine(s),
-		thisMonthRef,
-		coverageLine,
-		ownerLine,
-		methodLine,
-		customLine,
-		paceLine,
-		paceMarkLine,
-		proratedLine,
-		rolloverLine,
-		effectiveCapLine,
-		envLine,
-		envDebtLine,
-		metricsStrip,
-		todosLine,
-		notesNode,
-		actionsRow,
+		// Everything below the bar sits in a flex row so a budget WITH a note can put the
+		// note in a right-hand column (the lower-left content is short, leaving that space
+		// empty). No note → the note column is omitted and the main content fills the width.
+		Div(css.Class("budget-lower"),
+			Div(css.Class("budget-lower-main"),
+				// Spend-composition donut for a composite budget, under the full-width bar.
+				pieNode,
+				// One quiet metadata line beneath the bar. In last-month mode it reads the over/
+				// under-budget gap + period; otherwise the health status · money left · period.
+				IfElse(lastMonthMode,
+					Span(css.Class("budget-sub"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta+" · "+periodLabel(s.Budget.Period)),
+					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period))),
+				// Multi-category budgets: list the tracked categories so the combined total reads clearly.
+				If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
+					uistate.T("budgets.catsTracking", props.TrackedCats))),
+				// Cross-category tag tracking: the tags this budget also counts, whatever the category.
+				If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
+				// XC4: quiet committed-vs-free caption; XC3: the plain-English set-aside explainer.
+				// (A landing-month entry may carry only the explainer — no committed split.)
+				If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
+					Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
+						uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
+				If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
+					Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
+						props.Committed.SetAsideNote)),
+				// BG1: funding-target summary ("Refill to $200 · $60 to go").
+				budgetTargetLine(s),
+				thisMonthRef,
+				coverageLine,
+				ownerLine,
+				methodLine,
+				customLine,
+				paceLine,
+				paceMarkLine,
+				proratedLine,
+				rolloverLine,
+				effectiveCapLine,
+				envLine,
+				envDebtLine,
+				metricsStrip,
+				actionsRow,
+			),
+			If(hasSide, Div(css.Class("budget-side-col"),
+				If(hasNotes, notesNode),
+				todosPanel,
+			)),
 		),
-		pieNode,
 	)
 }
 
@@ -765,4 +789,36 @@ func budgetPie(b domain.Budget) (ui.Node, bool) {
 		Div(css.Class("budget-pie-hole")))
 	return Div(css.Class("budget-pie"), Attr("data-testid", "budget-pie-"+b.ID),
 		donut, Div(legend...)), true
+}
+
+// budgetLinkedTodos returns the to-dos linked to a budget (Task.RelatedType=budget),
+// ordered open-first then soonest-due — the list shown in the budget card's side panel.
+func budgetLinkedTodos(budgetID string) []followUpItem {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	fmtDate := uistate.LoadPrefs().FormatDate
+	var out []followUpItem
+	for _, t := range app.Tasks() {
+		if t.RelatedType != domain.RelatedBudget || t.RelatedID != budgetID {
+			continue
+		}
+		due := ""
+		if !t.Due.IsZero() && fmtDate != nil {
+			due = fmtDate(t.Due)
+		}
+		out = append(out, followUpItem{ID: t.ID, Title: t.Title, Done: t.Status == domain.StatusDone, Due: due, dueT: t.Due})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Done != b.Done {
+			return !a.Done // open first
+		}
+		if a.dueT.IsZero() != b.dueT.IsZero() {
+			return !a.dueT.IsZero() // dated before undated
+		}
+		return a.dueT.Before(b.dueT)
+	})
+	return out
 }

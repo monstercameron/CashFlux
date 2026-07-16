@@ -1,3 +1,22 @@
+## 2026-07-16 — Budget card layout: full-width bar, pie under it, note + to-dos side panel
+
+Iterated with Cam on the composite budget card. He wanted the status bar back to 100% (the right-side
+pie had squeezed it) with the pie moved UNDER the bar; then "move the notes to the right side … it's
+pretty empty"; then (after a first ugly cut) "the ui is dogshit … too off-center." Landing layout: bar +
+head full-width block on top, then a `.budget-lower` flex row — left `.budget-lower-main` (pie, status
+lines, metrics, actions) and a right `.budget-side-col`. The first cut floated a tiny note box mid-card
+(pie was full-width above, so the lower row started below it, and align-items:flex-start left the note
+orphaned). Fix: move the pie INTO the left column so the right column top-aligns with the donut; the note
+is a faint-filled full-width panel (max-width cap removed, ~7-line clamp) reading as a deliberate block,
+not a floater. Then Cam: put the budget's linked to-dos under the note — added `budgetLinkedTodos` (tasks
+with RelatedType=budget), rendered as a check-off panel reusing `txnFollowUpItem` (same CompleteTask/
+PutTask toggle), capped at 5 with a "+N in To-do" link; removed the now-redundant left-column todos line.
+Note now opens the flip modal on click (openNotes) instead of inline-expand — better for long notes
+(dropped the notesExpanded/toggleNotes state). Kebab: overrode the generated `margin-left:auto` to 0 so ⋯
+sits inline-left, not far-right. Seed: budget-linked to-dos on Dining/Splurges(x2)/Groceries/Transport so
+the panel shows across cards and Splurges demos a note + to-dos together. `budgets_row.go`, `rules_r4.go`,
+`sample.go`, `en_budgetpolish.go`.
+
 ## 2026-07-16 — Member scope fixed on /reports: sharing-aware Owners dimension (v1.0.56)
 
 Cam: “reports page doesn't seem to be working with the scope.” Root cause was a data-model mismatch

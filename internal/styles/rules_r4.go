@@ -176,25 +176,70 @@ func registerR4Surface() {
 	rule(".budgettag-add:hover, .budgettag-add:focus-visible",
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 	)
-	// Composite budget cards get a right-side spend-composition donut: the card becomes a
-	// flex row (main content + pie); a single-dimension budget renders no pie and stays a
-	// plain block.
-	rule(".budget.budget-has-pie",
+	// Composite budgets show a spend-composition donut UNDER the full-width status bar: a
+	// quiet horizontal strip (donut + amount legend). The bar keeps 100% width.
+	rule(".budget-pie",
 		display("flex"),
-		flexDirection("row"), // override the bento card's column direction
+		alignItems("center"),
+		gap("1.1rem"),
+		margin("0.5rem 0 0.15rem"),
+	)
+	// Below the bar, a flex row: the status/metrics/actions stack on the left, and — when the
+	// budget has a note — the note in a right-hand column (filling the otherwise-empty space).
+	rule(".budget-lower",
+		display("flex"),
 		alignItems("flex-start"),
 		gap("1.5rem"),
 	)
-	rule(".budget.budget-has-pie .budget-main",
+	rule(".budget-lower-main",
 		flex("1 1 auto"),
 		minWidth("0"),
 	)
-	rule(".budget-pie",
-		flex("0 0 auto"),
+	// The right column holds the note (top) and the budget's linked follow-up to-dos (below),
+	// each a quiet panel top-aligned with the donut.
+	rule(".budget-side-col",
+		flex("0 0 clamp(220px, 32%, 360px)"),
 		display("flex"),
-		alignItems("center"),
-		gap("0.85rem"),
-		paddingTop("0.35rem"),
+		flexDirection("column"),
+		gap("0.6rem"),
+	)
+	rule(".budget-side-col .budget-notes",
+		width("100%"),
+		maxWidth("none"),
+		marginTop("0"),
+		alignItems("flex-start"),
+		background("color-mix(in srgb, var(--text) 3%, transparent)"),
+	)
+	// A note in the panel shows more of itself before its read-more clamp.
+	rule(".budget-side-col .budget-notes .acct-notes-text",
+		prop("-webkit-line-clamp", "7"),
+	)
+	// Linked follow-up to-dos panel: a small header over the check-off rows (reusing the
+	// transaction follow-up item styling).
+	rule(".budget-todos",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		padding("0.5rem 0.55rem"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("color-mix(in srgb, var(--text) 3%, transparent)"),
+	)
+	rule(".budget-todos-head",
+		fontSize("0.68rem"),
+		fontWeight("700"),
+		textTransform("uppercase"),
+		letterSpacing("0.04em"),
+		color("var(--text-faint)"),
+		marginBottom("0.15rem"),
+	)
+	// Left-align the ⋯ overflow: keep it inline with the other action buttons rather than
+	// shoved to the far right (overrides the generated margin-left:auto).
+	rule(".bento-budgets .budget-actions .add-wrap",
+		marginLeft("0"),
+	)
+	ruleMedia("(max-width: 720px)", ".budget-lower",
+		flexDirection("column"),
 	)
 	rule(".budget-pie-donut",
 		position("relative"),
@@ -242,9 +287,5 @@ func registerR4Surface() {
 		paddingLeft("0.6rem"),
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
-	)
-	// On a narrow content column, drop the pie below the card content instead of squeezing.
-	ruleMedia("(max-width: 720px)", ".budget.budget-has-pie",
-		flexDirection("column"),
 	)
 }

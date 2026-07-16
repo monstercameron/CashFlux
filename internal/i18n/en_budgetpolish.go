@@ -35,6 +35,10 @@ var budgetPolishKeys = Catalog{
 	"budgets.tagsNoneThisMonth": "none this month",
 	"budgets.trackMetaHint":     "Figures show this month so far — transactions · total.",
 
+	// Linked follow-up to-dos in the budget card's side panel.
+	"budgets.followUpsHead": "Follow-ups · %d open of %d",
+	"budgets.followUpsMore": "+%d more in To-do",
+
 	// The redesigned "What this budget tracks" editor: category + tag sections.
 	"budgets.catsSection":  "Categories",
 	"budgets.tagsSection":  "Tags (cross-category)",
