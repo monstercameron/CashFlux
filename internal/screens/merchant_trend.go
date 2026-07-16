@@ -390,8 +390,9 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		Button(css.Class("mtrend-chip"), Type("button"),
 			Attr("data-testid", "mtrend-chip-"+props.TxnID),
 			Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(s.Open)),
+			// No native `title` — it would fight the hover popover with a second, redundant
+			// tooltip (same lesson as the follow-up chip). aria-label carries it for a11y.
 			Attr("aria-label", uistate.T("merchantTrend.label", props.Merchant)),
-			Title(uistate.T("merchantTrend.label", props.Merchant)),
 			OnClick(onClick),
 			// A neutral history glyph — direction (up/down/flat) isn't known until the
 			// lazy compute, so the resting chip must not imply "spending increased".

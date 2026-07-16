@@ -1,3 +1,10 @@
+## 2026-07-16 — Spending-trend chip: drop the native tooltip (fights the hover popover)
+
+Cam: "the tool tips are fighting the trend popover as well." Same clash the follow-up chip hit once its
+popover went hover-driven — the chip's native `title` shows a browser tooltip that competes with the
+popover it now spawns on hover. Removed the `Title(...)` from the trend chip; the `aria-label` stays for
+a11y. Verified: chip `title` attr is null, popover still opens on hover, 0 console errors. `merchant_trend.go`.
+
 ## 2026-07-16 — Spending-trend popover: hover open/close, drop the ✕
 
 Cam: "remove the close button from the spending trend popover and close in on mouse out too, handle it
