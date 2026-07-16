@@ -72,6 +72,77 @@ func registerTxcFieldsSurface() {
 	rule(".txn-followup-chip.all-done",
 		opacity("0.65"),
 	)
+	// The chip's wrapper anchors the hover popover; keep it inline with the description.
+	rule(".txn-followup-wrap",
+		display("inline-flex"),
+		alignItems("center"),
+		verticalAlign("middle"),
+	)
+
+	// Hover popover: a compact glanceable list of this charge's follow-up to-dos. Sits on
+	// the shared .add-menu shell (bg/border/shadow/z-index + AnchorPopover positioning).
+	rule(".txnfu-pop",
+		minWidth("15rem"),
+		maxWidth("22rem"),
+		maxHeight("16rem"),
+		overflowY("auto"),
+		padding("0.5rem"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+	)
+	rule(".txnfu-pop-head",
+		fontSize("0.64rem"),
+		fontWeight("600"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		color("var(--text-dim)"),
+		padding("0.1rem 0.35rem 0.3rem"),
+	)
+	rule(".txnfu-item",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.45rem"),
+		padding("0.3rem 0.35rem"),
+		borderRadius("7px"),
+		fontSize("0.85rem"),
+		color("var(--text)"),
+	)
+	rule(".txnfu-item svg",
+		flex("none"),
+		color("var(--accent)"),
+		alignSelf("center"),
+	)
+	rule(".txnfu-item.is-done",
+		color("var(--text-dim)"),
+	)
+	rule(".txnfu-item.is-done svg",
+		color("var(--text-dim)"),
+	)
+	rule(".txnfu-item.is-done .txnfu-item-title",
+		textDecoration("line-through"),
+	)
+	rule(".txnfu-item-title",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		prop("text-overflow", "ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txnfu-item-due",
+		flex("none"),
+		fontSize("0.72rem"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".txnfu-pop-foot",
+		marginTop("0.25rem"),
+		paddingTop("0.35rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
+		fontSize("0.72rem"),
+		color("var(--accent)"),
+		textAlign("center"),
+	)
 
 	// TXC-3: quick-filter preset chips above the ledger.
 	rule(".txn-presets",

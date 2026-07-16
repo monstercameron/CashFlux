@@ -12,6 +12,17 @@ the chip's click hook (StopPropagation, so the chip doesn't also open the edit m
 to end (chip "1/1" → click → /todo with LINKED=transaction showing the linked task), 0 errors on all 8
 pages. Left version.go/sw.js to the concurrent goals session (they own the bump to v1.0.50).
 
+Then Cam asked for a hover-glance popover. Split the chip into its own component (`txn_followup.go`,
+`txnFollowUpChip`) with hover-intent: `OnMouseEnter` schedules a 500ms `setTimeout` whose callback opens
+the popover only if a `ui.UseRef` hover flag is still set (so leaving early cancels the reveal without
+clearTimeout; a pointer merely passing over never flashes it). The popover rides the shared anchored-
+popover shell (`add-menu` + `uiw.AnchorPopover`/`DismissPopover`) so it escapes the row's clipping, and
+lists each linked to-do (title, done-state icon, due date) + a "click to open in To-do" hint. It's
+glance-only (closes on mouse-leave); the chip itself is the click-through. e2e: popover hidden at 250ms,
+shown at 750ms with the items, route stays /transactions. Then Cam flagged the native `title` tooltip
+"fighting" the popover — removed the chip's `title` attr (the popover is the rich hover content now),
+keeping `aria-label` for screen readers. Verified: `title` is null, popover still opens, 0 errors.
+
 ## 2026-07-16 — Money map + reached-goal Archive (v1.0.50)
 
 Continuing the earmark `/goal`. The "money map" (#4 of the six refinements) turned out to be mostly
