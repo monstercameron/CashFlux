@@ -126,7 +126,31 @@ func TestResolveScope_OwnerFilter(t *testing.T) {
 	}
 	s := scope.ReportScope{Owners: []string{"alice"}}
 	got := scope.ResolveScope(accounts, s, noInstitution)
-	want := []string{"a1"}
+	// Alice's perspective = her accounts PLUS the household's shared ones — a3 is
+	// group-owned, so it belongs to every member's scope. Bob's individual a2 does not.
+	want := []string{"a1", "a3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+func TestResolveScope_OwnerFilter_SharedScopeAccounts(t *testing.T) {
+	// The account data model marks sharing via Account.Scope while OwnerID records
+	// the CREATING member (e.g. "Joint Checking" created by Marcus). A member scope
+	// must include those shared accounts for every member, or the member who didn't
+	// create them sees an empty household (the /reports member-switcher bug).
+	joint := acct("joint", "marcus", domain.TypeChecking, false, "")
+	joint.Scope = domain.ScopeShared
+	own401k := acct("k401", "marcus", domain.TypeInvestment, false, "")
+	own401k.Scope = domain.ScopeIndividual
+	priyaBiz := acct("biz", "priya", domain.TypeChecking, false, "")
+	priyaBiz.Scope = domain.ScopeIndividual
+
+	accounts := []domain.Account{joint, own401k, priyaBiz}
+	got := scope.ResolveScope(accounts, scope.ReportScope{Owners: []string{"priya"}}, noInstitution)
+	// Priya sees her own business account AND the shared joint account — not
+	// Marcus's individual 401(k).
+	want := []string{"biz", "joint"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}

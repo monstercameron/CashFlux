@@ -46,8 +46,13 @@ type ReportScope struct {
 	// institutionOf accessor) matches any of these values, case-insensitively.
 	Institutions []string
 
-	// Owners narrows to accounts whose OwnerID matches any of these values.
-	// Use domain.GroupOwnerID ("group") to include shared accounts.
+	// Owners narrows to a member perspective: an account matches when its
+	// OwnerID is any of these values OR the account is SHARED (Scope ==
+	// domain.ScopeShared, or OwnerID == domain.GroupOwnerID). This mirrors the
+	// app-wide member-visibility rule ("mine + the household's") — the account
+	// data model marks sharing via Account.Scope while OwnerID records the
+	// creating member, so exact-owner matching would wrongly hide joint
+	// accounts from every member who didn't create them.
 	Owners []string
 
 	// Types narrows to accounts whose Type matches any of these values.
@@ -141,9 +146,12 @@ func matchesDimensions(
 		}
 	}
 
-	// Owner dimension.
+	// Owner dimension: a member's perspective includes the accounts they own AND
+	// the household's shared accounts (Scope=shared, or the group pseudo-owner) —
+	// the same "mine + shared" rule the rest of the app applies to member scoping.
 	if len(s.Owners) > 0 {
-		if !anyStringExact(a.OwnerID, s.Owners) {
+		shared := a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID
+		if !shared && !anyStringExact(a.OwnerID, s.Owners) {
 			return false
 		}
 	}

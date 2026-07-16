@@ -1,3 +1,17 @@
+## 2026-07-16 — Member scope fixed on /reports: sharing-aware Owners dimension (v1.0.56)
+
+Cam: “reports page doesn't seem to be working with the scope.” Root cause was a data-model mismatch
+inside the pure scope engine (#443): `ReportScope.Owners` matched `Account.OwnerID` exactly, but
+accounts express sharing via `Account.Scope == ScopeShared` while `OwnerID` holds the CREATOR (Joint
+Checking is OwnerID=marcus, Scope=shared). Net effect in the sample: Marcus’s member view ≈ the whole
+household (he created the joint accounts), Priya’s view = “No income, spending, or transfers” — both
+wrong, and the same defect silently applied to the dashboard/assistant, which read the same atom.
+Fix: the Owners dimension now includes shared accounts (Scope=shared or group-owned) for every
+member — the app-wide ownerVisibleTo “mine + shared” rule — with the doc comment rewritten and a
+regression test modelling the exact Joint-Checking shape. June verification differentiates correctly:
+Everyone $7,054 / Marcus $5,901 (no Priya business) / Priya $7,054 (shared salary + her business).
+July shows identical figures across members — correct, since every July flow is on shared accounts.
+
 ## 2026-07-16 — Reports → primary rail, slot 9 (v1.0.55)
 
 Cam: “move reports to top menu 9.” One-line route move in screens.go (GroupTools/Understand →
