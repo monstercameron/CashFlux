@@ -1082,6 +1082,20 @@ with the server token. Non-operators now get an actor-scoped audit read (`ListAu
 already indexed by `idx_audit_events_actor`) — their own events only — and 403 on metrics. Tests
 now assert the isolation both ways; the old ones only checked authentication.
 
+Interjection mid-Phase-1: Cam asked for a Settings page to connect the backend + sync DB/artifacts,
+toggleable. Checked first — it already existed (Settings → Cloud tab: toggle, server URL/token,
+Sync-now that pushes dataset + uploads artifact blobs, OAuth, devices, billing). Asked what he
+actually wanted; answer: promote it to a top-level Sync page. Built `/sync` as a focused System
+nav screen that REUSES the same sync engine + prefs (requestBackendSyncNow, prefsAtom,
+loadSyncStatus, testBackendConnection) — no forked logic — with a live status card, the connect
+toggle, the URL/self-host-token form, Test + Sync-now, and a link out to the Cloud tab for
+subscription/sign-in/devices. Wired via the same registry-injection seam as /settings
+(screens.SyncView). Note: shell.go's railMeta (the cloud icon) is entangled with the other
+session's uncommitted TxnHistoryHost edit, so per the no-entanglement rule I shipped the route
+without the custom icon (it falls back to the registry page icon) — a one-line follow-up once
+shell.go disentangles. Verified compile via a clean-HEAD archive overlay since the working tree
+carries the other session's broken WIP.
+
 Slice 0b: session-key separation. Sessions were HMAC-signed with `sessionSecret` = MasterKey (or
 Token). Two problems that separation fixes: rotating the AES master key (the `rotate-ai-master-key`
 op) would silently invalidate every session, and one secret's leak exposed both. Added
