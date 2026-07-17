@@ -721,10 +721,13 @@ func Dashboard() ui.Node {
 	noticeAtom := uistate.UseNotice()
 	freshnessDismissals := uistate.UseFreshnessDismissals()
 	remindToUpdate := ui.UseEvent(func() {
-		if _, err := app.CreateFreshnessReminderTask(uistate.T("dashboard.staleTaskTitle")); err != nil {
+		task, err := app.CreateFreshnessReminderTask(uistate.T("dashboard.staleTaskTitle"))
+		if err != nil {
 			noticeAtom.Set(noticeAtom.Get().With(uistate.T("dashboard.reminderErr", err.Error()), true))
 			return
 		}
+		// QA CF-28: land ON the created task, not just the list.
+		uistate.SetDeepLinkFocus(`[id="` + task.ID + `"]`)
 		nav.Navigate(uistate.RoutePath("/todo"))
 	})
 	dismissFreshness := ui.UseEvent(func() {
@@ -1820,7 +1823,12 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 			rev.Set(rev.Get() + 1)
 		}
 	})
-	openTodo := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/todo")) })
+	// QA CF-28: drilling from a dashboard row scrolls to and pulses THAT task on
+	// /todo (the deep-link flash), instead of dropping the user at an unfocused list.
+	openTodo := ui.UseEvent(func() {
+		uistate.SetDeepLinkFocus(`[id="` + t.ID + `"]`)
+		nav.Navigate(uistate.RoutePath("/todo"))
+	})
 
 	dotTone, prio := "text-faint", "Low priority"
 	var dotContent any = "○"

@@ -7,18 +7,21 @@ package i18n
 // does not touch the shared en.go.
 var accountsACKeys = Catalog{
 	// AC1 — account groups.
-	"accounts.groupsAction":      "Groups",
-	"accounts.groupsManageTitle": "Organize your accounts into groups",
-	"accounts.newGroup":          "New group",
-	"accounts.editGroup":         "Edit group",
-	"accounts.groupNameLabel":    "Group name",
-	"accounts.groupNamePh":       "Shared, Liquid, Property…",
-	"accounts.groupNameRequired": "Give the group a name.",
-	"accounts.groupPickAccounts": "Choose which accounts belong to this group.",
-	"accounts.groupNoAccounts":   "Add an account first, then group it.",
-	"accounts.createGroup":       "Create group",
-	"accounts.saveGroup":         "Save group",
-	"accounts.deleteGroup":       "Delete group",
+	"accounts.groupsAction": "Groups",
+	// QA CF-27: the menu item says what clicking does, by state.
+	"accounts.newGroupAction":     "New group…",
+	"accounts.manageGroupsAction": "Manage groups",
+	"accounts.groupsManageTitle":  "Organize your accounts into groups",
+	"accounts.newGroup":           "New group",
+	"accounts.editGroup":          "Edit group",
+	"accounts.groupNameLabel":     "Group name",
+	"accounts.groupNamePh":        "Shared, Liquid, Property…",
+	"accounts.groupNameRequired":  "Give the group a name.",
+	"accounts.groupPickAccounts":  "Choose which accounts belong to this group.",
+	"accounts.groupNoAccounts":    "Add an account first, then group it.",
+	"accounts.createGroup":        "Create group",
+	"accounts.saveGroup":          "Save group",
+	"accounts.deleteGroup":        "Delete group",
 	// %s = group name. Deleting only ungroups; accounts are untouched.
 	"accounts.groupDeleted":     "Removed the \"%s\" group. Its accounts are back under Ungrouped.",
 	"accounts.groupSaved":       "Group saved.",

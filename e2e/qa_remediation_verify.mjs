@@ -466,6 +466,39 @@ if (await sweepBtn.count()) {
   check("CF-12: sweep rules entry reachable", false);
 }
 
+// ──────── CF-27 + CF-28: honest Groups label; deep-linked task focus ────────
+// CF-27: the manage-menu groups item says what it does.
+if (await manage.count()) {
+  await manage.click();
+  await page.waitForTimeout(400);
+  const groupsLabel = (await page.locator('[data-testid="acct-groups-btn"]').count()) ? await page.locator('[data-testid="acct-groups-btn"]').innerText() : "(none)";
+  check("CF-27: groups menu item states its action", /New group|Manage groups/i.test(groupsLabel), groupsLabel);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+}
+// CF-28: a /todo#taskID deep link (the assistant's "Open it" URL shape) pulses
+// that task. Grab a real task id from the list, then re-enter with the hash.
+await nav("/todo");
+await page.waitForTimeout(1200);
+const taskRows = await page.locator('[data-testid="task-card"]').all();
+let realTaskID = "";
+for (const r of taskRows) {
+  const id = await r.getAttribute("id");
+  if (id && id !== "task-card") { realTaskID = id; break; }
+}
+if (realTaskID) {
+  const taskID = realTaskID;
+  await page.evaluate((id) => { history.pushState({}, "", "/todo#" + id); dispatchEvent(new PopStateEvent("popstate")); }, taskID);
+  // the mount effect consumes the hash on the next /todo mount — navigate away and back
+  await nav("/");
+  await page.evaluate((id) => { history.pushState({}, "", "/todo#" + id); dispatchEvent(new PopStateEvent("popstate")); }, taskID);
+  await page.waitForTimeout(1400);
+  const flashed = await page.locator(".deeplink-flash").count();
+  check("CF-28: hash-deep-linked task gets the focus pulse", flashed > 0, `${flashed} flashed for #${taskID}`);
+} else {
+  check("CF-28: task list has rows", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

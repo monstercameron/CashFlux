@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -32,6 +34,17 @@ func Todo() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
+
+	// QA CF-28: an assistant "[Open it](/todo#taskID)" link (or any hash deep
+	// link) lands with the fragment in the URL — consume it once on mount into
+	// the deep-link flash so the target task is scrolled to and pulsed, instead
+	// of appearing unfocused somewhere in the sorted list.
+	ui.UseEffect(func() func() {
+		if hash := js.Global().Get("location").Get("hash").String(); len(hash) > 1 {
+			uistate.SetDeepLinkFocus(`[id="` + strings.TrimPrefix(hash, "#") + `"]`)
+		}
+		return nil
+	}, "todo-hash-focus")
 
 	base := app.Settings().BaseCurrency
 	if base == "" {

@@ -730,7 +730,15 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				TriggerTestID: "acct-manage-btn",
 				TriggerClass:  "btn btn-tool",
 				Items: []uiw.OverflowMenuItem{
-					{Label: uistate.T("accounts.groupsAction"), Icon: icon.Tag, TestID: "acct-groups-btn", OnSelect: openGroups},
+					// QA CF-27: the item's label matches what clicking DOES — with no
+					// groups yet it opens the creation form, so it says "New group…";
+					// with groups it opens the manager.
+					{Label: func() string {
+						if len(app.AccountGroups()) == 0 {
+							return uistate.T("accounts.newGroupAction")
+						}
+						return uistate.T("accounts.manageGroupsAction")
+					}(), Icon: icon.Tag, TestID: "acct-groups-btn", OnSelect: openGroups},
 					{Label: uistate.T("accounts.institutionsAction"), Icon: icon.Landmark, TestID: "acct-institutions-btn", OnSelect: openInstitutions},
 					{Label: uistate.T("acctSweepCfg.title"), Icon: icon.TrendingUp, TestID: "acct-sweep-btn", OnSelect: openSweep, Hidden: len(accounts) < 2},
 					{Label: uistate.T("accounts.manageFXRates"), Icon: icon.Scale, TestID: "acct-fx-btn", OnSelect: openFX, Hidden: !showFX},
