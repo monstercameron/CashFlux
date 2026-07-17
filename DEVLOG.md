@@ -43,6 +43,21 @@ resolve), and >6 budgets now seed the compact list when no density was ever chos
 persisted choice always wins. 11 new e2e assertions green on the lane server, 0 page errors;
 follow-ups-collapse asserted structurally (sample data has no budget-linked to-dos to click).
 
+## 2026-07-17 — #45: the grid with a floor nobody stood on (lane 2)
+
+QA's guesses were close ("a min-height on the bento container… a hidden element still reserving
+space"); the reality was `grid-template-rows: repeat(8, var(--cell))` on `.bento`. An explicit
+row TEMPLATE isn't a hint — it's a floor: those eight 152px tracks exist whether or not anything
+occupies them, so the grid never measured under 1286px. On the full default layout (13 rows) the
+floor was invisible — content grew past it via auto-rows. Under a Focus preset (4 rows of
+widgets) the page scrolled through 742px of blank tracks; the boot-time skeleton reserved the
+same ghost rows. Deleting the template and leaning on the existing `grid-auto-rows: var(--cell)`
+makes rows exist exactly where content places them — same cell size, no floor. Notably every
+sub-page bento (ledger/accounts/budgets/…) already overrode the template to `auto`, which is why
+only the dashboard exhibited it. The residual 94px is `main.cf-scroll`'s documented clearance for
+the fixed corner controls, and stays. Diagnosis path worth keeping: measure `main.scrollHeight`
+minus the max child bottom per layout state — 94px in every state after the fix, 742px before.
+
 ## 2026-07-17 — #44: the Focus select that forgot, and the layout that un-applied itself (lane 2)
 
 The QA read was "the select doesn't reflect the current state" — true, but shallow. Driving it

@@ -5171,7 +5171,10 @@ func registerGenerated() {
 		display("grid"),
 		customProp("--cell", "152px"),
 		gridTemplateColumns("repeat(4, minmax(0,1fr))"),
-		gridTemplateRows("repeat(8, var(--cell))"),
+		// No explicit row template: rows are created by content via auto-rows.
+		// A fixed repeat(8, --cell) floor kept the grid 1286px tall even when a
+		// focus preset filled only 4 rows, leaving ~740px of phantom scroll
+		// below the last widget (QA task #45).
 		gridAutoRows("var(--cell)"),
 		gap("10px"),
 		overflowAnchor("none"),
