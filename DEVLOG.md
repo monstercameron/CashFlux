@@ -114,6 +114,16 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Report snapshots freeze aggregates, not raw data
+
+Design question: what does a "snapshot" store? Freezing the raw transaction set would be a
+second dataset to migrate forever; freezing rendered HTML would rot. Chose the middle: the
+HEADLINE aggregates (income/spending/net + top-6 categories/payees, minor units + base) — small
+enough for KV, meaningful enough to answer "what did July look like when I closed it?", and
+immune to schema drift because it's just labeled numbers. The panel says "read-only; the live
+report may differ" out loud — a snapshot that silently disagreed with the live page would read
+as a bug instead of the point.
+
 ## 2026-07-17 — Rule previews: the list behind the count, and an honest backfill
 
 Two halves. The disclosure half is cheap: the per-rule count already existed (MatchCountFull);

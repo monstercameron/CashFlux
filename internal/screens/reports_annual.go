@@ -403,7 +403,7 @@ func Reports() ui.Node {
 			Span(css.Class("rpta-fig-v", tw.FontDisplay), fmtMoney(nwNet)),
 			If(sub != "", Span(ClassStr("rpta-fig-sub rpta-tone-"+tone), sub)),
 			If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), Title(uistate.T("rpta.nwSparkTitle")),
-				sparklineSVG(nwInts),
+				sparklineSVG(nwInts, uistate.T("rpta.nwSparkAlt")),
 				Span(css.Class("rpta-fig-spark-cap"), uistate.T("rpta.nwSparkCap"), " · ", rptaSrcLink("nav.netWorth", "/networth")))),
 		))
 	}
@@ -1220,7 +1220,7 @@ func Reports() ui.Node {
 		}
 		risingNodes = append(risingNodes, Div(css.Class("rpta-watch-row"),
 			Span(css.Class("rpta-watch-name"), nameOf(tr.CategoryID)),
-			sparklineSVG(tr.Spend),
+			sparklineSVG(tr.Spend, uistate.T("rpta.catSparkAlt")),
 			Span(css.Class("rpta-watch-delta", "rpta-tone-warn"), fmt.Sprintf("▲ %d%%", tr.DeltaPct)),
 			Span(css.Class("rpta-watch-amt"), fmtMinor(tr.Total)),
 		))
@@ -1917,6 +1917,11 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 			exportMenu,
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),
+		// Month-end snapshots: freeze the current aggregates; reopen them read-only.
+		ui.CreateElement(reportSnapshotControl, reportSnapshotProps{
+			Rows: rows, IncomeRows: incomeRows, Payees: payees, NameOf: nameOf,
+			Base: base, PeriodLabel: from.Format("Jan 2006"),
+		}),
 	)
 }
 
@@ -2010,7 +2015,7 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 		),
 		Span(css.Class("rpta-cat-amt", tw.FontDisplay), props.FmtMinor(amt)),
 		Span(css.Class("rpta-cat-avg", "rpta-muted"), props.FmtMinor(amt/12)),
-		Span(css.Class("rpta-cat-spark"), sparklineSVG(props.Spark)),
+		Span(css.Class("rpta-cat-spark"), sparklineSVG(props.Spark, uistate.T("rpta.catSparkAlt"))),
 		Span(ClassStr(deltaCls), delta),
 		Span(css.Class("rpta-cat-share", "rpta-muted"), fmt.Sprintf("%d%%", share)),
 	)

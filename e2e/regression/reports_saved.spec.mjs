@@ -21,6 +21,23 @@ test.describe("reports: turn into action", () => {
   });
 });
 
+test.describe("reports: snapshots", () => {
+  test("Snapshot freezes the aggregates; the picker reopens them read-only", async ({ app }) => {
+    await nav(app, "/reports");
+    await app.getByTestId("reports-snap-take").click();
+    await expect(app.locator("body")).toContainText(/Snapshot of .* saved/);
+    // The snapshot auto-selects and renders the frozen panel.
+    const panel = app.getByTestId("report-snap-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText(/Frozen view of .* read-only/);
+    await expect(panel).toContainText(/Income .*Spending .*Net /);
+    // The picker lists it; deleting empties the panel.
+    await expect(app.getByTestId("reports-snap-select")).toBeVisible();
+    await app.getByTestId("reports-snap-delete").click();
+    await expect(app.getByTestId("report-snap-panel")).toHaveCount(0);
+  });
+});
+
 test.describe("reports: saved views", () => {
   test("save, apply after changing the period, and delete", async ({ app }) => {
     await nav(app, "/reports");

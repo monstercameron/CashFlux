@@ -1014,6 +1014,17 @@ var english = Catalog{
 	"reports.actionBudgets":    "Adjust budgets",
 	"reports.actionGoal":       "Start a goal",
 	"reports.actionTaskTitle":  "Follow up on the %s report",
+	// Report snapshots (frozen month-end aggregates).
+	"reports.snapTake":        "Snapshot",
+	"reports.snapTakeTitle":   "Freeze this report's headline figures so later edits can't rewrite them",
+	"reports.snapLabel":       "Snapshots",
+	"reports.snapPlaceholder": "Snapshots…",
+	"reports.snapOption":      "%s (taken %s)",
+	"reports.snapTaken":       "Snapshot of %s saved.",
+	"reports.snapDeleted":     "Snapshot deleted.",
+	"reports.snapDeleteTitle": "Delete the selected snapshot",
+	"reports.snapFrozen":      "Frozen view of %s, taken %s — read-only; the live report may differ.",
+	"reports.snapTotals":      "Income %s · Spending %s · Net %s",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",
