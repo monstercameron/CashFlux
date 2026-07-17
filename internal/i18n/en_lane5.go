@@ -77,6 +77,23 @@ var lane5Keys = Catalog{
 	"budgets.incomeActualSoFar":  "Received so far: %s of the %s your plan expects.",
 	"budgets.incomeActualEnded":  "Received: %s against the %s the plan expected.",
 
+	// #65 — goals refinement: plan comparison, conflicts, paycheck preview, funding order.
+	"goals.compareEasier":         "Take it easier (−25%)",
+	"goals.compareYours":          "Your plan",
+	"goals.compareHarder":         "Push harder (+25%)",
+	"goals.compareNoLanding":      "no landing date",
+	"goals.conflictTitle":         "%s all set money aside from %s",
+	"goals.conflictBody":          "Together they claim %s but the account holds %s — %s more than it can back.",
+	"goals.conflictReview":        "Review earmarks",
+	"goals.conflictReviewTitle":   "Open the earmarks manager to adjust who claims what",
+	"goals.paycheckPreviewToggle": "Preview: what would a %s paycheck fund?",
+	"goals.paycheckPreviewIntro":  "If your next paycheck lands around %s (your largest recent one), the waterfall would set aside:",
+	"goals.paycheckPreviewNote":   "This is only a preview — when the paycheck actually arrives, the same plan is offered for your approval.",
+	"goals.fundingOrderToggle":    "Funding order",
+	"goals.fundingOrderIntro":     "Payday money fills these goals top to bottom. Reorder to change who gets funded first.",
+	"goals.fundingMoveUp":         "Fund %s earlier",
+	"goals.fundingMoveDown":       "Fund %s later",
+
 	// #71 (UX-06) — the compact goal card's expand/collapse control.
 	"goals.expand":        "Details",
 	"goals.expandTitle":   "Show everything on this goal",

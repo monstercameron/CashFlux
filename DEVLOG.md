@@ -1,3 +1,24 @@
+## 2026-07-17 — #65: the goals engine stops telling comfortable lies (lane 5)
+
+Three of this ticket's five items were honesty bugs wearing feature clothes. The sharpest:
+`goals.Project` amortized from `now` even while a goal was paused — a goal paused until October
+showed a landing date only reachable by contributing through the pause. The fix moves the
+amortization start to `PausedUntil` (and `MonthlyNeeded` counts contributing months from there;
+paused past the target date → ok=false, because no monthly makes it). The payday waterfall had a
+matching lie by omission: it happily funded paused goals. Now excluded.
+
+Funding priority: the waterfall's comment claimed it ranked goals "in their stored order (the
+priority source the /goals list controls)" — but the list never controlled anything; it was
+insertion order. New additive `Goal.FundingOrder` + `FundingOrdered`/`MoveFunding` (full 1..n
+renumber on every move, so order becomes explicit the first time it's touched), consumed by a
+refactored `waterfallProposalFor` that also backs the new `WaterfallPreview` — the "what would a
+$X paycheck fund?" disclosure, gated to render only after the live proposal is handled so two
+cards never compete for the same moment. Reordering is move-up/move-down buttons rather than
+pointer drag: keyboard-accessible from day one, and honest about the lean-first directive; a
+pointer-drag layer can sit on top later. E2E proved the wiring end to end: dismissing the live
+waterfall surfaced the preview, and one move-down visibly reswapped the funding list. 44/44 lane
+assertions green, 0 page errors.
+
 ## 2026-07-17 — #54: the activity feed grows into an audit trail (lane 1)
 
 The capture side already existed — field-level diffs (auditlog.DiffJSON), actor stamping, SQLite

@@ -202,6 +202,33 @@ func registerGoalsSurface() {
 	rule(".bento-goals .goal-plan",
 		marginTop("0.6rem"),
 	)
+	// #65: the planner's side-by-side plan comparison — three quiet rows (25%
+	// less / the current plan / 25% more), each amount → landing date; the
+	// current plan carries the accent.
+	rule(".goal-plan-compare",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.25rem"),
+		margin("0.5rem 0 0.25rem"),
+		padding("0.5rem 0.7rem"),
+		border(hair),
+		borderRadius("10px"),
+	)
+	rule(".goal-plan-compare-row",
+		display("flex"),
+		alignItems("baseline"),
+		gap("1rem"),
+		fontSize("0.85rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".goal-plan-compare-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+	)
+	rule(".goal-plan-compare-row.is-current",
+		fontWeight("600"),
+		color("var(--accent)"),
+	)
 
 	// --- Task 4: EARMARKS made visual --------------------------------------------
 	// Account exposure as cards with an earmarked-vs-free coverage bar, so the split is

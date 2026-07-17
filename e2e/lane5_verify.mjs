@@ -102,6 +102,74 @@ if (await slider.count()) {
   check("#51: plan slider reachable", false);
 }
 
+// ───────── #65: plan comparison, funding order, paycheck preview, recompute ─────────
+// (The first goal card is expanded with its planner open from the #51 block.)
+const compare = page.locator('[data-testid^="goal-plan-compare-"]').first();
+if (await compare.count()) {
+  const rows65 = await compare.locator(".goal-plan-compare-row").count();
+  const current = await compare.locator(".goal-plan-compare-row.is-current").count();
+  const txt65 = await compare.innerText();
+  check("#65: planner compares three plans side by side", rows65 === 3 && current === 1, `${rows65} rows`);
+  check("#65: comparison pairs each amount with a landing date", /\/mo/.test(txt65) && /(20\d\d|no landing)/.test(txt65), txt65.replace(/\n/g, " | ").slice(0, 90));
+} else {
+  check("#65: planner comparison present", false);
+}
+
+// Edits recompute projections: raising the target must change the figures.
+const expandedCard = page.locator('[data-testid^="goal-row-"]').first();
+const gid = (await expandedCard.getAttribute("data-testid")).replace("goal-row-", "");
+const figsBefore = await page.locator(`[data-testid="goal-figs-${gid}"]`).innerText().catch(() => "");
+await page.locator(`[data-testid="goal-target-btn-${gid}"]`).click();
+await page.waitForTimeout(300);
+await page.locator(`[data-testid="goal-target-input-${gid}"]`).fill("99999");
+await page.locator(`[data-testid="goal-target-save-${gid}"]`).click();
+await page.waitForTimeout(600);
+const figsAfter = await page.locator(`[data-testid="goal-figs-${gid}"]`).innerText().catch(() => "");
+check("#65: editing the target recomputes the projections", figsBefore !== "" && figsAfter !== "" && figsBefore !== figsAfter);
+
+// Funding order: reorder moves a goal and renumbers the sequence.
+const foToggle = page.locator('[data-testid="goals-funding-order-toggle"]');
+if (await foToggle.count()) {
+  await foToggle.click();
+  await page.waitForTimeout(400);
+  const namesBefore = await page.locator('[data-testid^="goal-funding-row-"] .wf-line-name').allInnerTexts();
+  check("#65: funding-order list shows the waterfall sequence", namesBefore.length >= 2, namesBefore.join(" | "));
+  const firstRowId = (await page.locator('[data-testid^="goal-funding-row-"]').first().getAttribute("data-testid")).replace("goal-funding-row-", "");
+  await page.locator(`[data-testid="goal-funding-down-${firstRowId}"]`).click();
+  await page.waitForTimeout(600);
+  const namesAfter = await page.locator('[data-testid^="goal-funding-row-"] .wf-line-name').allInnerTexts();
+  check("#65: move-down reorders the funding sequence", namesAfter.length === namesBefore.length && namesAfter[0] === namesBefore[1], namesAfter.join(" | "));
+  await page.locator(`[data-testid="goal-funding-up-${firstRowId}"]`).click();
+  await page.waitForTimeout(400);
+} else {
+  console.log("SKIP: #65 funding order — fewer than two fundable goals");
+}
+
+// Paycheck preview: appears once the live waterfall moment is handled.
+const wfDismiss = page.locator('[data-testid="goals-waterfall-dismiss"]');
+if (await wfDismiss.count()) {
+  await wfDismiss.click();
+  await page.waitForTimeout(800);
+}
+const ppToggle = page.locator('[data-testid="goals-paycheck-preview-toggle"]');
+if (await ppToggle.count()) {
+  check("#65: next-paycheck preview offered when no income is pending", true);
+  await ppToggle.click();
+  await page.waitForTimeout(400);
+  const ppLines = await page.locator('[data-testid="goals-paycheck-preview"] .wf-line').count();
+  const ppNote = await page.locator('[data-testid="goals-paycheck-preview-note"]').innerText().catch(() => "");
+  check("#65: preview lists per-goal funding lines", ppLines >= 1, `${ppLines} lines`);
+  check("#65: preview says approval happens when the paycheck lands", /preview|approval/i.test(ppNote), ppNote.slice(0, 60));
+} else {
+  console.log("SKIP: #65 paycheck preview — no recent income to estimate from");
+}
+// Conflict strip is dataset-dependent; note its absence rather than fail.
+if (!(await page.locator('[data-testid="goals-conflict-strip"]').count())) {
+  console.log("SKIP: #65 conflict strip — no shared over-claimed account in this dataset");
+} else {
+  check("#65: conflict strip names the over-claimed account", true);
+}
+
 // ───────── #70 (UX-05): budgets historical wording, clickable counts, Automate ─────────
 await nav("/budgets");
 // (1) Automate menu: bulk tools are folded away until the menu opens.

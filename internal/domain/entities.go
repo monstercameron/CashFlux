@@ -862,6 +862,11 @@ type Goal struct {
 	// priority sort and the compare view. Omitted from JSON when zero so
 	// existing rows round-trip with no migration needed.
 	Priority int `json:"priority,omitempty"`
+	// FundingOrder is the goal's explicit position (1 = first) in the payday
+	// waterfall's funding sequence (#65). 0 (the default) = no explicit position;
+	// unordered goals fund after ordered ones, ranked by Priority then stored
+	// order. Omitted from JSON when zero — existing rows need no migration.
+	FundingOrder int `json:"fundingOrder,omitempty"`
 	// IsSinkingFund marks the goal as a sinking fund — a bucket you save
 	// into regularly for an irregular future expense (car repairs, holidays,
 	// annual subscriptions, etc.). Sinking funds are displayed in a dedicated

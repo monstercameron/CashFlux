@@ -158,6 +158,39 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 		readout = Span(uistate.T("goals.planFinish", finish.Format("Jan 2006")))
 	}
 
+	// #65: side-by-side plan comparison — the current plan bracketed by saving 25%
+	// less and 25% more (clamped to the slider's honest range), each with its own
+	// landing date, so "what if I stretch / ease off" is answered at a glance
+	// instead of by dragging the slider back and forth.
+	type comparePlan struct {
+		key     string
+		minor   int64
+		current bool
+	}
+	plans := []comparePlan{
+		{"goals.compareEasier", clampRange(cur.Get() * 3 / 4), false},
+		{"goals.compareYours", cur.Get(), true},
+		{"goals.compareHarder", clampRange(cur.Get() * 5 / 4), false},
+	}
+	var compareRows []ui.Node
+	for _, p := range plans {
+		fin, has := planFinish(props.App, g, p.minor, now)
+		dateTxt := uistate.T("goals.compareNoLanding")
+		if has {
+			dateTxt = fin.Format("Jan 2006")
+		}
+		cls := "goal-plan-compare-row"
+		if p.current {
+			cls += " is-current"
+		}
+		compareRows = append(compareRows, Div(ClassStr(cls),
+			Span(css.Class("goal-plan-compare-name"), uistate.T(p.key)),
+			Span(css.Class("wf-line-amt"), uistate.T("goals.planPerMo", fmtMoney(money.New(p.minor, g.TargetAmount.Currency)))),
+			Span(css.Class("wf-line-amt"), dateTxt),
+		))
+	}
+	compare := Div(css.Class("goal-plan-compare"), Attr("data-testid", "goal-plan-compare-"+g.ID), compareRows)
+
 	return Div(css.Class("goal-plan"), Attr("data-testid", "goal-plan-"+g.ID),
 		Div(css.Class("goal-plan-head"),
 			Span(css.Class("goal-plan-title"), uistate.T("goals.planTitle")),
@@ -185,6 +218,7 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 		),
 		// aria-live so the projected finish is ANNOUNCED as the plan changes.
 		Div(css.Class("goal-plan-readout"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", "goal-plan-readout-"+g.ID), readout),
+		compare,
 		Div(css.Class("goal-plan-actions", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "goal-plan-use-"+g.ID), OnClick(useThis), uistate.T("goals.planUseThis")),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "goal-plan-wherefrom-"+g.ID), OnClick(whereFrom), uistate.T("goals.planWhereFrom")),

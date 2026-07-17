@@ -105,6 +105,12 @@ func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.T
 	if monthly.Amount <= 0 {
 		return time.Time{}, false, nil
 	}
+	// Pause honesty (#65): a paused goal contributes nothing until PausedUntil,
+	// so the amortization starts THERE — projecting from `from` while paused
+	// showed a landing date the pause makes impossible.
+	if goal.IsPaused(from) {
+		from = goal.PausedUntil
+	}
 	// Contributions land during the CURRENT month first (the same convention
 	// MonthlyNeeded amortizes with — its month count includes this month), so
 	// the Nth and final payment happens in month N-1. Projecting the first
@@ -124,6 +130,14 @@ func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.T
 // earmark, contribution, or passing month re-derives a fresh figure — set aside
 // more this month and next month's ask shrinks.
 func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) {
+	// Pause honesty (#65): while paused no contributions happen, so the gap
+	// amortizes over the months AFTER the pause lifts — otherwise the shown
+	// "needed / mo" undercounts what resuming will actually require. A pause
+	// extending past the target date leaves no contributing months at all, so
+	// the shifted `from` falls through the next check to ok=false.
+	if goal.IsPaused(from) {
+		from = goal.PausedUntil
+	}
 	if goal.TargetDate.IsZero() || !goal.TargetDate.After(from) {
 		return money.Money{}, false, nil
 	}

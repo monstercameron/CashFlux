@@ -123,6 +123,44 @@ func (a *App) WaterfallPlan(now time.Time) WaterfallProposal {
 	}
 	income := a.incomeSinceStamp(floor, base, rates)
 
+	return a.waterfallProposalFor(now, income, base, rates)
+}
+
+// WaterfallPreview builds the same funding proposal for a HYPOTHETICAL income —
+// the "fund from next paycheck" preview (#65). Nothing is detected, stamped, or
+// written; the caller supplies the expected paycheck in base minor units.
+func (a *App) WaterfallPreview(now time.Time, incomeMinor int64) WaterfallProposal {
+	base := a.baseCurrency()
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	return a.waterfallProposalFor(now, incomeMinor, base, rates)
+}
+
+// EstimatedNextPaycheckMinor guesses the size of the next paycheck: the largest
+// single income transaction of the last 45 days, in base minor units (0 when
+// there is none). A deliberate floor-not-forecast — the preview labels itself
+// as an estimate.
+func (a *App) EstimatedNextPaycheckMinor(now time.Time) int64 {
+	base := a.baseCurrency()
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	floor := now.AddDate(0, 0, -45)
+	var best int64
+	for _, t := range a.Transactions() {
+		if !t.IsIncome() || t.IsTransfer() || t.Date.Before(floor) || t.Date.After(now) {
+			continue
+		}
+		if conv := convertMinor(t.Amount.Amount, t.Amount.Currency, base, rates); conv > best {
+			best = conv
+		}
+	}
+	return best
+}
+
+// waterfallProposalFor runs the pure waterfall over the given income pool: goals
+// in FUNDING order (explicit FundingOrder, then Priority, then stored order —
+// the sequence the /goals funding-priority control edits, #65), paused goals
+// excluded (a pause means "stop contributing", so payday must not fund them),
+// every account capped at its real free balance (XC7).
+func (a *App) waterfallProposalFor(now time.Time, income int64, base string, rates currency.Rates) WaterfallProposal {
 	proposal := WaterfallProposal{IncomeMinor: income, Currency: base, RemainderMinor: income}
 	if income <= 0 {
 		return proposal
@@ -133,8 +171,8 @@ func (a *App) WaterfallPlan(now time.Time) WaterfallProposal {
 	// Per-account free balance (XC7): real balance minus every existing earmark.
 	free := waterfall.AccountFree{}
 	quotas := make([]waterfall.GoalQuota, 0, len(allGoals))
-	for _, g := range allGoals {
-		if g.Archived || !g.IsFinancial() {
+	for _, g := range goals.FundingOrdered(allGoals) {
+		if g.Archived || !g.IsFinancial() || g.IsPaused(now) {
 			continue
 		}
 		complete, err := goals.IsComplete(g)

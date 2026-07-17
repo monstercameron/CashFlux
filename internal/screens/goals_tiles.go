@@ -351,6 +351,11 @@ func goalListWidget(props goalListProps) ui.Node {
 
 	var body ui.Node = Div(
 		goalsWaterfallCard(),
+		// #65: shared-claim conflicts, the next-paycheck preview, and the payday
+		// funding-order control (each self-gates to nothing when not applicable).
+		ui.CreateElement(goalConflictStrip, struct{}{}),
+		ui.CreateElement(goalsPaycheckPreviewCard, struct{}{}),
+		ui.CreateElement(goalsFundingOrderCard, struct{}{}),
 		// Missed deadlines lead — they're the section that needs a decision (re-date,
 		// re-fund, or archive), so they never hide below the healthy list.
 		missedSection,
