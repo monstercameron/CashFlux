@@ -1,3 +1,29 @@
+## 2026-07-17 — Two-tab clobber: the real "income basis doesn't persist" bug
+
+Cam: the "Income to budget with" choice doesn't persist and the page resets when you leave it —
+and (rightly) tore into me for starting to solve it with a JS update-pill in index.html. Lesson
+re-learned and logged: this is a Go-WASM project; fix the Go, don't decorate the shell.
+
+The bug wouldn't reproduce single-tab: save → page income updates → reopen → navigate away/back →
+reload, all held. It reproduced instantly with TWO tabs on the same origin: save "fixed $6,000" in
+tab B, let an older tab A (opened before the save) navigate — basis back to "all income". Root
+cause: whole-dataset last-writer-wins persistence, and a "passive" tab isn't passive — recurring
+advancement at its boot dirties its serialization, so the `s == last` byte-guard passes and its 4s
+ticker / pagehide flush writes a full STALE copy over everything saved since. Cam almost certainly
+had yesterday's stale tab still open somewhere; every save evaporated on its next flush. This also
+retroactively explains some of yesterday's "fix not visible" confusion.
+
+Fix at the persistence seam, all Go: a generation stamp (`cashflux:dataset:gen`) in RAW
+localStorage — browserstore is useless here because its in-memory cache is per-tab — bumped on
+every dataset write; save() (ticker, pagehide, RequestPersist) refuses to write when the live stamp
+differs from the one this tab loaded/last wrote, logs, and posts a one-time "saved in another tab —
+reload" toast. The encrypted path re-checks at its async callback. Deliberate same-tab replacements
+(sync apply ×2, backup restore ×2, wipe) bump the stamp AND adopt it (`datasetMyGen`) so their own
+autosave keeps running while other tabs yield. Verified: the exact clobber sequence now holds
+fixed/$6,000 through tab A's activity + reload; smoke/invariants + the new income-basis e2e green.
+(The budgets notes-modal spec failure in the full lane is a concurrent session's uncommitted
+budgets_row.go WIP, not this change.) v1.0.62, SW v337.
+
 ## 2026-07-16 — Competitive-gap feature wave: six local-first additions
 
 After a gap analysis vs. the comps (Monarch, Copilot, Rocket Money, Empower, PocketGuard), Cam asked to

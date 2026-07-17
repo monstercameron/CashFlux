@@ -123,6 +123,7 @@ func applyBackup(env backup.Envelope) {
 	if len(r.Workspaces) == 0 {
 		if len(env.Datasets) > 0 {
 			lsSet(datasetStoreKey, env.Datasets[0])
+			datasetMyGen = bumpDatasetGen()
 		}
 		return
 	}
@@ -132,6 +133,7 @@ func applyBackup(env backup.Envelope) {
 		}
 		if w.ID == r.ActiveID {
 			lsSet(datasetStoreKey, env.Datasets[i])
+			datasetMyGen = bumpDatasetGen()
 		} else {
 			saveBlob(w.ID, map[string]string{datasetStoreKey: env.Datasets[i]})
 		}

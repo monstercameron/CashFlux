@@ -124,3 +124,38 @@ test.describe("budgets: sort + add template", () => {
     await expect(app.getByTestId("budgets-template-503020")).toBeVisible();
   });
 });
+
+test.describe("budgets: income-basis modal persists selections", () => {
+  // Cam report 2026-07-17: "Income to budget with doesn't persist when making a
+  // selection". Locks the whole loop: pick a basis in the modal, Save, and the
+  // choice must (a) drive the page's income figure immediately and (b) survive
+  // reopening the modal and a full reload.
+  test("fixed-income basis saves, updates the page, and survives reopen + reload", async ({ app }) => {
+    await nav(app, "/budgets");
+    const openBtn = app.locator('[data-testid="budgets-basis-open"]').first();
+    await openBtn.scrollIntoViewIfNeeded();
+    await openBtn.click();
+    const mode = app.locator('[data-testid="budgets-zbb-income-mode"]');
+    await expect(mode).toBeVisible();
+    await mode.selectOption("fixed");
+    const fixed = app.locator('[data-testid="budgets-zbb-fixed-amount"]');
+    await expect(fixed).toBeVisible(); // the mode selection itself must stick
+    await fixed.fill("6000");
+    await app.getByRole("button", { name: /^save$/i }).last().click();
+    await app.waitForTimeout(600);
+    // The saved basis drives the page immediately — no reload needed.
+    await expect(app.locator("#main")).toContainText("$6,000.00");
+    // Reopen: the staged draft reseeds from the SAVED prefs.
+    await openBtn.click();
+    await expect(mode).toHaveValue("fixed");
+    await expect(app.locator('[data-testid="budgets-zbb-fixed-amount"]')).toHaveValue("6000");
+    await app.keyboard.press("Escape");
+    // Reload: the choice persisted to the dataset (RequestPersist), not just memory.
+    await app.reload();
+    await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 45000 });
+    await nav(app, "/budgets");
+    await expect(app.locator("#main")).toContainText("$6,000.00");
+    await app.locator('[data-testid="budgets-basis-open"]').first().click();
+    await expect(mode).toHaveValue("fixed");
+  });
+});

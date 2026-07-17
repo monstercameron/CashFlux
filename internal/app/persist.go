@@ -5,6 +5,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"syscall/js"
 	"time"
@@ -53,11 +54,11 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:notify:browser":        true,
 	// cashflux:sampleActive is NOT kept: it moved into the dataset's app KV, so a wipe
 	// clears it with the data (a wiped dataset is correctly no longer "the sample").
-	"cashflux:seeded": true,
-	"cashflux:sync-device-id":        true,
-	"cashflux:sync-status":           true,
-	"cashflux:sync-queue":            true,
-	"cashflux:workspaces":            true,
+	"cashflux:seeded":         true,
+	"cashflux:sync-device-id": true,
+	"cashflux:sync-status":    true,
+	"cashflux:sync-queue":     true,
+	"cashflux:workspaces":     true,
 	// WebAuthn PRF passkey state (C282) — preserved so the passkey survives a
 	// financial-data wipe; the credential is worthless without the authenticator.
 	"cashflux:webauthn-credid": true,
@@ -106,15 +107,64 @@ func wipeFinancialLocalState(then func()) {
 			browserstore.Remove(key)
 		}
 	}
-	// 2) Persist the emptied store, then continue (reload) after it commits.
+	// 2) Persist the emptied store, then continue (reload) after it commits. A
+	// deliberate wipe also bumps the cross-tab generation so any other open tab
+	// stops autosaving its pre-wipe copy back over the emptied dataset.
 	if app := appstate.Default; app != nil {
 		if data, err := app.ExportJSONRedacted(); err == nil {
+			bumpDatasetGen()
 			browserstore.SetThen(datasetStoreKey, string(data), then)
 			return
 		}
 	}
 	then()
 }
+
+// datasetGenKey is a tiny cross-tab GENERATION STAMP for the autosaved dataset,
+// kept in raw localStorage (deliberately NOT browserstore, whose in-memory cache
+// is per-tab and never sees another tab's writes). Every dataset write bumps it;
+// a tab may only overwrite the dataset while the stamp still matches the one it
+// loaded (or last wrote). This is what stops a second, older tab — whose boot
+// bookkeeping (recurring advancement etc.) dirties its own serialization — from
+// flushing a stale whole-dataset copy over changes saved in the active tab
+// (Cam's "Income to budget with doesn't persist", 2026-07-17: last-writer-wins
+// clobber from a lingering tab).
+const datasetGenKey = "cashflux:dataset:gen"
+
+// readDatasetGen reads the live cross-tab generation stamp ("" when unset).
+func readDatasetGen() string {
+	defer func() { _ = recover() }()
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return ""
+	}
+	if v := ls.Call("getItem", datasetGenKey); v.Truthy() {
+		return v.String()
+	}
+	return ""
+}
+
+// bumpDatasetGen stamps a fresh generation and returns it — called after every
+// successful dataset write so other tabs know their in-memory copy is stale.
+var datasetGenSeq int
+
+func bumpDatasetGen() string {
+	datasetGenSeq++
+	g := fmt.Sprintf("%d-%d", time.Now().UnixNano(), datasetGenSeq)
+	defer func() { _ = recover() }()
+	if ls := js.Global().Get("localStorage"); ls.Truthy() {
+		ls.Call("setItem", datasetGenKey, g)
+	}
+	return g
+}
+
+// datasetMyGen is the generation THIS tab is entitled to overwrite: seeded from
+// the store at boot, advanced by this tab's own writes (autosave, sync apply,
+// restore). datasetStaleNotified gates the one-time "another tab saved" toast.
+var (
+	datasetMyGen         string
+	datasetStaleNotified bool
+)
 
 // datasetStoreKey is the localStorage key holding the autosaved dataset, so the
 // app's data survives a page reload (previously every reload reset to the sample
@@ -257,12 +307,25 @@ func startDatasetAutosave() {
 		}
 		last = string(data)
 	}
+	// Seed this tab's write entitlement from the store's current generation.
+	datasetMyGen = readDatasetGen()
 	save := func() {
 		if suspendAutosave {
 			return // a workspace switch is rewriting storage; don't clobber it
 		}
 		if pendingEnvelopeRaw != "" {
 			return // an encrypted dataset is awaiting unlock — never overwrite it
+		}
+		if g := readDatasetGen(); g != datasetMyGen {
+			// Another tab saved after this one loaded. Overwriting would silently
+			// revert its changes (whole-dataset last-writer-wins), so this tab
+			// stops persisting and says so once — reload to pick up the latest.
+			if !datasetStaleNotified {
+				datasetStaleNotified = true
+				app.Log().Warn("dataset updated by another tab; this tab will not overwrite — reload to continue saving here")
+				uistate.PostNotice(uistate.T("app.staleTabNotice"), true)
+			}
+			return
 		}
 		// localStorage.setItem can throw (e.g. quota exceeded on a very large
 		// dataset), which surfaces as a Go panic — don't let it crash the app.
@@ -308,12 +371,18 @@ func startDatasetAutosave() {
 					app.Log().Error("dataset encrypt failed; not writing this tick", "err", encErr)
 					return
 				}
+				// Encryption is async — re-check the stamp at write time so a save
+				// that raced another tab's write still refuses to clobber it.
+				if g := readDatasetGen(); g != datasetMyGen {
+					return
+				}
 				defer func() {
 					if r := recover(); r != nil {
 						app.Log().Error("encrypted dataset write failed", "err", r)
 					}
 				}()
 				browserstore.Set(datasetStoreKey, string(env))
+				datasetMyGen = bumpDatasetGen()
 				last = target
 				afterWrite()
 			})
@@ -321,6 +390,7 @@ func startDatasetAutosave() {
 		}
 		last = s
 		browserstore.Set(datasetStoreKey, s)
+		datasetMyGen = bumpDatasetGen()
 		afterWrite()
 	}
 	// resaveDataset forces an immediate rewrite even when the dataset bytes are

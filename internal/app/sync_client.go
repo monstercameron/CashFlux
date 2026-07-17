@@ -323,6 +323,9 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			return
 		}
 		lsSet(datasetStoreKey, string(dataset))
+		// Deliberate same-tab dataset replacement: advance the cross-tab generation
+		// (other tabs must stop overwriting) and this tab's own write entitlement.
+		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
 		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)})
 		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
@@ -555,6 +558,9 @@ func resolveConflictUseServer() {
 			return
 		}
 		lsSet(datasetStoreKey, string(dataset))
+		// Deliberate same-tab dataset replacement: advance the cross-tab generation
+		// (other tabs must stop overwriting) and this tab's own write entitlement.
+		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
 		saveSyncMeta(wID, syncMeta{
 			UpdatedAt: resp.Workspace.UpdatedAt,
