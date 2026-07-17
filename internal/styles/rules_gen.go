@@ -11999,21 +11999,48 @@ func registerGenerated() {
 			opacity("0.35"),
 		),
 	)
+	// Compact one-line Cloud rail row (2026-07-17 audit P0): icon + label + ✕.
+	// Deliberately a quiet row, not a promo card, so it never competes with the
+	// primary navigation for rail space at short viewport heights.
 	rule(".cloud-mention",
-		margin("0 0.75rem 0.6rem"),
-		padding("0.6rem 0.7rem"),
-		borderRadius("8px"),
-		border("1px solid var(--border)"),
-		background("var(--bg-elev)"),
+		margin("0 0.75rem 0.5rem"),
+		padding("0.15rem 0.25rem"),
+		borderRadius("6px"),
 	)
-	rule(".cloud-mention-title",
+	rule(".cloud-mention-link",
+		padding("0.3rem 0.45rem"),
+		borderRadius("6px"),
+		color("var(--text-dim)"),
 		fontSize("0.8rem"),
-		fontWeight("600"),
-		color("var(--text)"),
-		margin("0"),
+		textDecoration("none"),
 	)
-	rule(".cloud-mention-body",
-		margin("0.15rem 0 0"),
+	rule(".cloud-mention-link:hover",
+		background("var(--hover)"),
+		color("var(--text)"),
+	)
+	rule(".cloud-mention-x",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("1.5rem"),
+		height("1.5rem"),
+		borderRadius("6px"),
+		color("var(--text-faint)"),
+		flexShrink("0"),
+	)
+	rule(".cloud-mention-x:hover",
+		background("var(--hover)"),
+		color("var(--text)"),
+	)
+	// The narrow (icon-only) mobile rail has no room for a labeled row, and a
+	// stripped icon-only promo reads as mystery chrome — hide it outright.
+	ruleMedia("(max-width: 768px)", ".cloud-mention",
+		display("none"),
+	)
+	// At very short desktop heights the rail's nav needs every row; the Cloud
+	// mention is the first thing to yield.
+	ruleMedia("(max-height: 560px)", ".cloud-mention",
+		display("none"),
 	)
 	rule(".upsheet-backdrop",
 		position("fixed"),

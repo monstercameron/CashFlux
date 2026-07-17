@@ -1,3 +1,20 @@
+## 2026-07-17 — Visual/UX audit remediation begins: the shell sheds its promo card
+
+The nine-menu visual audit's core diagnosis is "lack of ruthless prioritization" — too many
+persistent layers (header, sample banner, smart strip, oversized summaries, alert banners,
+toolbars) before the actual work. Remediation is running as a 14-task list: three shell P0s
+(Cloud promo, sample banner, smart strip), the one-primary-action-per-page pass, the Budgets
+above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
+screenshot verification sweep.
+
+First slice: the Cloud mention. The rail-foot promo card was the audit's most damning shell
+finding (covers nav at 720px heights; a one-word-per-line slab on the 56px mobile rail). Kept the
+snooze machinery — it's sound — and swapped the card for a one-line row: cloud glyph (new curated
+icon; the set had none) + "CashFlux Cloud" + ✕. Row → /plans + snooze, ✕ → snooze. CSS hides it
+on the icon-only mobile rail (an unlabeled icon row would be mystery chrome) and under 560px
+viewport height. Strings live in a new en_shellchrome.go — en.go is another session's WIP and the
+per-feature key file pattern exists precisely for this.
+
 ## 2026-07-17 — QA remediation opens: the liability-payment sign defect (H1/CF-01)
 
 Two black-box QA reports landed (a 10-workflow pass and a first-nine-menus polish audit); both

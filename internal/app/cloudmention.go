@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -42,15 +44,16 @@ func cloudMentionSnoozed() bool {
 	return time.Since(snoozedAt) < cloudMentionSnoozeDays*24*time.Hour
 }
 
-// CloudMention is a calm, dismissible banner that introduces the optional CashFlux
-// Cloud tier (sync + backup + AI proxy) without nagging (§7.11). It shows only
-// when the user hasn't snoozed it within the last 30 days and isn't already
-// syncing. "Learn more" navigates to the Plans comparison surface (/plans);
-// "Not now" snoozes for 30 days.
-// After the snooze window expires the banner re-surfaces automatically — dismissing
-// it is a snooze, not a permanent opt-out, so the upgrade path is never permanently
-// buried. Its own component so the snooze + atom hooks stay at a stable render
-// position (§7.11, R31-reengage).
+// CloudMention introduces the optional CashFlux Cloud tier (sync + backup + AI
+// proxy) without nagging (§7.11). Per the 2026-07-17 visual audit it is a single
+// compact rail row — icon + label + a small ✕ — never a multi-line promo card, so
+// it can't stack against the primary navigation at short viewport heights or
+// collapse into a one-word-per-line slab on the narrow mobile rail (the CSS hides
+// it entirely there). The row navigates to the /plans comparison surface and
+// snoozes itself; the ✕ snoozes for 30 days without navigating. After the snooze
+// window expires the row re-surfaces automatically — dismissing is a snooze, not a
+// permanent opt-out. Its own component so the snooze + atom hooks stay at a stable
+// render position (§7.11, R31-reengage).
 func CloudMention() uic.Node {
 	snoozed := uic.UseState(cloudMentionSnoozed())
 
@@ -64,24 +67,27 @@ func CloudMention() uic.Node {
 		snoozed.Set(true)
 	}
 
-	onDismiss := uic.UseEvent(func() { snooze() })
-	// R31-reengage: snooze the banner when the user clicks "Learn more" so it
-	// doesn't re-appear immediately; navigation to /plans is handled by the
-	// anchor href — no imperative router call needed.
+	// R31-reengage: following the row to /plans also snoozes it so it doesn't
+	// re-appear immediately; navigation is handled by the anchor href.
 	onLearn := uic.UseEvent(func() { snooze() })
+	onDismiss := uic.UseEvent(func() { snooze() })
 
-	return Div(css.Class("cloud-mention", tw.Flex, tw.FlexCol, tw.Gap1),
+	return Div(css.Class("cloud-mention", tw.Flex, tw.ItemsCenter, tw.Gap15),
 		Attr("role", "note"),
-		P(css.Class("cloud-mention-title"), uistate.T("cloud.mentionTitle")),
-		P(css.Class("cloud-mention-body", tw.Text12, tw.TextDim), uistate.T("cloud.mentionBody")),
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
-			// R31-reengage: "Learn more" navigates to the permanent /plans
-			// comparison surface (replacing the one-shot ShowUpgradeSheet call),
-			// so full pricing is always one step away without consuming a modal.
-			// ShowUpgradeSheet still fires from gated Cloud actions (§7.11).
-			A(css.Class("btn", "btn-sm"), Attr("href", uistate.RoutePath("/plans")),
-				OnClick(onLearn), uistate.T("cloud.mentionLearn")),
-			Button(css.Class("btn", "btn-sm", tw.TextFaint), Type("button"), OnClick(onDismiss), uistate.T("cloud.mentionDismiss")),
+		Attr("data-testid", "cloud-mention"),
+		A(css.Class("cloud-mention-link", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.Flex1, tw.MinW0),
+			Attr("href", uistate.RoutePath("/plans")),
+			Attr("title", uistate.T("cloud.rowTitle")),
+			OnClick(onLearn),
+			ui.Icon(icon.Cloud, css.Class(tw.W4, tw.H4, tw.ShrinkO)),
+			Span(css.Class("cloud-mention-label", tw.Truncate), uistate.T("cloud.rowLabel")),
+		),
+		Button(css.Class("cloud-mention-x"), Type("button"),
+			Attr("title", uistate.T("cloud.mentionDismiss")),
+			Attr("aria-label", uistate.T("cloud.mentionDismiss")),
+			Attr("data-testid", "cloud-mention-dismiss"),
+			OnClick(onDismiss),
+			ui.Icon(icon.Close, css.Class(tw.W35, tw.H35)),
 		),
 	)
 }
