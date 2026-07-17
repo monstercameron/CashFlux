@@ -1,3 +1,38 @@
+## 2026-07-17 — R3 CF-02: the reconcile dead-end gets its exits (lane 4)
+
+Round-3 QA's sharpest finding: type a statement balance that doesn't match and the reconcile modal
+just… sits there — a muted "no uncleared transactions" line, a Cancel button, no way forward. The
+fix is a resolution row that names the three honest exits: post an adjustment transaction for the
+exact difference (cleared+reviewed, labeled with the statement date, undoable), jump to the
+account's cleared ledger to investigate (the session survives as a draft), or force-complete with
+the gap recorded — `Reconciliation` gains additive `DifferenceMinor`/`Forced` fields and history
+rows wear an "off by $X" tag, so a forced close can never masquerade as a clean one. Alongside:
+"Save & finish later" (per-account KV draft, re-seeds on reopen with a resumed note) and "Reopen
+last" via a new pure `reconcile.Undo` that returns the removed event so the form lands back inside
+it. Design decision worth keeping: the adjustment path doesn't auto-record — it balances the
+difference and lets the normal Record button appear, so there's exactly one recording path.
+26 e2e assertions on the lane server, 0 page errors, first run green.
+
+## 2026-07-17 — Phone nav becomes one system: 5-slot bar + More sheet + FAB (R3/UX-01)
+
+The 390px dual-nav bug had two independent causes stacked: the rail's phone treatment was a
+56px width-collapse (never `display:none`) at 768px, while the tab bar appeared at 640px — so
+between the app's own breakpoints, and at 390px, BOTH navs rendered. And the nine-destination
+scrolling strip meant the active tab could be scrolled out of view entirely (a scroll-into-view
+effect papered over it). Redesign instead of patch: the bar is now five fixed slots (Home /
+Transactions / Budgets / Goals / More), the other five destinations live in a bottom sheet whose
+rows are the same `mobileTabItem` component with a `Sheet` flag + an `OnPick` closer, and the
+quick-add becomes a floating 52px button above the bar. The More tab wears the active state when
+the current route lives inside the sheet, so "where am I" never disappears. Rail is
+`display:none !important` under 640px, and the unlabeled dark block under the logo (the
+workspace-switch trigger with its text spans hidden) is hidden in icon-rail mode.
+
+Lessons: (1) breakpoint constants must be shared, not coincidentally equal — the 640/768
+mismatch was invisible in code review because each rule read sensibly alone; (2) at 320px the
+math is merciless — five slots = 64px each, and "Transactions" at 0.65rem clips by ~12px; a
+360px label-size step (0.56rem) fixed it, caught only because the verify script runs BOTH
+widths. 20/20 e2e assertions green (`lane3_verify_50.mjs`).
+
 ## 2026-07-17 — QA remediation complete: 42 findings, all fixed and e2e-locked
 
 Both black-box QA reports (the 10-workflow pass and the first-nine-menus audit) are fully

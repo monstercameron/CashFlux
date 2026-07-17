@@ -25,6 +25,20 @@ func Record(history []domain.Reconciliation, ev domain.Reconciliation) []domain.
 	return out
 }
 
+// Undo removes the NEWEST reconciliation event from the history (the
+// reopen-last action, QA R3 CF-02): it returns the shortened history, the
+// removed event (so the caller can re-seed the reconcile form with its
+// statement balance/date), and false when there is nothing to undo. The input
+// slice is never mutated.
+func Undo(history []domain.Reconciliation) ([]domain.Reconciliation, domain.Reconciliation, bool) {
+	if len(history) == 0 {
+		return nil, domain.Reconciliation{}, false
+	}
+	out := make([]domain.Reconciliation, len(history)-1)
+	copy(out, history[:len(history)-1])
+	return out, history[len(history)-1], true
+}
+
 // Through returns the latest "reconciled through" date across the history —
 // the newest entry's statement date (or recording time) — and false when the
 // account has never been reconciled.

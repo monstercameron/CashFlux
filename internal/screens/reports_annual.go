@@ -239,17 +239,35 @@ func Reports() ui.Node {
 	spendStats, _ := reports.SpendingStats(scopedTxns, as, ae, rates)
 	noSpendDays := reports.NoSpendDays(scopedTxns, as, ae, time.Now())
 	weekday, _ := reports.SpendingByWeekday(scopedTxns, as, ae, rates)
+	// QA R3 CF-03: the review's subscription section counted every detected
+	// recurring pattern — utilities, pharmacy runs, liability payments — into
+	// "N recurring charges ≈ $X/yr". It now applies the same classification the
+	// Subscriptions surface uses (essentials, liability payments, and planned
+	// recurring flows excluded), so the headline total only carries charges the
+	// user could actually cancel.
+	subsRecurringNames := make(map[string]bool)
+	for _, r := range app.Recurring() {
+		if n := strings.ToLower(strings.TrimSpace(r.Label)); n != "" {
+			subsRecurringNames[n] = true
+		}
+	}
+	subsCatNameOf := func(id string) string { return catName[id] }
+	subsAccounts := app.Accounts()
 	subs, _ := subscriptions.Detect(scopedTxns, rates, 3)
 	liveSubs := subs[:0:0]
 	for _, s := range subs {
-		if !s.Lapsed(time.Now()) {
-			liveSubs = append(liveSubs, s)
+		if s.Lapsed(time.Now()) {
+			continue
 		}
+		if !subscriptions.IsRealSubscriptionName(s.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
+			continue
+		}
+		liveSubs = append(liveSubs, s)
 	}
 	priceRises, _ := subscriptions.DetectPriceChanges(scopedTxns, rates, 3)
 	rises := priceRises[:0:0]
 	for _, pc := range priceRises {
-		if pc.Delta > 0 {
+		if pc.Delta > 0 && subscriptions.IsRealSubscriptionName(pc.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
 			rises = append(rises, pc)
 		}
 	}

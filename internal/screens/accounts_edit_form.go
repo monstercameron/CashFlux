@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
@@ -23,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -104,10 +106,17 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onXferDesc := ui.UseEvent(func(v string) { xferDescS.Set(v) })
 
 	// ---- reconcile state ----
-	stmtBalS := ui.UseState("")
+	// QA R3 CF-02: an interrupted reconciliation resumes — the form seeds from a
+	// saved per-account draft ("Save & finish later") when one exists.
+	draftBal, draftDate, hasReconDraft := uistate.LoadReconcileDraft(props.AccountID)
+	stmtDateInit := time.Now().Format("2006-01-02")
+	if hasReconDraft && draftDate != "" {
+		stmtDateInit = draftDate
+	}
+	stmtBalS := ui.UseState(draftBal)
 	onStmtBal := ui.UseEvent(func(v string) { stmtBalS.Set(v) })
 	// Statement closing date — the "reconciled through" point recorded with the event.
-	stmtDateS := ui.UseState(time.Now().Format("2006-01-02"))
+	stmtDateS := ui.UseState(stmtDateInit)
 	onStmtDate := ui.UseEvent(func(v string) { stmtDateS.Set(v) })
 	// Recording a reconciliation appends to the account's capped history, confirms
 	// the balance (BalanceAsOf), and closes the modal. Only offered once the
@@ -133,9 +142,121 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
+		uistate.ClearReconcileDraft(a.ID)
 		uistate.BumpDataRevision()
 		uistate.PostNotice(uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006")), false)
 		done()
+	}))
+	// --- QA R3 CF-02: legitimate discrepancy-resolution paths -----------------
+	// Post an adjustment transaction for the exact difference so the cleared
+	// balance meets the statement; cleared+reviewed, clearly labeled, undoable.
+	doReconAdjust := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+		if perr != nil {
+			return
+		}
+		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
+		diff := reconcile.Diff(cleared.Amount, stmtMinor)
+		if diff.Reconciled {
+			return
+		}
+		t := domain.Transaction{
+			ID: id.New(), AccountID: a.ID, Date: time.Now(),
+			Desc:    uistate.T("accounts.reconAdjustDesc", strings.TrimSpace(stmtDateS.Get())),
+			Amount:  money.New(diff.DifferenceMinor, a.Currency),
+			Cleared: true, Reviewed: true,
+			Source: domain.TxnSourceManual,
+		}
+		if err := app.PutTransaction(t); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.PostUndoable(uistate.T("accounts.reconAdjustPosted", fmtMoney(money.New(diff.DifferenceMinor, a.Currency))))
+	}))
+	// Force-complete despite a discrepancy: an explicit confirm, then the event
+	// records WITH the unresolved difference (Forced) so history stays honest.
+	doReconForce := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+		if perr != nil {
+			return
+		}
+		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
+		diff := reconcile.Diff(cleared.Amount, stmtMinor)
+		if diff.Reconciled {
+			return
+		}
+		diffStr := fmtMoney(money.New(diff.DifferenceMinor, a.Currency))
+		uistate.ConfirmModal(uistate.T("accounts.reconForceConfirm", diffStr), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			ev := domain.Reconciliation{
+				At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency),
+				DifferenceMinor: diff.DifferenceMinor, Forced: true,
+			}
+			if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
+				ev.StatementDate = d
+			}
+			cp := a
+			cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
+			cp.BalanceAsOf = time.Now()
+			if err := app.PutAccount(cp); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.ClearReconcileDraft(a.ID)
+			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("accounts.reconForceRecorded", diffStr), false)
+			done()
+		})
+	}))
+	// Save the half-done reconciliation and close; the draft re-seeds next open.
+	doReconSaveDraft := ui.UseEvent(Prevent(func() {
+		uistate.SaveReconcileDraft(a.ID, strings.TrimSpace(stmtBalS.Get()), strings.TrimSpace(stmtDateS.Get()))
+		uistate.PostNotice(uistate.T("accounts.reconDraftSaved"), false)
+		done()
+	}))
+	// Reopen (undo) the most recent recorded reconciliation: pop it from history
+	// and re-seed the form with its figures so the user is back inside it.
+	doReconReopen := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		hist, removed, ok := reconcile.Undo(a.Reconciliations)
+		if !ok {
+			return
+		}
+		cp := a
+		cp.Reconciliations = hist
+		if err := app.PutAccount(cp); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		stmtBalS.Set(money.FormatMinor(removed.StatementBalance.Amount, dec))
+		if !removed.StatementDate.IsZero() {
+			stmtDateS.Set(dateutil.FormatDate(removed.StatementDate))
+		}
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("accounts.reconReopened", removed.Through().Format("Jan 2, 2006")), false)
+	}))
+	// Investigate: jump to this account's cleared transactions in the ledger so a
+	// stubborn discrepancy can be hunted where the rows live.
+	reconNav := router.UseNavigate()
+	reconTxFilter := uistate.UseTxFilter()
+	doReconInvestigate := ui.UseEvent(Prevent(func() {
+		f := uistate.TxFilter{Account: a.ID, Cleared: "yes"}.Normalize()
+		reconTxFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		uistate.SaveReconcileDraft(a.ID, strings.TrimSpace(stmtBalS.Get()), strings.TrimSpace(stmtDateS.Get()))
+		done()
+		reconNav.Navigate(uistate.RoutePath("/transactions"))
 	}))
 
 	// ---- edit state ----
@@ -401,7 +522,9 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
-		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app)
+		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app,
+		reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
+			SaveDraft: doReconSaveDraft, Reopen: doReconReopen, HasDraft: hasReconDraft})
 	case uistate.AcctEditModeTransfer:
 		return transferForm(a, app, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
@@ -478,15 +601,28 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 	)
 }
 
+// reconcileActions bundles the discrepancy-resolution handlers (QA R3 CF-02)
+// so reconcileForm's signature stays manageable: post an adjustment for the
+// difference, force-complete with the gap recorded, jump to the cleared ledger
+// to investigate, save the half-done session as a draft, and reopen (undo) the
+// most recent recorded reconciliation.
+type reconcileActions struct {
+	Adjust, Force, Investigate, SaveDraft, Reopen ui.Handler
+	HasDraft                                      bool
+}
+
 // reconcileForm is the reconcile-to-statement editor. Once the difference hits
 // zero, "Record reconciliation" (onRecord) appends the event to the account's
 // history; the form also shows the "reconciled through" status and the recent
-// history so past reconciliations are inspectable in place.
-func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App) ui.Node {
+// history so past reconciliations are inspectable in place. While a typed
+// statement balance still disagrees with the cleared balance, the resolution
+// row (acts) offers the legitimate ways out of the dead end.
+func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App, acts reconcileActions) ui.Node {
 	var allTxns []domain.Transaction
 	if app != nil {
 		allTxns = app.Transactions()
 	}
+	stmtTyped := strings.TrimSpace(stmtBalS.Get()) != ""
 	stmtMinor, _ := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
 	result := reconcile.Diff(curCleared.Amount, stmtMinor)
 	diffLabel := money.FormatMinor(result.DifferenceMinor, dec)
@@ -520,6 +656,8 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 		histRows = append(histRows, Div(css.Class("row"), Attr("data-testid", "reconcile-history-row"),
 			Style(map[string]string{"display": "flex", "justify-content": "space-between", "gap": "1rem"}),
 			Span(r.Through().Format("Jan 2, 2006")),
+			If(r.Forced, Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-history-forced"),
+				uistate.T("accounts.reconForcedTag", money.FormatMinor(r.DifferenceMinor, dec)))),
 			Span(fmtMoney(r.StatementBalance)),
 		))
 	}
@@ -529,6 +667,9 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 			If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
 				Style(map[string]string{"margin": "0 0 0.5rem"}),
 				uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
+			If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
+				Style(map[string]string{"margin": "0 0 0.5rem"}),
+				uistate.T("accounts.reconDraftNote"))),
 			labeledField(uistate.T("accounts.statementBalance"),
 				Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
 					Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
@@ -550,12 +691,30 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 				Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),
 			If(len(unclearedTxns) == 0 && !result.Reconciled,
 				P(css.Class("muted"), uistate.T("accounts.noUncleared"))),
+			// The way out of a stuck difference (QA R3 CF-02): adjustment /
+			// investigate / force-complete, offered once a balance is typed.
+			If(stmtTyped && !result.Reconciled, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+				Attr("data-testid", "reconcile-resolve"),
+				P(css.Class("t-caption", tw.TextDim), uistate.T("accounts.reconResolveHint")),
+				Div(Style(map[string]string{"display": "flex", "gap": "0.5rem", "flex-wrap": "wrap"}),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-adjust"),
+						OnClick(acts.Adjust), uistate.T("accounts.reconAdjustAction")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-investigate"),
+						OnClick(acts.Investigate), uistate.T("accounts.reconInvestigate")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-force"),
+						OnClick(acts.Force), uistate.T("accounts.reconForceAction"))))),
 			If(len(histRows) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
 				Attr("data-testid", "reconcile-history"),
-				P(css.Class("t-caption"), uistate.T("accounts.reconHistoryHeading")),
+				Div(Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "baseline", "gap": "1rem"}),
+					P(css.Class("t-caption"), uistate.T("accounts.reconHistoryHeading")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-reopen"),
+						OnClick(acts.Reopen), uistate.T("accounts.reconReopenAction"))),
 				Div(css.Class("rows"), histRows))),
 		),
 		Div(css.Class("modal-foot"),
+			If(stmtTyped && !result.Reconciled,
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-save-draft"),
+					OnClick(acts.SaveDraft), uistate.T("accounts.reconSaveDraft"))),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 		),
 	)

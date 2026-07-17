@@ -221,6 +221,13 @@ type Reconciliation struct {
 	At               time.Time   `json:"at"`
 	StatementDate    time.Time   `json:"statementDate,omitempty"`
 	StatementBalance money.Money `json:"statementBalance"`
+	// DifferenceMinor records the unresolved statement−cleared discrepancy when
+	// the reconciliation was force-completed (QA R3 CF-02). Zero for an exact
+	// match. Additive JSON — older datasets simply read zero.
+	DifferenceMinor int64 `json:"differenceMinor,omitempty"`
+	// Forced marks a reconciliation the user completed despite a non-zero
+	// difference, after an explicit warning.
+	Forced bool `json:"forced,omitempty"`
 }
 
 // Through returns the reconciliation's effective "reconciled through" date:

@@ -46,21 +46,28 @@ type sidebarProps struct {
 	ActivePath string
 }
 
-// mobileTabItemProps configures one item in the mobile bottom tab bar.
+// mobileTabItemProps configures one item in the mobile bottom tab bar (or, with
+// Sheet set, one row of the More sheet). OnPick, when non-nil, runs after the
+// navigation — the More sheet passes a closer so picking a destination dismisses it.
 type mobileTabItemProps struct {
 	Label  string
 	Path   string
 	Icon   icon.Name
 	Active bool
+	Sheet  bool
+	OnPick func()
 }
 
-// mobileTabItem is a single tappable entry in the mobile bottom tab bar.
-// Its own component so its click-handler hook stays at a stable position
+// mobileTabItem is a single tappable entry in the mobile bottom tab bar / More
+// sheet. Its own component so its click-handler hook stays at a stable position
 // regardless of how many items are in the bar (the On*-hooks-in-loops rule).
 func mobileTabItem(props mobileTabItemProps) uic.Node {
 	nav := router.UseNavigate()
-	path := props.Path
+	path, onPick := props.Path, props.OnPick
 	cls := "mobile-tab-item"
+	if props.Sheet {
+		cls = "mobile-sheet-item"
+	}
 	if props.Active {
 		cls += " active"
 	}
@@ -71,6 +78,9 @@ func mobileTabItem(props mobileTabItemProps) uic.Node {
 		OnClick(Prevent(func() {
 			if path != "" {
 				nav.Navigate(uistate.RoutePath(path))
+			}
+			if onPick != nil {
+				onPick()
 			}
 		})),
 	}
@@ -92,54 +102,77 @@ type mobileTabBarProps struct {
 	ActivePath string
 }
 
-// MobileTabBar renders a fixed bottom tab bar for phones. The CSS agent
-// controls visibility: it is shown only under a phone-width breakpoint and
-// hidden on desktop. It surfaces the four primary destinations plus a quick
-// +Add shortcut as tappable anchors with icon + label. The desktop left rail
-// is left entirely intact — this is purely additive (L11).
+// MobileTabBar renders the phone-width bottom navigation (CSS controls the
+// breakpoint; hidden on desktop). UX-01 redesign: FIVE fixed slots — Home,
+// Transactions, Budgets, Goals, and a More toggle — so labels never clip in a
+// scrolling strip, plus a floating quick-add button above the bar. The
+// remaining primary destinations (Accounts, To-do, Notifications, Assistant,
+// Reports) live in the More bottom sheet; when the active route is one of
+// them, the More tab itself lights up so the current destination always shows
+// with color AND label.
 func MobileTabBar(props mobileTabBarProps) uic.Node {
 	cur := props.ActivePath
-	// ALL nine primary destinations ride in a horizontally scrollable strip —
-	// the parity scan flagged that menus 5–9 (Goals, To-do, Notifications,
-	// Assistant, Reports) had no equivalent primary navigation on phones. The
-	// +Add slot stays pinned outside the scroller so it's always one thumb away.
 	quickAdd := uistate.UseQuickAdd()
 	openAdd := uic.UseEvent(func() { quickAdd.Set(true) })
-	// Keep the ACTIVE destination visible in the scrollable strip — landing on
-	// Notifications with its tab scrolled out of view reads as "no nav here".
-	uic.UseEffect(func() func() {
-		doc := js.Global().Get("document")
-		if el := doc.Call("querySelector", ".mobile-tabbar .mobile-tab-item.active"); el.Truthy() {
-			el.Call("scrollIntoView", map[string]any{"inline": "center", "block": "nearest"})
+	moreOpen := uic.UseState(false)
+	toggleMore := uic.UseEvent(Prevent(func() { moreOpen.Set(!moreOpen.Get()) }))
+	closeMore := uic.UseEvent(Prevent(func() { moreOpen.Set(false) }))
+	closeSheet := func() { moreOpen.Set(false) }
+
+	moreDests := []mobileTabItemProps{
+		{Label: uistate.T("nav.accounts"), Path: "/accounts", Icon: icon.Accounts, Active: cur == "/accounts", Sheet: true, OnPick: closeSheet},
+		{Label: uistate.T("nav.todo"), Path: "/todo", Icon: icon.Todo, Active: cur == "/todo", Sheet: true, OnPick: closeSheet},
+		{Label: uistate.T("nav.notifications"), Path: "/notifications", Icon: icon.Bell, Active: cur == "/notifications", Sheet: true, OnPick: closeSheet},
+		{Label: uistate.T("nav.assistant"), Path: "/assistant", Icon: icon.Sparkles, Active: cur == "/assistant", Sheet: true, OnPick: closeSheet},
+		{Label: uistate.T("nav.reports"), Path: "/reports", Icon: icon.Reports, Active: cur == "/reports", Sheet: true, OnPick: closeSheet},
+	}
+	moreActive := false
+	for _, d := range moreDests {
+		if d.Active {
+			moreActive = true
+			break
 		}
-		return nil
-	}, cur)
-	dests := []mobileTabItemProps{
-		{Label: uistate.T("nav.dashboard"), Path: "/", Icon: icon.Dashboard, Active: cur == "/"},
-		{Label: uistate.T("nav.transactions"), Path: "/transactions", Icon: icon.Transactions, Active: cur == "/transactions"},
-		{Label: uistate.T("nav.accounts"), Path: "/accounts", Icon: icon.Accounts, Active: cur == "/accounts"},
-		{Label: uistate.T("nav.budgets"), Path: "/budgets", Icon: icon.Budgets, Active: cur == "/budgets"},
-		{Label: uistate.T("nav.goals"), Path: "/goals", Icon: icon.Goals, Active: cur == "/goals"},
-		{Label: uistate.T("nav.todo"), Path: "/todo", Icon: icon.Todo, Active: cur == "/todo"},
-		{Label: uistate.T("nav.notifications"), Path: "/notifications", Icon: icon.Bell, Active: cur == "/notifications"},
-		{Label: uistate.T("nav.assistant"), Path: "/assistant", Icon: icon.Sparkles, Active: cur == "/assistant"},
-		{Label: uistate.T("nav.reports"), Path: "/reports", Icon: icon.Reports, Active: cur == "/reports"},
 	}
-	items := make([]any, 0, len(dests)+1)
-	items = append(items, css.Class("mobile-tab-scroll"))
-	for _, d := range dests {
-		items = append(items, uic.CreateElement(mobileTabItem, d))
+	moreCls := "mobile-tab-item mobile-tab-more"
+	if moreActive || moreOpen.Get() {
+		moreCls += " active"
 	}
-	return Nav(css.Class("mobile-tabbar"), Attr("aria-label", uistate.T("nav.mobileTabLabel")),
-		Div(items...),
-		// +Add slot: opens the Quick-Add overlay (same as the top-bar Add button).
-		// It is a button — not an anchor — because it has no route destination.
-		Button(css.Class("mobile-tab-item mobile-tab-add"), Type("button"),
+	sheetRows := make([]any, 0, len(moreDests)+2)
+	sheetRows = append(sheetRows, css.Class("mobile-more-sheet"), Attr("role", "menu"),
+		Attr("aria-label", uistate.T("nav.mobileMoreSheet")), Attr("data-testid", "mobile-more-sheet"))
+	for _, d := range moreDests {
+		sheetRows = append(sheetRows, uic.CreateElement(mobileTabItem, d))
+	}
+
+	expanded := "false"
+	if moreOpen.Get() {
+		expanded = "true"
+	}
+	return Fragment(
+		If(moreOpen.Get(), Div(css.Class("mobile-more-backdrop"), Attr("data-testid", "mobile-more-backdrop"), OnClick(closeMore))),
+		If(moreOpen.Get(), Div(sheetRows...)),
+		// Floating quick-add: one thumb-reach action above the bar, replacing the
+		// old sixth pinned slot so the bar stays five equal destinations.
+		Button(css.Class("mobile-tab-fab"), Type("button"),
 			Attr("aria-label", uistate.T("action.quickAdd")),
 			Title(uistate.T("action.quickAdd")),
+			Attr("data-testid", "mobile-tab-fab"),
 			OnClick(openAdd),
-			ui.Icon(icon.PlusCircle, css.Class(tw.W5, tw.H5)),
-			Span(css.Class("mobile-tab-label"), uistate.T("action.add")),
+			ui.Icon(icon.Plus, css.Class(tw.W5, tw.H5)),
+		),
+		Nav(css.Class("mobile-tabbar"), Attr("aria-label", uistate.T("nav.mobileTabLabel")),
+			uic.CreateElement(mobileTabItem, mobileTabItemProps{Label: uistate.T("nav.mobileHome"), Path: "/", Icon: icon.Dashboard, Active: cur == "/"}),
+			uic.CreateElement(mobileTabItem, mobileTabItemProps{Label: uistate.T("nav.transactions"), Path: "/transactions", Icon: icon.Transactions, Active: cur == "/transactions"}),
+			uic.CreateElement(mobileTabItem, mobileTabItemProps{Label: uistate.T("nav.budgets"), Path: "/budgets", Icon: icon.Budgets, Active: cur == "/budgets"}),
+			uic.CreateElement(mobileTabItem, mobileTabItemProps{Label: uistate.T("nav.goals"), Path: "/goals", Icon: icon.Goals, Active: cur == "/goals"}),
+			Button(ClassStr(moreCls), Type("button"),
+				Attr("aria-label", uistate.T("nav.mobileMore")),
+				Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
+				Attr("data-testid", "mobile-tab-more"),
+				OnClick(toggleMore),
+				ui.Icon(icon.MoreH, css.Class(tw.W5, tw.H5)),
+				Span(css.Class("mobile-tab-label"), uistate.T("nav.mobileMore")),
+			),
 		),
 	)
 }

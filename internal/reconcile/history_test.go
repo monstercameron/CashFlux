@@ -71,3 +71,25 @@ func TestThrough(t *testing.T) {
 		t.Errorf("through = %v, want the newest recording time", got)
 	}
 }
+
+func TestUndoRemovesNewestWithoutMutating(t *testing.T) {
+	base := []domain.Reconciliation{rec(1, 0), rec(2, 0)}
+	out, removed, ok := Undo(base)
+	if !ok || len(out) != 1 || len(base) != 2 {
+		t.Fatalf("ok=%v len(out)=%d len(base)=%d, want true/1/2", ok, len(out), len(base))
+	}
+	if !removed.At.Equal(rec(2, 0).At) {
+		t.Error("removed entry is not the newest")
+	}
+	if _, _, ok := Undo(nil); ok {
+		t.Error("empty history should report nothing to undo")
+	}
+}
+
+func TestRecordKeepsForcedDiscrepancy(t *testing.T) {
+	ev := domain.Reconciliation{At: rec(3, 0).At, StatementBalance: money.New(115031, "USD"), DifferenceMinor: -500, Forced: true}
+	h := Record(nil, ev)
+	if h[0].DifferenceMinor != -500 || !h[0].Forced {
+		t.Errorf("forced discrepancy not preserved: %+v", h[0])
+	}
+}
