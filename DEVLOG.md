@@ -1,3 +1,32 @@
+## 2026-07-17 — The real basis-persistence bug: locked boots seeded default prefs
+
+Cam, after the gen-guard ship: "still doesn't persist — saved, navved away and back, still there;
+refreshed, and it reset again." Then, on my two-tab framing: "your 2 tab analysis is retarded…
+saving the budget options should simply be persisted in the database in memory, stop overthinking."
+He was right about where to look. Traced the plain database path end-to-end under instrumentation:
+SetPrefs → SettingKVSet → settingskv in the in-memory SQLite → autosave blob. Read the blob straight
+out of IndexedDB in the browser: the basis was IN the persisted dataset before and after refresh on
+every plaintext repro. The one boot my repros never took was HIS: an app-lock passcode. With
+encryption-at-rest, boot leaves the dataset as a pending envelope; the LOCK SCREEN renders first and
+the first UsePrefs seeds the atom from an EMPTY store — prefs.Default(). hydrateFromPasscode then
+imports the dataset (saved prefs and all) but re-seeded NOTHING: the UI ran the whole session on
+default prefs (basis = "all income"), in-session saves lived only in the atom (nav away/back held),
+and any theme toggle would even persist the defaults back over the real prefs. Fix: the unlock path
+now does SetPrefs(LoadPrefs()) + ApplyTheme(LoadTheme()) right after ImportJSON.
+
+Verification humility, logged deliberately: my first "proof" run was worthless — the passcode
+"739154" was silently REJECTED by PasscodeStrength (digits-only 6-codes grade Weak; you need 8+
+chars or two classes), the setup dialog never closed, and the test measured the plaintext path
+passing as always. Only after making the new e2e SELF-DIAGNOSING (assert the setup dialog actually
+hid, surface #cf-al-err's text on failure) did the real run happen: enable "cashflux77", save fixed
+$6,000, reload into the gate, unlock — basis intact. Both incomebasis.spec.mjs tests green against
+the deployed binary (external E2E_BASE_URL mode — the suite's own build kept racing a concurrent
+session's tree churn; the budgets.spec rewrite underway is theirs, my tests moved to their own
+file). Also from this episode: the earlier update-pill JS in index.html was reverted whole — fixes
+go in Go here, and the reported bug gets fixed before any infrastructure hardening. The v1.0.62
+cross-tab generation guard stays (it IS a real clobber class, reproduced), but it was not Cam's bug.
+v1.0.63, SW v338.
+
 ## 2026-07-17 — Budgets design pass: the verification round
 
 Closed the loop on fixes 1–7 with e2e + screenshots (dark/light × cards/compact × live/overlay,

@@ -98,6 +98,15 @@ func hydrateFromPasscode(passcode string) {
 			return
 		}
 		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
+		// Re-seed the PREFS ATOM from the just-imported settings KV. The lock screen
+		// rendered before this import, so the first UsePrefs seeded the atom from an
+		// EMPTY store — prefs.Default(). Without this, every passcode boot shows
+		// default preferences (the budgets income basis reset to "all income", Cam
+		// 2026-07-17) even though the saved values sit right here in the store — and
+		// the next PersistPrefs (any theme toggle) would write those defaults back
+		// over the real ones. SetPrefs also re-applies theme/accent to the document.
+		uistate.SetPrefs(uistate.LoadPrefs())
+		uistate.ApplyTheme(uistate.LoadTheme())
 		// The dataset is loaded now, so it's safe to fold any legacy standalone OpenAI
 		// key + language selection into it (encrypted users couldn't migrate at boot
 		// while still locked).
