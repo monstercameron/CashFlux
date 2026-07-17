@@ -553,6 +553,22 @@ it. Design decision worth keeping: the adjustment path doesn't auto-record — i
 difference and lets the normal Record button appear, so there's exactly one recording path.
 26 e2e assertions on the lane server, 0 page errors, first run green.
 
+## 2026-07-17 — The rail goes lean; Back finally remembers (#60)
+
+The IA machinery already existed — collapsible Tools sub-groups, a collapsible System section,
+deep-link auto-reveal — it just defaulted to everything-open, which is how a nine-primary rail
+grew into a thirty-item wall. The change is a default flip with one storage subtlety: the
+persist path stripped false values ("expanded" WAS the default, so only collapses were stored);
+with collapsed-by-default, "expanded" becomes a deliberate choice that must persist, so the
+store now keeps both polarities. Missing key = collapsed; explicit value wins; "My pages"
+(user content, not tooling) deliberately stays open.
+
+Back-navigation state had two of three legs already — filters and the period live in persistent
+atoms — but scroll reset on every navigation. A new scrollMemoryHost keeps a per-route offset
+map: leaving a route records the pane's scrollTop (effect cleanup), a popstate listener flags
+Back/Forward, and only flagged navigations restore (fresh forward nav starts at top, as users
+expect), with one +250ms re-assert to outlast deferred below-the-fold rendering. 11/11 e2e.
+
 ## 2026-07-17 — The mobile pass: one grid defect, five spilling pages (#59)
 
 Every core page scrolled sideways at 390px, and it was ONE defect wearing five costumes: the

@@ -22,15 +22,11 @@ func UseCollapsedToolGroups() state.Atom[map[string]bool] {
 	return state.UseAtom(toolGroupsAtomID, loadCollapsedToolGroups())
 }
 
-// PersistCollapsedToolGroups saves the collapsed Tools sub-sections.
+// PersistCollapsedToolGroups saves the collapsed Tools sub-sections. Explicit
+// false values are kept too: sections default to COLLAPSED (#60 lean sidebar),
+// so "expanded" is a deliberate choice that must survive reloads.
 func PersistCollapsedToolGroups(m map[string]bool) {
-	clean := map[string]bool{}
-	for k, v := range m {
-		if v {
-			clean[k] = true
-		}
-	}
-	data, err := json.Marshal(clean)
+	data, err := json.Marshal(m)
 	if err != nil {
 		return
 	}

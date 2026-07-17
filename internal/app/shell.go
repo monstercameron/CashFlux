@@ -289,6 +289,8 @@ func Shell(props ShellProps) uic.Node {
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
 		// the breakpoint). The desktop left rail is unchanged — this is additive.
 		uic.CreateElement(MobileTabBar, mobileTabBarProps{ActivePath: props.ActivePath}),
+		// #60: per-route scroll memory — Back/Forward restores where you were.
+		uic.CreateElement(scrollMemoryHost, scrollMemoryProps{ActivePath: props.ActivePath}),
 		uic.CreateElement(SettingsHost),
 		uic.CreateElement(QuickAddHost),
 		uic.CreateElement(AddHost),
@@ -600,6 +602,15 @@ func Sidebar(props sidebarProps) uic.Node {
 		collapsedGroups.Set(next)
 		uistate.PersistCollapsedToolGroups(next)
 	}
+	// #60 lean sidebar: sections default to COLLAPSED — the rail leads with the
+	// nine primary destinations, and the advanced sections open on demand. An
+	// explicit stored value (either way) always wins over the default.
+	groupCollapsed := func(sg string) bool {
+		if v, ok := collapsed[sg]; ok {
+			return v
+		}
+		return true
+	}
 	toolsByGroup := map[string][]railItem{}
 	for _, it := range visibleTools {
 		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
@@ -629,7 +640,7 @@ func Sidebar(props sidebarProps) uic.Node {
 				continue
 			}
 			// Keep the sub-group open when it holds the current route (see above).
-			isCollapsed := collapsed[sg] && sg != currentToolSubGroup
+			isCollapsed := groupCollapsed(sg) && sg != currentToolSubGroup
 			toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 				Label:     toolSubGroupLabel(sg),
 				Collapsed: isCollapsed,
@@ -665,7 +676,7 @@ func Sidebar(props sidebarProps) uic.Node {
 	var systemNodes []any
 	if len(visibleSystem) > 0 {
 		// Auto-reveal System when the current route lives there (see the Tools note).
-		sysCollapsed := collapsed["system"] && !currentInSystem
+		sysCollapsed := groupCollapsed("system") && !currentInSystem
 		systemNodes = append(systemNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
 			Label: uistate.T("rail.system"), Collapsed: sysCollapsed,
 			OnToggle: func() { setCollapsed("system", !sysCollapsed) },
