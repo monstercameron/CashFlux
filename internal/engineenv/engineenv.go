@@ -41,6 +41,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
+	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 )
 
@@ -172,6 +173,7 @@ var atomNames = []string{
 	"idle_cash_benchmark",      // the user-entered benchmark APR% the forgone figure uses (AC15)
 	"transactions",             // count of transactions
 	"txns_unreviewed",          // count of unreviewed non-transfer transactions (all time)
+	"txns_review_queue",        // count of transactions in the guided Review inbox (uncategorized or #needs-review)
 	"members",                  // count of members
 	"budgets",                  // count of budgets
 	"goals",                    // count of goals
@@ -433,6 +435,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"idle_cash_benchmark":      idle.BenchmarkAPRPercent,
 		"transactions":             float64(len(d.Transactions)),
 		"txns_unreviewed":          float64(unreviewedCount(d.Transactions)),
+		"txns_review_queue":        float64(reviewqueue.Count(d.Transactions)),
 		"members":                  float64(len(d.Members)),
 		"budgets":                  float64(len(d.Budgets)),
 		"goals":                    float64(len(d.Goals)),

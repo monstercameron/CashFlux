@@ -1,3 +1,23 @@
+## 2026-07-17 — #74: two "review" numbers become one (lane 6)
+
+The deep-dive flagged "Review inbox (252)" vs "Review 2274 waiting transactions" as terminology
+collision, but it's really a population bug: the inbox counts reviewqueue.Count (uncategorized OR
+#needs-review, non-transfer — the actionable triage pile), while the to-do suggestion counted
+`!t.Reviewed` across the whole ledger. Since `Reviewed` only gets set by the review flow itself,
+that second number was effectively "every transaction you've ever had" — no one schedules a task
+to review 2,274 rows. Unified on the inbox population everywhere: tasksuggest now imports
+reviewqueue and titles the suggestion with the inbox's own name.
+
+The deep-link needed a small domain addition: tasks link via RelatedType/RelatedID, but the
+aggregate review task's "entity" is the inbox itself. New `RelatedReviewQueue` ("review-queue")
+with sentinel ID "review-inbox": tasklink routes it to /transactions and always resolves the
+display name; todo's goLink opens the inbox atom on arrival. Nice side effect: because the
+suggestion now carries a RelatedID, the existing open-task dedupe hides the proposal while the
+task it created is still open. Resolution honesty too — the task's self-resolve moves from
+`txns_unreviewed == 0` (would ~never fire) to a new `txns_review_queue` engine var that measures
+what the task actually names. 5 e2e assertions: count parity, chip, and the link landing inside
+the open inbox.
+
 ## 2026-07-17 — #46: /reports stops improvising its own dialog language (lane 1)
 
 Cam's consistency pass: the Snapshots cluster sat on its own line under the toolbar, and three

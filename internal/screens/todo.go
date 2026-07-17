@@ -72,7 +72,15 @@ func TaskRow(props taskRowProps) ui.Node {
 	// Row-display deep-link: declared unconditionally here so the hook slot never
 	// shifts across renders (framework rule).
 	linkRoute := tasklink.Route(t.RelatedType)
-	goLink := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath(linkRoute)) }))
+	goLink := ui.UseEvent(Prevent(func() {
+		nav.Navigate(uistate.RoutePath(linkRoute))
+		// The aggregate review task's population IS the guided Review inbox
+		// (UX-10) — open it on arrival so the link lands on the exact filtered
+		// set the task names, not the full ledger.
+		if t.RelatedType == domain.RelatedReviewQueue {
+			uistate.OpenReviewInbox()
+		}
+	}))
 	// Drag-to-reorder hooks (declared unconditionally; wired into the row only when
 	// props.Draggable, i.e. the "Custom order" sort is active).
 	dragStart := ui.UseEvent(func() {

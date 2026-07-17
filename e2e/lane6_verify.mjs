@@ -103,6 +103,39 @@ if (await firstNotif.count()) {
 }
 await mctx.close();
 
+// ─────────────── #74: review-inbox vs waiting-transactions counts ───────────────
+// Fresh context: the earlier #75 steps cleared this page's notification feed but
+// transactions/tasks are untouched; still, use a clean context for count parity.
+const c74 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p74 = await c74.newPage();
+await p74.goto(BASE + "/", { waitUntil: "load" });
+await p74.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p74.waitForTimeout(1500);
+const nav74 = async (path) => { await p74.evaluate((x) => { history.pushState({}, "", x); dispatchEvent(new PopStateEvent("popstate")); }, path); await p74.waitForTimeout(1800); };
+await nav74("/transactions");
+const inboxBtnText = await p74.locator('[data-testid="txn-review-btn"]').innerText().catch(() => "");
+const inboxN = (inboxBtnText.match(/\((\d+)\)/) || [])[1];
+check("#74: transactions Review inbox count present", !!inboxN, inboxBtnText.trim());
+await nav74("/todo");
+const suggestText = await p74.locator('[data-testid="todo-suggest-unreviewed"]').innerText().catch(() => "");
+const suggestM = suggestText.match(/Review (\d+) transactions in the Review inbox/);
+check("#74: suggestion names the Review inbox", !!suggestM, suggestText.trim().slice(0, 80));
+check("#74: suggestion count equals the inbox count", !!suggestM && suggestM[1] === inboxN, `${suggestM && suggestM[1]} vs ${inboxN}`);
+if (suggestM) {
+  await p74.locator('[data-testid="todo-suggest-add-unreviewed"]').click();
+  await p74.waitForTimeout(900);
+  const taskLink = p74.locator('button[data-testid^="task-link-"]', { hasText: "Review inbox" }).first();
+  check("#74: created task carries a 'Review inbox' link", (await taskLink.count()) > 0, "");
+  if (await taskLink.count()) {
+    await taskLink.click();
+    await p74.waitForTimeout(1800);
+    const onTxns = await p74.evaluate(() => location.pathname.includes("/transactions"));
+    const inboxOpen = await p74.locator('[data-testid="review-inbox"]').count();
+    check("#74: task link opens the Review inbox on /transactions", onTxns && inboxOpen > 0, `path=${onTxns} inbox=${inboxOpen}`);
+  }
+}
+await c74.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

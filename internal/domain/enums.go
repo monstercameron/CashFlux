@@ -395,11 +395,16 @@ const (
 	RelatedGoal        RelatedType = "goal"
 	RelatedTransaction RelatedType = "transaction"
 	RelatedDocument    RelatedType = "document"
+	// RelatedReviewQueue links a task to the transactions Review inbox as a
+	// whole (the aggregate "review your backlog" task) rather than to one
+	// entity — the UI opens the guided inbox instead of navigating to a record.
+	RelatedReviewQueue RelatedType = "review-queue"
 )
 
 // AllRelatedTypes lists every valid related type.
 var AllRelatedTypes = []RelatedType{
 	RelatedNone, RelatedAccount, RelatedBudget, RelatedGoal, RelatedTransaction, RelatedDocument,
+	RelatedReviewQueue,
 }
 
 func (r RelatedType) String() string { return string(r) }

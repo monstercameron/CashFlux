@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/freshness"
+	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 )
 
 // Kind names a suggestion's condition family.
@@ -38,6 +39,11 @@ const UnreviewedThreshold = 5
 // maxPerKind caps how many same-kind suggestions surface at once so a neglected
 // dataset proposes a short list, not a wall.
 const maxPerKind = 3
+
+// ReviewInboxRelatedID is the sentinel RelatedID the aggregate review-backlog
+// task carries (there is no single entity — the "entity" is the Review inbox
+// itself). tasklink resolves RelatedReviewQueue + this ID to the inbox.
+const ReviewInboxRelatedID = "review-inbox"
 
 // Suggestion is one proposed task. Key is the stable dismissal identity (same
 // condition → same key, so a dismissal holds until the condition changes
@@ -77,17 +83,16 @@ func Scan(accounts []domain.Account, txns []domain.Transaction, budgets []domain
 	}
 
 	// Review backlog: a single aggregate suggestion once the pile clears the
-	// threshold. Resolves itself when txns_unreviewed hits zero.
-	unreviewed := 0
-	for _, t := range txns {
-		if !t.Reviewed && !t.IsTransfer() {
-			unreviewed++
-		}
-	}
-	if unreviewed >= UnreviewedThreshold {
+	// threshold. UX-10: this counts the SAME population as the transactions
+	// page's Review inbox (reviewqueue.Count — uncategorized or #needs-review,
+	// non-transfer), not the ledger-wide !Reviewed tally — two different numbers
+	// under one "review" verb read as a contradiction. The suggestion links to
+	// the inbox (RelatedReviewQueue) and resolves itself when the queue empties.
+	if queued := reviewqueue.Count(txns); queued >= UnreviewedThreshold {
 		out = append(out, Suggestion{
-			Key: "unreviewed", Kind: KindUnreviewed, Count: unreviewed,
-			Resolve: &domain.TaskResolve{Condition: "txns_unreviewed == 0"},
+			Key: "unreviewed", Kind: KindUnreviewed, Count: queued,
+			RelatedType: domain.RelatedReviewQueue, RelatedID: ReviewInboxRelatedID,
+			Resolve: &domain.TaskResolve{Condition: "txns_review_queue == 0"},
 			DueDays: 7,
 		})
 	}

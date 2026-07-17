@@ -52,7 +52,8 @@ func suggestTitle(s tasksuggest.Suggestion) string {
 	case tasksuggest.KindStaleAccount:
 		return uistate.T("todo.suggestStale", s.Name)
 	case tasksuggest.KindUnreviewed:
-		return uistate.T("todo.suggestUnreviewed", s.Count)
+		// UX-10: same count, same name as the transactions page's Review inbox.
+		return uistate.T("todo.suggestReviewInbox", s.Count)
 	default:
 		return uistate.T("todo.suggestOverspent", s.Name)
 	}

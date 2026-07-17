@@ -22,6 +22,10 @@ var lane6Keys = Catalog{
 	"notifications.clearedNotice":   "All notifications cleared.",
 	"notifications.moreActions":     "More actions",
 	"notifications.alertSettings":   "Alert settings",
+
+	// #74 (UX-10) — the to-do suggestion counts the SAME population as the
+	// transactions page's Review inbox and says so with the same name.
+	"todo.suggestReviewInbox": "Review %d transactions in the Review inbox",
 }
 
 func init() {

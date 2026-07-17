@@ -48,20 +48,32 @@ func TestScanUnreviewedThreshold(t *testing.T) {
 	if got := Scan(nil, mk(UnreviewedThreshold-1), nil, freshness.Windows{}, currency.Rates{Base: "USD"}, now, time.Sunday); len(got) != 0 {
 		t.Errorf("below threshold: %+v", got)
 	}
-	// At threshold: one aggregate suggestion with a self-resolve condition.
+	// At threshold: one aggregate suggestion counting the Review-inbox
+	// population (UX-10), linked to the inbox, with a self-resolve condition
+	// on the matching engine var.
 	got := Scan(nil, mk(UnreviewedThreshold), nil, freshness.Windows{}, currency.Rates{Base: "USD"}, now, time.Sunday)
 	if len(got) != 1 || got[0].Kind != KindUnreviewed || got[0].Count != UnreviewedThreshold {
 		t.Fatalf("at threshold: %+v", got)
 	}
-	if got[0].Resolve == nil || got[0].Resolve.Condition != "txns_unreviewed == 0" {
+	if got[0].RelatedType != domain.RelatedReviewQueue || got[0].RelatedID != ReviewInboxRelatedID {
+		t.Errorf("review suggestion link = %s/%s", got[0].RelatedType, got[0].RelatedID)
+	}
+	if got[0].Resolve == nil || got[0].Resolve.Condition != "txns_review_queue == 0" {
 		t.Errorf("resolve = %+v", got[0].Resolve)
 	}
-	// Reviewed and transfer rows don't count.
+	// Categorized-untagged and transfer rows are NOT in the inbox population;
+	// a categorized row tagged #needs-review is.
 	txns := mk(UnreviewedThreshold)
-	txns[0].Reviewed = true
+	txns[0].CategoryID = "cat1"
 	txns[1].TransferAccountID = "y"
 	if got := Scan(nil, txns, nil, freshness.Windows{}, currency.Rates{Base: "USD"}, now, time.Sunday); len(got) != 0 {
-		t.Errorf("reviewed/transfer rows counted: %+v", got)
+		t.Errorf("non-queue rows counted: %+v", got)
+	}
+	txns[0].Tags = []string{"needs-review"}
+	txns[1].TransferAccountID = ""
+	got = Scan(nil, txns, nil, freshness.Windows{}, currency.Rates{Base: "USD"}, now, time.Sunday)
+	if len(got) != 1 || got[0].Count != UnreviewedThreshold {
+		t.Errorf("tagged row not counted: %+v", got)
 	}
 }
 

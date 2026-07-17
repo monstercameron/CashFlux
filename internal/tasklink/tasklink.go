@@ -21,6 +21,10 @@ func Route(rt domain.RelatedType) string {
 		return "/goals"
 	case domain.RelatedTransaction:
 		return "/transactions"
+	case domain.RelatedReviewQueue:
+		// The aggregate review task lives on the transactions page; the UI layer
+		// additionally opens the guided Review inbox on arrival (UX-10).
+		return "/transactions"
 	default:
 		return ""
 	}
@@ -38,6 +42,8 @@ func TypeLabel(rt domain.RelatedType) string {
 		return "Goal"
 	case domain.RelatedTransaction:
 		return "Transaction"
+	case domain.RelatedReviewQueue:
+		return "Review inbox"
 	default:
 		return "None"
 	}
@@ -86,6 +92,9 @@ func EntityName(
 				return n, true
 			}
 		}
+	case domain.RelatedReviewQueue:
+		// The link target is the inbox itself, not a record — always resolvable.
+		return "Review inbox", true
 	}
 	return "", false
 }
