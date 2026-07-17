@@ -1,3 +1,20 @@
+## 2026-07-17 — R3 #51: the contribution slider learns to talk (lane 5)
+
+The goal planner's slider was mouse-only and told screen readers "84000" — raw minor units. Three
+additions in `goalContribSlider`: an `OnKeyDown` handler (arrows = one step, Page keys = five,
+Home/End = range ends) that drives the same `cur` state the drag path uses; `aria-valuetext`
+rendering the formatted "$840.00/mo" so AT announces money, not cents; and a numeric entry field
+beside the slider with a draft-string state that parses through `money.ParseMinor`, clamps to the
+plan's min/max, and re-formats on blur. The readout div gained `aria-live=polite` so projection
+updates announce themselves.
+
+Two e2e lessons worth keeping: (1) a range input's DOM value is snapped by the BROWSER to the
+`min + n*step` grid — setting state to a non-aligned max renders as the nearest step below it, so
+asserting `value === max` is wrong by construction; assert within-one-step-of-max (or read the
+valuetext, which reflects state). (2) When a test types an amount to drive the slider, derive it
+from the rendered min/max attrs — a hardcoded "$100" was silently below this goal's plan floor and
+the clamp (correct behavior) read as a test failure. 4/4 green on the lane server, 0 page errors.
+
 ## 2026-07-17 — R3 CF-03: one subscription rule for every surface (lane 6)
 
 Round-3 QA caught the M5 essentials filter being only skin-deep: the ACTIVE subscriptions list was

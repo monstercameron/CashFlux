@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/emergencyfund"
@@ -70,11 +71,63 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 		seed = max.Amount
 	}
 	cur := ui.UseState(seed)
+	dec := currency.Decimals(g.TargetAmount.Currency)
+	// QA #51: the slider must never be the only precise input — a numeric $/mo
+	// field sits beside it. draft holds the field's raw text so typing isn't
+	// fought by reformatting; the slider keeps it in sync when dragged.
+	draft := ui.UseState(money.FormatMinor(seed, dec))
 
+	clampRange := func(v int64) int64 {
+		if v < min.Amount {
+			return min.Amount
+		}
+		if v > max.Amount {
+			return max.Amount
+		}
+		return v
+	}
 	onSlide := ui.UseEvent(func(e ui.Event) {
 		if v, err := strconv.ParseInt(e.GetValue(), 10, 64); err == nil {
 			cur.Set(v)
+			draft.Set(money.FormatMinor(v, dec))
 		}
+	})
+	// QA #51: explicit keyboard support — the framework's value re-set could
+	// swallow native range stepping, and Home/End/Page keys were dead. Handled
+	// here with PreventDefault so a step never double-applies.
+	onSlideKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		st := step.Amount
+		var next int64
+		switch e.GetKey() {
+		case "ArrowLeft", "ArrowDown":
+			next = clampRange(cur.Get() - st)
+		case "ArrowRight", "ArrowUp":
+			next = clampRange(cur.Get() + st)
+		case "PageDown":
+			next = clampRange(cur.Get() - 5*st)
+		case "PageUp":
+			next = clampRange(cur.Get() + 5*st)
+		case "Home":
+			next = min.Amount
+		case "End":
+			next = max.Amount
+		default:
+			return
+		}
+		e.PreventDefault()
+		cur.Set(next)
+		draft.Set(money.FormatMinor(next, dec))
+	})
+	// Direct numeric entry: parse as it's typed (partial text keeps the last
+	// valid amount), clamp into the slider's range on commit.
+	onDraft := ui.UseEvent(func(v string) {
+		draft.Set(v)
+		if minor, err := money.ParseMinor(strings.TrimSpace(v), dec); err == nil && minor > 0 {
+			cur.Set(clampRange(minor))
+		}
+	})
+	onDraftBlur := ui.UseEvent(func(e ui.Event) {
+		draft.Set(money.FormatMinor(cur.Get(), dec))
 	})
 	nav := router.UseNavigate()
 	useThis := ui.UseEvent(Prevent(func() {
@@ -110,14 +163,28 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 			Span(css.Class("goal-plan-title"), uistate.T("goals.planTitle")),
 			Span(css.Class("goal-plan-amt", tw.FontDisplay), uistate.T("goals.planPerMo", fmtMoney(money.New(cur.Get(), g.TargetAmount.Currency)))),
 		),
-		Input(Type("range"), css.Class("set-range goal-plan-slider"),
-			Attr("min", strconv.FormatInt(min.Amount, 10)),
-			Attr("max", strconv.FormatInt(max.Amount, 10)),
-			Attr("step", strconv.FormatInt(step.Amount, 10)),
-			Attr("data-testid", "goal-plan-slider-"+g.ID),
-			Attr("aria-label", uistate.T("goals.planSliderLabel")),
-			Value(strconv.FormatInt(cur.Get(), 10)), OnInput(onSlide)),
-		Div(css.Class("goal-plan-readout"), Attr("role", "status"), Attr("data-testid", "goal-plan-readout-"+g.ID), readout),
+		Div(css.Class("goal-plan-controls", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Input(Type("range"), css.Class("set-range goal-plan-slider"),
+				Attr("min", strconv.FormatInt(min.Amount, 10)),
+				Attr("max", strconv.FormatInt(max.Amount, 10)),
+				Attr("step", strconv.FormatInt(step.Amount, 10)),
+				Attr("data-testid", "goal-plan-slider-"+g.ID),
+				Attr("aria-label", uistate.T("goals.planSliderLabel")),
+				// QA #51: assistive tech announced the raw minor-units number
+				// ("24059"); valuetext carries the formatted money-per-month.
+				Attr("aria-valuetext", uistate.T("goals.planPerMo", fmtMoney(money.New(cur.Get(), g.TargetAmount.Currency)))),
+				Value(strconv.FormatInt(cur.Get(), 10)), OnInput(onSlide), OnKeyDown(onSlideKey)),
+			// QA #51: precise entry without dragging — a compact $/mo field kept in
+			// two-way sync with the slider.
+			Input(Type("text"), css.Class("field goal-plan-amount-input"),
+				Style(map[string]string{"width": "7.5rem", "flex": "none"}),
+				Attr("inputmode", "decimal"),
+				Attr("data-testid", "goal-plan-amount-"+g.ID),
+				Attr("aria-label", uistate.T("goals.planAmountLabel")),
+				Value(draft.Get()), OnInput(onDraft), OnBlur(onDraftBlur)),
+		),
+		// aria-live so the projected finish is ANNOUNCED as the plan changes.
+		Div(css.Class("goal-plan-readout"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", "goal-plan-readout-"+g.ID), readout),
 		Div(css.Class("goal-plan-actions", tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "goal-plan-use-"+g.ID), OnClick(useThis), uistate.T("goals.planUseThis")),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "goal-plan-wherefrom-"+g.ID), OnClick(whereFrom), uistate.T("goals.planWhereFrom")),
