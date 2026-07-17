@@ -1,3 +1,15 @@
+## 2026-07-17 — #76 follow-up: the grouping that outgrew its tile (lane 2)
+
+The lane's own screenshot pass caught it: stacking two labeled sections doubled the Needs-attention
+content height inside a fixed 152px tile, and overflow:hidden ate the Household rows — an invisible
+regression that all 13 functional e2e checks missed because the labels and rows EXIST in the DOM;
+they just paint past the clip. Fix: in the 4×1 chips variant the group labels flow inline inside
+the one wrapping container; stacked sections remain for tiles with row height. Also hardened the
+verify script's ready gate (wait for a hydrated tile, not just app-ready) after a deferred-mount
+race made a tile-attribute assertion flaky. Lesson worth keeping: after layout-affecting widget
+changes, probe content-vs-tile geometry (scrollHeight vs clientHeight, child bottoms vs tile
+bottom) — DOM-presence assertions can't see clipping.
+
 ## 2026-07-17 — #65: the goals engine stops telling comfortable lies (lane 5)
 
 Three of this ticket's five items were honesty bugs wearing feature clothes. The sharpest:

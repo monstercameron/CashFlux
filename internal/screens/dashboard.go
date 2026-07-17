@@ -2211,7 +2211,18 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 		if spanRow < 2 {
 			cls = "attention-chips"
 		}
-		if len(fin) > 0 && len(chores) > 0 {
+		switch {
+		case len(fin) > 0 && len(chores) > 0 && spanRow < 2:
+			// The 4×1 chips tile has no height for stacked sections (they'd clip
+			// at the tile edge) — the labels join the single wrapping flow instead:
+			// MONEY chip chip … HOUSEHOLD chip chip.
+			flow := make([]ui.Node, 0, len(items)+2)
+			flow = append(flow, Span(css.Class("attn-group-label attn-group-label--inline"), Attr("data-testid", "attn-money"), uistate.T("dashboard.attnMoney")))
+			flow = append(flow, rowsOf(fin)...)
+			flow = append(flow, Span(css.Class("attn-group-label attn-group-label--inline"), Attr("data-testid", "attn-household"), uistate.T("dashboard.attnHousehold")))
+			flow = append(flow, rowsOf(chores)...)
+			body = Div(ClassStr(cls), flow)
+		case len(fin) > 0 && len(chores) > 0:
 			body = Div(css.Class("attention-groups"),
 				Div(css.Class("attn-group"),
 					Span(css.Class("attn-group-label"), Attr("data-testid", "attn-money"), uistate.T("dashboard.attnMoney")),
@@ -2222,7 +2233,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 					Div(ClassStr(cls), rowsOf(chores)),
 				),
 			)
-		} else {
+		default:
 			body = Div(ClassStr(cls), rowsOf(items))
 		}
 	}

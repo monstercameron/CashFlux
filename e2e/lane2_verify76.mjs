@@ -10,7 +10,10 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 const ready = async () => {
   await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
-  await page.waitForTimeout(4000);
+  // The bento tiles hydrate a beat after first paint (useAfterSettle) — wait for
+  // a real tile, not just app-ready, before asserting on tile attributes.
+  await page.waitForSelector('.bento .w[data-widget]', { timeout: 30000 });
+  await page.waitForTimeout(2500);
 };
 
 await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load" });

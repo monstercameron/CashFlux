@@ -144,4 +144,13 @@ func registerLane2Dashboard() {
 		color("var(--text-faint)"),
 		marginBottom("0.25rem"),
 	)
+	// In the 4×1 chips tile the labels flow INLINE with the chips (a stacked
+	// section pair clips at the 152px tile edge).
+	rule(".attn-group-label--inline",
+		display("inline-flex"),
+		alignItems("center"),
+		alignSelf("center"),
+		marginBottom("0"),
+		marginRight("0.15rem"),
+	)
 }
