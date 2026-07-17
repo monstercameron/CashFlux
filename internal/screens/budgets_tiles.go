@@ -135,6 +135,8 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	switch {
 	case over:
 		fillCls += " is-over"
+	case v.LastMonthMode:
+		fillCls += " is-hist" // history is neutral — green/amber are live statements
 	case fillPct >= 85:
 		fillCls += " is-near"
 	}

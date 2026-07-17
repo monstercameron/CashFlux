@@ -197,13 +197,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 	if lastMonthMode {
 		barSpent, barPct, width = props.LastMonthSpent, props.LastMonthPct, props.LastMonthFill
-		switch {
-		case props.LastMonthOver:
+		if props.LastMonthOver {
+			// An actual overrun stays danger red — it's a fact, whenever it happened.
 			fillClass = "bar-fill over"
-		case props.LastMonthPct >= 85:
-			fillClass = "bar-fill near"
-		default:
-			fillClass = "bar-fill"
+		} else {
+			// History fills NEUTRAL: the healthy-green live tone (and the amber "near"
+			// warning) under a LAST MONTH tag would read as a statement about now
+			// (design critique: green was doing too many jobs).
+			fillClass = "bar-fill is-hist"
 		}
 	}
 	if width > 100 {

@@ -776,4 +776,22 @@ func registerBudgetsSurface() {
 		prop("line-height", "1.4"),
 	)
 	rule(".budget-fundshort-btn", prop("flex", "0 0 auto"), whiteSpace("nowrap"))
+
+	// Historical (last-month overlay) fills are NEUTRAL: green is reserved for healthy
+	// LIVE progress and amber for live warnings, so last month's spend renders as a
+	// quiet theme-agnostic gray band. Overruns keep danger red — a fact is a fact,
+	// whenever it happened. (Design critique: green was doing too many jobs.)
+	rule(".bar-fill.is-hist",
+		background("color-mix(in srgb, var(--text) 22%, transparent)"),
+		boxShadow("none"),
+	)
+	rule(".budget-loader-fill.is-hist",
+		background("linear-gradient(90deg, color-mix(in srgb, var(--text) 18%, transparent), color-mix(in srgb, var(--text) 9%, transparent))"),
+		borderRight("2px solid color-mix(in srgb, var(--text) 40%, transparent)"),
+	)
+	// The LAST MONTH tag follows: a neutral chip, not the accent used for live/healthy.
+	rule(".bento-budgets .budget-lastmonth-tag",
+		color("var(--text-dim)"),
+		background("color-mix(in srgb, var(--text) 10%, transparent)"),
+	)
 }

@@ -1,3 +1,15 @@
+## 2026-07-17 — Budgets fix 4/7: history wears gray
+
+Color discipline from the critique: green = healthy live progress, amber = live warning, red =
+overspend (a fact in any period), neutral gray = historical/allocated. Overlay bars now take a new
+`is-hist` modifier — `.bar-fill.is-hist` (cards) is a flat `color-mix(var(--text) 22%, transparent)`
+band, `.budget-loader-fill.is-hist` (summary) the same in the loader's gradient+border-right
+vocabulary — and the amber "near" tone is suppressed for history ("nearly over" is a live warning;
+last month either overran or didn't). `LastMonthOver` keeps `.over` red. The LAST MONTH chip retones
+accent→neutral via an equal-specificity override in `rules_budgets.go` (registered after the
+generated sheet, so it wins). Token note: used `var(--text)` mixes, not the undefined `--fg/--dim`
+landmines. Wasm + styles tests clean.
+
 ## 2026-07-17 — Vitals core: the report gets a balance-sheet dimension (1/2)
 
 Cam wants the Reports page to carry derived position metrics (his reference list: annual debt
