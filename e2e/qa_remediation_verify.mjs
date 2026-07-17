@@ -542,6 +542,70 @@ if (chipsEls.length > 0) {
   check("CF-18: no unanswerable suggestions offered keyless", true, "0 chips");
 }
 
+// ──── CF-17 + L2 + L3 + L5: board scroll, saved toasts, single headings, pace labels ────
+// CF-17: board columns scroll inside themselves.
+await nav("/todo");
+await page.waitForTimeout(1000);
+const boardTab = page.locator('button:text-is("Board") >> visible=true').first();
+if (await boardTab.count()) {
+  await boardTab.click();
+  await page.waitForTimeout(1000);
+  const colBody = page.locator(".tdb-col-body").first();
+  if (await colBody.count()) {
+    const style = await colBody.evaluate((el) => { const cs = getComputedStyle(el); return cs.overflowY + "|" + cs.maxHeight; });
+    check("CF-17: board columns scroll internally (capped height)", /^auto\|/.test(style) && !/\|none$/.test(style), style);
+  } else {
+    check("CF-17: board columns present", false);
+  }
+} else {
+  check("CF-17: Board tab reachable", false);
+}
+// L5: goal cards label the required pace distinctly.
+await nav("/goals");
+await page.waitForTimeout(1200);
+body = await bodyText();
+check("L5: goal pace labeled 'Needed / mo'", /needed \/ mo/i.test(body), "");
+// L2: switching the budgeting method announces the save.
+await nav("/budgets");
+await page.waitForTimeout(1200);
+const methodSel = page.locator(".budgets-tb select").first();
+if (await methodSel.count()) {
+  const cur = await methodSel.inputValue();
+  const opts = await methodSel.locator("option").all();
+  let other = "";
+  for (const o of opts) { const v = await o.getAttribute("value"); if (v && v !== cur) { other = v; break; } }
+  if (other) {
+    await methodSel.selectOption(other);
+    await page.waitForTimeout(800);
+    body = await bodyText();
+    check("L2: method change posts a saved notice", body.includes("Budgeting method saved"), "");
+    await methodSel.selectOption(cur); // restore
+    await page.waitForTimeout(600);
+  } else {
+    check("L2: alternate method available", false);
+  }
+} else {
+  check("L2: method picker reachable", false);
+}
+// L3: a flip modal exposes exactly ONE heading to AT.
+await nav("/accounts");
+await page.waitForTimeout(1000);
+const balBtn2 = page.locator('[data-testid^="acct-balance-btn-"]').first();
+if (await balBtn2.count()) {
+  await balBtn2.click();
+  await page.waitForTimeout(900);
+  const headingInfo = await page.evaluate(() => {
+    const hs = Array.from(document.querySelectorAll(".flip-wrap h3"));
+    const exposed = hs.filter((h) => !h.closest('[aria-hidden="true"]'));
+    return { total: hs.length, exposed: exposed.length };
+  });
+  check("L3: flip modal exposes exactly one title to AT", headingInfo.exposed === 1, JSON.stringify(headingInfo));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+} else {
+  check("L3: modal reachable", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

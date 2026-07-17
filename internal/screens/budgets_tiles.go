@@ -913,6 +913,7 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 		if err := app.PutAccount(ac); err == nil {
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("common.savedToast"), false) // QA L2
 		}
 	}
 	dbKey := "acct-savings:" + sa.AccountID
@@ -1344,6 +1345,7 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		s.BudgetMethodology = e.GetValue()
 		_ = app.PutSettings(s)
 		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("settings.methodSaved"), false) // QA L2
 	})
 	sortVal := sortAtom.Get()
 	// Standard two-row toolbar (matches the transactions/accounts toolbar): budgets has

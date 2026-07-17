@@ -719,6 +719,9 @@ func globalSettingsForm() uic.Node {
 			s.BudgetMethodology = e.GetValue()
 			_ = a.PutSettings(s)
 			bump() // re-render the budgets view with the new methodology
+			// QA L2: auto-saving controls announce the save instead of persisting
+			// silently (the QA had to navigate away and back to confirm).
+			uistate.PostNotice(uistate.T("settings.methodSaved"), false)
 		}
 	})
 	onBase := uic.UseEvent(func(e uic.Event) {
@@ -727,6 +730,7 @@ func globalSettingsForm() uic.Node {
 			s.BaseCurrency = e.GetValue()
 			_ = a.PutSettings(s)
 			bump() // re-window every currency-aware figure to the new base
+			uistate.PostNotice(uistate.T("settings.baseSaved"), false) // QA L2
 		}
 	})
 	// setRate writes (or clears, when 0/blank) one currency's rate against the base.

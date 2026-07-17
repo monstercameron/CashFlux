@@ -324,9 +324,12 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		Div(css.Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
 			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
 			Div(ClassStr(innerCls),
-				// Front face — a neutral card briefly seen during the flip.
-				Div(css.Class("flip-face"),
-					Div(css.Class("wh"), Span(css.Class("grip"), Attr("aria-hidden", "true"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), H3(props.Title)),
+				// Front face — a neutral card briefly seen during the flip. It is
+				// DECORATIVE: without aria-hidden its H3 title sat in the
+				// accessibility tree beside the back face's real title, so every
+				// flip modal announced its heading twice (QA L3/CF-29).
+				Div(css.Class("flip-face"), Attr("aria-hidden", "true"),
+					Div(css.Class("wh"), Span(css.Class("grip"), Icon(icon.Grip, css.Class(tw.W4, tw.H4))), H3(props.Title)),
 				),
 				// Back face — the settings panel.
 				Div(css.Class("flip-face flip-back"),

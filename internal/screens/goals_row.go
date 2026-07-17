@@ -355,10 +355,16 @@ func GoalRow(props goalRowProps) ui.Node {
 		var figs []ui.Node
 		if !complete {
 			figs = append(figs, goalFig(uistate.T("goalsredesign.figToGo"), fmtMoney(toGo)))
+			// QA L5: one bare "Monthly" cell served TWO different figures — the
+			// mathematically required pace and the user's own saved plan — so a
+			// $140 plan silently displayed as the $121.43 requirement. The pace is
+			// now labeled "Needed / mo", and a user-set plan shows as its own
+			// "Your plan / mo" cell beside it, never replaced.
 			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-				figs = append(figs, goalFig(uistate.T("goalsredesign.figMonthly"), fmtMoney(per)))
-			} else if g.MonthlyContribution.Amount > 0 {
-				figs = append(figs, goalFig(uistate.T("goalsredesign.figMonthly"), fmtMoney(g.MonthlyContribution)))
+				figs = append(figs, goalFig(uistate.T("goals.figMonthlyNeeded"), fmtMoney(per)))
+			}
+			if g.MonthlyContribution.Amount > 0 {
+				figs = append(figs, goalFig(uistate.T("goals.figMonthlyPlan"), fmtMoney(g.MonthlyContribution)))
 			}
 			if !g.TargetDate.IsZero() {
 				figs = append(figs, goalFig(uistate.T("goalsredesign.figTarget"), pr.FormatDate(g.TargetDate)))

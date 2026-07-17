@@ -72,10 +72,16 @@ func registerTodoBoardSurface() {
 	)
 
 	// The task-card stack within a column.
+	// QA CF-17: a 37-task lane made the whole page one very long scroll — the
+	// column body now scrolls INSIDE the card (capped to a screenful), so the
+	// board stays a board at any task count.
 	rule(".tdb-col-body",
 		display("flex"),
 		flexDirection("column"),
 		gap("0.55rem"),
+		maxHeight("min(62vh, 640px)"),
+		overflowY("auto"),
+		paddingRight("0.15rem"),
 	)
 	rule(".tdb-empty",
 		padding("0.9rem 0.4rem"),
