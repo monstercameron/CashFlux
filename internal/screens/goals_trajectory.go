@@ -39,6 +39,20 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 
 	heading := Div(css.Class("gtj-head"), uistate.T("goaltrajectory.heading"))
 
+	// Coverage-aware: the projection starts from everything already accounted
+	// for — saved PLUS earmarked — so setting money aside moves the trajectory
+	// the moment it happens, month to month, exactly like the card's figures.
+	covered := goalsvc.CoverageMinor(g)
+
+	// A goal that's already covered has no pace left to project — render nothing.
+	// The card already announces completion once (the 100% loader + the "Funded —
+	// reallocate?" line); a trajectory sentence would restate it, and the old
+	// behaviour (falling through to the "add a monthly contribution" prompt) told
+	// a funded goal to keep planning. Checked BEFORE the no-contribution prompt.
+	if covered >= g.TargetAmount.Amount {
+		return Fragment()
+	}
+
 	// No pace to project from: a low-pressure prompt, no chart.
 	if !hasContribution {
 		return Div(css.Class("gtj"), Attr("data-testid", "goal-trajectory-"+g.ID),
@@ -47,11 +61,6 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 				uistate.T("goaltrajectory.empty")),
 		)
 	}
-
-	// Coverage-aware: the projection starts from everything already accounted
-	// for — saved PLUS earmarked — so setting money aside moves the trajectory
-	// the moment it happens, month to month, exactly like the card's figures.
-	covered := goalsvc.CoverageMinor(g)
 	res := goaltrajectory.Project(goaltrajectory.Input{
 		CurrentMinor: covered,
 		TargetMinor:  g.TargetAmount.Amount,
@@ -64,16 +73,11 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 	nowStr := fmtMoney(money.New(covered, g.TargetAmount.Currency))
 	hasTargetDate := !g.TargetDate.IsZero()
 	monthsToGoal := res.MonthsToGoal
-	// "Reached" means the target is already covered — not merely reachable
-	// with this month's payment.
-	reached := covered >= g.TargetAmount.Amount
 
 	// The plain-language ETA sentence (wording unchanged) — the precise, screen-reader
-	// friendly summary beneath the rail.
+	// friendly summary beneath the rail. (A covered goal already returned above.)
 	var readout ui.Node
 	switch {
-	case reached:
-		readout = Span(uistate.T("goaltrajectory.reachedNow", targetStr))
 	case !res.Reachable:
 		readout = Span(uistate.T("goaltrajectory.beyond", targetStr))
 	case hasTargetDate:
@@ -122,16 +126,9 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 	fillFrac := 1.0
 	flagFrac, targFrac := -1.0, -1.0 // <0 => marker not drawn
 	horizonMonth := res.ProjectedDate
+	onPace := false // exactly on pace for the target date → the rail adds nothing
 
 	switch {
-	case reached:
-		tone, pillTone, pillText = "is-done", "is-done", uistate.T("goaltrajectory.pillReached")
-		fillFrac = 1
-		if hasTargetDate {
-			horizonMonth = g.TargetDate
-		} else {
-			horizonMonth = now
-		}
 	case !res.Reachable:
 		// No landing point at this pace: show current progress as an amber sliver and the
 		// deadline tick, so the shortfall is visible without a fake projection.
@@ -161,6 +158,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 			switch {
 			case slack <= 0:
 				pillText = uistate.T("goaltrajectory.pillOnPace")
+				onPace = true
 			case slack == 1:
 				pillText = uistate.T("goaltrajectory.pillAheadOne")
 			default:
@@ -185,6 +183,17 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		fillFrac, horizonMonth = 1, res.ProjectedDate
 	}
 
+	// Compact mode: when the rail's spatial read carries no information — there's no
+	// target date to diverge from, or the projection lands exactly on pace — the
+	// one-line readout says everything, so the pill + rail + end captions stay home
+	// and the card gives that height back.
+	if !hasTargetDate || onPace {
+		return Div(css.Class("gtj"), Attr("data-testid", "goal-trajectory-"+g.ID),
+			heading,
+			Div(css.Class("gtj-eta"), Attr("data-testid", "goal-trajectory-eta-"+g.ID), readout),
+		)
+	}
+
 	railKids := []any{css.Class("gtj-rail")}
 	railKids = append(railKids, Div(ClassStr("gtj-rail-fill "+tone),
 		Attr("style", fmt.Sprintf("width:%.1f%%", clamp01(fillFrac)*100))))
@@ -199,6 +208,15 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 
 	horizonStr := horizonMonth.Format("Jan '06")
 
+	// The readout sentence renders under the rail ONLY when it adds something the
+	// pill can't say — the behind / off-pace advice ("consider a larger monthly
+	// amount"). An ahead sentence would restate the pill + rail verbatim, which is
+	// the pace-said-twice noise this card was just cured of.
+	var etaNode ui.Node = Fragment()
+	if tone == "is-behind" {
+		etaNode = Div(css.Class("gtj-eta"), Attr("data-testid", "goal-trajectory-eta-"+g.ID), readout)
+	}
+
 	return Div(css.Class("gtj"), Attr("data-testid", "goal-trajectory-"+g.ID),
 		Attr("aria-label", uistate.T("goaltrajectory.railAria", nowStr, targetStr, pillText)),
 		Div(css.Class("gtj-head2"),
@@ -210,7 +228,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 			Span(uistate.T("goaltrajectory.railNow", nowStr)),
 			Span(uistate.T("goaltrajectory.railTarget", targetStr, horizonStr)),
 		),
-		Div(css.Class("gtj-eta"), Attr("data-testid", "goal-trajectory-eta-"+g.ID), readout),
+		etaNode,
 	)
 }
 

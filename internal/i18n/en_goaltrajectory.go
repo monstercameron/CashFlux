@@ -21,8 +21,6 @@ var goalTrajectoryKeys = Catalog{
 	"goaltrajectory.aheadOne":  "About a month ahead of your %s target.",
 	"goaltrajectory.behind":    "About %d months past your %s target — consider a larger monthly amount.",
 	"goaltrajectory.behindOne": "About a month past your %s target — consider a larger monthly amount.",
-	// Reachable this month (already at target after this period). %s = target amount.
-	"goaltrajectory.reachedNow": "You've reached %s — goal complete.",
 	// Pace too slow to land within the projection horizon. %s = target amount.
 	"goaltrajectory.beyond": "At this pace, %s is more than ten years away — consider a larger monthly amount.",
 	// Empty state: no monthly contribution to project from yet.
@@ -31,14 +29,15 @@ var goalTrajectoryKeys = Catalog{
 	"goaltrajectory.chartLabel": "Projected balance over time for %s",
 
 	// Compact pace-horizon design: a status pill + the "now → horizon" rail ends.
-	"goaltrajectory.pillReached":  "Reached",
-	"goaltrajectory.pillOnPace":   "On pace",
-	"goaltrajectory.pillAhead":    "%d mo ahead",   // %d ≥ 1
-	"goaltrajectory.pillAheadOne": "1 mo ahead",
-	"goaltrajectory.pillBehind":   "%d mo behind",  // %d ≥ 1
+	// (The pill + rail render only when the projection diverges from a real target
+	// date; reached / no-date / on-pace goals get the one-line readout alone.)
+	"goaltrajectory.pillOnPace":    "On pace",
+	"goaltrajectory.pillAhead":     "%d mo ahead", // %d ≥ 1
+	"goaltrajectory.pillAheadOne":  "1 mo ahead",
+	"goaltrajectory.pillBehind":    "%d mo behind", // %d ≥ 1
 	"goaltrajectory.pillBehindOne": "1 mo behind",
-	"goaltrajectory.pillOffPace":  "Off pace",
-	"goaltrajectory.pillHits":     "Hits %s",       // %s = landing month, no target date
+	"goaltrajectory.pillOffPace":   "Off pace",
+	"goaltrajectory.pillHits":      "Hits %s", // %s = landing month, no target date
 	// Rail end captions. %s = amount; %s = a month ("Nov '26").
 	"goaltrajectory.railNow":    "Now · %s",
 	"goaltrajectory.railTarget": "%s · %s",
