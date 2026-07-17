@@ -148,6 +148,42 @@ func registerR4Surface() {
 		boxShadow("0 0 0 2px var(--accent)"),
 	)
 
+	// Bill → budget-fit chip: a small clickable pill on a bill row telling you whether
+	// paying it still fits the budget tracking its category. The everyday case (it
+	// fits) is deliberately QUIET — a hairline neutral pill — so it informs without
+	// nagging; only the overage case takes an amber tint (amber, not the row's red
+	// urgency tone, so the two signals stay distinct). Clicking it flashes the budget.
+	rule(".bill-fit",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		padding("0.05rem 0.5rem"),
+		borderRadius("999px"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		transition("border-color .12s ease, background .12s ease"),
+	)
+	rule(".bill-fit-ok",
+		color("var(--text-dim)"),
+	)
+	rule(".bill-fit-ok:hover",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
+	rule(".bill-fit-over",
+		color("var(--text-down)"),
+		borderColor("color-mix(in srgb, #f59e0b 55%, var(--border))"),
+		background("color-mix(in srgb, #f59e0b 12%, transparent)"),
+	)
+	rule(".bill-fit-over:hover",
+		background("color-mix(in srgb, #f59e0b 20%, transparent)"),
+	)
+
 	// The "?" smart-tooltip renders through IconButton, which prepends the full `.btn`
 	// base — giving it a ~41px bordered square next to a ~14px caps label on the hero /
 	// budgets / goals stat labels (only the `.stat-label` scope shrank it, so Accounts was

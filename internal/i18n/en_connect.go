@@ -15,6 +15,12 @@ var connectKeys = Catalog{
 	"budgets.driverRecurring":          "recurring",
 	"budgets.driverDrillAria":          "See all %s charges",
 	"budgets.driverDrillRecurringAria": "Manage the recurring charge from %s",
+
+	// Bill → budget-fit chip: does this upcoming charge still fit the budget that
+	// tracks its category, for the period it's due?
+	"bills.budgetFits":    "Fits %s · %s left",
+	"bills.budgetOver":    "%s over %s",
+	"bills.budgetFitAria": "Open the %s budget",
 }
 
 func init() {

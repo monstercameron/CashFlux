@@ -1,3 +1,21 @@
+## 2026-07-17 — Connective layer: does this bill fit its budget?
+
+Third connective feature. A bill and a budget are the same money seen from two pages; the chip states
+whether the upcoming charge still fits. Kept the logic honest by reusing the engine: pure
+`budgeting.FitBill(limit, spent, bill)` (table-tested, spending-exactly-to-limit fits, one-over is
+over), and the screen resolves the bill's category (only recurring-derived bills carry one — a
+liability statement payment is debt, not category spend, so it gets no chip), finds the budget whose
+descendant-expanded tracked set covers it, and computes that budget's `Spent` for the period the due
+date lands in (so a bill due next month compares against next month's fresh budget, not this one).
+FX-converts the charge to the limit currency before comparing. Verified against the seed: "Streaming
+& apps" ($38) → "Fits Subscriptions · $2.00 left" — a genuinely tight real signal, since the
+Subscriptions budget is $40. Debt bills (mortgage, car, student loan) correctly show nothing.
+Tied it to the deep-link work: clicking the chip flashes the budget's card via the same
+SetDeepLinkFocus seam — so the three connective features compose instead of sitting apart. Quiet
+neutral pill for fits, amber (deliberately not the row's red urgency red) for over — two distinct
+signals. All green: FitBill unit test, wasm build, and a gapfeatures e2e that asserts the chip and
+the resulting budget-card flash. Screenshotted /bills to confirm the pill reads well and isn't noisy.
+
 ## 2026-07-17 — Connective layer: notifications that land on the exact item
 
 Second of the "make the nine pages reason together" additions. A notification isn't about a page,

@@ -8,11 +8,14 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -27,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -286,6 +290,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			PayOn: payOn, PayOnLabel: pr.FormatDate(payOn),
 			PlanActive: viewSmart && !sameDay(payOn, b.DueDate),
 			AheadTag:   aheadTagFor(b, isPaid),
+			Fit:        billFitFor(b),
 		})
 	}
 
@@ -318,6 +323,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 				PayOn:  payOn, PayOnLabel: pr.FormatDate(payOn),
 				PlanActive: true,
 				AheadTag:   aheadTagFor(b, isPaid),
+				Fit:        billFitFor(b),
 			})
 		}
 		// The plan view lists by when you PAY (the actionable order), not by
@@ -565,6 +571,103 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 }
 
 // billRowData is one bill plus its display-ready amount and dates.
+// billFitChip is the "does this bill fit its budget?" verdict shown on a bill row —
+// the analytical link from Bills to Budgets. It's computed for recurring-derived
+// bills that map to a category a budget tracks, comparing the (FX-converted) charge
+// against what's left in that budget for the period the bill lands in.
+type billFitChip struct {
+	BudgetID   string
+	BudgetName string
+	Fits       bool
+	Amount     string // formatted room-left (fits) or amount-over (doesn't)
+}
+
+// billCategoryID resolves the spending category a bill maps to, or "" when it has
+// none to budget against. Only recurring-derived bills carry a category (their
+// AccountID is "recurring:<id>"); account statement bills (a liability's minimum
+// payment) aren't category spend, so they get no fit chip.
+func billCategoryID(app *appstate.App, b bills.Bill) string {
+	const prefix = "recurring:"
+	if !strings.HasPrefix(b.AccountID, prefix) {
+		return ""
+	}
+	rid := strings.TrimPrefix(b.AccountID, prefix)
+	for _, r := range app.Recurring() {
+		if r.ID == rid {
+			return r.CategoryID
+		}
+	}
+	return ""
+}
+
+// billFitFor is the pointer-returning wrapper the row builder uses: the fit chip
+// when the bill maps to a tracked budget, or nil (no chip).
+func billFitFor(b bills.Bill) *billFitChip {
+	if c, ok := billBudgetFit(b); ok {
+		return &c
+	}
+	return nil
+}
+
+// billBudgetFit computes whether a bill fits the budget that tracks its category,
+// for the period the bill's due date falls in. Returns ok=false when the bill has
+// no category, no budget tracks it, or the budget carries no positive limit — in
+// all those cases the row simply shows no chip. It mirrors the engine's own spend
+// (budgeting.Spent) so the chip reconciles with the Budgets page.
+func billBudgetFit(b bills.Bill) (billFitChip, bool) {
+	app := appstate.Default
+	if app == nil {
+		return billFitChip{}, false
+	}
+	catID := billCategoryID(app, b)
+	if catID == "" {
+		return billFitChip{}, false
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	cats := app.Categories()
+	var matched domain.Budget
+	found := false
+	for _, bd := range app.Budgets() {
+		desc := categorytree.DescendantsOfAll(cats, bd.TrackedCategoryIDs())
+		if desc[catID] {
+			matched = bd
+			found = true
+			break
+		}
+	}
+	if !found {
+		return billFitChip{}, false
+	}
+	limit := matched.Limit
+	if limit.Currency == "" {
+		limit = money.New(limit.Amount, base)
+	}
+	if limit.Amount <= 0 {
+		return billFitChip{}, false
+	}
+	start, end := budgeting.PeriodRange(matched.Period, b.DueDate, uistate.LoadPrefs().WeekStartWeekday())
+	spent, err := budgeting.Spent(matched, app.Transactions(), start, end, rates)
+	if err != nil {
+		return billFitChip{}, false
+	}
+	billConv, err := rates.Convert(b.Amount, limit.Currency)
+	if err != nil {
+		return billFitChip{}, false
+	}
+	fit := budgeting.FitBill(limit.Amount, spent.Amount, billConv.Amount)
+	chip := billFitChip{BudgetID: matched.ID, BudgetName: matched.Name, Fits: fit.Fits}
+	if fit.Fits {
+		chip.Amount = fmtMoney(money.New(fit.LeftAfter, limit.Currency))
+	} else {
+		chip.Amount = fmtMoney(money.New(fit.OverBy, limit.Currency))
+	}
+	return chip, true
+}
+
 type billRowData struct {
 	Bill       bills.Bill
 	Shown      money.Money // amount converted to the base currency
@@ -578,6 +681,9 @@ type billRowData struct {
 	// flag stays "until you did it once"; once this or the prior occurrence is
 	// marked paid, the revised cadence is just the schedule).
 	AheadTag bool
+	// Fit: the budget-fit verdict for this bill, or nil when it maps to no tracked
+	// budget. Computed once at build time so BillRow stays render-only.
+	Fit *billFitChip
 }
 
 // sameDay reports whether two times fall on the same calendar date.
@@ -618,6 +724,16 @@ func BillRow(props billRowProps) ui.Node {
 			props.OnNegotiate(d.Bill)
 		}
 	}))
+	// The budget-fit chip jumps to and flashes the budget it's about (reusing the
+	// notification deep-link focus machinery), so "this fits Groceries" is one click
+	// from that budget's card.
+	nav := router.UseNavigate()
+	openFit := ui.UseEvent(Prevent(func() {
+		if d.Fit != nil {
+			uistate.SetDeepLinkFocus(`[data-testid="budget-card-` + d.Fit.BudgetID + `"]`)
+			nav.Navigate(uistate.RoutePath("/budgets"))
+		}
+	}))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
 	activeDate := d.Bill.DueDate
 	if d.PlanActive {
@@ -638,6 +754,23 @@ func BillRow(props billRowProps) ui.Node {
 	// "Unmark paid" button lets them undo in one click.
 	if d.IsPaid {
 		metaCls = "row-meta"
+	}
+	// Budget-fit chip: quiet neutral pill when the bill fits the budget tracking its
+	// category, an amber pill when paying it would push that budget over. Absent when
+	// the bill maps to no tracked budget (billBudgetFit returned nil).
+	var fitNode ui.Node = Fragment()
+	if d.Fit != nil {
+		cls := "pill bill-fit bill-fit-ok"
+		label := uistate.T("bills.budgetFits", d.Fit.BudgetName, d.Fit.Amount)
+		if !d.Fit.Fits {
+			cls = "pill bill-fit bill-fit-over"
+			label = uistate.T("bills.budgetOver", d.Fit.Amount, d.Fit.BudgetName)
+		}
+		fitNode = Button(ClassStr(cls), Type("button"),
+			Attr("data-testid", "bill-fit-"+d.Bill.AccountID),
+			Attr("aria-label", uistate.T("bills.budgetFitAria", d.Fit.BudgetName)),
+			Title(uistate.T("bills.budgetFitAria", d.Fit.BudgetName)),
+			OnClick(openFit), label)
 	}
 	// data-plan-move lets tooling (and the e2e) count rows the plan re-dated,
 	// independent of the pay-ahead flag (which only marks cycle-ahead moves).
@@ -660,6 +793,7 @@ func BillRow(props billRowProps) ui.Node {
 			If(d.AheadTag, Span(css.Class("rec-tag"), Attr("data-testid", "bill-payahead"), Attr("title", uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))),
 			// C154: paid chip — visible when this occurrence is marked paid.
 			If(d.IsPaid, Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"), Attr("title", uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))),
+			fitNode,
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
 		// bill-sub-actions: fixed trailing group so action buttons don't crowd the

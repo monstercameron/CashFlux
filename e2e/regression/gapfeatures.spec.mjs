@@ -111,6 +111,20 @@ test.describe("gap features", () => {
     }
   });
 
+  test("bill → budget-fit chip: an upcoming bill shows whether it fits its budget", async ({ app }) => {
+    // The seeded "Streaming & apps" recurring ($38) maps to the Subscriptions budget
+    // ($40), and car payments map to Transportation — so at least one bill row shows a
+    // fit chip stating whether paying it stays within that budget for the period.
+    await nav(app, "/bills");
+    const chip = app.locator('[data-testid^="bill-fit-"]').first();
+    await expect(chip).toBeVisible({ timeout: 15_000 });
+    await expect(chip).toContainText(/fits|over/i);
+    // Clicking it deep-links to the budget and flashes that budget's card.
+    await chip.click();
+    await expect(app).toHaveURL(/\/budgets/, { timeout: 10_000 });
+    await expect(app.locator(".budget.deeplink-flash").first()).toBeVisible({ timeout: 10_000 });
+  });
+
   test("budget driver panel: an over budget reveals what's driving it", async ({ app }) => {
     // The seeded Groceries budget is over; its card offers a "What's driving this"
     // disclosure that expands to the largest charges behind the overspend.
