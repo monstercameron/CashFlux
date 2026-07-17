@@ -1265,6 +1265,17 @@ pure `syncstate.ShouldResetBackoff(received, connectedFor, healthyAfter=30s)` so
 message-delivering or long-lived stream resets it. Extracted the decision to the native-testable
 syncstate package rather than burying it in the wasm-only app loop.
 
+Phase 1c: the watch was fire-once-at-boot with `context.Background()` and prefs captured once, so
+runtime toggle/URL/sign-in changes were dead until reload. Made it a cancelable, restartable loop
+behind a watchMu + watchCancel: `startBackendWatch` cancels any prior loop and starts a fresh one
+(so it doubles as restart), `stopBackendWatch` cancels, `restartBackendSync` picks stop-vs-start
+from live prefs. Binding every RPC to the loop ctx is what makes cancel actually unblock the
+streaming RecvMsg (the old Background() ctx couldn't). Also pulled the visibility/online listeners
+behind a once-guard so a runtime enable wires them too — previously only a boot-time-active backend
+got them. Wired both the Sync page and the Settings Cloud tab: toggle → restart; host change →
+restart (but NOT per-keystroke same-host edits — those ride the next natural reconnect since the
+loop re-reads prefs); OAuth sign-in → restart so the stream reauthenticates with the new session.
+
 Interjection mid-Phase-1: Cam asked for a Settings page to connect the backend + sync DB/artifacts,
 toggleable. Checked first — it already existed (Settings → Cloud tab: toggle, server URL/token,
 Sync-now that pushes dataset + uploads artifact blobs, OAuth, devices, billing). Asked what he

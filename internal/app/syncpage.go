@@ -67,9 +67,9 @@ func SyncPage() uic.Node {
 		p := prefsAtom.Get()
 		p.BackendDisabled = !v
 		persist(p)
-		if v {
-			requestBackendSyncNow()
-		}
+		// Take effect immediately: restart starts the watch (and lifecycle listeners)
+		// when on, or tears it down when off — no page reload required.
+		restartBackendSync()
 	}
 	onMode := func(v string) {
 		serverMode.Set(v)
@@ -87,7 +87,8 @@ func SyncPage() uic.Node {
 		// token issued by one server is meaningless to another — matching the Cloud
 		// settings behaviour. Editing only the path/query of the same host keeps the
 		// session.
-		if backendHost(next) != backendHost(p.ServerURL) && p.ServerToken != "" {
+		hostChanged := backendHost(next) != backendHost(p.ServerURL)
+		if hostChanged && p.ServerToken != "" {
 			p.ServerToken = ""
 			p.ServerCSRF = ""
 			serverToken.Set("")
@@ -96,6 +97,12 @@ func SyncPage() uic.Node {
 		}
 		p.ServerURL = next
 		persist(p)
+		// A host change points sync at a different server — restart the watch against
+		// it now (rather than waiting for the old connection to drop). Same-host edits
+		// (path/query) don't thrash the watch; the loop re-reads prefs on next reconnect.
+		if hostChanged {
+			restartBackendSync()
+		}
 	})
 	onToken := uic.UseEvent(func(v string) {
 		serverToken.Set(v)

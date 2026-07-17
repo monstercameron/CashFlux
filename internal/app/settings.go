@@ -729,7 +729,7 @@ func globalSettingsForm() uic.Node {
 			s := a.Settings()
 			s.BaseCurrency = e.GetValue()
 			_ = a.PutSettings(s)
-			bump() // re-window every currency-aware figure to the new base
+			bump()                                                     // re-window every currency-aware figure to the new base
 			uistate.PostNotice(uistate.T("settings.baseSaved"), false) // QA L2
 		}
 	})
@@ -807,9 +807,9 @@ func globalSettingsForm() uic.Node {
 		p := prefsAtom.Get()
 		p.BackendDisabled = !v
 		savePrefs(p)
-		if v {
-			requestBackendSyncNow()
-		}
+		// Runtime effect without reload: start the watch + listeners when on, tear
+		// them down when off (Phase 1c).
+		restartBackendSync()
 	}
 	initialAuth := backendauth.Discovery{AuthMode: backendauth.ModeToken}
 	if pr.ServerMode == prefs.ServerCloud {
@@ -829,7 +829,9 @@ func globalSettingsForm() uic.Node {
 		} else {
 			notify(uistate.T("settings.oauthSignedInAs", userID), false)
 		}
-		requestBackendSyncNow()
+		// A fresh OAuth token means the watch must reconnect with it — restart so it
+		// authenticates the stream with the new session, not just flush+pull.
+		restartBackendSync()
 	}
 	onServerMode := func(v string) {
 		serverMode.Set(v)
@@ -857,7 +859,8 @@ func globalSettingsForm() uic.Node {
 		// and re-points sync at the new URL. Local data is untouched; only the cloud
 		// session is cleared. We compare hosts so editing the path/query of the same
 		// server doesn't needlessly drop the session.
-		if backendHost(next) != backendHost(p.ServerURL) && p.ServerToken != "" {
+		hostChanged := backendHost(next) != backendHost(p.ServerURL)
+		if hostChanged && p.ServerToken != "" {
 			p.ServerToken = ""
 			p.ServerCSRF = ""
 			serverToken.Set("")
@@ -868,6 +871,11 @@ func globalSettingsForm() uic.Node {
 		}
 		p.ServerURL = next
 		savePrefs(p)
+		// Point the live watch at the new server now (Phase 1c) — only on a host
+		// change, so per-keystroke path edits don't thrash the connection.
+		if hostChanged {
+			restartBackendSync()
+		}
 	})
 	onServerToken := uic.UseEvent(func(v string) {
 		serverToken.Set(v)

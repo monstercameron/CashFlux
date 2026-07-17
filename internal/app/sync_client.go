@@ -71,9 +71,27 @@ func startBackendSync() {
 	if !uistate.LoadPrefs().Normalize().BackendActive() {
 		return
 	}
+	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
 	startBackendWatch()
+}
+
+// syncListenersWired guards the one-time registration of the page lifecycle
+// listeners, so enabling the backend at RUNTIME (not just boot) gets the same
+// visibility/focus/online/offline reconciliation as a fresh load — without
+// double-registering on repeated toggles.
+var syncListenersWired bool
+
+// wireSyncLifecycleListeners registers the visibility/focus/online/offline
+// listeners that trigger reconciling pulls and reflect connectivity. Idempotent:
+// the guard means it runs at most once whether reached from boot or a runtime
+// enable.
+func wireSyncLifecycleListeners() {
+	if syncListenersWired {
+		return
+	}
+	syncListenersWired = true
 	cb := js.FuncOf(func(js.Value, []js.Value) any {
 		if js.Global().Get("document").Get("visibilityState").String() == "visible" {
 			flushBackendSyncQueue()
@@ -207,70 +225,142 @@ func flushBackendSyncQueue() {
 	}()
 }
 
+// watchMu guards watchCancel, the cancel func for the single live watch loop.
+// A cancelable, restartable watch is what makes runtime pref changes take effect
+// without a full page reload: toggling the backend off cancels the loop, and
+// changing the server URL/token restarts it against the new endpoint.
+var (
+	watchMu     sync.Mutex
+	watchCancel context.CancelFunc
+)
+
+// startBackendWatch (re)starts the workspace watch loop. It cancels any prior
+// loop first so there is never more than one, and starts a fresh one only when
+// the backend is active — so it doubles as the restart primitive after a pref
+// change. Safe to call repeatedly.
 func startBackendWatch() {
-	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	watchMu.Lock()
+	defer watchMu.Unlock()
+	if watchCancel != nil {
+		watchCancel()
+		watchCancel = nil
+	}
+	if !uistate.LoadPrefs().Normalize().BackendActive() {
 		return
 	}
-	go func() {
-		// C322: exponential backoff + jitter (2s→120s cap) instead of fixed
-		// 10s/3s sleeps, so a flapping network doesn't hammer the backend and many
-		// clients don't reconnect in lockstep.
-		const baseDelay, capDelay, jitterFrac = 2 * time.Second, 120 * time.Second, 0.3
-		// healthyAfter is how long a stream must stay up (absent any received
-		// message) to count as a healthy connection worth resetting the backoff for
-		// — the thrash guard against a stream that opens then instantly errors.
-		const healthyAfter = 30 * time.Second
-		attempt := 0
-		sleepBackoff := func() {
-			d := backoff.Jitter(backoff.Delay(attempt, baseDelay, capDelay), jitterFrac, rand.Float64())
-			time.Sleep(d)
+	ctx, cancel := context.WithCancel(context.Background())
+	watchCancel = cancel
+	go runBackendWatch(ctx)
+}
+
+// stopBackendWatch cancels the live watch loop (if any), tearing down its stream
+// and connection promptly (the loop's ctx-bound RecvMsg unblocks on cancel).
+func stopBackendWatch() {
+	watchMu.Lock()
+	defer watchMu.Unlock()
+	if watchCancel != nil {
+		watchCancel()
+		watchCancel = nil
+	}
+}
+
+// restartBackendSync applies a runtime backend pref change (toggle / URL / token)
+// without a reload: it stops the watch when the backend is now off, or flushes,
+// pulls, and restarts the watch against the fresh prefs when it is on. Callers are
+// the Sync page and Settings → Cloud toggles.
+func restartBackendSync() {
+	if !uistate.LoadPrefs().Normalize().BackendActive() {
+		stopBackendWatch()
+		return
+	}
+	wireSyncLifecycleListeners()
+	flushBackendSyncQueue()
+	pullActiveWorkspaceFromBackend(true)
+	startBackendWatch()
+}
+
+// runBackendWatch is the watch loop body: it dials the bridge, subscribes, and
+// reads live events until cancelled, reconnecting with capped backoff+jitter. It
+// re-reads prefs each iteration and binds every RPC to ctx, so a pref change
+// (via restartBackendSync) or a disable takes effect immediately rather than at
+// the next page reload.
+func runBackendWatch(ctx context.Context) {
+	// C322: exponential backoff + jitter (2s→120s cap) instead of fixed
+	// 10s/3s sleeps, so a flapping network doesn't hammer the backend and many
+	// clients don't reconnect in lockstep.
+	const baseDelay, capDelay, jitterFrac = 2 * time.Second, 120 * time.Second, 0.3
+	// healthyAfter is how long a stream must stay up (absent any received
+	// message) to count as a healthy connection worth resetting the backoff for
+	// — the thrash guard against a stream that opens then instantly errors.
+	const healthyAfter = 30 * time.Second
+	attempt := 0
+	// sleepBackoff waits out the backoff, but wakes immediately if the watch is
+	// cancelled — returns false when cancelled so the loop exits promptly.
+	sleepBackoff := func() bool {
+		d := backoff.Jitter(backoff.Delay(attempt, baseDelay, capDelay), jitterFrac, rand.Float64())
+		select {
+		case <-time.After(d):
 			attempt++
+			return true
+		case <-ctx.Done():
+			return false
 		}
-		// firstConnect skips the reconcile pull on the very first successful
-		// subscribe, because startBackendSync already pulled at boot — only
-		// RE-connects need to reconcile the gap.
-		firstConnect := true
-		for {
-			ctx := context.Background()
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
-			if err != nil {
-				logSyncError("backend sync watch dial failed", err)
-				sleepBackoff()
-				continue
-			}
-			stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
-			if err == nil {
-				err = stream.SendMsg(&backendrpc.WatchWorkspacesRequest{IncludeDeleted: true})
-			}
-			if err == nil {
-				err = stream.CloseSend()
-			}
-			if err == nil {
-				// Reconcile on every RE-subscribe: the server streams only FUTURE
-				// events and silently drops on a full send buffer, so a client that
-				// was briefly disconnected (or whose buffer overflowed) would miss
-				// other devices' changes with no signal. Pulling the active workspace
-				// now closes that gap — the push stream alone is best-effort.
-				if !firstConnect {
-					pullActiveWorkspaceFromBackend(true)
-				}
-				firstConnect = false
-				connectedAt := time.Now()
-				received := readBackendWatch(stream)
-				// Reset the backoff only when the stream proved healthy (delivered a
-				// message or stayed up long enough); an immediate error keeps the
-				// backoff climbing instead of reconnecting at the floor forever.
-				if syncstate.ShouldResetBackoff(received, time.Since(connectedAt), healthyAfter) {
-					attempt = 0
-				}
-			} else {
-				logSyncError("backend sync watch failed", err)
-			}
-			_ = conn.Close()
-			sleepBackoff()
+	}
+	// firstConnect skips the reconcile pull on the very first successful
+	// subscribe, because startBackendSync already pulled at boot — only
+	// RE-connects need to reconcile the gap.
+	firstConnect := true
+	for {
+		if ctx.Err() != nil {
+			return
 		}
-	}()
+		// Re-read prefs each iteration so a runtime URL/token change is picked up on
+		// the next (re)connect, and a disable exits the loop.
+		pr := uistate.LoadPrefs().Normalize()
+		if !pr.BackendActive() {
+			return
+		}
+		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		if err != nil {
+			logSyncError("backend sync watch dial failed", err)
+			if !sleepBackoff() {
+				return
+			}
+			continue
+		}
+		stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodSyncWatchWorkspaces, backendrpc.JSONCallOptions()...)
+		if err == nil {
+			err = stream.SendMsg(&backendrpc.WatchWorkspacesRequest{IncludeDeleted: true})
+		}
+		if err == nil {
+			err = stream.CloseSend()
+		}
+		if err == nil {
+			// Reconcile on every RE-subscribe: the server streams only FUTURE
+			// events and silently drops on a full send buffer, so a client that
+			// was briefly disconnected (or whose buffer overflowed) would miss
+			// other devices' changes with no signal. Pulling the active workspace
+			// now closes that gap — the push stream alone is best-effort.
+			if !firstConnect {
+				pullActiveWorkspaceFromBackend(true)
+			}
+			firstConnect = false
+			connectedAt := time.Now()
+			received := readBackendWatch(stream)
+			// Reset the backoff only when the stream proved healthy (delivered a
+			// message or stayed up long enough); an immediate error keeps the
+			// backoff climbing instead of reconnecting at the floor forever.
+			if syncstate.ShouldResetBackoff(received, time.Since(connectedAt), healthyAfter) {
+				attempt = 0
+			}
+		} else {
+			logSyncError("backend sync watch failed", err)
+		}
+		_ = conn.Close()
+		if !sleepBackoff() {
+			return
+		}
+	}
 }
 
 // readBackendWatch reads live workspace events until the stream ends, pulling the
