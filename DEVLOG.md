@@ -1,3 +1,16 @@
+## 2026-07-17 — Original vs cleaned merchant, rules target either (parity-scan item 13)
+
+Most of this contract already existed structurally — aliases never mutate the stored payee, and
+the review card pairs cleaned + raw. Two real gaps: the edit modal displayed only the editable raw
+field with no statement-text caption when an alias renames the merchant (added, testid
+txn-original-statement), and the rules engine matched RAW ONLY — a rule authored against the tidy
+name a user actually sees would silently miss the processor descriptor. Chose the zero-ripple pure
+fix: payee matching (legacy haystack + payee condition) also tries payeeclean.Suggest(raw) inside
+the engine, so counts/preview/apply stay consistent everywhere without touching one call-site
+signature; user-defined ALIAS names still aren't match targets (they'd need domain data inside the
+pure engine) — the deterministic cleanup covers the mechanical cases the scan describes. Table
+tests + 3/3 e2e (Venmo Payment | VENMO PAYMENT 1042778120).
+
 ## 2026-07-17 — Phone shell fixes (parity-scan item 11/26/27)
 
 The probe explained the scan's "rail and Cloud promo obstruct content": the promo was already

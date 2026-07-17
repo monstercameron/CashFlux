@@ -2,6 +2,8 @@
 
 package rules
 
+import "github.com/monstercameron/CashFlux/internal/payeeclean"
+
 // MatchCount returns how many of texts the rule would match — the "matches N
 // existing transactions" preview a user wants before applying a rule to existing
 // data (which is otherwise blind). Each text is typically a transaction's
@@ -53,7 +55,7 @@ func (r Rule) matchesFull(c TxnCtx) bool {
 	if len(r.Conditions) > 0 {
 		return MatchConditions(r.Conditions, c.Payee, c.Desc, c.AmountMinor, c.AccountID, c.Date)
 	}
-	return matches(c.Payee+" "+c.Desc, r.Match)
+	return matches(c.Payee+" "+c.Desc+" "+payeeclean.Suggest(c.Payee), r.Match)
 }
 
 // MatchCountFull returns how many of the transaction contexts the rule would

@@ -116,28 +116,28 @@ func TestMatchConditions(t *testing.T) {
 		},
 		// 7. Account is / is-not.
 		{
-			name:      "account is match",
+			name:       "account is match",
 			conditions: []RuleCondition{{Field: ConditionFieldAccount, Op: ConditionOpIs, Value: "acc-123"}},
-			accountID: "acc-123",
-			want:      true,
+			accountID:  "acc-123",
+			want:       true,
 		},
 		{
-			name:      "account is mismatch",
+			name:       "account is mismatch",
 			conditions: []RuleCondition{{Field: ConditionFieldAccount, Op: ConditionOpIs, Value: "acc-123"}},
-			accountID: "acc-999",
-			want:      false,
+			accountID:  "acc-999",
+			want:       false,
 		},
 		{
-			name:      "account is-not match",
+			name:       "account is-not match",
 			conditions: []RuleCondition{{Field: ConditionFieldAccount, Op: ConditionOpIsNot, Value: "acc-123"}},
-			accountID: "acc-999",
-			want:      true,
+			accountID:  "acc-999",
+			want:       true,
 		},
 		{
-			name:      "account is-not fails when equal",
+			name:       "account is-not fails when equal",
 			conditions: []RuleCondition{{Field: ConditionFieldAccount, Op: ConditionOpIsNot, Value: "acc-123"}},
-			accountID: "acc-123",
-			want:      false,
+			accountID:  "acc-123",
+			want:       false,
 		},
 		// 8. Multiple AND conditions: payee contains + amount >.
 		{
@@ -287,4 +287,45 @@ func TestFirstMatchFull(t *testing.T) {
 			t.Fatalf("FirstMatch should skip condition-bearing rules, got %v", r)
 		}
 	})
+}
+
+// TestPayeeConditionMatchesCleanedForm locks the commercial-parity contract:
+// a payee condition written against the CLEANED merchant name matches the raw
+// processor descriptor, and one written against the raw form still matches.
+func TestPayeeConditionMatchesCleanedForm(t *testing.T) {
+	raw := "SQ *BLUE BOTTLE COFFEE #47"
+	tests := []struct {
+		name  string
+		op    ConditionOp
+		value string
+		want  bool
+	}{
+		{"contains cleaned name", ConditionOpContains, "Blue Bottle Coffee", true},
+		{"contains raw fragment", ConditionOpContains, "SQ *BLUE", true},
+		{"equals cleaned name", ConditionOpEquals, "Blue Bottle Coffee", true},
+		{"no match", ConditionOpContains, "Chipotle", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conds := []RuleCondition{{Field: ConditionFieldPayee, Op: tc.op, Value: tc.value}}
+			got := MatchConditions(conds, raw, "", -1200, "acct1", TxnDate{})
+			if got != tc.want {
+				t.Fatalf("MatchConditions(%q vs %q %s) = %v, want %v", raw, tc.value, tc.op, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLegacyMatchHitsCleanedPayee locks the same contract for the legacy
+// substring Match: a rule whose Match is the tidy merchant name catches the
+// raw descriptor.
+func TestLegacyMatchHitsCleanedPayee(t *testing.T) {
+	r := Rule{Match: "blue bottle coffee", SetCategoryID: "cat-coffee"}
+	got := FirstMatchFull([]Rule{r}, "SQ *BLUE BOTTLE COFFEE #47", "", -1200, "acct1", TxnDate{})
+	if got == nil {
+		t.Fatal("legacy Match against the cleaned merchant name did not match the raw descriptor")
+	}
+	if none := FirstMatchFull([]Rule{{Match: "chipotle"}}, "SQ *BLUE BOTTLE COFFEE #47", "", -1200, "acct1", TxnDate{}); none != nil {
+		t.Fatal("unrelated rule matched")
+	}
 }

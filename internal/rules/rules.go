@@ -6,7 +6,11 @@
 // Go. The UI manages the rules and applies them on entry/import.
 package rules
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/payeeclean"
+)
 
 // ConditionField names the transaction field a structured condition inspects.
 type ConditionField string
@@ -113,11 +117,15 @@ func FirstMatchFull(rs []Rule, payee, desc string, amountMinor int64, accountID 
 
 // ruleMatchesFull reports whether one rule matches the full transaction context
 // (structured conditions when present, otherwise the legacy substring Match).
+// The legacy haystack includes the deterministically CLEANED payee alongside
+// the raw one, so a rule written against the tidy merchant name ("Blue Bottle
+// Coffee") matches the processor descriptor ("SQ *BLUE BOTTLE #47") too —
+// commercial parity: rules target either the original or the cleaned value.
 func ruleMatchesFull(r Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
 	if len(r.Conditions) > 0 {
 		return MatchConditions(r.Conditions, payee, desc, amountMinor, accountID, txnDate)
 	}
-	return matches(payee+" "+desc, r.Match)
+	return matches(payee+" "+desc+" "+payeeclean.Suggest(payee), r.Match)
 }
 
 // FirstMatchFullWhere returns the first rule that both matches the transaction and

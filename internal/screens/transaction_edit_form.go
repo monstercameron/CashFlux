@@ -561,7 +561,22 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		labeledField(uistate.T("transactions.descPlaceholder"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
 		labeledField(uistate.T("transactions.payeeLabel"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), Value(payeeS.Get()), OnInput(onPayee))),
+			Fragment(
+				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), Value(payeeS.Get()), OnInput(onPayee)),
+				// Parity: the ORIGINAL statement text stays visible beside the
+				// cleaned merchant — when the resolver (alias table + cleanup)
+				// displays this transaction under a different name, say what the
+				// bank actually printed, so categorization stays debuggable.
+				func() ui.Node {
+					raw := strings.TrimSpace(firstNonEmpty(txn.Payee, txn.Desc))
+					shown := strings.TrimSpace(app.PayeeResolver().Resolve(raw))
+					if raw == "" || shown == "" || strings.EqualFold(raw, shown) {
+						return Fragment()
+					}
+					return P(css.Class("muted", tw.TextXs, tw.Mt05), Attr("data-testid", "txn-original-statement"),
+						uistate.T("transactions.originalStatement", raw))
+				}(),
+			)),
 		labeledField(uistate.T("transactions.amountPlaceholder"),
 			Input(css.Class("field"), Type("number"), Step("0.01"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
 		uiw.FormField(uistate.T("transactions.categoryLabel"),

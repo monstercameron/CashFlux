@@ -3,6 +3,7 @@
 package rules
 
 import (
+	"github.com/monstercameron/CashFlux/internal/payeeclean"
 	"strconv"
 	"strings"
 	"time"
@@ -111,7 +112,16 @@ func MatchConditions(conditions []RuleCondition, payee, desc string, amountMinor
 func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
 	switch c.Field {
 	case ConditionFieldPayee:
-		return matchText(payee, c.Op, c.Value)
+		// The payee condition tests the raw descriptor AND its deterministic
+		// cleanup, so a condition written against either form matches
+		// (parity: rules target the original or the cleaned merchant).
+		if matchText(payee, c.Op, c.Value) {
+			return true
+		}
+		if clean := payeeclean.Suggest(payee); clean != "" && clean != payee {
+			return matchText(clean, c.Op, c.Value)
+		}
+		return false
 	case ConditionFieldDescription:
 		return matchText(desc, c.Op, c.Value)
 	case ConditionFieldAmount:
