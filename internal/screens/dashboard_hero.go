@@ -273,6 +273,10 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("home.quickAddAccount")),
 			),
+			// Presentation modes: one click swaps the widget set for a moment
+			// (daily check-in, payday, month end, debt, goals). The user can
+			// still drag/resize afterwards; Settings → Reset restores default.
+			ui.CreateElement(dashPresetPicker, struct{}{}),
 		),
 
 		// Quote of the day (opt-in AI Smart+ feature) — a calm footer ribbon.

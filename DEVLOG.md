@@ -131,6 +131,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Dashboard Focus presets close the sweep
+
+Last item of the report-driven UI sweep. Presets are just curated `[]dashlayout.Item` lists
+applied through the SAME path the Settings reset uses (layoutAtom + PersistItems), so drag,
+resize, reconcile-on-upgrade, and reset all keep working untouched. Two guard rails: a test
+asserts every preset id exists in the widget catalog (a typo would render an empty tile
+silently), and applying pins the mode to Custom so the auto-importance sorter can't instantly
+un-curate the order. A preset is a starting arrangement, not a lock — dragging afterwards just
+diverges, which is the honest semantic. With this, all 23 items from the local-first report
+triage are shipped or deliberately scope-resolved; the sweep's ledger is this DEVLOG.
+
 ## 2026-07-17 — "What's shared?" is buildMessages, read aloud
 
 The pre-send preview's one design rule: it must mirror the REAL payload builder, not a

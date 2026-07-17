@@ -1054,6 +1054,17 @@ var english = Catalog{
 	"insights.shareMemory":     "Your saved assistant memory (view it under Edit prompt).",
 	"insights.shareTurns":      "The conversation so far (%d turns are re-sent each message).",
 	"insights.shareTokens":     "Rough size: ≈ %s tokens of context per message.",
+	// Dashboard presentation presets.
+	"dashboard.presetLabel":    "Focus",
+	"dashboard.presetTitle":    "Swap the dashboard's widgets for a moment — you can still drag tiles afterwards; Settings → Reset restores the default.",
+	"dashboard.presetChoose":   "Choose a view…",
+	"dashboard.presetDaily":    "Daily check-in",
+	"dashboard.presetPayday":   "Payday",
+	"dashboard.presetMonthEnd": "Month end",
+	"dashboard.presetDebt":     "Debt",
+	"dashboard.presetGoals":    "Goals",
+	"dashboard.presetDefault":  "Everything (default)",
+	"dashboard.presetApplied":  "Dashboard focused: %s.",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",

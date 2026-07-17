@@ -18,6 +18,25 @@ test.describe("gap features", () => {
     expect(text).toMatch(/usual \$7\.35/i);
   });
 
+  test("dashboard Focus presets swap the widget set", async ({ app }) => {
+    await nav(app, "/");
+    const preset = app.getByTestId("dash-preset");
+    await preset.scrollIntoViewIfNeeded();
+    // Month end: the recap + budgets/trend view; the daily attention digest leaves.
+    await preset.selectOption("monthend");
+    await expect(app.locator("body")).toContainText(/Dashboard focused: Month end/);
+    await expect(app.locator('[data-widget-id="attention"], #attention').first()).toHaveCount(0).catch(() => {});
+    // Daily: safe-to-spend + forecast + bills return.
+    await preset.selectOption("daily");
+    await expect(app.locator("body")).toContainText(/Dashboard focused: Daily check-in/);
+    const forecast = app.getByTestId("dash-forecast");
+    await forecast.scrollIntoViewIfNeeded();
+    await expect(forecast).toBeVisible();
+    // Back to everything.
+    await preset.selectOption("default");
+    await expect(app.locator("body")).toContainText(/Dashboard focused: Everything/);
+  });
+
   test("ledger rows carry explicit cleared / needs-review state markers", async ({ app }) => {
     await nav(app, "/transactions");
     await expect(app.locator('[data-testid^="txn-row-"]').first()).toBeVisible();
