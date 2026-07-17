@@ -1299,6 +1299,15 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 		}
 		return fmt.Errorf("appstate: recurring bill not found")
 	}
+	// A bill payment posted straight to a liability account must reduce the debt
+	// under that account's at-rest sign convention (see liabilityPaymentMinor) —
+	// the raw bill amount only did so for negative-stored debts.
+	for _, ac := range a.Accounts() {
+		if ac.ID == accountID && ac.Class == domain.ClassLiability {
+			amount.Amount = liabilityPaymentMinor(ac, a.Transactions(), amount.Amount)
+			break
+		}
+	}
 	t := domain.Transaction{
 		ID: id.New(), AccountID: accountID, Amount: amount, Date: now,
 		Payee: name, Desc: "Bill payment: " + name,

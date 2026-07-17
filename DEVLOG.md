@@ -1,3 +1,19 @@
+## 2026-07-17 — QA remediation opens: the liability-payment sign defect (H1/CF-01)
+
+Two black-box QA reports landed (a 10-workflow pass and a first-nine-menus polish audit); both
+flagged the same Critical: a $50 transfer-payment into a $500 liability made it $550. The
+interesting part wasn't the fix, it was WHY the bills Mark-paid path looked correct while transfers
+corrupted: liabilities have two at-rest sign conventions in the wild — sample data stores debts
+negative, the "amount you owe" add form stores them positive — and both `CreateTransferPair` and
+`RecordBillPayment` blindly posted the caller's sign. Positive in-leg + positive-stored debt = debt
+grows. Rather than migrate the data (risky: display code already Abs-normalizes both conventions,
+and imported datasets are outside our control forever), the payment leg now derives its sign per
+account: `liabilityPaymentMinor` reads the booked balance (fallback: opening balance) and posts
+whichever sign moves it toward zero. Covers transfers AND the bills path; four table tests lock
+both conventions on both paths. Full remediation backlog (42 items) tracked in session todos;
+display-side sign inconsistency (Dashboard shows the positive-stored debt un-parenthesized, CF-09)
+is its own follow-up.
+
 ## 2026-07-17 — The real basis-persistence bug: locked boots seeded default prefs
 
 Cam, after the gen-guard ship: "still doesn't persist — saved, navved away and back, still there;

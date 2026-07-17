@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -98,6 +99,14 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 			toMoney = conv
 		}
 	}
+	// A transfer into a liability is a payment and must REDUCE the debt. Liability
+	// balances carry two at-rest sign conventions (the sample data stores debts
+	// negative; the "amount you owe" add form stores them positive), so a blanket
+	// positive in-leg grew positive-stored debts instead of paying them down. Pick
+	// the sign per account: whichever moves its booked balance toward zero.
+	if toAcc.Class == domain.ClassLiability {
+		toMoney.Amount = liabilityPaymentMinor(toAcc, a.Transactions(), toMoney.Amount)
+	}
 
 	outID = id.New()
 	inID = id.New()
@@ -133,4 +142,24 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		return "", "", fmt.Errorf("transfer: record in-leg: %w", err)
 	}
 	return outID, inID, nil
+}
+
+// liabilityPaymentMinor returns the signed minor-unit amount for a payment leg
+// posted to a liability account: the sign that moves the account's booked
+// balance toward zero under its own at-rest convention. A zero balance falls
+// back to the opening balance's sign; when both are zero the debt is settled
+// and the leg posts positive (the sample-data convention). amountMinor may be
+// passed with either sign — only its magnitude is used.
+func liabilityPaymentMinor(acc domain.Account, all []domain.Transaction, amountMinor int64) int64 {
+	if amountMinor < 0 {
+		amountMinor = -amountMinor
+	}
+	ref := acc.OpeningBalance.Amount
+	if bal, err := ledger.Balance(acc, all); err == nil && bal.Amount != 0 {
+		ref = bal.Amount
+	}
+	if ref > 0 {
+		return -amountMinor // debt stored positive-owed: a payment subtracts
+	}
+	return amountMinor // debt stored negative (or settled): a payment adds toward zero
 }
