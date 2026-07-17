@@ -60,6 +60,68 @@ func TestLargeTransactionCandidatesZeroThreshold(t *testing.T) {
 	}
 }
 
+func TestUnusualChargeCandidates(t *testing.T) {
+	since := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	text := func(payee string, amount, typical int64) (string, string) {
+		return "Unusual charge at " + payee, fmt.Sprintf("%d vs usual %d", amount, typical)
+	}
+	exp := func(id, payee string, cents int64, d time.Time) domain.Transaction {
+		return domain.Transaction{ID: id, Payee: payee, Amount: money.New(-cents, "USD"), Date: d}
+	}
+	day := func(n int) time.Time { return time.Date(2026, time.June, n, 0, 0, 0, 0, time.UTC) }
+	txns := []domain.Transaction{
+		// Coffee: four typical ~$5 charges + one $60 (12x median, above the $50 floor)
+		// in window → flagged.
+		exp("c1", "Coffee Shop", 500, day(2)),
+		exp("c2", "Coffee Shop", 500, day(3)),
+		exp("c3", "Coffee Shop", 550, day(4)),
+		exp("c4", "Coffee Shop", 450, day(5)),
+		exp("c5", "Coffee Shop", 6000, day(20)), // anomalous, in window
+		// Rent: consistent $2000 charges, one at $2000 → not anomalous.
+		exp("r1", "Landlord", 200000, day(2)),
+		exp("r2", "Landlord", 200000, day(3)),
+		exp("r3", "Landlord", 200000, day(4)),
+		exp("r4", "Landlord", 200000, day(20)),
+		// Newpayee: only one charge ever → no baseline, never flagged even if large.
+		exp("n1", "New Store", 99999, day(21)),
+	}
+	got, err := UnusualChargeCandidates("rule-unusual", txns, 5000, since, rates, text)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates, want 1 (the anomalous coffee charge): %+v", len(got), got)
+	}
+	c := got[0]
+	if c.OccurrenceKey != "unusual:c5" {
+		t.Errorf("OccurrenceKey = %q, want unusual:c5", c.OccurrenceKey)
+	}
+	if c.Event != notify.EventUnusualCharge || c.Severity != notify.SeverityWarning {
+		t.Errorf("Event/Severity = %q/%v", c.Event, c.Severity)
+	}
+}
+
+func TestUnusualChargeCandidatesGates(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	txt := func(string, int64, int64) (string, string) { return "", "" }
+	one := domain.Transaction{ID: "a", Payee: "X", Amount: money.New(-99999, "USD"), Date: time.Now()}
+	// Zero floor disables entirely.
+	if got, _ := UnusualChargeCandidates("r", []domain.Transaction{one}, 0, time.Time{}, rates, txt); got != nil {
+		t.Errorf("zero floor should yield nothing, got %+v", got)
+	}
+	// A charge below the floor is never flagged, even if far above the payee's tiny median.
+	small := []domain.Transaction{
+		{ID: "s1", Payee: "Y", Amount: money.New(-10, "USD"), Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "s2", Payee: "Y", Amount: money.New(-10, "USD"), Date: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+		{ID: "s3", Payee: "Y", Amount: money.New(-10, "USD"), Date: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)},
+		{ID: "s4", Payee: "Y", Amount: money.New(-100, "USD"), Date: time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)}, // 10x median but $1 < $50 floor
+	}
+	if got, _ := UnusualChargeCandidates("r", small, 5000, time.Time{}, rates, txt); len(got) != 0 {
+		t.Errorf("below-floor charge should not flag, got %+v", got)
+	}
+}
+
 func TestBackupCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
 	text := func(days int) (string, string) {

@@ -30,6 +30,7 @@ func defaultNotifyRoutes() []NotifyRoute {
 		{"default-low", "/accounts"},
 		{"default-goal", "/goals"},
 		{"default-large", "/transactions"},
+		{"default-unusual", "/transactions"},
 		{"default-paycheck", "/transactions"},
 		{"default-digest", "/reports"},
 	}

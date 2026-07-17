@@ -42,6 +42,7 @@ const (
 	EventBackupDue        Event = "backup-due"        // a periodic data-backup reminder is due
 	EventLowBalance       Event = "low-balance"       // an asset account's balance dropped below a floor
 	EventPaycheckLanded   Event = "paycheck-landed"   // an expected income/paycheck transaction just arrived
+	EventUnusualCharge    Event = "unusual-charge"    // a charge is unusually large vs the same payee's own history
 )
 
 // Severity ranks a notification for ordering and styling in the center.

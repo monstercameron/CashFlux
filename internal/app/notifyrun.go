@@ -82,6 +82,7 @@ func runNotifyCatchUp() {
 		})...)
 	cands = append(cands, weeklyDigestCandidates(app, now)...)
 	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
+	cands = append(cands, unusualChargeCandidates(app, now, ruleCfg)...)
 	cands = append(cands, backupReminderCandidates(app, now)...)
 	cands = append(cands, lowBalanceCandidates(app, now, ruleCfg)...)
 	cands = append(cands, paycheckLandedCandidates(app, now, ruleCfg)...)
@@ -217,6 +218,44 @@ func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.Rul
 				label = uistate.T("notify.largeNoDesc")
 			}
 			return uistate.T("notify.largeTitle", fmtBaseMoney(amount, base)), uistate.T("notify.largeBody", label)
+		})
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// unusualChargeCandidates flags recent expenses that are unusually large versus
+// the same payee's own history (a price hike, a duplicate charge, or fraud) —
+// computed entirely on-device. The floor comes from the user's override in cfg
+// (if set and positive), otherwise the default-unusual rule's built-in value; a
+// zero/absent floor disables the alert. Scoped to the last 30 days so the first
+// open doesn't replay the whole ledger; the baseline still uses all history.
+func unusualChargeCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	var ruleDefault int64
+	for _, r := range notify.DefaultRules() {
+		if r.ID == "default-unusual" {
+			ruleDefault = int64(r.Threshold)
+		}
+	}
+	floor := notify.EffectiveThreshold("default-unusual", cfg, ruleDefault)
+	if floor <= 0 {
+		return nil
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	since := now.AddDate(0, 0, -30)
+	out, err := notifyfeed.UnusualChargeCandidates("default-unusual", app.Transactions(), floor, since, rates,
+		func(payee string, amount, typical int64) (title, body string) {
+			label := payee
+			if label == "" {
+				label = uistate.T("notify.largeNoDesc")
+			}
+			return uistate.T("notify.unusualTitle", label),
+				uistate.T("notify.unusualBody", fmtBaseMoney(amount, base), fmtBaseMoney(typical, base))
 		})
 	if err != nil {
 		return nil

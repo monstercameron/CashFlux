@@ -162,6 +162,8 @@ var english = Catalog{
 	"notify.catchUpError":                "Couldn't refresh notifications just now — they'll catch up shortly.",
 	"notify.largeTitle":                  "Large charge: %s",
 	"notify.largeBody":                   "%s — a bigger-than-usual transaction.",
+	"notify.unusualTitle":                "Unusual charge at %s",
+	"notify.unusualBody":                 "%s — well above the usual %s here. Worth a look.",
 	"notify.largeNoDesc":                 "A transaction",
 	"notify.backupTitle":                 "Back up your data",
 	"notify.backupBody":                  "It's been %d days since your last export. A quick backup keeps your data safe.",

@@ -10,6 +10,8 @@ package notifyfeed
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backup"
@@ -294,6 +296,127 @@ func PaycheckLandedCandidates(
 		})
 	}
 	return out
+}
+
+// unusualChargeFactor is how many times a payee's typical (median) expense a
+// charge must exceed to count as "unusual" — a heads-up that a merchant you know
+// billed far more than usual (a price hike, a mistaken double-charge, or fraud).
+const unusualChargeFactor = 3.0
+
+// unusualMinHistory is how many OTHER expenses at the same payee are needed before
+// its baseline is trustworthy — below this there's no established "normal" to
+// deviate from, so nothing is flagged.
+const unusualMinHistory = 3
+
+// payeeKey normalizes a transaction to the merchant it belongs to for baseline
+// grouping: its Payee if set, else its Desc, lower-cased and trimmed. Empty when
+// neither is set (ungroupable — skipped).
+func payeeKey(t domain.Transaction) string {
+	s := strings.TrimSpace(t.Payee)
+	if s == "" {
+		s = strings.TrimSpace(t.Desc)
+	}
+	return strings.ToLower(s)
+}
+
+// medianMinor returns the median of a slice of minor-unit magnitudes. The input
+// is copied before sorting so the caller's slice is untouched. Empty → 0.
+func medianMinor(v []int64) int64 {
+	if len(v) == 0 {
+		return 0
+	}
+	c := append([]int64(nil), v...)
+	slices.Sort(c)
+	n := len(c)
+	if n%2 == 1 {
+		return c[n/2]
+	}
+	return (c[n/2-1] + c[n/2]) / 2
+}
+
+// UnusualChargeCandidates flags expenses that are unusually large versus the SAME
+// payee's own history — the local "did this merchant just bill me way more than
+// normal?" alert (a price hike, a duplicate charge, or fraud), computed entirely
+// on-device with no external service. A charge is flagged when its base-currency
+// magnitude is at least unusualChargeFactor × the median of that payee's OTHER
+// expenses, is at least `floor` minor units (skip trivial amounts), and the payee
+// has at least unusualMinHistory other expenses to establish a baseline. Only
+// charges dated on/after `since` are flagged (the recent window), but the whole
+// ledger builds each payee's baseline. Each is keyed by txn id so it fires once.
+// A non-positive floor disables the alert. text renders the localized title/body
+// from the payee, the charge amount, and the payee's typical (median) amount.
+func UnusualChargeCandidates(
+	ruleID string,
+	txns []domain.Transaction,
+	floor int64,
+	since time.Time,
+	rates currency.Rates,
+	text func(payee string, amount, typical int64) (title, body string),
+) ([]notify.Candidate, error) {
+	if floor <= 0 {
+		return nil, nil
+	}
+	type exp struct {
+		t   domain.Transaction
+		mag int64
+	}
+	byPayee := map[string][]exp{}
+	for _, t := range txns {
+		if !t.IsExpense() {
+			continue
+		}
+		key := payeeKey(t)
+		if key == "" {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount.Abs(), rates.Base)
+		if err != nil {
+			return nil, err
+		}
+		byPayee[key] = append(byPayee[key], exp{t: t, mag: conv.Amount})
+	}
+	var out []notify.Candidate
+	for _, list := range byPayee {
+		if len(list) <= unusualMinHistory {
+			continue // not enough history for anyone in this group to be a baseline of >= minHistory OTHERS
+		}
+		for i, e := range list {
+			if e.t.Date.Before(since) {
+				continue // only recent charges are flagged
+			}
+			if e.mag < floor {
+				continue
+			}
+			others := make([]int64, 0, len(list)-1)
+			for j, o := range list {
+				if j != i {
+					others = append(others, o.mag)
+				}
+			}
+			if len(others) < unusualMinHistory {
+				continue
+			}
+			typical := medianMinor(others)
+			if typical <= 0 || float64(e.mag) < unusualChargeFactor*float64(typical) {
+				continue
+			}
+			label := e.t.Payee
+			if strings.TrimSpace(label) == "" {
+				label = e.t.Desc
+			}
+			title, body := text(label, e.mag, typical)
+			out = append(out, notify.Candidate{
+				RuleID:        ruleID,
+				Event:         notify.EventUnusualCharge,
+				OccurrenceKey: "unusual:" + e.t.ID,
+				At:            e.t.Date,
+				Title:         title,
+				Body:          body,
+				Severity:      notify.SeverityWarning,
+			})
+		}
+	}
+	return out, nil
 }
 
 // LargeTransactionCandidates produces a notify.Candidate for each expense whose

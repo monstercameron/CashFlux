@@ -663,6 +663,10 @@ func SampleDataset() Dataset {
 	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-a", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Tags: []string{"duplicate", "dispute"}, Source: domain.TxnSourceImported})
 	add(domain.Transaction{ID: "tx-dup-doordash-2026-06-b", AccountID: card, Date: date(2026, time.June, 21), Payee: "CKE*DD DOORDASH WINGSTOP 855-431-0459", Desc: "CKE*DD DOORDASH WINGSTOP 855-431-0459", CategoryID: catDining, Amount: usd(-3849), MemberID: marcus, Cleared: true, Tags: []string{"duplicate", "dispute"}, Source: domain.TxnSourceImported})
 	add(domain.Transaction{ID: "tx-misfiled-parking-2026-05", AccountID: checking, Date: date(2026, time.May, 14), Payee: "PWP*CITYPARKING 866-330-3444", Desc: "PWP*CITYPARKING 866-330-3444", CategoryID: catDining, Amount: usd(-1400), MemberID: marcus, Cleared: true, Tags: []string{"needs-review"}, Source: domain.TxnSourceImported})
+	// A wildly-out-of-pattern charge at a merchant they use constantly (Blue Bottle
+	// Coffee normally runs ~$6): a $68 hit that engages the on-device unusual-charge
+	// alert — a price gouge, a fat-fingered tip, or a duplicate/fraud worth a look.
+	add(domain.Transaction{ID: "tx-coffee-anomaly-2026-06", AccountID: card, Date: date(2026, time.June, 25), Payee: "Blue Bottle Coffee", Desc: "Coffee — $68?!", CategoryID: catDining, Amount: usd(-6800), MemberID: marcus, Cleared: true, Tags: []string{"needs-review"}, Source: domain.TxnSourceImported})
 
 	// The current month (July 2026) is mid-flight: the first few days have
 	// posted — pending, uncleared — which is what a real ledger looks like on

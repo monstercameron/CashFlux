@@ -22,6 +22,13 @@ const defaultLowBalanceMinor = 10000
 // as incidental income rather than a paycheck. A zero Threshold disables the alert.
 const defaultPaycheckMinor = 50000
 
+// defaultUnusualFloorMinor is the minimum charge magnitude (minor units) an
+// "unusual charge" alert considers — below this, an above-normal charge is too
+// small to be worth flagging (e.g. 5000 = $50.00). The ratio test (a charge much
+// larger than the payee's own typical amount) is the real trigger; this floor
+// just suppresses noise on trivial amounts. A zero Threshold disables the alert.
+const defaultUnusualFloorMinor = 5000
+
 // DefaultRules returns the recommended Phase-A notification rules — one per
 // supported event — all enabled and delivered in-app, with no quiet hours and no
 // frequency cap (the per-event occurrence keys already bound how often each can
@@ -42,5 +49,6 @@ func DefaultRules() []Rule {
 		{ID: "default-large", Event: EventLargeTransaction, Enabled: true, Channels: inApp, Threshold: defaultLargeTxnMinor},
 		{ID: "default-low-balance", Event: EventLowBalance, Enabled: true, Channels: inApp, Threshold: defaultLowBalanceMinor},
 		{ID: "default-paycheck", Event: EventPaycheckLanded, Enabled: true, Channels: inApp, Threshold: defaultPaycheckMinor},
+		{ID: "default-unusual", Event: EventUnusualCharge, Enabled: true, Channels: inApp, Threshold: defaultUnusualFloorMinor},
 	}
 }
