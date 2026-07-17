@@ -13,6 +13,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -22,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -553,6 +555,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				effectiveCapLine,
 				envLine,
 				envDebtLine,
+				// "What's driving this?" — the analytical link (top charges → their ledger /
+				// subscriptions), offered only when a budget is near or over, where knowing
+				// WHY is what you actually want. Collapsed and lazy, so it never crowds a card.
+				If(s.State == budgeting.StateOver || s.State == budgeting.StateNear,
+					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget})),
 				metricsStrip,
 				actionsRow,
 			),
@@ -561,6 +568,145 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				todosPanel,
 			)),
 		),
+	)
+}
+
+// budgetTopDriversFor computes the up-to-n largest charges driving a budget's spend
+// this period, reconciled with the shown Spent (same rollup covers as EvaluateRollup).
+// Returns the drivers and the base currency. Reads appstate directly (like the
+// composition pie), so the card component stays self-contained.
+func budgetTopDriversFor(b domain.Budget, n int) ([]budgeting.Driver, string) {
+	app := appstate.Default
+	if app == nil {
+		return nil, "USD"
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	start, end := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
+	covers := func(id string) bool { return descendants[id] }
+	drivers, err := budgeting.TopDrivers(b, app.Transactions(), start, end, rates, covers, n)
+	if err != nil {
+		return nil, base
+	}
+	return drivers, base
+}
+
+// recurringLabelSet returns the household's recurring-charge labels, lower-cased —
+// so a budget driver can be recognized as a recurring bill / subscription and offer
+// the tighter "manage it" path instead of just showing it as a one-off charge.
+func recurringLabelSet() map[string]bool {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, r := range app.Recurring() {
+		if l := strings.ToLower(strings.TrimSpace(r.Label)); l != "" && r.Amount.IsNegative() {
+			out[l] = true
+		}
+	}
+	return out
+}
+
+// budgetDriversPanelProps configures the "what's driving this" disclosure.
+type budgetDriversPanelProps struct {
+	Budget domain.Budget
+}
+
+// budgetDriversPanel is the budget card's "what's driving this?" disclosure — the
+// analytical link that answers WHY a budget is over, not just that it is. Collapsed
+// by default (the card is already dense, and this is opt-in detail); when opened it
+// lists the largest charges driving the overspend, each drilling to the ledger for
+// that merchant — and a charge that's a recurring bill/subscription links straight to
+// where it can be reviewed or cancelled. Its own component so the disclosure hook and
+// the drivers computation stay lazy and at stable positions.
+func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
+	expanded := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	open := expanded.Get()
+
+	discLabel := uistate.T("budgets.driversShow")
+	if open {
+		discLabel = uistate.T("budgets.driversHide")
+	}
+	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
+		Attr("data-testid", "budget-drivers-toggle-"+props.Budget.ID),
+		Attr("aria-expanded", ariaBool(open)), OnClick(toggle),
+		Span(discLabel),
+		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
+
+	var body ui.Node = Fragment()
+	if open {
+		drivers, base := budgetTopDriversFor(props.Budget, 3)
+		if len(drivers) == 0 {
+			body = P(css.Class("budget-drivers-empty"), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
+				uistate.T("budgets.driversNone"))
+		} else {
+			recSet := recurringLabelSet()
+			rows := make([]ui.Node, 0, len(drivers))
+			for _, d := range drivers {
+				label := d.Label
+				isRec := recSet[strings.ToLower(strings.TrimSpace(label))]
+				drill := func(payee string, recurring bool) func() {
+					return func() {
+						if recurring {
+							nav.Navigate(uistate.RoutePath("/subscriptions"))
+							return
+						}
+						f := txFilter.Get()
+						f.Text = payee
+						f = f.Normalize()
+						txFilter.Set(f)
+						uistate.PersistTxFilter(f)
+						nav.Navigate(uistate.RoutePath("/transactions"))
+					}
+				}(label, isRec)
+				rows = append(rows, ui.CreateElement(budgetDriverRow, budgetDriverRowProps{
+					BudgetID: props.Budget.ID, Label: label,
+					Amount: fmtMoney(money.New(d.Amount, base)), Recurring: isRec, OnDrill: drill,
+				}))
+			}
+			body = Div(css.Class("budget-drivers-list"), rows)
+		}
+	}
+	return Div(css.Class("budget-drivers"), head, body)
+}
+
+// budgetDriverRowProps is one driver line in the "what's driving this" list.
+type budgetDriverRowProps struct {
+	BudgetID  string
+	Label     string
+	Amount    string
+	Recurring bool
+	OnDrill   func()
+}
+
+// budgetDriverRow renders one driving charge: the merchant, its amount, and (when it's
+// a recurring bill/subscription) a quiet "recurring" cue. The whole row is the drill —
+// to the merchant's charges, or to Subscriptions for a recurring one. Own component so
+// its click hook never registers inside the parent's driver loop (framework rule).
+func budgetDriverRow(props budgetDriverRowProps) ui.Node {
+	onDrill := ui.UseEvent(Prevent(func() {
+		if props.OnDrill != nil {
+			props.OnDrill()
+		}
+	}))
+	aria := uistate.T("budgets.driverDrillAria", props.Label)
+	if props.Recurring {
+		aria = uistate.T("budgets.driverDrillRecurringAria", props.Label)
+	}
+	return Button(css.Class("budget-driver-row"), Type("button"),
+		Attr("data-testid", "budget-driver-"+props.BudgetID),
+		Attr("aria-label", aria), Title(aria), OnClick(onDrill),
+		Span(css.Class("budget-driver-name"), props.Label),
+		If(props.Recurring, Span(css.Class("budget-driver-recurring"), uistate.T("budgets.driverRecurring"))),
+		Span(css.Class("budget-driver-amt"), props.Amount),
 	)
 }
 

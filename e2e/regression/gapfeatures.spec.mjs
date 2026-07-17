@@ -82,4 +82,16 @@ test.describe("gap features", () => {
     await mic.click();
     await expect(page.locator("#cf-chat-input")).toHaveValue(/how much did we spend on groceries/i, { timeout: 10_000 });
   });
+
+  test("budget driver panel: an over budget reveals what's driving it", async ({ app }) => {
+    // The seeded Groceries budget is over; its card offers a "What's driving this"
+    // disclosure that expands to the largest charges behind the overspend.
+    await nav(app, "/budgets");
+    const toggle = app.locator('[data-testid^="budget-drivers-toggle-"]').first();
+    await expect(toggle).toBeVisible();
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+    // At least one driving charge appears (a drill button to that merchant's ledger).
+    await expect(app.locator('[data-testid^="budget-driver-"]').first()).toBeVisible({ timeout: 10_000 });
+  });
 });

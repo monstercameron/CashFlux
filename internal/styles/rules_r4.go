@@ -27,6 +27,95 @@ func registerR4Surface() {
 		fontWeight("600"),
 	)
 
+	// "What's driving this?" disclosure on a near/over budget card — the analytical link
+	// to the charges behind an overspend. Kept deliberately QUIET and monochrome: the card
+	// already owns one red signal (the status line), so the driver amounts stay neutral and
+	// the toggle reads as a calm caption, not a competing alert.
+	rule(".budget-drivers",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+		marginTop("0.1rem"),
+	)
+	rule(".budget-drivers-toggle",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.2rem"),
+		alignSelf("flex-start"),
+		padding("0"),
+		border("none"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.8rem"),
+		transition("color .12s ease"),
+	)
+	rule(".budget-drivers-toggle:hover",
+		color("var(--text)"),
+	)
+	rule(".budget-drivers-chev",
+		transition("transform .15s ease"),
+	)
+	rule(".budget-drivers-toggle[aria-expanded=\"true\"] .budget-drivers-chev",
+		transform("rotate(180deg)"),
+	)
+	rule(".budget-drivers-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+		marginTop("0.1rem"),
+	)
+	rule(".budget-driver-row",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		textAlign("left"),
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.5rem"),
+		width("100%"),
+		padding("0.22rem 0.4rem"),
+		border("none"),
+		borderRadius("6px"),
+		background("transparent"),
+		color("var(--text)"),
+		transition("background .12s ease"),
+	)
+	rule(".budget-driver-row:hover",
+		background("color-mix(in srgb, var(--text) 6%, transparent)"),
+	)
+	rule(".budget-driver-name",
+		flex("1 1 auto"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontSize("0.86rem"),
+	)
+	rule(".budget-driver-recurring",
+		flex("none"),
+		fontSize("0.64rem"),
+		textTransform("uppercase"),
+		letterSpacing("0.05em"),
+		color("var(--text-dim)"),
+		border("1px solid var(--border)"),
+		borderRadius("999px"),
+		padding("0.02rem 0.4rem"),
+	)
+	rule(".budget-driver-amt",
+		flex("none"),
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text)"),
+		fontSize("0.86rem"),
+	)
+	rule(".budget-drivers-empty",
+		color("var(--text-faint)"),
+		fontSize("0.8rem"),
+		margin("0.15rem 0 0"),
+	)
+
 	// The "?" smart-tooltip renders through IconButton, which prepends the full `.btn`
 	// base — giving it a ~41px bordered square next to a ~14px caps label on the hero /
 	// budgets / goals stat labels (only the `.stat-label` scope shrank it, so Accounts was
