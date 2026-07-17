@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -447,6 +448,14 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// Payee-alias resolver (TX1): raw payee → clean display name (learned alias →
 	// rule pack → raw). Applied at DISPLAY only; the raw payee stays on the txn.
 	payeeResolver := props.App.PayeeResolver()
+	// #63: per-account reconciled-through dates — a cleared row dated at or
+	// before its account's newest reconciliation wears the stronger ✓✓ chip.
+	reconThrough := make(map[string]time.Time)
+	for _, ac := range props.App.Accounts() {
+		if th, ok := reconcile.Through(ac.Reconciliations); ok {
+			reconThrough[ac.ID] = th
+		}
+	}
 	// Member id → name, for the optional "User" column (the frame carries no member).
 	memberName := make(map[string]string)
 	for _, m := range props.App.Members() {
@@ -622,8 +631,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Category:            cat,
 			Source:              srcCol.Str(i),
 			Member:              memberName[txByID[rid].MemberID],
-			Cleared:             cleared,
-			Reviewed:            txByID[rid].Reviewed,
+			Cleared: cleared,
+			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
+				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
+			Reviewed: txByID[rid].Reviewed,
 			Selected:            sel[rid],
 			Receipts:            nAtt,
 			Attachment:          firstAtt,
@@ -793,7 +804,11 @@ type txnFrameRowProps struct {
 	Member        string          // assigned household member's name ("" if unassigned)
 	Vis           uistate.TxnCols // which optional columns to render (must match the header)
 	Cleared       bool
-	Reviewed      bool
+	// Reconciled marks a cleared row dated at or before its account's
+	// reconciled-through date (#63) — vouched for by a statement, shown with a
+	// stronger chip than plain cleared.
+	Reconciled bool
+	Reviewed   bool
 	Selected      bool
 	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
 	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
@@ -918,6 +933,11 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	// local-first report asked for, kept small because thousands of rows carry it.
 	var stateBadge ui.Node = Fragment()
 	switch {
+	case props.Reconciled:
+		// #63: the strongest state — this cleared row falls at or before its
+		// account's reconciled-through date, so a statement has vouched for it.
+		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-reconciled-badge"),
+			Attr("title", uistate.T("transactions.reconciledBadgeTitle")), "✓✓")
 	case props.Cleared:
 		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-cleared-badge"),
 			Attr("title", uistate.T("transactions.clearedBadgeTitle")), "✓")
@@ -1079,6 +1099,13 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			OnSelect: func() { props.OnOpenSplit(props.ID) },
 		})
 	}
+	// #63: every recorded change to THIS transaction (edits, rule applications,
+	// imports) — the audit trail scoped to one row. Opens the history flip modal.
+	items = append(items, uiw.OverflowMenuItem{
+		Label:    uistate.T("txnhistory.menuAction"),
+		TestID:   "txn-history-open",
+		OnSelect: func() { uistate.SetTxnHistory(props.ID) },
+	})
 	// SM-1: clean up / map this merchant name — a per-transaction entry to the payee
 	// mapping that also lives on /rules. Opens the payee-cleanup flip modal.
 	if !props.IsTransfer {

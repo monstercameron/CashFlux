@@ -294,6 +294,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(AddHost),
 		uic.CreateElement(TxnEditHost),
 		uic.CreateElement(TxnSplitHost),
+		uic.CreateElement(TxnHistoryHost),
 		uic.CreateElement(TxnColumnsHost),
 		uic.CreateElement(TxnSmartCatHost),
 		uic.CreateElement(TxnLinkHost),

@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -328,7 +329,16 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			uistate.IncrementLearnTally(learn, t.CategoryID)
 		}
 		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("toast.txnUpdated"), false)
+		// #63: the saved confirmation names the consequence — where the account's
+		// balance now stands — instead of a bare "updated".
+		saveMsg := uistate.T("toast.txnUpdated")
+		if acc, ok := domain.AccountByID(app.Accounts(), t.AccountID); ok {
+			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
+				saveMsg = uistate.T("transactions.savedImpact", acc.Name,
+					money.FormatMinor(b.Amount, currency.Decimals(acc.Currency)))
+			}
+		}
+		uistate.PostNotice(saveMsg, false)
 
 		// TX1 learning flow: when the user renamed the payee, quietly offer to always
 		// show the original (raw) name as the new one — creating a view-layer alias so

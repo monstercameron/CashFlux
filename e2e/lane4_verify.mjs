@@ -252,6 +252,90 @@ await page.locator("#cf-dialog-confirm").click();
 await page.waitForTimeout(2000);
 check("#57: roll-back restores pre-import data", /Rolled back/.test(await bodyText()));
 
+// ─────────────── #63: transaction trust details ───────────────
+// (a) Record a real reconciliation so the ✓✓ reconciled chip has data: open the
+// reconcile modal, post an adjustment to zero the difference, record it.
+await nav("/accounts");
+await page.waitForTimeout(1200);
+await openRecon();
+await stmtInput.fill("777777.77");
+await page.waitForTimeout(600);
+await page.locator('[data-testid="reconcile-adjust"]').click();
+await page.waitForTimeout(900);
+await page.locator('[data-testid="reconcile-done"]').click();
+await page.waitForTimeout(1000);
+await nav("/transactions");
+await page.waitForTimeout(1500);
+await page.locator('tr[data-testid^="txn-row-"]').first().waitFor({ timeout: 20000 });
+check("#63: reconciled rows wear the ✓✓ chip (distinct from cleared)", (await page.locator('[data-testid="txn-reconciled-badge"]').count()) > 0);
+
+// (b) Edit a transaction → durable saved confirmation names the balance impact.
+const editRow = page.locator('tr[data-testid^="txn-row-"]').first();
+const editRowID = (await editRow.getAttribute("data-testid")).replace("txn-row-", "");
+await editRow.click();
+await page.waitForTimeout(1000);
+check("#63: edit modal open", await page.locator('[data-testid="txn-edit-form"]').isVisible());
+const descInput = page.locator('[data-testid="txn-edit-form"] input[type="text"]').first();
+await descInput.fill("Lane4 trust edit");
+await page.locator('[data-testid="txn-edit-save"]').click();
+await page.waitForTimeout(1000);
+check("#63: saved confirmation states the account's new balance", /Saved — .* is now .*\d/.test(await bodyText()), (await bodyText()).match(/Saved[^\n]*/)?.[0]);
+await shot(page, "63-saved-impact");
+
+// (c) Per-transaction history panel from the row kebab.
+await page.locator(`[data-testid="txn-kebab-${editRowID}"]`).click();
+await page.waitForTimeout(500);
+await page.locator(`[data-testid="txn-row-${editRowID}"] [data-testid="txn-history-open"]`).click();
+await page.waitForTimeout(1000);
+check("#63: history panel opens", await page.locator('[data-testid="txn-history-panel"]').isVisible());
+const histText = await page.locator('[data-testid="txn-history-panel"]').innerText().catch(() => "");
+check("#63: the edit is recorded with before → after detail", /Lane4 trust edit/.test(histText) || /→/.test(histText), histText.slice(0, 140).replace(/\n/g, " · "));
+await shot(page, "63-history-panel");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(700);
+
+// (d) Percentage splits verified from the live surface (recently-landed mode).
+await page.locator(`[data-testid="txn-kebab-${editRowID}"]`).click();
+await page.waitForTimeout(500);
+const splitItem = page.locator(`[data-testid="txn-row-${editRowID}"] [data-testid="txn-split-open"]`);
+if (await splitItem.count()) {
+  await splitItem.click();
+  await page.waitForTimeout(1000);
+  await page.locator('[data-testid="split-mode-percent"]').click();
+  await page.waitForTimeout(500);
+  check("#63: percent split mode engages", (await page.locator('[data-testid="split-mode-percent"]').getAttribute("aria-pressed")) === "true");
+  const remText = await page.locator('[data-testid="split-remainder"]').innerText().catch(() => "");
+  check("#63: percent mode balances against 100%", /Balanced|% left to assign/.test(remText), remText);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(700);
+} else {
+  check("#63: percent split mode engages", false, "split menu entry missing");
+}
+
+// (e) Transfer semantics sentence in the transfer form.
+await nav("/accounts");
+await page.waitForTimeout(1200);
+const xferBtn = page.locator('[data-testid^="transfer-start-btn-"]').first();
+const xferAcctID = (await xferBtn.getAttribute("data-testid")).replace("transfer-start-btn-", "");
+const xferRow = page.locator(`[data-testid="acct-row-${xferAcctID}"]`);
+await xferRow.locator('button[aria-haspopup="menu"]').first().click();
+await page.waitForTimeout(400);
+await xferBtn.click();
+await page.waitForTimeout(900);
+const xferForm = page.locator(`#acct-transfer-form-${xferAcctID}`);
+check("#63: transfer form open", await xferForm.isVisible());
+// Pick the first real destination, then type an amount.
+const toSelect = xferForm.locator("select").nth(1);
+await toSelect.selectOption({ index: 1 });
+await page.waitForTimeout(400);
+await xferForm.locator('input[type="number"]').fill("50");
+await page.waitForTimeout(600);
+check("#63: transfer semantics sentence present", await page.locator('[data-testid="xfer-semantics"]').isVisible());
+check("#63: semantics say it isn't spending", /not spending|doesn't count as spending|neither side counts as spending|debt payment/.test(await page.locator('[data-testid="xfer-semantics"]').innerText().catch(() => "")));
+await shot(page, "63-transfer-semantics");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(600);
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

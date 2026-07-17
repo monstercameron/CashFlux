@@ -92,6 +92,21 @@ var lane4Keys = Catalog{
 	"documents.rollbackTitle":   "Restore your data to just before this import",
 	"documents.rollbackConfirm": "Roll back this import? Your data returns to the moment before it ran — the imported rows and anything you changed since will be lost.",
 	"documents.rolledBack":      "Rolled back — your data is back to just before that import.",
+
+	// #63 — transaction trust details.
+	// %s ×2 = account name, its new balance.
+	"transactions.savedImpact":          "Saved — %s is now %s.",
+	"transactions.reconciledBadgeTitle": "Reconciled — vouched for by a recorded statement reconciliation.",
+	// %s ×3 = from-account, amount, to-account.
+	"accounts.xferSemanticsAsset":     "Moves %s down by %s and %s up by the same — your total money doesn't change, and neither side counts as spending.",
+	"accounts.xferSemanticsLiability": "Takes %s down by %s and reduces what you owe on %s by the same — a debt payment, not spending.",
+	"txnhistory.title":                "Transaction history",
+	"txnhistory.menuAction":           "History",
+	"txnhistory.empty":                "No recorded changes for this transaction yet. Edits, rule applications, and imports made from now on are tracked here.",
+	"txnhistory.scopeNote":            "Every change this device recorded for this transaction, newest first.",
+	"txnhistory.actorYou":             "You",
+	// %d = estimated minutes remaining at the session's pace.
+	"review.paceEstimate": "≈ %d min left at this pace",
 }
 
 func init() {

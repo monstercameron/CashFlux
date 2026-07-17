@@ -350,6 +350,17 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr strin
 			toName = ac.Name
 		}
 	}
+	// #63: state the transfer's SEMANTICS in one plain sentence — what each side
+	// does and that neither leg is spending. A liability destination reads as
+	// paying down what's owed, not as an increase.
+	amtStr := money.FormatMinor(amtMinor, dec)
+	semantics := uistate.T("accounts.xferSemanticsAsset", fromName, amtStr, toName)
+	for _, ac := range app.Accounts() {
+		if ac.ID == toID && ac.Class == domain.ClassLiability {
+			semantics = uistate.T("accounts.xferSemanticsLiability", fromName, amtStr, toName)
+			break
+		}
+	}
 	return Div(css.Class("budget-sub"), Attr("data-testid", "xfer-balance-preview"),
 		Style(map[string]string{"margin": "0", "display": "grid", "gap": "0.15rem"}),
 		Span(uistate.T("accounts.xferPreviewTitle")),
@@ -357,6 +368,7 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr strin
 			uistate.T("accounts.xferPreviewLine", fromName, fmtMoney(pv.FromBefore), fmtMoney(pv.FromAfter))),
 		Span(Attr("data-testid", "xfer-preview-to"),
 			uistate.T("accounts.xferPreviewLine", toName, fmtMoney(pv.ToBefore), fmtMoney(pv.ToAfter))),
+		Span(css.Class(tw.TextDim), Attr("data-testid", "xfer-semantics"), semantics),
 	)
 }
 

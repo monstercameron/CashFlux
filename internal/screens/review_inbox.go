@@ -15,6 +15,7 @@ package screens
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
@@ -196,6 +197,9 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 	skipped := ui.UseState([]string{})
 	total := ui.UseState(0)
 	opened := ui.UseState(false)
+	// startedAt stamps when this review session opened (#63): with a few
+	// reviews done, the progress line adds a remaining-time estimate.
+	startedAt := ui.UseState(int64(0))
 	seededFor := ui.UseState("~none~")
 	selVal := ui.UseState("")
 	alsoSimilar := ui.UseState(false)
@@ -292,6 +296,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		total.Set(reviewqueue.Count(app.Transactions()))
 		skipped.Set(nil)
 		seededFor.Set("~none~")
+		startedAt.Set(time.Now().Unix())
 		opened.Set(true)
 	}
 	if !open.Get() && opened.Get() {
@@ -414,7 +419,8 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		// Progress: count + "N left" and a slim track.
 		Div(css.Class("rvw-progress"),
 			Span(css.Class("rvw-progress-count"), Attr("data-testid", "review-progress"),
-				uistate.T("review.progress", pos, total.Get())+" · "+uistate.T("review.leftCount", left)),
+				uistate.T("review.progress", pos, total.Get())+" · "+uistate.T("review.leftCount", left)+
+					reviewPaceSuffix(startedAt.Get(), pos-1, left)),
 			Div(css.Class("rvw-progress-track"),
 				Div(css.Class("rvw-progress-fill"), Attr("style", progressWidth(pos, total.Get()))),
 			),
@@ -459,6 +465,25 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 }
 
 // progressWidth is the inline style for the progress fill bar.
+// reviewPaceSuffix estimates the remaining review time from this session's own
+// pace (#63): after at least three reviews it appends "≈ N min left at this
+// pace". Silent before that — an estimate from one datapoint would be noise.
+func reviewPaceSuffix(startedUnix int64, reviewed, left int) string {
+	if startedUnix <= 0 || reviewed < 3 || left <= 0 {
+		return ""
+	}
+	elapsed := time.Now().Unix() - startedUnix
+	if elapsed <= 0 {
+		return ""
+	}
+	mins := (float64(elapsed) / float64(reviewed) * float64(left)) / 60
+	est := int(mins + 0.5)
+	if est < 1 {
+		est = 1
+	}
+	return " · " + uistate.T("review.paceEstimate", est)
+}
+
 func progressWidth(pos, total int) string {
 	pct := 0
 	if total > 0 {

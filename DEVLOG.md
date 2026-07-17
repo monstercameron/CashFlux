@@ -1,3 +1,16 @@
+## 2026-07-17 — #63: transactions explain themselves (lane 4)
+
+The trust bundle. The interesting piece was the per-transaction history panel: the #54 audit
+trail already recorded field-level before→after for single-entity updates (inferEntryFields sets
+EntityID only when exactly ONE real row changed), so a row-scoped history is just RecentAudit
+filtered by EntityID — no new recording machinery. The honest cost of that derivation: bulk
+changes and pre-audit history don't attribute to a row, and the empty state says so. The
+reconciled ✓✓ chip derives from reconcile.Through per account (cleared AND dated at/before the
+newest statement date) — computed once per render into a map, not per row. Transfer semantics
+ride the existing PreviewTransferPair card, with liability destinations worded as debt paydown.
+The review inbox's remaining-time estimate only speaks after three reviews — an estimate from
+one datapoint is noise wearing a number's clothes.
+
 ## 2026-07-17 — #52: detections learn to say how sure they are (lane 6)
 
 The strategy doc's correctness pillar, applied to the subscription detector. The old pipeline was
