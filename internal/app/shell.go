@@ -933,10 +933,6 @@ type topBarProps struct {
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
 	collapsed := uistate.UseRailCollapsed()
-	nav := router.UseNavigate()
-	// Breadcrumb: Dashboard (clickable) › current screen. Off the dashboard the
-	// home crumb navigates back; on it, just the title shows.
-	onHome := func() { nav.Navigate(uistate.RoutePath("/")) }
 	curPath := props.ActivePath
 	onDashboard := curPath == "/"
 	// The time-resolution control only makes sense where there's a period concept;
@@ -960,9 +956,10 @@ func TopBar(props topBarProps) uic.Node {
 			}),
 			ui.Icon(icon.Menu, css.Class(tw.W5, tw.H5)),
 		),
-		Nav(css.Class("breadcrumb tb-title", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0), Attr("aria-label", uistate.T("topbar.breadcrumb")),
-			If(!onDashboard, Button(css.Class(tw.TextDim, tw.HoverTextFg, tw.Text15), Type("button"), Attr("title", uistate.T("nav.dashboard")), Attr("aria-label", uistate.T("nav.dashboard")), OnClick(onHome), uistate.T("nav.dashboard"))), // C315
-			If(!onDashboard, Span(css.Class(tw.TextFaint), "›")),
+		// UX-04: no "Dashboard ›" prefix — the rail/bottom bar already own "go
+		// home", and the crumb was the first thing squeezing the title into
+		// "Dashboa…". The page title stands alone and gets first claim on space.
+		Div(css.Class("tb-title", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FontDisplay, tw.MinW0),
 			// The current page's title is the screen's single <h1> — so every screen
 			// has exactly one top-level heading for screen-reader heading navigation.
 			H1(css.Class(tw.TextLg, tw.FontSemibold, tw.Truncate), Attr("aria-current", "page"), props.Title),

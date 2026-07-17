@@ -82,6 +82,24 @@ func MoreMenu(props moreMenuProps) uic.Node {
 	}
 	themeLabel := uistate.T("topbar.theme") + " · " + uistate.T("settings.theme"+themeWord(p.Theme))
 
+	// UX-04: the music and lock buttons fold out of the bar on sub-1280px widths
+	// (the inline buttons stay mounted, just hidden, so MuzakToggle's player
+	// effect keeps running) — these rows keep both reachable with labels.
+	muzakAtom := uistate.UseMuzakEnabled()
+	muzakLabel := uistate.T("muzak.turnOn")
+	muzakIcon := icon.VolumeMute
+	if muzakAtom.Get() {
+		muzakLabel = uistate.T("muzak.turnOff")
+		muzakIcon = icon.Volume
+	}
+	toggleMuzak := func() {
+		next := !muzakAtom.Get()
+		muzakAtom.Set(next)
+		uistate.PersistMuzakEnabled(next)
+		checkpointMusic()
+	}
+	lockEnabled := loadAppLock().Enabled
+
 	return Div(css.Class("add-wrap topbar-more", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
 		Button(css.Class("icon-btn more-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg), Type("button"),
 			Attr("title", uistate.T("topbar.more")), Attr("aria-label", uistate.T("topbar.more")),
@@ -103,6 +121,8 @@ func MoreMenu(props moreMenuProps) uic.Node {
 			If(props.OnDashboard, item(uistate.T("dashboard.customize"), icon.Customize, func() { nav.Navigate(uistate.RoutePath("/widget-manager")) })),
 			item(themeLabel, icon.Appearance, cycleTheme),
 			item(uistate.T("nav.help"), icon.HelpCircle, func() { nav.Navigate(uistate.RoutePath("/help")) }),
+			item(muzakLabel, muzakIcon, toggleMuzak),
+			If(lockEnabled, item(uistate.T("applock.cmdLock"), icon.Lock, func() { showAppLockGate() })),
 		),
 	)
 }

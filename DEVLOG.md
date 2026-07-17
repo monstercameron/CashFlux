@@ -245,6 +245,24 @@ it. Design decision worth keeping: the adjustment path doesn't auto-record — i
 difference and lets the normal Record button appear, so there's exactly one recording path.
 26 e2e assertions on the lane server, 0 page errors, first run green.
 
+## 2026-07-17 — The header hierarchy inverts: title first, utilities yield (UX-04)
+
+"Dashboa…" wasn't one bug, it was a priority inversion expressed three ways: a breadcrumb prefix
+spending title-space on a destination two other surfaces already own; a title allowed to shrink
+(flex-shrink 1) while sitting next to a context strip that overflowed INVISIBLY (its children are
+flex-none, so when the strip compressed they just spilled under the actions divider — overflow the
+title paid for); and a "two-row grid below 1536px" that existed only as a comment. Fixes: crumb
+deleted, title flex-shrink 0 capped at 40vw, and the promised two-row layout actually implemented
+(641–1535px) mirroring the phone shell's order/flex-basis pattern. Cascade of second-order fits,
+each found by the verify script, not by eye: the freshness stamp spilled 8px at 1440 (now flex
+0 1 auto + overflow hidden — the strip's least critical leg yields first); the full-width context
+row was still 53px short at 900 (fold the "Viewing as" prose ≤1180, tighten the member select);
+music/lock fold below 1280 with new labeled More-menu rows (buttons stay mounted for the player
+effect). Measurement lesson: `.tb-context` scrollWidth is a LIE for clip-detection — hidden
+absolutely-positioned popovers (period presets) inflate it; compare visible children's boxes
+against the container box instead. 59/59 e2e across 1440/1280/1100/900; the 320/390 suite re-run
+green.
+
 ## 2026-07-17 — Phone nav becomes one system: 5-slot bar + More sheet + FAB (R3/UX-01)
 
 The 390px dual-nav bug had two independent causes stacked: the rail's phone treatment was a
