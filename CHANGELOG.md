@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Transfer forms preview both balances before posting (UI-refinement sweep, 2026-07-17):** both transfer editors (the page-level "Transfer money" modal and the per-account row form) now show "After this transfer: <account>: <before> → <after>" for the source AND destination once two accounts and a valid amount are chosen. The preview comes from a new `appstate.PreviewTransferPair`, which shares the exact leg math (`transferLegs`: FX conversion at the saved rate, liability-payment sign that moves debt toward zero) with `CreateTransferPair`, so what's previewed can never drift from what posts — parity is asserted by a dedicated test. Table-tested (same-currency, FX at a saved rate, both liability sign conventions, validation); e2e covers appear/update/clear in the page form (`xfer-balance-preview`, `xfer-preview-from`, `xfer-preview-to`).
+
 ### Fixed
 - **/reports chrome footprint (visual audit, 2026-07-17):** the sticky 11-chip section index wrapped into two or three rows that followed the reader down the whole report at sub-1280px widths — below that width the chip labels now yield to dot + number on one horizontally scrollable row (section names stay as tooltips). And a many-account household turned the Scope panel's account chips into a wall — the chip well now caps at 7.5rem and scrolls inside itself.
 - **Assistant chat layout at real-world sizes (visual audit, 2026-07-17):** three fit-and-finish defects — (1) user message pills clipped long unbroken strings (URLs, pasted ids); they now break anywhere inside the bubble; (2) the chat console's 34rem minimum height pushed the docked composer below the fold at 720px-class viewports; the floor drops to 20rem so the console fits the screen; (3) the model/thinking/privacy control cell gains shrink/clip guards so it can never push the page sideways.

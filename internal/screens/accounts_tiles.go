@@ -314,6 +314,51 @@ func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.No
 		uistate.T("accounts.fxNoteAmountIn", fromAc.Currency, toAc.Currency, fmtMoney(conv)))
 }
 
+// acctTransferBalancePreview shows what the transfer would do to both booked
+// balances before it posts — "Checking: $1,000.00 → $950.00" for each side —
+// via appstate.PreviewTransferPair, which shares the exact leg math (FX
+// conversion + liability payment sign) with the real post. Renders nothing
+// until both accounts are picked and a valid positive amount is typed.
+func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr string) ui.Node {
+	if app == nil || fromID == "" || toID == "" || fromID == toID {
+		return Fragment()
+	}
+	dec := currency.Decimals("")
+	for _, ac := range app.Accounts() {
+		if ac.ID == fromID {
+			dec = currency.Decimals(ac.Currency)
+			break
+		}
+	}
+	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), dec)
+	if perr != nil || amtMinor <= 0 {
+		return Fragment()
+	}
+	pv, err := app.PreviewTransferPair(appstate.TransferParams{
+		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor,
+	})
+	if err != nil {
+		return Fragment()
+	}
+	var fromName, toName string
+	for _, ac := range app.Accounts() {
+		switch ac.ID {
+		case fromID:
+			fromName = ac.Name
+		case toID:
+			toName = ac.Name
+		}
+	}
+	return Div(css.Class("budget-sub"), Attr("data-testid", "xfer-balance-preview"),
+		Style(map[string]string{"margin": "0", "display": "grid", "gap": "0.15rem"}),
+		Span(uistate.T("accounts.xferPreviewTitle")),
+		Span(Attr("data-testid", "xfer-preview-from"),
+			uistate.T("accounts.xferPreviewLine", fromName, fmtMoney(pv.FromBefore), fmtMoney(pv.FromAfter))),
+		Span(Attr("data-testid", "xfer-preview-to"),
+			uistate.T("accounts.xferPreviewLine", toName, fmtMoney(pv.ToBefore), fmtMoney(pv.ToAfter))),
+	)
+}
+
 // doAccountTransfer creates a transfer pair from the page/row transfer forms. Pure
 // (no hooks): validates the amount, defaults the date/desc, and bumps the revision.
 func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, dateStr, desc string) {
@@ -761,6 +806,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// G7: cross-currency semantics said out loud — denomination + live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
 			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
+			// Before/after balances for both sides, straight from the same leg
+			// math the post will use (PreviewTransferPair).
+			acctTransferBalancePreview(app, pfrom, pto, amtS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(dateS.Get()), OnInput(onDate))),

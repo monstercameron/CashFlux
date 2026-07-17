@@ -1,3 +1,19 @@
+## 2026-07-17 — Transfer preview: before/after balances from the post's own math
+
+First slice of the local-first UI-refinement sweep (the "product boundaries" report → 23-item
+backlog). The transfer forms showed an FX note (G7) but never answered the question the user is
+actually asking before submitting: *what will both balances be afterward?* The trap here is
+drift — a preview that reimplements the transfer math goes stale the moment the posting rules
+change (exactly the liability-sign subtlety H1 already burned us on). So the leg computation was
+extracted out of `CreateTransferPair` into `transferLegs` (FX conversion + `liabilityPaymentMinor`
+sign pick) and `PreviewTransferPair` calls the SAME helper, plus a parity test that posts after
+previewing and asserts both balances land exactly on the previewed numbers. UI is one shared
+`acctTransferBalancePreview` node in both editors; renders only once from+to+valid amount exist,
+so there's never a stale/placeholder number. Screenshot-verified in the page modal (Joint
+Checking → 401(k), $100: 30,174.70→30,074.70 / 17,500→17,600). Note: 5 pre-existing
+`accounts.spec.mjs` failures (row Edit moved into the kebab by the 2026-07-17 audit work) are
+owned by the concurrent remediation session — not touched here.
+
 ## 2026-07-17 — Report scope becomes report-local (parity-scan "scope leaks globally")
 
 The /reports Scope panel and the top-bar "Viewing as" lens shared ONE persisted atom

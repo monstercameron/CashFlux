@@ -63,21 +63,9 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		return "", "", fmt.Errorf("transfer: amount must be greater than zero")
 	}
 
-	var fromAcc, toAcc domain.Account
-	var foundFrom, foundTo bool
-	for _, ac := range a.Accounts() {
-		switch ac.ID {
-		case p.FromAccountID:
-			fromAcc, foundFrom = ac, true
-		case p.ToAccountID:
-			toAcc, foundTo = ac, true
-		}
-	}
-	if !foundFrom {
-		return "", "", fmt.Errorf("transfer: source account %q not found", p.FromAccountID)
-	}
-	if !foundTo {
-		return "", "", fmt.Errorf("transfer: destination account %q not found", p.ToAccountID)
+	fromAcc, toAcc, ferr := a.transferAccounts(p.FromAccountID, p.ToAccountID)
+	if ferr != nil {
+		return "", "", ferr
 	}
 
 	when := p.Date
@@ -89,24 +77,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		desc = "Transfer"
 	}
 
-	fromMoney := money.New(-p.AmountMinor, fromAcc.Currency)
-	toMoney := money.New(p.AmountMinor, toAcc.Currency) // fallback: same minor units
-	if fromAcc.Currency != toAcc.Currency {
-		s := a.Settings()
-		rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
-		srcAbs := money.New(p.AmountMinor, fromAcc.Currency)
-		if conv, cerr := rates.Convert(srcAbs, toAcc.Currency); cerr == nil {
-			toMoney = conv
-		}
-	}
-	// A transfer into a liability is a payment and must REDUCE the debt. Liability
-	// balances carry two at-rest sign conventions (the sample data stores debts
-	// negative; the "amount you owe" add form stores them positive), so a blanket
-	// positive in-leg grew positive-stored debts instead of paying them down. Pick
-	// the sign per account: whichever moves its booked balance toward zero.
-	if toAcc.Class == domain.ClassLiability {
-		toMoney.Amount = liabilityPaymentMinor(toAcc, a.Transactions(), toMoney.Amount)
-	}
+	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor)
 
 	outID = id.New()
 	inID = id.New()
@@ -162,4 +133,98 @@ func liabilityPaymentMinor(acc domain.Account, all []domain.Transaction, amountM
 		return -amountMinor // debt stored positive-owed: a payment subtracts
 	}
 	return amountMinor // debt stored negative (or settled): a payment adds toward zero
+}
+
+// transferAccounts resolves and validates the two accounts of a transfer pair.
+func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Account, err error) {
+	var foundFrom, foundTo bool
+	for _, ac := range a.Accounts() {
+		switch ac.ID {
+		case fromID:
+			fromAcc, foundFrom = ac, true
+		case toID:
+			toAcc, foundTo = ac, true
+		}
+	}
+	if !foundFrom {
+		return domain.Account{}, domain.Account{}, fmt.Errorf("transfer: source account %q not found", fromID)
+	}
+	if !foundTo {
+		return domain.Account{}, domain.Account{}, fmt.Errorf("transfer: destination account %q not found", toID)
+	}
+	return fromAcc, toAcc, nil
+}
+
+// transferLegs computes the signed out/in leg amounts for a transfer of
+// amountMinor (source minor units, > 0) between the two accounts: a negative
+// out leg in the source currency, and an in leg FX-converted to the destination
+// currency when the currencies differ (copied as-is when no rate exists).
+//
+// A transfer into a liability is a payment and must REDUCE the debt. Liability
+// balances carry two at-rest sign conventions (the sample data stores debts
+// negative; the "amount you owe" add form stores them positive), so a blanket
+// positive in-leg grew positive-stored debts instead of paying them down. Pick
+// the sign per account: whichever moves its booked balance toward zero.
+func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor int64) (fromMoney, toMoney money.Money) {
+	fromMoney = money.New(-amountMinor, fromAcc.Currency)
+	toMoney = money.New(amountMinor, toAcc.Currency) // fallback: same minor units
+	if fromAcc.Currency != toAcc.Currency {
+		s := a.Settings()
+		rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
+		srcAbs := money.New(amountMinor, fromAcc.Currency)
+		if conv, cerr := rates.Convert(srcAbs, toAcc.Currency); cerr == nil {
+			toMoney = conv
+		}
+	}
+	if toAcc.Class == domain.ClassLiability {
+		toMoney.Amount = liabilityPaymentMinor(toAcc, a.Transactions(), toMoney.Amount)
+	}
+	return fromMoney, toMoney
+}
+
+// TransferPreview reports what a transfer pair would do to both booked
+// balances, before anything posts. Amounts are in each account's own currency.
+type TransferPreview struct {
+	// FromBefore/FromAfter are the source account's booked balance now and
+	// after the out leg.
+	FromBefore, FromAfter money.Money
+	// ToBefore/ToAfter are the destination account's booked balance now and
+	// after the in leg (FX-converted and liability-signed like the real post).
+	ToBefore, ToAfter money.Money
+}
+
+// PreviewTransferPair computes the before/after balances a CreateTransferPair
+// call with the same params would produce, without writing anything. It shares
+// the exact leg math (transferLegs) with CreateTransferPair so the preview can
+// never drift from what actually posts.
+func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
+	if p.FromAccountID == "" || p.ToAccountID == "" {
+		return TransferPreview{}, fmt.Errorf("transfer preview: both accounts are required")
+	}
+	if p.FromAccountID == p.ToAccountID {
+		return TransferPreview{}, fmt.Errorf("transfer preview: source and destination accounts must differ")
+	}
+	if p.AmountMinor <= 0 {
+		return TransferPreview{}, fmt.Errorf("transfer preview: amount must be greater than zero")
+	}
+	fromAcc, toAcc, err := a.transferAccounts(p.FromAccountID, p.ToAccountID)
+	if err != nil {
+		return TransferPreview{}, err
+	}
+	txns := a.Transactions()
+	fromBal, err := ledger.Balance(fromAcc, txns)
+	if err != nil {
+		return TransferPreview{}, fmt.Errorf("transfer preview: source balance: %w", err)
+	}
+	toBal, err := ledger.Balance(toAcc, txns)
+	if err != nil {
+		return TransferPreview{}, fmt.Errorf("transfer preview: destination balance: %w", err)
+	}
+	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor)
+	return TransferPreview{
+		FromBefore: fromBal,
+		FromAfter:  money.New(fromBal.Amount+fromMoney.Amount, fromAcc.Currency),
+		ToBefore:   toBal,
+		ToAfter:    money.New(toBal.Amount+toMoney.Amount, toAcc.Currency),
+	}, nil
 }

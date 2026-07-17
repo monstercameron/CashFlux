@@ -112,6 +112,34 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await expect(dialog.locator('[data-testid="xfer-fx-note"]')).toContainText(/lands in EUR/i);
   });
 
+  test("the transfer form previews both accounts' before/after balances", async ({ app }) => {
+    await nav(app, "/accounts");
+    await app.getByTestId("page-transfer-btn").click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    // No preview until both accounts and a valid amount exist.
+    await expect(dialog.locator('[data-testid="xfer-balance-preview"]')).toHaveCount(0);
+    const fromOpts = await dialog.getByTestId("page-xfer-from-select").locator("option").allInnerTexts();
+    const fromLabel = fromOpts.find((s) => /Joint Checking/.test(s));
+    await dialog.getByTestId("page-xfer-from-select").selectOption({ label: fromLabel });
+    const toOpts = await dialog.getByTestId("page-xfer-to-select").locator("option").allInnerTexts();
+    const toLabel = toOpts.find((s) => s.trim() && !/Joint Checking/.test(s) && !/^Choose/.test(s));
+    await dialog.getByTestId("page-xfer-to-select").selectOption({ label: toLabel });
+    await expect(dialog.locator('[data-testid="xfer-balance-preview"]')).toHaveCount(0); // still no amount
+    await dialog.getByTestId("page-xfer-amt").fill("100");
+    // Both sides show "<name>: <before> → <after>" from the same math the post uses.
+    const fromLine = dialog.locator('[data-testid="xfer-preview-from"]');
+    const toLine = dialog.locator('[data-testid="xfer-preview-to"]');
+    await expect(fromLine).toBeVisible();
+    await expect(toLine).toBeVisible();
+    await expect(fromLine).toContainText("Joint Checking");
+    await expect(fromLine).toContainText("→");
+    await expect(toLine).toContainText("→");
+    // Clearing the amount removes the preview again (no stale numbers).
+    await dialog.getByTestId("page-xfer-amt").fill("");
+    await expect(dialog.locator('[data-testid="xfer-balance-preview"]')).toHaveCount(0);
+  });
+
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
     await nav(app, "/accounts");
     // The class filter itself remains…

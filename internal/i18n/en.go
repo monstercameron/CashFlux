@@ -3003,6 +3003,8 @@ var english = Catalog{
 	"accounts.transferDone":            "Transfer recorded.",
 	"accounts.transferInvalidAmount":   "Enter a valid amount greater than zero.",
 	"accounts.transferMoney":           "Transfer money",
+	"accounts.xferPreviewTitle":        "After this transfer:",
+	"accounts.xferPreviewLine":         "%s: %s → %s",
 
 	// L-series 6-lane sweep, round 2 (2026-06-23)
 	"nav.mobileTabLabel":          "Mobile navigation",

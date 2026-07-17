@@ -460,6 +460,8 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 					Step("0.01"), Attr("min", "0.01"), OnInput(onXferAmt))),
 			// G7: cross-currency semantics — denomination + converted preview / no-rate warning.
 			acctTransferFXNote(app, fromID, toID, xferAmtS.Get()),
+			// Before/after balances for both sides (shared with the page form).
+			acctTransferBalancePreview(app, fromID, toID, xferAmtS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(xferDateS.Get()), OnInput(onXferDate))),
