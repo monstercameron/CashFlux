@@ -312,6 +312,15 @@ func lastMonthLabelKey(on bool) string {
 	return "budgets.lastMonth"
 }
 
+// budgetDensityLabelKey picks the density toggle's label: the button always names the
+// layout a click switches TO ("Compact list" from cards, "Card view" from the list).
+func budgetDensityLabelKey(density string) string {
+	if density == uistate.BudgetDensityCompact {
+		return "budgets.densityCards"
+	}
+	return "budgets.densityCompact"
+}
+
 // budgetAssignBanner renders the method-specific income context line: simple mode
 // shows income · budgeted · the unbudgeted/over gap; zero-based shows the amount left
 // to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
@@ -1219,6 +1228,17 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	// One-click "Last month" — flip the whole budgets view to the previous period.
 	lastMonthAtom := uistate.UseBudgetsLastMonth()
 	toggleLastMonth := ui.UseEvent(Prevent(func() { lastMonthAtom.Set(!lastMonthAtom.Get()) }))
+	// Density: full cards ⇄ the compact one-line list. Persisted — how you read the
+	// page is a lasting preference, not a per-visit tweak.
+	densityAtom := uistate.UseBudgetDensity()
+	toggleDensity := ui.UseEvent(Prevent(func() {
+		next := uistate.BudgetDensityCompact
+		if densityAtom.Get() == uistate.BudgetDensityCompact {
+			next = uistate.BudgetDensityComfortable
+		}
+		densityAtom.Set(next)
+		uistate.PersistBudgetDensity(next)
+	}))
 	// C112: switch the budgeting methodology right from /budgets.
 	onMethod := ui.UseEvent(func(e ui.Event) {
 		s := app.Settings()
@@ -1261,6 +1281,11 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		// Row 2: the actions on their own tidy line, with the primary "+ Add budget"
 		// last so it clearly outranks the ghost controls.
 		Div(css.Class("filter-toolbar-actions"),
+			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+				Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
+				Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
+				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(uistate.T(budgetDensityLabelKey(densityAtom.Get())))),
 			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
 				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
@@ -1320,6 +1345,8 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	// state (no atom / no data-revision bump): typing only re-renders this tile.
 	search := ui.UseState("")
 	onSearch := ui.UseEvent(func(v string) { search.Set(v) })
+	// Density: full cards (default) or the compact one-line list for long budget lists.
+	compact := uistate.UseBudgetDensity().Get() == uistate.BudgetDensityCompact
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
 	// category (mirrors Accounts→Transactions, C30/C50).
@@ -1417,6 +1444,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
 					Committed: v.Committed[s.Budget.ID], HasCommitted: func() bool { _, ok := v.Committed[s.Budget.ID]; return ok }(),
+					Compact: compact,
 				})
 			},
 		)
@@ -1427,7 +1455,11 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		// G8: contextual creation — categories with real spending this month and no
 		// budget, each one click from a pre-filled add form (category + suggested limit).
 		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{App: app, Base: v.Base, CatName: v.CatName})
-		body = Fragment(searchBar, matchNote, Div(css.Class("budget-grid"), rows), unbudgeted)
+		listCls := "budget-grid"
+		if compact {
+			listCls = "budget-clist"
+		}
+		body = Fragment(searchBar, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

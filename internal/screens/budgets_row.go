@@ -357,24 +357,73 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if !menuOpen.Get() {
 		menuHidden = " hidden-menu"
 	}
+	// The ⋯ overflow is shared by both densities. In COMPACT the row has no footer, so
+	// the money moves (Cover/Top-up, Transactions) join the top of the menu; the
+	// destructive group stays pinned at the bottom either way.
+	kebabNode := Div(css.Class("add-wrap"), Attr("id", menuID),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
+		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))),
+			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))),
+			If(props.Compact && canDrill, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu), uistate.T("nav.transactions"))),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
+			If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
+			Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
+		),
+	)
 	actionsRow := Div(css.Class("budget-actions"),
 		coverBtn,
 		topupBtn,
 		If(canDrill, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu),
 			uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
-		Div(css.Class("add-wrap"), Attr("id", menuID),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
-				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
-				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
-				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
-			),
-		),
+		kebabNode,
 	)
+
+	// COMPACT density: one scannable line — name, mini bar, spent/limit, what's left,
+	// a status chip, and the ⋯ menu (which absorbs the money moves above). Everything
+	// analytical (pie, metrics, captions, notes, to-dos) belongs to the card layout;
+	// compact is for reading fifteen budgets without scrolling (design critique #9).
+	if props.Compact {
+		crowCls := "budget-crow " + budgetRowStateClass(s, props.PaceOver)
+		var crowTitle ui.Node
+		if canDrill {
+			crowTitle = Button(css.Class("budget-crow-name budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill), title)
+		} else {
+			crowTitle = Span(css.Class("budget-crow-name"), title)
+		}
+		var crowLeft, crowChip ui.Node
+		if lastMonthMode {
+			crowLeft = Span(ClassStr("budget-crow-left"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta)
+			crowChip = Span(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID), uistate.T("budgets.lastMonthCap"))
+		} else {
+			leftCls := "budget-crow-left"
+			if s.Remaining.IsNegative() {
+				leftCls += " " + tw.Fold(tw.TextDown)
+			}
+			crowLeft = Span(ClassStr(leftCls), budgetRemainPhrase(s.Remaining))
+			chipTone := ""
+			switch {
+			case s.State == budgeting.StateOver:
+				chipTone = " is-danger"
+			case s.State == budgeting.StateNear || props.PaceOver != "":
+				chipTone = " is-warn"
+			}
+			crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
+		}
+		return Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
+			crowTitle,
+			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")),
+				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
+			Span(css.Class("budget-crow-amt fig"), barSpent+" / "+fmtMoney(limit)),
+			crowLeft,
+			crowChip,
+			kebabNode,
+		)
+	}
 
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
 	// card when the budget has a note — mirrors the /accounts notes affordance.

@@ -190,6 +190,31 @@ const (
 // BudgetSortHealth). Ephemeral (resets on reload) — a transient view choice.
 func UseBudgetSort() state.Atom[string] { return state.UseAtom("budgets:sort", BudgetSortHealth) }
 
+// Budget-list densities: comfortable = the full card per budget; compact = one
+// scannable line per budget, for households with enough categories that the cards
+// stop fitting on a screen (the list stops scaling around ten cards).
+const (
+	BudgetDensityComfortable = "comfortable"
+	BudgetDensityCompact     = "compact"
+)
+
+// budgetDensityStoreID keys the persisted density choice in localStorage.
+const budgetDensityStoreID = "cashflux:budgets:density"
+
+// UseBudgetDensity returns the shared atom holding the /budgets list density, seeded
+// from localStorage — unlike sort, density is a lasting workspace preference (how you
+// read the page), not a transient view tweak, so it survives reloads.
+func UseBudgetDensity() state.Atom[string] {
+	d := kvGet(budgetDensityStoreID)
+	if d != BudgetDensityCompact {
+		d = BudgetDensityComfortable
+	}
+	return state.UseAtom("budgets:density", d)
+}
+
+// PersistBudgetDensity saves the density choice so the next visit opens the same way.
+func PersistBudgetDensity(d string) { kvSet(budgetDensityStoreID, d) }
+
 // UseBudgetsLastMonth returns the shared atom for the budgets "Last month's spend"
 // toggle: when true, each budget row OVERLAYS last period's actual spending in its
 // categories plus how it compares to this month's budget — a planning reference — while

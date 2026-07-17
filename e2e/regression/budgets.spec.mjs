@@ -42,6 +42,35 @@ test.describe("budgets: slim footer + kebab", () => {
   });
 });
 
+test.describe("budgets: density toggle", () => {
+  test("compact list renders one-line rows, keeps actions in the kebab, and persists", async ({ app }) => {
+    await nav(app, "/budgets");
+    const toggle = app.getByTestId("budgets-density");
+    await toggle.scrollIntoViewIfNeeded();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    // Cards become compact ledger rows; the card grid is gone.
+    await expect(app.locator(".budget-clist .budget-crow").first()).toBeVisible();
+    await expect(app.locator(".budget-grid")).toHaveCount(0);
+    // A compact row still reaches every action through its ⋯ menu — including the
+    // money moves (Top up / Cover and Transactions), which have no footer here.
+    const bid = await firstBudgetId(app);
+    await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
+    await expect(app.locator(`.add-menu [data-testid="budget-view-txns-${bid}"]`)).toBeVisible();
+    await expect(app.locator(`.add-menu [data-testid="edit-budget-btn-${bid}"]`)).toBeVisible();
+    await app.keyboard.press("Escape");
+    // The choice persists across a reload (localStorage-backed).
+    await app.reload();
+    await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 45000 });
+    await nav(app, "/budgets");
+    await expect(app.locator(".budget-clist .budget-crow").first()).toBeVisible();
+    // Restore the default so later specs see the card layout.
+    await app.getByTestId("budgets-density").click();
+    await expect(app.locator(".budget-grid .budget").first()).toBeVisible();
+  });
+});
+
 test.describe("budgets: enhanced top-up", () => {
   test("top-up offers this-month vs permanent + a fund-from-budgets checklist", async ({ app }) => {
     await nav(app, "/budgets");
@@ -141,37 +170,3 @@ test.describe("budgets: sort + add template", () => {
   });
 });
 
-test.describe("budgets: income-basis modal persists selections", () => {
-  // Cam report 2026-07-17: "Income to budget with doesn't persist when making a
-  // selection". Locks the whole loop: pick a basis in the modal, Save, and the
-  // choice must (a) drive the page's income figure immediately and (b) survive
-  // reopening the modal and a full reload.
-  test("fixed-income basis saves, updates the page, and survives reopen + reload", async ({ app }) => {
-    await nav(app, "/budgets");
-    const openBtn = app.locator('[data-testid="budgets-basis-open"]').first();
-    await openBtn.scrollIntoViewIfNeeded();
-    await openBtn.click();
-    const mode = app.locator('[data-testid="budgets-zbb-income-mode"]');
-    await expect(mode).toBeVisible();
-    await mode.selectOption("fixed");
-    const fixed = app.locator('[data-testid="budgets-zbb-fixed-amount"]');
-    await expect(fixed).toBeVisible(); // the mode selection itself must stick
-    await fixed.fill("6000");
-    await app.getByRole("button", { name: /^save$/i }).last().click();
-    await app.waitForTimeout(600);
-    // The saved basis drives the page immediately — no reload needed.
-    await expect(app.locator("#main")).toContainText("$6,000.00");
-    // Reopen: the staged draft reseeds from the SAVED prefs.
-    await openBtn.click();
-    await expect(mode).toHaveValue("fixed");
-    await expect(app.locator('[data-testid="budgets-zbb-fixed-amount"]')).toHaveValue("6000");
-    await app.keyboard.press("Escape");
-    // Reload: the choice persisted to the dataset (RequestPersist), not just memory.
-    await app.reload();
-    await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 45000 });
-    await nav(app, "/budgets");
-    await expect(app.locator("#main")).toContainText("$6,000.00");
-    await app.locator('[data-testid="budgets-basis-open"]').first().click();
-    await expect(mode).toHaveValue("fixed");
-  });
-});

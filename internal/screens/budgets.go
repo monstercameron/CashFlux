@@ -823,6 +823,7 @@ type budgetRowProps struct {
 	LinkedTodos       int                   // count of to-dos linked to this budget (Task.RelatedType=budget); 0 hides the link
 	Committed         budgetCommitted       // XC4 committed-vs-free split (+ XC3 set-aside note); zero value hides it
 	HasCommitted      bool                  // whether Committed carries a figure to render
+	Compact           bool                  // compact density: render the one-line row instead of the full card
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)

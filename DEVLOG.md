@@ -1,40 +1,21 @@
-## 2026-07-17 — Budgets fix 6/7: the overlay banner retires
+## 2026-07-17 — Connective layer: celebrate the wins (the app is warning-heavy)
 
-Removed the C9 `budget-viewstatus` banner from `budgetListWidget` and its rule from
-`rules_budgets.go`. Rationale logged in the critique reconciliation: the overlay state is already
-carried by the toggle's `aria-pressed` + label flip (e2e-locked in interactions.spec.mjs) and the
-LAST MONTH chips on summary + cards (which fix 4 made visually distinct from live-state colors, so
-they now do the naming job the banner existed for). Four signals → three, and the full-width row
-above the grid returns to content. The two `budgets.viewing*` strings stay in en.go untouched
-(concurrent thread owns that file right now) — flagged for the next i18n cull. No e2e referenced
-the banner testid.
-
-## 2026-07-17 — Budgets fix 5/7: the card footer goes on a diet
-
-Footer now = Cover|Top-up + Transactions + ⋯. Edit budget / Edit tracking / Notes / Formulas moved
-into the kebab as plain `add-item` menu entries (matching the /accounts kebab vocabulary — no new
-divider primitive), danger group (`Remove recurring`, `Delete`) stays at the menu bottom per the
-standing directive (which only ever required DESTRUCTIVE actions to live there — folding config
-items in is compatible). The four open-modal handlers now also `menuOpen.Set(false)` so the menu
-doesn't linger under the flip modal. Testids unchanged, so the modals' own specs needed only the
-"open the kebab first" step: budgets.spec.mjs (header comment rewritten — it documented the old
-all-inline contract — `firstBudgetId` now derives from the always-visible kebab, new
-`openBudgetMenu` helper, footer test asserts the inverse: config buttons NOT visible until the menu
-opens) and interactions.spec.mjs (both tracked-categories tests go through the kebab). Note the
-goals page moved the opposite direction earlier today (actions out of its kebab) — deliberate:
-goals cards have 2-3 actions total, budget cards had seven.
-
-## 2026-07-17 — Budgets fix 4/7: history wears gray
-
-Color discipline from the critique: green = healthy live progress, amber = live warning, red =
-overspend (a fact in any period), neutral gray = historical/allocated. Overlay bars now take a new
-`is-hist` modifier — `.bar-fill.is-hist` (cards) is a flat `color-mix(var(--text) 22%, transparent)`
-band, `.budget-loader-fill.is-hist` (summary) the same in the loader's gradient+border-right
-vocabulary — and the amber "near" tone is suppressed for history ("nearly over" is a live warning;
-last month either overran or didn't). `LastMonthOver` keeps `.over` red. The LAST MONTH chip retones
-accent→neutral via an equal-specificity override in `rules_budgets.go` (registered after the
-generated sheet, so it wins). Token note: used `var(--text)` mixes, not the undefined `--fg/--dim`
-landmines. Wasm + styles tests clean.
+Last of the four connective features, and the one where the design brief said to spend boldness. The
+Notification Center is a wall of amber/red — bills due, low balances, over budgets — with no positive
+reinforcement, so it now leads with a "Recent wins" card: goals funded, net-worth rungs crossed,
+no-spend streaks, budgets kept last month. Kept detection pure and testable (`milestones.Detect` with
+a net-worth ladder + stable dedupe keys), pushing the primitive computation to the screen
+(`goals.Reached`, `ledger.NetWorthExplained`, a completed-days streak walk, last-month `Spent`). The
+delight: a freshly-reached win (tracked in localStorage so it fires once, not every visit) triggers a
+one-shot confetti burst — 14 small pieces with index-derived positions/delays/hues so it's lively but
+never random-looking. Everything else stays calm; the burst and the card rise-in are off under
+prefers-reduced-motion. Latched the "celebrate" flag in UseState so a re-render after the mark-seen
+effect can't yank the confetti mid-view. Mounted it as a `notif-wins` surface tile between the summary
+and the feed, made it span the full surface width (grid-column 1/-1). Screenshotted /notifications: the
+card reads warm and the confetti spreads across the full width without looking cheap — the one bold
+moment the rest of the app earns by staying quiet. Verified on the seed: "Net worth past $100,000" and
+"3 days, no spending" both surface. All green: milestones unit tests, wasm build, and the full
+12-test gapfeatures e2e suite (F1–F4 plus the six earlier gap features).
 
 ## 2026-07-17 — Vitals core: the report gets a balance-sheet dimension (1/2)
 
@@ -79,15 +60,88 @@ Adopted, in two commits:
    swatches sample the actual fills (solid=saved, hatch=set aside) + the visible "set-aside money
    stays in your accounts" (was tooltip-only). Quick-fund chip gains a tracked-caps "Suggested"
    eyebrow — "Set aside $4,500.11 from SCCU Savings" could read as a receipt; now it can't.
-2. Trajectory (`goals_trajectory.go`): compact heading+sentence form when reached / no target date /
-   exactly on pace; the pill+rail only earns its height when the flag-vs-tick spatial read carries
-   information (ahead/behind/off-pace). This also kills the "On track badge + On pace pill" dup.
+2. Trajectory (`goals_trajectory.go`): a REACHED goal renders no trajectory at all (the 100% loader
+   + "Funded — reallocate?" line are the single completion statement; previously a funded goal was
+   even prompted to "add a monthly contribution" because the empty-state check ran before the
+   reached check). No-date / exactly-on-pace goals get compact heading+sentence; the pill+rail only
+   earns its height when the flag-vs-tick spatial read carries information (ahead/behind/off-pace).
+   This also kills the "On track badge + On pace pill" dup.
+
+Adversarial critic loop (Sonnet, per standing workflow): first pass ITERATE with two real catches —
+(a) ahead cards said the pace twice (pill "1 mo ahead" + sentence "About a month ahead of your …
+target"), fixed by rendering the sentence under the rail only for behind/off-pace where it carries
+the "consider a larger monthly amount" advice; (b) reached cards said "Funded" and "goal complete"
+in two places, fixed by dropping the reached trajectory block entirely. Plus the legend hatch was
+illegible at 11px square — swatches are now 20×11 bar segments with a coarser 55%-vs-12% hatch.
+Second pass: SHIP. Two more finds while visually inspecting: the complete-financial-goal footer
+showed Archive twice (primary + tool row; tool-row copy suppressed), and the meta line "· linked to
+X" carried a dangling separator once it became its own row (now "Linked to X").
 
 Retired i18n keys removed outright (no dead code): earmarkedLine, paceNeeded(Title),
-earmark{None,Partial,Full}. Goals e2e updated: legend testid keeps `goal-earmarked-<id>`, text
-contract moves /earmarked/i → /set aside/i, badge assertion dropped. Note: `en.go` reports
-gofmt-dirty but HEAD's copy does too (pre-existing, the CRLF thing) — not reformatting a shared
-3k-line file under concurrent work.
+earmark{None,Partial,Full}, goaltrajectory.reachedNow, goaltrajectory.pillReached. Goals e2e
+updated: legend testid keeps `goal-earmarked-<id>`, text contract moves /earmarked/i →
+/set aside/i, badge assertion dropped (13/13 green, twice). Note: `en.go` reports gofmt-dirty but
+HEAD's copy does too (pre-existing, the CRLF thing) — not reformatting a shared 3k-line file under
+concurrent work.
+
+## 2026-07-17 — Budgets fix 7/7: a ledger mode for long lists
+
+The last and largest critique item: no density mode. Shape of the build:
+
+- **State:** `UseBudgetDensity` in `uistate/budgetspage.go` — atom seeded from localStorage via the
+  existing `kvGet/kvSet` bridge (`cashflux:budgets:density`), `PersistBudgetDensity` on toggle.
+  Unlike sort (deliberately ephemeral), density is how you READ the page, so it persists.
+- **Row:** no second component — `budgetRowProps.Compact` branches inside `BudgetRow` AFTER all
+  hooks are declared, so hook order is identical in both densities (the framework rule that shaped
+  this: never let a layout mode change hook positions). The kebab was extracted to a shared
+  `kebabNode`; in compact it absorbs the money moves (Cover/Top-up, Transactions) at the top of the
+  menu since the compact row has no footer. Same testids in both densities — only one layout
+  renders at a time, and `budget-card-<id>` stays on the row so notification deep-links keep landing.
+- **Visual:** `.budget-crow` grid ledger — 3px state stripe (over red / near+risk amber / on-track
+  a quiet accent mix), 8px meter reusing the same `.bar-fill` state classes (incl. fix 4's
+  `is-hist`), tabular numerals, ellipsized name. Below 860px the meter and left-phrase columns drop.
+- **E2e:** new density-toggle spec — switch, `.budget-clist` renders, kebab reaches
+  Transactions/Edit, reload persistence, restore default at the end so later specs see cards.
+
+Wasm + styles/i18n tests clean. This closes the 7-item budgets design list; verification pass next.
+
+## 2026-07-17 — Budgets fix 6/7: the overlay banner retires
+
+Removed the C9 `budget-viewstatus` banner from `budgetListWidget` and its rule from
+`rules_budgets.go`. Rationale logged in the critique reconciliation: the overlay state is already
+carried by the toggle's `aria-pressed` + label flip (e2e-locked in interactions.spec.mjs) and the
+LAST MONTH chips on summary + cards (which fix 4 made visually distinct from live-state colors, so
+they now do the naming job the banner existed for). Four signals → three, and the full-width row
+above the grid returns to content. The two `budgets.viewing*` strings stay in en.go untouched
+(concurrent thread owns that file right now) — flagged for the next i18n cull. No e2e referenced
+the banner testid.
+
+## 2026-07-17 — Budgets fix 5/7: the card footer goes on a diet
+
+Footer now = Cover|Top-up + Transactions + ⋯. Edit budget / Edit tracking / Notes / Formulas moved
+into the kebab as plain `add-item` menu entries (matching the /accounts kebab vocabulary — no new
+divider primitive), danger group (`Remove recurring`, `Delete`) stays at the menu bottom per the
+standing directive (which only ever required DESTRUCTIVE actions to live there — folding config
+items in is compatible). The four open-modal handlers now also `menuOpen.Set(false)` so the menu
+doesn't linger under the flip modal. Testids unchanged, so the modals' own specs needed only the
+"open the kebab first" step: budgets.spec.mjs (header comment rewritten — it documented the old
+all-inline contract — `firstBudgetId` now derives from the always-visible kebab, new
+`openBudgetMenu` helper, footer test asserts the inverse: config buttons NOT visible until the menu
+opens) and interactions.spec.mjs (both tracked-categories tests go through the kebab). Note the
+goals page moved the opposite direction earlier today (actions out of its kebab) — deliberate:
+goals cards have 2-3 actions total, budget cards had seven.
+
+## 2026-07-17 — Budgets fix 4/7: history wears gray
+
+Color discipline from the critique: green = healthy live progress, amber = live warning, red =
+overspend (a fact in any period), neutral gray = historical/allocated. Overlay bars now take a new
+`is-hist` modifier — `.bar-fill.is-hist` (cards) is a flat `color-mix(var(--text) 22%, transparent)`
+band, `.budget-loader-fill.is-hist` (summary) the same in the loader's gradient+border-right
+vocabulary — and the amber "near" tone is suppressed for history ("nearly over" is a live warning;
+last month either overran or didn't). `LastMonthOver` keeps `.over` red. The LAST MONTH chip retones
+accent→neutral via an equal-specificity override in `rules_budgets.go` (registered after the
+generated sheet, so it wins). Token note: used `var(--text)` mixes, not the undefined `--fg/--dim`
+landmines. Wasm + styles tests clean.
 
 ## 2026-07-17 — Budgets fix 3/7: the overlay summary stops subtracting across periods
 

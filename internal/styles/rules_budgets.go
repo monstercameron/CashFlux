@@ -779,4 +779,82 @@ func registerBudgetsSurface() {
 		color("var(--text-dim)"),
 		background("color-mix(in srgb, var(--text) 10%, transparent)"),
 	)
+
+	// Compact density: the budget list as a LEDGER — one hairline row per budget with a
+	// left state stripe, a mini meter, and tabular figures. The card layout's job is
+	// depth; this one's is span (fifteen categories without scrolling).
+	rule(".budget-clist",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+	)
+	rule(".budget-crow",
+		display("grid"),
+		gridTemplateColumns("minmax(8rem, 1.2fr) minmax(7rem, 1.6fr) max-content max-content max-content max-content"),
+		alignItems("center"),
+		gap("0.8rem"),
+		padding("0.4rem 0.6rem 0.4rem 0.75rem"),
+		border("1px solid var(--border)"),
+		borderLeft("3px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-card)"),
+	)
+	rule(".budget-crow.is-over", borderLeftColor("var(--danger)"))
+	rule(".budget-crow.is-near", borderLeftColor("var(--warn)"))
+	rule(".budget-crow.is-risk", borderLeftColor("var(--warn)"))
+	rule(".budget-crow.is-ontrack", borderLeftColor("color-mix(in srgb, var(--accent) 55%, var(--border))"))
+	rule(".budget-crow-name",
+		fontWeight("600"),
+		fontSize("0.88rem"),
+		color("var(--text)"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		textAlign("left"),
+	)
+	rule("button.budget-crow-name",
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		cursor("pointer"),
+	)
+	rule(".budget-crow-bar",
+		position("relative"),
+		height("8px"),
+		borderRadius("999px"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		overflow("hidden"),
+	)
+	rule(".budget-crow-bar .bar-fill",
+		position("absolute"),
+		top("0"),
+		left("0"),
+		bottom("0"),
+		height("100%"),
+		borderRadius("0"),
+		boxShadow("none"),
+	)
+	rule(".budget-crow-amt",
+		fontSize("0.85rem"),
+		whiteSpace("nowrap"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".budget-crow-left",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".budget-crow-chip", whiteSpace("nowrap"))
+	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
+	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
+	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu.
+	ruleMedia("(max-width: 860px)", ".budget-crow",
+		gridTemplateColumns("minmax(7rem, 1fr) max-content max-content max-content"),
+	)
+	ruleMedia("(max-width: 860px)", ".budget-crow-bar", display("none"))
+	ruleMedia("(max-width: 860px)", ".budget-crow-left", display("none"))
 }
