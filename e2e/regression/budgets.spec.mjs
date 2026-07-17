@@ -6,6 +6,27 @@
 // the 50/30/20 template living inside the Add-budget modal.
 import { test, expect, nav } from "./fixtures.mjs";
 
+test.describe("budgets: release unused funds", () => {
+  test("the kebab's Release lowers this period's cap to what's spent", async ({ app }) => {
+    await nav(app, "/budgets");
+    // Find a budget whose kebab offers Release (remaining > 0).
+    const releaseBtn = app.locator('[data-testid^="budget-release-btn-"]').first();
+    const bid = (await releaseBtn.getAttribute("data-testid")).replace("budget-release-btn-", "");
+    const kebab = app.getByTestId(`budget-kebab-${bid}`);
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await releaseBtn.click();
+    // Confirm the release; the undoable toast names the amount and budget.
+    await app.locator("#cf-dialog-confirm").click();
+    await expect(app.locator("body")).toContainText(/Released .* from /);
+    // The row's Release action is gone — nothing left to release this period.
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await expect(app.getByTestId(`budget-release-btn-${bid}`)).toHaveCount(0);
+    await app.keyboard.press("Escape");
+  });
+});
+
 // firstBudgetId returns the id of the first budget row (derived from its kebab button —
 // the one per-card action that is always visible).
 async function firstBudgetId(app) {

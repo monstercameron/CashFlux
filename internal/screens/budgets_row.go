@@ -123,6 +123,36 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	openTopup := ui.UseEvent(Prevent(func() {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
+	// Release unused funds: the mirror of Top up — a NEGATIVE one-time period
+	// boost lowering THIS period's cap to what's spent, so the leftover returns
+	// to the plan (To Assign under zero-based budgeting) instead of implying it
+	// may still be spent. Future periods are untouched (boosts are per-period).
+	releaseUnused := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		app := appstate.Default
+		if app == nil || s.Remaining.Amount <= 0 {
+			return
+		}
+		remaining := s.Remaining
+		uistate.ConfirmModal(uistate.T("budgets.releaseConfirm", fmtMoney(remaining), s.Budget.Name), false, func(ok bool) {
+			if !ok {
+				return
+			}
+			for _, b := range app.Budgets() {
+				if b.ID != s.Budget.ID {
+					continue
+				}
+				start, _ := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
+					uistate.PostNotice(err.Error(), true)
+					return
+				}
+				uistate.BumpDataRevision()
+				uistate.PostUndoable(uistate.T("budgets.releasedToast", fmtMoney(remaining), b.Name))
+				return
+			}
+		})
+	}))
 
 	// "Cover…" opens the shell-root flip modal (BudgetEditHost cover mode), which picks
 	// a source budget + amount and moves the limit — no longer an inline row form.
@@ -371,6 +401,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
+			If(s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "budget-release-btn-"+s.Budget.ID), Title(uistate.T("budgets.releaseTitle")),
+				OnClick(releaseUnused), uistate.T("budgets.releaseAction"))),
 			If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 			Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 		),
@@ -516,7 +549,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				open++
 			}
 		}
-		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-" + s.Budget.ID),
+		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-"+s.Budget.ID),
 			Span(css.Class("budget-todos-head"), uistate.T("budgets.followUpsHead", open, len(linkedTodos)))}
 		for i, it := range linkedTodos {
 			if i >= maxTodos {

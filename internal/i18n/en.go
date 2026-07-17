@@ -1030,6 +1030,11 @@ var english = Catalog{
 	"reports.eventsManage":   "Manage events",
 	"reports.eventRange":     "%s – %s",
 	"reports.eventOpenRange": "since %s",
+	// Release unused budget funds (the mirror of the per-period top-up).
+	"budgets.releaseAction":  "Release unused funds",
+	"budgets.releaseTitle":   "Lower this period's cap to what's spent, returning the leftover to your plan. Future periods keep the normal limit.",
+	"budgets.releaseConfirm": "Release %s from \"%s\" for this period? The cap drops to what's spent; next period is unchanged.",
+	"budgets.releasedToast":  "Released %s from %s.",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",

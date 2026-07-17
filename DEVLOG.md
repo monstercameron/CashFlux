@@ -131,6 +131,16 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Release = a negative top-up
+
+The budgets item bundled three asks. "Release unused funds" shipped as the exact mirror of the
+existing per-period top-up: `WithPeriodBoost(periodStart, -remaining)` — no new mechanism, and
+per-period semantics give "future periods unchanged" for free. The remaining two asks are
+covered adjacently and deliberately NOT rebuilt: past/current periods already read distinctly
+(the annual grid + the is-hist tones from the July design pass), and "freeze a completed month"
+is what report snapshots + the month-end-close checklist now do together. Building a separate
+budget-freeze store would have duplicated the snapshot concept one page over.
+
 ## 2026-07-17 — Report annotations already had an entity
 
 The report item read "user annotations for life events" and my first instinct was a new
