@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"syscall/js"
 	"time"
@@ -1214,6 +1215,7 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	if fr.Rows == 0 {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noUpcomingBills"))
 	} else {
+		idColBills, _ := fr.Column("id")
 		rows := make([]ui.Node, 0, fr.Rows)
 		for i := 0; i < fr.Rows; i++ {
 			dueTone := "text-faint"
@@ -1224,11 +1226,13 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 			// .UTC(): due dates are UTC-midnight calendar dates; local-zone
 			// reconstruction shows them a day early west of UTC (C339).
 			when := time.Unix(int64(dueCol.Num(i)), 0).UTC()
-			rows = append(rows, Div(css.Class(tw.Flex, tw.JustifyBetween),
-				Span(nameCol.Str(i)),
-				Span(ClassStr(dueTone), pr.FormatDate(when)),
-				Span(css.Class("fig", tw.FontDisplay, tw.TextDown, tw.W24, tw.TextRight), fmtMoney(amt.Neg())),
-			))
+			rows = append(rows, ui.CreateElement(dashBillRow, dashBillRowProps{
+				AcctID:  idColBills.Str(i),
+				Name:    nameCol.Str(i),
+				DueText: pr.FormatDate(when),
+				DueTone: dueTone,
+				Amount:  fmtMoney(amt.Neg()),
+			}))
 		}
 		body = Div(css.Class("t-body", tw.SpaceY25), rows)
 	}
@@ -1262,9 +1266,15 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	}
 	nameCol, _ := fr.Column("name")
 	pctCol, _ := fr.Column("percent")
+	idCol, _ := fr.Column("id")
 	type seg struct {
 		name string
 		pct  int
+		// Click-through routing: catID for a real category, uncat for the
+		// no-category segment, otherIDs (comma-joined tail) for "Other".
+		catID    string
+		uncat    bool
+		otherIDs string
 	}
 	// Build segments from the RAW float percents, summing the tail into "Other".
 	// Display percents are then assigned so the bar fills exactly 100% — the last
@@ -1272,19 +1282,24 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	// int truncation (which left the bar visibly underfilled and "Other" wrong).
 	segs := make([]seg, 0, topN+1)
 	var otherRaw float64
+	var otherIDs []string
 	for i := 0; i < fr.Rows; i++ {
 		if i < topN {
 			name := nameCol.Str(i)
+			id := idCol.Str(i)
 			if name == "" {
 				name = uistate.T("dashboard.uncategorized")
 			}
-			segs = append(segs, seg{name: name, pct: int(pctCol.Num(i) + 0.5)})
+			segs = append(segs, seg{name: name, pct: int(pctCol.Num(i) + 0.5), catID: id, uncat: id == ""})
 		} else {
 			otherRaw += pctCol.Num(i)
+			if id := idCol.Str(i); id != "" {
+				otherIDs = append(otherIDs, id)
+			}
 		}
 	}
 	if otherRaw > 0 {
-		segs = append(segs, seg{name: uistate.T("dashboard.other"), pct: int(otherRaw + 0.5)})
+		segs = append(segs, seg{name: uistate.T("dashboard.other"), pct: int(otherRaw + 0.5), otherIDs: strings.Join(otherIDs, ",")})
 	}
 	// Force the displayed percents to total exactly 100 so the segmented bar always
 	// spans the full container width without over/underflow: distribute the rounding
@@ -1305,13 +1320,19 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	tones := []string{"bg-up", "bg-warn", "bg-dim", "bg-down"}
 	barParts := make([]ui.Node, 0, len(segs))
 	legend := make([]ui.Node, 0, len(segs))
+	from, to := dashPeriodFilterRange(c.Start, c.End)
 	for i, s := range segs {
 		tone := tones[i%len(tones)]
 		barParts = append(barParts, Div(ClassStr(tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", s.pct)})))
-		legend = append(legend, Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap15),
-			Span(ClassStr(tw.Fold(tw.W2, tw.H2, tw.RoundedFull)+" "+tw.ColorClass(tone))),
-			Textf("%s %d%%", s.name, s.pct),
-		))
+		// Every legend entry drills to the exact contributing transactions:
+		// the ledger filtered to this category (or the uncategorized set, or
+		// the collapsed tail) inside the widget's own period window.
+		legend = append(legend, ui.CreateElement(breakdownLegendItem, breakdownLegendProps{
+			Label: fmt.Sprintf("%s %d%%", s.name, s.pct),
+			Tone:  tone,
+			CatID: s.catID, Uncat: s.uncat, OtherIDs: s.otherIDs,
+			From: from, To: to,
+		}))
 	}
 
 	body := Div(
@@ -1654,6 +1675,7 @@ func accountsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	balCol, _ := fr.Column("balance")
 	curCol, _ := fr.Column("currency")
 	toneCol, _ := fr.Column("tone")
+	idColA, _ := fr.Column("id")
 	cells := make([]ui.Node, 0, fr.Rows)
 	for i := 0; i < fr.Rows; i++ {
 		bal := money.New(balCol.Int64(i), curCol.Str(i))
@@ -1661,10 +1683,12 @@ func accountsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		if toneCol.Str(i) == "down" {
 			tone = "text-down"
 		}
-		cells = append(cells, Div(
-			Div(css.Class(tw.TextDim), nameCol.Str(i)),
-			Div(ClassStr("fig t-body "+tw.Fold(tw.FontDisplay, tw.Mt05)+" "+tw.ColorClass(tone)), fmtMoney(bal)),
-		))
+		cells = append(cells, ui.CreateElement(dashAcctCell, dashAcctCellProps{
+			AcctID:  idColA.Str(i),
+			Name:    nameCol.Str(i),
+			Balance: fmtMoney(bal),
+			Tone:    tone,
+		}))
 	}
 	var body ui.Node
 	bodyCls := ""
@@ -1920,6 +1944,7 @@ func budgetsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		nameCol, _ := fr.Column("name")
 		pctCol, _ := fr.Column("percent")
 		stateCol, _ := fr.Column("state")
+		idColB, _ := fr.Column("id")
 		rows := make([]ui.Node, 0, fr.Rows)
 		for i := 0; i < fr.Rows; i++ {
 			state := stateCol.Str(i)
@@ -1931,6 +1956,7 @@ func budgetsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 				tone, bar = "text-down", "bg-down"
 			}
 			rows = append(rows, ui.CreateElement(dashBudgetRow, dashBudgetRowProps{
+				ID:      idColB.Str(i),
 				Label:   nameCol.Str(i),
 				Percent: int(pctCol.Num(i)),
 				Tone:    tone,
@@ -1967,17 +1993,20 @@ func recentFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	if fr.Rows == 0 {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noTransactions"))
 	} else {
+		idColR, _ := fr.Column("id")
 		rows := make([]ui.Node, 0, fr.Rows)
 		for i := 0; i < fr.Rows; i++ {
 			amt := money.New(amtCol.Int64(i), curCol.Str(i))
 			// .UTC(): txn dates are UTC-midnight calendar dates; local-zone
 			// reconstruction rendered them a day early west of UTC (C339).
 			when := time.Unix(int64(dateCol.Num(i)), 0).UTC()
-			rows = append(rows, Tr(css.Class(tw.BorderB, tw.BorderLine70),
-				Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16, tw.Truncate), when.Format("Jan 2")),
-				Td(css.Class(tw.Py25), descCol.Str(i)),
-				Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)+" "+tw.ColorClass(figTone(amt))), fmtMoney(amt)),
-			))
+			rows = append(rows, ui.CreateElement(dashRecentRow, dashRecentRowProps{
+				TxnID:   idColR.Str(i),
+				Date:    when.Format("Jan 2"),
+				Desc:    descCol.Str(i),
+				Amount:  fmtMoney(amt),
+				AmtTone: figTone(amt),
+			}))
 		}
 		switch display {
 		case "page":
@@ -2330,7 +2359,179 @@ func kpiBodyHero(figure, figTone, subline, subTone string) ui.Node {
 }
 
 // dashBudgetRowProps configures one budget row in the dashboard budgets widget.
+// drillCategorySet expands root category IDs into the comma-joined set of
+// themselves plus every descendant, sorted for a deterministic filter value.
+// The spending breakdown aggregates by root; the ledger filter matches exact
+// category IDs — the drill has to bridge that.
+func drillCategorySet(rootIDs []string) string {
+	app := appstate.Default
+	if app == nil {
+		return strings.Join(rootIDs, ",")
+	}
+	set := categorytree.DescendantsOfAll(app.Categories(), rootIDs)
+	if len(set) == 0 {
+		return strings.Join(rootIDs, ",")
+	}
+	ids := make([]string, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, ",")
+}
+
+// dashPeriodFilterRange converts a widget's [start, end) period window into
+// the inclusive From/To date strings the transactions filter speaks, so a
+// dashboard drill lands on exactly the transactions the widget summed.
+func dashPeriodFilterRange(start, end time.Time) (from, to string) {
+	return start.Format(dateutil.Layout), end.AddDate(0, 0, -1).Format(dateutil.Layout)
+}
+
+// breakdownLegendProps carries one spending-breakdown legend entry.
+type breakdownLegendProps struct {
+	Label    string
+	Tone     string // dot tone class, e.g. "bg-up"
+	CatID    string // category to filter by (when not uncat/other)
+	Uncat    bool   // the no-category segment → Uncategorized filter
+	OtherIDs string // comma-joined tail category IDs for the "Other" segment
+	From, To string // the widget's period window, inclusive filter dates
+}
+
+// breakdownLegendItem is one clickable legend entry on the Spending breakdown:
+// it opens /transactions filtered to this segment's category (or the
+// uncategorized set, or the collapsed tail) within the widget's own period
+// window — the parity scan's "every visualization routes to the exact
+// contributing transactions". Own component for its hooks (loop gotcha).
+func breakdownLegendItem(p breakdownLegendProps) ui.Node {
+	nav := router.UseNavigate()
+	filterAtom := uistate.UseTxFilter()
+	click := ui.UseEvent(func() {
+		f := uistate.TxFilter{From: p.From, To: p.To}
+		switch {
+		case p.Uncat:
+			f.Uncategorized = true
+		case p.OtherIDs != "":
+			f.Categories = drillCategorySet(strings.Split(p.OtherIDs, ","))
+		default:
+			// The breakdown sums by ROOT category while the ledger filter
+			// matches exact IDs — drill on the whole subtree or a rollup slice
+			// lands on an empty ledger.
+			set := drillCategorySet([]string{p.CatID})
+			if strings.Contains(set, ",") {
+				f.Categories = set
+			} else {
+				f.Category = p.CatID
+			}
+		}
+		f = f.Normalize()
+		filterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	})
+	return Button(css.Class("dash-drill", tw.Flex, tw.ItemsCenter, tw.Gap15),
+		Type("button"),
+		Attr("title", uistate.T("dashboard.legendDrillTitle")),
+		OnClick(click),
+		Span(ClassStr(tw.Fold(tw.W2, tw.H2, tw.RoundedFull)+" "+tw.ColorClass(p.Tone))),
+		Span(p.Label),
+	)
+}
+
+// dashBillRowProps carries one Upcoming-bills row to its clickable component.
+type dashBillRowProps struct {
+	AcctID  string // account behind the bill; "recurring:<id>" for pure recurring items
+	Name    string
+	DueText string
+	DueTone string
+	Amount  string
+}
+
+// dashBillRow makes an upcoming bill actionable: an account-backed bill jumps
+// to that account's row on /accounts (flashed); a recurring-only item opens
+// /recurring. Own component for its hooks (loop gotcha).
+func dashBillRow(p dashBillRowProps) ui.Node {
+	nav := router.UseNavigate()
+	click := ui.UseEvent(func() {
+		if strings.HasPrefix(p.AcctID, "recurring:") {
+			nav.Navigate(uistate.RoutePath("/recurring"))
+			return
+		}
+		uistate.SetDeepLinkFocus(`[data-testid="acct-row-` + p.AcctID + `"]`)
+		nav.Navigate(uistate.RoutePath("/accounts"))
+	})
+	return Button(css.Class("dash-drill", tw.Flex, tw.JustifyBetween, tw.WFull, tw.TextLeft),
+		Type("button"),
+		Attr("title", uistate.T("dashboard.billDrillTitle", p.Name)),
+		OnClick(click),
+		Span(p.Name),
+		Span(ClassStr(p.DueTone), p.DueText),
+		Span(css.Class("fig", tw.FontDisplay, tw.TextDown, tw.W24, tw.TextRight), p.Amount),
+	)
+}
+
+// dashAcctCellProps carries one Accounts-widget balance cell.
+type dashAcctCellProps struct {
+	AcctID  string
+	Name    string
+	Balance string
+	Tone    string
+}
+
+// dashAcctCell is one clickable account balance on the Accounts widget: it
+// jumps to that account's row on /accounts (flashed). Own component (loop gotcha).
+func dashAcctCell(p dashAcctCellProps) ui.Node {
+	nav := router.UseNavigate()
+	click := ui.UseEvent(func() {
+		uistate.SetDeepLinkFocus(`[data-testid="acct-row-` + p.AcctID + `"]`)
+		nav.Navigate(uistate.RoutePath("/accounts"))
+	})
+	return Button(css.Class("dash-drill", tw.TextLeft),
+		Type("button"),
+		Attr("title", uistate.T("dashboard.acctDrillTitle", p.Name)),
+		OnClick(click),
+		Div(css.Class(tw.TextDim), p.Name),
+		Div(ClassStr("fig t-body "+tw.Fold(tw.FontDisplay, tw.Mt05)+" "+tw.ColorClass(p.Tone)), p.Balance),
+	)
+}
+
+// dashRecentRowProps carries one Recent-transactions row.
+type dashRecentRowProps struct {
+	TxnID   string
+	Date    string
+	Desc    string
+	Amount  string
+	AmtTone string
+}
+
+// dashRecentRow is one clickable recent transaction: it opens the ledger
+// searched to that transaction's payee/description (the notification deep-link
+// convention), so the row lands beside its siblings. Own component (loop gotcha).
+func dashRecentRow(p dashRecentRowProps) ui.Node {
+	nav := router.UseNavigate()
+	filterAtom := uistate.UseTxFilter()
+	click := ui.UseEvent(func() {
+		f := uistate.TxFilter{}
+		if label := notifyTxnSearchLabel(p.TxnID); label != "" {
+			f.Text = label
+		}
+		f = f.Normalize()
+		filterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	})
+	return Tr(css.Class("dash-drill-row", tw.BorderB, tw.BorderLine70),
+		Attr("role", "link"),
+		Attr("tabindex", "0"),
+		Attr("title", uistate.T("dashboard.recentDrillTitle")),
+		OnClick(click),
+		Td(css.Class("fig", tw.Py25, tw.TextDim, tw.W16, tw.Truncate), p.Date),
+		Td(css.Class(tw.Py25), p.Desc),
+		Td(ClassStr("fig "+tw.Fold(tw.Py25, tw.TextRight, tw.FontDisplay)+" "+tw.ColorClass(p.AmtTone)), p.Amount),
+	)
+}
+
 type dashBudgetRowProps struct {
+	ID      string // budget id — the drill lands on budget-card-<id> on /budgets
 	Label   string
 	Percent int
 	Tone    string // color class for the figure, e.g. "text-down"
@@ -2345,7 +2546,12 @@ type dashBudgetRowProps struct {
 // (the On* loop gotcha).
 func dashBudgetRow(props dashBudgetRowProps) ui.Node {
 	nav := router.UseNavigate()
-	openBudgets := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/budgets")) })
+	openBudgets := ui.UseEvent(func() {
+		if props.ID != "" {
+			uistate.SetDeepLinkFocus(`[data-testid="budget-card-` + props.ID + `"]`)
+		}
+		nav.Navigate(uistate.RoutePath("/budgets"))
+	})
 
 	header := Div(css.Class(tw.Flex, tw.JustifyBetween),
 		Span(props.Label),
@@ -2353,17 +2559,20 @@ func dashBudgetRow(props dashBudgetRowProps) ui.Node {
 	)
 	bar := uiw.ProgressBar(uiw.ProgressBarProps{Percent: props.Percent, Tone: props.Bar, Class: "mt-1.5"})
 
+	// Every row drills to its own budget card (flashed) on /budgets — the
+	// over-state keeps its stronger chrome, but a healthy budget is just as
+	// inspectable (parity scan: visualizations route to their source).
+	cls := "dash-drill"
 	if props.Over {
-		// Over-budget rows are actionable: clicking opens the Budgets screen.
-		return Button(css.Class("budget-over-row", tw.WFull, tw.TextLeft),
-			Type("button"),
-			Attr("aria-label", uistate.T("dashboard.budgetDrillTitle")),
-			Attr("title", uistate.T("dashboard.budgetDrillTitle")),
-			OnClick(openBudgets),
-			header, bar,
-		)
+		cls = "budget-over-row"
 	}
-	return Div(header, bar)
+	return Button(css.Class(cls, tw.WFull, tw.TextLeft),
+		Type("button"),
+		Attr("aria-label", uistate.T("dashboard.budgetDrillTitle")),
+		Attr("title", uistate.T("dashboard.budgetDrillTitle")),
+		OnClick(openBudgets),
+		header, bar,
+	)
 }
 
 // anomalyHubRowProps carries one SMART anomaly finding to its per-row component.

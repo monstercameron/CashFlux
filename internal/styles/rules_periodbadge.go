@@ -55,4 +55,26 @@ func registerPeriodBadge() {
 		borderColor("var(--accent)"),
 		color("var(--text)"),
 	)
+	// Dashboard drill affordances: widget rows/legend entries that route to
+	// their filtered source keep their layout but read as quiet links.
+	rule(".dash-drill",
+		background("none"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		color("inherit"),
+		textAlign("inherit"),
+		cursor("pointer"),
+		borderRadius("6px"),
+	)
+	rule(".dash-drill:hover, .dash-drill:focus-visible",
+		color("var(--accent)"),
+	)
+	rule(".dash-drill-row",
+		cursor("pointer"),
+	)
+	rule(".dash-drill-row:hover td, .dash-drill-row:focus-visible td",
+		color("var(--accent)"),
+	)
 }

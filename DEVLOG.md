@@ -1,3 +1,16 @@
+## 2026-07-17 — Dashboard drills (parity-scan item 10)
+
+Wired the click-through contract: every widget that shows data now routes to that data, filtered.
+The engine frames didn't carry entity IDs (only display columns), so the pure layer got `id`
+columns first (budget usage, account balances, upcoming bills — account ID with the `recurring:`
+pseudo-prefix for pure recurring items — recent transactions, spending breakdown), then per-row
+components own the click hooks (loop gotcha). The one real bug the live probe caught: the first
+Transportation drill landed on an EMPTY ledger — the breakdown aggregates by root category but
+the ledger filter matches exact IDs, so the drill now expands the subtree via categorytree
+(single ID → Category; rollup → Categories multi-filter). Drill styling is a quiet .dash-drill
+link affordance, not button chrome. 12/12 e2e + a filtered-rows probe (Transportation 53% → 2
+July rows).
+
 ## 2026-07-17 — Freshness card gains its repair loop (parity-scan item 9)
 
 The scan wants a "connection-health card with refresh and repair actions". CashFlux has no bank

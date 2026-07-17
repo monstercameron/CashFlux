@@ -39,7 +39,7 @@ func BudgetStatus(budgets []domain.Budget, cats []domain.Category, txns []domain
 	for _, c := range cats {
 		catName[c.ID] = c.Name
 	}
-	var names, percents, states, over []any
+	var ids, names, percents, states, over []any
 	for _, b := range budgets {
 		st, err := budgeting.EvaluateRollup(b, txns, start, end, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
@@ -55,12 +55,14 @@ func BudgetStatus(budgets []domain.Budget, cats []domain.Category, txns []domain
 		if label == "" {
 			label = catName[st.Budget.CategoryID]
 		}
+		ids = append(ids, st.Budget.ID)
 		names = append(names, label)
 		percents = append(percents, float64(st.Percent))
 		states = append(states, stateTone(st.State))
 		over = append(over, st.State == budgeting.StateOver)
 	}
 	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
 		domain.Field{Name: "name", Type: domain.FieldString, Values: names},
 		domain.Field{Name: "percent", Type: domain.FieldPercent, Values: percents},
 		domain.Field{Name: "state", Type: domain.FieldTone, Values: states},
@@ -85,7 +87,7 @@ func stateTone(s budgeting.State) string {
 // cleared selects the cleared balance. Accounts whose balance can't be computed
 // (FX mismatch) are skipped. limit caps rows (0 = no cap).
 func AccountBalances(accounts []domain.Account, txns []domain.Transaction, cleared bool, limit int) domain.Frame {
-	var names, balances, currencies, tones []any
+	var ids, names, balances, currencies, tones []any
 	for _, a := range accounts {
 		if a.Archived {
 			continue
@@ -119,12 +121,14 @@ func AccountBalances(accounts []domain.Account, txns []domain.Transaction, clear
 		if bal.IsNegative() {
 			tone = "down"
 		}
+		ids = append(ids, a.ID)
 		names = append(names, a.Name)
 		balances = append(balances, bal.Amount)
 		currencies = append(currencies, bal.Currency)
 		tones = append(tones, tone)
 	}
 	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
 		domain.Field{Name: "name", Type: domain.FieldString, Values: names},
 		domain.Field{Name: "balance", Type: domain.FieldMoney, Values: balances},
 		domain.Field{Name: "currency", Type: domain.FieldString, Values: currencies},
@@ -158,14 +162,16 @@ func NetWorthSeries(accounts []domain.Account, txns []domain.Transaction, rates 
 // row cap is a limit transform applied by the pipeline.
 func RecentTransactions(txns []domain.Transaction) domain.Frame {
 	recent := ledger.Recent(txns, len(txns))
-	var dates, descs, amounts, currencies []any
+	var ids, dates, descs, amounts, currencies []any
 	for _, t := range recent {
+		ids = append(ids, t.ID)
 		dates = append(dates, float64(t.Date.Unix()))
 		descs = append(descs, t.Desc)
 		amounts = append(amounts, t.Amount.Amount)
 		currencies = append(currencies, t.Amount.Currency)
 	}
 	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
 		domain.Field{Name: "date", Type: domain.FieldNumber, Values: dates},
 		domain.Field{Name: "desc", Type: domain.FieldString, Values: descs},
 		domain.Field{Name: "amount", Type: domain.FieldMoney, Values: amounts},
@@ -228,8 +234,9 @@ func RichTransactions(txns []domain.Transaction, accounts []domain.Account, cats
 // and amount (money minor units, positive). The row cap is a limit transform.
 func UpcomingBills(accounts []domain.Account, recurring []domain.Recurring, now time.Time) domain.Frame {
 	upcoming := bills.UpcomingAll(accounts, recurring, now)
-	var names, dues, days, amounts, currencies []any
+	var ids, names, dues, days, amounts, currencies []any
 	for _, b := range upcoming {
+		ids = append(ids, b.AccountID)
 		names = append(names, b.Name)
 		dues = append(dues, float64(b.DueDate.Unix()))
 		days = append(days, float64(b.DaysUntil))
@@ -237,6 +244,7 @@ func UpcomingBills(accounts []domain.Account, recurring []domain.Recurring, now 
 		currencies = append(currencies, b.Amount.Currency)
 	}
 	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
 		domain.Field{Name: "name", Type: domain.FieldString, Values: names},
 		domain.Field{Name: "due", Type: domain.FieldNumber, Values: dues},
 		domain.Field{Name: "days", Type: domain.FieldNumber, Values: days},
@@ -316,8 +324,9 @@ func SpendingBreakdown(cats []domain.Category, txns []domain.Transaction, rates 
 	// Rank all root categories by spend (no tail collapse — that's the widget's
 	// top-N presentation choice). RankSpending with n == len keeps every category.
 	ranked, _ := ledger.RankSpending(totals, len(totals))
-	var names, amounts, percents []any
+	var ids, names, amounts, percents []any
 	for _, ct := range ranked {
+		ids = append(ids, ct.CategoryID)
 		name := catName[ct.CategoryID]
 		names = append(names, name)
 		amounts = append(amounts, ct.Amount)
@@ -328,6 +337,7 @@ func SpendingBreakdown(cats []domain.Category, txns []domain.Transaction, rates 
 		percents = append(percents, pct)
 	}
 	return domain.NewFrame(
+		domain.Field{Name: "id", Type: domain.FieldString, Values: ids},
 		domain.Field{Name: "name", Type: domain.FieldString, Values: names},
 		domain.Field{Name: "amount", Type: domain.FieldMoney, Values: amounts},
 		domain.Field{Name: "percent", Type: domain.FieldPercent, Values: percents},
