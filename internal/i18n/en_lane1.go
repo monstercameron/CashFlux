@@ -9,6 +9,8 @@ var lane1Keys = Catalog{
 	// %s = plain-English scope parts, %s = the review window line.
 	"rpta.scopeShowing": "Showing %s only · %s — health score and Where you stand stay household-wide",
 	"rpta.scopeReset":   "Reset scope",
+	// %s = the snapshot's period label (e.g. "Jul 2026").
+	"reports.snapModalTitle": "Snapshot — %s",
 }
 
 func init() {

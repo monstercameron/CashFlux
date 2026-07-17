@@ -101,6 +101,26 @@ func savedReportsControl(props struct{}) ui.Node {
 		opts = append(opts, uiw.SelectOption{Value: s.ID, Label: s.Name})
 	}
 
+	// #46: the name-current-view form opens in the app-standard flip modal
+	// (standard Save/Cancel footer via FormID) instead of expanding inline in
+	// the toolbar. Constructed unconditionally (FlipPanel carries a hook),
+	// rendered only while open.
+	saveModal := uiw.FlipPanel(uiw.FlipPanelProps{
+		Title:        uistate.T("reports.savedSave"),
+		Width:        uiw.FlipSmallW,
+		Height:       "min(60vh, 300px)",
+		FormID:       "reports-saved-form",
+		SaveTestID:   "reports-saved-confirm",
+		CancelTestID: "reports-saved-cancel",
+		OnClose:      func() { nameOpen.Set(false); nameS.Set("") },
+		Back: Form(Attr("id", "reports-saved-form"), OnSubmit(saveCurrent),
+			uiw.FormField(uistate.T("reports.savedNameLabel"),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "reports-saved-name"),
+					Attr("aria-label", uistate.T("reports.savedNameLabel")), Attr("autofocus", "true"),
+					Placeholder(uistate.T("reports.savedNamePh")), Value(nameS.Get()), OnInput(onName))),
+		),
+	})
+
 	return Div(Attr("data-testid", "reports-saved"),
 		Style(map[string]string{"display": "inline-flex", "gap": "0.4rem", "align-items": "center", "flex-wrap": "wrap"}),
 		If(len(list) > 0, uiw.SelectInput(uiw.SelectInputProps{
@@ -110,19 +130,8 @@ func savedReportsControl(props struct{}) ui.Node {
 		If(selS.Get() != "", Button(css.Class("btn", "btn-sm"), Type("button"),
 			Attr("data-testid", "reports-saved-delete"), Title(uistate.T("reports.savedDeleteTitle")),
 			OnClick(deleteSel), "✕")),
-		IfElse(nameOpen.Get(),
-			Fragment(
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "reports-saved-name"),
-					Style(map[string]string{"max-width": "11rem"}),
-					Attr("aria-label", uistate.T("reports.savedNameLabel")),
-					Placeholder(uistate.T("reports.savedNamePh")), Value(nameS.Get()), OnInput(onName)),
-				Button(css.Class("btn", "btn-sm", "btn-primary"), Type("button"),
-					Attr("data-testid", "reports-saved-confirm"), OnClick(saveCurrent), uistate.T("action.save")),
-				Button(css.Class("btn", "btn-sm"), Type("button"),
-					Attr("data-testid", "reports-saved-cancel"), OnClick(toggleName), uistate.T("action.cancel")),
-			),
-			Button(css.Class("strip-toggle"), Type("button"), Attr("data-testid", "reports-saved-open"),
-				Title(uistate.T("reports.savedSaveTitle")), OnClick(toggleName), uistate.T("reports.savedSave")),
-		),
+		Button(css.Class("strip-toggle"), Type("button"), Attr("data-testid", "reports-saved-open"),
+			Title(uistate.T("reports.savedSaveTitle")), OnClick(toggleName), uistate.T("reports.savedSave")),
+		If(nameOpen.Get(), saveModal),
 	)
 }

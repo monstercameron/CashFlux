@@ -1,3 +1,28 @@
+## 2026-07-17 — #46: /reports stops improvising its own dialog language (lane 1)
+
+Cam's consistency pass: the Snapshots cluster sat on its own line under the toolbar, and three
+different /reports triggers each invented a different inline-expansion pattern — the Report-metrics
+builder materialized in the APPENDIX (a full page from its toolbar button, the QA report's "no focus
+transition" complaint), Saved-views swapped its button for an inline input+save+cancel trio, and the
+scope panel had its own `scope-save-form` mini-span. All four now speak FlipPanel.
+
+The one framework subtlety worth writing down: **FlipPanel is a helper, not a component — its
+internal `UseState` lands in the CALLER's hook chain.** So `if open { modal = FlipPanel(...) }`
+is a conditional hook. The safe idiom (used by insights.go, now by all four of these) is construct
+unconditionally, gate the RENDER: `panel := uiw.FlipPanel(...)` then `If(open, panel)`. Cheap when
+closed, hook-stable always. Corollary: removing scopeselector's now-dead `cancelSave` UseEvent is
+fine (hook count must be stable across renders, not across code versions), but the hook-order doc
+comment above the component had to be renumbered.
+
+Small dividend: with the modal owning the header, `FormulaBuilderProps.Title` goes back to its
+"Formula calculator" default so the dialog doesn't read "Report metrics / Report metrics" (the
+UX-08 duplicate-title class of bug, avoided rather than filed). Standard-footer detail: `FormID`
+pins the app-wide Save/Cancel footer whose Save is a native submit — both name forms keep their
+original testids (`reports-saved-confirm` via `SaveTestID`) so older probes keep passing.
+
+E2E: 10 new assertions in `lane1_verify.mjs` (19 total with #47) — inline placement, each surface
+opens inside `.flip-panel` and closes clean, a named view round-trips into the picker. 19/19.
+
 ## 2026-07-17 — UX-05: budgets learn past tense, and every count earns its click (lane 5)
 
 The deep-dive's sharpest budgets finding was a tense bug wearing a UX costume: page back to June

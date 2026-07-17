@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/scope"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -94,8 +95,10 @@ func scopeAcctRow(p scopeAcctRowProps) ui.Node {
 //  5. ui.UseState — selectedSV
 //  6. ui.UseEvent — clearAll
 //  7. ui.UseEvent — openSave
-//  8. ui.UseEvent — cancelSave
-//  9. ui.UseEvent — toggleAccts
+//  8. ui.UseEvent — toggleAccts
+//
+// (+ the save-view FlipPanel's internal state hook — the panel is constructed
+// unconditionally and only rendered while open, so its position is stable.)
 func ScopeSelector() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -117,11 +120,7 @@ func ScopeSelector() ui.Node {
 		showSave.Set(true)
 		saveName.Set("")
 	})
-	cancelSave := ui.UseEvent(func() { // hook 8
-		showSave.Set(false)
-		saveName.Set("")
-	})
-	toggleAccts := ui.UseEvent(func() { // hook 9
+	toggleAccts := ui.UseEvent(func() { // hook 8
 		showAccts.Set(!showAccts.Get())
 	})
 
@@ -179,8 +178,9 @@ func ScopeSelector() ui.Node {
 		}
 	})
 
-	// saveConfirm persists the current scope as a named saved view.
-	saveConfirm := OnClick(func() {
+	// saveConfirm persists the current scope as a named saved view (form submit
+	// from the flip modal's standard Save footer).
+	saveConfirm := OnSubmit(Prevent(func() {
 		name := strings.TrimSpace(saveName.Get())
 		if name == "" {
 			return
@@ -189,7 +189,7 @@ func ScopeSelector() ui.Node {
 		_ = app.PutSavedView(sv)
 		showSave.Set(false)
 		saveName.Set("")
-	})
+	}))
 
 	// deleteView removes the currently selected saved view.
 	deleteView := OnClick(func() {
@@ -274,22 +274,28 @@ func ScopeSelector() ui.Node {
 		uistate.T("scope.viewAll"),
 	))
 
-	// "Save current as…" name-entry form (shown only when openSave clicked).
-	saveForm := If(showSave.Get(),
-		Span(css.Class("scope-save-form"),
-			Input(
-				css.Class("field"),
-				Type("text"),
-				Attr("placeholder", uistate.T("scope.savedViews.namePlaceholder")),
-				Attr("aria-label", uistate.T("scope.savedViews.namePlaceholder")),
-				OnInput(func(v string) { saveName.Set(v) }),
-			),
-			Button(css.Class("btn", "btn-sm"), Type("button"), saveConfirm,
-				uistate.T("scope.savedViews.confirm")),
-			Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(cancelSave),
-				uistate.T("scope.savedViews.cancel")),
+	// "Save current as…" opens the app-standard flip modal (#46) instead of an
+	// inline mini-form. Constructed unconditionally (FlipPanel carries a hook),
+	// rendered only while open; the standard footer's Save submits the form.
+	saveForm := uiw.FlipPanel(uiw.FlipPanelProps{
+		Title:     uistate.T("scope.savedViews.save"),
+		Width:     uiw.FlipSmallW,
+		Height:    "min(60vh, 300px)",
+		FormID:    "scope-save-form",
+		SaveLabel: uistate.T("scope.savedViews.confirm"),
+		OnClose:   func() { showSave.Set(false); saveName.Set("") },
+		Back: Form(Attr("id", "scope-save-form"), css.Class("scope-save-form"), saveConfirm,
+			uiw.FormField(uistate.T("scope.savedViews.namePlaceholder"),
+				Input(
+					css.Class("field"),
+					Type("text"),
+					Attr("autofocus", "true"),
+					Attr("placeholder", uistate.T("scope.savedViews.namePlaceholder")),
+					Attr("aria-label", uistate.T("scope.savedViews.namePlaceholder")),
+					OnInput(func(v string) { saveName.Set(v) }),
+				)),
 		),
-	)
+	})
 
 	// Saved-views row: dropdown + save-as button + delete button.
 	savedViewsRow := If(len(savedViews) > 0 || !sc.IsAll(),
@@ -300,11 +306,9 @@ func ScopeSelector() ui.Node {
 				svChange,
 				svOpts,
 			),
-			If(!showSave.Get(),
-				Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(openSave),
-					uistate.T("scope.savedViews.save")),
-			),
-			saveForm,
+			Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(openSave),
+				uistate.T("scope.savedViews.save")),
+			If(showSave.Get(), saveForm),
 			If(selectedSV.Get() != "",
 				Button(css.Class("btn", "btn-sm"), Type("button"),
 					Attr("aria-label", uistate.T("scope.savedViews.delete")),

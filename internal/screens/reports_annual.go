@@ -1484,11 +1484,22 @@ func Reports() ui.Node {
 	if len(cfDefs) > 0 {
 		appendixBits = append(appendixBits, customFieldSpendSection(scopedTxns, cfDefs, selectedCFKey.Get(), onCFKeyChange, as, ae, rates, base, fmtMinor, winForExports))
 	}
-	if showFormulas.Get() {
-		appendixBits = append(appendixBits, Fragment(
+	// #46: the Report-metrics builder opens in the app-standard flip modal
+	// instead of expanding a very large builder inline in the appendix, far
+	// from its toolbar trigger. Constructed unconditionally (FlipPanel carries
+	// a hook), rendered only while open.
+	metricsModal := uiw.FlipPanel(uiw.FlipPanelProps{
+		Title:     uistate.T("reports.metricsShow"),
+		Width:     uiw.FlipLargeW,
+		Height:    "min(90vh, 720px)",
+		CloseOnly: true,
+		OnClose:   func() { showFormulas.Set(false) },
+		// Title "" → the builder's own "Formula calculator" heading, so the
+		// modal header and the section heading never read as duplicates.
+		Back: Div(Attr("data-testid", "reports-metrics-modal"),
 			P(css.Class("rpta-muted"), uistate.T("reports.formulaHint")),
-			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("reports.metricsShow"), ShowSaved: true})))
-	}
+			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{ShowSaved: true})),
+	})
 	var appendix ui.Node = Fragment()
 	if len(appendixBits) > 0 {
 		appendix = rptaSection("rpta-11", "11", uistate.T("rpta.secAppendix"), "dim", uistate.T("rpta.secAppendixSub"), "", Fragment(anyify(appendixBits)...))
@@ -1510,6 +1521,7 @@ func Reports() ui.Node {
 		problems,
 		plan,
 		appendix,
+		If(showFormulas.Get(), metricsModal),
 	)
 }
 
@@ -1954,13 +1966,14 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 			// Report-to-action: the report ends in next steps, not just charts.
 			ui.CreateElement(reportActionsMenu, reportActionsProps{PeriodLabel: from.Format("Jan 2006")}),
 			exportMenu,
+			// Month-end snapshots: freeze the current aggregates; reopen them
+			// read-only in a flip modal. Inline with its sibling controls (#46).
+			ui.CreateElement(reportSnapshotControl, reportSnapshotProps{
+				Rows: rows, IncomeRows: incomeRows, Payees: payees, NameOf: nameOf,
+				Base: base, PeriodLabel: from.Format("Jan 2006"),
+			}),
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),
-		// Month-end snapshots: freeze the current aggregates; reopen them read-only.
-		ui.CreateElement(reportSnapshotControl, reportSnapshotProps{
-			Rows: rows, IncomeRows: incomeRows, Payees: payees, NameOf: nameOf,
-			Base: base, PeriodLabel: from.Format("Jan 2006"),
-		}),
 		// Life-event annotations: the events intersecting this report window.
 		ui.CreateElement(reportEventChips, struct{}{}),
 	)
