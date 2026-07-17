@@ -104,3 +104,70 @@ func containsLenderPhrase(s string) bool {
 	}
 	return false
 }
+
+// essentialPhrases marks recurring EVERYDAY SPENDING that is not a cancellable
+// subscription: utilities, fuel, groceries, pharmacy/tobacco runs, rent,
+// insurance, taxes. Offering "How to cancel" for Electricity or Pharmacy (QA
+// M5) both inflated the subscription counts/costs and read as nonsense advice.
+// Matched case-insensitively against the subscription's name, its transactions'
+// payee/description, and — when the caller can resolve them — the matched
+// transactions' category names.
+var essentialPhrases = []string{
+	"utilit",
+	"electric",
+	"gas",
+	"water",
+	"sewer",
+	"trash",
+	"waste",
+	"power",
+	"energy",
+	"grocer",
+	"supermarket",
+	"pharmacy",
+	"drugstore",
+	"cigarette",
+	"tobacco",
+	"fuel",
+	"rent",
+	"insurance",
+	"tax",
+}
+
+// IsEssentialSpend reports whether a detected subscription is really ordinary
+// recurring spending (a utility, grocery/pharmacy run, rent, insurance, tax)
+// rather than a cancellable service. Signals, any one sufficient:
+//
+//  1. The subscription's name contains an essential phrase.
+//  2. A matched transaction's Payee or Desc contains one.
+//  3. A matched transaction's category NAME (resolved via catNameOf; pass nil
+//     when category names aren't available) contains one.
+func IsEssentialSpend(sub Subscription, txns []domain.Transaction, catNameOf func(id string) string) bool {
+	if containsEssentialPhrase(sub.Name) {
+		return true
+	}
+	for _, t := range txns {
+		if !isMatchedTxn(sub.Name, t) {
+			continue
+		}
+		if containsEssentialPhrase(t.Payee) || containsEssentialPhrase(t.Desc) {
+			return true
+		}
+		if catNameOf != nil && t.CategoryID != "" && containsEssentialPhrase(catNameOf(t.CategoryID)) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsEssentialPhrase reports whether s contains any essentialPhrases as a
+// case-insensitive substring.
+func containsEssentialPhrase(s string) bool {
+	lower := strings.ToLower(s)
+	for _, phrase := range essentialPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}

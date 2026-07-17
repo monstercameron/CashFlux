@@ -76,10 +76,10 @@ func TestIsLiabilityPayment(t *testing.T) {
 	allAccounts := []domain.Account{creditCardAcct, checkingAcct, loanAcct, mortgageAcct, locAcct}
 
 	tests := []struct {
-		name    string
-		sub     Subscription
-		txns    []domain.Transaction
-		want    bool
+		name string
+		sub  Subscription
+		txns []domain.Transaction
+		want bool
 	}{
 		{
 			name: "credit card account — account-type signal",
@@ -276,4 +276,49 @@ func TestAccountByID(t *testing.T) {
 			t.Error("expected ok=false for empty accounts")
 		}
 	})
+}
+
+// TestIsEssentialSpend locks the QA M5 fix: utilities, grocery/pharmacy/tobacco
+// runs, rent, insurance, and taxes recur like subscriptions but are everyday
+// spending — never cancellable services with "How to cancel" affordances.
+func TestIsEssentialSpend(t *testing.T) {
+	catNameOf := func(id string) string {
+		return map[string]string{
+			"cat-util":   "Utilities",
+			"cat-health": "Health & Pharmacy",
+			"cat-fun":    "Entertainment",
+		}[id]
+	}
+	withCat := func(desc, catID string) domain.Transaction {
+		tx := txnWithAccount(desc, "acct-chk", 5000)
+		tx.CategoryID = catID
+		return tx
+	}
+
+	cases := []struct {
+		name string
+		sub  Subscription
+		txns []domain.Transaction
+		want bool
+	}{
+		{"electricity by name", makeSub("Electricity"), nil, true},
+		{"gas by name", makeSub("Gas"), nil, true},
+		{"cigarettes by name", makeSub("Cigarettes"), nil, true},
+		{"pharmacy by name", makeSub("CVS Pharmacy"), nil, true},
+		{"rent by name", makeSub("Rent"), nil, true},
+		{"utility by category", makeSub("City Services"),
+			[]domain.Transaction{withCat("City Services", "cat-util")}, true},
+		{"pharmacy by category", makeSub("Corner Store"),
+			[]domain.Transaction{withCat("Corner Store", "cat-health")}, true},
+		{"streaming service is NOT essential", makeSub("Netflix"),
+			[]domain.Transaction{withCat("Netflix", "cat-fun")}, false},
+		{"gym is NOT essential", makeSub("Planet Fitness"), nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsEssentialSpend(tc.sub, tc.txns, catNameOf); got != tc.want {
+				t.Errorf("IsEssentialSpend(%q) = %v, want %v", tc.sub.Name, got, tc.want)
+			}
+		})
+	}
 }

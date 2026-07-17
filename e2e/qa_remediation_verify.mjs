@@ -313,6 +313,19 @@ if (await coverAllBtn.count()) {
   check("L1: no over-budget in sample to cover (covered by table tests)", true, "");
 }
 
+// ──────────────── M5: essentials are not cancellable subscriptions ────────────────
+await nav("/subscriptions");
+await page.waitForTimeout(1500);
+// The active-subscription rows carry sub-howto-cancel-<slug> affordances; no
+// essential (utility/pharmacy/tobacco) may have one. Price-change notices for
+// utilities remain legitimate, so this scopes to the cancel affordances.
+const cancelIDs = [];
+for (const el of await page.locator('[data-testid^="sub-howto-cancel-"]').all()) {
+  cancelIDs.push(await el.getAttribute("data-testid"));
+}
+const badCancels = cancelIDs.filter((id) => /cigarette|electric|pharma|gas\b|grocer/i.test(id || ""));
+check("M5: no cancel affordances for utilities/retail spending", badCancels.length === 0, badCancels.join(", ") || `${cancelIDs.length} cancel links, all services`);
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

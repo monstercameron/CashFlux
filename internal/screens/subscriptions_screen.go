@@ -223,6 +223,15 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 	}
 
+	// QA M5: category/name resolver for the essential-spend check — Electricity,
+	// Gas, Cigarettes, Pharmacy recur like subscriptions but are everyday
+	// spending; listing them with "How to cancel" inflated the counts and costs.
+	catNames := make(map[string]string)
+	for _, c := range app.Categories() {
+		catNames[c.ID] = c.Name
+	}
+	catNameOf := func(id string) string { return catNames[id] }
+
 	var subs []subscriptions.Subscription
 	var ignoredSubs []subscriptions.Subscription
 	for _, s := range rawSubs {
@@ -231,6 +240,9 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 		if recurringNames[strings.ToLower(strings.TrimSpace(s.Name))] {
 			continue // already a planned recurring flow — not a subscription
+		}
+		if subscriptions.IsEssentialSpend(s, allTxns, catNameOf) {
+			continue // ordinary recurring spending (utility/grocery/pharmacy/rent) — not cancellable
 		}
 		if ignoreMap[strings.ToLower(strings.TrimSpace(s.Name))] {
 			ignoredSubs = append(ignoredSubs, s)
