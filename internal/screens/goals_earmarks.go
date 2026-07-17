@@ -98,17 +98,28 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	// accounts (any non-liability asset, matching the Set-aside modal's list),
 	// how much of it is reserved (earmarked), and what's still free to assign.
 	// This is the "where does my money stand" answer the per-account cards below detail.
-	var totalBal int64
+	// QA CF-14: "Free to assign" must mean money that can actually be assigned
+	// without opting into a held asset — a $304k condo in the headline made
+	// $377k look freely assignable. The headline is now LIQUID balances minus
+	// the earmarks against them; held assets (property, investments, …) get
+	// their own quiet caption and remain opt-in in the Set-aside modal.
+	var totalBal, liquidBal, liquidEarmarks int64
 	for _, a := range accounts {
 		if !earmarkSourceAccount(a) {
 			continue
 		}
 		bal, _ := ledger.Balance(a, txns)
-		totalBal += toBase(bal)
+		b := toBase(bal)
+		totalBal += b
+		if earmarkEligibleType(a.Type) {
+			liquidBal += b
+			liquidEarmarks += earmarkByAcct[a.ID]
+		}
 	}
-	totalFree := totalBal - grandTotal
+	heldAssets := totalBal - liquidBal
+	totalFree := liquidBal - liquidEarmarks
 	freeMod := ""
-	if totalFree < 0 { // more earmarked than money on hand — over-committed
+	if totalFree < 0 { // more earmarked than liquid money on hand — over-committed
 		freeMod = " " + tw.Fold(tw.TextWarn)
 	}
 	// Earmarked share of the whole, for the split bar (clamped 0..100). With
@@ -141,6 +152,8 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 				Attr("aria-label", uistate.T("goals.mapBarLabel", fmtMoney(money.New(grandTotal, base)), fmtMoney(money.New(totalBal, base)))),
 				Div(css.Class("ea-map-bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", earmarkedShare))),
 			),
+			If(heldAssets > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "earmarks-held-note"),
+				uistate.T("goals.mapHeldNote", fmtMoney(money.New(heldAssets, base))))),
 		),
 	})
 

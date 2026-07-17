@@ -938,7 +938,9 @@ var english = Catalog{
 	"goals.linkExplain":               "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
 	"goals.quickFundChip":             "Set aside %s from %s",
 	"goals.quickFundEyebrow":          "Suggested",
-	"goals.quickFundTitle":            "Reserve the remaining amount in one click — no money moves",
+	// QA CF-15: suggestions across goals draw on ONE free-cash pool, so say so —
+	// applying one shrinks the others' suggestions on the spot.
+	"goals.quickFundTitle":            "Reserve the remaining amount in one click — no money moves. Suggestions share the same free cash: applying one updates the others.",
 	"goals.quickFundToast":            "Set aside %s from %s.",
 	"goals.editSavedToast":            "Updated “%s”.",
 	"goals.allocateNoAccts":           "No accounts to earmark from yet.",
@@ -969,6 +971,8 @@ var english = Catalog{
 	"goals.mapTotal":                  "In accounts",
 	"goals.mapEarmarked":              "Earmarked",
 	"goals.mapFree":                   "Free to assign",
+	// QA CF-14: the free figure is liquid-only; held assets are named separately.
+	"goals.mapHeldNote":               "Plus %s in held assets (property, investments) — not counted as free to assign; they stay opt-in when setting aside.",
 	"goals.mapBarLabel":               "%s of %s earmarked across your accounts",
 	"goals.earmarksManage":            "Manage",
 	"goals.earmarksDelete":            "Remove earmark",

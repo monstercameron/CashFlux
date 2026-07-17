@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/roundups"
@@ -248,7 +249,11 @@ func roundupConfigForm(props roundupConfigFormProps) ui.Node {
 	onCadence := ui.UseEvent(func(e ui.Event) { cadence.Set(e.GetValue()) })
 
 	goals := app.Goals()
-	accounts := app.Accounts()
+	// QA CF-16: only accounts that PRODUCE everyday card/checking expenses can
+	// meaningfully round up — a mortgage, the condo, or a 401(k) in this list
+	// was noise (and previously-selected ineligible accounts stay listed so they
+	// can be unchecked, never silently dropped).
+	accounts := roundUpEligibleAccounts(app.Accounts(), cfg.ParticipatingSet())
 
 	onSave := ui.UseEvent(func() {
 		ids := make([]string, 0, len(selected.Get()))
@@ -356,4 +361,27 @@ func roundupConfigForm(props roundupConfigFormProps) ui.Node {
 				Attr("data-testid", "roundups-config-save"), OnClick(onSave), uistate.T("roundups.save")),
 		),
 	)
+}
+
+// roundUpEligibleAccounts returns the accounts the Round-ups config offers:
+// everyday spend-producing accounts (checking, debit, cash, credit cards) —
+// property, investments, retirement, and loans can't produce the card/checking
+// expenses round-ups accrue from (QA CF-16). Any account ALREADY participating
+// stays listed regardless of type so it can be unchecked, never silently lost.
+func roundUpEligibleAccounts(accounts []domain.Account, participating map[string]bool) []domain.Account {
+	out := make([]domain.Account, 0, len(accounts))
+	for _, a := range accounts {
+		if participating[a.ID] {
+			out = append(out, a)
+			continue
+		}
+		if a.Archived {
+			continue
+		}
+		switch a.Type {
+		case domain.TypeChecking, domain.TypeDebit, domain.TypeCash, domain.TypeCreditCard:
+			out = append(out, a)
+		}
+	}
+	return out
 }

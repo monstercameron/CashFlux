@@ -104,9 +104,11 @@ await page.waitForTimeout(700);
 // first upload: unique rows import directly (file path sanity)
 const [fc1] = await Promise.all([page.waitForEvent("filechooser"), page.locator('[data-testid="csv-file-picker"]').click()]);
 await fc1.setFiles(csv1);
-await page.locator('[data-testid="csv-import-msg"]').waitFor({ timeout: 8000 }).catch(() => {});
-await page.waitForTimeout(400);
-let msg = (await page.locator('[data-testid="csv-import-msg"]').count()) ? await page.locator('[data-testid="csv-import-msg"]').innerText() : "(none)";
+let msg = "(none)";
+for (let i = 0; i < 10 && !/imported/i.test(msg); i++) {
+  await page.waitForTimeout(800);
+  if (await page.locator('[data-testid="csv-import-msg"]').count()) msg = await page.locator('[data-testid="csv-import-msg"]').innerText();
+}
 check("H2 setup: clean file import succeeded", /imported/i.test(msg), msg);
 
 // second upload: 2 dup rows + 1 new → warning stages the bytes
@@ -411,6 +413,35 @@ await nav("/budgets");
 await page.waitForTimeout(900);
 const pillElsewhere = (await pill.count()) ? await pill.innerText() : "(none)";
 check("CF-24: other pages keep the plain month pill", !/Year ending/i.test(pillElsewhere), pillElsewhere.replace(/\n/g, " "));
+
+// ──────── CF-14 + CF-16: liquid-honest money map; spend-account round-ups ────────
+await nav("/goals");
+await page.waitForTimeout(1200);
+await page.locator('[data-testid="goals-tab-earmarks"]').click();
+await page.waitForTimeout(1000);
+const mapText = (await page.locator('[data-testid="earmarks-moneymap"]').count()) ? await page.locator('[data-testid="earmarks-moneymap"]').innerText() : "(none)";
+check("CF-14: money map names held assets separately", (await page.locator('[data-testid="earmarks-held-note"]').count()) > 0, mapText.replace(/\n/g, " · ").slice(0, 140));
+const freeM = mapText.match(/Free to assign\s*\$([\d,]+\.\d{2})/i);
+const totalM = mapText.match(/In accounts\s*\$([\d,]+\.\d{2})/i);
+if (freeM && totalM) {
+  const toN = (s) => parseFloat(s.replace(/,/g, ""));
+  check("CF-14: free-to-assign is far below total assets (liquid-only)", toN(freeM[1]) < toN(totalM[1]) * 0.7, `free=$${freeM[1]} total=$${totalM[1]}`);
+}
+// CF-16: round-ups config lists only spend-producing accounts
+await page.locator('[data-testid="goals-tab-goals"]').click();
+await page.waitForTimeout(600);
+const ruBtn = page.locator('[data-testid="goals-roundup-config"]');
+if (await ruBtn.count()) {
+  await ruBtn.click();
+  await page.waitForTimeout(900);
+  const listText = (await page.locator(".sweep-budgets").count()) ? await page.locator(".sweep-budgets").innerText() : "(none)";
+  const badAccts = ["Mortgage", "Condo", "401", "Car Loan", "Student"].filter((w) => listText.includes(w));
+  check("CF-16: round-ups checklist excludes property/loans/investments", badAccts.length === 0, badAccts.join(", ") || listText.replace(/\n/g, " · ").slice(0, 120));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+} else {
+  check("CF-16: round-ups config trigger reachable", false);
+}
 
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
