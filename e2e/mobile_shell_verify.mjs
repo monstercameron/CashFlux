@@ -1,10 +1,12 @@
 // mobile_shell_verify.mjs — locks the 390x844 phone-shell contract (parity
-// scan: rail/promo obstruction + menus 5-9 losing primary navigation):
-//   1. The icon rail is 56px and never overlaps content; no footer prose.
+// scan: rail/promo obstruction + menus 5-9 losing primary navigation), updated
+// for the UX-01 single-nav design (f82f0749):
+//   1. The rail is REMOVED at phone width — the bottom bar is the only nav.
 //   2. The top bar wraps: title row + full-width context strip, no overlap.
-//   3. The bottom tab bar reaches ALL nine primary destinations (scrollable),
-//      pins +Add, and scrolls the active tab into view.
-//   4. Menus 5-9 render with working navigation.
+//   3. The bar holds four destinations + a More toggle, plus a floating
+//      quick-add; the More sheet reaches the remaining five (menus 5-9).
+//   4. Navigating via the sheet works and the More tab lights up for a
+//      sheet-resident route, so the active destination always shows.
 // Usage: node e2e/mobile_shell_verify.mjs   (server on :8097 serving web/)
 import { chromium } from "playwright";
 const BASE = "http://127.0.0.1:8097";
@@ -17,22 +19,15 @@ await page.goto(BASE + "/dashboard", { waitUntil: "load" });
 await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 60000 });
 await page.waitForTimeout(2200);
 
-// 1. Rail geometry + no prose.
+// 1. Single nav: the rail is gone; main owns the full width.
 const geo = await page.evaluate(() => {
   const rail = document.querySelector("aside.rail");
   const main = document.querySelector("main");
-  const foot = document.querySelector("aside.rail .rail-foot-info");
-  const wsHead = document.querySelector("aside.rail .ws-switch-head");
-  const visible = (el) => el && getComputedStyle(el).display !== "none";
-  return {
-    railW: rail ? rail.getBoundingClientRect().width : -1,
-    mainX: main ? main.getBoundingClientRect().x : -1,
-    footVisible: visible(foot),
-    wsHeadVisible: visible(wsHead),
-  };
+  const railVisible = rail && getComputedStyle(rail).display !== "none";
+  return { railVisible, mainX: main ? Math.round(main.getBoundingClientRect().x) : -1, mainW: main ? Math.round(main.getBoundingClientRect().width) : -1 };
 });
-check("rail is a 56px icon column beside (not over) content", geo.railW === 56 && geo.mainX >= 56, JSON.stringify(geo));
-check("rail footer prose is hidden on phones", !geo.footVisible && !geo.wsHeadVisible);
+check("rail is removed at phone width (single nav)", !geo.railVisible, JSON.stringify(geo));
+check("content owns the full width", geo.mainX <= 4 && geo.mainW >= 380, JSON.stringify(geo));
 
 // 2. Top bar wrap: title and context strip don't overlap.
 const tb = await page.evaluate(() => {
@@ -45,30 +40,32 @@ const tb = await page.evaluate(() => {
 check("top-bar title has real width", tb.titleW > 40, JSON.stringify(tb));
 check("context strip wraps to its own full-width row", tb.ctxW >= 260 && tb.ctxBelowTitle, JSON.stringify(tb));
 
-// 3. Tab bar reaches all nine destinations.
-const tabInfo = await page.evaluate(() => {
-  const items = [...document.querySelectorAll(".mobile-tabbar .mobile-tab-item:not(.mobile-tab-add)")];
-  const add = document.querySelector(".mobile-tabbar .mobile-tab-add");
-  return { count: items.length, labels: items.map((i) => i.getAttribute("aria-label")), addVisible: add ? getComputedStyle(add).display !== "none" : false };
+// 3. Bar inventory: four destinations + More toggle + floating quick-add.
+const barInfo = await page.evaluate(() => {
+  const items = [...document.querySelectorAll(".mobile-tabbar .mobile-tab-item:not(.mobile-tab-more)")];
+  const more = document.querySelector('[data-testid="mobile-tab-more"]');
+  const fab = document.querySelector('[data-testid="mobile-tab-fab"]');
+  const visible = (el) => el && getComputedStyle(el).display !== "none";
+  return { count: items.length, labels: items.map((i) => i.getAttribute("aria-label")), more: visible(more), fab: visible(fab) };
 });
-check("tab bar lists all nine destinations", tabInfo.count === 9, JSON.stringify(tabInfo.labels));
-check("+Add stays pinned", tabInfo.addVisible);
+check("bar holds four fixed destinations", barInfo.count === 4, JSON.stringify(barInfo.labels));
+check("More toggle present", barInfo.more);
+check("floating quick-add present", barInfo.fab);
 await page.screenshot({ path: "e2e/mobile_shell_dash.png" });
 
-// 4. Navigate to a menu-5-9 page via the tab bar: Notifications.
-const notifTab = page.locator('.mobile-tabbar .mobile-tab-item[aria-label*="Notification"], .mobile-tabbar .mobile-tab-item:has-text("Notifications")').first();
-await notifTab.scrollIntoViewIfNeeded();
-await notifTab.click();
+// 4. The More sheet reaches menus 5-9 and navigates.
+await page.locator('[data-testid="mobile-tab-more"]').click();
+await page.waitForTimeout(700);
+const sheet = page.locator('[data-testid="mobile-more-sheet"]');
+check("More sheet opens", (await sheet.count()) === 1);
+const sheetLabels = await sheet.locator(".mobile-sheet-item").evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+check("sheet reaches the remaining five destinations", sheetLabels.length === 5, JSON.stringify(sheetLabels));
+await sheet.locator('.mobile-sheet-item[aria-label*="Notification"]').first().click();
 await page.waitForTimeout(1600);
-check("tab navigates to /notifications", page.url().endsWith("/notifications"), page.url());
-const activeVisible = await page.evaluate(() => {
-  const el = document.querySelector(".mobile-tabbar .mobile-tab-item.active");
-  if (!el) return false;
-  const r = el.getBoundingClientRect();
-  const bar = document.querySelector(".mobile-tab-scroll").getBoundingClientRect();
-  return r.x >= bar.x - 2 && r.x + r.width <= bar.x + bar.width + 2;
-});
-check("active tab is scrolled into view", activeVisible);
+check("sheet item navigates to /notifications", page.url().endsWith("/notifications"), page.url());
+check("sheet closed after picking", (await page.locator('[data-testid="mobile-more-sheet"]').count()) === 0);
+const moreActive = await page.locator('[data-testid="mobile-tab-more"]').evaluate((el) => el.className.includes("active"));
+check("More tab lights up for a sheet-resident route", moreActive);
 await page.screenshot({ path: "e2e/mobile_shell_notif.png" });
 
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 2).join(" | ")}`);
