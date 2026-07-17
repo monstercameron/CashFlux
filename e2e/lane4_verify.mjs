@@ -117,6 +117,38 @@ await page.waitForTimeout(500);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(600);
 
+// ─────────────── #77: Mark all updated — preview + undo ───────────────
+await nav("/accounts");
+await page.waitForTimeout(1200);
+const markAllBtn = page.locator('[data-testid="acct-markall-btn"]');
+check("#77: mark-all button present (stale accounts exist)", (await markAllBtn.count()) > 0);
+if (await markAllBtn.count()) {
+  // Preview: the confirm names the count and the accounts before writing.
+  await markAllBtn.click();
+  await page.waitForTimeout(500);
+  const dlg = await bodyText();
+  const previewM = dlg.match(/Mark (\d+) balances? as confirmed just now\? This updates: (.+?)\. You can undo/);
+  check("#77: confirm previews the affected count + names", !!previewM, previewM ? `${previewM[1]}: ${previewM[2].slice(0, 60)}` : dlg.slice(0, 120));
+  await shot(page, "77-markall-preview");
+  // Cancel is a true no-op.
+  await page.locator("#cf-dialog-cancel").click();
+  await page.waitForTimeout(500);
+  check("#77: cancel leaves the stale set untouched", (await markAllBtn.count()) > 0);
+  // Confirm applies and the toast carries a live Undo.
+  await markAllBtn.click();
+  await page.waitForTimeout(500);
+  await page.locator("#cf-dialog-confirm").click();
+  await page.waitForTimeout(1200);
+  check("#77: applied toast", /Marked .* as updated just now/i.test(await bodyText()));
+  const undoBtn = page.locator(".toast-undo");
+  check("#77: toast offers Undo", (await undoBtn.count()) > 0);
+  check("#77: bulk action consumed the stale set", (await markAllBtn.count()) === 0);
+  await shot(page, "77-markall-undo-toast");
+  await undoBtn.click();
+  await page.waitForTimeout(1500);
+  check("#77: undo restores the stale balances (button returns)", (await markAllBtn.count()) > 0);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

@@ -670,25 +670,52 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	sweepAtom := uistate.UseSweepRulesOpen()
 	openSweep := func() { sweepAtom.Set(true) }
 	openFX := func() { uistate.OpenGlobalSettingsAt("household") }
+	// #77: a high-impact bulk write previews its blast radius first — the confirm
+	// names how many balances it touches (and which) — and the apply is undoable
+	// (one capture for the whole batch, so a single Undo restores every stamp).
 	markAll := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
 		now := time.Now()
-		n := 0
+		var staleAccts []domain.Account
 		for _, ac := range app.Accounts() {
-			if ac.Archived || !freshness.IsStale(ac, w, now) {
-				continue
+			if !ac.Archived && freshness.IsStale(ac, w, now) {
+				staleAccts = append(staleAccts, ac)
 			}
-			ac.BalanceAsOf = now
-			if err := app.PutAccount(ac); err != nil {
-				uistate.PostNotice(uistate.T("accounts.markErr", err.Error()), true)
-				continue
+		}
+		if len(staleAccts) == 0 {
+			return
+		}
+		names := make([]string, 0, 3)
+		for i, ac := range staleAccts {
+			if i == 3 {
+				break
 			}
-			n++
+			names = append(names, ac.Name)
 		}
-		if n > 0 {
-			uistate.PostNotice(uistate.T("accounts.markedUpdated", plural(n, "balance")), false)
+		list := strings.Join(names, ", ")
+		if len(staleAccts) > 3 {
+			list = uistate.T("accounts.markAllMore", list, len(staleAccts)-3)
 		}
-		uistate.BumpDataRevision()
+		uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list),
+			uistate.T("accounts.markAll"), false, func(ok bool) {
+				if !ok {
+					return
+				}
+				n := 0
+				for _, ac := range staleAccts {
+					ac.BalanceAsOf = time.Now()
+					if err := app.PutAccount(ac); err != nil {
+						uistate.PostNotice(uistate.T("accounts.markErr", err.Error()), true)
+						continue
+					}
+					n++
+				}
+				uistate.BumpDataRevision()
+				if n > 0 {
+					auditview.CaptureNow()
+					uistate.PostUndoable(uistate.T("accounts.markedUpdated", plural(n, "balance")))
+				}
+			})
 	}))
 
 	accounts := app.Accounts()

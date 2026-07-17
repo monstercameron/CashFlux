@@ -1,3 +1,13 @@
+## 2026-07-17 — #77: Mark-all-updated learns consent and regret (lane 4)
+
+The one-click bulk stamp on /accounts wrote BalanceAsOf across every stale account with no
+preview and no way back. Now: ConfirmModalLabeled names the count and the first three account
+names ("…and 5 more") before anything writes; on confirm, all the PutAccounts land, then ONE
+auditview.CaptureNow() groups the batch into a single change set, so the undoable toast's Undo
+reverts the entire sweep atomically — the diff-since-last-capture undo design makes batch-undo
+free as long as you capture once *after* the loop, never per-row. E2E covers the full arc
+including the Undo restoring the stale set (the mark-all button literally comes back).
+
 ## 2026-07-17 — R3 CF-01: the report scope that lied (lane 1)
 
 The High from round-3 QA: pick "Specific accounts → Regression Checking" on /reports, the toolbar

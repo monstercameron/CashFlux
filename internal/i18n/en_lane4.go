@@ -28,6 +28,12 @@ var lane4Keys = Catalog{
 	// %s = the formatted difference recorded on a forced reconciliation.
 	"accounts.reconForcedTag": "off by %s",
 	"accounts.reconDraftNote": "Resumed from your saved draft.",
+
+	// #77 — Mark-all-updated preview + undo. First %s = "N balances", second
+	// %s = the (possibly truncated) account-name list.
+	"accounts.markAllConfirm": "Mark %s as confirmed just now? This updates: %s. You can undo it afterwards.",
+	// %s = the leading names, %d = how many more beyond them.
+	"accounts.markAllMore": "%s and %d more",
 }
 
 func init() {
