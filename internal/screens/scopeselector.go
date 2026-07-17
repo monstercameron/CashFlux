@@ -83,11 +83,11 @@ func scopeAcctRow(p scopeAcctRowProps) ui.Node {
 // ScopeSelector renders the multi-dimension filter panel for /reports (#444).
 // It exposes chips for Institutions, Owners (household members + Shared), and
 // Account Types, a collapsible individual-account checklist, and a saved-views
-// control. Every state change calls uistate.SetActiveScope preserving dimensions
+// control. Every state change calls uistate.SetReportScope preserving dimensions
 // that were not touched.
 //
 // Hook order (stable, unconditional):
-//  1. uistate.UseActiveScope()
+//  1. uistate.UseReportScope()
 //  2. ui.UseState — showSave
 //  3. ui.UseState — saveName
 //  4. ui.UseState — showAccts
@@ -102,7 +102,7 @@ func ScopeSelector() ui.Node {
 		return Fragment()
 	}
 
-	scopeAtom := uistate.UseActiveScope() // hook 1
+	scopeAtom := uistate.UseReportScope() // hook 1
 	sc := scopeAtom.Get()
 
 	showSave := ui.UseState(false)  // hook 2
@@ -111,7 +111,7 @@ func ScopeSelector() ui.Node {
 	selectedSV := ui.UseState("")   // hook 5: selected saved-view ID in the dropdown
 
 	clearAll := ui.UseEvent(func() { // hook 6
-		uistate.SetActiveScope(scope.ReportScope{})
+		uistate.SetReportScope(scope.ReportScope{})
 	})
 	openSave := ui.UseEvent(func() { // hook 7
 		showSave.Set(true)
@@ -139,28 +139,28 @@ func ScopeSelector() ui.Node {
 	toggleInstitution := func(inst string) {
 		cur := scopeAtom.Get()
 		cur.Institutions = toggleStringSlice(cur.Institutions, inst)
-		uistate.SetActiveScope(cur)
+		uistate.SetReportScope(cur)
 	}
 
 	// toggleOwner adds or removes ownerID from the scope.Owners dimension.
 	toggleOwner := func(ownerID string) {
 		cur := scopeAtom.Get()
 		cur.Owners = toggleStringSlice(cur.Owners, ownerID)
-		uistate.SetActiveScope(cur)
+		uistate.SetReportScope(cur)
 	}
 
 	// toggleType adds or removes t from the scope.Types dimension.
 	toggleType := func(t domain.AccountType) {
 		cur := scopeAtom.Get()
 		cur.Types = toggleTypeSlice(cur.Types, t)
-		uistate.SetActiveScope(cur)
+		uistate.SetReportScope(cur)
 	}
 
 	// toggleAccountID adds or removes acctID from the scope.AccountIDs dimension.
 	toggleAccountID := func(acctID string) {
 		cur := scopeAtom.Get()
 		cur.AccountIDs = toggleStringSlice(cur.AccountIDs, acctID)
-		uistate.SetActiveScope(cur)
+		uistate.SetReportScope(cur)
 	}
 
 	// ── Saved-view handlers (non-hook) ────────────────────────────────────────
@@ -173,7 +173,7 @@ func ScopeSelector() ui.Node {
 		}
 		for _, sv := range savedViews {
 			if sv.ID == svID {
-				uistate.SetActiveScope(sv.Scope)
+				uistate.SetReportScope(sv.Scope)
 				return
 			}
 		}

@@ -1,3 +1,15 @@
+## 2026-07-17 — Report scope becomes report-local (parity-scan "scope leaks globally")
+
+The /reports Scope panel and the top-bar "Viewing as" lens shared ONE persisted atom
+(`UseActiveScope`) — by design a household lens with an announcing banner, but the parity scan is
+right that a filter chosen while reading a report must not follow you to the dashboard and survive
+reloads. Split the state: ScopeSelector now edits `UseReportScope` (own KV key + RequestPersist —
+the C2 kvSet landmine), and the annual review computes `scope.Merge(lens, local)` so a report
+narrowed to Checking still respects "Viewing as Marcus" (local dimension wins, empty dimensions
+fall back to the lens). Member switcher, profile switch, dashboard, accounts, insights, assistant
+all keep the lens untouched. The scope panel auto-open keys on the LOCAL scope only, so a lens set
+in the top bar doesn't pop the panel. 8/8 e2e; banner semantics verified in both directions.
+
 ## 2026-07-17 — QA remediation: budget history stops wearing today's pacing (CF-05)
 
 The budgets CONTROLLER was already period-honest (its anchor snaps to the window start when the

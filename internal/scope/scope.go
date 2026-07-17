@@ -232,3 +232,29 @@ func sliceToSet(ss []string) map[string]struct{} {
 	}
 	return m
 }
+
+// Merge combines the app-wide viewing lens (the top-bar "Viewing as" scope)
+// with a report-local scope into the effective scope for a report view.
+//
+// Rule: dimension-wise, the local scope wins wherever it says anything; a
+// dimension the local scope leaves empty falls back to the lens. This keeps a
+// report narrowed inside whatever the household is currently "viewing as"
+// while guaranteeing a filter chosen on the report page never rewrites the
+// app-wide lens (the commercial-parity scan's "report scope leaks globally"
+// defect).
+func Merge(lens, local ReportScope) ReportScope {
+	out := local
+	if len(out.Owners) == 0 {
+		out.Owners = lens.Owners
+	}
+	if len(out.Institutions) == 0 {
+		out.Institutions = lens.Institutions
+	}
+	if len(out.Types) == 0 {
+		out.Types = lens.Types
+	}
+	if len(out.AccountIDs) == 0 {
+		out.AccountIDs = lens.AccountIDs
+	}
+	return out
+}

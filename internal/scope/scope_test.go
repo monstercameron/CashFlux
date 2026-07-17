@@ -49,9 +49,9 @@ func txn(id, accountID string) domain.Transaction {
 
 func TestIsAll(t *testing.T) {
 	tests := []struct {
-		name  string
-		s     scope.ReportScope
-		want  bool
+		name string
+		s    scope.ReportScope
+		want bool
 	}{
 		{"zero value", scope.ReportScope{}, true},
 		{"institutions set", scope.ReportScope{Institutions: []string{"Chase"}}, false},
@@ -212,7 +212,7 @@ func TestResolveScope_AccountIDs_Union(t *testing.T) {
 		acct("a1", "alice", domain.TypeChecking, false, ""),
 		acct("a2", "alice", domain.TypeSavings, false, ""),
 		acct("a3", "bob", domain.TypeSavings, false, ""), // not alice's, but listed in AccountIDs
-		acct("a4", "bob", domain.TypeCash, true, ""),    // archived — union must not resurrect it
+		acct("a4", "bob", domain.TypeCash, true, ""),     // archived — union must not resurrect it
 	}
 	s := scope.ReportScope{
 		Owners:     []string{"alice"},
@@ -387,5 +387,34 @@ func TestRoundTrip_ResolveThenApply(t *testing.T) {
 		if tx.AccountID != "a1" && tx.AccountID != "a2" {
 			t.Errorf("unexpected txn accountID %q", tx.AccountID)
 		}
+	}
+}
+
+func TestMerge(t *testing.T) {
+	lens := scope.ReportScope{Owners: []string{"m1"}}
+	tests := []struct {
+		name  string
+		lens  scope.ReportScope
+		local scope.ReportScope
+		want  scope.ReportScope
+	}{
+		{"both empty", scope.ReportScope{}, scope.ReportScope{}, scope.ReportScope{}},
+		{"lens only", lens, scope.ReportScope{}, scope.ReportScope{Owners: []string{"m1"}}},
+		{"local only", scope.ReportScope{}, scope.ReportScope{Types: []domain.AccountType{domain.TypeChecking}},
+			scope.ReportScope{Types: []domain.AccountType{domain.TypeChecking}}},
+		{"local narrows inside lens", lens, scope.ReportScope{Types: []domain.AccountType{domain.TypeChecking}},
+			scope.ReportScope{Owners: []string{"m1"}, Types: []domain.AccountType{domain.TypeChecking}}},
+		{"local owners win over lens", lens, scope.ReportScope{Owners: []string{"m2"}},
+			scope.ReportScope{Owners: []string{"m2"}}},
+		{"institutions fall back to lens", scope.ReportScope{Institutions: []string{"Chase"}}, scope.ReportScope{},
+			scope.ReportScope{Institutions: []string{"Chase"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := scope.Merge(tc.lens, tc.local)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("scope.Merge(%+v, %+v) = %+v, want %+v", tc.lens, tc.local, got, tc.want)
+			}
+		})
 	}
 }

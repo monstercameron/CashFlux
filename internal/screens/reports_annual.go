@@ -50,7 +50,11 @@ func Reports() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
-	scopeAtom := uistate.UseActiveScope()
+	// The report reads the /reports-local scope merged INSIDE the app-wide
+	// "Viewing as" lens — a filter chosen here never rewrites what other pages
+	// show (the parity scan's "report scope leaks globally" defect).
+	scopeAtom := uistate.UseReportScope()
+	lensScope := uistate.UseActiveScope().Get()
 
 	// Drill wiring (category / payee-less: plain ledger) — hooks at stable positions.
 	nav := router.UseNavigate()
@@ -71,7 +75,7 @@ func Reports() ui.Node {
 	txns := app.Transactions()
 	accounts := app.Accounts()
 
-	sc := scopeAtom.Get()
+	sc := scope.Merge(lensScope, scopeAtom.Get())
 	instOf := func(a domain.Account) string { return a.Institution }
 	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
 	scopedTxns := scope.ApplyScopeToTxns(txns, scopeIDs)
@@ -93,7 +97,9 @@ func Reports() ui.Node {
 	onToggleRollup := ui.UseEvent(func() { rollupCats.Set(!rollupCats.Get()) })
 	yoyMode := ui.UseState(cfg.YoY)
 	_ = yoyMode // annual review always compares to the prior year; state kept for config compat
-	scopeOpen := ui.UseState(!sc.IsAll())
+	// The panel auto-opens only for a REPORT-local scope — an app-wide lens
+	// ("Viewing as …") is announced by the top-bar banner, not this panel.
+	scopeOpen := ui.UseState(!scopeAtom.Get().IsAll())
 	onToggleScope := ui.UseEvent(Prevent(func() { scopeOpen.Set(!scopeOpen.Get()) }))
 	showFormulas := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
