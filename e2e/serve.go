@@ -87,6 +87,38 @@ func main() {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		clean := filepath.Clean(r.URL.Path)
 		full := filepath.Join(root, clean)
+		// The boot loader fetches bin/main.wasm.gz FIRST. Dev rebuilds refresh
+		// main.wasm without its .gz sibling, which either 404s (missing gz —
+		// console noise + slower boot) or, far worse, silently boots STALE code
+		// (old gz beside a new wasm). Whenever the raw sibling is newer — or the
+		// gz is missing entirely — serve a fresh gzip of the raw wasm instead.
+		if strings.HasSuffix(clean, ".wasm.gz") {
+			raw := strings.TrimSuffix(full, ".gz")
+			rawInfo, rawErr := os.Stat(raw)
+			gzInfo, gzErr := os.Stat(full)
+			if rawErr == nil && (gzErr != nil || gzInfo.ModTime().Before(rawInfo.ModTime())) {
+				f, err := os.Open(raw)
+				if err != nil {
+					http.NotFound(w, r)
+					return
+				}
+				defer f.Close()
+				w.Header().Set("Content-Type", "application/gzip")
+				w.Header().Set("Cache-Control", "no-store")
+				gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+				if err != nil {
+					http.Error(w, "compression error", http.StatusInternalServerError)
+					return
+				}
+				defer gz.Close()
+				if _, err := io.Copy(gz, f); err != nil {
+					log.Printf("serve: gz-from-raw stream error: %v", err)
+				}
+				log.Printf("serve: %s served from fresh %s (gz missing or stale)", clean, filepath.Base(raw))
+				return
+			}
+			// Fresh gz on disk (or no raw sibling): fall through to static serving.
+		}
 		if strings.HasSuffix(clean, ".wasm") {
 			if info, err := os.Stat(full); err == nil && !info.IsDir() {
 				serveWasm(w, r, full)

@@ -6,6 +6,7 @@
 //   node e2e/serve.mjs [root=web] [port=8099]
 import http from "node:http";
 import { createReadStream, statSync } from "node:fs";
+import { createGzip } from "node:zlib";
 import path from "node:path";
 
 const root = process.argv[2] || "web";
@@ -40,6 +41,22 @@ function sendFile(res, full) {
 const server = http.createServer((req, res) => {
   const clean = path.posix.normalize(decodeURIComponent(req.url.split("?")[0]));
   const full = path.join(root, clean);
+  // The boot loader fetches bin/main.wasm.gz FIRST. Dev rebuilds refresh
+  // main.wasm without its .gz sibling, which either 404s (missing gz) or —
+  // far worse — silently boots STALE code (old gz beside a new wasm). When
+  // the raw sibling is newer or the gz is missing, gzip the raw wasm live.
+  if (clean.endsWith(".wasm.gz")) {
+    const raw = full.slice(0, -3);
+    let rawInfo = null, gzInfo = null;
+    try { rawInfo = statSync(raw); } catch {}
+    try { gzInfo = statSync(full); } catch {}
+    if (rawInfo && (!gzInfo || gzInfo.mtimeMs < rawInfo.mtimeMs)) {
+      res.setHeader("Content-Type", "application/gzip");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      console.log(`e2e: ${clean} served from fresh raw wasm (gz missing or stale)`);
+      return createReadStream(raw).pipe(createGzip({ level: 1 })).pipe(res);
+    }
+  }
   try {
     const info = statSync(full);
     if (info.isFile()) return sendFile(res, full);

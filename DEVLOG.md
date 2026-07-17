@@ -310,6 +310,21 @@ it. Design decision worth keeping: the adjustment path doesn't auto-record — i
 difference and lets the normal Record button appear, so there's exactly one recording path.
 26 e2e assertions on the lane server, 0 page errors, first run green.
 
+## 2026-07-17 — The gz landmine gets defused at the serving path (#78)
+
+Chased the "main.wasm.gz 404 on direct loads" report to its actual mechanism: the loader fetches
+the gz FIRST, and any rebuild path that refreshes main.wasm without regzipping (gwc dev does
+exactly this) leaves either no gz (404 noise + slow raw fallback) or a stale one — which is far
+worse, because a stale gz means the app SILENTLY boots old code while the new binary sits ignored
+beside it. The right layer for the fix is the server, not the frozen loader JS: both e2e servers
+now compare mtimes on every .wasm.gz request and stream a fresh gzip of the raw wasm whenever the
+sibling is newer or the gz is missing. One guard kills the 404, the stale-gz landmine, and the
+"deploy must remember to refresh BOTH files" footgun for anything served through these roots.
+
+The splash also became a page-shaped skeleton: rail + topbar + hero + tile grid (bottom-tab stub
+on phones), pure markup/CSS inside #boot — the dismissal JS contract untouched. Verified with
+fixture-root probes per server (stale/missing/fresh) + live sub-route boots at both viewports.
+
 ## 2026-07-17 — The header hierarchy inverts: title first, utilities yield (UX-04)
 
 "Dashboa…" wasn't one bug, it was a priority inversion expressed three ways: a breadcrumb prefix
