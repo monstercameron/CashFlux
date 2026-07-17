@@ -166,6 +166,19 @@ type Account struct {
 	// JSON when zero so existing rows round-trip with no migration needed.
 	RevalueDays int `json:"revalueDays,omitempty"`
 
+	// FreshnessExempt, when true, excludes this account from stale-balance
+	// tracking entirely — no nudges, no stale badge, regardless of how old the
+	// balance is. For accounts the user deliberately doesn't maintain (a memo
+	// account, an estimate they'll never reconcile). Omitted from JSON when
+	// false so existing rows round-trip with no migration needed.
+	FreshnessExempt bool `json:"freshnessExempt,omitempty"`
+
+	// FreshnessSnoozeUntil, when set, suppresses stale-balance nudges for this
+	// account until the given date ("ignore until…"). Unlike a session dismissal
+	// it persists, and unlike FreshnessExempt it expires. Zero = no snooze.
+	// Omitted from JSON when zero so existing rows round-trip unchanged.
+	FreshnessSnoozeUntil time.Time `json:"freshnessSnoozeUntil,omitempty"`
+
 	// ExcludeFromNetWorth, when true, keeps this account visible in its class
 	// views but omits it from the net_worth / assets / liabilities figures (AC11).
 	// For accounts a household tracks but does not consider part of their own net

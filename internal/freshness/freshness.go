@@ -42,11 +42,11 @@ func DefaultWindows() Windows {
 		domain.TypeDebit:        30,
 		domain.TypeCash:         30,
 		domain.TypeSavings:      45,
-		domain.TypeInvestment:  120,
-		domain.TypeRetirement:  120, // C73: slow-moving like investments — same long window
-		domain.TypeCrypto:       30, // C73: volatile but manually updated — monthly cadence
-		domain.TypeProperty:    180, // C224: illiquid real-estate valuation — same long window as Other
-		domain.TypeVehicle:     180, // C224: illiquid vehicle valuation — same long window as Other
+		domain.TypeInvestment:   120,
+		domain.TypeRetirement:   120, // C73: slow-moving like investments — same long window
+		domain.TypeCrypto:       30,  // C73: volatile but manually updated — monthly cadence
+		domain.TypeProperty:     180, // C224: illiquid real-estate valuation — same long window as Other
+		domain.TypeVehicle:      180, // C224: illiquid vehicle valuation — same long window as Other
 		domain.TypeOther:        180,
 	}
 }
@@ -83,10 +83,14 @@ func (w Windows) Merge(overrides Windows) Windows {
 }
 
 // IsStale reports whether an account's balance is stale as of now. Archived
-// accounts and exempt/untracked types are never stale; a tracked account whose
-// balance has never been confirmed (zero BalanceAsOf) is treated as stale.
+// accounts, freshness-exempt accounts, accounts snoozed past now, and
+// exempt/untracked types are never stale; a tracked account whose balance has
+// never been confirmed (zero BalanceAsOf) is treated as stale.
 func IsStale(account domain.Account, windows Windows, now time.Time) bool {
-	if account.Archived {
+	if account.Archived || account.FreshnessExempt {
+		return false
+	}
+	if !account.FreshnessSnoozeUntil.IsZero() && now.Before(account.FreshnessSnoozeUntil) {
 		return false
 	}
 	days, ok := windows.EffectiveWindowDays(account)

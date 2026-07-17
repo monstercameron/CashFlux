@@ -1915,6 +1915,7 @@ var english = Catalog{
 	"transactions.member":              "Member",
 	"transactions.kindLabel":           "Type",
 	"transactions.payeeLabel":          "Payee",
+	"transactions.originalStatement":   "Statement text: %s",
 	"transactions.categoryLabel":       "Category",
 	"transactions.newCategory":         "New category",
 	"transactions.newCategoryName":     "New category name",
@@ -3044,6 +3045,11 @@ var english = Catalog{
 	"accounts.transferMoney":           "Transfer money",
 	"accounts.xferPreviewTitle":        "After this transfer:",
 	"accounts.xferPreviewLine":         "%s: %s → %s",
+	// Stale-balance controls (per-account exemption + snooze-until).
+	"accounts.freshExempt":      "Don't remind me to update this balance",
+	"accounts.freshExemptHint":  "This account is left out of stale-balance reminders entirely.",
+	"accounts.freshSnoozeLabel": "Snooze balance reminders until",
+	"accounts.freshSnoozeHint":  "No stale-balance reminders for this account until this date. Leave blank for none.",
 
 	// L-series 6-lane sweep, round 2 (2026-06-23)
 	"nav.mobileTabLabel":          "Mobile navigation",

@@ -136,6 +136,13 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	beneficiaryNoteS := ui.UseState(a.BeneficiaryNote)
 	// AC5: the per-account revaluation-cadence override (0 = the type default).
 	revalueDaysS := ui.UseState(intOrEmpty(a.RevalueDays))
+	// Stale-balance controls: persistent exemption + "ignore until" snooze date.
+	freshSnoozeISO := ""
+	if !a.FreshnessSnoozeUntil.IsZero() {
+		freshSnoozeISO = dateutil.FormatDate(a.FreshnessSnoozeUntil)
+	}
+	freshExemptS := ui.UseState(a.FreshnessExempt)
+	freshSnoozeS := ui.UseState(freshSnoozeISO)
 	retS := ui.UseState(floatOrEmpty(a.ExpectedReturnAPR))
 	apyS := ui.UseState(floatOrEmpty(a.APY))
 	liqS := ui.UseState(intOrEmpty(a.LiquidityScore))
@@ -160,6 +167,8 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onDue := ui.UseEvent(func(v string) { dueS.Set(v) })
 	onStmtDay := ui.UseEvent(func(v string) { stmtDayS.Set(v) })
 	onToggleExclNW := ui.UseEvent(func() { exclNWS.Set(!exclNWS.Get()) })
+	onToggleFreshExempt := ui.UseEvent(func() { freshExemptS.Set(!freshExemptS.Get()) })
+	onFreshSnooze := ui.UseEvent(func(v string) { freshSnoozeS.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
 	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
 	// C6: ONE institution concept. Picking a directory entry also fills the free-text
@@ -285,6 +294,14 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		cp.BeneficiaryNote = strings.TrimSpace(beneficiaryNoteS.Get())
 		// AC5: revaluation-cadence override (0 = the account type's default cadence).
 		cp.RevalueDays = textutil.ParseInt(revalueDaysS.Get())
+		// Stale-balance controls: exemption + snooze-until (blank = no snooze).
+		cp.FreshnessExempt = freshExemptS.Get()
+		cp.FreshnessSnoozeUntil = time.Time{}
+		if s := strings.TrimSpace(freshSnoozeS.Get()); s != "" {
+			if d, derr := dateutil.ParseDate(s); derr == nil {
+				cp.FreshnessSnoozeUntil = d
+			}
+		}
 		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
 			cp.Custom = customValuesToMap(defs, customEditVals.Get())
 		}
@@ -326,6 +343,8 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				instIDS: instIDS, onInstID: onInstID, openInstitutions: openInstitutionsFromEditor,
 				beneficiaryNoteS: beneficiaryNoteS, onBeneficiaryNote: onBeneficiaryNote,
 				revalueDaysS: revalueDaysS, onRevalueDays: onRevalueDays,
+				freshExemptS: freshExemptS, freshSnoozeS: freshSnoozeS,
+				onToggleFreshExempt: onToggleFreshExempt, onFreshSnooze: onFreshSnooze,
 			})
 	}
 }
@@ -498,6 +517,11 @@ type acctEditExtra struct {
 	// revalueDaysS/onRevalueDays: AC5's per-account revaluation-cadence override.
 	revalueDaysS  ui.State[string]
 	onRevalueDays ui.Handler
+	// Stale-balance controls: opt out of freshness tracking / snooze until a date.
+	freshExemptS        ui.State[bool]
+	freshSnoozeS        ui.State[string]
+	onToggleFreshExempt ui.Handler
+	onFreshSnooze       ui.Handler
 }
 
 func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
@@ -635,6 +659,16 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 					Div(css.Class("row-main"),
 						Span(uistate.T("accountsstmt.excludeNetWorth")),
 						Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
+				// Stale-balance reminders: opt out for good, or snooze until a date.
+				Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
+					Div(css.Class("row-main"),
+						Span(uistate.T("accounts.freshExempt")),
+						Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
+				If(!x.freshExemptS.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
+					Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
+						Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")),
+						Value(x.freshSnoozeS.Get()), OnInput(x.onFreshSnooze)))),
 			)),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),

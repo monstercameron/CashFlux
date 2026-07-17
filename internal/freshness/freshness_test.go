@@ -83,6 +83,34 @@ func TestIsStaleArchivedAndExempt(t *testing.T) {
 	}
 }
 
+func TestIsStalePerAccountExemptAndSnooze(t *testing.T) {
+	w := DefaultWindows()
+
+	// A per-account exemption beats any window.
+	ex := acct(domain.TypeCreditCard, daysAgo(100))
+	ex.FreshnessExempt = true
+	if IsStale(ex, w, now) {
+		t.Error("freshness-exempt account should never be stale")
+	}
+
+	// A snooze suppresses staleness until its date…
+	sn := acct(domain.TypeCreditCard, daysAgo(100))
+	sn.FreshnessSnoozeUntil = now.AddDate(0, 0, 7)
+	if IsStale(sn, w, now) {
+		t.Error("snoozed account should not be stale before the snooze date")
+	}
+	// …and expires: at/after the date the account is stale again.
+	if !IsStale(sn, w, now.AddDate(0, 0, 7)) {
+		t.Error("snooze should expire on its date")
+	}
+	// A past snooze changes nothing.
+	past := acct(domain.TypeCreditCard, daysAgo(100))
+	past.FreshnessSnoozeUntil = daysAgo(1)
+	if !IsStale(past, w, now) {
+		t.Error("expired snooze should leave the account stale")
+	}
+}
+
 func TestDaysSinceUpdate(t *testing.T) {
 	if got := DaysSinceUpdate(acct(domain.TypeChecking, daysAgo(7)), now); got != 7 {
 		t.Errorf("DaysSinceUpdate = %d, want 7", got)

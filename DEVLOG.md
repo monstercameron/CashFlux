@@ -60,6 +60,21 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Stale-balance opt-outs, and a validation landmine found by the e2e
+
+The freshness system had a per-type window, a per-account cadence override (AC5), and a
+SESSION-scoped dismissal — but no persistent "leave me alone" and no dated snooze. Two additive
+Account fields, honored at the single choke point (`freshness.IsStale`), so the dashboard nudge,
+stale badges, and Mark-all all obey without per-surface wiring. UI sits beside AC11's
+exclude-from-net-worth toggle in More options; the snooze field hides while exempt is ticked
+(it wouldn't apply).
+
+The e2e's first run couldn't Save at all: the failure screenshot showed the browser's native
+"Value must be ≤ 5" bubble on "Easy to access" — the sample data seeds LiquidityScore=100
+(legacy 0-100 scale) while the form enforces 1-5, so EVERY save of Joint Checking is silently
+blocked until the user scrolls to a field they never touched. Filed as its own defect (task list);
+the spec clears the out-of-range fields for now with a comment pointing at the ticket.
+
 ## 2026-07-17 — Life-event goal templates: names + horizons, not presumed amounts
 
 Small slice. The report wanted life-event framing (wedding/baby/home) on goal creation; the

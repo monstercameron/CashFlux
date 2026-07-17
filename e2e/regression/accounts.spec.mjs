@@ -140,6 +140,42 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await expect(dialog.locator('[data-testid="xfer-balance-preview"]')).toHaveCount(0);
   });
 
+  test("stale-balance controls: snooze-until persists and the exemption hides it", async ({ app }) => {
+    await nav(app, "/accounts");
+    // Edit lives in the row's ⋯ menu (the .add-wrap holds trigger + menu).
+    const kebab = app.locator('.add-wrap:has([data-testid="edit-account-btn-acct-checking"]) > button');
+    const editBtn = app.locator('[data-testid="edit-account-btn-acct-checking"]');
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await editBtn.click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    await dialog.getByTestId("acct-edit-more").click();
+    // Snooze a couple of weeks out, save.
+    const snooze = dialog.getByTestId("acct-edit-fresh-snooze");
+    await snooze.scrollIntoViewIfNeeded();
+    await snooze.fill("2026-08-01");
+    // Known defect (tracked): sample liquidity/stability scores use the legacy
+    // 0-100 scale and trip the 1-5 native validation — clear them so Save runs.
+    for (const ph of [/easy to access/i, /low risk/i]) {
+      const f = dialog.getByPlaceholder(ph);
+      if ((await f.count()) && !["", "1", "2", "3", "4", "5"].includes(await f.inputValue())) await f.fill("");
+    }
+    await dialog.locator('button[type="submit"]').click();
+    await app.waitForTimeout(650);
+    // Reopen: the date persisted.
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await editBtn.click();
+    await app.waitForTimeout(650);
+    await dialog.getByTestId("acct-edit-more").click();
+    await expect(dialog.getByTestId("acct-edit-fresh-snooze")).toHaveValue("2026-08-01");
+    // Ticking the exemption hides the snooze field (it no longer applies).
+    await dialog.getByTestId("acct-edit-fresh-exempt").click({ force: true });
+    await expect(dialog.getByTestId("acct-edit-fresh-snooze")).toHaveCount(0);
+    await app.keyboard.press("Escape");
+  });
+
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
     await nav(app, "/accounts");
     // The class filter itself remains…
