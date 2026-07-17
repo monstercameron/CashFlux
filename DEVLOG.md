@@ -1,3 +1,32 @@
+## 2026-07-16 — Competitive-gap feature wave: six local-first additions
+
+After a gap analysis vs. the comps (Monarch, Copilot, Rocket Money, Empower, PocketGuard), Cam asked to
+build the ones that DON'T need a separate paid service — i.e. everything achievable on-device with the
+household's own data (and, for AI, their own key). Six vertical slices, each built bottom-up (pure logic
++ table tests → UI → e2e) and committed on its own:
+
+1. **Unusual-charge alerts** — anomaly detection relative to a payee's *own* median, not an absolute
+   threshold (that's what makes it "unusual" vs. the existing "large" alert). Excludes critical-severity
+   kinds from grouping. Seeded a deterministic $68-vs-$7 anomaly so the e2e is stable.
+2. **Goal growth projection** — compounding math; the honest bit is only showing a % return against a
+   positive cost basis (a goal funded net-negative can't have a meaningful %).
+3. **Cancel/negotiate helpers** — reframed Rocket Money's paid "we cancel it for you" as a tracked
+   checklist to-do (the local thing we CAN do). Needed a `PresetNotes` on the task-add seam.
+4. **Daily safe-to-spend** — the timeline + safe-to-spend TOTAL already existed on /planning; the gap was
+   the per-day framing. First cut divided headroom by days-to-low-point, which degenerated to "$47k/day
+   for 1 day" when income>expenses (low point is today) — corrected to discretionary ÷ days-to-next-income.
+5. **Investment performance** — cost basis (opening + net transfers in) vs. current value, from history,
+   no live prices. Reused the reports CSV pattern.
+6. **Assistant voice input** — browser Web Speech API. Two gotchas: Playwright Chromium ships a native
+   `SpeechRecognition` stub, so the test must mock BOTH API names; and the transcript arrives on a raw JS
+   callback outside the framework loop, so it writes the DOM value + dispatches a native 'input' event
+   (same trick the composer's Enter/arrow keys already use) rather than a plain state.Set.
+
+Two of these corrected over-claimed "gaps" from my own review: the daily cash-flow timeline and the
+tax-deductible export already existed — I added the daily allowance and investment performance rather than
+rebuilding what was there. Concurrency held throughout (another agent live in goals/budgets/reports);
+path-scoped commits, diff-checked mine-only before staging, timed builds around their WIP.
+
 ## 2026-07-16 — Goal pace math: coverage-aware, one month model, re-amortizing
 
 Cam, from his own custom goal (not the seed): $32k emergency fund due Dec 31, $22k + $4.5k earmarked
