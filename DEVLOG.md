@@ -1,3 +1,23 @@
+## 2026-07-17 — Connective layer: notifications that land on the exact item
+
+Second of the "make the nine pages reason together" additions. A notification isn't about a page,
+it's about one thing on it — so clicking one should land on that thing. Built a small reusable
+deep-link mechanism instead of special-casing each alert: a pure `notify.ParseTarget` inverts the
+`ruleID@occurrence` dedupe-key back into a (kind, entity-id) — put it in the pure `notify` package
+(not the wasm-only `notifyroutes.go`) so it's table-testable natively. On click, a transaction
+target sets the ledger's search to the merchant and routes to /transactions (deterministic, no
+highlight infra); an account/budget target sets a captured `uistate` deep-link atom, and an
+always-mounted `DeepLinkFocusHost` waits ~160ms for the destination route to render, then scrolls
+the element into view and adds a transient `.deeplink-flash` accent-ring pulse (removed after 1.7s;
+`prefers-reduced-motion` tones it to a static ring). Added `acct-row-<id>` / `budget-card-<id>`
+testids (rows had per-field testids but no id on the row/card root). Learned the reduced-motion path
+matters for the e2e: the suite runs `reducedMotion:reduce`, so the flash class must be added even
+when the animation is off — the account-flash test asserts `.acct-row.deeplink-flash` and it fired.
+The state.Set-from-raw-JS-callback trap that bit the voice input didn't recur here: clearing the
+focus atom from the setTimeout callback only needs the value cleared (the flash is done via direct
+DOM), not a re-render. All green: notify + budgeting unit tests, wasm build, and three gapfeatures
+e2e (driver panel + two deep-links). Kept i18n out of en.go (none needed — the mechanism is silent).
+
 ## 2026-07-17 — Two-tab clobber: the real "income basis doesn't persist" bug
 
 Cam: the "Income to budget with" choice doesn't persist and the page resets when you leave it —

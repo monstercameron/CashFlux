@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/notify"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -294,6 +295,27 @@ type notifyRowProps struct {
 // actions on the right (mark read/unread, snooze 1 day, dismiss) — faster than burying
 // them in a menu. Read items dim; unread items carry a vivid severity accent — the feed
 // reads like a triage log.
+// notifyTxnSearchLabel resolves the merchant/description a transaction-scoped
+// notification should pre-search the ledger by, so the click lands on that exact
+// charge rather than the full list. Empty when the transaction is gone (the caller
+// then falls back to a plain page navigation).
+func notifyTxnSearchLabel(txnID string) string {
+	app := appstate.Default
+	if app == nil {
+		return ""
+	}
+	for _, t := range app.Transactions() {
+		if t.ID != txnID {
+			continue
+		}
+		if s := strings.TrimSpace(t.Payee); s != "" {
+			return s
+		}
+		return strings.TrimSpace(t.Desc)
+	}
+	return ""
+}
+
 func notifyRow(props notifyRowProps) ui.Node {
 	it := props.Item
 	sev := it.Severity
@@ -304,10 +326,36 @@ func notifyRow(props notifyRowProps) ui.Node {
 
 	route := routeForNotify(it)
 	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	// A notification isn't just about a page — it's about one specific thing on it.
+	// So landing filters/flashes that exact item: a flagged charge opens the ledger
+	// pre-searched to its merchant; an account or budget alert scrolls to and pulses
+	// its own card. Unresolvable targets fall back to a plain page navigation.
 	goResource := ui.UseEvent(Prevent(func() {
-		if route != "" {
-			nav.Navigate(uistate.RoutePath(route))
+		if route == "" {
+			return
 		}
+		switch tgt := notify.ParseTarget(it.ID); tgt.Kind {
+		case notify.TargetTxn:
+			if label := notifyTxnSearchLabel(tgt.ID); label != "" {
+				f := txFilter.Get()
+				f.Text = label
+				f = f.Normalize()
+				txFilter.Set(f)
+				uistate.PersistTxFilter(f)
+				nav.Navigate(uistate.RoutePath("/transactions"))
+				return
+			}
+		case notify.TargetAccount:
+			if route == "/accounts" {
+				uistate.SetDeepLinkFocus(`[data-testid="acct-row-` + tgt.ID + `"]`)
+			}
+		case notify.TargetBudget:
+			if route == "/budgets" {
+				uistate.SetDeepLinkFocus(`[data-testid="budget-card-` + tgt.ID + `"]`)
+			}
+		}
+		nav.Navigate(uistate.RoutePath(route))
 	}))
 	onRead := ui.UseEvent(func() {
 		if props.OnRead != nil {

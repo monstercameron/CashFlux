@@ -412,7 +412,7 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	}
 
-	return Div(css.Class("row acct-row"), Style(rowStyle),
+	return Div(css.Class("row acct-row"), Attr("data-testid", "acct-row-"+a.ID), Style(rowStyle),
 		// PRIMARY line: type glyph + name/badges on the left, the balance figure and the
 		// row actions right-aligned. Everything else is demoted to the sub-line or details.
 		Div(css.Class("acct-row-head"),

@@ -295,6 +295,9 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(Toast),
 		// Global floating "back to top" button — reveals on scroll, jumps #main to the top.
 		uic.CreateElement(ScrollToTopButton),
+		// Deep-link focus: after a notification jumps to an account/budget, scroll to
+		// and pulse that exact card. Mounted once so its hook depth is constant.
+		uic.CreateElement(DeepLinkFocusHost),
 		// Headless SMART proactive digest driver: fires on cadence when opted in,
 		// posting a brief insight summary to the notification feed. Mounted once
 		// here (not in a loop) so its hook depth is always constant.

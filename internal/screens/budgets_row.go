@@ -455,7 +455,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 	hasSide := hasNotes || len(linkedTodos) > 0
 
-	return Div(css.Class(cardCls),
+	return Div(css.Class(cardCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
 		Div(css.Class("budget-head"),
 			// The title gets the whole header line now (the spent/limit amount and the
 			// percent moved INTO the bar below), so a long budget name has room to breathe.

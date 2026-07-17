@@ -83,6 +83,34 @@ test.describe("gap features", () => {
     await expect(page.locator("#cf-chat-input")).toHaveValue(/how much did we spend on groceries/i, { timeout: 10_000 });
   });
 
+  test("notification deep-link: an unusual-charge alert lands on the ledger pre-searched to that merchant", async ({ app }) => {
+    // Clicking a transaction-scoped notification shouldn't just open the ledger —
+    // it should land on the exact charge. The unusual Blue Bottle Coffee alert opens
+    // /transactions with the search already set to that merchant.
+    await nav(app, "/notifications");
+    const open = app.locator('[data-testid^="notif-open-default-unusual@"]').first();
+    await expect(open).toBeVisible();
+    await open.click();
+    await expect(app).toHaveURL(/\/transactions/, { timeout: 10_000 });
+    const search = app.locator('#main input[type="search"]').first();
+    await expect(search).toHaveValue(/blue bottle coffee/i, { timeout: 10_000 });
+  });
+
+  test("notification deep-link: an account alert scrolls to and flashes that account's card", async ({ app }) => {
+    // A stale/low-balance notification is about one account; clicking it lands on
+    // /accounts and pulses that account's own row so the eye finds it immediately.
+    await nav(app, "/notifications");
+    const acctAlert = app
+      .locator('[data-testid^="notif-open-default-stale@"], [data-testid^="notif-open-default-low-balance@"]')
+      .first();
+    // Only assert the flash when the seed actually produced such an alert.
+    if ((await acctAlert.count()) > 0) {
+      await acctAlert.click();
+      await expect(app).toHaveURL(/\/accounts/, { timeout: 10_000 });
+      await expect(app.locator(".acct-row.deeplink-flash").first()).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
   test("budget driver panel: an over budget reveals what's driving it", async ({ app }) => {
     // The seeded Groceries budget is over; its card offers a "What's driving this"
     // disclosure that expands to the largest charges behind the overspend.

@@ -116,6 +116,38 @@ func registerR4Surface() {
 		margin("0.15rem 0 0"),
 	)
 
+	// Deep-link flash: when a notification jumps to the exact account/budget it's
+	// about, that card scrolls into view and pulses an accent ring so the eye lands
+	// on it immediately. The pulse is transient (added, then removed after ~1.7s) and
+	// self-fades to nothing, leaving the card untouched. scroll-margin-top keeps the
+	// "center" scroll clear of the sticky page header.
+	rule(".deeplink-flash",
+		position("relative"),
+		zIndex("2"),
+		borderRadius("12px"),
+		prop("scroll-margin-top", "96px"),
+		animation("deeplink-pulse 1.7s ease-out"),
+	)
+	keyframes("deeplink-pulse",
+		at("0%",
+			boxShadow("0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent)"),
+			background("color-mix(in srgb, var(--accent) 16%, transparent)"),
+		),
+		at("60%",
+			boxShadow("0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent)"),
+		),
+		at("100%",
+			boxShadow("0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent)"),
+			background("transparent"),
+		),
+	)
+	// Reduced motion: no expanding pulse — a calm, brief static accent ring instead,
+	// so the deep-link still signals "here" without animation.
+	ruleMedia("(prefers-reduced-motion:reduce)", ".deeplink-flash",
+		animation("none"),
+		boxShadow("0 0 0 2px var(--accent)"),
+	)
+
 	// The "?" smart-tooltip renders through IconButton, which prepends the full `.btn`
 	// base — giving it a ~41px bordered square next to a ~14px caps label on the hero /
 	// budgets / goals stat labels (only the `.stat-label` scope shrank it, so Accounts was
