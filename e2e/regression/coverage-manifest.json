@@ -87,6 +87,7 @@
       "txn-tag-needs-review",
       "txn-tag-wsb",
       "txn-toggle-exclude",
+      "txn-upcoming-strip",
       "txn-views-btn"
     ],
     "untestided": 68
@@ -1362,24 +1363,18 @@
       "smart-peek-*",
       "smart-section-action",
       "sub-cancel-select-*",
-      "sub-cancel-select-gas",
       "sub-cancel-select-household-&-*",
       "sub-cancel-select-movies-&-fun",
-      "sub-cancel-select-phones-(two-lines)",
       "sub-cancel-select-shop-*",
       "sub-cancel-select-youtube-premium",
       "sub-howto-cancel-*",
-      "sub-howto-cancel-gas",
       "sub-howto-cancel-household-&-*",
       "sub-howto-cancel-movies-&-fun",
-      "sub-howto-cancel-phones-(two-lines)",
       "sub-howto-cancel-shop-*",
       "sub-howto-cancel-youtube-premium",
       "sub-ignore-*",
-      "sub-ignore-gas",
       "sub-ignore-household-&-*",
       "sub-ignore-movies-&-fun",
-      "sub-ignore-phones-(two-lines)",
       "sub-ignore-shop-*",
       "sub-ignore-youtube-premium",
       "subs-detect-prefs-toggle",
@@ -1390,7 +1385,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 44
+    "untestided": 32
   },
   "/insights": {
     "testids": [
