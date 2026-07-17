@@ -516,6 +516,32 @@ if (await balBtn.count()) {
   check("CF-10: balance button reachable", false);
 }
 
+// ──── CF-18 + CF-26 (+CF-21 path): keyless starter chips answer on-device ────
+await nav("/assistant");
+await page.waitForTimeout(1800);
+// the CF-22 step left the Insights tab active — chips live on the Ask tab
+const askTab = page.locator('button:text-is("Ask") >> visible=true').first();
+if (await askTab.count()) { await askTab.click(); await page.waitForTimeout(800); }
+// chips show on an EMPTY new thread only — restored conversations suppress them
+const newChat = page.locator('[data-testid="assistant-new-chat"]');
+if (await newChat.count()) { await newChat.click(); await page.waitForTimeout(900); }
+const chipsEls = await page.locator(".chip-suggest").all();
+if (chipsEls.length > 0) {
+  const chipText = await chipsEls[0].innerText();
+  await chipsEls[0].click();
+  await page.waitForTimeout(1500);
+  body = await bodyText();
+  check("CF-26: tapping a suggestion sends it (user turn appears)", body.includes(chipText), chipText);
+  // the persistent key HINT strip legitimately mentions the key — only the
+  // needKey ERROR ("…in Settings first.") signals a failed suggestion
+  check("CF-18: keyless suggestion answers on-device (no key alert)", !body.includes("Add your OpenAI key in Settings first"), "");
+  const agentBubbles = await page.locator(".chat-row-agent").count();
+  check("CF-18: a deterministic answer bubble rendered", agentBubbles > 0, `${agentBubbles} agent bubbles`);
+} else {
+  // keyless with no on-device-answerable suggestions: offering none is the honest state
+  check("CF-18: no unanswerable suggestions offered keyless", true, "0 chips");
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

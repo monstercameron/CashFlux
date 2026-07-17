@@ -720,12 +720,31 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				"Add a to-do task for the user.",
 				json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"notes":{"type":"string"},"priority":{"type":"string","enum":["low","medium","high"]},"due":{"type":"string","description":"YYYY-MM-DD"}},"required":["title"]}`)),
 			mutates: true,
+			// QA CF-19: the approval card must show EVERY field that will be
+			// written — due date and priority used to be silently applied after a
+			// preview that named only the title.
 			preview: func(raw json.RawMessage) string {
 				var a struct {
-					Title string `json:"title"`
+					Title    string `json:"title"`
+					Notes    string `json:"notes"`
+					Priority string `json:"priority"`
+					Due      string `json:"due"`
 				}
 				_ = json.Unmarshal(raw, &a)
-				return "Add a to-do: “" + strings.TrimSpace(a.Title) + "”"
+				out := "Add a to-do: “" + strings.TrimSpace(a.Title) + "”"
+				if p := strings.TrimSpace(a.Priority); p != "" {
+					out += " · " + p + " priority"
+				}
+				if d := strings.TrimSpace(a.Due); d != "" {
+					out += " · due " + d
+				}
+				if n := strings.TrimSpace(a.Notes); n != "" {
+					if len(n) > 80 {
+						n = n[:80] + "…"
+					}
+					out += "\nNotes: " + n
+				}
+				return out
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {

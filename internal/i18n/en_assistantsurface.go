@@ -24,6 +24,14 @@ var assistantSurfaceKeys = Catalog{
 	// the composer as a context bubble to talk it through. The aria names carry the
 	// finding's title (QA CF-22: fifteen identical "Go to the source of this flag"
 	// names were indistinguishable to assistive technology).
+	"assistant.allModels": "all models", // QA CF-20: separator over the catalog's long tail
+	// QA CF-18: keyless starter questions — each phrased to match the on-device
+	// localqa intents (net worth / upcoming bills / goal progress / health score),
+	// so every offered chip answers instantly without a key.
+	"insights.keylessQ1":           "What's my net worth?",
+	"insights.keylessQ2":           "What bills are due soon?",
+	"insights.keylessQ3":           "How are my savings goals doing?",
+	"insights.keylessQ4":           "What's my financial health score?",
 	"assistant.flagSource":         "Source",
 	"assistant.flagSourceAriaFor":  "Go to the source: %s",
 	"assistant.flagDiscuss":        "Discuss",
@@ -86,8 +94,8 @@ var assistantSurfaceKeys = Catalog{
 
 	// Composer, agent-voiced (overrides the en.go placeholder) — echoes all
 	// three verbs the intro just taught.
-	"insights.askPlaceholder":        "Ask, tell me what to do, or have me estimate something…",
-	"assistant.statusLive":           "Live — full agent",
+	"insights.askPlaceholder": "Ask, tell me what to do, or have me estimate something…",
+	"assistant.statusLive":    "Live — full agent",
 	// The "add a key" call-to-action lives ONCE in the footer notice (insights.keyHint);
 	// the subtitle and the composer placeholder no longer repeat it (they said the same
 	// thing a third and second time on the same screen).

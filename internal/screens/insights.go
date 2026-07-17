@@ -7,6 +7,7 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -218,10 +219,8 @@ func Insights() ui.Node {
 	// with Up/Down (-1 = not cycling); histDraft preserves the in-progress draft.
 	histIdx := ui.UseState(-1)
 	histDraft := ui.UseState("")
-	// fillAsk drops a question into the Ask box and focuses it (used by the starter chips
-	// and the "Discuss" action on a flagged-activity row) so the user can review or edit
-	// before sending.
-	fillAsk := func(q string) { input.Set(q); focusByID("cf-chat-input") }
+	// (fillAsk retired — starter chips now SEND directly, QA CF-26; the Discuss
+	// flow attaches context bubbles rather than filling the box.)
 	// ctxAttach holds flagged-activity items attached to the composer as context
 	// bubbles (the "Discuss" action). They ride along above the input — never dumped
 	// into it — and fold into the next message the user sends. removeCtx drops one.
@@ -491,26 +490,28 @@ func Insights() ui.Node {
 			return
 		}
 
-		if key == "" && !useBackendAI {
-			// C244: try to answer deterministically via localqa before falling back to
-			// the key-hint error. This makes the chat useful even with no OpenAI key.
-			intent, matched := localqa.Match(text)
-			if matched {
-				src := newInsightsQASource(app, base, rates)
-				if answer, answered := localqa.Answer(intent, src, text, func(minor int64) string {
-					return insightsMoneyFmt(minor, base)
-				}); answered {
-					hist := append(append([]chatTurn{}, turns.Get()...),
-						chatTurn{ID: id.New(), Role: "user", Text: text},
-						chatTurn{ID: id.New(), Role: "assistant", Text: answer},
-					)
-					turns.Set(hist)
-					input.Set("")
-					ctxAttach.Set(nil)
-					histIdx.Set(-1)
-					return
-				}
+		// C244 / QA CF-21: try the deterministic local answerer FIRST — for
+		// everyone, keyed or not. A simple aggregate ("how much did we spend on
+		// Auto loans last month?") used to ship ~8.6k tokens of context to the
+		// model for a figure the local data answers exactly, instantly, and free.
+		// Only unmatched questions fall through to the model (or the key hint).
+		if intent, matched := localqa.Match(text); matched {
+			src := newInsightsQASource(app, base, rates)
+			if answer, answered := localqa.Answer(intent, src, text, func(minor int64) string {
+				return insightsMoneyFmt(minor, base)
+			}); answered {
+				hist := append(append([]chatTurn{}, turns.Get()...),
+					chatTurn{ID: id.New(), Role: "user", Text: text},
+					chatTurn{ID: id.New(), Role: "assistant", Text: answer},
+				)
+				turns.Set(hist)
+				input.Set("")
+				ctxAttach.Set(nil)
+				histIdx.Set(-1)
+				return
 			}
+		}
+		if key == "" && !useBackendAI {
 			errMsg.Set(uistate.T("insights.needKey"))
 			return
 		}
@@ -1153,15 +1154,44 @@ func Insights() ui.Node {
 	// box). Replaying the same fixed chips after real exchanges read as a bot
 	// ignoring the conversation — an agent's follow-ups should come from the
 	// thread itself, and until they can, showing none is more honest.
-	// Tapping a chip FILLS the Ask box (doesn't send) so the user can review/edit first.
+	// Tapping a chip SENDS the question (QA CF-26).
+	// QA CF-18: keyless, offer the FIXED questions the on-device answerer
+	// (localqa) actually handles — the copy promises "a fixed set of questions
+	// straight from your data", so every offered chip must work without a key
+	// instead of alerting "Add your OpenAI key first". The localqa.Match filter
+	// stays as a safety net so a rephrased chip can never regress into the alert.
+	shownStarters := starters
+	if noAI {
+		fixed := []string{
+			uistate.T("insights.keylessQ1"),
+			uistate.T("insights.keylessQ2"),
+			uistate.T("insights.keylessQ3"),
+			uistate.T("insights.keylessQ4"),
+		}
+		shownStarters = make([]string, 0, len(fixed))
+		for _, q := range fixed {
+			if _, ok := localqa.Match(q); ok {
+				shownStarters = append(shownStarters, q)
+			}
+		}
+	}
 	chips := Fragment()
-	if len(starters) > 0 && input.Get() == "" && empty {
+	if len(shownStarters) > 0 && input.Get() == "" && empty {
 		chips = Div(css.Class(tw.Mb2),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
-				MapKeyed(starters,
+				MapKeyed(shownStarters,
 					func(q string) any { return q },
 					func(q string) ui.Node {
-						return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: fillAsk})
+						// QA CF-26: a tapped suggestion SENDS (the commercial-chat
+						// convention) — filling the box and demanding a second Send read
+						// as a broken chip. fillAsk stays for the Discuss flow, where
+						// reviewing the context before sending is the point.
+						return ui.CreateElement(suggestChip, suggestChipProps{Q: q, OnPick: func(q string) {
+							if loading.Get() {
+								return
+							}
+							sendText(q)
+						}})
 					},
 				),
 			),
@@ -1804,24 +1834,58 @@ func reasoningModel(model string) bool {
 	return strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") || strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "gpt-5")
 }
 
-// assistantModelIDs returns the ids for the header model picker: the live list from
-// OpenAI when available, else the built-in defaults, always including the current
-// selection so a custom/older model stays visible even if it's not in the list.
-func assistantModelIDs(models []string, cur string) []string {
+// assistantLegacyModelBits marks catalog ids that are NOT sensible chat picks:
+// embeddings, audio, images, moderation, research/legacy families, and aliases.
+var assistantLegacyModelBits = []string{
+	"embedding", "whisper", "tts", "audio", "realtime", "moderation",
+	"dall-e", "image", "davinci", "babbage", "curie", "instruct",
+	"search", "transcribe", "computer-use", "codex", "chatgpt-", "gpt-3.5",
+}
+
+// assistantDatedModel matches dated snapshot ids (gpt-4o-2024-08-06, gpt-4-0613).
+var assistantDatedModel = regexp.MustCompile(`\d{4}-\d{2}-\d{2}$|-\d{4}$`)
+
+// assistantRecommendedModel reports whether a catalog id belongs in the short
+// recommended list: a current, undated chat model.
+func assistantRecommendedModel(m string) bool {
+	lm := strings.ToLower(strings.TrimSpace(m))
+	for _, bit := range assistantLegacyModelBits {
+		if strings.Contains(lm, bit) {
+			return false
+		}
+	}
+	return !assistantDatedModel.MatchString(lm)
+}
+
+// assistantModelSplit partitions the /models catalog for the picker (QA CF-20:
+// after key setup the raw list buried three sensible choices under dozens of
+// dated, legacy, and research ids): a short recommended set of current chat
+// models first, everything else behind an "all models" separator. The current
+// selection always stays visible.
+func assistantModelSplit(models []string, cur string) (rec, rest []string) {
 	ids := models
 	if len(ids) == 0 {
 		ids = []string{"gpt-5.4-mini", "gpt-5.5", "o4-mini"}
 	}
 	cur = strings.TrimSpace(cur)
-	if cur != "" {
-		for _, m := range ids {
-			if m == cur {
-				return ids
-			}
+	seenCur := false
+	for _, m := range ids {
+		if m == cur {
+			seenCur = true
 		}
-		ids = append([]string{cur}, ids...)
+		if assistantRecommendedModel(m) {
+			rec = append(rec, m)
+		} else {
+			rest = append(rest, m)
+		}
 	}
-	return ids
+	if cur != "" && !seenCur {
+		rec = append([]string{cur}, rec...)
+	}
+	if len(rec) == 0 {
+		rec, rest = rest, nil
+	}
+	return rec, rest
 }
 
 type modelPickerProps struct {
@@ -1843,13 +1907,22 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 	// The shared control-pill (.todo-ctrl + .todo-select) used on To-do/Goals/Budgets/
 	// Accounts/Transactions: an uppercase label + a borderless in-pill select, so the
 	// model switcher reads identically to every other page's controls.
+	rec, rest := assistantModelSplit(p.Models, p.Current)
 	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.modelPick")),
 		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.modelLabel")),
 		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
-			MapKeyed(assistantModelIDs(p.Models, p.Current),
+			MapKeyed(rec,
 				func(m string) any { return m },
 				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
 			),
+			// QA CF-20: the long tail (dated snapshots, legacy/research families)
+			// stays reachable but sits behind an inert separator, under the short
+			// recommended list.
+			If(len(rest) > 0, Option(Value(""), Attr("disabled", "disabled"), "── "+uistate.T("assistant.allModels")+" ──")),
+			If(len(rest) > 0, Fragment(MapKeyed(rest,
+				func(m string) any { return "rest:" + m },
+				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
+			))),
 		),
 	)
 }
