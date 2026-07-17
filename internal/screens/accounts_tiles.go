@@ -553,22 +553,23 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	openAdd := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
 	// AC1: open the account-group manager. When at least one group exists, jump
 	// straight to editing the first (its header carries per-group edit too); with
-	// none, start a new group.
+	// none, start a new group. Plain funcs (not UseEvent): they run from the
+	// Manage overflow menu, whose item component owns the click hook.
 	groupEditAtom := uistate.UseAccountGroupEdit()
-	openGroups := ui.UseEvent(Prevent(func() {
+	openGroups := func() {
 		target := "new"
 		if gs := app.AccountGroups(); len(gs) > 0 {
 			target = gs[0].ID
 		}
 		groupEditAtom.Set(target)
-	}))
+	}
 	// AC10: open the institution directory (add/rename/color/delete banks and lenders).
 	institutionsAtom := uistate.UseInstitutionsManager()
-	openInstitutions := ui.UseEvent(Prevent(func() { institutionsAtom.Set(true) }))
+	openInstitutions := func() { institutionsAtom.Set(true) }
 	// AC7: open the surplus-sweep rules manager.
 	sweepAtom := uistate.UseSweepRulesOpen()
-	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
-	openFX := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
+	openSweep := func() { sweepAtom.Set(true) }
+	openFX := func() { uistate.OpenGlobalSettingsAt("household") }
 	markAll := ui.UseEvent(Prevent(func() {
 		w := app.FreshnessWindows()
 		now := time.Now()
@@ -671,24 +672,25 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		ClearAllLabel: uistate.T("accounts.clearFilters"),
 		RemoveLabel:   uistate.T("accounts.removeFilter"),
 		Actions: []ui.Node{
-			// Labeled toolbar buttons (.btn-tool): a grayed leading glyph + a visible text
-			// label, plus a small trailing badge for behaviour — Transfer opens a flip modal
-			// (⧉), Manage exchange rates navigates to Settings (↗), and Mark-all is an
-			// in-place bulk action (amber, no badge). All left-justified as one group, with
-			// the primary "Transfer money" LAST so it anchors the right end of the group.
+			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
+			// (contextual, amber), Transfer money, and the primary "+ Add account" —
+			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
+			// Exchange rates) fold into ONE labeled "Manage" menu, so the row before
+			// the account list stops presenting seven equally weighted verbs.
 			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
 				uistate.T("accounts.markAll"), "action", "stale", false, markAll)),
-			If(showFX, acctToolbarGlyph("acct-fx-btn", icon.Scale,
-				uistate.T("accounts.manageFXRates"), "nav", "", false, openFX)),
-			// The 2-row toolbar gives the actions row the full width, so surface the
-			// manager actions directly (no overflow needed): Groups (AC1), Institutions
-			// (AC10), and Sweep rules (AC7).
-			If(len(accounts) >= 1, acctToolbarGlyph("acct-groups-btn", icon.Tag,
-				uistate.T("accounts.groupsAction"), "modal", "", groupEditAtom.Get() != "", openGroups)),
-			If(len(accounts) >= 1, acctToolbarGlyph("acct-institutions-btn", icon.Landmark,
-				uistate.T("accounts.institutionsAction"), "modal", "", institutionsAtom.Get(), openInstitutions)),
-			If(len(accounts) >= 2, acctToolbarGlyph("acct-sweep-btn", icon.TrendingUp,
-				uistate.T("acctSweepCfg.title"), "modal", "", sweepAtom.Get(), openSweep)),
+			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
+				TriggerText:   uistate.T("accounts.manageMenu"),
+				TriggerLabel:  uistate.T("accounts.manageMenuTitle"),
+				TriggerTestID: "acct-manage-btn",
+				TriggerClass:  "btn btn-tool",
+				Items: []uiw.OverflowMenuItem{
+					{Label: uistate.T("accounts.groupsAction"), Icon: icon.Tag, TestID: "acct-groups-btn", OnSelect: openGroups},
+					{Label: uistate.T("accounts.institutionsAction"), Icon: icon.Landmark, TestID: "acct-institutions-btn", OnSelect: openInstitutions},
+					{Label: uistate.T("acctSweepCfg.title"), Icon: icon.TrendingUp, TestID: "acct-sweep-btn", OnSelect: openSweep, Hidden: len(accounts) < 2},
+					{Label: uistate.T("accounts.manageFXRates"), Icon: icon.Scale, TestID: "acct-fx-btn", OnSelect: openFX, Hidden: !showFX},
+				},
+			})),
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
 				uistate.T("accounts.transferMoney"), "modal", "", transferAtom.Get(), openTransfer)),
 			// G1 + primary-last convention: "+ Add account" anchors the right end, exactly

@@ -66,6 +66,14 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Fifth slice: the /accounts toolbar's verb pile. The interesting call was WHICH buttons keep their
+place: frequency, not feature age. Groups/Institutions/Sweeps/FX are setup surfaces you touch
+monthly at most — they take the "Manage" menu; Mark-all/Transfer/Add are the daily verbs and stay
+labeled. The OverflowMenu component already supported a labeled trigger (TriggerText), so the
+whole change is declarative; the menu items keep their old testids so ad-hoc scripts still
+resolve them once the menu is open. Row contrast rides the global token raise coming in the
+contrast slice.
+
 Fourth slice: Budgets above-the-fold — the audit's clearest per-page indictment (first category
 below the fold behind six summary layers). The trick was noticing the stack was three KINDS of
 thing interleaved: status (to-assign/spending/age), warnings (over-assigned, overspent, fund

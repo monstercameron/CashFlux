@@ -35,14 +35,23 @@ test.describe("accounts: labeled toolbar buttons", () => {
     const add = app.getByTestId("accounts-add");
     await expect(add).toBeVisible();
     await expect(add).toHaveClass(/btn-primary/);
-    // Manage exchange rates is a labeled button that NAVIGATES: no dialog popup.
+    // 2026-07-17 audit: the management surfaces (Groups, Institutions, Sweep
+    // rules, Exchange rates) live under ONE labeled "Manage" menu — the toolbar
+    // stops presenting seven equally weighted verbs before the account list.
+    const manage = app.getByTestId("acct-manage-btn");
+    await expect(manage).toBeVisible();
+    await expect(manage).toHaveClass(/btn-tool/);
+    await expect(manage).toContainText("Manage");
+    await manage.click();
+    await expect(app.getByTestId("acct-groups-btn")).toBeVisible();
+    await expect(app.getByTestId("acct-institutions-btn")).toBeVisible();
+    // Exchange rates (when present) navigates to Settings from inside the menu.
     const fx = app.getByTestId("acct-fx-btn");
-    if (await fx.count()) {
-      await expect(fx).toHaveClass(/btn-tool/);
-      await expect(fx).toContainText("Manage exchange rates");
-      await expect(fx).not.toHaveAttribute("aria-haspopup", "dialog");
+    if (await fx.isVisible()) {
       await fx.click();
       await expect(app.locator('#main[data-route="/settings"]').first()).toBeVisible();
+    } else {
+      await app.keyboard.press("Escape");
     }
   });
 });
