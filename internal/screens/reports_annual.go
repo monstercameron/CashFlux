@@ -1751,7 +1751,10 @@ func rptaIndex() ui.Node {
 		}
 	}
 	item := func(id, num, key, zone string) ui.Node {
-		return Button(css.Class("rpta-idx-item"), Type("button"), Attr("data-testid", "rpta-idx-item"), OnClick(scrollTo(id)),
+		// Title carries the section name even when the CSS hides the text label at
+		// narrow widths (2026-07-17 audit: the index must stay one compact row).
+		return Button(css.Class("rpta-idx-item"), Type("button"), Attr("data-testid", "rpta-idx-item"),
+			Title(uistate.T(key)), OnClick(scrollTo(id)),
 			Span(ClassStr("rpta-idx-dot rpta-dot-"+zone)),
 			Span(css.Class("rpta-idx-num"), num),
 			Span(css.Class("rpta-idx-label"), uistate.T(key)),

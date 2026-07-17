@@ -171,6 +171,17 @@ func registerReportsAnnual() {
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
 	)
+	// 2026-07-17 audit: the sticky index must stay ONE compact row. Under 1280px
+	// the 11 labeled chips wrapped to two or three sticky rows that followed the
+	// reader down the whole report — below that width the labels yield to dot +
+	// number (each item keeps its section name in the title tooltip).
+	ruleMedia("(max-width: 1280px)", ".rpta-idx-label",
+		display("none"),
+	)
+	ruleMedia("(max-width: 1280px)", ".rpta-index",
+		flexWrap("nowrap"),
+		overflowX("auto"),
+	)
 
 	// ── Sections: the verdict spine ──────────────────────────────────────────
 	rule(".rpta-sec",

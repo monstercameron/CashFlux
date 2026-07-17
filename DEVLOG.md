@@ -108,6 +108,11 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Tenth slice: Reports. The masthead is the audit's favorite thing on the page — untouched. The
+space thief was the STICKY index: 11 labeled chips wrap to 2-3 rows under 1280px and, being
+sticky, tax every scroll position. Labels collapse to dot+number (tooltip keeps the name) on one
+scrollable row there. Scope's account-chip well capped at 7.5rem with inner scroll.
+
 Ninth slice: Assistant — three CSS-only fixes (bubble overflow-wrap, console min-height 34→20rem
 so the docked composer fits a 720px viewport, shrink/clip guards on the control cell). The
 console's internal-scroll + docked-composer architecture was already right; only the floor was

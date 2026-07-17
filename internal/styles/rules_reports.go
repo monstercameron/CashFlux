@@ -196,6 +196,10 @@ func registerReportsSurface() {
 		prop("border-style", "dashed"),
 	)
 	rule(".scope-accts",
+		// 2026-07-17 audit: a household with many accounts turned the scope panel
+		// into a wall of chips — cap the chip well and scroll inside it.
+		prop("max-height", "7.5rem"),
+		prop("overflow-y", "auto"),
 		prop("display", "flex"),
 		prop("flex-wrap", "wrap"),
 		prop("gap", "0.35rem 1rem"),
