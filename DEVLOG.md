@@ -980,6 +980,16 @@ with the server token. Non-operators now get an actor-scoped audit read (`ListAu
 already indexed by `idx_audit_events_actor`) — their own events only — and 403 on metrics. Tests
 now assert the isolation both ways; the old ones only checked authentication.
 
+Slice 0b: session-key separation. Sessions were HMAC-signed with `sessionSecret` = MasterKey (or
+Token). Two problems that separation fixes: rotating the AES master key (the `rotate-ai-master-key`
+op) would silently invalidate every session, and one secret's leak exposed both. Added
+`CASHFLUX_SERVER_SESSION_KEY` as the primary signing secret with a MasterKey/Token fallback so no
+existing deployment breaks, plus `SESSION_KEY_PREVIOUS` accepted on verify-only for a zero-downtime
+rotation window. `verifySessionClaims` now tries every verify secret with `hmac.Equal` (no early
+return — constant-time, no key-identity timing leak). Startup warns in oauth mode when the dedicated
+key is unset. Tests prove isolation (a master-key-signed token fails under a distinct session key),
+the rotation window (old token verifies until PREVIOUS is dropped), and the fallback.
+
 ## 2026-07-17 — Visual/UX audit remediation begins: the shell sheds its promo card
 
 The nine-menu visual audit's core diagnosis is "lack of ruthless prioritization" — too many

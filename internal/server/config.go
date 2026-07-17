@@ -32,7 +32,17 @@ type Config struct {
 	Billing                           bool
 	AppOrigin                         string
 	MasterKey                         string
-	Token                             string
+	// SessionKey is the dedicated HMAC secret for signing session (access/refresh)
+	// JWTs. Separating it from MasterKey means an AES master-key rotation
+	// (rotate-ai-master-key) doesn't invalidate every session, and a leak of one
+	// secret doesn't compromise the other. When empty, signing falls back to
+	// MasterKey/Token (legacy behaviour) so existing deployments keep working.
+	SessionKey string
+	// SessionKeyPrevious is an optional prior SessionKey accepted on VERIFY only
+	// (never used to sign), so a SessionKey rotation doesn't log every user out —
+	// set it to the old key for one refresh window, then remove it.
+	SessionKeyPrevious string
+	Token              string
 	TokenSHA256                       string
 	GeneratedToken                    bool
 	StripeAPIBaseURL                  string
@@ -107,6 +117,8 @@ func FromEnv() (Config, error) {
 	}
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))
+	cfg.SessionKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SESSION_KEY"))
+	cfg.SessionKeyPrevious = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SESSION_KEY_PREVIOUS"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
 	cfg.StripeAPIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_API_BASE_URL"))

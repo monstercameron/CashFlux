@@ -126,6 +126,12 @@ func main() {
 		logger.Warn("generated self-host access token", "token", token)
 		logger.Warn("persist generated token", "hint", "set CASHFLUX_SERVER_TOKEN_SHA256 to the sha256 of this token, or CASHFLUX_SERVER_TOKEN for local development, to keep it stable across restarts")
 	}
+	// Multi-tenant Cloud should sign sessions with a dedicated key so an AES
+	// master-key rotation doesn't log every user out and neither secret's leak
+	// compromises the other. Falling back to MasterKey works but couples them.
+	if cfg.AuthMode == "oauth" && cfg.SessionKey == "" {
+		logger.Warn("session signing key not set", "hint", "set CASHFLUX_SERVER_SESSION_KEY to a dedicated random secret; falling back to the AES master key couples session signing to encryption-key rotation")
+	}
 	traceCtx, traceCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	traceShutdown, err := server.ConfigureTracing(traceCtx, cfg)
 	traceCancel()
