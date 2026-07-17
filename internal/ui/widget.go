@@ -192,6 +192,14 @@ func widget(props WidgetProps) uic.Node {
 	// tiles, with Space/Enter to grab a tile for keyboard move/resize (widget a11y).
 	rovingAtom := uistate.UseCurrentTile()
 	grabbedAtom := uistate.UseGrabbedTile()
+	// Layout-edit gate (#76): on the dashboard, pointer drag-reorder and the visual
+	// rearranging chrome (grip, resize handles — hidden via the bento's
+	// data-layout-edit attribute in CSS) only engage in explicit edit-layout mode.
+	// Every other bento surface behaves as before. The atom read is unconditional
+	// (hook stability); only ATTRIBUTE VALUES change with it — the hook set below
+	// is identical in and out of edit mode.
+	layoutEditable := uistate.UseLayoutEdit().Get() ||
+		router.GetCurrentPath() != uistate.RoutePath("/")
 
 	// Drop hidden widgets before packing so the visible tiles reflow into the gaps
 	// (the dashboard skips rendering hidden tiles; this keeps everyone else's
@@ -294,8 +302,12 @@ func widget(props WidgetProps) uic.Node {
 		if grabbed {
 			grabbedAttr = "true"
 		}
+		dragAttr := "false"
+		if layoutEditable {
+			dragAttr = "true"
+		}
 		args = append(args,
-			Attr("draggable", "true"),
+			Attr("draggable", dragAttr),
 			Attr("tabindex", tabidx),
 			Attr("aria-grabbed", grabbedAttr),
 			// APG grid pattern (WCAG 2.1.1 keyboard, without 12+ tab stops): arrows move

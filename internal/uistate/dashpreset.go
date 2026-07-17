@@ -18,3 +18,15 @@ func PersistDashPreset(key string) { kvSet(dashPresetStoreID, key) }
 // LoadDashPreset returns the last applied preset key, "" when none was ever
 // applied (the picker then shows its placeholder).
 func LoadDashPreset() string { return kvGet(dashPresetStoreID) }
+
+// dashDailyNudgeStoreID remembers that the one-time "try Daily check-in"
+// recommendation was answered (either way), so it never re-appears (#76).
+const dashDailyNudgeStoreID = "cashflux:dash-daily-nudge"
+
+// DashDailyNudgeAnswered reports whether the Daily check-in recommendation was
+// already accepted or declined.
+func DashDailyNudgeAnswered() bool { return kvGet(dashDailyNudgeStoreID) != "" }
+
+// MarkDashDailyNudgeAnswered records the recommendation as handled. Callers
+// follow with RequestPersist so the answer survives an immediate reload.
+func MarkDashDailyNudgeAnswered() { kvSet(dashDailyNudgeStoreID, "done") }

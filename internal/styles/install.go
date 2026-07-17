@@ -72,6 +72,8 @@ func Register() {
 	registerTodoPrioSurface()
 	registerDashHeroSurface()
 	registerR4Surface()
+	registerLane2Dashboard()
+	registerLane6Fixes()
 	inject(Build())
 }
 

@@ -1,3 +1,31 @@
+## 2026-07-17 — #76: six defaults against the 215-button dashboard (lane 2)
+
+The interesting engineering was in the edit-layout gate. The obvious implementation — render the
+grips/handles only when editing — is a hook-order landmine: the resize handles carry OnClick
+hooks, so toggling their EXISTENCE at runtime shifts the widget component's hook sequence (the
+GWC stable-positions rule). The shipped design keeps the hook set identical in both modes and
+moves the difference entirely into values: the bento root wears `data-layout-edit="on|off"`, CSS
+hides `.grip`/`.rz` under "off", and the tile's `draggable` ATTRIBUTE flips between "true"/"false"
+(attributes aren't hooks). Keyboard grab/move stays live in both modes deliberately — it requires
+an explicit Space-grab, can't fire by accident, and keeps the a11y path permanent. The gate also
+scopes by route (`GetCurrentPath() != RoutePath("/")` → always editable) so the other bento
+surfaces (ledger/accounts/budgets) that reuse the same Widget shell never see it.
+
+Second lesson, from e2e: the Focus select held its pick in mount-time `UseState`, so when the
+Daily check-in nudge applied a preset from OUTSIDE the picker, the select kept showing the
+placeholder until reload. Local state mirroring a persisted value is just cache invalidation with
+extra steps — the select now derives from `LoadDashPreset()` every render (the apply path writes
+the layout atom, which re-renders the picker with the fresh key), and the UseState is gone.
+
+The chores split is structural, not textual: `attention.Item.Household` is true only for a task
+with no financial linkage (RelatedType none) and no nudge origin — no keyword matching against
+task titles. Both-groups-present renders Money/Household micro-labels; one group renders flat, so
+the widget's existing look survives for households that keep money and chores separate anyway.
+"First week of use" is proxied by ledger activity older than 7 days — an empty new household
+never sees the nudge mid-setup, and a QA session on sample data (5y of history) sees it
+immediately, which is exactly the testability trade wanted. 13/13 e2e, hero −26% in focused mode
+(target 25–35%).
+
 ## 2026-07-17 — UX-06: the goal card learns restraint (lane 5)
 
 Probed before designing: the first sample goal card was 617px tall with 14 buttons and every

@@ -143,3 +143,34 @@ func TestRankEmptyIsCalm(t *testing.T) {
 		t.Fatalf("empty inputs should yield no items, got %+v", got)
 	}
 }
+
+// TestRankHouseholdSplit verifies chore classification: a plain manual to-do is
+// Household; to-dos linked to a financial entity or created by a nudge — and
+// every non-task kind — are money items.
+func TestRankHouseholdSplit(t *testing.T) {
+	in := Inputs{
+		Now: now,
+		Tasks: []domain.Task{
+			{ID: "chore", Title: "Replace air filters", Status: domain.StatusOpen, Priority: domain.PriorityHigh},
+			{ID: "linked", Title: "Top up baby fund", Status: domain.StatusOpen, Priority: domain.PriorityHigh, RelatedType: domain.RelatedGoal, RelatedID: "g1"},
+			{ID: "nudged", Title: "Refresh balances", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Source: domain.SourceNudge},
+		},
+	}
+	got := Rank(in, DefaultConfig())
+	if len(got) != 3 {
+		t.Fatalf("got %d items, want 3", len(got))
+	}
+	byID := map[string]Item{}
+	for _, it := range got {
+		byID[it.AnchorID] = it
+	}
+	if !byID["chore"].Household {
+		t.Fatalf("plain manual task should be Household: %+v", byID["chore"])
+	}
+	if byID["linked"].Household {
+		t.Fatalf("goal-linked task should be a money item: %+v", byID["linked"])
+	}
+	if byID["nudged"].Household {
+		t.Fatalf("nudge-created task should be a money item: %+v", byID["nudged"])
+	}
+}

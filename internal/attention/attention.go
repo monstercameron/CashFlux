@@ -60,7 +60,14 @@ type Item struct {
 	Route    string            // in-app route for the deep link (e.g. "/todo")
 	AnchorID string            // entity id to anchor-scroll to, when one exists
 	Anomaly  *insights.Anomaly // set only for KindSpending, for the view to phrase
-	when     time.Time         // deadline used to order by soonness; zero sorts last
+	// Household marks a plain household chore (a to-do with no financial linkage),
+	// so the widget can group money actions apart from chores instead of
+	// interleaving "Pay down the credit card" with "Replace the air filters".
+	// Financial kinds (bill/budget/stale/spending) are always false; a task is a
+	// chore unless it is linked to a financial entity (account/budget/goal/
+	// transaction/review queue) or was created by a financial nudge.
+	Household bool
+	when      time.Time // deadline used to order by soonness; zero sorts last
 }
 
 // Config selects which sources to include and how aggressively to surface them.
@@ -176,9 +183,10 @@ func Rank(in Inputs, cfg Config) []Item {
 				days = daysSince(t.Due, in.Now)
 				when = t.Due
 			}
+			household := (t.RelatedType == domain.RelatedNone || t.RelatedType == "") && t.Source != domain.SourceNudge
 			items = append(items, Item{
 				Kind: KindTask, Severity: sev, Label: t.Title, Days: days,
-				Route: "/todo", AnchorID: t.ID, when: when,
+				Route: "/todo", AnchorID: t.ID, Household: household, when: when,
 			})
 		}
 	}

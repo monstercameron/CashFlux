@@ -853,6 +853,13 @@ func Dashboard() ui.Node {
 	// no-touch-chrome: lets the CSS agent hide drag/resize affordances (.grip, .rz
 	// buttons) under @media (hover:none) so they don't show on touch screens (L33).
 	tiles = append(tiles, css.Class("bento no-touch-chrome"))
+	// #76: outside explicit edit-layout mode the grips and resize handles are
+	// hidden (CSS keys on this attribute) and pointer drag is off (widget shell).
+	layoutEditAttr := "off"
+	if uistate.UseLayoutEdit().Get() {
+		layoutEditAttr = "on"
+	}
+	tiles = append(tiles, Attr("data-layout-edit", layoutEditAttr))
 	// Renders nothing; owns the FLIP reflow trigger (keyed on layout, not drag state).
 	tiles = append(tiles, ui.CreateElement(bentoFlipDriver))
 	// The dashboard surface's full placement set (built-ins + hidden + their saved
@@ -1219,8 +1226,15 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.noUpcomingBills"))
 	} else {
 		idColBills, _ := fr.Column("id")
-		rows := make([]ui.Node, 0, fr.Rows)
-		for i := 0; i < fr.Rows; i++ {
+		// #76: the daily glance is the NEXT few charges, not the whole schedule —
+		// three rows by default, with the rest one click away on /bills.
+		const billsGlanceCap = 3
+		shown := fr.Rows
+		if shown > billsGlanceCap {
+			shown = billsGlanceCap
+		}
+		rows := make([]ui.Node, 0, shown+1)
+		for i := 0; i < shown; i++ {
 			dueTone := "text-faint"
 			if daysCol.Num(i) <= 7 {
 				dueTone = "text-warn"
@@ -1237,6 +1251,13 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 				Amount:  fmtMoney(amt.Neg()),
 			}))
 		}
+		if fr.Rows > shown {
+			rows = append(rows, ui.CreateElement(dashViewAllLink, dashViewAllLinkProps{
+				Route:  "/bills",
+				Label:  uistate.T("dashboard.viewAllBills", fr.Rows),
+				TestID: "bills-view-all",
+			}))
+		}
 		body = Div(css.Class("t-body", tw.SpaceY25), rows)
 	}
 	bodyCls := ""
@@ -1247,6 +1268,29 @@ func billsFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		ID: "bills", Title: uistate.T("dashboard.upcomingBills"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "6",
 		BodyClass: bodyCls, Body: body,
 	})
+}
+
+// dashViewAllLinkProps configures a quiet trailing "View all N" row in a capped
+// dashboard list widget.
+type dashViewAllLinkProps struct {
+	Route  string
+	Label  string
+	TestID string
+}
+
+// dashViewAllLink is the shared "View all …" row: a small text button that
+// navigates to the widget's full page. Own component so its UseEvent hook is
+// registered outside any caller loop (CLAUDE.md hooks gotcha).
+func dashViewAllLink(p dashViewAllLinkProps) ui.Node {
+	nav := router.UseNavigate()
+	route := p.Route
+	click := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath(route)) })
+	return Button(css.Class("dash-view-all"), Type("button"),
+		Attr("data-testid", p.TestID),
+		Attr("aria-label", p.Label),
+		OnClick(click),
+		p.Label,
+	)
 }
 
 // breakdownFrame is the FrameRenderer for the Spending breakdown widget
@@ -2137,9 +2181,25 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 		}
 		body = Div(css.Class("attention-list"), rows)
 	default:
-		rows := make([]ui.Node, 0, len(items))
+		// #76: money actions and household chores read as different jobs — when both
+		// are present, group them under quiet micro-labels instead of interleaving
+		// "Pay the card" with "Replace the air filters". One group alone renders
+		// flat, exactly as before.
+		fin := make([]attention.Item, 0, len(items))
+		chores := make([]attention.Item, 0, 2)
 		for _, it := range items {
-			rows = append(rows, ui.CreateElement(attentionRow, attentionRowProps{Item: it, Base: base}))
+			if it.Household {
+				chores = append(chores, it)
+			} else {
+				fin = append(fin, it)
+			}
+		}
+		rowsOf := func(group []attention.Item) []ui.Node {
+			rows := make([]ui.Node, 0, len(group))
+			for _, it := range group {
+				rows = append(rows, ui.CreateElement(attentionRow, attentionRowProps{Item: it, Base: base}))
+			}
+			return rows
 		}
 		// Wide-and-short (e.g. the default 4×1) flows items as wrapping chips; any
 		// layout with height stacks them as a list.
@@ -2147,7 +2207,20 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 		if spanRow < 2 {
 			cls = "attention-chips"
 		}
-		body = Div(ClassStr(cls), rows)
+		if len(fin) > 0 && len(chores) > 0 {
+			body = Div(css.Class("attention-groups"),
+				Div(css.Class("attn-group"),
+					Span(css.Class("attn-group-label"), Attr("data-testid", "attn-money"), uistate.T("dashboard.attnMoney")),
+					Div(ClassStr(cls), rowsOf(fin)),
+				),
+				Div(css.Class("attn-group"),
+					Span(css.Class("attn-group-label"), Attr("data-testid", "attn-household"), uistate.T("dashboard.attnHousehold")),
+					Div(ClassStr(cls), rowsOf(chores)),
+				),
+			)
+		} else {
+			body = Div(ClassStr(cls), rowsOf(items))
+		}
 	}
 
 	return uiw.Widget(uiw.WidgetProps{

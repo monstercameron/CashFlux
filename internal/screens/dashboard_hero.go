@@ -105,6 +105,11 @@ func dashboardHero() ui.Node {
 		delta, deltaTone = uistate.T("dashboard.netWorthAsOfToday"), "text-dim"
 	}
 
+	// #76: a curated Focus view is about the day's few decisions — the hero drops
+	// ~30% of its height there (no sparkline, tighter type/spacing via CSS).
+	preset := uistate.LoadDashPreset()
+	focused := preset != "" && preset != "default"
+
 	return ui.CreateElement(heroSummary, heroSummaryProps{
 		NetWorth:     fmtMoney(nw.Net),
 		NetWorthTone: figTone(nw.Net),
@@ -116,6 +121,8 @@ func dashboardHero() ui.Node {
 		Spark:        spark,
 		Delta:        delta,
 		DeltaTone:    deltaTone,
+		HasAccounts:  len(accounts) > 0,
+		Focused:      focused,
 	})
 }
 
@@ -171,6 +178,13 @@ type heroSummaryProps struct {
 	Spark        []float64 // trailing 6-month net-worth series for the hero sparkline (nil → no chart)
 	Delta        string    // formatted "▲ $X this month" net-worth change ("" → no chip)
 	DeltaTone    string    // color token for the delta chip
+	// HasAccounts demotes the "Add account" quick action once setup is done (#76):
+	// with accounts in place it's a rare admin task that lives on /accounts, not a
+	// daily entry point beside Add transaction.
+	HasAccounts bool
+	// Focused compacts the hero (~30% shorter via .home-hero--focused) while a
+	// curated Focus preset is the active view (#76).
+	Focused bool
 }
 
 // heroSummary renders the non-empty hero: a time-of-day greeting, the
@@ -216,7 +230,11 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		)
 	}
 
-	return Div(css.Class("home-hero"),
+	heroCls := "home-hero"
+	if props.Focused {
+		heroCls += " home-hero--focused"
+	}
+	return Div(ClassStr(heroCls),
 		// Greeting + a quiet date line for context — H2 because the topbar shell
 		// provides the implicit page landmark (WCAG 2.4.6, no level-skip).
 		Div(css.Class("home-hero-top"),
@@ -265,19 +283,30 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("home.quickAddTxn")),
 			),
-			Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("aria-label", uistate.T("home.quickAddAccountAria")),
-				Attr("title", uistate.T("home.quickAddAccountAria")),
-				Attr("data-testid", "hero-add-account"),
-				OnClick(openAddAccount),
-				uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("home.quickAddAccount")),
+			// #76: Add account is a setup/admin action — once accounts exist it
+			// leaves the daily surface (still one click away on /accounts and in
+			// the global + menu). Add transaction stays primary.
+			If(!props.HasAccounts,
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("aria-label", uistate.T("home.quickAddAccountAria")),
+					Attr("title", uistate.T("home.quickAddAccountAria")),
+					Attr("data-testid", "hero-add-account"),
+					OnClick(openAddAccount),
+					uiw.Icon(icon.CreditCard, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("home.quickAddAccount")),
+				),
 			),
 			// Presentation modes: one click swaps the widget set for a moment
 			// (daily check-in, payday, month end, debt, goals). The user can
 			// still drag/resize afterwards; Settings → Reset restores default.
 			ui.CreateElement(dashPresetPicker, struct{}{}),
+			// #76: rearranging chrome (grips + resize handles + pointer drag)
+			// only appears in explicit edit-layout mode.
+			ui.CreateElement(layoutEditToggle, struct{}{}),
 		),
+
+		// #76: one-time Daily check-in recommendation after the first week.
+		ui.CreateElement(dashDailyNudge, struct{}{}),
 
 		// Quote of the day (opt-in AI Smart+ feature) — a calm footer ribbon.
 		ui.CreateElement(heroQuote, struct{}{}),
