@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/idlecash"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
@@ -482,6 +483,8 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		// Renders nothing until a benchmark is set in Settings and there's enough
 		// idle cash to be worth naming.
 		acctIdleCashLine(app, props.Base, goToAllocate),
+		// Liquidity breakdown: the asset side grouped by how usable the money is.
+		acctLiquidityLine(app, props.Base, props.Rates),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -531,6 +534,58 @@ func acctIdleCashLine(app *appstate.App, base string, onAllocate ui.Handler) ui.
 		Span(uistate.T("accounts.idleCashLine", fmtMoney(idle), fmtMoney(forgone), benchStr)),
 		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-idle-cash-link"), OnClick(onAllocate), uistate.T("accounts.idleCashLink")),
 	)
+}
+
+// acctLiquidityLine renders the asset side grouped by how usable the money is
+// right now (internal/liquidity): Available cash · Restricted · Investments ·
+// Held assets, each base-converted. Empty buckets stay silent, and the whole
+// line renders nothing until at least two buckets hold money — a single-bucket
+// household learns nothing from it. Rate-less accounts are skipped (consistent
+// with the net-worth exclusion disclosure above).
+func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.Node {
+	txns := app.Transactions()
+	totals := liquidity.Totals(app.Accounts(), time.Now(), func(a domain.Account) (int64, bool) {
+		bal, err := ledger.Balance(a, txns)
+		if err != nil {
+			return 0, false
+		}
+		c, cerr := rates.Convert(bal, base)
+		if cerr != nil {
+			return 0, false
+		}
+		return c.Amount, true
+	})
+	type item struct {
+		cls    liquidity.Class
+		key    string
+		testid string
+	}
+	items := []item{
+		{liquidity.Available, "accounts.liqAvailable", "acct-liq-available"},
+		{liquidity.Restricted, "accounts.liqRestricted", "acct-liq-restricted"},
+		{liquidity.Investments, "accounts.liqInvestments", "acct-liq-investments"},
+		{liquidity.Held, "accounts.liqHeld", "acct-liq-held"},
+	}
+	nonzero := 0
+	for _, it := range items {
+		if totals[it.cls] != 0 {
+			nonzero++
+		}
+	}
+	if nonzero < 2 {
+		return Fragment()
+	}
+	kids := []any{css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-liquidity-line"),
+		Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.25rem 1rem"}),
+		Title(uistate.T("accounts.liqTitle"))}
+	for _, it := range items {
+		if totals[it.cls] == 0 {
+			continue
+		}
+		kids = append(kids, Span(Attr("data-testid", it.testid),
+			uistate.T(it.key, fmtMoney(money.New(totals[it.cls], base)))))
+	}
+	return P(kids...)
 }
 
 // --- acct-toolbar ---------------------------------------------------------------

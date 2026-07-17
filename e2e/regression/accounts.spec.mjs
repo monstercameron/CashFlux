@@ -223,6 +223,18 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await app.keyboard.press("Escape");
   });
 
+  test("the summary shows the liquidity breakdown line", async ({ app }) => {
+    await nav(app, "/accounts");
+    const line = app.getByTestId("acct-liquidity-line");
+    await expect(line).toBeVisible();
+    // The sample household has cash, investments (its 401(k)s are typed as
+    // investments), and property — those buckets carry money. Restricted only
+    // appears for locked or retirement-typed accounts, absent from the sample.
+    await expect(line.getByTestId("acct-liq-available")).toContainText(/Available cash .*[\d,]+\.\d{2}/);
+    await expect(line.getByTestId("acct-liq-investments")).toContainText(/Investments .*[\d,]+\.\d{2}/);
+    await expect(line.getByTestId("acct-liq-held")).toContainText(/Held assets .*[\d,]+\.\d{2}/);
+  });
+
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
     await nav(app, "/accounts");
     // The class filter itself remains…

@@ -86,6 +86,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Liquidity classes derive; they don't configure
+
+The report suggested a per-account liquidity override; skipped it deliberately. The class is a
+pure function of type + lock state (`liquidity.Of`), which keeps it explainable and immune to
+drift — and the user already HAS a lever: LockUntil restricts any account, and the type picker
+is the classification. One judgment call: `TypeRetirement` counts as restricted (the money
+exists but isn't spendable), while the sample's 401(k)s are typed as investments and land in
+that bucket — the e2e documents this rather than pretending the sample has a restricted
+bucket. The line renders on the summary tile only when ≥2 buckets have money; a single-bucket
+household learns nothing from it.
+
 ## 2026-07-17 — Four balances and a provenance sentence
 
 The report's accounts section asked for provenance + a current/cleared/statement/projected

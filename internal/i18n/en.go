@@ -3074,6 +3074,12 @@ var english = Catalog{
 	"accounts.provImported": "Balance last moved by imported transactions",
 	"accounts.provDerived":  "Balance is derived from recorded transactions",
 	"accounts.provAsOf":     " (%s).",
+	// Liquidity breakdown line on the accounts summary.
+	"accounts.liqAvailable":   "Available cash %s",
+	"accounts.liqRestricted":  "Restricted %s",
+	"accounts.liqInvestments": "Investments %s",
+	"accounts.liqHeld":        "Held assets %s",
+	"accounts.liqTitle":       "Your assets grouped by how usable the money is right now. Locked and retirement accounts count as restricted; property and vehicles as held assets.",
 
 	// L-series 6-lane sweep, round 2 (2026-06-23)
 	"nav.mobileTabLabel":          "Mobile navigation",
