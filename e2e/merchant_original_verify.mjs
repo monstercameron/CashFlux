@@ -43,7 +43,9 @@ await page.waitForTimeout(600);
 const row = page.locator('[data-testid="txn-row-tx-2026-07-raw0"], [data-testid="txn-row-tx-2026-07-raw1"]').first();
 if (await row.count()) {
   await row.scrollIntoViewIfNeeded();
-  await row.click();
+  // Click a neutral cell (the date) — the description cell hosts interactive
+  // chips (merchant trend, dedupe badge) that would swallow a center click.
+  await row.locator("td").nth(1).click();
   await page.waitForTimeout(1200);
   const form = page.locator('[data-testid="txn-edit-form"]');
   check("edit modal opens", (await form.count()) > 0);
