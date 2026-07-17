@@ -1,3 +1,17 @@
+## 2026-07-17 — Budgets fix 3/7: the overlay summary stops subtracting across periods
+
+In overlay mode the summary loader showed `thisBudget − lastSpent` as "Left". Fixed by summing last
+period's effective budget alongside its spend in `computeBudgetViewRaw` (`lastTotalLimit +=
+prev.Spent + prev.Remaining`, i.e. the evaluated limit) and, in `budgetSummaryWidget`, swapping the
+overlay denominator to `v.LastTotalLimit` for EVERY method (a past month has no computed income
+basis, so the zero-based income denominator only applies live). The third figure relabels "Left" →
+"Unspent" (`budgets.lastMonthUnspent`, new `en_budgetoverlay.go`) and drops the safe-to-spend smart
+tooltip in overlay mode — that explainer describes the live figure. Fill %, near/over tones now all
+read last-vs-last, consistent with the LAST MONTH tag already sitting on the loader. Note the CARDS
+deliberately keep last-spend-vs-this-budget (that comparison is the overlay's planning purpose and
+is labeled "$X under/over this budget"); the summary was the only place the subtraction was both
+unlabeled and cross-period. Wasm + i18n/styles tests clean.
+
 ## 2026-07-17 — Budgets fix 2/7: the sinking-fund line now does its own arithmetic
 
 `budgetFundSetAsideNode` gained the check the critique asked for: the month's total sinking-fund

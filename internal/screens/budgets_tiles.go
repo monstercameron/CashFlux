@@ -103,9 +103,20 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// "spent of what's assigned to categories". Simple/envelope keep the total budgeted.
 	spendLimit := v.TotalLimit
 	spendLimitLabel := uistate.T("budgets.budgeted")
+	leftLabel := uistate.T("budgets.left")
 	if v.Method == budgeting.MethodZeroBased {
 		spendLimit = v.BannerIncome + v.RolledOver
 		spendLimitLabel = uistate.T("budgets.spendBudgetLabel")
+	}
+	if v.LastMonthMode {
+		// Period-honest overlay: last month's spend reads against last month's OWN total
+		// budget, and the difference is what went UNSPENT — never this month's budget
+		// minus last month's spend, a subtraction across two periods that means nothing
+		// (design critique #5). Every method uses the budget totals here; an income
+		// basis for a past month isn't computed.
+		spendLimit = v.LastTotalLimit
+		spendLimitLabel = uistate.T("budgets.budgeted")
+		leftLabel = uistate.T("budgets.lastMonthUnspent")
 	}
 	leftM := money.New(spendLimit-barSpent, v.Base)
 	over := barSpent > spendLimit
@@ -146,10 +157,12 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				Div(css.Class("budget-loader-value"), fmtMoney(money.New(spendLimit, v.Base))),
 			),
 			// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
+			// In the last-month overlay it becomes "Unspent" (a historical fact, so the
+			// safe-to-spend explainer doesn't apply and is omitted).
 			Div(css.Class("budget-loader-fig", "is-right"),
 				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					uistate.T("budgets.left"),
-					smartTooltipFor(smartSettings, "budget-safe", uistate.T("budgets.left"), uistate.T("smart.tipBudgetSafe")),
+					leftLabel,
+					If(!v.LastMonthMode, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
 				),
 				Div(ClassStr("budget-loader-value is-hero "+accentFor(leftM)), budgetLeftValue(leftM)),
 			),

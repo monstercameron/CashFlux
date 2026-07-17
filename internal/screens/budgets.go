@@ -78,11 +78,14 @@ type budgetView struct {
 	RolledOver int64
 	// LastMonth holds the "Last month's spend" overlay per budget (keyed by budget ID),
 	// populated only when that toggle is on; empty otherwise. LastMonthMode is that
-	// toggle, and LastTotalSpent is last period's total spend across all budgets (base
-	// minor units) so the summary graph can show last month too.
+	// toggle, and LastTotalSpent / LastTotalLimit are last period's total spend and
+	// total budget across all budgets (base minor units), so the summary graph can show
+	// last month against last month's OWN budget — never last spend vs this budget,
+	// which is a figure from two different periods.
 	LastMonth      map[string]budgetLastMonth
 	LastMonthMode  bool
 	LastTotalSpent int64
+	LastTotalLimit int64
 	// Committed holds the XC4 committed-vs-free split per budget (keyed by budget ID),
 	// including any XC3 smoothing set-aside folded into the committed figure. Absent
 	// entries mean nothing is committed (a fully-free budget).
@@ -369,6 +372,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	// the user can plan this month's amounts against what they really spent.
 	lastMonth := map[string]budgetLastMonth{}
 	var lastTotalSpent int64 // last period's total spend across budgets (base minor), for the summary graph
+	var lastTotalLimit int64 // last period's total budget (spent + remaining), the honest denominator for it
 	// Pooled leftover: last month's unspent budget (limit − spent, clamped ≥ 0)
 	// summed across budgets that DON'T carry their own remaining, when the user opts
 	// to roll leftover into next month's assignable pool (zero-based view).
@@ -473,6 +477,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
 				lastTotalSpent += prev.Spent.Amount
+				lastTotalLimit += prev.Spent.Amount + prev.Remaining.Amount
 				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
 				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
 				if limitMinor > 0 {
@@ -642,6 +647,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		LastMonth:      lastMonth,
 		LastMonthMode:  showLastMonth,
 		LastTotalSpent: lastTotalSpent,
+		LastTotalLimit: lastTotalLimit,
 		Committed:      committedMap,
 		AgeMoney:       ageMoney,
 	}
