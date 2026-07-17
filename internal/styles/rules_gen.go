@@ -12090,13 +12090,16 @@ func registerGenerated() {
 	)
 	// The narrow (icon-only) mobile rail has no room for a labeled row, and a
 	// stripped icon-only promo reads as mystery chrome — hide it outright.
-	ruleMedia("(max-width: 768px)", ".cloud-mention",
-		display("none"),
+	// Two-class selector: the row's tw.Flex utility (whose sheet loads AFTER the
+	// design system and wins ties by order) would otherwise out-cascade a bare
+	// .cloud-mention display:none.
+	ruleMedia("(max-width: 768px)", "aside.rail .cloud-mention",
+		display("none !important"),
 	)
 	// At very short desktop heights the rail's nav needs every row; the Cloud
 	// mention is the first thing to yield.
-	ruleMedia("(max-height: 560px)", ".cloud-mention",
-		display("none"),
+	ruleMedia("(max-height: 560px)", "aside.rail .cloud-mention",
+		display("none !important"),
 	)
 	rule(".upsheet-backdrop",
 		position("fixed"),
