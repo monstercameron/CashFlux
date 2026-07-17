@@ -111,7 +111,7 @@ const autoBtnHidden = await page.locator('[data-testid="budgets-autobudget"]').i
 check("#70: bulk tools hidden until Automate opens", !autoBtnHidden);
 await automate.click();
 await page.waitForTimeout(400);
-for (const id of ["budgets-last-month", "budgets-autobudget", "budgets-sweep-config", "budgets-adjust-all"]) {
+for (const id of ["budgets-last-month", "budgets-autobudget", "budgets-month-close", "budgets-sweep-config", "budgets-adjust-all"]) {
   const vis = await page.locator(`[data-testid="${id}"]`).isVisible().catch(() => false);
   check(`#70: Automate menu holds ${id}`, vis);
 }
@@ -161,6 +161,44 @@ if (filtered) {
 } else {
   console.log("SKIP: #70 attention-count filter — no over/near counts in this dataset/period");
 }
+
+// ───────── #64: guided month-close flow (still on the past month from above) ─────────
+const offer = page.locator('[data-testid="budgets-monthclose-offer"]');
+check("#64: closed month offers the guided close flow", (await offer.count()) > 0);
+if (await offer.count()) {
+  await offer.click();
+  await page.waitForTimeout(800);
+  const body64 = await page.locator('[data-testid="monthclose-body"]').isVisible().catch(() => false);
+  check("#64: month-close modal opens", body64);
+  for (const id of ["monthclose-overspends", "monthclose-leftovers", "monthclose-assign", "monthclose-income", "monthclose-copy"]) {
+    check(`#64: section ${id} present`, (await page.locator(`[data-testid="${id}"]`).count()) === 1);
+  }
+  const deltaTxt = await page.locator('[data-testid="monthclose-income-delta"]').innerText().catch(() => "");
+  check("#64: income section distinguishes expected vs actual", /more|less|on plan/i.test(deltaTxt), deltaTxt);
+  const rollNote = await page.locator('[data-testid="monthclose-rollover-note"]').innerText().catch(() => "");
+  if (rollNote) check("#64: rollover behavior explained before the month changes", /rollover is (ON|OFF)/i.test(rollNote), rollNote.slice(0, 60));
+  else console.log("SKIP: #64 rollover note — no leftovers in this period");
+  // Over-assignment resolutions are dataset-dependent — assert whichever state shows.
+  const overAssigned = (await page.locator('[data-testid="monthclose-resolve-defer"]').count()) > 0;
+  if (overAssigned) {
+    for (const id of ["monthclose-resolve-income", "monthclose-resolve-defer"]) {
+      check(`#64: resolution choice ${id} offered`, (await page.locator(`[data-testid="${id}"]`).count()) === 1);
+    }
+    await page.locator('[data-testid="monthclose-resolve-defer"]').click();
+    await page.waitForTimeout(400);
+    check("#64: leave-unresolved collapses to an honest note", (await page.locator('[data-testid="monthclose-deferred"]').count()) === 1);
+  } else {
+    const fits = await page.locator('[data-testid="monthclose-assign"]').innerText().catch(() => "");
+    check("#64: plan-fits state says so plainly", /fits/i.test(fits), fits.slice(0, 60));
+  }
+  await page.locator('[data-testid="monthclose-done"]').click();
+  await page.waitForTimeout(500);
+  check("#64: Done closes the flow", (await page.locator('[data-testid="monthclose-body"]').count()) === 0);
+}
+// The plan cell distinguishes expected vs actually-received income.
+const incActual = await page.locator('[data-testid="budgets-income-actual"]').innerText().catch(() => "");
+if (incActual) check("#64: assign banner shows actual vs expected income", /Received/i.test(incActual), incActual.slice(0, 70));
+else console.log("SKIP: #64 income-actual line — no income basis in this method/dataset");
 
 // (5) Follow-ups collapsed by default (only when a budget has linked to-dos).
 const fuToggle = page.locator('[data-testid^="budget-todos-toggle-"]').first();

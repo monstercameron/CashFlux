@@ -1,3 +1,22 @@
+## 2026-07-17 — #64: month-close becomes a walk, not a scavenger hunt (lane 5)
+
+The strategy doc's ask was composition, not invention: cover-all, rollover, boosts, and sweep all
+existed — what was missing was one place that walks them in order when a month ends. The new
+`internal/monthclose` package is deliberately thin (Build splits statuses into overspends/
+leftovers and pairs expected vs actual income; Resolutions returns only the over-assignment
+choices that actually apply; CopyBoosts computes the top-up carry plan) so all money semantics
+stay in the primitives it points at. Two design decisions worth recording: (1) "Leave
+unresolved" is a real choice with a real consequence — it collapses the section to an honest
+"still claims $X more" note rather than pretending resolution happened; (2) CopyBoosts takes a
+per-budget periodStarts resolver because PeriodBoosts are keyed by each budget's OWN period
+start — a single month key would silently no-op for weekly and quarterly budgets.
+
+The modal follows the sweep-config pattern (atom + surface-root FlipPanel + body component
+owning all hooks), and the copy rows are per-row components so no On* registers in a loop. The
+exception state is a comma-joined string atom — maps don't belong in UseState values. Section
+chrome is inline-styled on purpose: a new styles-registry file would entangle a shared file
+under six concurrent lanes for five containers. 36/36 lane assertions green, 0 page errors.
+
 ## 2026-07-17 — #76: six defaults against the 215-button dashboard (lane 2)
 
 The interesting engineering was in the edit-layout gate. The obvious implementation — render the

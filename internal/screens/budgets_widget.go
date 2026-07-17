@@ -104,6 +104,7 @@ func Budgets() ui.Node {
 		),
 		budgetsSweepConfigModal(),
 		budgetsCoverAllModal(),
+		budgetsMonthCloseModal(),
 		flexAssignSheet(),
 	)
 }

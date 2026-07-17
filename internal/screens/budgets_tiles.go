@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -76,7 +77,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
 	// closed month reads as a live figure that will still move. Range is half-open,
 	// so the window is historical exactly when its end is not after now.
-	_, wEnd := vw.Range()
+	wStart, wEnd := vw.Range()
 	hist := !time.Now().Before(wEnd)
 	// A discoverable button that opens the "Income to budget with" modal (the income-
 	// source picker + rules) — present in every method, so simple/envelope users can set
@@ -227,6 +228,23 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
 		)
 	}
+	// #64: the plan figure is EXPECTED income — say what actually arrived beside it,
+	// so the basis never masquerades as money already received.
+	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
+		actualIncome := int64(0)
+		if lines, err := reports.IncomeByCategory(app.Transactions(), wStart, wEnd, currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}); err == nil {
+			for _, ln := range lines {
+				actualIncome += ln.Amount
+			}
+		}
+		key := "budgets.incomeActualSoFar"
+		if hist {
+			key = "budgets.incomeActualEnded"
+		}
+		planCell = Fragment(planCell,
+			P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
+				uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base)))))
+	}
 	strip := Div(css.Class("budget-status-strip"), Attr("data-testid", "budgets-status-strip"),
 		Div(css.Class("budget-strip-cell is-plan"), planCell),
 		Div(css.Class("budget-strip-cell is-spend"),
@@ -263,7 +281,14 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		Hist: hist, FollowUps: followUps,
 	})
 
-	body := Div(strip, rail, rangeHint)
+	// #64: offer the guided close flow when the period is in its last five days or
+	// already ended — the moment the checklist is actually useful.
+	var closeOffer ui.Node = Fragment()
+	if daysLeft := int(time.Until(wEnd).Hours() / 24); hist || (daysLeft >= 0 && daysLeft <= 5) {
+		closeOffer = Div(css.Class(tw.Mt2), ui.CreateElement(monthCloseOfferChip, struct{}{}))
+	}
+
+	body := Div(strip, rail, closeOffer, rangeHint)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -1448,6 +1473,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	// three clear choices — density, Automate, Add — instead of six ghost buttons.
 	sweepAtom := uistate.UseSweepConfigOpen()
 	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
+	// #64: the guided month-close flow, reachable any time from the Automate menu.
+	mcAtom := uistate.UseMonthCloseOpen()
+	openMonthClose := ui.UseEvent(Prevent(func() { mcAtom.Set(true) }))
 	autoMenuOpen := ui.UseState(false)
 	toggleAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(!autoMenuOpen.Get()) }))
 	closeAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(false) }))
@@ -1524,6 +1552,11 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 						Attr("data-testid", "budgets-autobudget"),
 						Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
 						uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
+					// #64: the guided month-close checklist.
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "budgets-month-close"),
+						Title(uistate.T("monthclose.offerTitle")), OnClick(openMonthClose),
+						uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("monthclose.offer"))),
 					// XC6: the leftover-sweep config modal.
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "budgets-sweep-config"),

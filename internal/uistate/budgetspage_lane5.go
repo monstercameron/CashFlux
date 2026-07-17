@@ -19,6 +19,11 @@ const (
 // dismissible "Showing only…" chip. Ephemeral — a drill-down, not a preference.
 func UseBudgetAttention() state.Atom[string] { return state.UseAtom("budgets:attention", "") }
 
+// UseMonthCloseOpen returns the shared atom controlling whether the guided
+// "Close out the month" flip modal is open (#64). The budgets Automate menu and
+// the near-month-end offer chip set it; the surface-root modal host renders it.
+func UseMonthCloseOpen() state.Atom[bool] { return state.UseAtom("budgets:monthCloseOpen", false) }
+
 // UseBudgetDensitySeeded returns the /budgets density atom like UseBudgetDensity,
 // but when the user has never made an explicit choice it defaults to the compact
 // list for households with many budgets (UX-05: past six cards the full-card view
