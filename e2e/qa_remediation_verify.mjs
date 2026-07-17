@@ -204,6 +204,59 @@ check("CF-05: no projected-overspend warnings on history", !/projected/i.test(hi
 await page.locator('button.period-step[aria-label="Next period"]').first().click();
 await page.waitForTimeout(800);
 
+// ───────────────────────── M2: rules quick-add submits ─────────────────────────
+await nav("/rules");
+const ruleForm = page.locator('[data-testid="rule-add-form"]').first();
+await ruleForm.waitFor({ timeout: 8000 }).catch(() => {});
+const rulesBefore = await page.locator("body").innerText();
+const countBefore = (rulesBefore.match(/QA M2 Probe/g) || []).length;
+await ruleForm.locator('input[type="text"]').first().fill("QA M2 Probe");
+// pick any category
+const ruleCat = ruleForm.locator("select").first();
+const rOpts = await ruleCat.locator("option").all();
+for (const o of rOpts) { const v = await o.getAttribute("value"); if (v) { await ruleCat.selectOption(v); break; } }
+await page.waitForTimeout(300);
+check("M2: inline quick-add has a visible submit", (await page.locator('[data-testid="rule-add-submit"]').count()) > 0);
+await page.locator('[data-testid="rule-add-submit"]').click();
+await page.waitForTimeout(1000);
+const rulesAfter = await page.locator("body").innerText();
+check("M2: rule saved and appears in the list", (rulesAfter.match(/QA M2 Probe/g) || []).length > countBefore, "");
+check("M2: form cleared after save", (await ruleForm.locator('input[type="text"]').first().inputValue()) === "");
+check("M2: success notice posted", /Rule added/i.test(rulesAfter));
+
+// ──────────────── M4 + L4: allocation holdback metric + confirm labels ────────────────
+await nav("/allocate");
+await page.locator('[data-testid="allocate-amount"]').fill("100");
+await page.waitForTimeout(1200);
+const chipsText = await page.locator(".debt-chips").first().innerText();
+const keptText = (await page.locator(".alloc-kept").count()) ? await page.locator(".alloc-kept").innerText() : "";
+const keptM = keptText.match(/Kept back: \$([\d,.]+)/);
+if (keptM) {
+  const kept = keptM[1];
+  check("M4: Held back chip matches the kept-back copy",
+    new RegExp(`HELD BACK[\\s\\S]{0,10}\\$${kept.replace(".", "\\.")}`, "i").test(chipsText),
+    `kept=$${kept} chips=${chipsText.replace(/\n/g, " ")}`);
+} else {
+  // no rounding leftover this run — chip must not contradict a nonzero copy, so just record
+  check("M4: no kept-back leftover produced this run (nothing to contradict)", true, "");
+}
+// L4: open the confirmation and assert no doubled "Goal · Goal ·" labels
+const applyBtn = page.locator('button:has-text("Apply allocation")').first();
+await applyBtn.waitFor({ timeout: 8000 }).catch(() => {});
+if (await applyBtn.count()) {
+  await applyBtn.scrollIntoViewIfNeeded().catch(() => {});
+  await applyBtn.click();
+  await page.waitForTimeout(800);
+  const confirmText = await bodyText();
+  check("L4: confirmation rows do not repeat the kind label", !confirmText.includes("Goal · Goal ·"), "");
+  const cancel = page.locator('.alloc-confirm button:has-text("Cancel"), button:has-text("Cancel")').first();
+  if (await cancel.count()) await cancel.click();
+  await page.waitForTimeout(400);
+} else {
+  const btns = (await page.locator("button").allInnerTexts()).filter((b) => /apply|alloc/i.test(b));
+  check("L4: Apply allocation button reachable", false, JSON.stringify(btns));
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

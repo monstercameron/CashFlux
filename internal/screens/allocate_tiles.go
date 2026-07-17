@@ -101,7 +101,12 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 
 	figs := Div(css.Class("debt-chips"),
 		allocStatChip(uistate.T("allocate.figAllocatable"), fmtMoney(money.New(v.Allocatable(), base)), " "+tw.ColorClass("text-up")),
-		allocStatChip(uistate.T("allocate.figReserve"), fmtMoney(money.New(v.ReserveMinor, base)), ""),
+		// QA M4: the chip must state the money ACTUALLY held back from the plan —
+		// v.Remainder (reserve buffer + caps/rounding leftovers), the same figure
+		// the "Kept back" sentence and the destination totals reconcile against.
+		// Showing only the configured reserve read "Held back $0.00" beside
+		// "Kept back: $0.10".
+		allocStatChip(uistate.T("allocate.figReserve"), fmtMoney(money.New(v.Remainder, base)), ""),
 		allocStatChip(uistate.T("allocate.figDestinations"), fmt.Sprintf("%d", len(v.Ranked)), ""),
 	)
 

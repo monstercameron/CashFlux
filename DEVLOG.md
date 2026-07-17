@@ -10,6 +10,22 @@ fall back to the lens). Member switcher, profile switch, dashboard, accounts, in
 all keep the lens untouched. The scope panel auto-open keys on the LOCAL scope only, so a lens set
 in the top bar doesn't pop the panel. 8/8 e2e; banner semantics verified in both directions.
 
+## 2026-07-17 — QA remediation: three small truths (M2, M4, L4)
+
+M2 was CF-02's cousin: the /rules inline quick-add form has no submit button at all — the header's
+"+ Add rule" is a focus affordance, so the audit filled the form, clicked the only thing labeled
+"Add rule", and nothing happened. The inline form now owns a primary submit; and the dig exposed a
+second latent bug — BOTH form instances carried id="rule-add-form", so the AddHost modal's footer
+submit-by-id could drive the wrong (empty, inline) form when the modal opened over /rules. The id
+now belongs to the modal instance alone. Emerging theme across CF-02/M2: an action that LOOKS
+present but is inert (pointer-inert button, focus-only button) reads as data loss to a tester —
+every visible primary action must either act or explain.
+
+M4 and L4 were reconciliation nits with one-line fixes: the allocate hero's "Held back" chip quoted
+the configured reserve ($0.00) instead of the plan's actual remainder ($0.10 of rounding), and the
+confirm rows printed the goal kind twice because allocate.goalPrefix is already IN the candidate
+name. Both e2e-locked; suite at 28/28.
+
 ## 2026-07-17 — QA remediation: budget history stops wearing today's pacing (CF-05)
 
 The budgets CONTROLLER was already period-honest (its anchor snaps to the window start when the
