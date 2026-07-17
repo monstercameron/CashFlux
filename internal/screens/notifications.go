@@ -417,7 +417,8 @@ func notifyRow(props notifyRowProps) ui.Node {
 
 	var unreadDot ui.Node = Fragment()
 	if !it.Read {
-		unreadDot = Span(css.Class("notif-dot"), Attr("aria-label", uistate.T("notifications.unread")))
+		// role="img" so the aria-label is permitted on the span (axe, #67).
+		unreadDot = Span(css.Class("notif-dot"), Attr("role", "img"), Attr("aria-label", uistate.T("notifications.unread")))
 	}
 
 	// The badge + body is the navigable region: clicking it jumps to the alerting

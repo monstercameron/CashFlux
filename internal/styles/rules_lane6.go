@@ -205,4 +205,79 @@ func registerLane6Fixes() {
 		color("color-mix(in srgb, #7c83ff 65%, var(--text))"),
 		background("color-mix(in srgb, #7c83ff 10%, transparent)"),
 	)
+
+	// ── #67: contrast repairs the token fix can't reach ────────────────────────
+	// The smart-peek badge's red (#d8716f) lands ~3.45:1 on its own translucent
+	// red fill; pull the glyph color toward the text so it clears AA while the
+	// badge keeps its red identity from the fill + border.
+	// Double-class selector: the badge's tone arrives via an atomic color class
+	// (.text-down + generated class) that outlasts a bare .smart-peek-badge rule.
+	rule(".smart-peek-badge.text-down, span.smart-peek-badge",
+		color("color-mix(in srgb, #d8716f 45%, var(--text))"),
+	)
+	ruleMedia("(prefers-color-scheme: light)", "[data-theme=\"light\"] .smart-peek-badge",
+		color("color-mix(in srgb, #d8716f 55%, #000)"),
+	)
+	rule("[data-theme=\"light\"] .smart-peek-badge",
+		color("color-mix(in srgb, #d8716f 55%, #000)"),
+	)
+	// The raw accent (#2e8b57) as SMALL TEXT is ~4.4:1 on dark surfaces — just
+	// under AA. These text usages switch to the theme-derived --accent-ink
+	// (accent pulled toward the text color until it passes); fills keep --accent.
+	rule(".th-sort",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	// Match the original sorted-column selector's specificity so the ink wins.
+	rule(".txn-table th[aria-sort=\"ascending\"] .th-sort, .txn-table th[aria-sort=\"descending\"] .th-sort",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	// The todo List/Board view switch's active pill: accent text on accent tint.
+	rule(".tvw-btn.is-active",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	rule(".txn-followup-chip span",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	rule(".nhx-toggle-btn[aria-selected=\"true\"]",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	rule(".notif-sev-tag.sev-info",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	rule(".btn-link",
+		color("var(--accent-ink, var(--accent))"),
+	)
+	// Active goals/board tab: #04140c on the mid-green accent was 4.4:1, and
+	// white on the raw accent is 4.27:1 — the mid-tone fails against both. A
+	// slightly darkened fill with white text clears AA in both themes.
+	rule(".goals-tab.is-active",
+		background("color-mix(in srgb, var(--accent) 78%, #000)"),
+		color("#ffffff"),
+	)
+	rule("[data-theme=\"light\"] .goals-tab.is-active",
+		background("color-mix(in srgb, var(--accent) 78%, #000)"),
+		color("#ffffff"),
+	)
+	// White 12.5px text on the raw danger red (#d8716f) was 3.27:1; darken the
+	// fill, keep white text (≈5.9:1).
+	rule(".budget-rail-resolve",
+		background("color-mix(in srgb, var(--danger, #d8716f) 62%, #000)"),
+	)
+	// .set-label hard-coded #6c6c72 (3.8:1); use the AA-derived faint token.
+	rule(".set-label",
+		color("var(--text-faint)"),
+	)
+	// The goal card's inline target button renders OVER the loader's accent
+	// progress fill once coverage reaches it — gray text on green (1.86:1). A
+	// near-opaque card-toned backdrop restores a known background.
+	rule(".goal-card-loader .budget-limit-btn",
+		background("color-mix(in srgb, var(--bg-card) 88%, transparent)"),
+		borderRadius("6px"),
+		padding("0 0.3rem"),
+	)
+	// Annual-report sparkline captions render over the chart's gradient wash;
+	// lift them to the dim tone so they clear AA over the lightest band.
+	rule(".rpta-fig-spark-cap, .rpta-fig-spark-cap .rpta-src",
+		color("var(--text-dim)"),
+	)
 }

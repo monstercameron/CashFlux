@@ -55,10 +55,14 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 	if fillW < 0 {
 		fillW = 0
 	}
+	// Progress semantics live on the childless FILL bar, not the wrapper — the
+	// wrapper contains focusable descendants (the smart tooltip), and a labeled
+	// role wrapping interactive children fails axe nested-interactive (#67).
 	body := Div(ClassStr("budget-loader"),
-		Attr("role", "progressbar"), Attr("aria-valuenow", fmt.Sprintf("%d", fillW)),
-		Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.overallProgress")),
-		Div(css.Class("budget-loader-fill"), Attr("style", fmt.Sprintf("width:%d%%", fillW))),
+		Div(css.Class("budget-loader-fill"),
+			Attr("role", "img"),
+			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("goals.overallProgress"), fillW)),
+			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
 		Div(css.Class("budget-loader-figs"),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), uistate.T("goals.savedSoFar")),

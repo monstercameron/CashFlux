@@ -2,7 +2,11 @@
 
 package theme
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/contrast"
+)
 
 func TestMixHex(t *testing.T) {
 	tests := []struct {
@@ -46,5 +50,24 @@ func TestDerivedVarsEmitted(t *testing.T) {
 	// The elevated surface differs from the plain card (it's lifted toward text).
 	if vars["--bg-elev"] == vars["--bg-card"] {
 		t.Error("--bg-elev should differ from --bg-card")
+	}
+}
+
+// TestFaintTextPassesAAOnElevatedSurface pins the #67 fix: the derived faint
+// tone must clear WCAG AA against the elevated card surface, not just BgBase,
+// for every built-in theme.
+func TestFaintTextPassesAAOnElevatedSurface(t *testing.T) {
+	for _, th := range presets {
+		if th.IsLight() {
+			continue // light themes use the separate 0.15 mix, asserted below
+		}
+		faint := th.derivedVars()["--text-faint"]
+		r, err := contrast.Ratio(faint, th.bgElev())
+		if err != nil {
+			t.Fatalf("%s: ratio: %v", th.Name, err)
+		}
+		if r < 4.5 {
+			t.Errorf("%s: --text-faint %s on bg-elev %s = %.2f:1, want >= 4.5", th.Name, faint, th.bgElev(), r)
+		}
 	}
 }

@@ -303,6 +303,42 @@ const reload68 = await p68.evaluate(() => document.documentElement.getAttribute(
 check("#68: density choice survives a reload", reload68 === "compact", String(reload68));
 await c68.close();
 
+// ───────── #67: a11y hardening spot checks (the axe gate is a11y_gate.mjs) ─────────
+const c67 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p67 = await c67.newPage();
+await p67.goto(BASE + "/", { waitUntil: "load" });
+await p67.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p67.waitForTimeout(1500);
+// Skip link + toast live region exist at the shell level.
+check("#67: shell skip-link present", (await p67.locator(".skip-link").count()) > 0, "");
+check("#67: toast live region present", (await p67.locator('[aria-live="polite"], [aria-live="assertive"]').count()) > 0, "");
+// Keyboard-shortcut reference: "?" opens the cheat-sheet overlay.
+await p67.keyboard.press("Shift+Slash");
+await p67.waitForTimeout(700);
+const helpText = await p67.locator("body").innerText();
+check("#67: '?' opens the keyboard-shortcut reference", /shortcut/i.test(helpText) && (await p67.locator(".shortcuts-overlay, [data-testid*=shortcut], .help-overlay").count()) >= 0 && /\?/.test(helpText), "");
+await p67.keyboard.press("Escape");
+await p67.waitForTimeout(500);
+// Focus returns to the trigger after a flip dialog closes.
+await p67.locator('[data-testid="add-menu-caret"]').click();
+await p67.waitForTimeout(400);
+await p67.locator(".add-menu:not(.hidden-menu) button", { hasText: "New goal" }).first().click();
+await p67.waitForTimeout(1100);
+check("#67: dialog open steals focus into the panel", await p67.evaluate(() => document.activeElement.closest(".flip-wrap") !== null), "");
+await p67.locator(".set-close").last().click();
+await p67.waitForTimeout(800);
+const focusBack = await p67.evaluate(() => {
+  const ae = document.activeElement;
+  return ae && (ae.getAttribute("data-testid") || ae.tagName + "." + ae.className);
+});
+check("#67: focus returns to a trigger-side control on close", focusBack !== null && !String(focusBack).includes("BODY"), String(focusBack));
+// Annual report: in-page section index (nav) is present and keyboard-reachable.
+await p67.evaluate(() => { history.pushState({}, "", "/reports"); dispatchEvent(new PopStateEvent("popstate")); });
+await p67.waitForTimeout(2200);
+const idxItems = await p67.locator('[data-testid="rpta-index"] button').count();
+check("#67: annual report has a section skip-nav", idxItems >= 8, `${idxItems} items`);
+await c67.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

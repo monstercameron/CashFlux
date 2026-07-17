@@ -155,11 +155,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	if over {
 		loaderCls += " is-over"
 	}
+	// Progress semantics live on the childless FILL bar as role="img" with the
+	// value in the label (not role="progressbar" on the wrapper): the wrapper
+	// holds focusable figure children, and a labeled role wrapping interactive
+	// descendants fails axe nested-interactive (#67).
 	statGrid := Div(ClassStr(loaderCls),
-		Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(fillW)),
-		Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"),
-		Attr("aria-label", uistate.T("budgets.progressLabel")),
-		Div(ClassStr(fillCls), Attr("style", fmt.Sprintf("width:%d%%", fillW))),
+		Div(ClassStr(fillCls),
+			Attr("role", "img"),
+			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), fillW)),
+			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
 		Div(css.Class("budget-loader-figs"),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
@@ -1747,7 +1751,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
-				Anchor: v.Anchor,
+					Anchor:    v.Anchor,
 					Committed: v.Committed[s.Budget.ID], HasCommitted: func() bool { _, ok := v.Committed[s.Budget.ID]; return ok }(),
 					Compact: compact,
 				})

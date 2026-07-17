@@ -1897,7 +1897,9 @@ func dashTaskRow(props dashTaskRowProps) ui.Node {
 		Button(css.Class("dash-check"), Type("button"), Attr("role", "checkbox"), Attr("aria-checked", boolStr(done)),
 			Attr("aria-label", checkLabel), Attr("title", checkLabel), OnClick(toggle),
 			Text(checkGlyph(done))),
-		Span(ClassStr(dotTone), Attr("title", prio), Attr("aria-label", prio), dotContent),
+		// role="img" lets the aria-label apply — a generic span may not carry one
+		// (axe aria-prohibited-attr, #67).
+		Span(ClassStr(dotTone), Attr("role", "img"), Attr("title", prio), Attr("aria-label", prio), dotContent),
 		Button(ClassStr("dash-task "+titleCls), Type("button"), OnClick(openTodo), t.Title),
 	)
 }

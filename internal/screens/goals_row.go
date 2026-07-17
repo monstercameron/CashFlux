@@ -682,14 +682,21 @@ func GoalRow(props goalRowProps) ui.Node {
 
 	// The card's "loader": a progress bar with a kind-appropriate label + percent
 	// inside it. Built once — both the compact and expanded states render it.
-	loaderNode := Div(css.Class("goal-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(coveragePct)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("goals.progressLabel")),
+	// Progress semantics live on the childless saved-fill bar (role="img" with
+	// the percent in the label): the loader wrapper contains focusable figure
+	// buttons, and a labeled role wrapping interactive children fails axe
+	// nested-interactive (#67).
+	loaderNode := Div(css.Class("goal-card-loader"),
 		// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
 		// saved segment, so the gap between "saved" and "backed" is legible at a glance.
 		// Rendered first → painted under the saved fill (same stacking context, later
 		// DOM node wins), leaving only the pct..coverage slice showing through.
 		If(financial && coveragePct > pct,
 			Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
-		Div(ClassStr("bar-fill "+barClass), Attr("style", barFillStyle(pct))),
+		Div(ClassStr("bar-fill "+barClass),
+			Attr("role", "img"),
+			Attr("aria-label", uistate.T("goals.progressLabel")+": "+strconv.Itoa(coveragePct)+"%"),
+			Attr("style", barFillStyle(pct))),
 		Div(css.Class("goal-card-loader-figs"),
 			mainFig,
 			pctFig,

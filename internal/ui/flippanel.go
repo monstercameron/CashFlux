@@ -232,6 +232,16 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			backdropCb.Release()
 			if !prevFocus.IsNull() && !prevFocus.IsUndefined() {
 				prevFocus.Call("focus")
+				// #67: the trigger may have vanished by close time (e.g. an add-menu
+				// item inside a since-closed popover) — focus() then silently no-ops
+				// and keyboard users land on <body>. Fall back to the main content
+				// landmark so focus resumes at the page, not nowhere.
+				if !doc.Get("activeElement").Equal(prevFocus) {
+					if m := doc.Call("getElementById", "main"); !m.IsNull() && !m.IsUndefined() {
+						m.Call("setAttribute", "tabindex", "-1")
+						m.Call("focus")
+					}
+				}
 			}
 		}
 	}, true)

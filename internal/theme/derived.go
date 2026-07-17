@@ -40,6 +40,38 @@ func mixHex(a, b string, t float64) string {
 // toward the text color — for popovers, hover, and raised chrome.
 func (t Theme) bgElev() string { return mixHex(t.BgCard, t.Text, 0.06) }
 
+// faintText derives the --text-faint tone for dark themes: TextDim pulled toward
+// the background as far as possible while still passing WCAG AA (≥4.6:1, a small
+// margin over 4.5) against the lightest surface it renders on (the elevated
+// card). Starts at the historical 0.28 mix and walks back toward pure TextDim in
+// 0.02 steps; if even TextDim itself fails (a pathological custom theme) it
+// returns TextDim, never something dimmer.
+// accentInk derives the text-safe accent: the accent mixed toward the theme's
+// text color (brighter on dark themes, darker on light) in 0.05 steps until it
+// passes AA (≥4.6:1) against the elevated surface. Falls back to the text color
+// itself if even a full mix can't pass (degenerate custom themes).
+func accentInk(accent, text, bgElev string) string {
+	// 5.2 (not a bare 4.5) so the ink still clears AA on accent-TINTED chips and
+	// selection fills, which sit a step lighter than the elevated surface.
+	for mix := 0.0; mix <= 1.0; mix += 0.05 {
+		c := mixHex(accent, text, mix)
+		if r, err := contrast.Ratio(c, bgElev); err == nil && r >= 5.2 {
+			return c
+		}
+	}
+	return text
+}
+
+func faintText(textDim, bgBase, bgElev string) string {
+	for mix := 0.28; mix >= 0; mix -= 0.02 {
+		c := mixHex(textDim, bgBase, mix)
+		if r, err := contrast.Ratio(c, bgElev); err == nil && r >= 4.6 {
+			return c
+		}
+	}
+	return textDim
+}
+
 // derivedVars are the extra CSS tokens the shell needs that aren't stored Theme
 // fields: an elevated surface (--bg-elev), a fainter text (--text-faint), a dimmed
 // accent (--accent-dim), a semantic warn (--warn), and a --danger alias for Down
@@ -49,11 +81,18 @@ func (t Theme) bgElev() string { return mixHex(t.BgCard, t.Text, 0.06) }
 func (t Theme) derivedVars() map[string]string {
 	m := map[string]string{
 		"--bg-elev": t.bgElev(),
-		// Dark default: mix 0.28 toward the (dark) bg — at 0.40 the faint tone landed
-		// ~3.66:1 on near-black (fails AA); 0.28 keeps it ~4.6:1 while still reading
-		// fainter than --text-dim. Light themes override this below (different math).
-		"--text-faint": mixHex(t.TextDim, t.BgBase, 0.28),
+		// Dark default: the faint tone must pass AA (4.5:1) on the LIGHTEST surface
+		// it sits on — the elevated card (--bg-elev), not just near-black BgBase.
+		// The old fixed 0.28 mix landed ~4.06:1 on elevated cards (#67 axe gate);
+		// faintText walks the mix back until the ratio clears AA with margin.
+		// Light themes override this below (different math).
+		"--text-faint": faintText(t.TextDim, t.BgBase, t.bgElev()),
 		"--accent-dim": mixHex(t.Accent, t.BgBase, 0.45),
+		// --accent-ink: the accent adjusted for use AS TEXT — pulled toward the
+		// theme's text color until it clears AA on the elevated surface. The raw
+		// accent (#2e8b57 by default) lands ~4.4:1 as small text on dark cards
+		// (#67 axe gate); fills/buttons keep using --accent unchanged.
+		"--accent-ink": accentInk(t.Accent, t.Text, t.bgElev()),
 		"--warn":       warnToken,
 		"--danger":     t.Down,
 	}

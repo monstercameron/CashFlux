@@ -58,6 +58,25 @@ func chartD3(props ChartProps) uic.Node {
 		}
 		if fn := js.Global().Get("cashfluxRenderChart"); fn.Type() == js.TypeFunction {
 			fn.Invoke(el, specJSON, props.CurrencySymbol)
+			// #67: the vendored renderer emits an inner svg[role=img] with no
+			// accessible name. The container div above already carries role=img +
+			// aria-label, so hide the inner svg from AT — one named image, not an
+			// anonymous one nested inside it. Stamped now AND on a short delay,
+			// because the renderer may draw asynchronously.
+			hideInnerSVG := func() {
+				if svg := el.Call("querySelector", "svg"); !svg.IsNull() && !svg.IsUndefined() {
+					svg.Call("setAttribute", "aria-hidden", "true")
+					svg.Call("removeAttribute", "role")
+				}
+			}
+			hideInnerSVG()
+			var late js.Func
+			late = js.FuncOf(func(js.Value, []js.Value) any {
+				hideInnerSVG()
+				late.Release()
+				return nil
+			})
+			js.Global().Call("setTimeout", late, 400)
 		}
 		return func() {
 			if !el.IsNull() && !el.IsUndefined() {
