@@ -495,6 +495,17 @@ func Planning() ui.Node {
 				}
 				_ = s2sTone
 				_ = lowDate
+				// Daily allowance: your discretionary "safe to spend" spread across the days
+				// until your next income (paycheck) — the "$X/day until payday" framing comps
+				// lead with. Derived from the same recurring schedule the runway projects.
+				var perDayNode ui.Node = Fragment()
+				if planSafeToSpend > 0 {
+					if nextIn, nerr := runway.DaysToNextInflow(recs, time.Now(), runwayDays, rates); nerr == nil {
+						perDay := planSafeToSpend / int64(nextIn)
+						perDayNode = Div(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "runway-perday"),
+							uistate.T("planning.safeToSpendPerDay", fmtMoney(money.New(perDay, base)), nextIn))
+					}
+				}
 				rwBody = Div(
 					// Safe-to-spend is the runway's headline (its bottom margin matches the grid
 					// gutter so the gap to the secondary figures is uniform); the secondary stats
@@ -502,6 +513,7 @@ func Planning() ui.Node {
 					Div(css.Class("stat plan-runway-hero"),
 						Div(css.Class("stat-label", tw.TextDim), uistate.T("planning.safeToSpend")),
 						Div(ClassStr("stat-value is-hero "+tw.Fold(tw.FontDisplay)+" "+accentFor(money.New(planSafeToSpend, base))), fmtMoney(money.New(planSafeToSpend, base))),
+						perDayNode,
 					),
 					Div(css.Class("stat-grid"),
 						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),

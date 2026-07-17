@@ -123,3 +123,37 @@ func equalInts(a, b []int) bool {
 	}
 	return true
 }
+
+func TestDaysToNextInflow(t *testing.T) {
+	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("finds the first paycheck day", func(t *testing.T) {
+		recs := []domain.Recurring{
+			rec("Rent", -140000, "USD", domain.CadenceMonthly, time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC)),
+			rec("Pay", 300000, "USD", domain.CadenceMonthly, time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC)),
+		}
+		d, err := DaysToNextInflow(recs, from, 45, usd())
+		if err != nil {
+			t.Fatalf("DaysToNextInflow: %v", err)
+		}
+		if d != 15 { // Jul 16 is 15 days after Jul 1
+			t.Errorf("days = %d, want 15", d)
+		}
+	})
+
+	t.Run("no inflow in horizon falls back to the horizon", func(t *testing.T) {
+		recs := []domain.Recurring{rec("Rent", -140000, "USD", domain.CadenceMonthly, time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC))}
+		d, _ := DaysToNextInflow(recs, from, 30, usd())
+		if d != 30 {
+			t.Errorf("days = %d, want 30 (horizon, no inflow)", d)
+		}
+	})
+
+	t.Run("clamps to at least 1", func(t *testing.T) {
+		recs := []domain.Recurring{rec("Pay", 300000, "USD", domain.CadenceMonthly, from)} // inflow today
+		d, _ := DaysToNextInflow(recs, from, 30, usd())
+		if d != 1 {
+			t.Errorf("days = %d, want 1 (inflow today clamps to 1)", d)
+		}
+	})
+}

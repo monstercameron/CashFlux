@@ -7,7 +7,8 @@ package i18n
 // does not touch the shared en.go; mirrors the en_setup.go pattern.
 var planningSurfaceKeys = Catalog{
 	// C141: standalone Safe to spend tile on /planning (matches dashboard terminology).
-	"planning.safeToSpend": "Safe to spend",
+	"planning.safeToSpend":       "Safe to spend",
+	"planning.safeToSpendPerDay": "About %s/day until your next income (in %d days)",
 	// C142: unified label for the affordability card's "available" stat — was "Free to spend".
 	"planning.affordAvailableLabel": "Safe to spend",
 }

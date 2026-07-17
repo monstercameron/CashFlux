@@ -45,4 +45,12 @@ test.describe("gap features", () => {
     await expect(notes).toHaveValue(/competitor/i);
     await expect(notes).toHaveValue(/retention/i);
   });
+
+  test("daily safe-to-spend: the cash runway shows a per-day allowance until next income", async ({ app }) => {
+    await nav(app, "/planning");
+    const perDay = app.getByTestId("runway-perday");
+    await expect(perDay).toBeVisible({ timeout: 15_000 });
+    await expect(perDay).toContainText(/\/day until your next income/i);
+    await expect(perDay).toContainText(/\(in \d+ days\)/i);
+  });
 });

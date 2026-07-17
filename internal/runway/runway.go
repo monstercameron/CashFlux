@@ -73,3 +73,22 @@ func Project(startBal int64, recs []domain.Recurring, from time.Time, days int, 
 	}
 	return cashflow.DailyBalances(startBal, events, days, buffer), nil
 }
+
+// DaysToNextInflow returns the day offset (from `from`) of the first scheduled
+// inflow — a positive recurring event, typically the next paycheck — within `days`,
+// or `days` itself when none is scheduled in the horizon. It is the denominator for
+// a "safe to spend per day until your next income" daily allowance, so it's clamped
+// to a minimum of 1 (an inflow today still spreads over one day, not zero).
+func DaysToNextInflow(recs []domain.Recurring, from time.Time, days int, rates currency.Rates) (int, error) {
+	events, err := Events(recs, from, days, rates)
+	if err != nil {
+		return 0, err
+	}
+	best := days
+	for _, e := range events {
+		if e.Amount > 0 && e.Day < best {
+			best = e.Day
+		}
+	}
+	return max(best, 1), nil
+}
