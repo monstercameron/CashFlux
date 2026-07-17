@@ -213,4 +213,50 @@ func registerNotifySurface() {
 		paddingTop("0.5rem"),
 		borderTop("1px solid var(--border)"),
 	)
+
+	// --- mobile actions (#75) --------------------------------------------------
+	// Under 640px the three icon-only row actions are recognition-dependent, so
+	// the trio swaps for ONE labeled primary (mark read/unread) plus a labeled
+	// overflow menu. Desktop keeps the fast inline icons; only one cluster is
+	// ever visible.
+	rule(".notif-actions-m",
+		display("none"),
+	)
+	rule(".notif-m-primary",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		padding("0.3rem 0.6rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text)"),
+		fontSize("0.78rem"),
+		whiteSpace("nowrap"),
+	)
+	ruleMedia("(max-width: 640px)", ".notif .notif-actions",
+		display("none"),
+	)
+	ruleMedia("(max-width: 640px)", ".notif-actions-m",
+		display("flex"),
+		alignItems("center"),
+		gap("0.35rem"),
+		prop("flex-shrink", "0"),
+	)
+	// Phone cards cap the title at two lines so one verbose alert can't push its
+	// metadata (severity · time) and actions off screen.
+	ruleMedia("(max-width: 640px)", ".notif-title",
+		display("-webkit-box"),
+		prop("-webkit-line-clamp", "2"),
+		prop("line-clamp", "2"),
+		prop("-webkit-box-orient", "vertical"),
+		prop("overflow", "hidden"),
+		// Break at word boundaries, not mid-word ("Transpor tation") — the
+		// two-line clamp handles overflow, so aggressive breaking is unneeded.
+		prop("overflow-wrap", "normal"),
+		prop("word-break", "normal"),
+	)
 }

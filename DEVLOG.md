@@ -1,3 +1,22 @@
+## 2026-07-17 — #75: Notifications polish — the 8.4 page gets its last mile (lane 6)
+
+Three small dents in the deep-dive's strongest page. "Due in 0 days" is the classic
+formatter-honesty bug: the candidate builder always interpolated the day count, so the switch now
+lives at the i18n boundary in notifyrun (0 → "Due today.", 1 → "Due tomorrow.", else the count) —
+generation-side, so the shell bell, the feed, and the history archive all inherit it. Clear all was
+a one-tap destroyer sitting in the same cluster as the filter chips; it now runs through
+ConfirmModalLabeled with the visible count in the message and posts a completion notice (the
+existing one-level dismiss-undo stays for single rows; the modal is the batch guard).
+
+The mobile work is the interesting part: the desktop trio (check/clock/x icon buttons) is fast for
+a pointer but recognition-dependent on a phone. Rather than restyling one cluster both ways, the
+row renders TWO clusters — the desktop trio and a mobile pair (labeled "Mark as read" pill + a ⋯
+menu whose items are words: three snooze horizons, Alert settings → OpenGlobalSettingsAt("alerts"),
+Dismiss) — and CSS picks exactly one per breakpoint. All hooks stay unconditional at the row level,
+so the GWC stable-position rule holds. Titles clamp to two lines under 640px with word-boundary
+wrapping (the first screenshot showed "Transpor tation" — a global overflow-wrap leaking in;
+overridden locally). 14/14 e2e green incl. the confirm-cancel-confirm cycle at 390px.
+
 ## 2026-07-17 — #77: Mark-all-updated learns consent and regret (lane 4)
 
 The one-click bulk stamp on /accounts wrote BalanceAsOf across every stale account with no

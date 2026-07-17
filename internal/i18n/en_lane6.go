@@ -13,6 +13,15 @@ var lane6Keys = Catalog{
 	"subs.guideTitle":    "Cancel %s — step-by-step checklist",
 	"subs.guideAdded":    "Added a cancellation checklist for %s to your to-dos.",
 	"subs.webSearch":     "Web search ↗",
+
+	// #75 — notifications polish: human due-dates, a guarded Clear all, and the
+	// labeled mobile action overflow.
+	"notify.billBodyToday":          "Due today.",
+	"notify.billBodyTomorrow":       "Due tomorrow.",
+	"notifications.clearAllConfirm": "Clear all %d notifications? This removes read, unread, and snoozed alerts.",
+	"notifications.clearedNotice":   "All notifications cleared.",
+	"notifications.moreActions":     "More actions",
+	"notifications.alertSettings":   "Alert settings",
 }
 
 func init() {

@@ -71,7 +71,15 @@ func runNotifyCatchUp() {
 		})...)
 	cands = append(cands, notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), billLeadDays, now,
 		func(name string, days int) (title, body string) {
-			return uistate.T("notify.billTitle", name), uistate.T("notify.billBody", days)
+			switch days {
+			case 0:
+				body = uistate.T("notify.billBodyToday")
+			case 1:
+				body = uistate.T("notify.billBodyTomorrow")
+			default:
+				body = uistate.T("notify.billBody", days)
+			}
+			return uistate.T("notify.billTitle", name), body
 		})...)
 	cands = append(cands, notifyfeed.BudgetCandidates("default-budget", currentBudgetStatuses(app, now), now,
 		func(name string, over bool) (title, body string) {

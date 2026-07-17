@@ -54,6 +54,55 @@ body = await bodyText();
 const recurM = body.match(/(\d+) recurring charges/);
 check("#49: annual report recurring count is classified (not 25)", !recurM || parseInt(recurM[1], 10) < 25, recurM ? recurM[0] : "(no line)");
 
+// ───────────────────────── #75: notifications polish ─────────────────────────
+await nav("/notifications");
+await page.waitForTimeout(1500);
+body = await bodyText();
+check("#75: no 'Due in 0 days' / 'Due in 1 days' wording", !/Due in [01] days/.test(body), "");
+// Clear all is guarded: click → confirm dialog, cancel keeps the feed
+const rowsBefore = await page.locator(".notif, .notif-group").count();
+check("#75: notification rows present", rowsBefore > 0, `${rowsBefore}`);
+await page.locator('[data-testid="notif-clear-all"]').click();
+await page.waitForTimeout(600);
+const dlgUp = await page.locator("#cf-dialog-cancel").count();
+check("#75: Clear all opens a confirm dialog", dlgUp > 0, "");
+if (dlgUp) {
+  await page.locator("#cf-dialog-cancel").click();
+  await page.waitForTimeout(600);
+  const rowsAfterCancel = await page.locator(".notif, .notif-group").count();
+  check("#75: cancel keeps the feed intact", rowsAfterCancel === rowsBefore, `${rowsAfterCancel}/${rowsBefore}`);
+  await page.locator('[data-testid="notif-clear-all"]').click();
+  await page.waitForTimeout(500);
+  await page.locator("#cf-dialog-confirm").click();
+  await page.waitForTimeout(800);
+  const rowsAfterConfirm = await page.locator(".notif, .notif-group").count();
+  check("#75: confirm clears the feed", rowsAfterConfirm === 0, `${rowsAfterConfirm}`);
+}
+// Mobile: icon trio collapses to labeled primary + labeled overflow menu
+const mctx = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+const mp = await mctx.newPage();
+await mp.goto(BASE + "/", { waitUntil: "load" });
+await mp.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await mp.waitForTimeout(1500);
+await mp.evaluate(() => { history.pushState({}, "", "/notifications"); dispatchEvent(new PopStateEvent("popstate")); });
+await mp.waitForTimeout(1800);
+const firstNotif = mp.locator(".notif").first();
+if (await firstNotif.count()) {
+  const trioVisible = await firstNotif.locator(".notif-actions").isVisible().catch(() => false);
+  check("#75: mobile hides the icon-only trio", !trioVisible, "");
+  const primary = firstNotif.locator(".notif-m-primary");
+  check("#75: mobile primary action is labeled", (await primary.isVisible()) && (await primary.innerText()).trim().length > 2, await primary.innerText().catch(() => ""));
+  const clamp = await firstNotif.locator(".notif-title").evaluate((el) => getComputedStyle(el).webkitLineClamp);
+  check("#75: mobile title clamps to two lines", clamp === "2", clamp);
+  await firstNotif.locator('[data-testid^="notif-more-"]').click();
+  await mp.waitForTimeout(500);
+  const menuItems = await firstNotif.locator('.add-menu:not(.hidden-menu) [role="menuitem"]').allInnerTexts();
+  check("#75: overflow menu has labeled actions", menuItems.length >= 4 && menuItems.every((t) => t.trim().length > 2), menuItems.join(" / "));
+} else {
+  check("#75: mobile notification rows present", false);
+}
+await mctx.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

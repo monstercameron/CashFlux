@@ -115,9 +115,19 @@ func notifSummaryWidget(props notifProps) ui.Node {
 		}))
 	}
 
+	// Clear all is destructive and sits beside the (non-destructive) filter chips,
+	// so it confirms first (#75) — one accidental tap shouldn't wipe the triage log.
 	clearAll := ui.UseEvent(Prevent(func() {
-		feedAtom.Set(nil)
-		uistate.PersistNotifyFeed(nil)
+		n := len(uistate.VisibleFeed(feedAtom.Get(), time.Now().Unix()))
+		uistate.ConfirmModalLabeled(uistate.T("notifications.clearAllConfirm", n),
+			uistate.T("notifications.clearAll"), true, func(ok bool) {
+				if !ok {
+					return
+				}
+				feedAtom.Set(nil)
+				uistate.PersistNotifyFeed(nil)
+				uistate.PostNotice(uistate.T("notifications.clearedNotice"), false)
+			})
 	}))
 
 	var catchUp ui.Node = Fragment()

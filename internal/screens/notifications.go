@@ -377,6 +377,36 @@ func notifyRow(props notifyRowProps) ui.Node {
 	if !snoozeOpen.Get() {
 		snoozeHidden = " hidden-menu"
 	}
+	// Mobile cluster (#75): three icon-only glyphs per row are recognition-
+	// dependent on a phone, so under 640px the trio collapses to ONE labeled
+	// primary (mark read/unread) plus a labeled overflow menu (snooze horizons,
+	// alert settings, dismiss). Hooks are unconditional — CSS decides which
+	// cluster shows.
+	moreOpen := ui.UseState(false)
+	moreID := ui.UseId()
+	toggleMore := ui.UseEvent(Prevent(func() { moreOpen.Set(!moreOpen.Get()) }))
+	closeMore := ui.UseEvent(Prevent(func() { moreOpen.Set(false) }))
+	uiw.DismissPopover(moreOpen.Get(), moreID, func() { moreOpen.Set(false) })
+	uiw.AnchorPopover(moreOpen.Get(), moreID)
+	onReadM := ui.UseEvent(func() {
+		if props.OnRead != nil {
+			props.OnRead()
+		}
+	})
+	mSnooze1 := ui.UseEvent(Prevent(func() { moreOpen.Set(false); snoozeFor(1) }))
+	mSnooze7 := ui.UseEvent(Prevent(func() { moreOpen.Set(false); snoozeFor(7) }))
+	mSnooze30 := ui.UseEvent(Prevent(func() { moreOpen.Set(false); snoozeFor(30) }))
+	mDismiss := ui.UseEvent(Prevent(func() {
+		moreOpen.Set(false)
+		if props.OnDismiss != nil {
+			props.OnDismiss()
+		}
+	}))
+	mSettings := ui.UseEvent(Prevent(func() { moreOpen.Set(false); uistate.OpenGlobalSettingsAt("alerts") }))
+	moreHidden := ""
+	if !moreOpen.Get() {
+		moreHidden = " hidden-menu"
+	}
 
 	cardCls := "notif " + notifySeverityClass(sev)
 	if it.Read {
@@ -447,6 +477,30 @@ func notifyRow(props notifyRowProps) ui.Node {
 			),
 			Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"), Attr("data-testid", "notif-dismiss-"+it.ID),
 				Attr("aria-label", uistate.T("notifications.dismiss")), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		),
+		// Mobile-only actions (#75): a labeled primary + a labeled overflow menu.
+		Div(css.Class("notif-actions-m"),
+			Button(css.Class("notif-m-primary"), Type("button"), Attr("data-testid", "notif-mread-"+it.ID),
+				OnClick(onReadM), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(readLabel)),
+			Div(css.Class("add-wrap"), Attr("id", moreID),
+				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-more-"+it.ID),
+					Attr("aria-label", uistate.T("notifications.moreActions")), Title(uistate.T("notifications.moreActions")),
+					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(moreOpen.Get())),
+					OnClick(toggleMore), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+moreHidden), OnClick(closeMore)),
+				Div(ClassStr("add-menu"+moreHidden), Attr("role", "menu"),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-msnooze1d-"+it.ID), OnClick(mSnooze1), uistate.T("notifications.snooze1d")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-msnooze1w-"+it.ID), OnClick(mSnooze7), uistate.T("notifications.snooze1w")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-msnooze1m-"+it.ID), OnClick(mSnooze30), uistate.T("notifications.snooze1m")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-msettings-"+it.ID), OnClick(mSettings), uistate.T("notifications.alertSettings")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-mdismiss-"+it.ID), OnClick(mDismiss), uistate.T("notifications.dismiss")),
+				),
+			),
 		),
 	)
 }
