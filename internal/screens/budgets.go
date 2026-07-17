@@ -232,7 +232,7 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 		var pickedRem money.Money
 		havePick := false
 		for _, g := range linked {
-			rem, err := goalsvc.Remaining(g)
+			rem, err := goalsvc.CoveredRemaining(g)
 			if err != nil || rem.Amount <= 0 {
 				continue
 			}

@@ -107,8 +107,11 @@ func TestMonthlyNeededContributionProjectsToTargetDate(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("Project ok=%v err=%v", ok, err)
 	}
-	if !projected.Equal(g.TargetDate) {
-		t.Errorf("projected = %s, want target date %s", dateutil.FormatDate(projected), dateutil.FormatDate(g.TargetDate))
+	// Paying exactly the suggested monthly finishes ON OR BEFORE the deadline —
+	// contributions land during the current month first, so the last of the 12
+	// payments happens in December, a month inside the Jan 1 target.
+	if projected.After(g.TargetDate) {
+		t.Errorf("projected = %s lands after the target %s", dateutil.FormatDate(projected), dateutil.FormatDate(g.TargetDate))
 	}
 }
 
@@ -205,19 +208,20 @@ func TestIsComplete(t *testing.T) {
 func TestProject(t *testing.T) {
 	from := mustDate("2026-06-15")
 
-	// remaining 60000, monthly 20000 -> 3 months -> 2026-09-15
+	// remaining 60000, monthly 20000 -> 3 payments starting THIS month
+	// (Jun, Jul, Aug) -> the last lands 2026-08-15.
 	date, ok, err := Project(goal(100000, 40000), usd(20000), from)
 	if err != nil || !ok {
 		t.Fatalf("Project ok=%v err=%v", ok, err)
 	}
-	if dateutil.FormatDate(date) != "2026-09-15" {
-		t.Errorf("projected = %s, want 2026-09-15", dateutil.FormatDate(date))
+	if dateutil.FormatDate(date) != "2026-08-15" {
+		t.Errorf("projected = %s, want 2026-08-15", dateutil.FormatDate(date))
 	}
 
-	// remaining 65000, monthly 20000 -> ceil(3.25) = 4 months
+	// remaining 65000, monthly 20000 -> ceil(3.25) = 4 payments (Jun..Sep)
 	date2, _, _ := Project(goal(100000, 35000), usd(20000), from)
-	if dateutil.FormatDate(date2) != "2026-10-15" {
-		t.Errorf("projected (ceil) = %s, want 2026-10-15", dateutil.FormatDate(date2))
+	if dateutil.FormatDate(date2) != "2026-09-15" {
+		t.Errorf("projected (ceil) = %s, want 2026-09-15", dateutil.FormatDate(date2))
 	}
 
 	// already complete -> from, ok
@@ -246,7 +250,7 @@ func TestEvaluate(t *testing.T) {
 	if s.Percent != 40 || !s.Remaining.Equal(usd(60000)) || s.Complete {
 		t.Errorf("status = %+v", s)
 	}
-	if !s.HasProjection || dateutil.FormatDate(s.Projected) != "2026-09-15" {
+	if !s.HasProjection || dateutil.FormatDate(s.Projected) != "2026-08-15" {
 		t.Errorf("projection = %v has=%v", s.Projected, s.HasProjection)
 	}
 }

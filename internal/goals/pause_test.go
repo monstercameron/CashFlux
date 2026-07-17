@@ -12,8 +12,8 @@ import (
 
 func TestComputePauseCostProjectionShift(t *testing.T) {
 	from := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
-	// $100 target, $0 saved, $50/mo → 2 months → finish 2026-03-15. Pause 2 months
-	// pushes the finish to 2026-05-15.
+	// $100 target, $0 saved, $50/mo → 2 payments starting this month → finish
+	// 2026-02-15. Pausing 2 months pushes the finish to 2026-04-15.
 	g := domain.Goal{
 		TargetAmount:  money.New(10000, "USD"),
 		CurrentAmount: money.New(0, "USD"),
@@ -25,8 +25,8 @@ func TestComputePauseCostProjectionShift(t *testing.T) {
 	if !cost.HasFinish {
 		t.Fatal("want a datable finish")
 	}
-	wantOrig := time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC)
-	wantShift := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	wantOrig := time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)
+	wantShift := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
 	if !cost.Original.Equal(wantOrig) {
 		t.Errorf("Original = %v, want %v", cost.Original, wantOrig)
 	}

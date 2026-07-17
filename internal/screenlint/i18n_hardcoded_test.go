@@ -39,8 +39,8 @@ import (
 // css utility soup, glyphs, urls, and all-lowercase identifiers are ignored.
 var i18nBaselines = map[string]int{
 	// UI layer (wasm screens + app chrome). Baselines set 2026-07-03 (C361);
-	// first conversion tranche brought screens 211→126 and app 17→0.
-	"../screens": 126,
+	// first conversion tranche brought screens 211→126, later sweeps to 115; app 17→0.
+	"../screens": 115,
 	"../app":     0,
 	// Shared component library + UI-adjacent packages (second sweep pass —
 	// Cam: "every page AND component"). widgetregistry's 2 are the preset

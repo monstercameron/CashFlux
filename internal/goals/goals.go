@@ -88,7 +88,11 @@ func RawPercent(goal domain.Goal) int {
 // possible (non-positive contribution). A goal that is already complete projects
 // to `from` with ok=true.
 func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.Time, ok bool, err error) {
-	rem, err := Remaining(goal)
+	// Coverage-aware: earmarked money is already accounted for, so the
+	// projection only has to close the covered-remaining gap. Recomputed from
+	// `from` each call, the projection re-amortizes month to month as saves,
+	// earmarks, and the calendar move.
+	rem, err := CoveredRemaining(goal)
 	if err != nil {
 		return time.Time{}, false, err
 	}
@@ -101,19 +105,29 @@ func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.T
 	if monthly.Amount <= 0 {
 		return time.Time{}, false, nil
 	}
-	months := int((rem.Amount + monthly.Amount - 1) / monthly.Amount) // ceil division
-	return dateutil.AddMonths(from, months), true, nil
+	// Contributions land during the CURRENT month first (the same convention
+	// MonthlyNeeded amortizes with — its month count includes this month), so
+	// the Nth and final payment happens in month N-1. Projecting the first
+	// payment a month out made "pay exactly the suggested monthly" read as one
+	// month late whenever the deadline fell mid-month.
+	payments := int((rem.Amount + monthly.Amount - 1) / monthly.Amount) // ceil division
+	return dateutil.AddMonths(from, payments-1), true, nil
 }
 
 // MonthlyNeeded returns the contribution per remaining month required to reach the
 // goal by its TargetDate, counting whole months from `from` (rounding a partial
 // month up, minimum one). It returns ok=false when the goal has no target date, is
-// already complete, or the target date is not in the future.
+// already covered, or the target date is not in the future.
+//
+// Coverage-aware and month-to-month: the amount amortizes the COVERED remaining
+// gap (target − saved − earmarked) over the months left from `from`, so every
+// earmark, contribution, or passing month re-derives a fresh figure — set aside
+// more this month and next month's ask shrinks.
 func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) {
 	if goal.TargetDate.IsZero() || !goal.TargetDate.After(from) {
 		return money.Money{}, false, nil
 	}
-	rem, err := Remaining(goal)
+	rem, err := CoveredRemaining(goal)
 	if err != nil {
 		return money.Money{}, false, err
 	}
@@ -200,11 +214,12 @@ func OnTrack(goal domain.Goal, monthly money.Money, from time.Time) (onTrack, kn
 	if goal.TargetDate.IsZero() {
 		return false, false, nil
 	}
-	complete, err := IsComplete(goal)
+	// A covered goal (saved + earmarked ≥ target) is on track by definition.
+	covRem, err := CoveredRemaining(goal)
 	if err != nil {
 		return false, false, err
 	}
-	if complete {
+	if covRem.IsZero() {
 		return true, true, nil
 	}
 	// A paused goal is not expected to be contributing, so it is never "behind"
@@ -322,16 +337,14 @@ func MilestoneCrossed(beforePct, afterPct int) int {
 }
 
 // Evaluate returns the full Status for a goal given an assumed monthly
-// contribution and a reference date.
+// contribution and a reference date. Coverage-aware like the rest of the pace
+// layer: remaining and completion count earmarks alongside saved money.
 func Evaluate(goal domain.Goal, monthly money.Money, from time.Time) (Status, error) {
-	rem, err := Remaining(goal)
+	rem, err := CoveredRemaining(goal)
 	if err != nil {
 		return Status{}, err
 	}
-	complete, err := IsComplete(goal)
-	if err != nil {
-		return Status{}, err
-	}
+	complete := rem.IsZero()
 	projected, has, err := Project(goal, monthly, from)
 	if err != nil {
 		return Status{}, err

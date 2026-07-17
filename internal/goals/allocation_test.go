@@ -123,3 +123,57 @@ func TestReviewDue(t *testing.T) {
 		t.Fatal("daily reviewed 2 days ago should be due")
 	}
 }
+
+// The Cam scenario (2026-07-16): $32,000 emergency fund due Dec 31 2026, $0
+// saved, $22,000 + $4,500 earmarked. The pace layer must amortize the COVERED
+// gap ($5,500) over the remaining months — not re-ask for the whole target —
+// and re-derive month to month as earmarks and the calendar move.
+func TestPaceIsCoverageAwareAndReamortizes(t *testing.T) {
+	g := mkGoalWithAlloc("em", 32_000_00, 0, alloc("sccu", 22_000_00), alloc("hysa", 4_500_00))
+	g.TargetDate = mustDate("2026-12-31")
+	from := mustDate("2026-07-16")
+
+	rem, err := CoveredRemaining(g)
+	if err != nil || rem.Amount != 5_500_00 {
+		t.Fatalf("CoveredRemaining = %v (err %v), want $5,500", rem.Amount, err)
+	}
+
+	// Jul 16 → Dec 31: five whole months + the partial final month = 6.
+	per, ok, err := MonthlyNeeded(g, from)
+	if err != nil || !ok {
+		t.Fatalf("MonthlyNeeded ok=%v err=%v", ok, err)
+	}
+	if want := int64((5_500_00 + 5) / 6); per.Amount != want {
+		t.Errorf("MonthlyNeeded = %d, want %d (the $5,500 gap over 6 months, NOT target/6)", per.Amount, want)
+	}
+
+	// At that pace the goal is on track — the trajectory must not read "behind".
+	onTrack, known, err := OnTrack(g, per, from)
+	if err != nil || !known || !onTrack {
+		t.Errorf("OnTrack = %v (known %v, err %v), want on track", onTrack, known, err)
+	}
+
+	// Month-to-month: set aside another $2,500 in August and the September ask
+	// re-amortizes ($3,000 over 4 months), it doesn't stay stale.
+	g.Allocations = append(g.Allocations, alloc("extra", 2_500_00))
+	sep := mustDate("2026-09-10")
+	per2, ok, err := MonthlyNeeded(g, sep)
+	if err != nil || !ok {
+		t.Fatalf("MonthlyNeeded (Sep) ok=%v err=%v", ok, err)
+	}
+	if want := int64((3_000_00 + 3) / 4); per2.Amount != want {
+		t.Errorf("MonthlyNeeded after adjustment = %d, want %d ($3,000 over 4 months)", per2.Amount, want)
+	}
+
+	// Fully covered → complete-paced, nothing more asked.
+	g.Allocations = append(g.Allocations, alloc("final", 3_000_00))
+	if _, ok, _ := MonthlyNeeded(g, sep); ok {
+		t.Error("MonthlyNeeded should report ok=false once coverage meets the target")
+	}
+	if p := ClassifyPace(g, sep); p != PaceComplete {
+		t.Errorf("ClassifyPace = %v, want complete once fully covered", p)
+	}
+	if d, ok, err := Project(g, money.New(0, "USD"), sep); err != nil || !ok || !d.Equal(sep) {
+		t.Errorf("Project on a covered goal = %v/%v/%v, want immediate", d, ok, err)
+	}
+}

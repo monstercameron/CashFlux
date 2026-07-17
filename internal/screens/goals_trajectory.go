@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/goaltrajectory"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -47,8 +48,12 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		)
 	}
 
+	// Coverage-aware: the projection starts from everything already accounted
+	// for — saved PLUS earmarked — so setting money aside moves the trajectory
+	// the moment it happens, month to month, exactly like the card's figures.
+	covered := goalsvc.CoverageMinor(g)
 	res := goaltrajectory.Project(goaltrajectory.Input{
-		CurrentMinor: g.CurrentAmount.Amount,
+		CurrentMinor: covered,
 		TargetMinor:  g.TargetAmount.Amount,
 		MonthlyMinor: monthly.Amount,
 		Start:        now,
@@ -56,10 +61,12 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 	})
 
 	targetStr := fmtMoney(g.TargetAmount)
-	nowStr := fmtMoney(g.CurrentAmount)
+	nowStr := fmtMoney(money.New(covered, g.TargetAmount.Currency))
 	hasTargetDate := !g.TargetDate.IsZero()
 	monthsToGoal := res.MonthsToGoal
-	reached := res.Reachable && monthsToGoal == 0
+	// "Reached" means the target is already covered — not merely reachable
+	// with this month's payment.
+	reached := covered >= g.TargetAmount.Amount
 
 	// The plain-language ETA sentence (wording unchanged) — the precise, screen-reader
 	// friendly summary beneath the rail.
@@ -129,7 +136,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		// No landing point at this pace: show current progress as an amber sliver and the
 		// deadline tick, so the shortfall is visible without a fake projection.
 		tone, pillTone, pillText = "is-behind", "is-behind", uistate.T("goaltrajectory.pillOffPace")
-		fillFrac = clamp01(float64(g.CurrentAmount.Amount) / float64(g.TargetAmount.Amount))
+		fillFrac = clamp01(float64(covered) / float64(g.TargetAmount.Amount))
 		if hasTargetDate {
 			targFrac, horizonMonth = 1, g.TargetDate
 		}

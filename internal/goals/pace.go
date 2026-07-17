@@ -48,7 +48,9 @@ const finalStretchPct = 90
 // 90% always reads as the final stretch even if its deadline is far off, so the
 // most actionable goal surfaces first.
 func ClassifyPace(goal domain.Goal, from time.Time) Pace {
-	if complete, err := IsComplete(goal); err == nil && complete {
+	// Coverage-aware: a goal whose target is fully accounted for (saved +
+	// earmarked) is complete-paced, matching Reached and the card figures.
+	if rem, err := CoveredRemaining(goal); err == nil && rem.IsZero() {
 		return PaceComplete
 	}
 	// A paused goal is a chosen state: it never reads overdue/due-soon, so the
@@ -56,7 +58,7 @@ func ClassifyPace(goal domain.Goal, from time.Time) Pace {
 	if goal.IsPaused(from) {
 		return PacePaused
 	}
-	pct := Percent(goal)
+	pct := CoveragePercent(goal)
 	if goal.TargetDate.IsZero() {
 		// Undated: the only signal is progress.
 		if pct >= finalStretchPct {

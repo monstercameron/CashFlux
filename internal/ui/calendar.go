@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/calendargrid"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v4/ui"
@@ -59,7 +60,7 @@ func Calendar(props CalendarProps) uic.Node {
 		}
 	}))
 
-	prevArgs := []any{css.Class("uical-nav-btn"), Type("button"), Attr("aria-label", "Previous month")}
+	prevArgs := []any{css.Class("uical-nav-btn"), Type("button"), Attr("aria-label", uistate.T("uical.prevMonth"))}
 	if props.TestIDPrefix != "" {
 		prevArgs = append(prevArgs, Attr("data-testid", props.TestIDPrefix+"-prev"))
 	}
@@ -70,7 +71,7 @@ func Calendar(props CalendarProps) uic.Node {
 	}
 	prevArgs = append(prevArgs, Icon(icon.ChevronLeft))
 
-	nextArgs := []any{css.Class("uical-nav-btn"), Type("button"), Attr("aria-label", "Next month")}
+	nextArgs := []any{css.Class("uical-nav-btn"), Type("button"), Attr("aria-label", uistate.T("uical.nextMonth"))}
 	if props.TestIDPrefix != "" {
 		nextArgs = append(nextArgs, Attr("data-testid", props.TestIDPrefix+"-next"))
 	}

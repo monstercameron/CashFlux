@@ -114,7 +114,12 @@ func Project(in Input) Result {
 		bal += in.MonthlyMinor
 		series = append(series, Point{Month: dateutil.AddMonths(in.Start, m), BalanceMinor: bal})
 		if bal >= in.TargetMinor {
-			monthsToGoal = m
+			// Contributions land during the CURRENT month first (the goals
+			// package's MonthlyNeeded convention), so the m-th payment — the
+			// one that crosses the target — happens in month m-1. Counting it
+			// a month later made a goal paying exactly its suggested monthly
+			// read "1 mo behind" whenever the deadline fell mid-month.
+			monthsToGoal = m - 1
 			reachable = true
 			break
 		}

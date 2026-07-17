@@ -24,13 +24,13 @@ func TestSliderPointAt(t *testing.T) {
 	g := sliderGoal()
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	// $500/mo → $12,000 / $500 = 24 months → Jan 2028.
+	// $500/mo → 24 payments starting this month (Jan '26..Dec '27) → Dec 2027.
 	pt := SliderPointAt(g, 50000, from)
 	if !pt.HasFinish {
 		t.Fatal("expected a finish at $500/mo")
 	}
-	if pt.Finish.Year() != 2028 || pt.Finish.Month() != time.January {
-		t.Fatalf("finish = %v, want Jan 2028", pt.Finish)
+	if pt.Finish.Year() != 2027 || pt.Finish.Month() != time.December {
+		t.Fatalf("finish = %v, want Dec 2027", pt.Finish)
 	}
 	if pt.OnTrack {
 		t.Fatal("Jan 2028 is after Aug 2027 target — should not be on track")

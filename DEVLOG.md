@@ -1,3 +1,33 @@
+## 2026-07-16 — Goal pace math: coverage-aware, one month model, re-amortizing
+
+Cam, from his own custom goal (not the seed): $32k emergency fund due Dec 31, $22k + $4.5k earmarked
+— "the math is busted… the monthly should be amortized over the remaining goal months, and I don't
+understand the savings trajectory, it's yellow and showing 1 month behind even though that's not the
+case." Plus mid-turn: "they need to be month to month aware as we make adjustments."
+
+Diagnosis: the card was half-converted to the earmark-first model. "To go $5,500" used coverage, but
+the whole pace layer still ran on `Remaining` = target − SAVED: MonthlyNeeded asked $5,333.34 (=
+32000/6 — the full target re-amortized as if the earmarks didn't exist), and the trajectory projected
+from $0. Fix one: `CoveredRemaining` (target − saved − earmarked, same currency-mismatch contract as
+Remaining, so the edge tests keep their teeth) now feeds MonthlyNeeded / Project / OnTrack / Evaluate
+/ ClassifyPace / the rail / budgets savings / SMART-G6. "Month to month aware" falls out for free:
+every figure re-derives from live coverage and `now`, so an August earmark shrinks September's ask
+(locked in the new table test).
+
+Fix two was the subtler bug his screenshot exposed: "On track" chip NEXT TO an amber "1 mo behind"
+rail. MonthlyNeeded counts the current month as a payment slot (Jul..Dec = 6 payments), but Project
+and goaltrajectory placed the first payment a month out — so paying exactly the suggested monthly
+always projected one month past a mid-month deadline. Unified on pay-this-month (annuity-due): N
+payments finish in month N−1, in both `goals.Project` and `goaltrajectory` (series shape untouched;
+MonthsToGoal/ProjectedDate shift). Five test files re-anchored to the convention with comments; the
+round-trip test now asserts the honest invariant (projected ≤ target) instead of exact equality.
+"Reached" on the rail now means covered ≥ target, not "reachable with this month's payment".
+
+Replicated his goal live end-to-end (create → earmark 22k + 4.5k): Monthly $916.67, chip "Set aside
+$5,500.00 from Joint Checking", rail "On pace · Now $26,500 → $32,000 Dec '26", 0 console errors;
+goals + smoke lanes 15/15. Rode along: locked the i18n ratchet baseline to 115 and localized the two
+calendar aria-labels that were failing `go test ./...` on shared main. v1.0.61, SW v336.
+
 ## 2026-07-16 — Earmarks open to any non-liability account
 
 Cam: "Set aside money modal should allow us to earmark money from any non liability account." The

@@ -616,7 +616,7 @@ func g6MilestoneNudge(in Input) []smart.Insight {
 			continue
 		}
 		if pct >= almostTherePct {
-			rem, err := goals.Remaining(g)
+			rem, err := goals.CoveredRemaining(g)
 			if err != nil {
 				continue
 			}

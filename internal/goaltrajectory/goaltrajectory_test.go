@@ -24,7 +24,7 @@ func TestProject(t *testing.T) {
 			name:            "normal accrual to target",
 			in:              Input{CurrentMinor: 0, TargetMinor: 100_000, MonthlyMinor: 25_000, Start: start},
 			wantLen:         5, // month 0..4 (0, 25k, 50k, 75k, 100k)
-			wantMonths:      4,
+			wantMonths:      3, // 4 payments starting THIS month -> done in month 3
 			wantReachable:   true,
 			wantLastBalance: 100_000,
 		},
@@ -68,15 +68,15 @@ func TestProject(t *testing.T) {
 			name:            "exact-month landing",
 			in:              Input{CurrentMinor: 0, TargetMinor: 1_200, MonthlyMinor: 100, Start: start},
 			wantLen:         13, // month 0..12
-			wantMonths:      12,
+			wantMonths:      11, // 12 payments starting THIS month -> done in month 11
 			wantReachable:   true,
 			wantLastBalance: 1_200,
 		},
 		{
 			name:            "final month overshoots target (kept honest)",
 			in:              Input{CurrentMinor: 0, TargetMinor: 100, MonthlyMinor: 30, Start: start},
-			wantLen:         5, // 0,30,60,90,120 -> reaches at month 4
-			wantMonths:      4,
+			wantLen:         5, // 0,30,60,90,120 series shape
+			wantMonths:      3, // the 4th payment lands during month 3
 			wantReachable:   true,
 			wantLastBalance: 120,
 		},
@@ -152,10 +152,10 @@ func TestProjectTargetDateVsPace(t *testing.T) {
 	// Pace reaches in 4 months regardless of a far-off target date.
 	targetDate := start.AddDate(0, 24, 0)
 	got := Project(Input{CurrentMinor: 0, TargetMinor: 100_000, MonthlyMinor: 25_000, Start: start, TargetDate: targetDate})
-	if !got.Reachable || got.MonthsToGoal != 4 {
-		t.Fatalf("MonthsToGoal = %d reachable=%v, want 4/true (pace-driven)", got.MonthsToGoal, got.Reachable)
+	if !got.Reachable || got.MonthsToGoal != 3 {
+		t.Fatalf("MonthsToGoal = %d reachable=%v, want 3/true (4 payments starting this month, pace-driven)", got.MonthsToGoal, got.Reachable)
 	}
-	wantDate := start.AddDate(0, 4, 0)
+	wantDate := start.AddDate(0, 3, 0)
 	if !got.ProjectedDate.Equal(wantDate) {
 		t.Errorf("ProjectedDate = %v, want pace date %v", got.ProjectedDate, wantDate)
 	}

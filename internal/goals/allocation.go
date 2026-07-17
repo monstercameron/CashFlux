@@ -33,6 +33,24 @@ func CoverageMinor(g domain.Goal) int64 {
 	return g.CurrentAmount.Amount + g.AllocatedMinor()
 }
 
+// CoveredRemaining is the gap between the target and what's already accounted
+// for — saved (CurrentAmount) PLUS earmarked — floored at zero, in the target
+// currency. This is the remaining figure every pace computation amortizes:
+// earmarks are first-class progress, so money merely reserved (not yet moved)
+// still shrinks what's left to find. Like Remaining, a saved/target currency
+// mismatch is an error (allocations are stored in the target currency).
+func CoveredRemaining(g domain.Goal) (money.Money, error) {
+	rem, err := g.TargetAmount.Sub(g.CurrentAmount)
+	if err != nil {
+		return money.Money{}, err
+	}
+	rem.Amount -= g.AllocatedMinor()
+	if rem.Amount < 0 {
+		rem.Amount = 0
+	}
+	return rem, nil
+}
+
 // CoveragePercent is CoverageMinor over the target, clamped to 0..100. A goal with no
 // positive target (non-financial, or unset) reports 0.
 func CoveragePercent(g domain.Goal) int {

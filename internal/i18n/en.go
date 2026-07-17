@@ -2178,6 +2178,8 @@ var english = Catalog{
 	"rpta.goalsArchived":            "%d more already achieved and archived.",
 	"rpta.openGoals":                "Open Goals",
 	"rpta.depTimes":                 "×%d over the year",
+	"uical.prevMonth":               "Previous month",
+	"uical.nextMonth":               "Next month",
 	"rpta.histRest":                 "Everything else (%d categories)",
 	"rpta.histScale":                "Bar length is money spent — full width = %s, the year's biggest category",
 	"rpta.histScaleSame":            "Same scale as the category bars above",
