@@ -20,6 +20,9 @@ type VersionResponse struct {
 	AuthMode            string   `json:"authMode"`
 	BillingEnabled      bool     `json:"billingEnabled"`
 	AuthProviders       []string `json:"authProviders,omitempty"`
+	// PaymentProviders lists the configured, ready-to-use payment providers
+	// ("stripe", "paypal") so the client offers only the buttons that will work.
+	PaymentProviders []string `json:"paymentProviders,omitempty"`
 }
 
 // RootResponse is returned by / for local backend discoverability.
@@ -150,6 +153,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("OPTIONS /v1/billing/status", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/billing/status", handleBillingStatus(cfg, store))
 	mux.HandleFunc("POST /v1/billing/stripe/webhook", handleStripeWebhook(cfg, store))
+	mux.HandleFunc("POST /v1/billing/paypal/webhook", handleProviderWebhook(cfg, store, "paypal"))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -162,6 +166,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			AuthMode:            cfg.AuthMode,
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
+			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
 		})
 	})
 	mux.Handle("GET /v1/auth/{provider}", authLimiter(handleOAuthStart(cfg)))

@@ -41,36 +41,60 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 		if !decodeOptionalJSONBody(w, r, &req, 64<<10) {
 			return
 		}
-		price, plan, ok := stripePriceForInterval(w, cfg, req.Interval)
+		provider, ok := billingProviderFromRequest(w, cfg, r)
 		if !ok {
+			return
+		}
+		// Validate the interval up front so a bad value is a clean 400 (matching the
+		// prior contract) before any allow-check or upstream call.
+		if _, _, err := stripePriceForIntervalValue(cfg, req.Interval); err != nil && provider.Name() == "stripe" && strings.Contains(err.Error(), "interval is invalid") {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "billing interval is invalid")
 			return
 		}
 		if !allowBillingCheckout(w, store, user.ID) {
 			return
 		}
-		requestHash := billingRequestHash("checkout", user.ID, price, plan)
+		requestHash := billingRequestHash("checkout", user.ID, provider.Name(), req.Interval)
 		if replayBillingIdempotency(w, r, store, user.ID, requestHash) {
 			return
 		}
-		form := url.Values{}
-		form.Set("mode", "subscription")
-		form.Set("success_url", strings.TrimSpace(cfg.StripeSuccessURL))
-		form.Set("cancel_url", strings.TrimSpace(cfg.StripeCancelURL))
-		form.Set("client_reference_id", user.ID)
-		form.Set("line_items[0][price]", price)
-		form.Set("line_items[0][quantity]", "1")
-		form.Set("metadata[user_id]", user.ID)
-		form.Set("metadata[plan]", plan)
-		form.Set("subscription_data[metadata][user_id]", user.ID)
-		form.Set("subscription_data[metadata][plan]", plan)
-		form.Set("allow_promotion_codes", "true")
-		sessionURL, err := createStripeSession(r.Context(), cfg, "/checkout/sessions", form)
+		sessionURL, _, err := provider.Checkout(r.Context(), cfg, user.ID, req.Interval)
 		if err != nil {
-			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe checkout session failed")
+			if isBillingConfigError(err) {
+				writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
+			} else {
+				writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "checkout session failed")
+			}
 			return
 		}
 		writeBillingSession(w, r, store, user.ID, requestHash, billingSessionResponse{URL: sessionURL})
 	}
+}
+
+// billingProviderFromRequest resolves the payment provider for a checkout request
+// from the ?provider= query (default stripe) and confirms it is configured.
+func billingProviderFromRequest(w http.ResponseWriter, cfg Config, r *http.Request) (PaymentProvider, bool) {
+	provider, ok := paymentProvider(strings.TrimSpace(r.URL.Query().Get("provider")))
+	if !ok {
+		writeErrorJSON(w, ErrorReasonInvalidArgument, "unknown payment provider")
+		return nil, false
+	}
+	if !provider.Configured(cfg) {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "payment provider is not configured")
+		return nil, false
+	}
+	return provider, true
+}
+
+// isBillingConfigError reports whether a provider error is a caller/config problem
+// (bad interval, unconfigured plan) rather than an upstream/network failure, so
+// the handler can return 4xx-invalid vs 502-upstream appropriately.
+func isBillingConfigError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "interval is invalid") || strings.Contains(msg, "is not configured")
 }
 
 func allowBillingCheckout(w http.ResponseWriter, store *Store, userID string) bool {
@@ -141,19 +165,23 @@ func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		if !ok || strings.TrimSpace(sub.ProviderCustomer) == "" {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe customer is not configured")
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "no active subscription to manage")
 			return
 		}
-		requestHash := billingRequestHash("portal", user.ID, sub.ProviderCustomer, strings.TrimSpace(cfg.StripePortalReturnURL))
+		// The manage/cancel surface belongs to whichever provider owns the existing
+		// subscription, not a request param.
+		provider, ok := paymentProvider(sub.Provider)
+		if !ok || !provider.Configured(cfg) {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "payment provider is not configured")
+			return
+		}
+		requestHash := billingRequestHash("portal", user.ID, provider.Name(), sub.ProviderCustomer)
 		if replayBillingIdempotency(w, r, store, user.ID, requestHash) {
 			return
 		}
-		form := url.Values{}
-		form.Set("customer", sub.ProviderCustomer)
-		form.Set("return_url", strings.TrimSpace(cfg.StripePortalReturnURL))
-		sessionURL, err := createStripeSession(r.Context(), cfg, "/billing_portal/sessions", form)
+		sessionURL, err := provider.Portal(r.Context(), cfg, sub)
 		if err != nil {
-			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe portal session failed")
+			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "portal session failed")
 			return
 		}
 		writeBillingSession(w, r, store, user.ID, requestHash, billingSessionResponse{URL: sessionURL})
@@ -233,10 +261,9 @@ func authorizedBillingRequest(w http.ResponseWriter, r *http.Request, cfg Config
 		writeErrorJSON(w, ErrorReasonFailedPrecondition, "billing is disabled")
 		return AuthUser{}, false
 	}
-	if strings.TrimSpace(cfg.StripeSecretKey) == "" {
-		writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe secret key is not configured")
-		return AuthUser{}, false
-	}
+	// Provider-specific configuration is checked per-provider in
+	// billingProviderFromRequest / at portal time, so this gate no longer requires
+	// Stripe specifically — a PayPal-only deployment is valid.
 	user, ok := httpBearerUser(r, cfg)
 	if !ok {
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
@@ -294,28 +321,6 @@ func handleBillingStatus(cfg Config, store *Store) http.HandlerFunc {
 			resp.TrialEnd = sub.TrialEnd.UTC().Format(time.RFC3339)
 		}
 		writeJSON(w, resp)
-	}
-}
-
-func stripePriceForInterval(w http.ResponseWriter, cfg Config, interval string) (string, string, bool) {
-	switch strings.ToLower(strings.TrimSpace(interval)) {
-	case "", "annual", "yearly":
-		price := strings.TrimSpace(cfg.StripePriceAnnual)
-		if price == "" {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "annual stripe price is not configured")
-			return "", "", false
-		}
-		return price, "personal_annual", true
-	case "monthly":
-		price := strings.TrimSpace(cfg.StripePriceMonthly)
-		if price == "" {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "monthly stripe price is not configured")
-			return "", "", false
-		}
-		return price, "personal_monthly", true
-	default:
-		writeErrorJSON(w, ErrorReasonInvalidArgument, "billing interval is invalid")
-		return "", "", false
 	}
 }
 
@@ -466,6 +471,56 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		if err := applyStripeEvent(store, event, time.Now().UTC(), cfg.Metrics); err != nil {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// handleProviderWebhook is the provider-neutral webhook endpoint (used by PayPal;
+// Stripe keeps its dedicated handler). It authenticates via the provider's own
+// scheme, dedupes replays by event id, and applies the mapped subscription
+// mutation. A verify failure is 403; a mapping/apply failure is 400.
+func handleProviderWebhook(cfg Config, store *Store, providerName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if store == nil {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+			return
+		}
+		if !cfg.Billing {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "billing is disabled")
+			return
+		}
+		provider, ok := paymentProvider(providerName)
+		if !ok || !provider.Configured(cfg) {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "payment provider is not configured")
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeErrorJSON(w, ErrorReasonPayloadTooLarge, "webhook body is too large")
+				return
+			}
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "webhook body is invalid")
+			return
+		}
+		now := time.Now().UTC()
+		ev, err := provider.VerifyWebhook(r.Context(), cfg, r.Header, body, now)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "webhook signature is invalid")
+			return
+		}
+		if isNew, err := store.RecordWebhookEventOnce(provider.Name(), ev.ID, now); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "webhook dedupe failed")
+			return
+		} else if !isNew {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if err := provider.ApplyWebhook(store, ev, now, cfg.Metrics); err != nil {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
 			return
 		}

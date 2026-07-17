@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,5 +128,70 @@ func TestPayPalStatusMapping(t *testing.T) {
 		if got != c.want || ok != c.ok {
 			t.Errorf("%s/%s => %q,%v want %q,%v", c.event, c.resource, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+func TestBillingCheckoutRoutesToPayPal(t *testing.T) {
+	srv := mockPayPal(t, "SUCCESS")
+	defer srv.Close()
+	store := openTestStore(t)
+	now := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "token:paypaluser", Provider: "token", Subject: "x", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	cfg := paypalTestConfig(srv.URL)
+	cfg.AuthMode = "token"
+	cfg.Token = "dev-token"
+	cfg.Billing = true
+	h := NewMux(cfg, store)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout?provider=paypal", strings.NewReader(`{"interval":"annual"}`))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("paypal checkout status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var out struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(strings.NewReader(rr.Body.String())).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.URL != "https://paypal/checkout/I-SUB123" {
+		t.Fatalf("checkout url = %q", out.URL)
+	}
+
+	// An unknown provider is a clean 400.
+	bad := httptest.NewRequest(http.MethodPost, "/v1/billing/checkout?provider=venmo", strings.NewReader(`{"interval":"annual"}`))
+	bad.Header.Set("Authorization", "Bearer dev-token")
+	bad.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, bad)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("unknown provider status = %d", rr.Code)
+	}
+}
+
+func TestVersionAdvertisesPaymentProviders(t *testing.T) {
+	cfg := paypalTestConfig("https://api-m.sandbox.paypal.com")
+	cfg.AuthMode = "token"
+	cfg.Billing = true
+	cfg.StripeSecretKey = "sk_test"
+	h := NewMux(cfg, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/v1/version", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	var out VersionResponse
+	if err := json.NewDecoder(strings.NewReader(rr.Body.String())).Decode(&out); err != nil {
+		t.Fatalf("decode version: %v", err)
+	}
+	has := map[string]bool{}
+	for _, p := range out.PaymentProviders {
+		has[p] = true
+	}
+	if !has["stripe"] || !has["paypal"] {
+		t.Fatalf("payment providers = %v, want stripe+paypal", out.PaymentProviders)
 	}
 }

@@ -24753,3 +24753,14 @@ SUSPENDED/UPDATED) to ours. Defaulted the API base to SANDBOX so a half-configur
 accidentally transact against live PayPal. Tested against a mock PayPal server (token + subscription
 + verify endpoints) plus a pure status-mapping table and an apply-webhook that drives the shared
 entitlement seam active — proving Stripe and PayPal are truly interchangeable below the seam.
+
+Phase 3e: provider-neutral routes + discovery. Checkout resolves the provider from ?provider=
+(default stripe) through the seam; portal uses the SUBSCRIPTION's own provider (you manage where you
+bought). Kept Stripe's dedicated, well-tested webhook handler and added a generic
+handleProviderWebhook for PayPal (verify→403, apply→400, same replay dedupe). Relaxed
+authorizedBillingRequest to drop the hard StripeSecretKey requirement — a PayPal-only deploy is now
+valid; per-provider Configured() gates each call. /v1/version advertises the configured
+paymentProviders so the client shows only working buttons. Deleted the now-dead HTTP
+stripePriceForInterval (the value-returning twin drives the seam). Server side of payments is now
+complete: two live providers, provider-neutral persistence + entitlement, replay-safe webhooks,
+discovery. Client selector next.

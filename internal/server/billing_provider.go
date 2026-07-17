@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -56,6 +57,24 @@ func paymentProviders() map[string]PaymentProvider {
 		"paypal": paypalProvider{},
 	}
 	return providers
+}
+
+// ConfiguredPaymentProviders returns the names of providers with complete
+// configuration (billing only — the caller gates on cfg.Billing separately),
+// sorted, so the client's version discovery offers only working buttons. Only
+// billing-enabled deployments have any.
+func (c Config) ConfiguredPaymentProviders() []string {
+	if !c.Billing {
+		return nil
+	}
+	var names []string
+	for name, p := range paymentProviders() {
+		if p.Configured(c) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // paymentProvider resolves a provider by name, defaulting to Stripe when the name
