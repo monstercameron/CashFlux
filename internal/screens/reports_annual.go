@@ -1912,6 +1912,8 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 				Span(metricsLabel)),
 			// Saved report views: name the current period + scope, reopen in one click.
 			ui.CreateElement(savedReportsControl, struct{}{}),
+			// Report-to-action: the report ends in next steps, not just charts.
+			ui.CreateElement(reportActionsMenu, reportActionsProps{PeriodLabel: from.Format("Jan 2006")}),
 			exportMenu,
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),

@@ -114,6 +114,15 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Report-to-action: four doors, not a framework
+
+The report item ("report-to-action controls for tasks, budgets, goals, and transaction review")
+shipped as one OverflowMenu with four verbs, each reusing an existing surface: PutTask for the
+follow-up, the ReviewInbox atom, plain navigation + SetAddTarget for budgets/goals. Deliberately
+NOT per-finding action chips on every report row yet — that wants the per-row kebab treatment
+and would have tripled the change; the menu proves the loop (report → action) and the rows can
+gain chips later if the menu earns use.
+
 ## 2026-07-17 — Saved report views ride the scope split
 
 This one got easy because of this morning's report-scope work (the other session's parity-scan

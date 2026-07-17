@@ -2,6 +2,25 @@
 // reopen it from the picker, delete it.
 import { test, expect, nav } from "./fixtures.mjs";
 
+test.describe("reports: turn into action", () => {
+  test("the actions menu creates a follow-up task and routes to the review inbox", async ({ app }) => {
+    await nav(app, "/reports");
+    await app.getByTestId("reports-actions-btn").click();
+    await app.getByTestId("reports-action-task").click();
+    await expect(app.locator("body")).toContainText(/Task added: Follow up on the .* report/);
+    // The task exists on /todo.
+    await nav(app, "/todo");
+    await app.getByTestId("todo-search").fill("Follow up on the");
+    await expect(app.locator("#main")).toContainText(/Follow up on the .* report/);
+    // Review inbox action opens the inbox overlay.
+    await nav(app, "/reports");
+    await app.getByTestId("reports-actions-btn").click();
+    await app.getByTestId("reports-action-review").click();
+    await expect(app.locator('[role="dialog"]')).toBeVisible();
+    await app.keyboard.press("Escape");
+  });
+});
+
 test.describe("reports: saved views", () => {
   test("save, apply after changing the period, and delete", async ({ app }) => {
     await nav(app, "/reports");
