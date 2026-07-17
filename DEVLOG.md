@@ -17,6 +17,34 @@ moment the rest of the app earns by staying quiet. Verified on the seed: "Net wo
 "3 days, no spending" both surface. All green: milestones unit tests, wasm build, and the full
 12-test gapfeatures e2e suite (F1–F4 plus the six earlier gap features).
 
+## 2026-07-17 — "00 · Where you stand" ships on /reports (2/2)
+
+The section UI over the vitals core. Design decisions, in the page's own language (verdict spine,
+serif figures, hairline rules — extend, don't fight):
+- **Numbered 00, placed between the index and §01.** Position (stock) before the year's flows —
+  and the existing rpta-01..11 ids/testids never renumber.
+- **Three ruled ledger columns**, each vital = small-caps label / toned serif figure / one-line
+  muted reading that states its own basis ("If income stopped: liquid cash against average
+  spending plus debt minimums"). No bars-on-everything — Cam already rejected that in §05.
+- **Signature device: the target-tick meter.** Only the four bounded vitals with a canonical
+  published target get one (savings 20, DTI 36, utilization 30, coverage 6.0mo); the tick makes
+  distance-to-target spatial. Scales are honest per-metric ranges (40/60/100/8mo), title tooltip
+  carries "value now · target".
+- **Truth-anchored tones** (vitals core): sign alone isn't judgment — a positive discretionary
+  under 10% of income tones WARN ("$151.93 free" must not read as green health); payoff that
+  can't outpace interest reads "Never at minimums" in red with the plain reason.
+- **Applicability-gated rows**: no debts → "Nothing owed — no debts are tracked." italic line;
+  essential-month reading collapses its parenthetical when a component is $0 (the seeded data
+  showed "essential spending ($0.00)" — looked broken, now a plain sentence).
+- CSS gotcha caught by screenshot: `.rpta-vital-v{color:var(--text)}` registered AFTER
+  `.rpta-tone-*` neutralized the tones (same specificity, later order wins) — fixed with
+  compound `.rpta-vital-v.rpta-tone-*` overrides. Verified live via a one-off Playwright shot
+  (serve.mjs on :8123, both themes); figures reconcile column-internally (in − out = kept;
+  kept − minimums = free).
+- **Coverage ratchet note:** the new index entry + testid'd index buttons (`rpta-idx-item`) change
+  the /reports control inventory; the manifest regen is deliberately NOT in this commit (standing
+  protocol under concurrent work) — regenerate in a follow-up pass.
+
 ## 2026-07-17 — Vitals core: the report gets a balance-sheet dimension (1/2)
 
 Cam wants the Reports page to carry derived position metrics (his reference list: annual debt

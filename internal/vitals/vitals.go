@@ -85,7 +85,12 @@ type Inputs struct {
 // Has* flags mark applicability so the UI never renders a fake zero.
 type Result struct {
 	// ── Cash flow capacity ──
-	HasIncome           bool  // any income in the averaged window
+	HasIncome bool // any income in the averaged window
+	// IncomeMonthlyMinor / ExpenseMonthlyMinor / LiquidMinor echo the inputs so a
+	// renderer works from one struct and the figures reconcile by construction.
+	IncomeMonthlyMinor  int64
+	ExpenseMonthlyMinor int64
+	LiquidMinor         int64
 	SurplusMonthlyMinor int64 // income − spending (signed)
 	SurplusAnnualMinor  int64 // surplus × 12 — the year-end picture at this pace
 	SurplusTone         Tone
@@ -167,12 +172,18 @@ const (
 	aprHighPercent = 10.0
 	// defaultFundMonths is the fund horizon used when Inputs.FundMonths is unset.
 	defaultFundMonths = 6
+	// discretionaryWarnPctOfIncome: a positive-but-thin buffer (under this % of
+	// income) reads as a tight month, not a healthy one.
+	discretionaryWarnPctOfIncome = 10
 )
 
 // Evaluate derives every position metric from the inputs. Deterministic.
 func Evaluate(in Inputs) Result {
 	r := Result{
 		HasIncome:             in.IncomeMonthlyMinor > 0,
+		IncomeMonthlyMinor:    in.IncomeMonthlyMinor,
+		ExpenseMonthlyMinor:   in.ExpenseMonthlyMinor,
+		LiquidMinor:           in.LiquidMinor,
 		EssentialMonthlyMinor: in.EssentialMonthlyMinor,
 	}
 
@@ -197,10 +208,7 @@ func Evaluate(in Inputs) Result {
 	var weighted float64
 	var payoffDebts []payoff.Debt
 	for _, d := range in.Debts {
-		bal := d.BalanceMinor
-		if bal < 0 {
-			bal = 0
-		}
+		bal := max(d.BalanceMinor, 0)
 		total += bal
 		if d.IsMortgage {
 			r.HasMortgage = true
@@ -269,8 +277,17 @@ func Evaluate(in Inputs) Result {
 
 	// Discretionary: what the month leaves after spending AND required minimums,
 	// so it reconciles with the surplus row (discretionary = surplus − minimums).
+	// Toned against income, not just sign — a technically-positive sliver is a
+	// tight month, not a healthy one.
 	r.DiscretionaryMinor = r.SurplusMonthlyMinor - minPayments
-	r.DiscretionaryTone = signTone(r.DiscretionaryMinor)
+	switch {
+	case r.DiscretionaryMinor < 0:
+		r.DiscretionaryTone = ToneDown
+	case r.HasIncome && r.DiscretionaryMinor*100 < in.IncomeMonthlyMinor*int64(discretionaryWarnPctOfIncome):
+		r.DiscretionaryTone = ToneWarn
+	default:
+		r.DiscretionaryTone = ToneUp
+	}
 
 	// ── Cushion ──
 	r.FundMonths = in.FundMonths

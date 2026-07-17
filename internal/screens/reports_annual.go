@@ -23,11 +23,13 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/safespend"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/vitals"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/router"
@@ -154,7 +156,7 @@ func Reports() ui.Node {
 	}
 
 	// Net worth: full-household (unscoped) monthly series across the window.
-	nwBounds := append(append([]time.Time{}, bounds...))
+	nwBounds := append([]time.Time{}, bounds...)
 	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, nwBounds, rates)
 	nwNet, _, _, _ := ledger.NetWorth(accounts, txns, rates)
 	var nwChange int64
@@ -240,6 +242,53 @@ func Reports() ui.Node {
 
 	// Goals over the year (household-wide; classify is cheap).
 	gc := goalsvc.CountByState(app.Goals(), app.Tasks(), time.Now(), true)
+
+	// ── 00 · Where you stand: today's position, household-wide like net worth
+	// (a balance sheet has no scope). Trailing 6-month averages feed the
+	// capacity figures; the essential-month basis and debt list feed the rest.
+	// All judgment lives in the pure internal/vitals core.
+	vitFlows := lastN(monthFlows, 6)
+	essBasis := buildSmartInput(app, pr.WeekStartWeekday()).EssentialBasis()
+	toBaseVit := safespend.ToBaseFunc(rates)
+	liquidAll, _ := ledger.LiquidBalance(accounts, txns, rates)
+	var vitDebts []vitals.Debt
+	vitCards := vitals.Cards{}
+	for _, a := range accounts {
+		if a.Archived || a.Class != domain.ClassLiability {
+			continue
+		}
+		bal, err := ledger.Balance(a, txns)
+		if err != nil {
+			continue
+		}
+		mag := absMinor(toBaseVit(bal.Amount, bal.Currency))
+		if a.Type == domain.TypeCreditCard {
+			vitCards.HasCards = true
+			vitCards.BalanceMinor += mag
+			vitCards.LimitMinor += toBaseVit(a.CreditLimit.Amount, a.CreditLimit.Currency)
+		}
+		if mag == 0 && a.MinPayment.Amount == 0 {
+			continue
+		}
+		vitDebts = append(vitDebts, vitals.Debt{
+			Name:            a.Name,
+			BalanceMinor:    mag,
+			AprPercent:      a.InterestRateAPR,
+			MinPaymentMinor: toBaseVit(a.MinPayment.Amount, a.MinPayment.Currency),
+			IsMortgage:      a.Type == domain.TypeMortgage,
+			InPayoff:        a.IncludedInPayoff(),
+		})
+	}
+	vt := vitals.Evaluate(vitals.Inputs{
+		IncomeMonthlyMinor:    reports.AverageMonthlyIncome(vitFlows),
+		ExpenseMonthlyMinor:   reports.AverageMonthlyExpense(vitFlows),
+		MonthsAveraged:        reports.ActiveMonths(vitFlows),
+		EssentialMonthlyMinor: essBasis.EssentialMonthlyMinor(),
+		LiquidMinor:           liquidAll.Amount,
+		Debts:                 vitDebts,
+		Cards:                 vitCards,
+	})
+	standSec := rptaVitalsSection(vt, reports.ActiveMonths(vitFlows), essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor)
 
 	// Uncategorized share of spend (data hygiene).
 	var uncatMinor int64
@@ -1350,6 +1399,7 @@ func Reports() ui.Node {
 		masthead,
 		toolbar,
 		index,
+		standSec,
 		strengths,
 		flowSec,
 		motion,
@@ -1685,13 +1735,14 @@ func rptaIndex() ui.Node {
 		}
 	}
 	item := func(id, num, key, zone string) ui.Node {
-		return Button(css.Class("rpta-idx-item"), Type("button"), OnClick(scrollTo(id)),
+		return Button(css.Class("rpta-idx-item"), Type("button"), Attr("data-testid", "rpta-idx-item"), OnClick(scrollTo(id)),
 			Span(ClassStr("rpta-idx-dot rpta-dot-"+zone)),
 			Span(css.Class("rpta-idx-num"), num),
 			Span(css.Class("rpta-idx-label"), uistate.T(key)),
 		)
 	}
 	return Nav(css.Class("rpta-index"), Attr("data-testid", "rpta-index"), Attr("aria-label", uistate.T("rpta.indexLabel")),
+		item("rpta-00", "00", "rpta.idxStand", "neutral"),
 		item("rpta-01", "01", "rpta.idxStrong", "up"),
 		item("rpta-02", "02", "rpta.idxFlow", "up"),
 		item("rpta-03", "03", "rpta.idxMotion", "neutral"),

@@ -42,9 +42,32 @@ func TestEvaluateCashFlow(t *testing.T) {
 	if r.SavingsTone != ToneUp {
 		t.Errorf("SavingsTone = %q, want up", r.SavingsTone)
 	}
-	// discretionary = surplus − minimums (180000+50300)
+	// discretionary = surplus − minimums (180000+50300); 38% of income → up
 	if want := int64(574114 - 230300); r.DiscretionaryMinor != want {
 		t.Errorf("DiscretionaryMinor = %d, want %d", r.DiscretionaryMinor, want)
+	}
+	if r.DiscretionaryTone != ToneUp {
+		t.Errorf("DiscretionaryTone = %q, want up", r.DiscretionaryTone)
+	}
+}
+
+func TestEvaluateDiscretionaryTightIsWarn(t *testing.T) {
+	// Positive but thin: $150 free on $7,000 income (~2%) is a tight month.
+	r := Evaluate(Inputs{
+		IncomeMonthlyMinor:  700000,
+		ExpenseMonthlyMinor: 373000,
+		Debts:               []Debt{{Name: "Loan", BalanceMinor: 100000, MinPaymentMinor: 312000, InPayoff: true}},
+	})
+	if r.DiscretionaryMinor != 15000 {
+		t.Fatalf("DiscretionaryMinor = %d, want 15000", r.DiscretionaryMinor)
+	}
+	if r.DiscretionaryTone != ToneWarn {
+		t.Errorf("DiscretionaryTone = %q, want warn for a thin positive buffer", r.DiscretionaryTone)
+	}
+	// Negative stays down.
+	r2 := Evaluate(Inputs{IncomeMonthlyMinor: 100000, ExpenseMonthlyMinor: 150000})
+	if r2.DiscretionaryTone != ToneDown {
+		t.Errorf("DiscretionaryTone = %q, want down when negative", r2.DiscretionaryTone)
 	}
 }
 
