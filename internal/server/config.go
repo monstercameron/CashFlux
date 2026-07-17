@@ -26,12 +26,12 @@ const (
 
 // Config contains the runtime settings for the optional CashFlux backend.
 type Config struct {
-	Addr                              string
-	DataDir                           string
-	AuthMode                          string
-	Billing                           bool
-	AppOrigin                         string
-	MasterKey                         string
+	Addr      string
+	DataDir   string
+	AuthMode  string
+	Billing   bool
+	AppOrigin string
+	MasterKey string
 	// SessionKey is the dedicated HMAC secret for signing session (access/refresh)
 	// JWTs. Separating it from MasterKey means an AES master-key rotation
 	// (rotate-ai-master-key) doesn't invalidate every session, and a leak of one
@@ -41,8 +41,8 @@ type Config struct {
 	// SessionKeyPrevious is an optional prior SessionKey accepted on VERIFY only
 	// (never used to sign), so a SessionKey rotation doesn't log every user out —
 	// set it to the old key for one refresh window, then remove it.
-	SessionKeyPrevious string
-	Token              string
+	SessionKeyPrevious                string
+	Token                             string
 	TokenSHA256                       string
 	GeneratedToken                    bool
 	StripeAPIBaseURL                  string
@@ -53,6 +53,14 @@ type Config struct {
 	StripeSuccessURL                  string
 	StripeCancelURL                   string
 	StripePortalReturnURL             string
+	PayPalClientID                    string
+	PayPalClientSecret                string
+	PayPalAPIBaseURL                  string
+	PayPalWebhookID                   string
+	PayPalPlanAnnual                  string
+	PayPalPlanMonthly                 string
+	PayPalReturnURL                   string
+	PayPalCancelURL                   string
 	ConsoleDir                        string
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
@@ -129,6 +137,14 @@ func FromEnv() (Config, error) {
 	cfg.StripeSuccessURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SUCCESS_URL"))
 	cfg.StripeCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_CANCEL_URL"))
 	cfg.StripePortalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_PORTAL_RETURN_URL"))
+	cfg.PayPalClientID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CLIENT_ID"))
+	cfg.PayPalClientSecret = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CLIENT_SECRET"))
+	cfg.PayPalAPIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_API_BASE_URL"))
+	cfg.PayPalWebhookID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_WEBHOOK_ID"))
+	cfg.PayPalPlanAnnual = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_PLAN_ANNUAL"))
+	cfg.PayPalPlanMonthly = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_PLAN_MONTHLY"))
+	cfg.PayPalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_RETURN_URL"))
+	cfg.PayPalCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CANCEL_URL"))
 	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.OAuthProviders = oauthProvidersFromEnv()

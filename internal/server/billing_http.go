@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -63,7 +64,7 @@ func handleBillingCheckout(cfg Config, store *Store) http.HandlerFunc {
 		form.Set("subscription_data[metadata][user_id]", user.ID)
 		form.Set("subscription_data[metadata][plan]", plan)
 		form.Set("allow_promotion_codes", "true")
-		sessionURL, err := createStripeSession(r, cfg, "/checkout/sessions", form)
+		sessionURL, err := createStripeSession(r.Context(), cfg, "/checkout/sessions", form)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe checkout session failed")
 			return
@@ -150,7 +151,7 @@ func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
 		form := url.Values{}
 		form.Set("customer", sub.ProviderCustomer)
 		form.Set("return_url", strings.TrimSpace(cfg.StripePortalReturnURL))
-		sessionURL, err := createStripeSession(r, cfg, "/billing_portal/sessions", form)
+		sessionURL, err := createStripeSession(r.Context(), cfg, "/billing_portal/sessions", form)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonUpstreamUnavailable, "stripe portal session failed")
 			return
@@ -318,25 +319,32 @@ func stripePriceForInterval(w http.ResponseWriter, cfg Config, interval string) 
 	}
 }
 
-func createStripeSession(r *http.Request, cfg Config, path string, form url.Values) (string, error) {
+// stripeHTTPClient bounds every Stripe API call with an explicit timeout so a
+// hung upstream can't pin a request goroutine (the shared http.DefaultClient has
+// no timeout — it relied solely on the request context).
+var stripeHTTPClient = &http.Client{Timeout: 20 * time.Second}
+
+func createStripeSession(ctx context.Context, cfg Config, path string, form url.Values) (string, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.StripeAPIBaseURL), "/")
 	if baseURL == "" {
 		baseURL = "https://api.stripe.com/v1"
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, baseURL+path, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+path, strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.StripeSecretKey))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := stripeHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("stripe status %d", resp.StatusCode)
+		// Surface Stripe's error message (truncated) so misconfig (bad price id, bad
+		// key) is diagnosable from logs instead of a bare status code.
+		return "", fmt.Errorf("stripe status %d: %s", resp.StatusCode, stripeErrorMessage(data))
 	}
 	var out struct {
 		URL string `json:"url"`
@@ -350,7 +358,33 @@ func createStripeSession(r *http.Request, cfg Config, path string, form url.Valu
 	return strings.TrimSpace(out.URL), nil
 }
 
+// stripeErrorMessage extracts Stripe's human-readable error message from an API
+// error body ({"error":{"message":"..."}}), truncated, or falls back to a short
+// raw snippet. Never returns secrets — Stripe error messages don't echo the key.
+func stripeErrorMessage(body []byte) string {
+	var parsed struct {
+		Error struct {
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if msg := strings.TrimSpace(parsed.Error.Message); msg != "" {
+			if len(msg) > 200 {
+				msg = msg[:200]
+			}
+			return msg
+		}
+	}
+	snippet := strings.TrimSpace(string(body))
+	if len(snippet) > 120 {
+		snippet = snippet[:120]
+	}
+	return snippet
+}
+
 type stripeEvent struct {
+	ID   string `json:"id"`
 	Type string `json:"type"`
 	Data struct {
 		Object json.RawMessage `json:"object"`
@@ -476,12 +510,12 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 			return fmt.Errorf("stripe checkout session is missing subscription identity")
 		}
 		next := Subscription{
-			UserID:             userID,
+			UserID:               userID,
 			ProviderCustomer:     session.Customer,
 			ProviderSubscription: session.Subscription,
-			Status:             metadataValueDefault(session.Metadata, "trialing", "subscription_status", "status"),
-			Plan:               metadataValueDefault(session.Metadata, "unknown", "plan", "price"),
-			UpdatedAt:          now,
+			Status:               metadataValueDefault(session.Metadata, "trialing", "subscription_status", "status"),
+			Plan:                 metadataValueDefault(session.Metadata, "unknown", "plan", "price"),
+			UpdatedAt:            now,
 		}
 		if err := store.PutSubscription(next); err != nil {
 			return err
@@ -556,14 +590,14 @@ func stripeSubscriptionRecord(store *Store, sub stripeSubscriptionObject, now ti
 		return Subscription{}, fmt.Errorf("stripe subscription is missing required fields")
 	}
 	return Subscription{
-		UserID:             userID,
+		UserID:               userID,
 		ProviderCustomer:     sub.Customer,
 		ProviderSubscription: sub.ID,
-		Status:             sub.Status,
-		Plan:               stripeSubscriptionPlan(sub),
-		CurrentPeriodEnd:   unixTime(sub.CurrentPeriodEnd),
-		TrialEnd:           unixTime(sub.TrialEnd),
-		UpdatedAt:          now,
+		Status:               sub.Status,
+		Plan:                 stripeSubscriptionPlan(sub),
+		CurrentPeriodEnd:     unixTime(sub.CurrentPeriodEnd),
+		TrialEnd:             unixTime(sub.TrialEnd),
+		UpdatedAt:            now,
 	}, nil
 }
 

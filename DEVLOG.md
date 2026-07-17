@@ -24722,3 +24722,13 @@ stripe_* row, rewinds the version, re-migrates, and asserts the row survives as 
 Renamed the Subscription struct fields (StripeCustomer→ProviderCustomer etc.) and
 GetSubscriptionByStripeID→GetSubscriptionByProviderID; the entitlement seam
 (subscriptionCloudActive) stayed untouched since it only reads status/dates.
+
+Phase 3b: the PaymentProvider seam. Interface = Name/Configured/Checkout/Portal/VerifyWebhook/
+ApplyWebhook — each provider owns its redirect flow and its signature scheme + event shape; the
+generic handler will orchestrate auth/idempotency/replay-dedupe around them. Kept it low-risk:
+stripeProvider DELEGATES to the existing tested helpers (createStripeSession, validStripeSignature,
+applyStripeEvent) rather than rewriting them. Refactored createStripeSession to take a context (not
+*http.Request) so the seam is transport-free, gave it an explicit 20s HTTP client timeout, and made
+it surface Stripe's error message (bad price/key becomes diagnosable). Added the stripeEvent id for
+replay dedupe. paypalProvider is a fail-closed stub (Configured=false) until 3d fills it in; PayPal
+config fields added now so the registry compiles. Entitlement seam untouched.
