@@ -181,6 +181,21 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		lastMonthTag = Div(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budgets-summary-lastmonth"), uistate.T("budgets.lastMonthCap"))
 	}
 
+	// The sinking-fund line checks the commitment against the method's still-unallocated
+	// pool: To-Assign for zero-based, income − budgeted for simple. Envelope has no such
+	// pool (money lives in the envelopes), so the line stays a plain footnote there.
+	var fundFree int64
+	fundHasPool := false
+	switch v.Method {
+	case budgeting.MethodZeroBased:
+		fundFree = budgeting.ToAssign(v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned)
+		fundHasPool = true
+	case budgeting.MethodSimple:
+		fundFree = v.BannerIncome - v.TotalLimit
+		fundHasPool = true
+	}
+	fundLine := budgetFundSetAsideNode(v, fundFree, fundHasPool)
+
 	var body ui.Node
 	if v.Method == budgeting.MethodZeroBased {
 		// Zero-based leads with the To-Assign hero (the thesis: give every dollar a job),
@@ -194,7 +209,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				statGrid),
 			budgetAgeOfMoneyNode(v, smartSettings),
 			rangeHint,
-			budgetFundSetAsideNode(v),
+			fundLine,
 			pills,
 		)
 	} else {
@@ -204,7 +219,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			budgetAgeOfMoneyNode(v, smartSettings),
 			rangeHint,
 			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
-			budgetFundSetAsideNode(v),
+			fundLine,
 			overBanner,
 			pills,
 		)
@@ -1050,12 +1065,57 @@ func spreadLeftoverAcrossSavings(app *appstate.App, accts []savingsAcct, leftove
 
 // budgetFundSetAsideNode shows the household's total monthly sinking-fund commitment,
 // when non-zero — placed after the income context so it reads as a committed slice.
-func budgetFundSetAsideNode(v budgetView) ui.Node {
+// freePool is the method's still-unallocated money (To-Assign for zero-based, income −
+// budgeted for simple) and hasPool whether the method has such a pool at all (envelope
+// doesn't). When the commitment exceeds the pool the footnote ESCALATES to an amber
+// planning alert naming the shortfall — the one state where this line demands a
+// decision rather than records a fact (design critique #4: the requirement was stated
+// but never checked against what's actually left).
+func budgetFundSetAsideNode(v budgetView, freePool int64, hasPool bool) ui.Node {
 	if v.TotalFundSetAside <= 0 {
 		return Fragment()
 	}
+	if hasPool && v.TotalFundSetAside > freePool {
+		return ui.CreateElement(budgetFundShortAlert, budgetFundShortProps{
+			SetAside: v.TotalFundSetAside, Free: freePool, Base: v.Base,
+		})
+	}
 	return P(css.Class("budget-sub", tw.FontDisplay), Attr("data-testid", "budgets-fund-setaside"),
 		uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))
+}
+
+// budgetFundShortProps feeds the sinking-fund shortfall alert: the month's total
+// set-aside requirement, the still-unallocated pool it must fit into, and the base
+// currency both are denominated in.
+type budgetFundShortProps struct {
+	SetAside int64
+	Free     int64
+	Base     string
+}
+
+// budgetFundShortAlert is the sinking-fund shortfall warning: an amber alert row (not
+// danger red — nothing is overspent yet, this is a plan that doesn't add up) naming the
+// gap, what the funds need, and what's actually free, with a jump to the goals page
+// where sinking funds are managed. Own component so its navigate hook sits at a stable
+// position even though the alert renders conditionally.
+func budgetFundShortAlert(props budgetFundShortProps) ui.Node {
+	nav := router.UseNavigate()
+	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
+	short := props.SetAside - props.Free
+	need := fmtMoney(money.New(props.SetAside, props.Base))
+	body := uistate.T("budgets.fundShortBodyNone", need)
+	if props.Free > 0 {
+		body = uistate.T("budgets.fundShortBody", need, fmtMoney(money.New(props.Free, props.Base)))
+	}
+	return Div(css.Class("budget-fundshort"), Attr("role", "status"), Attr("data-testid", "budgets-fund-short"),
+		uiw.Icon(icon.AlertTriangle, css.Class("budget-fundshort-icon", tw.ShrinkO, tw.W4, tw.H4)),
+		Div(css.Class("budget-fundshort-main"),
+			Span(css.Class("budget-fundshort-title"), uistate.T("budgets.fundShortTitle", fmtMoney(money.New(short, props.Base)))),
+			Span(css.Class("budget-fundshort-body"), body),
+		),
+		Button(css.Class("btn btn-sm budget-fundshort-btn"), Type("button"), Attr("data-testid", "budgets-fund-short-review"),
+			Title(uistate.T("budgets.fundShortReviewTitle")), OnClick(goToGoals), uistate.T("budgets.fundShortReview")),
+	)
 }
 
 // --- budget-toolbar --------------------------------------------------------------

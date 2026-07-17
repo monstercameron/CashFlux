@@ -1,3 +1,18 @@
+## 2026-07-17 — Budgets fix 2/7: the sinking-fund line now does its own arithmetic
+
+`budgetFundSetAsideNode` gained the check the critique asked for: the month's total sinking-fund
+set-aside (`v.TotalFundSetAside`) compared against the method's still-unallocated pool — zero-based
+uses `budgeting.ToAssign(income+rolledOver, expenses+savings)` (the same figure as the hero), simple
+uses `income − TotalLimit`, envelope passes `hasPool=false` and keeps the plain footnote since its
+money already lives in the envelopes. Shortfall → `budgetFundShortAlert`, a separate component (it
+owns a `router.UseNavigate` hook, and conditional CHILD components are fine — the rule is stable hook
+order within a component) rendering an amber alert row: bold "short by $X" headline, plain-English
+need-vs-free body (with a "nothing is still unallocated" variant when the pool is ≤ 0), and a
+"Review sinking funds" button to /goals. Styles in `rules_budgets.go` mirror `.budget-over-banner`
+but on `var(--warn)` — deliberate color discipline from the critique: amber = plan problem,
+red = actual overspend. Strings in new `en_fundshort.go` (en.go left untouched — it's dirty from a
+concurrent thread). Wasm + vet clean.
+
 ## 2026-07-17 — Budgets-page design review, fix 1/7: one card, one period
 
 Kicked off the 7-item budgets-page fix list from the external design analysis (reconciled against

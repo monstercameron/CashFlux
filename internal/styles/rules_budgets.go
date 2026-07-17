@@ -743,4 +743,37 @@ func registerBudgetsSurface() {
 		color("var(--text-dim)"),
 		prop("line-height", "1.4"),
 	)
+
+	// Sinking-fund shortfall alert: the sibling of the red .budget-over-banner, in the
+	// caution amber — nothing is overspent yet, the PLAN doesn't add up. One icon, a bold
+	// shortfall headline over a plain-English body, and the review action pinned right.
+	rule(".budget-fundshort",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		padding("0.6rem 0.85rem"),
+		margin("0.6rem 0"),
+		borderRadius("8px"),
+		borderLeft("4px solid var(--warn)"),
+		background("color-mix(in srgb, var(--warn) 10%, var(--bg-elev))"),
+	)
+	rule(".budget-fundshort-icon", color("var(--warn)"))
+	rule(".budget-fundshort-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+		prop("flex", "1 1 auto"),
+		minWidth("0"),
+	)
+	rule(".budget-fundshort-title",
+		fontWeight("700"),
+		fontSize("0.9rem"),
+		color("var(--text)"),
+	)
+	rule(".budget-fundshort-body",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		prop("line-height", "1.4"),
+	)
+	rule(".budget-fundshort-btn", prop("flex", "0 0 auto"), whiteSpace("nowrap"))
 }
