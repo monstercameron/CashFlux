@@ -101,9 +101,13 @@ await page.waitForTimeout(900);
 // pick the CSV source tile
 await page.locator('[data-testid="import-type-picker"] button:has-text("CSV"), button:has-text("CSV / spreadsheet")').first().click();
 await page.waitForTimeout(700);
-// first upload: unique rows import directly (file path sanity)
+// first upload: #57 stages a preflight (counts + balance) — confirm commits it.
 const [fc1] = await Promise.all([page.waitForEvent("filechooser"), page.locator('[data-testid="csv-file-picker"]').click()]);
 await fc1.setFiles(csv1);
+await page.waitForTimeout(1200);
+const confirm1 = page.locator('[data-testid="csv-preflight-confirm"]');
+check("H2 setup: chosen file stages an import preflight", (await confirm1.count()) > 0);
+if (await confirm1.count()) await confirm1.click();
 let msg = "(none)";
 for (let i = 0; i < 10 && !/imported/i.test(msg); i++) {
   await page.waitForTimeout(800);
@@ -111,14 +115,14 @@ for (let i = 0; i < 10 && !/imported/i.test(msg); i++) {
 }
 check("H2 setup: clean file import succeeded", /imported/i.test(msg), msg);
 
-// second upload: 2 dup rows + 1 new → warning stages the bytes
+// second upload: 2 dup rows + 1 new → the preflight discloses the why-matched dups.
 const [fc2] = await Promise.all([page.waitForEvent("filechooser"), page.locator('[data-testid="csv-file-picker"]').click()]);
 await fc2.setFiles(csv2);
 await page.waitForTimeout(1500);
-const warn = (await page.locator('[data-testid="csv-dup-warn"]').count()) ? await page.locator('[data-testid="csv-dup-warn"]').innerText() : "";
-check("H2: duplicate warning shown for re-uploaded file", warn !== "", warn.replace(/\n/g, " "));
-// THE FIX: the primary Import button must commit the staged file (not demand a paste)
-await page.getByRole("button", { name: "Import", exact: true }).click();
+const dup = (await page.locator('[data-testid="csv-preflight-dups"]').count()) ? await page.locator('[data-testid="csv-preflight-dups"]').innerText() : "";
+check("H2: duplicate disclosure shown for re-uploaded file", dup !== "", dup.replace(/\n/g, " "));
+// THE FIX: the preflight's primary confirm must commit the staged file (not demand a paste)
+await page.locator('[data-testid="csv-preflight-confirm"]').click();
 await page.waitForTimeout(1500);
 msg = (await page.locator('[data-testid="csv-import-msg"]').count()) ? await page.locator('[data-testid="csv-import-msg"]').innerText() : "(none)";
 check("H2: primary Import committed the chosen file", /imported/i.test(msg) && !/paste some csv/i.test(msg), msg);
@@ -201,7 +205,18 @@ if (await linked.count()) {
 
 // ───────────────────────── CF-05: historical budget pacing ─────────────────────────
 await nav("/budgets");
-const metrics0 = page.locator('[data-testid^="budget-metrics-"]').first();
+await page.waitForTimeout(800);
+// UX-05 (#70): with >6 budgets the list seeds COMPACT (no per-card metrics strip);
+// switch to comfortable density so the pacing strip renders.
+let metrics0 = page.locator('[data-testid^="budget-metrics-"]').first();
+if (!(await metrics0.count())) {
+  const densityToggle = page.locator('[data-testid="budgets-density"]');
+  if ((await densityToggle.count()) && (await densityToggle.getAttribute("aria-pressed")) === "true") {
+    await densityToggle.click();
+    await page.waitForTimeout(900);
+    metrics0 = page.locator('[data-testid^="budget-metrics-"]').first();
+  }
+}
 await metrics0.waitFor({ timeout: 8000 }).catch(() => {});
 const curMetrics = (await metrics0.count()) ? await metrics0.innerText() : "(none)";
 check("CF-05 setup: current period shows live pacing", /Days left/i.test(curMetrics), curMetrics.replace(/\n/g, " · "));
@@ -332,7 +347,17 @@ check("M5: no cancel affordances for utilities/retail spending", badCancels.leng
 // M6: the first linked-account checkbox must be named by ITS row only.
 await nav("/goals");
 await page.waitForTimeout(1200);
-const goalEdit = page.locator('[data-testid^="goal-edit-btn-"]').first();
+// UX-06 (#71): goal cards default COMPACT — the edit trigger lives behind the card's
+// Details/expand control, so reveal it first.
+let goalEdit = page.locator('[data-testid^="goal-edit-btn-"]').first();
+if (!(await goalEdit.count())) {
+  const goalExpand = page.locator('[data-testid^="goal-expand-"]').first();
+  if (await goalExpand.count()) {
+    await goalExpand.click();
+    await page.waitForTimeout(700);
+    goalEdit = page.locator('[data-testid^="goal-edit-btn-"]').first();
+  }
+}
 if (await goalEdit.count()) {
   await goalEdit.click();
   await page.waitForTimeout(900);
@@ -360,6 +385,12 @@ if (await goalEdit.count()) {
 // CF-13: auto-budget include checkboxes carry names.
 await nav("/budgets");
 await page.waitForTimeout(1200);
+// UX-05 (#70): the bulk tools now live inside the "Automate" popover — open it first.
+const automateBtn = page.locator('[data-testid="budgets-automate"]');
+if (await automateBtn.count()) {
+  await automateBtn.click();
+  await page.waitForTimeout(600);
+}
 const autoBtn = page.locator('[data-testid="budgets-autobudget"]');
 if (await autoBtn.count()) {
   await autoBtn.click();

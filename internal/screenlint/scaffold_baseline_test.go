@@ -37,7 +37,12 @@ const (
 	// Bumped 39→40: the dormant-WIP integration (617ccb86) added one legitimate
 	// new list container in planning.go (detected recurring rows), warranting a raw
 	// Div(.rows) body inside an EntityListSection rather than a nested primitive.
-	rowsBaseline = 40
+	// Bumped 40→41: the six-lane QA/UX integration netted one new legitimate list
+	// body inside a primitive card (subscription confidence inbox / transaction
+	// history panel / import preflight / household clarity surfaces); the hard
+	// TestNoBespokeCardScaffold invariant stays at zero, confirming none are
+	// hand-rolled cards.
+	rowsBaseline = 41
 )
 
 // countMatches returns the occurrences of substr across every non-test .go file
