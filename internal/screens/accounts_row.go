@@ -423,6 +423,13 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(css.Class("acct-row-id"),
 				Div(css.Class("acct-row-name"),
 					Span(css.Class("row-desc"), a.Name),
+					// #66: shared vs individually-owned must be visible in the list —
+					// group-owned, shared-scope, or fractionally-shared accounts wear a
+					// quiet badge. Scope is checked too: seeded/imported data can mark
+					// an account shared while a person administers it (OwnerID set).
+					If(a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0,
+						Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
+							Title(uistate.T("accounts.sharedBadgeTitle")), uistate.T("accounts.sharedBadge"))),
 					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Title(staleBadgeTitle(a.Type, props.DaysStale)), staleBadgeText(a.Type, props.DaysStale))),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),

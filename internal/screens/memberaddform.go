@@ -112,6 +112,12 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 					AriaLabel: "Role",
 					TestID:    "member-add-role",
 				})),
+			// #66: say what the selected role can see and change, right where it's
+			// chosen — and how ownership works before the first entity is assigned.
+			P(css.Class("muted"), Attr("data-testid", "member-role-explain"),
+				uistate.T(memberRoleExplainKey(roleS.Get()))),
+			P(css.Class("muted"), Attr("data-testid", "member-ownership-explain"),
+				uistate.T("members.ownershipExplain")),
 			MapKeyed(memberDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 				return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 			}),

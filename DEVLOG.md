@@ -1,3 +1,25 @@
+## 2026-07-17 — #66: the household model gets explained instead of assumed (lane 5)
+
+The ticket's five items share one thesis: the app has a real permission/ownership model (roles,
+group owner, fractional shares, transaction member) that users only ever met through its side
+effects. The new `memberimpact` package is the only new computation — a pure breakdown of what a
+member's departure touches (owned accounts, share-holdings, budgets, goals, tagged transactions),
+which is exactly the reassign-before-delete gate's facts, now previewable read-only from a picker
+on the household page. Everything else is wording placed at the decision point: role explainers
+live under the role select (and re-render with it), the ownership note distinguishes the three
+ownership ideas in one paragraph, and an owner change in the account editor states the net-worth
+move it will cause BEFORE save.
+
+The ownership-filter audit (item 5) found the surfaces consistent — accounts/budgets/goals/
+allocate all gate on `ownerVisibleTo(owner, activeMember)`, transactions seed the member filter,
+and `ledger.NetByOwner` splits fractional shares per person — with ONE real crack: the seeded
+dataset marks accounts `Scope: ScopeShared` while `OwnerID` is a person, and the account editor
+derives Scope from OwnerID on save (a shared-scope account silently flips to individual if
+resaved). The Shared badge therefore keys off Scope OR group-owner OR shares; the Scope/OwnerID
+drift itself is recorded here as follow-up material rather than silently "fixed" in a lane
+commit that six agents are stacking on. Reports remain household-wide by design — worth an
+explicit product decision someday, not a drive-by scoping change. 54/54 lane assertions green.
+
 ## 2026-07-17 — #73: the assistant stops leading with its own settings (lane 6)
 
 The deep-dive's read was right: the page's first block was configuration (model, thinking,

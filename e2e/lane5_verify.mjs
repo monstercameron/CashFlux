@@ -280,6 +280,77 @@ if (await fuToggle.count()) {
   console.log("SKIP: #70 follow-ups collapse — no budget-linked to-dos in this dataset");
 }
 
+// ───────── #66: household clarity — roles, ownership, change previews ─────────
+await nav("/members");
+const rolesToggle = page.locator('[data-testid="members-roles-explain-toggle"]');
+check("#66: household page offers the roles explainer", (await rolesToggle.count()) === 1);
+if (await rolesToggle.count()) {
+  await rolesToggle.click();
+  await page.waitForTimeout(400);
+  const explain = await page.locator('[data-testid="members-roles-explain"]').innerText().catch(() => "");
+  check("#66: explainer covers all three roles", /Owner/.test(explain) && /Admin/.test(explain) && /Viewer/.test(explain) && /read-only/i.test(explain));
+  const own = await page.locator('[data-testid="members-ownership-explain"]').innerText().catch(() => "");
+  check("#66: ownership explained (owner vs member vs shared)", /OWNER/.test(own) && /MEMBER/.test(own) && /shared/i.test(own));
+}
+// Leave preview: pick the first real member and read the breakdown.
+const leaveSel = page.locator('[data-testid="member-leave-select"]');
+check("#66: leave-preview picker present", (await leaveSel.count()) === 1);
+if (await leaveSel.count()) {
+  const firstVal = await leaveSel.locator("option:not([value=''])").first().getAttribute("value");
+  await leaveSel.selectOption(firstVal);
+  await page.waitForTimeout(500);
+  const prev = await page.locator('[data-testid="member-leave-preview"]').innerText().catch(() => "");
+  check("#66: leave preview lists what needs reassignment", /would need a new owner|owns nothing/.test(prev), prev.replace(/\n/g, " | ").slice(0, 100));
+  const noteOK = /only a preview|nothing changes/i.test(prev) || /owns nothing/.test(prev);
+  check("#66: leave preview is explicitly read-only", noteOK);
+}
+// Role explainer inside the add-member form, live with the role select.
+await page.locator('button:has-text("Add member")').first().click();
+await page.waitForTimeout(600);
+const roleExplain1 = await page.locator('[data-testid="member-role-explain"]').innerText().catch(() => "");
+check("#66: member form explains the selected role", roleExplain1.length > 20, roleExplain1.slice(0, 50));
+const roleSel = page.locator('[data-testid="member-add-role"] select, select[data-testid="member-add-role"]').first();
+if (await roleSel.count()) {
+  await roleSel.selectOption("viewer");
+  await page.waitForTimeout(400);
+  const roleExplain2 = await page.locator('[data-testid="member-role-explain"]').innerText().catch(() => "");
+  check("#66: explainer follows the role choice", roleExplain2 !== roleExplain1 && /read-only/i.test(roleExplain2), roleExplain2.slice(0, 50));
+} else {
+  console.log("SKIP: #66 role-select live explainer — role select locator not found");
+}
+await page.keyboard.press("Escape");
+await page.waitForTimeout(400);
+
+// Shared badge on the accounts list.
+await nav("/accounts");
+const sharedBadges = await page.locator('[data-testid^="acct-shared-badge-"]').count();
+check("#66: shared accounts wear a Shared badge in the list", sharedBadges >= 1, `${sharedBadges} badges`);
+
+// Ownership-move preview in the account editor (Edit lives in the row kebab).
+const firstAcctRow = page.locator('[data-testid^="acct-row-"]').first();
+await firstAcctRow.locator('button[aria-haspopup="menu"]').first().click();
+await page.waitForTimeout(400);
+const editBtn = page.locator('[data-testid^="edit-account-btn-"] >> visible=true').first();
+if (await editBtn.count()) {
+  await editBtn.click();
+  await page.waitForTimeout(900);
+  const ownerSel = page.locator('.flip-panel select[aria-label="Owner"], .modal-scroll select[aria-label="Owner"]').first();
+  if (await ownerSel.count()) {
+    const cur = await ownerSel.inputValue();
+    const other = await ownerSel.locator(`option:not([value="${cur}"])`).first().getAttribute("value");
+    await ownerSel.selectOption(other);
+    await page.waitForTimeout(500);
+    const prevTxt = await page.locator('[data-testid="acct-owner-preview"]').innerText().catch(() => "");
+    check("#66: changing owner previews the net-worth move before saving", /moves this account/i.test(prevTxt), prevTxt.slice(0, 90));
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+  } else {
+    console.log("SKIP: #66 owner-move preview — owner select not found in editor");
+  }
+} else {
+  console.log("SKIP: #66 owner-move preview — no Edit button on account rows");
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

@@ -233,6 +233,8 @@ func membersBody() ui.Node {
 		reassignPanel,
 		If(errMsg.Get() != "", P(css.Class("notice-danger"), errMsg.Get())),
 		P(css.Class("muted"), uistate.T("members.desc")),
+		// #66: plain-English roles + ownership explainer (collapsed by default).
+		ui.CreateElement(membersRolesExplainer, struct{}{}),
 		IfElse(len(members) == 0,
 			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("members.empty"), CTALabel: uistate.T("members.addFirst"), AddTarget: "member"}),
 			hhRowsList(MapKeyed(members, keyOf, renderRow)),
@@ -240,6 +242,8 @@ func membersBody() ui.Node {
 		Div(css.Class(tw.Mt2),
 			Button(css.Class("btn"), Type("button"), OnClick(onAddMember), uistate.T("members.add")),
 		),
+		// #66: read-only departure preview — the reassign facts, before any delete.
+		ui.CreateElement(membersLeavePreview, struct{}{}),
 		// C274: single-device disclosure — clarifies that roles are labels on a
 		// shared local dataset, not per-member logins.
 		P(css.Class("muted", tw.Text12, tw.Mt2), Attr("data-testid", "members-single-device-note"), uistate.T("members.singleDeviceNote")),

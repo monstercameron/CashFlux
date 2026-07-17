@@ -849,6 +849,12 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				labeledField(uistate.T("common.owner"),
 					uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
 						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),
+				// #66: ownership preview — a changed owner MOVES this account's worth
+				// between people's net-worth views; say so before the save, not after.
+				If(ownerS.Get() != a.OwnerID,
+					P(css.Class("muted"), Attr("data-testid", "acct-owner-preview"),
+						uistate.T("accounts.ownerMovePreview", fmtMoney(curBal),
+							ownerDisplayName(members, a.OwnerID), ownerDisplayName(members, ownerS.Get())))),
 				If(len(members) >= 2, func() ui.Node {
 					shareSum := 0
 					for _, v := range sharesMapS.Get() {
