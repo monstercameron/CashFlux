@@ -1910,6 +1910,8 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 				OnClick(toggleFormulas),
 				uiw.Icon(icon.Calculator, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(metricsLabel)),
+			// Saved report views: name the current period + scope, reopen in one click.
+			ui.CreateElement(savedReportsControl, struct{}{}),
 			exportMenu,
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),

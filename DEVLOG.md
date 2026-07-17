@@ -114,6 +114,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Saved report views ride the scope split
+
+This one got easy because of this morning's report-scope work (the other session's parity-scan
+fix): a report view is now exactly two values — the period window (UsePeriod) and the
+REPORT-LOCAL scope (UseReportScope) — so a saved view is just {name, Res, From, To, ReportScope}
+in KV. Apply = set both atoms through their existing persist paths; no bespoke restore logic.
+List semantics live in pure `savedreports` (case-insensitive same-name replace so "June review"
+updates instead of twinning; cap 20 dropping oldest). One wasm-layer trap avoided: the
+SetReportScope no-op-until-captured contract means the control must call UseReportScope() at
+render, which it does anyway to read the scope for saving.
+
 ## 2026-07-17 — Suggested tasks: propose, never create
 
 The condition system item. The design constraint came straight from the report ("never create

@@ -995,9 +995,20 @@ var english = Catalog{
 	"todo.suggestDismiss":    "Dismiss",
 	"todo.suggestAdded":      "Task added: %s",
 	"todo.suggestDismissed":  "Suggestion dismissed for a month.",
-	"goals.linkExplain":      "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
-	"goals.quickFundChip":    "Set aside %s from %s",
-	"goals.quickFundEyebrow": "Suggested",
+	// Saved report views (period + scope under a name).
+	"reports.savedLabel":       "Saved views",
+	"reports.savedPlaceholder": "Saved views…",
+	"reports.savedSave":        "Save view",
+	"reports.savedSaveTitle":   "Save the current period and scope as a named view",
+	"reports.savedNameLabel":   "View name",
+	"reports.savedNamePh":      "Name this view",
+	"reports.savedStored":      "Saved \"%s\".",
+	"reports.savedApplied":     "Applied \"%s\".",
+	"reports.savedDeleted":     "Saved view deleted.",
+	"reports.savedDeleteTitle": "Delete the selected saved view",
+	"goals.linkExplain":        "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
+	"goals.quickFundChip":      "Set aside %s from %s",
+	"goals.quickFundEyebrow":   "Suggested",
 	// QA CF-15: suggestions across goals draw on ONE free-cash pool, so say so —
 	// applying one shrinks the others' suggestions on the spot.
 	"goals.quickFundTitle":       "Reserve the remaining amount in one click — no money moves. Suggestions share the same free cash: applying one updates the others.",
