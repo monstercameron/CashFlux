@@ -175,19 +175,6 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// redefine each budget's own period.
 	rangeHint := If(!vw.IsSinglePeriod(), P(css.Class("muted"), Attr("data-testid", "budgets-custom-range-hint"),
 		uistate.T("budgets.customRangeHint")))
-	// C125: a salient over-spend banner + the count/near pills.
-	overBanner := If(v.OverCount > 0, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
-		Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
-		Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
-		Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
-		// SMART-B14: one-tap entry to cover every overage at once (Free, opt-out).
-		If(smartSettings.IsEnabled(coverAllFeatureCode),
-			ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
-	))
-	pills := If(v.OverCount > 0 || v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
-		If(v.OverCount > 0, Span(css.Class("pill is-danger"), uistate.T("budgets.overBadge", v.OverCount))),
-		If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
-	))
 
 	// When the overlay is on, an accent "LAST MONTH" tag over the spend graph makes clear
 	// the figures are last period's, matching the tiles.
@@ -196,9 +183,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		lastMonthTag = Div(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budgets-summary-lastmonth"), uistate.T("budgets.lastMonthCap"))
 	}
 
-	// The sinking-fund line checks the commitment against the method's still-unallocated
-	// pool: To-Assign for zero-based, income − budgeted for simple. Envelope has no such
-	// pool (money lives in the envelopes), so the line stays a plain footnote there.
+	// The sinking-fund commitment checks against the method's still-unallocated
+	// pool: To-Assign for zero-based, income − budgeted for simple. Envelope has no
+	// such pool (money lives in the envelopes), so it never alerts there.
 	var fundFree int64
 	fundHasPool := false
 	switch v.Method {
@@ -209,36 +196,48 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		fundFree = v.BannerIncome - v.TotalLimit
 		fundHasPool = true
 	}
-	fundLine := budgetFundSetAsideNode(v, fundFree, fundHasPool)
 
-	var body ui.Node
+	// 2026-07-17 audit P0: ONE three-column status strip — the money you're
+	// planning with, the spend progress, and Age of money side by side — instead
+	// of the old vertical stack (hero, banner, loader, age line, footnotes) that
+	// pushed the first budget category below the fold.
+	var planCell ui.Node
 	if v.Method == budgeting.MethodZeroBased {
-		// Zero-based leads with the To-Assign hero (the thesis: give every dollar a job),
-		// then the income basis, then the spend-progress bar DEMOTED below — spending is
-		// context here, not the headline.
-		body = Div(
-			zeroBasedHero(v, basisBtn),
-			overBanner,
-			Div(css.Class("zbb-spend"),
-				IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap"))),
-				statGrid),
-			budgetAgeOfMoneyNode(v, smartSettings),
-			rangeHint,
-			fundLine,
-			pills,
-		)
+		planCell = zeroBasedHero(v, basisBtn)
 	} else {
-		body = Div(
-			lastMonthTag,
-			statGrid,
-			budgetAgeOfMoneyNode(v, smartSettings),
-			rangeHint,
+		planCell = Div(css.Class("budget-plan-cell"),
+			Span(css.Class("budget-strip-label"), uistate.T("budgets.stripPlan")),
 			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
-			fundLine,
-			overBanner,
-			pills,
 		)
 	}
+	strip := Div(css.Class("budget-status-strip"), Attr("data-testid", "budgets-status-strip"),
+		Div(css.Class("budget-strip-cell is-plan"), planCell),
+		Div(css.Class("budget-strip-cell is-spend"),
+			IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap"))),
+			statGrid),
+		Div(css.Class("budget-strip-cell is-age"), budgetAgeOfMoneyNode(v, smartSettings)),
+	)
+
+	// Every warning folds into ONE collapsed "N issues need attention" rail with
+	// drill-down (over-assignment, overspent categories, sinking-fund shortfall);
+	// healthy states reduce to a quiet footnote inside the rail component.
+	overAssigned := int64(0)
+	switch v.Method {
+	case budgeting.MethodZeroBased:
+		if ta := budgeting.ToAssign(v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned); ta < 0 {
+			overAssigned = -ta
+		}
+	case budgeting.MethodSimple:
+		if d := v.BannerIncome - v.TotalLimit; d < 0 {
+			overAssigned = -d
+		}
+	}
+	rail := ui.CreateElement(budgetIssuesRail, budgetIssuesRailProps{
+		View: v, SmartSettings: smartSettings,
+		OverAssigned: overAssigned, FundFree: fundFree, FundHasPool: fundHasPool,
+	})
+
+	body := Div(strip, rail, rangeHint)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -1095,17 +1094,112 @@ func spreadLeftoverAcrossSavings(app *appstate.App, accts []savingsAcct, leftove
 // planning alert naming the shortfall — the one state where this line demands a
 // decision rather than records a fact (design critique #4: the requirement was stated
 // but never checked against what's actually left).
-func budgetFundSetAsideNode(v budgetView, freePool int64, hasPool bool) ui.Node {
-	if v.TotalFundSetAside <= 0 {
-		return Fragment()
+// budgetIssuesRailProps feeds the summary's single collapsed issues rail: the
+// computed view, the over-assignment magnitude (0 when the plan adds up), and
+// the sinking-fund pool check inputs.
+type budgetIssuesRailProps struct {
+	View          budgetView
+	SmartSettings smart.Settings
+	OverAssigned  int64
+	FundFree      int64
+	FundHasPool   bool
+}
+
+// budgetIssuesRail is the audit-P0 replacement for the summary's stacked warning
+// banners: over-assignment, overspent categories, and the sinking-fund shortfall
+// collapse into ONE "N issues need attention" row that expands to the detailed
+// alerts on click. When over-assigned, the header carries a "Resolve $X" figure —
+// the page's actual to-do. With no issues it reduces to the quiet sinking-fund
+// footnote (or a near-limit pill), never an alert. Its own component so the
+// expand state + navigate hooks sit at stable positions.
+func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
+	v := props.View
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	nav := router.UseNavigate()
+	goAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
+
+	fundShort := v.TotalFundSetAside > 0 && props.FundHasPool && v.TotalFundSetAside > props.FundFree
+	count := 0
+	if props.OverAssigned > 0 {
+		count++
 	}
-	if hasPool && v.TotalFundSetAside > freePool {
-		return ui.CreateElement(budgetFundShortAlert, budgetFundShortProps{
-			SetAside: v.TotalFundSetAside, Free: freePool, Base: v.Base,
-		})
+	if v.OverCount > 0 {
+		count++
 	}
-	return P(css.Class("budget-sub", tw.FontDisplay), Attr("data-testid", "budgets-fund-setaside"),
-		uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))
+	if fundShort {
+		count++
+	}
+
+	if count == 0 {
+		// Healthy: at most the quiet set-aside footnote and/or a near-limit pill.
+		return Div(
+			If(v.TotalFundSetAside > 0, P(css.Class("budget-sub", tw.FontDisplay), Attr("data-testid", "budgets-fund-setaside"),
+				uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))),
+			If(v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount)))),
+		)
+	}
+
+	title := uistate.T("budgets.issuesRailOne")
+	if count != 1 {
+		title = uistate.T("budgets.issuesRail", count)
+	}
+	// Over-assignment is the page's to-do: the Resolve figure rides the header.
+	var resolve ui.Node = Fragment()
+	if props.OverAssigned > 0 {
+		resolve = Span(css.Class("budget-rail-resolve"), Attr("data-testid", "budgets-rail-resolve"),
+			uistate.T("budgets.resolveAmount", fmtMoney(money.New(props.OverAssigned, v.Base))))
+	}
+	hint := uistate.T("budgets.issuesShow")
+	chev := icon.ChevronDown
+	if open.Get() {
+		hint = uistate.T("budgets.issuesHide")
+		chev = icon.ChevronUp
+	}
+	header := Button(css.Class("budget-issues-rail"), Type("button"),
+		Attr("data-testid", "budgets-issues-rail"), Attr("aria-expanded", ariaBool(open.Get())),
+		Title(hint), OnClick(toggle),
+		uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
+		Span(css.Class("budget-issues-title"), title),
+		resolve,
+		If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
+		uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
+	)
+
+	if !open.Get() {
+		return Div(css.Class("budget-issues-wrap"), header)
+	}
+
+	var rows []any
+	if props.OverAssigned > 0 {
+		rows = append(rows, Div(css.Class("budget-issue-row"), Attr("data-testid", "budgets-issue-overassigned"),
+			Div(css.Class("budget-issue-main"),
+				Span(css.Class("budget-issue-title"), uistate.T("budgets.issueOverAssigned", fmtMoney(money.New(props.OverAssigned, v.Base)))),
+				Span(css.Class("budget-issue-body"), uistate.T("budgets.issueOverAssignedBody")),
+			),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-resolve-alloc"),
+				Title(uistate.T("budgets.issueReviewAllocTitle")), OnClick(goAllocate),
+				uistate.T("budgets.issueReviewAlloc")),
+		))
+	}
+	if v.OverCount > 0 {
+		rows = append(rows, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
+			Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
+			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
+			// SMART-B14: one-tap entry to cover every overage at once (Free, opt-out).
+			If(props.SmartSettings.IsEnabled(coverAllFeatureCode),
+				ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
+		))
+	}
+	if fundShort {
+		rows = append(rows, ui.CreateElement(budgetFundShortAlert, budgetFundShortProps{
+			SetAside: v.TotalFundSetAside, Free: props.FundFree, Base: v.Base,
+		}))
+	}
+	detail := append([]any{css.Class("budget-issues-detail"), Attr("data-testid", "budgets-issues-detail")}, rows...)
+	return Div(css.Class("budget-issues-wrap"), header, Div(detail...))
 }
 
 // budgetFundShortProps feeds the sinking-fund shortfall alert: the month's total

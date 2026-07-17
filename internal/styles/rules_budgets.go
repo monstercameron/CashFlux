@@ -857,4 +857,121 @@ func registerBudgetsSurface() {
 	)
 	ruleMedia("(max-width: 860px)", ".budget-crow-bar", display("none"))
 	ruleMedia("(max-width: 860px)", ".budget-crow-left", display("none"))
+
+	// --- 2026-07-17 audit P0: the summary's three-column status strip ---
+	// Plan (To-Assign hero / income basis) · Spending (the loader) · Age of money
+	// side by side, so the first budget category lands in the initial viewport.
+	rule(".budget-status-strip",
+		display("grid"),
+		gridTemplateColumns("minmax(0, 1.1fr) minmax(0, 1.3fr) minmax(0, 0.8fr)"),
+		gap("0.75rem 1.4rem"),
+		alignItems("stretch"),
+	)
+	rule(".budget-strip-cell",
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		justifyContent("flex-start"),
+	)
+	rule(".budget-strip-cell.is-spend, .budget-strip-cell.is-age",
+		borderLeft("1px solid var(--border)"),
+		paddingLeft("1.4rem"),
+	)
+	rule(".budget-strip-label",
+		fontSize("0.7rem"),
+		fontWeight("700"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	// Inside the strip the zero-based hero is one column, not the page centrepiece:
+	// tighter padding and a page-KPI-sized figure (audit type scale), not a hero.
+	rule(".budget-status-strip .zbb-hero",
+		padding("0.1rem 0 0.2rem"),
+		gap("0.25rem"),
+	)
+	rule(".budget-status-strip .zbb-figure",
+		fontSize("1.9rem"),
+	)
+	rule(".budget-status-strip .budget-loader",
+		minHeight("84px"),
+		marginBottom("0.4rem"),
+	)
+	rule(".budget-status-strip .budget-agemoney",
+		marginTop("0"),
+	)
+	ruleMedia("(max-width: 1100px)", ".budget-status-strip",
+		gridTemplateColumns("1fr"),
+	)
+	ruleMedia("(max-width: 1100px)", ".budget-strip-cell.is-spend, .budget-strip-cell.is-age",
+		borderLeft("0"),
+		paddingLeft("0"),
+	)
+
+	// --- the collapsed "N issues need attention" rail (replaces stacked banners) ---
+	rule(".budget-issues-wrap",
+		marginTop("0.6rem"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".budget-issues-rail",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		width("100%"),
+		textAlign("left"),
+		padding("0.45rem 0.7rem"),
+		background("color-mix(in srgb, #f59e0b 8%, transparent)"),
+		border("1px solid color-mix(in srgb, #f59e0b 45%, var(--border))"),
+		borderRadius("10px"),
+		color("var(--text)"),
+		cursor("pointer"),
+		font("inherit"),
+		fontSize("0.85rem"),
+		fontWeight("600"),
+	)
+	rule(".budget-issues-icon", color("#f59e0b"))
+	rule(".budget-issues-title", flex("1"), minWidth("0"))
+	// The over-assignment "Resolve $X" figure is the rail's call to action.
+	rule(".budget-rail-resolve",
+		padding("0.15rem 0.55rem"),
+		borderRadius("999px"),
+		background("var(--danger)"),
+		color("#fff"),
+		fontWeight("700"),
+		fontSize("0.78rem"),
+		whiteSpace("nowrap"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".budget-issues-chev", color("var(--text-faint)"))
+	rule(".budget-issues-detail",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+	)
+	rule(".budget-issue-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		padding("0.5rem 0.7rem"),
+		border("1px solid var(--border)"),
+		borderRadius("10px"),
+		background("var(--bg-elev)"),
+	)
+	rule(".budget-issue-main",
+		flex("1"),
+		minWidth("0"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+	)
+	rule(".budget-issue-title",
+		fontWeight("600"),
+		fontSize("0.85rem"),
+	)
+	rule(".budget-issue-body",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
 }
