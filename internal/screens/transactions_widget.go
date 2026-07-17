@@ -623,6 +623,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Source:              srcCol.Str(i),
 			Member:              memberName[txByID[rid].MemberID],
 			Cleared:             cleared,
+			Reviewed:            txByID[rid].Reviewed,
 			Selected:            sel[rid],
 			Receipts:            nAtt,
 			Attachment:          firstAtt,
@@ -707,9 +708,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colBalance"), Class: "td-amount"})
 		}
 		// row-desc-col: the fixed-layout ledger sizes columns from the header row, so
-	// the width-priority rule (2026-07-17 audit — description reads first) must
-	// live on the th, not the td.
-	cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee", Class: "row-desc-col"})
+		// the width-priority rule (2026-07-17 audit — description reads first) must
+		// live on the th, not the td.
+		cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee", Class: "row-desc-col"})
 		if colVis.Account {
 			cols = append(cols, uiw.Column{Label: "Account", SortKey: "account"})
 		}
@@ -784,14 +785,15 @@ type txnFrameRowProps struct {
 	TrendMerchant string
 	ShowTrend     bool // defer chip mount until after the table settles (perf)
 	Desc          string
-	Tags          []string          // appended after the description as small chips (capped, non-stretching)
-	OnTagClick    func(tag string)  // click a tag chip → filter the ledger to that tag
+	Tags          []string         // appended after the description as small chips (capped, non-stretching)
+	OnTagClick    func(tag string) // click a tag chip → filter the ledger to that tag
 	Account       string
 	Category      string
 	Source        string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
 	Member        string          // assigned household member's name ("" if unassigned)
 	Vis           uistate.TxnCols // which optional columns to render (must match the header)
 	Cleared       bool
+	Reviewed      bool
 	Selected      bool
 	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
 	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
@@ -911,6 +913,19 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		rowClass += " txn-excluded" // TXC-1: muted, marked out of budgets/reports
 	}
 
+	// Explicit state markers (beyond the row tint): a ✓ chip for cleared rows and
+	// a quiet dot for rows still awaiting review — the unified state read the
+	// local-first report asked for, kept small because thousands of rows carry it.
+	var stateBadge ui.Node = Fragment()
+	switch {
+	case props.Cleared:
+		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-cleared-badge"),
+			Attr("title", uistate.T("transactions.clearedBadgeTitle")), "✓")
+	case !props.Reviewed && !props.IsTransfer:
+		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-needsreview-badge"),
+			Attr("title", uistate.T("transactions.needsReviewBadgeTitle")), "•")
+	}
+
 	// XC1/XC2: link badges beside the description, mirroring the classic view.
 	var linkBadge ui.Node = Fragment()
 	switch {
@@ -990,6 +1005,7 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
 					Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
 				Span(css.Class("row-desc-text"), props.Desc),
+				stateBadge,
 				tagsNode,
 				// Follow-up indicator, to the right of the description: a chip with the open/total
 				// count that reveals a hover popover listing the linked to-dos, and links to the
@@ -1157,4 +1173,3 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		TriggerTestID: "txn-kebab-" + props.ID,
 	})
 }
-

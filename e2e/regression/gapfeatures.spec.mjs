@@ -18,6 +18,18 @@ test.describe("gap features", () => {
     expect(text).toMatch(/usual \$7\.35/i);
   });
 
+  test("ledger rows carry explicit cleared / needs-review state markers", async ({ app }) => {
+    await nav(app, "/transactions");
+    await expect(app.locator('[data-testid^="txn-row-"]').first()).toBeVisible();
+    // The sample ledger has both states; each marker explains itself on hover.
+    const cleared = app.getByTestId("txn-cleared-badge").first();
+    const review = app.getByTestId("txn-needsreview-badge").first();
+    await expect(cleared).toBeVisible();
+    await expect(cleared).toHaveAttribute("title", /cleared/i);
+    await expect(review).toBeVisible();
+    await expect(review).toHaveAttribute("title", /review/i);
+  });
+
   test("cash forecast widget: 30/60/90-day projected available cash on the dashboard", async ({ app }) => {
     await nav(app, "/");
     const tile = app.getByTestId("dash-forecast");

@@ -114,6 +114,16 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Transaction states: mark the two that were invisible
+
+Audited the report's eight-state list against what rows already show: origin = the Source
+column; excluded/duplicate/split/refund/group = existing badges; "matched" = the refund/bill
+pair chips. The two states with NO explicit mark were cleared (a subtle row tint you'd never
+notice) and needs-review (nothing at all on the row — only the inbox's count knew). A ✓ chip
+and a dim dot close that, sized for a ledger where 2k+ rows are unreviewed — a text chip per
+row would have been wallpaper. Per-row "Reconciled" state doesn't exist in the domain (the
+account holds reconciliation history; rows hold Cleared) and inventing it would lie.
+
 ## 2026-07-17 — Report-to-action: four doors, not a framework
 
 The report item ("report-to-action controls for tasks, budgets, goals, and transaction review")
