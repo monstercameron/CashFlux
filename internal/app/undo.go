@@ -72,9 +72,14 @@ func captureUndoPoint() {
 
 // capturedSkipCollections are dataset collections that mutate as DERIVED UI
 // state (not user actions), so they must not become undo steps or activity
-// entries. The dashboard writes its placement mirror on every render.
+// entries. The dashboard writes its placement mirror on every render, and the
+// audit log records every capture: without skipping auditEntries here, the
+// autosave that follows a captured mutation diffs the just-written audit row
+// into an auditEntries-only undo step — the stack's top entry then undoes
+// nothing the user can see, so the toast's "Undo" silently no-ops.
 var capturedSkipCollections = map[string]bool{
-	"placements": true,
+	"placements":   true,
+	"auditEntries": true,
 }
 
 // filterCapturedChanges removes derived-UI-state changes from a change set so
