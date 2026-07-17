@@ -131,6 +131,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — "What's shared?" is buildMessages, read aloud
+
+The pre-send preview's one design rule: it must mirror the REAL payload builder, not a
+hand-maintained description that drifts. The estimate therefore sums the same inputs
+buildMessages assembles — persona, the aiCtx aggregates line, categoryNames,
+customFieldsSummary, agent memory, the turn history — and the panel prints the literal
+aggregates string the model will see. chars/4 is stated as "rough size"; a real tokenizer in
+wasm would cost more than the honesty it adds. Notable framing choice: the categories line
+says "names, for grounding — no amounts", because that's the question a privacy-minded user
+is actually asking.
+
 ## 2026-07-17 — Notification snooze horizons + a one-level undo
 
 SnoozeFeedItem always took an arbitrary `until`; the UI just hard-coded +86400. Three-choice

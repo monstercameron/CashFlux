@@ -1222,6 +1222,25 @@ func Insights() ui.Node {
 			privacyTier.Set(next)
 			uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
 		}}),
+		// Pre-send data-sharing preview: what the NEXT message will carry, with a
+		// rough token estimate, mirroring buildMessages' actual inputs.
+		func() ui.Node {
+			persona := strings.TrimSpace(uistate.LoadSystemPrompt())
+			if persona == "" {
+				persona = defaultChatSystemPrompt
+			}
+			mem := uistate.LoadAgentMemory().Prompt()
+			chars := len(persona) + len(aiCtx.Line()) + len(categoryNames(app.Categories())) + len(customFieldsSummary(app.CustomFieldDefs())) + len(mem)
+			for _, t := range turns.Get() {
+				chars += len(t.Text)
+			}
+			return sharePreview(sharePreviewProps{
+				Tier: tier, CtxLine: aiCtx.Line(),
+				Categories: len(app.Categories()), CustomFields: len(app.CustomFieldDefs()),
+				MemoryOn: mem != "", Turns: len(turns.Get()),
+				EstTokens: chars / 4,
+			})
+		}(),
 		Div(css.Class("ask-ctrl-actions"),
 			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),

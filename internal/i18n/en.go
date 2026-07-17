@@ -1043,6 +1043,17 @@ var english = Catalog{
 	"notifications.undoPrompt":      "Dismissed a notification by mistake?",
 	"notifications.undoAction":      "Undo dismiss",
 	"notifications.undoRestored":    "Notification restored.",
+	// Assistant pre-send data-sharing preview.
+	"insights.shareChip":       "What's shared?",
+	"insights.shareChipTitle":  "See exactly what the next message will send before anything leaves this device",
+	"insights.shareHeading":    "Sent with your next message:",
+	"insights.shareTierFull":   "Privacy: full detail — the assistant may read individual transactions via tools you approve.",
+	"insights.shareTierAgg":    "Privacy: aggregates only — totals and KPIs; no individual transactions or payees.",
+	"insights.shareAggregates": "Headline aggregates: %s",
+	"insights.shareNames":      "Your %d category names and %d custom-field names (for grounding — no amounts).",
+	"insights.shareMemory":     "Your saved assistant memory (view it under Edit prompt).",
+	"insights.shareTurns":      "The conversation so far (%d turns are re-sent each message).",
+	"insights.shareTokens":     "Rough size: ≈ %s tokens of context per message.",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",
