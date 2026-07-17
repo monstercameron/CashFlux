@@ -443,6 +443,29 @@ if (await ruBtn.count()) {
   check("CF-16: round-ups config trigger reachable", false);
 }
 
+// ──────────── CF-12: sweep rules use transfer eligibility ────────────
+await nav("/accounts");
+await page.waitForTimeout(1200);
+// Sweep rules moved into the accounts "Manage" menu in the visual-audit pass.
+const manage = page.locator('[data-testid="acct-manage-btn"]');
+if (await manage.count()) { await manage.click(); await page.waitForTimeout(400); }
+const sweepBtn = page.locator('[data-testid="acct-sweep-btn"]');
+if (await sweepBtn.count()) {
+  await sweepBtn.click();
+  await page.waitForTimeout(900);
+  const srcOpts = await page.locator('[data-testid="sweep-cfg-source"] option').allInnerTexts();
+  const dstOpts = await page.locator('[data-testid="sweep-cfg-dest"] option').allInnerTexts();
+  const badSrc = srcOpts.filter((o) => /Mortgage|Condo|401|Loan|Stonks|Brokerage/i.test(o));
+  check("CF-12: sweep sources are liquid cash only", badSrc.length === 0, badSrc.join(", ") || `${srcOpts.length - 1} sources`);
+  const badDst = dstOpts.filter((o) => /Condo|Property|Vehicle/i.test(o));
+  check("CF-12: sweep destinations exclude valuation-only holdings", badDst.length === 0, badDst.join(", ") || `${dstOpts.length - 1} destinations`);
+  check("CF-12: liability destinations labelled as payments", dstOpts.some((o) => /payment/i.test(o)), "");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+} else {
+  check("CF-12: sweep rules entry reachable", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

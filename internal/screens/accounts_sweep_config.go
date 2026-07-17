@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -90,19 +91,26 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 		}))
 	}
 
-	acctOpt := func(sel string) []ui.Node {
-		opts := []ui.Node{Option(Value(""), uistate.T("acctSweepCfg.pickAccount"))}
-		for _, a := range accounts {
-			if a.Archived {
-				continue
+	// QA CF-12: the pickers used to list EVERY account — mortgage, the condo,
+	// car/student loans, investments, and even the chosen source itself. A sweep
+	// is a cash transfer, so it shares the C2 transfer eligibility rule
+	// (acctTransferOptions): liquid cash sources only, no valuation-only
+	// destinations, liabilities labelled as payments, each side excluding the
+	// other's selection.
+	sweepFromOpts, sweepToOpts := acctTransferOptions(accounts, src.Get(), dst.Get())
+	acctOptFrom := func(opts []uiw.SelectOption, sel string) []ui.Node {
+		nodes := []ui.Node{Option(Value(""), uistate.T("acctSweepCfg.pickAccount"))}
+		for _, o := range opts {
+			if o.Value == "" {
+				continue // replace the transfer placeholder with the sweep one above
 			}
-			args := []any{Value(a.ID), a.Name}
-			if a.ID == sel {
+			args := []any{Value(o.Value), o.Label}
+			if o.Value == sel {
 				args = append(args, Attr("selected", "selected"))
 			}
-			opts = append(opts, Option(args...))
+			nodes = append(nodes, Option(args...))
 		}
-		return opts
+		return nodes
 	}
 
 	var onDone ui.Handler
@@ -125,14 +133,14 @@ func SweepRulesForm(props SweepRulesFormProps) ui.Node {
 			Div(css.Class("sweep-add"),
 				labeledField(uistate.T("accountsRedesign.sweepKeepIn"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.source")),
-						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), acctOpt(src.Get()))),
+						Attr("data-testid", "sweep-cfg-source"), OnInput(onSrc), acctOptFrom(sweepFromOpts, src.Get()))),
 				labeledField(uistate.T("acctSweepCfg.keepAmount"),
 					Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
 						Attr("aria-label", uistate.T("acctSweepCfg.keepAmount")), Placeholder("3,000"),
 						Attr("data-testid", "sweep-cfg-keep"), Value(keep.Get()), OnInput(onKeep))),
 				labeledField(uistate.T("accountsRedesign.sweepMoveTo"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.dest")),
-						Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), acctOpt(dst.Get()))),
+						Attr("data-testid", "sweep-cfg-dest"), OnInput(onDst), acctOptFrom(sweepToOpts, dst.Get()))),
 				labeledField(uistate.T("acctSweepCfg.cadence"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("acctSweepCfg.cadence")),
 						Attr("data-testid", "sweep-cfg-cadence"), OnInput(onCadence),
