@@ -302,6 +302,32 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+## 2026-07-17 — Audit remediation verified: e2e + clean-room attribution + screenshot sweep
+
+Verification had to fight the environment more than the code. The first full suite run (45F/61P)
+was contaminated: globalSetup builds from the WORKING TREE, which carried the concurrent QA
+session's half-landed WIP (raw i18n keys in the top bar broke text-anchored specs everywhere).
+Second run from a git-archive of committed HEAD in a scratch dir (no worktrees, per the standing
+rule): 23F/87P. Third, an attribution run of those 23 against a build of the commit BEFORE this
+remediation began: every functional failure reproduces there too — the audit slices introduced
+ZERO regressions; the failures are spec drift from the parallel overhauls (2-row toolbars, goal
+templates, accounts merged-edit, import wizard, a11y baselines on /budgets + /goals). The
+sanctioned ratchets were regenerated (visual ×4, coverage ×2 — the second catch-up needed after
+the other session's upcoming-strip landed mid-verify).
+
+The 36-shot screenshot sweep (9 menus × desk/mob × themes) confirmed every audit fix visually and
+caught three real defects the specs couldn't: the fixed-layout ledger ignored the description
+width (fixed on the th — table-layout:fixed sizes from the header row), the budgets strip's
+loader figures collided in their narrower column (column-scaled type), and the phone top bar
+squeezed the sample chip into an amber sliver (readable floor; actions drop). Plus one cascade
+lesson worth keeping: display:none on a single class CANNOT beat a tw.* utility (utilities load
+last by design) — the Cloud row needed aside.rail scoping + !important to actually hide on the
+phone rail. Two mid-verify repairs: HEAD went unbuildable twice when concurrent commits referenced
+still-untracked files (txn_upcoming_strip.go, bills/pending.go) — committed the missing pairs
+additively after checking they compile + their tests pass. Final owned-spec run: 30/31 green, the
+one red being the coverage ratchet drifting again (regenerated). Deployed committed-HEAD wasm +
+fresh .gz into web/bin atomically.
+
 Thirteenth slice: the one-primary-action audit closed out. Auditing the table page by page after
 the earlier slices, eight of nine already conformed (largely by prior design: primary-last
 toolbars, the budgets rail, the waterfall card). Notifications was the gap — nothing said "act on
