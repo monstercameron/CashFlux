@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-17
+
+Minor release closing the local-first UI-refinement sweep (transfer previews, percent
+splits, goal scenarios/priority/compare, reconciliation history, balance provenance,
+liquidity classes, rule match disclosure + retroactive apply, ledger state markers,
+budget fund release, cash forecast + dashboard Focus presets, task suggestions +
+checklists, notification snooze/undo, assistant data-sharing preview, and the reports
+saved-views/snapshots/actions/event-annotations set), alongside the concurrent visual/QA
+audit remediation. Everything below accumulated under Unreleased since 1.0.14 (interim
+1.0.x version bumps shipped without cutting changelog sections).
+
 ### Added
 - **The tax-deductible workflow's rows drill to their supporting transactions (parity scan, 2026-07-17):** the named workflow already ran end to end — tick "tax-deductible" on a category, and the Annual Review's "Deductible totals" section reports the year's totals with a one-click CSV — but the lines were read-only. Each deductible category line now drills to the ledger filtered to that category's subtree within the report window, so the receipts behind every total are one click away (what a preparer actually asks for). E2E (`tax_workflow_verify.mjs`): mark → section → total → CSV → drill → filtered ledger, 7 assertions.
 - **Annual Review: month drills + partial-period honesty (parity scan, 2026-07-17):** every month row in "The year in motion" is now a drill — clicking a month name opens the ledger filtered to exactly that month's From/To, so any point of the year's story routes to its contributing transactions (joining the existing category drills and the dashboard drills). And when the review window's newest month is still in progress, the masthead states it plainly ("July is in progress — 17 of 31 days. Its figures are partial.") and the month's own row wears an *in progress* tag, so a half-elapsed month beside eleven complete ones never reads as a spending collapse. The window itself keeps walking with the top-bar period ("Year ending Jul 2026"), scope-consistent through `scope.Merge`; saved scope views (save-current-as → apply) are e2e-locked. E2E (`reports_range_verify.mjs`): 9 assertions across window-walking, drills, partial labels, and the saved-view round-trip.

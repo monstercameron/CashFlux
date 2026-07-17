@@ -131,6 +131,13 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — v1.1.0: the sweep ships as a minor release
+
+Version bump 1.0.63 → 1.1.0 (+0.1.0) and tag v1.1.0. Housekeeping note: interim 1.0.15–1.0.63
+bumps never cut CHANGELOG sections (everything piled under Unreleased since 1.0.14) and tagging
+stopped at v1.0.4 — this release cuts the whole Unreleased block into [1.1.0] and resumes
+tagging, so the next release starts from a clean Unreleased.
+
 ## 2026-07-17 — Dashboard Focus presets close the sweep
 
 Last item of the report-driven UI sweep. Presets are just curated `[]dashlayout.Item` lists
