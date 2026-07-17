@@ -481,6 +481,11 @@ func settingsDataPane(p settingsRightProps) uic.Node {
 		checkpointsSection(),
 
 		ui.Divider(),
+		// #53: the local integrity check — cross-checks the dataset against
+		// itself and lists any inconsistencies with drill-throughs.
+		dataHealthSection(),
+
+		ui.Divider(),
 		// AC16: the estate emergency pack — a plain-language document, generated on
 		// this device, for a spouse or executor who needs to step in. Framed with care
 		// and an explicit no-passwords guarantee before the action, and confirmed

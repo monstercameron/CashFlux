@@ -120,6 +120,36 @@ var lane4Keys = Catalog{
 	"documents.receiptAttachTitle":    "Put this receipt's breakdown on the existing transaction — no new row",
 	// %s ×2 = the charge's description, "N categories".
 	"documents.receiptAttached": "Attached the receipt to \"%s\" — split across %s, no new transaction created.",
+
+	// #53 — data health (local integrity check), Settings → Data.
+	"health.sectionTitle": "Data health",
+	"health.sectionHint":  "Your data, cross-checked against itself — transfer pairs, split sums, currencies, reconciliations, budget and goal arithmetic. Everything runs on this device.",
+	// %d = number of check families.
+	"health.allClear": "No inconsistencies found across %d checks.",
+	// %d = finding count.
+	"health.findingCount": "%d things worth a look:",
+	"health.sevWarning":   "warning",
+	"health.sevInfo":      "info",
+	"health.drillBtn":     "Go to it",
+	"health.drillTitle":   "Open where this lives",
+	// %s ×2 = txn description, amount.
+	"health.transferOrphan": "\"%s\" (%s) is a transfer leg with no matching leg in the other account — one side may have been deleted or edited.",
+	// %s ×3 = txn description, split sum, txn amount.
+	"health.splitSum": "\"%s\": its category lines add up to %s but the transaction is %s.",
+	// %s ×2 = txn description, its currency.
+	"health.currencyMismatch": "\"%s\" is recorded in %s, but its account uses a different currency — totals can't add it correctly.",
+	// %s = txn description.
+	"health.orphanAccount": "\"%s\" belongs to an account that no longer exists.",
+	// %s ×2 = account name, balance.
+	"health.liabilitySign": "%s is a debt account but shows a positive balance (%s) — an overpayment, or a sign flipped somewhere.",
+	// %s ×3 = account name, recorded statement balance, current cleared sum.
+	"health.reconcileDrift": "%s was reconciled at %s, but its cleared history now sums to %s — something cleared before that date changed afterwards.",
+	// %s = budget name.
+	"health.budgetLimit": "The budget \"%s\" has no positive limit, so its math can't mean anything.",
+	// %s = goal name.
+	"health.goalArithmetic": "The goal \"%s\" has an impossible amount (no positive target, or negative progress).",
+	// %s ×3 = goal name, current, target.
+	"health.goalOverfunded": "The goal \"%s\" holds %s — past its %s target. Worth celebrating, or worth checking.",
 }
 
 func init() {

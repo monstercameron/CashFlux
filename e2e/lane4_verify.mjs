@@ -380,6 +380,41 @@ await page.locator('tr[data-testid^="txn-row-"]').first().waitFor({ timeout: 200
 const costcoRows = await page.locator(".row-desc-text", { hasText: "COSTCO WHOLESALE" }).count();
 check("#58: no duplicate created — one Costco charge in the ledger", costcoRows === 1, `count=${costcoRows}`);
 
+// ─────────────── #53: data health — local integrity check ───────────────
+// Baseline: the section renders on Settings → Data.
+await nav("/settings");
+await page.waitForTimeout(1200);
+await page.locator('.set-tab-strip button', { hasText: "Data" }).first().click();
+await page.waitForTimeout(900);
+check("#53: data-health section on the Data tab", await page.locator('[data-testid="data-health-section"]').isVisible());
+const baselineRows = await page.locator('[data-testid="data-health-row"]').count();
+
+// Seed a real inconsistency: un-clear the reconciled adjustment row (#63
+// renamed it "Lane4 trust edit"), so the cleared history drifts from the
+// recorded statement balance.
+await nav("/transactions");
+await page.waitForTimeout(1500);
+const driftRow = page.locator('tr[data-testid^="txn-row-"]', { hasText: "Lane4 trust edit" }).first();
+await driftRow.waitFor({ timeout: 20000 });
+await driftRow.locator('input[type="checkbox"]').click();
+await page.waitForTimeout(600);
+await page.locator('[data-testid="bulk-mark-uncleared"]').click();
+await page.waitForTimeout(1200);
+
+await nav("/settings");
+await page.waitForTimeout(1200);
+await page.locator('.set-tab-strip button', { hasText: "Data" }).first().click();
+await page.waitForTimeout(900);
+const healthRows = page.locator('[data-testid="data-health-row"]');
+check("#53: the drift is detected", (await healthRows.count()) > baselineRows, `${baselineRows} → ${await healthRows.count()}`);
+const driftFinding = page.locator('[data-testid="data-health-row"]', { hasText: "was reconciled at" }).first();
+check("#53: finding explains the reconciliation drift in plain English", (await driftFinding.count()) > 0, (await driftFinding.innerText().catch(() => "")).replace(/\n/g, " · ").slice(0, 140));
+await shot(page, "53-data-health");
+// Drill-through lands where the problem lives.
+await driftFinding.locator('[data-testid="data-health-drill"]').click();
+await page.waitForTimeout(1200);
+check("#53: drill-through navigates to the entity's page", page.url().includes("/accounts"), page.url());
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

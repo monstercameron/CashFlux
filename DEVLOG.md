@@ -1,3 +1,47 @@
+## 2026-07-17 — #53: the dataset audits itself (lane 4)
+
+Data health closes the lane's trust arc: after checkpoints (#55), import preflights (#57), and
+per-row history (#63), internal/integrity asks whether the numbers agree with THEMSELVES. Nine
+pure check families; the strongest is reconciliation drift — the newest unforced reconciliation
+is a signed statement that cleared-history-through-date summed to X, so any later edit to that
+history is detectable forever. The e2e caught a real boundary bug on first run: statement dates
+are calendar days but transaction dates carry timestamps, so `!t.Date.After(through)` excluded
+a same-day 4:30 PM adjustment and reported drift on a perfectly reconciled account — the fix
+compares calendar-day keys, locked by TestReconcileDriftDayBoundary. Design choices: findings
+are typed (check + entity + amounts), with the screen owning the plain-English composition;
+exemptions are explicit (forced reconciliations, archived accounts, non-financial goal kinds)
+because an integrity checker that cries wolf gets ignored. Surface lives beside the checkpoints
+on Settings → Data — find a problem, and the tool to roll back from it is one section away.
+
+## 2026-07-17 — #67: the a11y gate, and what it dug up (lane 6)
+
+Built the gate first (axe-core over 12 routes + a light-theme pass, fail on serious/critical
+WCAG A/AA) and let it write the worklist: 57 gating findings. The interesting part is how few
+root causes that was.
+
+Contrast was two DERIVED TOKENS, not thirty bad colors. The theme engine's --text-faint mixed
+TextDim 0.28 toward the background — hand-tuned to "~4.6:1 on near-black", but the text sits on
+elevated cards where it landed 4.06:1. It's now computed: walk the mix back until
+contrast.Ratio ≥ 4.6 against bg-elev (a per-preset test pins it). Same story for the accent:
+#2e8b57 is a mid-green that fails as small text on dark (4.4:1) AND fails under white on its own
+fill (4.27:1) — the classic mid-tone trap. New derived --accent-ink (accent walked toward the
+text color until ≥5.2:1 — the extra margin covers accent-TINTED chip backgrounds) now carries
+every text usage; fills keep the brand accent untouched. A dozen selector-level repairs covered
+the stragglers, two with cascade lessons: the smart-peek badge's tone arrives via an atomic
+color class that outlasts a bare class rule (needs a double-class selector), and the sorted
+table header pins its color at (0,2,1) specificity.
+
+The ARIA findings were one pattern twice: labeled roles wrapping focusable children. The
+budget/goal "loaders" carried role=progressbar around figure BUTTONS — axe nested-interactive.
+Progress semantics moved to the childless fill bar as role=img with the percent in the label.
+Also: aria-label on bare spans (prohibited without a role), and the vendored d3 renderer's inner
+anonymous svg[role=img] inside our already-labeled container (hidden from AT, stamped twice
+because the renderer draws async). One real keyboard bug: closing a flip modal whose trigger
+lived in a since-closed popover dumped focus on <body> — restore now falls back to the #main
+landmark. The rest of the ticket was verification: skip-link, toast live regions, the "?"
+cheat-sheet, and the report's section index all already existed — now asserted in e2e so they
+stay. Gate: 0 findings across 13 scans; suite 56/56.
+
 ## 2026-07-17 — #58: receipts learn the ledger already knows (lane 4)
 
 The double-entry trap: the card import records the Costco run, then the receipt scan records it
