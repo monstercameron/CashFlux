@@ -1,3 +1,16 @@
+## 2026-07-17 — Phone shell fixes (parity-scan item 11/26/27)
+
+The probe explained the scan's "rail and Cloud promo obstruct content": the promo was already
+compacted away on phones (earlier commit), but the rail footer prose word-wrapped over the nav in
+its 56px column, and the top bar — nowrap — crushed .tb-title and .tb-context to width 0 so their
+overflow visually stacked (geometry probe: sample-banner squeezed to 17px, actions hogging 273px
+of a 334px row). Fixes are CSS-first (rules_mobileshell.go): topbar wraps at ≤640 (context strip
+gets its own scrollable row), rail prose hides at ≤768. The nav gap was real: the bottom tab bar
+stopped at four destinations + Add, so Goals/To-do/Notifications/Assistant/Reports only existed
+as unlabeled rail icons. The bar now scrolls all nine (Add pinned, active tab scrollIntoView on
+route change — landing on Notifications with its tab off-screen read as "no nav here"). 8/8 e2e;
+before/after screenshots at 390×844.
+
 ## 2026-07-17 — Dashboard drills (parity-scan item 10)
 
 Wired the click-through contract: every widget that shows data now routes to that data, filtered.

@@ -99,35 +99,39 @@ type mobileTabBarProps struct {
 // is left entirely intact — this is purely additive (L11).
 func MobileTabBar(props mobileTabBarProps) uic.Node {
 	cur := props.ActivePath
-	// Five fixed primary slots — enough for one-thumb reach on a 390px viewport.
-	// The +Add slot opens the Quick-Add overlay rather than navigating.
+	// ALL nine primary destinations ride in a horizontally scrollable strip —
+	// the parity scan flagged that menus 5–9 (Goals, To-do, Notifications,
+	// Assistant, Reports) had no equivalent primary navigation on phones. The
+	// +Add slot stays pinned outside the scroller so it's always one thumb away.
 	quickAdd := uistate.UseQuickAdd()
 	openAdd := uic.UseEvent(func() { quickAdd.Set(true) })
+	// Keep the ACTIVE destination visible in the scrollable strip — landing on
+	// Notifications with its tab scrolled out of view reads as "no nav here".
+	uic.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		if el := doc.Call("querySelector", ".mobile-tabbar .mobile-tab-item.active"); el.Truthy() {
+			el.Call("scrollIntoView", map[string]any{"inline": "center", "block": "nearest"})
+		}
+		return nil
+	}, cur)
+	dests := []mobileTabItemProps{
+		{Label: uistate.T("nav.dashboard"), Path: "/", Icon: icon.Dashboard, Active: cur == "/"},
+		{Label: uistate.T("nav.transactions"), Path: "/transactions", Icon: icon.Transactions, Active: cur == "/transactions"},
+		{Label: uistate.T("nav.accounts"), Path: "/accounts", Icon: icon.Accounts, Active: cur == "/accounts"},
+		{Label: uistate.T("nav.budgets"), Path: "/budgets", Icon: icon.Budgets, Active: cur == "/budgets"},
+		{Label: uistate.T("nav.goals"), Path: "/goals", Icon: icon.Goals, Active: cur == "/goals"},
+		{Label: uistate.T("nav.todo"), Path: "/todo", Icon: icon.Todo, Active: cur == "/todo"},
+		{Label: uistate.T("nav.notifications"), Path: "/notifications", Icon: icon.Bell, Active: cur == "/notifications"},
+		{Label: uistate.T("nav.assistant"), Path: "/assistant", Icon: icon.Sparkles, Active: cur == "/assistant"},
+		{Label: uistate.T("nav.reports"), Path: "/reports", Icon: icon.Reports, Active: cur == "/reports"},
+	}
+	items := make([]any, 0, len(dests)+1)
+	items = append(items, css.Class("mobile-tab-scroll"))
+	for _, d := range dests {
+		items = append(items, uic.CreateElement(mobileTabItem, d))
+	}
 	return Nav(css.Class("mobile-tabbar"), Attr("aria-label", uistate.T("nav.mobileTabLabel")),
-		uic.CreateElement(mobileTabItem, mobileTabItemProps{
-			Label:  uistate.T("nav.dashboard"),
-			Path:   "/",
-			Icon:   icon.Dashboard,
-			Active: cur == "/",
-		}),
-		uic.CreateElement(mobileTabItem, mobileTabItemProps{
-			Label:  uistate.T("nav.transactions"),
-			Path:   "/transactions",
-			Icon:   icon.Transactions,
-			Active: cur == "/transactions",
-		}),
-		uic.CreateElement(mobileTabItem, mobileTabItemProps{
-			Label:  uistate.T("nav.accounts"),
-			Path:   "/accounts",
-			Icon:   icon.Accounts,
-			Active: cur == "/accounts",
-		}),
-		uic.CreateElement(mobileTabItem, mobileTabItemProps{
-			Label:  uistate.T("nav.budgets"),
-			Path:   "/budgets",
-			Icon:   icon.Budgets,
-			Active: cur == "/budgets",
-		}),
+		Div(items...),
 		// +Add slot: opens the Quick-Add overlay (same as the top-bar Add button).
 		// It is a button — not an anchor — because it has no route destination.
 		Button(css.Class("mobile-tab-item mobile-tab-add"), Type("button"),
