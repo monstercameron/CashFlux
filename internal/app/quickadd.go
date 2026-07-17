@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/smarttext"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -44,8 +45,21 @@ func QuickAddHost() uic.Node {
 	catID := uic.UseState("")
 	date := uic.UseState("")
 	reviewed := uic.UseState(false) // L43: mark a confident entry as already reviewed
+	// QA M7: the metadata that used to require save-then-reopen (tags, member,
+	// note, cleared, report exclusion) is available at creation, folded behind a
+	// collapsed "More details" disclosure so the fast path stays five fields.
+	tagsS := uic.UseState("")
+	memberS := uic.UseState("")
+	noteS := uic.UseState("")
+	clearedS := uic.UseState(false)
+	excludeS := uic.UseState(false)
 
 	onReviewed := uic.UseEvent(func(e uic.Event) { reviewed.Set(e.IsChecked()) })
+	onTags := uic.UseEvent(func(v string) { tagsS.Set(v) })
+	onMember := uic.UseEvent(func(e uic.Event) { memberS.Set(e.GetValue()) })
+	onNote := uic.UseEvent(func(v string) { noteS.Set(v) })
+	onCleared := uic.UseEvent(func(e uic.Event) { clearedS.Set(e.IsChecked()) })
+	onExclude := uic.UseEvent(func(e uic.Event) { excludeS.Set(e.IsChecked()) })
 	onAcct := uic.UseEvent(func(e uic.Event) { acctID.Set(e.GetValue()) })
 	onAmount := uic.UseEvent(func(v string) { amount.Set(v) })
 	// TX16: on blur/Enter, evaluate an arithmetic entry ("45.99*3", "(12+8)*2")
@@ -128,6 +142,11 @@ func QuickAddHost() uic.Node {
 		catID.Set("")
 		date.Set("")
 		reviewed.Set(false)
+		tagsS.Set("")
+		memberS.Set("")
+		noteS.Set("")
+		clearedS.Set(false)
+		excludeS.Set(false)
 	}
 	closePanel := func() {
 		reset()
@@ -163,11 +182,20 @@ func QuickAddHost() uic.Node {
 		if acc.Scope == domain.ScopeIndividual {
 			member = acc.OwnerID
 		}
+		// QA M7: an explicit member pick from "More details" overrides the
+		// account-derived default.
+		if m := memberS.Get(); m != "" {
+			member = m
+		}
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
 			Desc: strings.TrimSpace(desc.Get()), CategoryID: catID.Get(),
 			Amount: money.New(amt, acc.Currency), MemberID: member, Reviewed: reviewed.Get(),
-			Source: domain.TxnSourceManual,
+			Source:             domain.TxnSourceManual,
+			Tags:               textutil.CommaFields(tagsS.Get()),
+			Note:               strings.TrimSpace(noteS.Get()),
+			Cleared:            clearedS.Get(),
+			ExcludeFromReports: excludeS.Get(),
 		}
 		// Apply auto-categorization rules on save (it won't overwrite a manual
 		// category). Quick-add is now the sole manual-add path after the inline
@@ -437,6 +465,35 @@ func QuickAddHost() uic.Node {
 		// FlipPanel footer Save/Close, so once the user exits the date input (Tab past
 		// the last segment, or Shift+Tab back) focus does proceed to those controls
 		// correctly. No code change warranted — the tab order is already correct.
+		// QA M7: the metadata that used to require save-then-find-then-edit — tags,
+		// member, note, cleared, report exclusion — folded behind a collapsed
+		// native disclosure so the everyday five-field path stays fast.
+		Details(css.Class("csv-help"), Attr("data-testid", "txn-add-more"),
+			Summary(uistate.T("quickAdd.moreDetails")),
+			Div(css.Class("form-grid"), Style(map[string]string{"margin-top": "0.5rem"}),
+				ui.FormField(uistate.T("quickAdd.tags"),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
+						Placeholder(uistate.T("quickAdd.tagsPh")), Value(tagsS.Get()), OnInput(onTags))),
+				If(len(app.Members()) > 0, ui.FormField(uistate.T("quickAdd.member"),
+					Select(css.Class("field"), Attr("data-testid", "txn-add-member"), Attr("aria-label", uistate.T("quickAdd.member")), OnChange(onMember),
+						func() []uic.Node {
+							opts := []uic.Node{Option(Value(""), SelectedIf(memberS.Get() == ""), uistate.T("quickAdd.memberAuto"))}
+							for _, m := range app.Members() {
+								opts = append(opts, Option(Value(m.ID), SelectedIf(memberS.Get() == m.ID), m.Name))
+							}
+							return opts
+						}()))),
+				ui.FormField(uistate.T("quickAdd.note"),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
+						Placeholder(uistate.T("quickAdd.notePh")), Value(noteS.Get()), OnInput(onNote))),
+				Label(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
+					Input(Type("checkbox"), Attr("data-testid", "txn-add-cleared"), OnChange(onCleared), Checked(clearedS.Get())),
+					uistate.T("quickAdd.cleared")),
+				Label(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
+					Input(Type("checkbox"), Attr("data-testid", "txn-add-exclude"), OnChange(onExclude), Checked(excludeS.Get())),
+					uistate.T("quickAdd.exclude")),
+			),
+		),
 		// C40: keep-open rapid entry. Disabled with the same validity gate as Save so
 		// it can't persist an invalid row. Lives in the body (the panel's footer Save
 		// closes the panel; this one deliberately keeps it open).

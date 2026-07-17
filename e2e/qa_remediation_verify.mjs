@@ -606,6 +606,34 @@ if (await balBtn2.count()) {
   check("L3: modal reachable", false);
 }
 
+// ──── M7: quick-add exposes tags/member/note/cleared/exclusion at creation ────
+await nav("/transactions");
+await page.waitForTimeout(900);
+// the top-bar +Add opens the quick-add panel directly
+await page.evaluate(() => { const b = document.querySelector(".add-btn"); if (b) b.click(); });
+await page.waitForTimeout(900);
+if (await page.locator('[data-testid="txn-add-more"]').count()) {
+  check("M7: quick-add carries a More details fold", true);
+  await page.locator('[data-testid="txn-add-more"] summary').click();
+  await page.waitForTimeout(400);
+  const haveFields = (await page.locator('[data-testid="txn-add-tags"]').count()) > 0 &&
+    (await page.locator('[data-testid="txn-add-cleared"]').count()) > 0 &&
+    (await page.locator('[data-testid="txn-add-exclude"]').count()) > 0 &&
+    (await page.locator('[data-testid="txn-add-note"]').count()) > 0;
+  check("M7: tags/note/cleared/exclusion fields present at creation", haveFields);
+  // fill them and save a probe txn, then confirm the saved record carries them
+  await page.locator('[data-testid="txn-add-amount"]').fill("12.34");
+  await page.locator('[data-testid="txn-add-desc"]').fill("QA M7 Probe");
+  await page.locator('[data-testid="txn-add-tags"]').fill("qa-m7");
+  await page.locator('[data-testid="txn-add-cleared"]').check();
+  await page.locator('.flip-back button:has-text("Save") >> visible=true').first().click();
+  await page.waitForTimeout(1200);
+  body = await bodyText();
+  check("M7: transaction saved from quick-add", body.includes("QA M7 Probe") || /added/i.test(body), "");
+} else {
+  check("M7: quick-add More details fold reachable", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

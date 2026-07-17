@@ -15,6 +15,18 @@ var qaPolishKeys = Catalog{
 	// user-set monthly plan is shown as its own figure so the two never blur.
 	"goals.figMonthlyNeeded": "Needed / mo",
 	"goals.figMonthlyPlan":   "Your plan / mo",
+
+	// M7 — quick-add "More details" fold: the metadata that used to require
+	// save-then-reopen, available at creation.
+	"quickAdd.moreDetails": "More details (tags, member, note…)",
+	"quickAdd.tags":        "Tags",
+	"quickAdd.tagsPh":      "vacation, reimbursable…",
+	"quickAdd.member":      "Member",
+	"quickAdd.memberAuto":  "From the account (default)",
+	"quickAdd.note":        "Note",
+	"quickAdd.notePh":      "A memo for this one transaction",
+	"quickAdd.cleared":     "Cleared (settled at the bank)",
+	"quickAdd.exclude":     "Exclude from reports and spending totals",
 }
 
 func init() {
