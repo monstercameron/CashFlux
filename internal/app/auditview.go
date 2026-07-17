@@ -82,8 +82,15 @@ func RecordAuditPoint(cs history.ChangeSet) {
 	actor := "user"
 	if sa := auditview.SessionActor(); sa != "" {
 		actor = sa
-		if sa == auditview.ActorAssistant {
+		// #54: the summary names the cause inline so exports and older UIs that
+		// only show the summary still carry the attribution.
+		switch sa {
+		case auditview.ActorAssistant:
 			summary += " · via assistant"
+		case auditview.ActorRule:
+			summary += " · by a rule"
+		case auditview.ActorImport:
+			summary += " · from an import"
 		}
 	}
 	e := auditlog.Entry{

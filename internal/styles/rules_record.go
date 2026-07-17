@@ -83,6 +83,26 @@ func registerRecordSurface() {
 		prop("font-weight", "600"),
 	)
 
+	// #54: a non-manual cause (rule / import / AI assistant) wears a small badge
+	// in the aside so automated changes are visually distinct from edits.
+	rule(".act-cause",
+		prop("display", "inline-block"),
+		prop("padding", "0.1rem 0.5rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "999px"),
+		prop("font-size", "0.72rem"),
+		prop("color", "var(--text-dim)"),
+		prop("background", "color-mix(in srgb, var(--accent) 10%, transparent)"),
+		prop("white-space", "nowrap"),
+	)
+	// #54: the downstream-figures line under a change's diff — which balances,
+	// budgets, and report figures the app recomputed because of it.
+	rule(".act-recalc",
+		prop("margin-top", "0.3rem"),
+		prop("font-size", "0.75rem"),
+		prop("color", "var(--text-faint)"),
+	)
+
 	// The aside holds actor + (on the newest row) Undo — keep them apart.
 	rule(".bento-record .row-aside",
 		prop("display", "flex"),

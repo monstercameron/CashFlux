@@ -139,6 +139,86 @@ await page.waitForTimeout(600);
 await page.locator('[data-testid="reports-scope-toggle"]').click();
 await page.waitForTimeout(500);
 
+// ───────────── #54: financial audit trail — before/after, cause, downstream ─────────────
+// Make one manual edit (toggle "Exclude from reports" on the first transaction
+// via its kebab), then read the audit trail: the entry must show a field-level
+// before → after diff, the manual actor, and the downstream figures recalculated.
+await nav("/transactions");
+// Use a fresh row (nth 3) and accept either direction of the toggle — repeated
+// runs against the same origin flip it back and forth.
+const targetRow = page.locator("table tbody tr").nth(3);
+await targetRow.hover(); // row actions are hover-revealed
+await page.waitForTimeout(300);
+await targetRow.locator('button[title="Transaction actions"], button[aria-label="Transaction actions"]').first().click({ force: true });
+await page.waitForTimeout(600);
+await page.locator('button:visible', { hasText: /Exclude from reports|Include in reports/ }).first().click();
+await page.waitForTimeout(1600);
+
+await nav("/activity");
+// Async KV autosaves and sample-seeded history share the feed — assert on OUR
+// entry: the one whose diff names the exclude-from-reports field.
+const firstEntry = page.locator(".row.act-entry", { hasText: "exclude from reports" }).first();
+check("#54: audit trail has entries", (await page.locator(".row.act-entry").count()) > 0);
+const entryText = (await firstEntry.innerText().catch(() => "")).replace(/\n/g, " ");
+const diffCount = await firstEntry.locator(".act-diff-line").count();
+check("#54: newest entry carries a field-level before → after diff", diffCount >= 1, entryText.slice(0, 200));
+if (diffCount) {
+  const before = await firstEntry.locator(".act-diff-before").first().innerText();
+  const after = await firstEntry.locator(".act-diff-after").first().innerText();
+  check("#54: diff shows distinct before and after values", before !== "" && after !== "" && before !== after, `${before} -> ${after}`);
+}
+check("#54: entry names its downstream recalculated figures",
+  (await firstEntry.locator('[data-testid="act-recalc"]').count()) === 1 && /Recalculated:/.test(entryText), entryText.slice(0, 220));
+check("#54: manual edit attributed to You", (await firstEntry.locator('[data-testid="act-actor"]').innerText().catch(() => "")).includes("You"));
+
+// Rules cause: create a rule that genuinely recategorizes an existing payee,
+// run the backfill, and check the audit entry is attributed to "Rule".
+await nav("/transactions");
+// A rule matches on payee/description CONTAINS — pull the first alphabetic word
+// (≥4 letters) from a clean data row, skipping UI badge words.
+const payeeWord = await page.evaluate(() => {
+  const stop = new Set(["EXCLUDED", "Split", "UPCOMING", "Edit", "Cleared", "Reviewed"]);
+  for (const row of document.querySelectorAll("table tbody tr")) {
+    const text = row.innerText || "";
+    // ApplyRules skips transfers and liability payments look-alikes — pick a
+    // word from a plain spending row.
+    if (/Transfer|payment|Payment/i.test(text)) continue;
+    for (const m of text.matchAll(/[A-Za-z]{4,}/g)) {
+      if (!stop.has(m[0])) return m[0];
+    }
+  }
+  return "";
+});
+await nav("/rules");
+const ruleForm = page.locator('[data-testid="rule-add-form"]').first();
+if ((await ruleForm.count()) && payeeWord.length >= 3) {
+  await ruleForm.locator('input[type="text"]').first().fill(payeeWord);
+  const catSel = ruleForm.locator("select").first();
+  const catOpts = await catSel.locator("option").all();
+  for (let i = catOpts.length - 1; i > 0; i--) { // last real category → guaranteed different for most rows
+    const v = await catOpts[i].getAttribute("value");
+    if (v) { await catSel.selectOption(v); break; }
+  }
+  await ruleForm.locator('button[type="submit"]').first().click();
+  await page.waitForTimeout(1200);
+  const applyBtn = page.locator('button:has-text("Apply to existing")').first();
+  if (await applyBtn.count()) {
+    await applyBtn.click();
+    await page.waitForTimeout(800);
+    // The backfill previews its blast radius behind a confirm dialog.
+    const confirmBtn = page.locator("#cf-dialog-confirm");
+    if (await confirmBtn.count()) await confirmBtn.click();
+    await page.waitForTimeout(1800);
+    await nav("/activity");
+    const ruleBadges = await page.locator('[data-testid="act-actor"]', { hasText: "Rule" }).count();
+    check("#54: rules backfill attributed to Rule", ruleBadges >= 1, `ruleBadges=${ruleBadges} word=${payeeWord}`);
+  } else {
+    check("#54: rules apply button reachable", false, "no 'Apply to existing' on /rules");
+  }
+} else {
+  check("#54: rule creation preconditions", false, `form=${await ruleForm.count()} word=${payeeWord}`);
+}
+
 check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 
 await browser.close();

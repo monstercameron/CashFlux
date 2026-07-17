@@ -1,3 +1,30 @@
+## 2026-07-17 — #54: the activity feed grows into an audit trail (lane 1)
+
+The capture side already existed — field-level diffs (auditlog.DiffJSON), actor stamping, SQLite
+persistence — so #54 was mostly two missing dimensions: CAUSE (only user/assistant existed) and
+CONSEQUENCE (nothing said which figures a change moved).
+
+Cause: the session-actor seam (auditview.SetSessionActor) generalizes cleanly. Rules backfill
+(`ApplyRulesWithCounts`) and the two import commits (`ImportTransactionsCSV`,
+`ImportReviewedDocumentRows`) now tag themselves, mirroring the assistant-changeset pattern —
+including the subtlety that the CAPTURE must happen inside the tagged window: the deferred call runs
+`auditview.CaptureNow()` BEFORE clearing the actor, because the normal autosave capture fires ~4s
+later when the tag is long gone and everything would stamp "user".
+
+Consequence: new pure `internal/auditimpact` maps (entityType, action, changedFields) → the
+downstream figures recomputed, derived at DISPLAY time so pre-existing entries explain themselves
+and nothing new needs persisting. The honesty constraints did the design work: a category-only edit
+must not claim balances moved; a generic settings/KV write must claim nothing (the first draft said
+"Recalculated: every converted total" under a saved-view write — a lie the e2e caught because KV
+autosaves interleave with the user's own edits in the feed).
+
+E2E lessons: (1) the feed is shared — sample-seeded history + async KV captures mean "newest row"
+is not "your row"; assert on the entry whose diff names your field. (2) txn-row actions are
+hover-revealed and every row's kebab menu is in the DOM — `button:visible` with a text filter, or
+you click a hidden menu item from another row. (3) the rules backfill hides behind a blast-radius
+confirm (`#cf-dialog-confirm`) — clicking Apply does nothing without confirming it. 25/25 green,
+including a real created-rule → backfill → Rule-badged entry round trip.
+
 ## 2026-07-17 — #62: the dashboard learns to hold your place (lane 2)
 
 The card itself is composition — the interesting work was making each row's promise TRUE. The

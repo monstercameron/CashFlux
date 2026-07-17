@@ -12,6 +12,15 @@ package auditview
 // ActorAssistant is the audit Actor value stamped on agent-made mutations.
 const ActorAssistant = "assistant"
 
+// ActorRule marks mutations made by the rules engine's backfill/apply paths
+// (#54): the audit trail distinguishes "a rule recategorized this" from a
+// manual edit.
+const ActorRule = "rule"
+
+// ActorImport marks mutations made by a file import (#54): rows created by the
+// CSV/receipt import paths rather than typed in by a person.
+const ActorImport = "import"
+
 // sessionActor overrides the recorded Actor while set. Empty means the normal
 // actor ("user"). Access is single-goroutine (the UI/tool loop), so no locking.
 var sessionActor string

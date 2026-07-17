@@ -44,6 +44,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditimpact"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -82,7 +83,10 @@ func activityRow(props activityRowProps) ui.Node {
 		actionLabel = actCapitalize(e.Action)
 	}
 
+	// #54: the actor doubles as the CAUSE — manual edit, rules engine, file
+	// import, or the AI assistant — so every row answers "who or what did this".
 	actorLabel := e.Actor
+	causeCls := ""
 	switch actorLabel {
 	case "user":
 		if v := uistate.T("activity.user"); v != "activity.user" {
@@ -96,6 +100,15 @@ func activityRow(props activityRowProps) ui.Node {
 		} else {
 			actorLabel = "System"
 		}
+	case auditview.ActorAssistant:
+		actorLabel = uistate.T("activity.causeAI")
+		causeCls = "act-cause"
+	case auditview.ActorRule:
+		actorLabel = uistate.T("activity.causeRule")
+		causeCls = "act-cause"
+	case auditview.ActorImport:
+		actorLabel = uistate.T("activity.causeImport")
+		causeCls = "act-cause"
 	}
 
 	undoBtnLabel := uistate.T("activity.undoBtn")
@@ -144,6 +157,24 @@ func activityRow(props activityRowProps) ui.Node {
 		detailNodes = append(detailNodes, Div(css.Class("act-diff-line", tw.TextFaint), uistate.T("activity.moreChanges", extra)))
 	}
 
+	// #54: name the downstream figures this change recomputed — derived from the
+	// entry's entity type, action, and changed fields via the pure auditimpact
+	// package, so historical entries explain themselves too.
+	var recalcLine ui.Node = Fragment()
+	fieldNames := make([]string, 0, len(e.Details))
+	for _, d := range e.Details {
+		fieldNames = append(fieldNames, d.Field)
+	}
+	if imp := auditimpact.Recalculated(e.EntityType, e.Action, fieldNames); len(imp) > 0 {
+		recalcLine = Div(css.Class("act-recalc"), Attr("data-testid", "act-recalc"),
+			uistate.T("activity.recalc", strings.Join(imp, " · ")))
+	}
+
+	actorCls := css.Class("row-meta", tw.TextFaint)
+	if causeCls != "" {
+		actorCls = css.Class(causeCls)
+	}
+
 	return Div(ClassStr(rowCls),
 		Div(css.Class("row-main"),
 			Div(css.Class("row-desc"),
@@ -152,9 +183,10 @@ func activityRow(props activityRowProps) ui.Node {
 			),
 			Span(css.Class("row-meta"), e.Summary),
 			If(len(detailNodes) > 0, Div(css.Class("act-diff"), detailNodes)),
+			recalcLine,
 		),
 		Div(css.Class("row-aside"),
-			If(e.Actor != "", Span(css.Class("row-meta", tw.TextFaint), actorLabel)),
+			If(e.Actor != "", Span(actorCls, Attr("data-testid", "act-actor"), actorLabel)),
 			If(showUndo,
 				Button(
 					css.Class("btn btn-xs"),

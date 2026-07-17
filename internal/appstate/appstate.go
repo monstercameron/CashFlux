@@ -21,6 +21,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/artifactstore"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -196,6 +197,14 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 // column is blank or unresolvable — pass "" to keep the previous behavior
 // (rows without an account are rejected by the validated write path).
 func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (imported int, skipped []store.CSVRowError, err error) {
+	// #54: rows created here are audit-stamped "import", and the audit point is
+	// captured while the tag is live (the deferred autosave capture would run
+	// after the tag reset).
+	auditview.SetSessionActor(auditview.ActorImport)
+	defer func() {
+		auditview.CaptureNow()
+		auditview.SetSessionActor("")
+	}()
 	base := "USD"
 	if s := a.Settings(); s.BaseCurrency != "" {
 		base = s.BaseCurrency
@@ -1092,6 +1101,13 @@ func (a *App) DeleteDocument(id string) error {
 // ledger for an account, skipping same-date/same-amount duplicates and recording
 // an import-history document when at least one row is imported.
 func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID string, rows []extract.Row) (DocumentImportResult, error) {
+	// #54: reviewed CSV/receipt rows are audit-stamped "import" (see
+	// ImportTransactionsCSV for the capture-before-reset rationale).
+	auditview.SetSessionActor(auditview.ActorImport)
+	defer func() {
+		auditview.CaptureNow()
+		auditview.SetSessionActor("")
+	}()
 	var result DocumentImportResult
 	acc, ok := domain.AccountByID(a.Accounts(), accountID)
 	if !ok {
@@ -2172,6 +2188,14 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 // Semantics are identical to ApplyRules: categories are overwritten when a rule
 // matches, tags are merged additively, and transfers are skipped.
 func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err error) {
+	// #54: recategorizations made by this backfill are audit-stamped "rule" —
+	// the trail distinguishes a rule's sweep from a person's edit. Captured
+	// before the tag resets, same as the assistant/import seams.
+	auditview.SetSessionActor(auditview.ActorRule)
+	defer func() {
+		auditview.CaptureNow()
+		auditview.SetSessionActor("")
+	}()
 	rs := a.Rules()
 	perRule = make(map[string]int, len(rs))
 	if len(rs) == 0 {
