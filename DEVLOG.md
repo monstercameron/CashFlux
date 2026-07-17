@@ -916,6 +916,22 @@ form and asserts ($450.00) after a $50 transfer; H2 uploads a real file through 
 and proves the primary Import commits the staged bytes; M1 asserts roster + lens + notice; CF-02
 asserts unarmed-click validation and both advance paths. 15/15 green, zero page errors.
 
+## 2026-07-17 — Cloud backend hardening & productionization (Phase 0: security/tokens)
+
+Kicked off the five-workstream Cloud effort (plan: zero-knowledge sync · sane gRPC idle · pro
+BE↔FE tokens · customer portal + operator console · Stripe+PayPal). Phase 0 first because the
+consoles and payments all ride the auth layer. Slice 0a: the cross-tenant leak from the earlier
+review. `/v1/audit` and `/metrics` gated on "any authenticated bearer," and `ListAuditEvents` had
+no actor filter — fine in single-tenant self-host (one principal) but in oauth multi-tenant Cloud
+any user could read the whole audit log (other users' actor_ids, IPs, target ids) and scrape
+Prometheus internals. Fix: an `httpOperatorAuthorized` check = static-server-token holder OR
+`AdminUserIDs` admin. The static-token branch matters — in self-host token mode the token holder
+IS the operator, and forcing them to also list the token's synthetic `token:<hash>` id in
+AdminUserIDs (the console's coupling gotcha) would be a footgun; a Prometheus scraper keeps working
+with the server token. Non-operators now get an actor-scoped audit read (`ListAuditEventsForActor`,
+already indexed by `idx_audit_events_actor`) — their own events only — and 403 on metrics. Tests
+now assert the isolation both ways; the old ones only checked authentication.
+
 ## 2026-07-17 — Visual/UX audit remediation begins: the shell sheds its promo card
 
 The nine-menu visual audit's core diagnosis is "lack of ruthless prioritization" — too many

@@ -485,6 +485,43 @@ LIMIT ?`, afterID, limit)
 	return events, nil
 }
 
+// ListAuditEventsForActor is the tenant-scoped audit read: it returns only the
+// events whose actor_id matches actorID. Non-admin callers use this so a Cloud
+// user can review their OWN activity without seeing the cross-tenant global log
+// (only admins call the unscoped ListAuditEvents). Same paging contract as
+// ListAuditEvents (afterID cursor, default/cap 100/500).
+func (s *Store) ListAuditEventsForActor(actorID string, afterID int64, limit int) ([]AuditEvent, error) {
+	if strings.TrimSpace(actorID) == "" {
+		return nil, nil
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	defer s.observeDB("ListAuditEventsForActor", time.Now())
+	rows, err := s.db.Query(`
+SELECT id, timestamp, actor_id, action, target_type, target_id, ip, request_id, previous_hash, hash
+FROM audit_events
+WHERE actor_id = ? AND id > ?
+ORDER BY id
+LIMIT ?`, actorID, afterID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("server store: list audit events for actor: %w", err)
+	}
+	defer rows.Close()
+	var events []AuditEvent
+	for rows.Next() {
+		event, err := scanAuditEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("server store: list audit rows for actor: %w", err)
+	}
+	return events, nil
+}
+
 // PruneAuditEventsBefore removes audit events older than before and returns the rows deleted.
 func (s *Store) PruneAuditEventsBefore(ctx context.Context, before time.Time) (int64, error) {
 	defer s.observeDB("PruneAuditEventsBefore", time.Now())

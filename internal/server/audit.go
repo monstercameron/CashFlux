@@ -56,13 +56,24 @@ func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
-		if _, ok := httpBearerUser(r, cfg); !ok {
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
 		afterID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("afterId")), 10, 64)
 		limit, _ := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("limit")))
-		events, err := store.ListAuditEvents(afterID, limit)
+		// Tenant isolation: only an operator-designated admin sees the GLOBAL audit
+		// log (every user's actor_id, IP, and target ids). A regular Cloud user gets
+		// ONLY their own actor-scoped events — the endpoint used to return the whole
+		// log to any authenticated bearer, a cross-tenant leak in multi-tenant Cloud.
+		var events []AuditEvent
+		var err error
+		if httpOperatorAuthorized(user, cfg) {
+			events, err = store.ListAuditEvents(afterID, limit)
+		} else {
+			events, err = store.ListAuditEventsForActor(user.ID, afterID, limit)
+		}
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "audit lookup failed")
 			return

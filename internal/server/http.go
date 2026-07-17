@@ -247,13 +247,31 @@ func handleCORSPreflight(cfg Config) http.HandlerFunc {
 
 func handleMetrics(cfg Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := httpBearerUser(r, cfg); !ok {
+		user, ok := httpBearerUser(r, cfg)
+		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+			return
+		}
+		// Prometheus internals (per-user usage, request/token counters, queue depth)
+		// are operator-only: the endpoint used to serve them to any authenticated
+		// user. A scraper authenticates with the static server token (operator) or an
+		// admin user; a regular Cloud user is denied.
+		if !httpOperatorAuthorized(user, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "operator access required")
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		cfg.Metrics.WritePrometheus(w)
 	}
+}
+
+// httpOperatorAuthorized reports whether an authenticated request carries
+// operator authority: it presents the configured static server token (whose
+// holder is the operator in self-host token mode), or its user is an
+// operator-designated admin (CASHFLUX_SERVER_ADMIN_USER_IDS). Used to gate the
+// cross-tenant operator surfaces (metrics, the global audit log).
+func httpOperatorAuthorized(user AuthUser, cfg Config) bool {
+	return cfg.IsAdmin(user.ID) || cfg.matchesStaticToken(user.Token)
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

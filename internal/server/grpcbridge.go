@@ -77,3 +77,26 @@ func (c Config) TokenForDisplay() string {
 	}
 	return ""
 }
+
+// matchesStaticToken reports whether token is the configured static server token
+// (plaintext CASHFLUX_SERVER_TOKEN or its sha256 CASHFLUX_SERVER_TOKEN_SHA256).
+// In self-host token mode, possessing this token IS operator authority — so
+// operator-only surfaces (audit, metrics) accept it without also requiring the
+// token's synthetic id to be listed in AdminUserIDs. Constant-time throughout.
+func (c Config) matchesStaticToken(token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+	if expected := strings.TrimSpace(c.Token); expected != "" &&
+		subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1 {
+		return true
+	}
+	if expectedHash := strings.TrimSpace(c.TokenSHA256); expectedHash != "" {
+		sum := sha256.Sum256([]byte(token))
+		if subtle.ConstantTimeCompare([]byte(hex.EncodeToString(sum[:])), []byte(expectedHash)) == 1 {
+			return true
+		}
+	}
+	return false
+}

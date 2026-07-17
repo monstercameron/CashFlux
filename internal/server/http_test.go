@@ -749,6 +749,100 @@ func TestMetricsEndpointRequiresAuth(t *testing.T) {
 	}
 }
 
+// TestMetricsEndpointRequiresOperator locks in that /metrics is operator-only:
+// a regular authenticated (non-admin, non-static-token) Cloud user is denied,
+// while an admin user is served. Prometheus internals must not leak to tenants.
+func TestMetricsEndpointRequiresOperator(t *testing.T) {
+	cfg := Config{AuthMode: "oauth", MasterKey: "0123456789abcdef0123456789abcdef", AdminUserIDs: []string{"github:admin"}, Metrics: NewMetrics()}
+	h := NewMux(cfg, openTestStore(t))
+	now := time.Now().UTC()
+
+	userToken, err := issueSessionToken(cfg, "github:1", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue user token: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("non-operator metrics status = %d, want 403", rr.Code)
+	}
+	assertHTTPErrorReason(t, rr, ErrorReasonPermissionDenied)
+
+	adminToken, err := issueSessionToken(cfg, "github:admin", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue admin token: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	rr = httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin metrics status = %d body %q", rr.Code, rr.Body.String())
+	}
+}
+
+// TestAuditEndpointIsolatesByActor locks in tenant isolation on /v1/audit: an
+// operator/admin sees the GLOBAL log (all actor_ids), but a regular Cloud user
+// sees ONLY their own actor-scoped events — the endpoint used to return the whole
+// cross-tenant log to any authenticated bearer.
+func TestAuditEndpointIsolatesByActor(t *testing.T) {
+	store := openTestStore(t)
+	for _, actor := range []string{"github:1", "github:2", "github:1"} {
+		if _, err := store.AppendAuditEvent(AuditEvent{
+			Timestamp: time.Date(2026, time.July, 18, 0, 0, 0, 0, time.UTC),
+			ActorID:   actor, Action: "workspace.put", TargetType: "workspace", TargetID: "w",
+		}); err != nil {
+			t.Fatalf("AppendAuditEvent: %v", err)
+		}
+	}
+	cfg := Config{AuthMode: "oauth", MasterKey: "0123456789abcdef0123456789abcdef", AdminUserIDs: []string{"github:admin"}, AppOrigin: "http://127.0.0.1:8080"}
+	h := NewMux(cfg, store)
+	now := time.Now().UTC()
+
+	countEvents := func(token string) (int, map[string]int) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/audit", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Origin", "http://127.0.0.1:8080")
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("audit status = %d body %q", rr.Code, rr.Body.String())
+		}
+		byActor := map[string]int{}
+		total := 0
+		dec := json.NewDecoder(strings.NewReader(rr.Body.String()))
+		for {
+			var ev AuditEvent
+			if err := dec.Decode(&ev); err != nil {
+				break
+			}
+			byActor[ev.ActorID]++
+			total++
+		}
+		return total, byActor
+	}
+
+	userToken, err := issueSessionToken(cfg, "github:1", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue user token: %v", err)
+	}
+	total, byActor := countEvents(userToken)
+	if total != 2 || byActor["github:1"] != 2 || byActor["github:2"] != 0 {
+		t.Fatalf("non-operator audit = %d events by-actor %v, want only own 2", total, byActor)
+	}
+
+	adminToken, err := issueSessionToken(cfg, "github:admin", "access", time.Hour, now)
+	if err != nil {
+		t.Fatalf("issue admin token: %v", err)
+	}
+	total, byActor = countEvents(adminToken)
+	if total != 3 || byActor["github:1"] != 2 || byActor["github:2"] != 1 {
+		t.Fatalf("admin audit = %d events by-actor %v, want global 3", total, byActor)
+	}
+}
+
 func TestAuditEndpointStreamsNDJSON(t *testing.T) {
 	store := openTestStore(t)
 	event, err := store.AppendAuditEvent(AuditEvent{
