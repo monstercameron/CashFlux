@@ -1,3 +1,20 @@
+## 2026-07-17 — QA remediation complete: 42 findings, all fixed and e2e-locked
+
+Both black-box QA reports (the 10-workflow pass and the first-nine-menus audit) are fully
+remediated. Every finding — 3 High + 7 Medium + 5 Low from report one, CF-01..CF-30 from report
+two — is fixed, committed one-feature-per-commit, and locked by e2e/qa_remediation_verify.mjs: 63
+live-browser assertions against the deployed build, 63/63 green with zero page errors; all native
+table tests green. A handful were resolved by the concurrent visual-audit session (CF-06 dashboard
+period contract, CF-07's leak half, CF-08 mobile shell, CF-11 reconciliation history) and are
+credited as such in the todo record.
+
+The recurring disease across the batch, worth remembering: SILENT state. A pointer-inert primary
+button (CF-02), a form with no submit (M2), a save with no revision bump (M1), a bulk-mark hidden
+in a page-open effect (CF-04), a row recomputing "now" behind the page's back (CF-05), a preview
+that omits what it writes (CF-19), a metric quoting a different variable than its neighbor (M4).
+The common fix was never clever: make the state visible — post the notice, thread the anchor,
+name the field, bump the revision.
+
 ## 2026-07-17 — Per-event alert prefs verified; the C2 landmine strikes again (item 24)
 
 The surface the scan asks for already existed and is better than expected: nine per-event enable
