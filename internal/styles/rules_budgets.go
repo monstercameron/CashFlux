@@ -897,6 +897,28 @@ func registerBudgetsSurface() {
 		minHeight("84px"),
 		marginBottom("0.4rem"),
 	)
+	// The loader now lives in a ~1/3-width column: the full-size serif figures
+	// (1.45/2rem, 1.5rem side padding) collided into each other there. Scale the
+	// figures to the column, tighten the padding, and let the middle "Budgeted"
+	// cell truncate before anything overlaps.
+	rule(".budget-status-strip .budget-loader-figs",
+		minHeight("84px"),
+		padding("0 0.8rem"),
+		gap("0.5rem"),
+	)
+	rule(".budget-status-strip .budget-loader-value",
+		fontSize("1.05rem"),
+	)
+	rule(".budget-status-strip .budget-loader-value.is-hero",
+		fontSize("1.35rem"),
+	)
+	rule(".budget-status-strip .budget-loader-fig",
+		overflow("hidden"),
+	)
+	rule(".budget-status-strip .budget-loader-fig .budget-loader-value",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
 	rule(".budget-status-strip .budget-agemoney",
 		marginTop("0"),
 	)

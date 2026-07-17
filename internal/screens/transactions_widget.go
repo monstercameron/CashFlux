@@ -171,7 +171,11 @@ func Transactions() ui.Node {
 		),
 	)
 
-	return Div(txnReceiptPreviewOverlay(app, previewAtom), bento)
+	return Div(txnReceiptPreviewOverlay(app, previewAtom),
+		// Pending-vs-posted: the month's still-unposted scheduled charges as
+		// ghost rows above the ledger (parity scan; billmatch-suppressed).
+		ui.CreateElement(txnUpcomingStrip, struct{}{}),
+		bento)
 }
 
 // init registers the transactions-surface widget bodies with the engine render
@@ -702,7 +706,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		if showBalance {
 			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colBalance"), Class: "td-amount"})
 		}
-		cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee"})
+		// row-desc-col: the fixed-layout ledger sizes columns from the header row, so
+	// the width-priority rule (2026-07-17 audit — description reads first) must
+	// live on the th, not the td.
+	cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee", Class: "row-desc-col"})
 		if colVis.Account {
 			cols = append(cols, uiw.Column{Label: "Account", SortKey: "account"})
 		}

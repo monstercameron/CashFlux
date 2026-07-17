@@ -262,6 +262,13 @@ func registerTxcFieldsSurface() {
 	// and full-strength ink at a solid weight; the secondary columns (account,
 	// category, source, user) stay quiet, dimmed one tier and slightly smaller so
 	// the eye lands on payee + amount first.
+	// The ledger renders with table-layout:fixed (.bento-ledger), where column
+	// widths come from the HEADER row — so the priority width lives on the
+	// Description th (row-desc-col); the td hint below still covers any
+	// auto-layout use of the same table vocabulary.
+	rule(".bento-ledger .txn-table th.row-desc-col",
+		width("34%"),
+	)
 	rule(".txn-table td.row-desc-cell",
 		width("38%"),
 		minWidth("14rem"),

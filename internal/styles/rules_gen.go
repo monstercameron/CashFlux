@@ -10806,6 +10806,17 @@ func registerGenerated() {
 	rule("[data-theme=\"light\"] .sample-banner-btn:hover",
 		color("#1c1c1e"),
 	)
+	// At phone widths the top bar has no room for the labeled chip: it squeezed
+	// into an unreadable amber sliver between the menu and period controls. The
+	// icon+label keep a readable floor and the actions drop; the full banner
+	// behavior remains available at desktop widths. (Desktop-first per the
+	// standing directive — this is a don't-look-broken guard, not a mobile flow.)
+	ruleMedia("(max-width: 640px)", ".sample-banner",
+		flexShrink("0"),
+	)
+	ruleMedia("(max-width: 640px)", ".sample-banner-actions",
+		display("none"),
+	)
 	// The chip's session-dismiss ✕: quiet icon button, same amber family.
 	rule(".sample-banner-x",
 		display("inline-flex"),
