@@ -56,10 +56,12 @@ func merchantContextPanel(app *appstate.App, txn domain.Transaction) ui.Node {
 		merchantStoryNodes(stats, merchant, base, thisMag, hasThis))
 }
 
-// sparklineSVG draws a tiny polyline of the last-N charge magnitudes with no
-// chart library — a bare SVG scaled to the min/max of the series. A series of one
-// point (or all-equal values) draws a flat baseline.
-func sparklineSVG(series []int64) ui.Node {
+// sparklineSVG draws a tiny polyline of a series with no chart library — a bare
+// SVG scaled to its min/max. A series of one point (or all-equal values) draws a
+// flat baseline. alt is the accessible name — every call site says what ITS
+// sparkline shows (QA CF-30: the report's net-worth shape used to announce
+// "Recent charges at this merchant").
+func sparklineSVG(series []int64, alt string) ui.Node {
 	if len(series) < 2 {
 		return Fragment()
 	}
@@ -87,7 +89,7 @@ func sparklineSVG(series []int64) ui.Node {
 	return Svg(
 		Attr("viewBox", fmt.Sprintf("0 0 %d %d", w, h)),
 		Attr("width", strconv.Itoa(w)), Attr("height", strconv.Itoa(h)),
-		Attr("role", "img"), Attr("aria-label", uistate.T("merchantPanel.sparklineAlt")),
+		Attr("role", "img"), Attr("aria-label", alt),
 		Attr("preserveAspectRatio", "none"),
 		Polyline(Attr("points", strings.Join(pts, " ")),
 			Attr("fill", "none"), Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5")),

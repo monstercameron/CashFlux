@@ -634,6 +634,23 @@ if (await page.locator('[data-testid="txn-add-more"]').count()) {
   check("M7: quick-add More details fold reachable", false);
 }
 
+// ──────────── CF-30: honest alt text, no nested image descriptions, plurals ────────────
+await nav("/reports");
+await page.waitForTimeout(2000);
+const sparkAlt = await page.evaluate(() => {
+  const s = document.querySelector(".rpta-fig-spark svg");
+  return s ? s.getAttribute("aria-label") : "(none)";
+});
+check("CF-30: net-worth sparkline alt describes net worth", sparkAlt !== "(none)" && /net worth/i.test(sparkAlt), sparkAlt);
+const flowNested = await page.evaluate(() => {
+  const svg = document.querySelector('[data-testid="rpta-flow-svg"]');
+  if (!svg) return "absent";
+  return svg.getAttribute("aria-hidden") === "true" ? "hidden" : "exposed:" + svg.getAttribute("aria-label");
+});
+check("CF-30: flow diagram exposes ONE description (inner SVG hidden)", flowNested === "hidden" || flowNested === "absent", flowNested);
+body = await bodyText();
+check("CF-30: no '1 txns' pluralization on reports", !/\b1 txns\b/.test(body), "");
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

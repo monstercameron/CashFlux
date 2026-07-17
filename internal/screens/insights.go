@@ -2582,7 +2582,8 @@ func insightsMerchantRow(props insightsMerchantRowProps) ui.Node {
 	m := props.Merchant
 	drill := ui.UseEvent(func() { props.OnDrill(m.Name) })
 	amtStr := fmtMoney(money.New(m.Total, props.Base))
-	txLabel := uistate.T("insights.merchantTxCount", m.Count)
+	// QA CF-30: "(1 txns)" — pluralize via the shared helper.
+	txLabel := "(" + plural(m.Count, "txn") + ")"
 	ariaLabel := uistate.T("insights.merchantDrillAria", m.Name)
 	return Button(
 		css.Class("insight-row insight-row--clickable"),

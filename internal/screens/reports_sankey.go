@@ -132,8 +132,11 @@ func rptaMoneyFlowSVG(flows []reports.Flow, colors *rptaFlowColors, incomeTotal 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, `<svg class="rpta-flow-svg" viewBox="0 0 %.0f %.0f" role="img" aria-label="%s" data-testid="rpta-flow-svg">`,
-		w, h, esc(uistate.T("rpta.flowAlt")))
+	// The HOST div (role=img + aria-label, see the render func) owns the
+	// accessible description; a second role=img on the inner SVG made assistive
+	// tech announce the same description twice, nested (QA CF-30).
+	fmt.Fprintf(&b, `<svg class="rpta-flow-svg" viewBox="0 0 %.0f %.0f" aria-hidden="true" data-testid="rpta-flow-svg">`,
+		w, h)
 
 	b.WriteString("<defs>")
 	for i, l := range layout.Links {

@@ -193,7 +193,7 @@ func merchantStoryNodes(stats merchantstats.Stats, merchant, base string, thisMa
 // preserveAspectRatio="none", which would distort any text inside it).
 func merchantSparkline(mags []int64, dates []time.Time, base string) ui.Node {
 	if len(mags) < 2 || len(dates) != len(mags) {
-		return sparklineSVG(mags) // fall back to the bare line if dates are unavailable
+		return sparklineSVG(mags, uistate.T("merchantPanel.sparklineAlt")) // fall back to the bare line if dates are unavailable
 	}
 	lo, hi := mags[0], mags[0]
 	for _, v := range mags {
@@ -208,7 +208,7 @@ func merchantSparkline(mags []int64, dates []time.Time, base string) ui.Node {
 	oldest, newest := dates[0], dates[len(dates)-1]
 	return Div(css.Class("mtrend-spark"),
 		Div(css.Class("mtrend-spark-row"),
-			sparklineSVG(mags),
+			sparklineSVG(mags, uistate.T("merchantPanel.sparklineAlt")),
 			// y-axis legend: highest charge at the top, lowest at the bottom.
 			Div(css.Class("mtrend-spark-yaxis"),
 				Span(css.Class("mtrend-spark-hi"), fmtMoney(money.New(hi, base))),

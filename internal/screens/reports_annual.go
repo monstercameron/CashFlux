@@ -1922,6 +1922,8 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 			Rows: rows, IncomeRows: incomeRows, Payees: payees, NameOf: nameOf,
 			Base: base, PeriodLabel: from.Format("Jan 2006"),
 		}),
+		// Life-event annotations: the events intersecting this report window.
+		ui.CreateElement(reportEventChips, struct{}{}),
 	)
 }
 

@@ -16,6 +16,11 @@ var qaPolishKeys = Catalog{
 	"goals.figMonthlyNeeded": "Needed / mo",
 	"goals.figMonthlyPlan":   "Your plan / mo",
 
+	// CF-30 — honest chart alt text: each sparkline says what IT shows (the
+	// report's net-worth shape used to announce "Recent charges at this merchant").
+	"rpta.nwSparkAlt":  "Net worth over the last 12 months",
+	"rpta.catSparkAlt": "Monthly spending over the year",
+
 	// M7 — quick-add "More details" fold: the metadata that used to require
 	// save-then-reopen, available at creation.
 	"quickAdd.moreDetails": "More details (tags, member, note…)",
