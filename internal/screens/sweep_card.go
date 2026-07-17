@@ -11,7 +11,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -154,19 +153,6 @@ func budgetsSweepCard() ui.Node {
 			action,
 		),
 	)
-}
-
-// sweepConfigToolbarButton is the "Sweep leftovers" btn-tool for the budgets
-// toolbar. It opens the config flip modal (rendered from the surface root). Its
-// own component so its click hook stays at a stable position.
-func sweepConfigToolbarButton() ui.Node {
-	openAtom := uistate.UseSweepConfigOpen()
-	onOpen := ui.UseEvent(Prevent(func() { openAtom.Set(true) }))
-	return Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-sweep-config"), Title(uistate.T("sweep.openConfig")),
-		OnClick(onOpen),
-		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(uistate.T("sweep.openConfig")))
 }
 
 // budgetsSweepConfigModal renders the "Sweep leftovers" flip modal when its open

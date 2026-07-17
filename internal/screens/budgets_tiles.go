@@ -72,6 +72,12 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		return Fragment()
 	}
 	smartSettings := uistate.LoadSmartSettings()
+	// UX-05: a wholly-past view window flips the summary into past-tense wording —
+	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
+	// closed month reads as a live figure that will still move. Range is half-open,
+	// so the window is historical exactly when its end is not after now.
+	_, wEnd := vw.Range()
+	hist := !time.Now().Before(wEnd)
 	// A discoverable button that opens the "Income to budget with" modal (the income-
 	// source picker + rules) — present in every method, so simple/envelope users can set
 	// which income funds the budget just like zero-based users.
@@ -118,6 +124,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		spendLimitLabel = uistate.T("budgets.budgeted")
 		leftLabel = uistate.T("budgets.lastMonthUnspent")
 	}
+	if hist && !v.LastMonthMode {
+		// A closed period has no "Left" — what remained is a historical fact.
+		leftLabel = uistate.T("budgets.histUnspent")
+	}
 	leftM := money.New(spendLimit-barSpent, v.Base)
 	over := barSpent > spendLimit
 	fillPct := 0
@@ -135,7 +145,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	switch {
 	case over:
 		fillCls += " is-over"
-	case v.LastMonthMode:
+	case v.LastMonthMode, hist:
 		fillCls += " is-hist" // history is neutral — green/amber are live statements
 	case fillPct >= 85:
 		fillCls += " is-near"
@@ -164,7 +174,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Div(css.Class("budget-loader-fig", "is-right"),
 				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
 					leftLabel,
-					If(!v.LastMonthMode, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
+					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
 				),
 				Div(ClassStr("budget-loader-value is-hero "+accentFor(leftM)), budgetLeftValue(leftM)),
 			),
@@ -181,6 +191,13 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	var lastMonthTag ui.Node = Fragment()
 	if v.LastMonthMode {
 		lastMonthTag = Div(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budgets-summary-lastmonth"), uistate.T("budgets.lastMonthCap"))
+	}
+
+	// The caption over the spend graph: "Spending so far this month" while the period
+	// is live, "<period> spending" (e.g. "Jun 2026 spending") once it has ended.
+	spendCap := uistate.T("budgets.zbbSpendCap")
+	if hist {
+		spendCap = uistate.T("budgets.histSpendCap", vw.Label())
 	}
 
 	// The sinking-fund commitment checks against the method's still-unallocated
@@ -213,7 +230,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	strip := Div(css.Class("budget-status-strip"), Attr("data-testid", "budgets-status-strip"),
 		Div(css.Class("budget-strip-cell is-plan"), planCell),
 		Div(css.Class("budget-strip-cell is-spend"),
-			IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), uistate.T("budgets.zbbSpendCap"))),
+			IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), Attr("data-testid", "budgets-spend-cap"), spendCap)),
 			statGrid),
 		Div(css.Class("budget-strip-cell is-age"), budgetAgeOfMoneyNode(v, smartSettings)),
 	)
@@ -232,9 +249,18 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			overAssigned = -d
 		}
 	}
+	// UX-05: open follow-up to-dos linked to any budget feed the rail, so a closed
+	// month can report its "N unresolved follow-ups" honestly.
+	followUps := 0
+	for _, t := range app.Tasks() {
+		if t.RelatedType == domain.RelatedBudget && t.RelatedID != "" && t.Status != domain.StatusDone {
+			followUps++
+		}
+	}
 	rail := ui.CreateElement(budgetIssuesRail, budgetIssuesRailProps{
 		View: v, SmartSettings: smartSettings,
 		OverAssigned: overAssigned, FundFree: fundFree, FundHasPool: fundHasPool,
+		Hist: hist, FollowUps: followUps,
 	})
 
 	body := Div(strip, rail, rangeHint)
@@ -325,7 +351,31 @@ func budgetDensityLabelKey(density string) string {
 // to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
 // overBannerText renders the over-budget banner copy with correct grammar for a
 // single over-budget category (the plural string read "1 budgets are over").
-func overBannerText(count int, total string) string {
+// hiddenIf returns the " hidden-menu" class suffix when hide is true — the same
+// convention the shared kebab menus use to keep closed popovers in the DOM.
+func hiddenIf(hide bool) string {
+	if hide {
+		return " hidden-menu"
+	}
+	return ""
+}
+
+// nearBadgeText renders the near-limit count, past-tense on a closed period
+// ("2 finished near the limit") and present-tense while the period is live.
+func nearBadgeText(count int, hist bool) string {
+	if hist {
+		return uistate.T("budgets.histNearBadge", count)
+	}
+	return uistate.T("budgets.nearBadge", count)
+}
+
+func overBannerText(count int, total string, hist bool) string {
+	if hist {
+		if count == 1 {
+			return uistate.T("budgets.histOverBannerOne", total)
+		}
+		return uistate.T("budgets.histOverBanner", count, total)
+	}
 	if count == 1 {
 		return uistate.T("budgets.overBannerOne", total)
 	}
@@ -1104,6 +1154,11 @@ type budgetIssuesRailProps struct {
 	OverAssigned  int64
 	FundFree      int64
 	FundHasPool   bool
+	// Hist marks a wholly-past view window (UX-05): counts read in the past tense
+	// ("ended over budget") and open follow-ups count as an item to review.
+	Hist bool
+	// FollowUps is the number of open to-dos linked to any budget.
+	FollowUps int
 }
 
 // budgetIssuesRail is the audit-P0 replacement for the summary's stacked warning
@@ -1119,6 +1174,16 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	nav := router.UseNavigate()
 	goAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
+	// UX-05: every count on the rail is clickable — it narrows the budget list to
+	// exactly the budgets behind that number, so nothing on the page is unexplainable.
+	att := uistate.UseBudgetAttention()
+	filterOver := ui.UseEvent(Prevent(func() { att.Set(uistate.BudgetAttentionOver) }))
+	filterNear := ui.UseEvent(Prevent(func() { att.Set(uistate.BudgetAttentionNear) }))
+	goTodos := ui.UseEvent(Prevent(func() {
+		uistate.SetTodoFilterLink(uistate.TodoLinkBudget)
+		uistate.SetTodoFilterLinkID("")
+		nav.Navigate(uistate.RoutePath("/todo"))
+	}))
 
 	fundShort := v.TotalFundSetAside > 0 && props.FundHasPool && v.TotalFundSetAside > props.FundFree
 	count := 0
@@ -1131,20 +1196,33 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	if fundShort {
 		count++
 	}
+	// A closed month's open follow-ups are unfinished business worth surfacing.
+	if props.Hist && props.FollowUps > 0 {
+		count++
+	}
 
 	if count == 0 {
-		// Healthy: at most the quiet set-aside footnote and/or a near-limit pill.
+		// Healthy: at most the quiet set-aside footnote and/or a near-limit pill —
+		// the pill filters the list to those budgets on click.
 		return Div(
 			If(v.TotalFundSetAside > 0, P(css.Class("budget-sub"), Attr("data-testid", "budgets-fund-setaside"),
 				uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))),
 			If(v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount)))),
+				Button(css.Class("pill is-warn"), Type("button"), Attr("data-testid", "budgets-near-filter"),
+					Title(uistate.T("budgets.filterNearTitle")), OnClick(filterNear),
+					nearBadgeText(v.NearCount, props.Hist)))),
 		)
 	}
 
 	title := uistate.T("budgets.issuesRailOne")
 	if count != 1 {
 		title = uistate.T("budgets.issuesRail", count)
+	}
+	if props.Hist {
+		title = uistate.T("budgets.histIssuesRailOne")
+		if count != 1 {
+			title = uistate.T("budgets.histIssuesRail", count)
+		}
 	}
 	// Over-assignment is the page's to-do: the Resolve figure rides the header.
 	var resolve ui.Node = Fragment()
@@ -1164,7 +1242,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
 		Span(css.Class("budget-issues-title"), title),
 		resolve,
-		If(v.NearCount > 0, Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount))),
+		If(v.NearCount > 0, Span(css.Class("pill is-warn"), nearBadgeText(v.NearCount, props.Hist))),
 		uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
 	)
 
@@ -1188,10 +1266,35 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		rows = append(rows, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
 			Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
-			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)))),
+			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)), props.Hist)),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-filter-over"),
+				Title(uistate.T("budgets.filterOverTitle")), OnClick(filterOver), uistate.T("budgets.filterShow")),
 			// SMART-B14: one-tap entry to cover every overage at once (Free, opt-out).
 			If(props.SmartSettings.IsEnabled(coverAllFeatureCode),
 				ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
+		))
+	}
+	if v.NearCount > 0 {
+		rows = append(rows, Div(css.Class("budget-issue-row"), Attr("data-testid", "budgets-issue-near"),
+			Div(css.Class("budget-issue-main"),
+				Span(css.Class("budget-issue-title"), nearBadgeText(v.NearCount, props.Hist)),
+			),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-filter-near"),
+				Title(uistate.T("budgets.filterNearTitle")), OnClick(filterNear), uistate.T("budgets.filterShow")),
+		))
+	}
+	if props.FollowUps > 0 {
+		fuTxt := uistate.T("budgets.followUpsCountOne")
+		if props.FollowUps != 1 {
+			fuTxt = uistate.T("budgets.followUpsCount", props.FollowUps)
+		}
+		rows = append(rows, Div(css.Class("budget-issue-row"), Attr("data-testid", "budgets-issue-followups"),
+			Div(css.Class("budget-issue-main"),
+				Span(css.Class("budget-issue-title"), fuTxt),
+				Span(css.Class("budget-issue-body"), uistate.T("budgets.followUpsRowBody")),
+			),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-followups-view"),
+				Title(uistate.T("budgets.followUpsRowView")), OnClick(goTodos), uistate.T("budgets.followUpsRowView")),
 		))
 	}
 	if fundShort {
@@ -1264,13 +1367,13 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 
 	// Whether any budget is visible in the current scope — the add button shows only
 	// then (the empty-state CTA owns the first add otherwise).
-	hasBudgets := false
+	visibleBudgets := 0
 	for _, b := range app.Budgets() {
 		if ownerVisibleTo(b.OwnerID, activeMemberID) {
-			hasBudgets = true
-			break
+			visibleBudgets++
 		}
 	}
+	hasBudgets := visibleBudgets > 0
 
 	// Open the add-budget modal (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
@@ -1329,8 +1432,9 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	lastMonthAtom := uistate.UseBudgetsLastMonth()
 	toggleLastMonth := ui.UseEvent(Prevent(func() { lastMonthAtom.Set(!lastMonthAtom.Get()) }))
 	// Density: full cards ⇄ the compact one-line list. Persisted — how you read the
-	// page is a lasting preference, not a per-visit tweak.
-	densityAtom := uistate.UseBudgetDensity()
+	// page is a lasting preference, not a per-visit tweak. With no stored choice, a
+	// household past six budgets starts compact (UX-05) — cards become the drill-in.
+	densityAtom := uistate.UseBudgetDensitySeeded(visibleBudgets > 6)
 	toggleDensity := ui.UseEvent(Prevent(func() {
 		next := uistate.BudgetDensityCompact
 		if densityAtom.Get() == uistate.BudgetDensityCompact {
@@ -1339,6 +1443,16 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		densityAtom.Set(next)
 		uistate.PersistBudgetDensity(next)
 	}))
+	// UX-05: the four equal-weight bulk tools (Last month's spend, Auto budget, Sweep
+	// leftovers, Adjust all) fold into ONE "Automate" menu, so the action row carries
+	// three clear choices — density, Automate, Add — instead of six ghost buttons.
+	sweepAtom := uistate.UseSweepConfigOpen()
+	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
+	autoMenuOpen := ui.UseState(false)
+	toggleAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(!autoMenuOpen.Get()) }))
+	closeAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(false) }))
+	uiw.DismissPopover(autoMenuOpen.Get(), "budgets-automate-wrap", func() { autoMenuOpen.Set(false) })
+	uiw.AnchorPopover(autoMenuOpen.Get(), "budgets-automate-wrap")
 	// C112: switch the budgeting methodology right from /budgets.
 	onMethod := ui.UseEvent(func(e ui.Event) {
 		s := app.Settings()
@@ -1387,20 +1501,41 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 				Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T(budgetDensityLabelKey(densityAtom.Get())))),
-			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
-				Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
-				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
-			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-autobudget"),
-				Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
-				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
-			// XC6: open the leftover-sweep config (own component so its click hook is stable).
-			sweepConfigToolbarButton(),
-			// G2: percent-based bulk limit adjustment across every visible budget.
-			If(hasBudgets, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "budgets-adjust-all"), Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
-				uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
+			// UX-05: ONE "Automate" menu holds the bulk tools (the four ghost buttons
+			// carried equal visual weight but none is an everyday action). Items keep
+			// their original data-testids. Same .add-wrap/.add-menu chrome as the row
+			// kebabs — viewport-aware via AnchorPopover, dismissed via DismissPopover.
+			Div(ClassStr("add-wrap"), Attr("id", "budgets-automate-wrap"),
+				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "budgets-automate"), Attr("aria-haspopup", "menu"),
+					Attr("aria-expanded", ariaBool(autoMenuOpen.Get())),
+					Title(uistate.T("budgets.automateTitle")), OnClick(toggleAutoMenu),
+					uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("budgets.automate")),
+					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
+				Div(ClassStr("add-backdrop"+hiddenIf(!autoMenuOpen.Get())), OnClick(closeAutoMenu)),
+				Div(ClassStr("add-menu"+hiddenIf(!autoMenuOpen.Get())), Attr("role", "menu"), OnClick(closeAutoMenu),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
+						Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
+						uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+						Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "budgets-autobudget"),
+						Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
+						uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
+					// XC6: the leftover-sweep config modal.
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "budgets-sweep-config"),
+						Title(uistate.T("sweep.openConfig")), OnClick(openSweep),
+						uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("sweep.openConfig"))),
+					// G2: percent-based bulk limit adjustment across every visible budget.
+					If(hasBudgets, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "budgets-adjust-all"),
+						Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
+						uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
+				),
+			),
 			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
@@ -1446,8 +1581,13 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	// state (no atom / no data-revision bump): typing only re-renders this tile.
 	search := ui.UseState("")
 	onSearch := ui.UseEvent(func(v string) { search.Set(v) })
-	// Density: full cards (default) or the compact one-line list for long budget lists.
-	compact := uistate.UseBudgetDensity().Get() == uistate.BudgetDensityCompact
+	// UX-05: the attention filter set by the issues rail's clickable counts. Cleared
+	// by the chip's "Show all".
+	att := uistate.UseBudgetAttention()
+	clearAtt := ui.UseEvent(Prevent(func() { att.Set("") }))
+	// Density: full cards (default) or the compact one-line list for long budget lists;
+	// households past six budgets start compact unless they've chosen otherwise (UX-05).
+	compact := uistate.UseBudgetDensitySeeded(len(v.Statuses) > 6).Get() == uistate.BudgetDensityCompact
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
 	// category (mirrors Accounts→Transactions, C30/C50).
@@ -1501,6 +1641,36 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				}
 			}
 			visible = filtered
+		}
+		// UX-05: the attention filter narrows the list to exactly the budgets behind
+		// the count the user clicked in the issues rail, with a dismissible chip above
+		// the list saying what it's showing.
+		var attChip ui.Node = Fragment()
+		if key := att.Get(); key != "" {
+			filtered := make([]budgeting.Status, 0, len(visible))
+			for _, s := range visible {
+				switch key {
+				case uistate.BudgetAttentionOver:
+					if s.State == budgeting.StateOver {
+						filtered = append(filtered, s)
+					}
+				case uistate.BudgetAttentionNear:
+					if s.State == budgeting.StateNear {
+						filtered = append(filtered, s)
+					}
+				}
+			}
+			visible = filtered
+			chipTxt := uistate.T("budgets.attentionOver")
+			if key == uistate.BudgetAttentionNear {
+				chipTxt = uistate.T("budgets.attentionNear")
+			}
+			attChip = Div(css.Class("budget-search-empty", tw.Flex, tw.ItemsCenter, tw.Gap2),
+				Attr("data-testid", "budgets-attention-chip"), Attr("role", "status"),
+				Span(chipTxt),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-attention-clear"),
+					Title(uistate.T("budgets.attentionClear")), OnClick(clearAtt), uistate.T("budgets.attentionClear")),
+			)
 		}
 		// The search field appears only once the list is long enough to be worth scanning,
 		// so short lists stay clean. Gated on the total count, not the filtered one, so it
@@ -1561,7 +1731,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		if compact {
 			listCls = "budget-clist"
 		}
-		body = Fragment(searchBar, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
+		body = Fragment(searchBar, attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

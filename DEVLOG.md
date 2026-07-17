@@ -1,3 +1,23 @@
+## 2026-07-17 — UX-05: budgets learn past tense, and every count earns its click (lane 5)
+
+The deep-dive's sharpest budgets finding was a tense bug wearing a UX costume: page back to June
+and the summary still said "Spending so far this month" with a green live-progress bar — settled
+history presented as a moving figure. The fix keys off one fact (`!now.Before(windowEnd)` on the
+half-open period range): caption becomes "Jun 2026 spending", Left → Unspent, the fill takes the
+neutral `is-hist` tone, the safe-to-spend tooltip disappears, and the issues rail rewrites itself
+in past tense — including a new "unresolved follow-ups" row (open budget-linked to-dos) that only
+counts as an issue on a closed month, where it is genuinely unfinished business.
+
+Second theme: no unexplainable numbers. The over/near counts were dead text; now each is a button
+that sets a `budgets:attention` atom the list narrows on, with a "Showing … only / Show all" chip.
+Notable constraint: the rail header is itself a `<button>`, so the near pill INSIDE it stays a
+span (nested buttons are invalid HTML) — the clickable versions live in the expanded rows and the
+healthy-state footnote instead. Third: the toolbar's four equal-weight bulk tools collapsed into
+one "Automate" popover (kebab chrome, original testids kept so existing e2e selectors still
+resolve), and >6 budgets now seed the compact list when no density was ever chosen — an explicit
+persisted choice always wins. 11 new e2e assertions green on the lane server, 0 page errors;
+follow-ups-collapse asserted structurally (sample data has no budget-linked to-dos to click).
+
 ## 2026-07-17 — #75: Notifications polish — the 8.4 page gets its last mile (lane 6)
 
 Three small dents in the deep-dive's strongest page. "Due in 0 days" is the classic

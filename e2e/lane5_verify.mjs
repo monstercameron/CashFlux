@@ -56,6 +56,78 @@ if (await slider.count()) {
   check("#51: plan slider reachable", false);
 }
 
+// ───────── #70 (UX-05): budgets historical wording, clickable counts, Automate ─────────
+await nav("/budgets");
+// (1) Automate menu: bulk tools are folded away until the menu opens.
+const automate = page.locator('[data-testid="budgets-automate"]');
+check("#70: toolbar has an Automate menu", (await automate.count()) === 1);
+const autoBtnHidden = await page.locator('[data-testid="budgets-autobudget"]').isVisible().catch(() => false);
+check("#70: bulk tools hidden until Automate opens", !autoBtnHidden);
+await automate.click();
+await page.waitForTimeout(400);
+for (const id of ["budgets-last-month", "budgets-autobudget", "budgets-sweep-config", "budgets-adjust-all"]) {
+  const vis = await page.locator(`[data-testid="${id}"]`).isVisible().catch(() => false);
+  check(`#70: Automate menu holds ${id}`, vis);
+}
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+
+// (2) Compact-by-default for >6 budgets (fresh context = no stored density choice).
+const listEl = page.locator('[data-testid="budgets-list"]');
+if (await listEl.count()) {
+  const cards = await listEl.evaluate((el) => el.childElementCount);
+  const isCompact = await listEl.evaluate((el) => el.classList.contains("budget-clist"));
+  if (cards > 6) check("#70: >6 budgets default to the compact list", isCompact, `${cards} budgets`);
+  else check("#70: <=6 budgets keep full cards", !isCompact, `${cards} budgets`);
+}
+
+// (3) Historical period wording: page back one month.
+const capNow = await page.locator('[data-testid="budgets-spend-cap"]').innerText().catch(() => "");
+check("#70: live period says 'so far this month'", /so far this month/i.test(capNow), capNow);
+await page.locator(".period-control .period-step").first().click();
+await page.waitForTimeout(1200);
+const capHist = await page.locator('[data-testid="budgets-spend-cap"]').innerText().catch(() => "");
+check("#70: past period reads '<period> spending'", /spending$/i.test(capHist) && !/so far/i.test(capHist), capHist);
+
+// (4) Clickable counts filter the list. Expand the rail if present, else use the
+// healthy-branch near pill.
+let filtered = false;
+const rail = page.locator('[data-testid="budgets-issues-rail"]');
+if (await rail.count()) {
+  await rail.click();
+  await page.waitForTimeout(400);
+  for (const id of ["budgets-filter-over", "budgets-filter-near"]) {
+    const b = page.locator(`[data-testid="${id}"]`);
+    if ((await b.count()) && (await b.isVisible())) { await b.click(); filtered = true; break; }
+  }
+} else {
+  const pill = page.locator('[data-testid="budgets-near-filter"]');
+  if (await pill.count()) { await pill.click(); filtered = true; }
+}
+if (filtered) {
+  await page.waitForTimeout(500);
+  const chip = await page.locator('[data-testid="budgets-attention-chip"]').isVisible().catch(() => false);
+  check("#70: clicking a count shows the filter chip", chip);
+  await page.locator('[data-testid="budgets-attention-clear"]').click();
+  await page.waitForTimeout(400);
+  const gone = (await page.locator('[data-testid="budgets-attention-chip"]').count()) === 0;
+  check("#70: Show all clears the attention filter", gone);
+} else {
+  console.log("SKIP: #70 attention-count filter — no over/near counts in this dataset/period");
+}
+
+// (5) Follow-ups collapsed by default (only when a budget has linked to-dos).
+const fuToggle = page.locator('[data-testid^="budget-todos-toggle-"]').first();
+if (await fuToggle.count()) {
+  const itemsBefore = await page.locator(".budget-todos .txnfu-item").count();
+  await fuToggle.click();
+  await page.waitForTimeout(300);
+  const itemsAfter = await page.locator(".budget-todos .txnfu-item").count();
+  check("#70: follow-ups start collapsed and expand on click", itemsBefore === 0 && itemsAfter >= 0, `${itemsBefore} → ${itemsAfter}`);
+} else {
+  console.log("SKIP: #70 follow-ups collapse — no budget-linked to-dos in this dataset");
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

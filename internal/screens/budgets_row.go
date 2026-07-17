@@ -185,6 +185,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 	}
 	openTodos := ui.UseEvent(Prevent(func() { openBudgetTodos() }))
+	// UX-05: the linked follow-ups list starts collapsed — the header row (with its
+	// open/total count) is always visible; the items reveal on click.
+	todosOpen := ui.UseState(false)
+	toggleTodos := ui.UseEvent(Prevent(func() { todosOpen.Set(!todosOpen.Get()) }))
 	removeRecurring := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		if props.OnRemoveRecurring != nil {
@@ -549,17 +553,32 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				open++
 			}
 		}
-		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-"+s.Budget.ID),
-			Span(css.Class("budget-todos-head"), uistate.T("budgets.followUpsHead", open, len(linkedTodos)))}
-		for i, it := range linkedTodos {
-			if i >= maxTodos {
-				break
-			}
-			kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due, OnOpen: openBudgetTodos}))
+		toggleHint := uistate.T("budgets.followUpsShow")
+		chev := icon.ChevronDown
+		if todosOpen.Get() {
+			toggleHint = uistate.T("budgets.followUpsHide")
+			chev = icon.ChevronUp
 		}
-		if extra := len(linkedTodos) - maxTodos; extra > 0 {
-			kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"), Attr("data-testid", "budget-todos-more-"+s.Budget.ID),
-				OnClick(openTodos), uistate.T("budgets.followUpsMore", extra)))
+		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-"+s.Budget.ID),
+			Button(css.Class("budget-todos-head"), Type("button"),
+				Attr("data-testid", "budget-todos-toggle-"+s.Budget.ID),
+				Attr("aria-expanded", ariaBool(todosOpen.Get())), Title(toggleHint), OnClick(toggleTodos),
+				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0",
+					"font": "inherit", "color": "inherit", "cursor": "pointer",
+					"display": "inline-flex", "align-items": "center", "gap": "0.25rem"}),
+				Span(uistate.T("budgets.followUpsHead", open, len(linkedTodos))),
+				uiw.Icon(chev, css.Class(tw.ShrinkO, tw.W35, tw.H35)))}
+		if todosOpen.Get() {
+			for i, it := range linkedTodos {
+				if i >= maxTodos {
+					break
+				}
+				kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due, OnOpen: openBudgetTodos}))
+			}
+			if extra := len(linkedTodos) - maxTodos; extra > 0 {
+				kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"), Attr("data-testid", "budget-todos-more-"+s.Budget.ID),
+					OnClick(openTodos), uistate.T("budgets.followUpsMore", extra)))
+			}
 		}
 		todosPanel = Div(kids...)
 	}
