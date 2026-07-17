@@ -9,6 +9,8 @@ var budgetMetricsKeys = Catalog{
 	"budgetMetrics.perDay":   "Left / day",
 	"budgetMetrics.daysLeft": "Days left",
 	"budgetMetrics.elapsed":  "Elapsed",
+	"budgetMetrics.ended":    "Ended",
+	"budgetMetrics.startsOn": "Starts",
 }
 
 func init() {

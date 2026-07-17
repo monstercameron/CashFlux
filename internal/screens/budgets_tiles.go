@@ -1542,6 +1542,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
+				Anchor: v.Anchor,
 					Committed: v.Committed[s.Budget.ID], HasCommitted: func() bool { _, ok := v.Committed[s.Budget.ID]; return ok }(),
 					Compact: compact,
 				})

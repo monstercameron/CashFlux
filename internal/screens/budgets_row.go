@@ -447,35 +447,57 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// period we are. Hidden in the last-month overlay (which shows a different period).
 	var metricsStrip ui.Node = Fragment()
 	if !lastMonthMode {
+		// QA CF-05: the period must come from the VIEW's anchor, not today — a
+		// June card paged into July was showing "14 days left · 52% elapsed ·
+		// Aug 1" (all current-month pacing). Completed periods state final facts;
+		// future periods say when they start; only a period containing today gets
+		// the live per-day / days-left / elapsed race.
 		nowT := time.Now()
-		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, nowT, prefs.WeekStartWeekday())
-		daysLeft := int(pEnd.Sub(nowT).Hours() / 24)
-		if daysLeft < 1 {
-			daysLeft = 1
+		anchorT := props.Anchor
+		if anchorT.IsZero() {
+			anchorT = nowT
 		}
-		elapsed := 0
-		if total := pEnd.Sub(pStart).Hours(); total > 0 {
-			elapsed = int(nowT.Sub(pStart).Hours() / total * 100)
-			if elapsed < 0 {
-				elapsed = 0
-			} else if elapsed > 100 {
-				elapsed = 100
+		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, anchorT, prefs.WeekStartWeekday())
+		switch {
+		case !nowT.Before(pEnd): // completed period — history has no pacing
+			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
+				budgetMetric(uistate.T("budgetMetrics.ended"), prefs.FormatDate(pEnd.AddDate(0, 0, -1)), ""),
+				budgetMetric(uistate.T("budgetMetrics.elapsed"), "100%", ""),
+			)
+		case nowT.Before(pStart): // future period — nothing has elapsed yet
+			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
+				budgetMetric(uistate.T("budgetMetrics.startsOn"), prefs.FormatDate(pStart), ""),
+				budgetMetric(uistate.T("budgetMetrics.elapsed"), "0%", ""),
+			)
+		default: // the viewed period contains today — live pacing
+			daysLeft := int(pEnd.Sub(nowT).Hours() / 24)
+			if daysLeft < 1 {
+				daysLeft = 1
 			}
+			elapsed := 0
+			if total := pEnd.Sub(pStart).Hours(); total > 0 {
+				elapsed = int(nowT.Sub(pStart).Hours() / total * 100)
+				if elapsed < 0 {
+					elapsed = 0
+				} else if elapsed > 100 {
+					elapsed = 100
+				}
+			}
+			perDay := int64(0)
+			if s.Remaining.Amount > 0 {
+				perDay = s.Remaining.Amount / int64(daysLeft)
+			}
+			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
+				budgetMetric(uistate.T("budgetMetrics.perDay"), fmtMoney(money.New(perDay, s.Remaining.Currency)), ""),
+				budgetMetric(uistate.T("budgetMetrics.daysLeft"), strconv.Itoa(daysLeft), prefs.FormatDate(pEnd)),
+				budgetMetric(uistate.T("budgetMetrics.elapsed"), fmt.Sprintf("%d%%", elapsed), ""),
+			)
 		}
-		perDay := int64(0)
-		if s.Remaining.Amount > 0 {
-			perDay = s.Remaining.Amount / int64(daysLeft)
-		}
-		metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
-			budgetMetric(uistate.T("budgetMetrics.perDay"), fmtMoney(money.New(perDay, s.Remaining.Currency)), ""),
-			budgetMetric(uistate.T("budgetMetrics.daysLeft"), strconv.Itoa(daysLeft), prefs.FormatDate(pEnd)),
-			budgetMetric(uistate.T("budgetMetrics.elapsed"), fmt.Sprintf("%d%%", elapsed), ""),
-		)
 	}
 
 	// A composite budget (multi-category, cats+tags, or multi-tag) gets a spend-composition
 	// donut UNDER the full-width status bar; a single-dimension budget shows none.
-	pieNode, hasPie := budgetPie(s.Budget)
+	pieNode, hasPie := budgetPie(s.Budget, props.Anchor)
 	cardCls := "budget " + budgetRowStateClass(s, props.PaceOver)
 	if hasPie {
 		cardCls += " budget-has-pie"
@@ -614,7 +636,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// subscriptions), offered only when a budget is near or over, where knowing
 				// WHY is what you actually want. Collapsed and lazy, so it never crowds a card.
 				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
-					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget})),
+					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Anchor: props.Anchor})),
 				metricsStrip,
 				actionsRow,
 			),
@@ -630,7 +652,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 // this period, reconciled with the shown Spent (same rollup covers as EvaluateRollup).
 // Returns the drivers and the base currency. Reads appstate directly (like the
 // composition pie), so the card component stays self-contained.
-func budgetTopDriversFor(b domain.Budget, n int) ([]budgeting.Driver, string) {
+func budgetTopDriversFor(b domain.Budget, n int, anchor time.Time) ([]budgeting.Driver, string) {
 	app := appstate.Default
 	if app == nil {
 		return nil, "USD"
@@ -640,7 +662,11 @@ func budgetTopDriversFor(b domain.Budget, n int) ([]budgeting.Driver, string) {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	start, end := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	// The drivers describe the VIEWED period (QA CF-05), not necessarily today's.
+	start, end := budgeting.PeriodRange(b.Period, anchor, uistate.LoadPrefs().WeekStartWeekday())
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	covers := func(id string) bool { return descendants[id] }
 	// Group charges by the clean merchant name (payee aliases + rule-pack normalization)
@@ -673,6 +699,7 @@ func recurringLabelSet() map[string]bool {
 // budgetDriversPanelProps configures the "what's driving this" disclosure.
 type budgetDriversPanelProps struct {
 	Budget domain.Budget
+	Anchor time.Time // the view's period anchor (QA CF-05); zero falls back to now
 }
 
 // budgetDriversPanel is the budget card's "what's driving this?" disclosure — the
@@ -702,7 +729,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 
 	var body ui.Node = Fragment()
 	if open {
-		drivers, base := budgetTopDriversFor(props.Budget, 3)
+		drivers, base := budgetTopDriversFor(props.Budget, 3, props.Anchor)
 		if len(drivers) == 0 {
 			body = P(css.Class("budget-drivers-empty"), Attr("id", listID), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
 				uistate.T("budgets.driversNone"))
@@ -872,7 +899,7 @@ func budgetOwnsScope(b domain.Budget, member string) bool {
 // first of the budget's tags it carries, in the budget's tag order) and never also to a
 // category — exactly mirroring the engine's tag-priority spend, so the wedges sum to the
 // budget's Spent with no double-counting. Wedges are sorted largest-first; zero wedges drop.
-func budgetCompositionSlices(b domain.Budget) []budgetSlice {
+func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 	app := appstate.Default
 	if app == nil {
 		return nil
@@ -882,7 +909,11 @@ func budgetCompositionSlices(b domain.Budget) []budgetSlice {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	start, end := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	// Composition follows the VIEWED period (QA CF-05), matching the card's bar.
+	start, end := budgeting.PeriodRange(b.Period, anchor, uistate.LoadPrefs().WeekStartWeekday())
 	catName := map[string]string{}
 	for _, c := range app.Categories() {
 		catName[c.ID] = c.Name
@@ -968,11 +999,11 @@ var budgetPiePalette = []string{"#4f9d69", "#e0a458", "#5b8def", "#c05e5e", "#8b
 // tracked dimensions — multi-category, cats+tags, or multi-tag). Returns (node, shown):
 // shown is false for a single-dimension budget or when there's no spend yet, so the caller
 // omits the pie column entirely.
-func budgetPie(b domain.Budget) (ui.Node, bool) {
+func budgetPie(b domain.Budget, anchor time.Time) (ui.Node, bool) {
 	if len(b.TrackedCategoryIDs())+len(b.TrackedTags) < 2 {
 		return Fragment(), false // not composite — the bar already tells the whole story
 	}
-	slices := budgetCompositionSlices(b)
+	slices := budgetCompositionSlices(b, anchor)
 	var total int64
 	for _, s := range slices {
 		total += s.Amount

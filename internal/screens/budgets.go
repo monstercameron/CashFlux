@@ -95,6 +95,12 @@ type budgetView struct {
 	// over the whole ledger (transfers excluded), so it is scope-independent; the
 	// summary tile shows it plain-English when Ready, or a "need more history" nudge.
 	AgeMoney agemoney.Result
+	// Anchor is the date the view's period math is anchored to: today when the
+	// viewed window includes today, otherwise the window's start (C40). Rows must
+	// derive their period-scoped figures (metrics strip, drivers, composition)
+	// from THIS — not time.Now() — or a historical month shows today's pacing
+	// (QA CF-05).
+	Anchor time.Time
 }
 
 // budgetCommitted is the per-budget committed-vs-free breakdown the row renders as a
@@ -650,6 +656,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		LastTotalLimit: lastTotalLimit,
 		Committed:      committedMap,
 		AgeMoney:       ageMoney,
+		Anchor:         anchor,
 	}
 }
 
@@ -824,6 +831,7 @@ type budgetRowProps struct {
 	Committed         budgetCommitted       // XC4 committed-vs-free split (+ XC3 set-aside note); zero value hides it
 	HasCommitted      bool                  // whether Committed carries a figure to render
 	Compact           bool                  // compact density: render the one-line row instead of the full card
+	Anchor            time.Time             // the view's period anchor (budgetView.Anchor); zero falls back to now (QA CF-05)
 	OnDelete          func(string)
 	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
 	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)

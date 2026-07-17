@@ -1,3 +1,17 @@
+## 2026-07-17 — QA remediation: budget history stops wearing today's pacing (CF-05)
+
+The budgets CONTROLLER was already period-honest (its anchor snaps to the window start when the
+viewed month doesn't contain today, and the pace/projection warnings gate on 0<elapsed<1), but the
+ROW went behind its back: the metrics strip, the drivers panel, and the composition donut each
+recomputed their period from time.Now() — so a June card carried "14 days left · 52% elapsed ·
+Aug 1, 2026" and its "what's driving this?" listed July's charges. Fix is a thread-the-anchor pass:
+budgetView.Anchor → budgetRowProps.Anchor → metrics/drivers/pie. History now states final facts
+(Ended Jun 30 · 100% elapsed), future periods say when they start, and only a period containing
+today races the clock. The lesson mirrors the widget-tile data-revision one: self-contained row
+helpers that read global state (appstate, time.Now) silently desynchronize from the page's view
+window — period context must arrive via props. E2E: 4 new assertions in qa_remediation_verify
+(22/22 green).
+
 ## 2026-07-17 — Review inbox gains one-click undo (commercial-parity scan, defect 1)
 
 The parity scan's bar for the review loop is "persist the decision, advance immediately, and

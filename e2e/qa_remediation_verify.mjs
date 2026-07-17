@@ -186,6 +186,24 @@ if (await linked.count()) {
   check("CF-04: found a linked unread notification to open", false);
 }
 
+// ───────────────────────── CF-05: historical budget pacing ─────────────────────────
+await nav("/budgets");
+const metrics0 = page.locator('[data-testid^="budget-metrics-"]').first();
+await metrics0.waitFor({ timeout: 8000 }).catch(() => {});
+const curMetrics = (await metrics0.count()) ? await metrics0.innerText() : "(none)";
+check("CF-05 setup: current period shows live pacing", /Days left/i.test(curMetrics), curMetrics.replace(/\n/g, " · "));
+// page back to the previous (completed) period
+await page.locator('button.period-step[aria-label="Previous period"]').first().click();
+await page.waitForTimeout(1500);
+const histMetrics = (await metrics0.count()) ? await metrics0.innerText() : "(none)";
+check("CF-05: completed period shows Ended, not days-left", /Ended/i.test(histMetrics) && !/Days left/i.test(histMetrics), histMetrics.replace(/\n/g, " · "));
+check("CF-05: completed period reads 100% elapsed", /100%/.test(histMetrics), "");
+const histBody = await bodyText();
+check("CF-05: no projected-overspend warnings on history", !/projected/i.test(histBody) || !/overspend/i.test(histBody), "");
+// restore the current period
+await page.locator('button.period-step[aria-label="Next period"]').first().click();
+await page.waitForTimeout(800);
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();
