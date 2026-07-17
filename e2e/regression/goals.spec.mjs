@@ -44,6 +44,22 @@ test.describe("goals: decluttered toolbar", () => {
   });
 });
 
+test.describe("goals: landing-range scenarios", () => {
+  test("a paced financial goal shows Best/Expected/Conservative landing dates", async ({ app }) => {
+    await nav(app, "/goals");
+    const line = app.locator('[data-testid^="goal-scenarios-"]').first();
+    await line.scrollIntoViewIfNeeded();
+    await expect(line).toBeVisible();
+    const text = await line.innerText();
+    // Three labeled points, each a month-year (or the honest 10+ yrs marker).
+    expect(text).toMatch(/Best (?:[A-Z][a-z]{2} \d{4}|10\+ yrs)/);
+    expect(text).toMatch(/Expected (?:[A-Z][a-z]{2} \d{4}|10\+ yrs)/);
+    expect(text).toMatch(/Conservative (?:[A-Z][a-z]{2} \d{4}|10\+ yrs)/);
+    // The what-if definition travels in the tooltip.
+    await expect(line).toHaveAttribute("title", /25% more/);
+  });
+});
+
 test.describe("goals: everyday actions inline, kebab keeps only Delete", () => {
   // The contract flipped on 2026-07-16 (Cam: "move the non-delete menu opts
   // outside of the kebab"): Edit and the other everyday actions are inline

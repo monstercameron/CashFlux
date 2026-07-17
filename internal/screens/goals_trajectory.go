@@ -61,13 +61,33 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 				uistate.T("goaltrajectory.empty")),
 		)
 	}
-	res := goaltrajectory.Project(goaltrajectory.Input{
+	traj := goaltrajectory.Input{
 		CurrentMinor: covered,
 		TargetMinor:  g.TargetAmount.Amount,
 		MonthlyMinor: monthly.Amount,
 		Start:        now,
 		TargetDate:   g.TargetDate,
-	})
+	}
+	res := goaltrajectory.Project(traj)
+
+	// Best / expected / conservative landing range: the same projection at 125%,
+	// 100%, and 75% of the planned monthly — a plainly explainable what-if band,
+	// not a statistical claim. One quiet line under the trajectory.
+	sc := goaltrajectory.ProjectScenarios(traj)
+	scDate := func(r goaltrajectory.Result) string {
+		if r.Reachable {
+			return r.ProjectedDate.Format("Jan 2006")
+		}
+		return uistate.T("goalscenarios.beyond")
+	}
+	scLine := Div(css.Class("gtj-eta is-muted"), Attr("data-testid", "goal-scenarios-"+g.ID),
+		Title(uistate.T("goalscenarios.title")),
+		Span(uistate.T("goalscenarios.best", scDate(sc.Best))),
+		Span(Attr("aria-hidden", "true"), " · "),
+		Span(uistate.T("goalscenarios.expected", scDate(sc.Expected))),
+		Span(Attr("aria-hidden", "true"), " · "),
+		Span(uistate.T("goalscenarios.conservative", scDate(sc.Conservative))),
+	)
 
 	targetStr := fmtMoney(g.TargetAmount)
 	nowStr := fmtMoney(money.New(covered, g.TargetAmount.Currency))
@@ -191,6 +211,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		return Div(css.Class("gtj"), Attr("data-testid", "goal-trajectory-"+g.ID),
 			heading,
 			Div(css.Class("gtj-eta"), Attr("data-testid", "goal-trajectory-eta-"+g.ID), readout),
+			scLine,
 		)
 	}
 
@@ -229,6 +250,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 			Span(uistate.T("goaltrajectory.railTarget", targetStr, horizonStr)),
 		),
 		etaNode,
+		scLine,
 	)
 }
 

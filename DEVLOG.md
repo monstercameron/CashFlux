@@ -34,6 +34,19 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Goal landing range: a what-if band, not a fake probability
+
+The report item asked for best/expected/conservative completion dates plus "completion
+probability from contribution variability." The probability half is unbuildable honestly today —
+goals don't keep a contribution ledger (CurrentAmount mutates in place; earmarks are snapshots),
+so any variance figure would be invented. Shipped the half that IS honest: `ProjectScenarios`
+reruns the existing `Project` at 125%/100%/75% of the planned monthly (integer quarters, floor at
+1 minor unit so a tiny plan still moves), rendered as one muted line under the trajectory rail
+with the definition in the tooltip. Explainability rule satisfied — every number traces to "the
+same projection, 25% more/less." If a contribution ledger ever lands, the percentile version can
+replace the fixed band. Verified on the Baby fund card: $840/mo, $4,200 to go → Nov 2026
+expected, Oct/Jan bracket (checked by hand).
+
 ## 2026-07-17 — Percent split mode: basis points, not floats
 
 Second slice of the UI-refinement sweep. The split editor only took exact amounts; a 60/40 rent
