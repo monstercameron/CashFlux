@@ -21,6 +21,29 @@ test.describe("reports: turn into action", () => {
   });
 });
 
+test.describe("reports: life-event annotations", () => {
+  test("an event overlapping the report window shows as a chip", async ({ app }) => {
+    // Create a life event inside the current (default) report month.
+    await nav(app, "/events");
+    await app.getByTestId("events-add").click();
+    await app.getByTestId("event-name").fill("Portugal trip");
+    await app.getByTestId("event-start").fill("2026-07-05");
+    await app.getByTestId("event-end").fill("2026-07-10");
+    await app.getByTestId("event-save").click();
+    // The report annotates the window with it.
+    await nav(app, "/reports");
+    const chips = app.getByTestId("report-event-chips");
+    await chips.scrollIntoViewIfNeeded();
+    await expect(chips).toBeVisible();
+    await expect(chips).toContainText(/Life events in this period/);
+    await expect(chips).toContainText(/Portugal trip/);
+    await expect(chips).toContainText(/Jul 5 – Jul 9/); // End is exclusive
+    // Manage routes to /events.
+    await app.getByTestId("report-events-manage").click();
+    await expect(app.locator('#main[data-route="/events"]').first()).toBeVisible();
+  });
+});
+
 test.describe("reports: snapshots", () => {
   test("Snapshot freezes the aggregates; the picker reopens them read-only", async ({ app }) => {
     await nav(app, "/reports");

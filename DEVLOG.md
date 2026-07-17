@@ -114,6 +114,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Report annotations already had an entity
+
+The report item read "user annotations for life events" and my first instinct was a new
+annotation store + chartspec marker support. Then the audit trail paid off: TX10 already built
+`domain.Event` — named, dated, user-managed at /events, transaction-linked. The whole feature
+is therefore a window-intersection helper (`reports.EventsIn`, half-open [Start, End) against
+[from, to)) and a chip row on /reports. The only subtlety worth a test row each: an event
+ENDING exactly at the window start doesn't intersect (half-open), and the chip renders the
+exclusive End as its inclusive last day (Jul 10-exclusive → "– Jul 9"). Chart-embedded markers
+remain possible later via chartspec, but chips deliver the meaning at a fraction of the surface.
+
 ## 2026-07-17 — Report snapshots freeze aggregates, not raw data
 
 Design question: what does a "snapshot" store? Freezing the raw transaction set would be a

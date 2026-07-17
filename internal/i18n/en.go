@@ -1025,6 +1025,11 @@ var english = Catalog{
 	"reports.snapDeleteTitle": "Delete the selected snapshot",
 	"reports.snapFrozen":      "Frozen view of %s, taken %s — read-only; the live report may differ.",
 	"reports.snapTotals":      "Income %s · Spending %s · Net %s",
+	// Life-event annotations on reports.
+	"reports.eventsHeading":  "Life events in this period:",
+	"reports.eventsManage":   "Manage events",
+	"reports.eventRange":     "%s – %s",
+	"reports.eventOpenRange": "since %s",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",
