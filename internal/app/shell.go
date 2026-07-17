@@ -938,7 +938,9 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
-			If(periodAware, uic.CreateElement(ResolutionControl)),
+			// QA CF-24: on /reports the compact month pill silently controls a rolling
+			// ANNUAL window — the prop makes the pill say so ("Year ending Jul 2026").
+			If(periodAware, uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: curPath == "/reports"})),
 			// Freshness leg of the persistent context strip (parity scan): when
 			// the data last changed, one click from the change itself.
 			uic.CreateElement(UpdatedStamp),
@@ -1181,13 +1183,22 @@ func LockToggle() uic.Node {
 	return Span(append(slot, If(enabled, lockBtn))...)
 }
 
+// resolutionControlProps configures the period pill per page. YearEnding marks
+// pages (the /reports annual review) where stepping the month shifts a rolling
+// twelve-month window — the pill then reads "Year ending Jul 2026" so the
+// control's true scope is self-evident (QA CF-24: a bare month pill beside an
+// annual heading read as a broken monthly filter).
+type resolutionControlProps struct {
+	YearEnding bool
+}
+
 // ResolutionControl is the top bar's time-resolution control. The common case is
 // a single period: a Week/Month/Quarter granularity toggle and one stepper that
 // pages the whole window (‹ Jun 2026 ›). When the view has moved off the current
 // period a "This period" reset appears; a "Custom range" toggle reveals the
 // dual From/To steppers for advanced ranges. All date math lives in
 // internal/period — every action just stores the next immutable Window.
-func ResolutionControl() uic.Node {
+func ResolutionControl(props resolutionControlProps) uic.Node {
 	atom := uistate.UsePeriod()
 	w := atom.Get()
 	open := uic.UseState(false)
@@ -1223,8 +1234,12 @@ func ResolutionControl() uic.Node {
 			label)
 	}
 
-	// The pill shows the current single period, or the from–to range.
+	// The pill shows the current single period, or the from–to range. On a
+	// year-ending page the single-period label says what stepping really does.
 	pillLabel := w.Label()
+	if props.YearEnding {
+		pillLabel = uistate.T("resolution.yearEnding", w.Label())
+	}
 	if rangeMode.Get() {
 		pillLabel = w.FromLabel() + " – " + w.ToLabel()
 	}

@@ -403,6 +403,15 @@ const invRows = await page.locator('[data-testid="invperf-row"]').allInnerTexts(
 const badPutIn = invRows.filter((r) => /Put in \(\$/.test(r));
 check("CF-25: no 'Put in ($X)' for negative net contributions", badPutIn.length === 0, badPutIn[0] || `${invRows.length} rows clean`);
 
+// ──────────── CF-24: the reports period pill announces its annual window ────────────
+const pill = page.locator('[data-testid="period-pill"]');
+const pillOnReports = (await pill.count()) ? await pill.innerText() : "(none)";
+check("CF-24: /reports period pill says 'Year ending …'", /Year ending/i.test(pillOnReports), pillOnReports.replace(/\n/g, " "));
+await nav("/budgets");
+await page.waitForTimeout(900);
+const pillElsewhere = (await pill.count()) ? await pill.innerText() : "(none)";
+check("CF-24: other pages keep the plain month pill", !/Year ending/i.test(pillElsewhere), pillElsewhere.replace(/\n/g, " "));
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();
