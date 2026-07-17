@@ -124,6 +124,12 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Thirteenth slice: the one-primary-action audit closed out. Auditing the table page by page after
+the earlier slices, eight of nine already conformed (largely by prior design: primary-last
+toolbars, the budgets rail, the waterfall card). Notifications was the gap — nothing said "act on
+the urgent ones". "Review critical (N)" now leads the summary cluster and drives the existing
+severity filter; no new machinery.
+
 Twelfth slice: contrast. One token change fixes every flagged surface at once — that's the point
 of the tier system. The landmine audit (var(--fg/--line/--dim/--faint)) found exactly one live
 offender: the widget-engine divider block painting var(--line), i.e. painting nothing. The style

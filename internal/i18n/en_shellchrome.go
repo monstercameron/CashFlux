@@ -9,6 +9,8 @@ var shellChromeKeys = Catalog{
 	// One-line Cloud rail row: the whole row links to /plans; the ✕ snoozes.
 	"cloud.rowLabel": "CashFlux Cloud",
 	"cloud.rowTitle": "Sync, backup, and AI across your devices — the app stays free and local either way. Learn more on the Plans page.",
+	// /notifications primary action while critical alerts exist (%d = count).
+	"notifications.reviewCritical": "Review critical (%d)",
 }
 
 func init() {

@@ -144,6 +144,11 @@ func notifSummaryWidget(props notifProps) ui.Node {
 				Span(css.Class("notif-summary-sub"), subLabel)),
 		),
 		Div(css.Class("notif-summary-actions"),
+			// 2026-07-17 audit: when critical alerts exist, "Review critical" is the
+			// page's ONE primary action — everything else (filters, clear) is secondary.
+			If(crit > 0, ui.CreateElement(notifReviewCriticalBtn, notifSevChipProps{
+				Count: crit, Active: f == "critical", OnPick: pick("critical"),
+			})),
 			Div(filtersArgs...),
 			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-clear-all"),
 				Attr("aria-label", uistate.T("notifications.clearAllAria")), OnClick(clearAll),
@@ -166,6 +171,22 @@ type notifSevChipProps struct {
 	Count  int // -1 => no count badge (the "All" chip)
 	Active bool
 	OnPick func()
+}
+
+// notifReviewCriticalBtn is the page's primary action while critical alerts
+// exist (2026-07-17 audit: "Review critical" outranks filters/history/clear).
+// Clicking narrows the feed to the critical tier. Own component so its click
+// hook sits at a stable position even though it renders conditionally.
+func notifReviewCriticalBtn(props notifSevChipProps) ui.Node {
+	on := ui.UseEvent(Prevent(func() {
+		if props.OnPick != nil {
+			props.OnPick()
+		}
+	}))
+	return Button(css.Class("btn btn-primary btn-sm notif-review-critical"), Type("button"),
+		Attr("data-testid", "notif-review-critical"), Attr("aria-pressed", ariaBool(props.Active)),
+		OnClick(on),
+		uistate.T("notifications.reviewCritical", props.Count))
 }
 
 // notifSevChip renders one filter chip: a severity dot + count + label as a pressable
