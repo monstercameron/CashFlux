@@ -106,6 +106,37 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// ---- reconcile state ----
 	stmtBalS := ui.UseState("")
 	onStmtBal := ui.UseEvent(func(v string) { stmtBalS.Set(v) })
+	// Statement closing date — the "reconciled through" point recorded with the event.
+	stmtDateS := ui.UseState(time.Now().Format("2006-01-02"))
+	onStmtDate := ui.UseEvent(func(v string) { stmtDateS.Set(v) })
+	// Recording a reconciliation appends to the account's capped history, confirms
+	// the balance (BalanceAsOf), and closes the modal. Only offered once the
+	// difference is zero, so the recorded event is always a true match.
+	doRecordRecon := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			done()
+			return
+		}
+		stmtMinor, perr := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+		if perr != nil {
+			done()
+			return
+		}
+		ev := domain.Reconciliation{At: time.Now(), StatementBalance: money.New(stmtMinor, a.Currency)}
+		if d, derr := dateutil.ParseDate(strings.TrimSpace(stmtDateS.Get())); derr == nil {
+			ev.StatementDate = d
+		}
+		cp := a
+		cp.Reconciliations = reconcile.Record(cp.Reconciliations, ev)
+		cp.BalanceAsOf = time.Now()
+		if err := app.PutAccount(cp); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006")), false)
+		done()
+	}))
 
 	// ---- edit state ----
 	instInit := a.Institution
@@ -323,7 +354,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
-		return reconcileForm(a, curCleared, dec, stmtBalS, onStmtBal, cancel, cbs.OnRefresh, app)
+		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app)
 	case uistate.AcctEditModeTransfer:
 		return transferForm(a, app, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
@@ -399,8 +430,11 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 	)
 }
 
-// reconcileForm is the reconcile-to-statement editor.
-func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS ui.State[string], onStmtBal, cancel ui.Handler, onRefresh func(domain.Account), app *appstate.App) ui.Node {
+// reconcileForm is the reconcile-to-statement editor. Once the difference hits
+// zero, "Record reconciliation" (onRecord) appends the event to the account's
+// history; the form also shows the "reconciled through" status and the recent
+// history so past reconciliations are inspectable in place.
+func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App) ui.Node {
 	var allTxns []domain.Transaction
 	if app != nil {
 		allTxns = app.Transactions()
@@ -429,12 +463,32 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS u
 	renderTxnRow := func(t domain.Transaction) ui.Node {
 		return ui.CreateElement(ReconcileTxnRow, reconcileTxnRowProps{Txn: t, Currency: a.Currency, OnToggle: onToggleClear})
 	}
+	// "Reconciled through" status + the recent history (newest first, capped at
+	// six rows here — the full capped history stays on the account).
+	through, hasThrough := reconcile.Through(a.Reconciliations)
+	var histRows []ui.Node
+	for i := len(a.Reconciliations) - 1; i >= 0 && len(histRows) < 6; i-- {
+		r := a.Reconciliations[i]
+		histRows = append(histRows, Div(css.Class("row"), Attr("data-testid", "reconcile-history-row"),
+			Style(map[string]string{"display": "flex", "justify-content": "space-between", "gap": "1rem"}),
+			Span(r.Through().Format("Jan 2, 2006")),
+			Span(fmtMoney(r.StatementBalance)),
+		))
+	}
+
 	return Div(css.Class("acct-edit-form"), Attr("data-testid", "reconcile-statement-mode"),
 		Div(css.Class("modal-scroll"),
+			If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
+				Style(map[string]string{"margin": "0 0 0.5rem"}),
+				uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
 			labeledField(uistate.T("accounts.statementBalance"),
 				Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
 					Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
 					Placeholder(uistate.T("accounts.statementBalancePh")), Value(stmtBalS.Get()), OnInput(onStmtBal))),
+			labeledField(uistate.T("accounts.reconStmtDate"),
+				Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
+					Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")),
+					Value(stmtDateS.Get()), OnInput(onStmtDate))),
 			Div(Style(map[string]string{"margin": "0.5rem 0"}),
 				Span(Style(map[string]string{"margin-right": "1rem"}), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
 				Span(Attr("data-testid", "reconcile-difference"), uistate.T("accounts.differenceLabel"), diffLabel),
@@ -442,12 +496,16 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS u
 					Attr("data-testid", "reconcile-confirmed"), uistate.T("accounts.reconciledCheck"))),
 			),
 			If(result.Reconciled, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "reconcile-done"),
-				OnClick(cancel), uistate.T("action.done"))),
+				OnClick(onRecord), uistate.T("accounts.reconRecordAction"))),
 			If(len(unclearedTxns) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
 				P(css.Class("t-caption"), uistate.T("accounts.unclearedHeading")),
 				Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),
 			If(len(unclearedTxns) == 0 && !result.Reconciled,
 				P(css.Class("muted"), uistate.T("accounts.noUncleared"))),
+			If(len(histRows) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
+				Attr("data-testid", "reconcile-history"),
+				P(css.Class("t-caption"), uistate.T("accounts.reconHistoryHeading")),
+				Div(css.Class("rows"), histRows))),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

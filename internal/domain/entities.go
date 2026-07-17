@@ -166,6 +166,14 @@ type Account struct {
 	// JSON when zero so existing rows round-trip with no migration needed.
 	RevalueDays int `json:"revalueDays,omitempty"`
 
+	// Reconciliations is the account's reconciliation history, oldest first:
+	// one entry per recorded statement reconciliation (when it was recorded,
+	// the statement's closing date, and the statement balance). The newest
+	// entry's StatementDate is the account's "reconciled through" date. Capped
+	// by the reconcile package when recording. Omitted from JSON when empty so
+	// existing rows round-trip with no migration needed.
+	Reconciliations []Reconciliation `json:"reconciliations,omitempty"`
+
 	// FreshnessExempt, when true, excludes this account from stale-balance
 	// tracking entirely — no nudges, no stale badge, regardless of how old the
 	// balance is. For accounts the user deliberately doesn't maintain (a memo
@@ -203,6 +211,26 @@ type Account struct {
 // user flagged as a liability), where AccountType.Class() alone would not. Prefer this
 // over t.Type.IsLiability() anywhere a formula asks "is this account money owed?".
 func (a Account) IsLiability() bool { return a.Class == ClassLiability }
+
+// Reconciliation is one recorded statement reconciliation on an account: the
+// moment the cleared balance was confirmed to match a bank statement. At is
+// when the user recorded it; StatementDate is the statement's closing date (the
+// "reconciled through" point — zero falls back to At); StatementBalance is the
+// statement's closing balance in the account's currency.
+type Reconciliation struct {
+	At               time.Time   `json:"at"`
+	StatementDate    time.Time   `json:"statementDate,omitempty"`
+	StatementBalance money.Money `json:"statementBalance"`
+}
+
+// Through returns the reconciliation's effective "reconciled through" date:
+// the statement date when present, otherwise the recording time.
+func (r Reconciliation) Through() time.Time {
+	if !r.StatementDate.IsZero() {
+		return r.StatementDate
+	}
+	return r.At
+}
 
 // Category classifies transactions as income or expense; categories may nest.
 type Category struct {

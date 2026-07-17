@@ -172,6 +172,37 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await app.keyboard.press("Escape");
   });
 
+  test("reconciliation records history and a reconciled-through status", async ({ app }) => {
+    await nav(app, "/accounts");
+    const kebab = app.locator('.add-wrap:has([data-testid="reconcile-start-btn-acct-checking"]) > button');
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await app.locator('[data-testid="reconcile-start-btn-acct-checking"]').click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    await expect(dialog.getByTestId("reconcile-statement-mode")).toBeVisible();
+    // First visit: never reconciled — no through-status yet.
+    await expect(dialog.getByTestId("reconcile-through")).toHaveCount(0);
+    // Type the exact cleared balance (read from the modal) so the diff is zero.
+    const clearedText = await dialog.locator(".modal-scroll > div > span").first().innerText();
+    const amount = clearedText.match(/-?[\d,]+\.\d{2}/)[0].replace(/,/g, "");
+    await dialog.getByTestId("reconcile-statement-input").fill(amount);
+    await dialog.getByTestId("reconcile-statement-date").fill("2026-06-30");
+    await expect(dialog.getByTestId("reconcile-confirmed")).toBeVisible();
+    // Record it — the modal closes and the event lands on the account.
+    await dialog.getByTestId("reconcile-done").click();
+    await expect(dialog.getByTestId("reconcile-statement-mode")).toHaveCount(0);
+    // Reopen: reconciled-through + a history row with the statement balance.
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await app.locator('[data-testid="reconcile-start-btn-acct-checking"]').click();
+    await app.waitForTimeout(650);
+    await expect(dialog.getByTestId("reconcile-through")).toContainText("Jun 30, 2026");
+    const row = dialog.getByTestId("reconcile-history-row").first();
+    await expect(row).toContainText("Jun 30, 2026");
+    await app.keyboard.press("Escape");
+  });
+
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
     await nav(app, "/accounts");
     // The class filter itself remains…

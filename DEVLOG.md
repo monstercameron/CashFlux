@@ -73,6 +73,18 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Reconciliation grows a memory
+
+The reconcile flow computed a diff and threw it away — "Done" just closed the modal, so
+"when did I last reconcile this and through what date?" was unanswerable. The event record is
+embedded on the Account (`[]Reconciliation`, oldest-first, capped at 36 by `reconcile.Record`)
+rather than a new store entity: it exports/imports/undoes with the account for free and the
+volume is bounded-monthly. `Through()` prefers the statement's closing date over the recording
+moment — reconciling on July 17 against a June 30 statement means you're reconciled THROUGH
+June 30, which is the honest answer. Recording also freshens BalanceAsOf (a zero-diff match IS
+a balance confirmation). The Done button became "Record reconciliation" — same testid
+(`reconcile-done`), so no spec churn. Screenshot-verified: status line + closing-date field.
+
 ## 2026-07-17 — The 1-5 score inputs were the bug, not the sample data
 
 Follow-up to the landmine the stale-balance e2e stepped on. Chased the scale to its source:
