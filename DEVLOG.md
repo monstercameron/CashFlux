@@ -1,3 +1,24 @@
+## 2026-07-17 — #73: the assistant stops leading with its own settings (lane 6)
+
+The deep-dive's read was right: the page's first block was configuration (model, thinking,
+privacy, what's-shared, New chat, Edit prompt), and on a phone you scrolled past all of it to
+reach the composer. The restructure is mostly re-homing, not rebuilding: the whole control cell
+became a drawer (`If(ctrlOpen)` under the header — component hooks are self-contained, so
+conditional inclusion is safe), New chat joined the header, and the aside slides in from the
+right under 1100px instead of stacking below the thread. One CSS landmine: the legacy
+`.ask-head-actions { flex: 0 0 auto }` kept the button cluster from shrinking, so its third
+button clipped off-screen at 390px instead of wrapping — the fix is flex:1 1 auto + min-width:0
+so the cluster is actually constrained and its own flex-wrap can work.
+
+The honesty items were two separate formatter lies. Per-message: an unknown-pricing model showed
+a bare token count that read as free — now "cost unavailable". Receipt: `%.2f` collapsed every
+sub-cent conversation to "~$0.00" — now four decimals under a cent (mirroring ai.FormatCostUSD),
+plus "cost unavailable" when tokens were spent with no pricing. The dock also gained the audit's
+requested scope line, computed from the SAME hoisted estimate the share-preview uses so the two
+can't disagree. Live-verified with Cam's key (one gpt-5.4-mini message, session-only, Remember
+off, key nowhere in the repo): "Used 4,327 tokens · about $0.0011" — the sub-cent path working on
+a real bill. 13 keyless e2e assertions + the live driver in the scratchpad.
+
 ## 2026-07-17 — #76 follow-up: the grouping that outgrew its tile (lane 2)
 
 The lane's own screenshot pass caught it: stacking two labeled sections doubled the Needs-attention

@@ -17,4 +17,122 @@ func registerLane6Fixes() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".flip-inner.flipped .flip-face:not(.flip-back)",
 		transition("none"),
 	)
+
+	// ── UX-09: assistant restructure ────────────────────────────────────────────
+	// Header: identity on the left, the New chat / Chat settings / Notes actions
+	// on the right, on one row that wraps gracefully.
+	rule(".ask-head-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+		width("100%"),
+		flexWrap("wrap"),
+	)
+	rule(".ask-head-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		flexWrap("wrap"),
+		// Override the legacy flex:0 0 auto — the cluster must shrink inside the
+		// header row so its buttons wrap instead of clipping at phone widths.
+		flex("1 1 auto"),
+		minWidth("0"),
+		justifyContent("flex-end"),
+	)
+	// The settings drawer is the old control cell, revealed below the header.
+	rule(".ask-settings-drawer",
+		marginBottom("0.6rem"),
+	)
+	// Composer-adjacent metadata: privacy badge + scope line left, keyboard hint right.
+	rule(".chat-dock-meta",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+		marginTop("0.45rem"),
+	)
+	rule(".chat-dock-meta .chat-dock-hint",
+		margin("0"),
+		marginLeft("auto"),
+	)
+	rule(".chat-privacy-badge",
+		appearance("none"),
+		fontFamily("inherit"),
+		cursor("pointer"),
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		padding("0.15rem 0.55rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("0.7rem"),
+		whiteSpace("nowrap"),
+	)
+	rule(".chat-privacy-badge:hover",
+		borderColor("var(--text-dim)"),
+		color("var(--text)"),
+	)
+	rule(".chat-dock-scope",
+		fontSize("0.7rem"),
+		color("var(--text-faint)"),
+	)
+	// The aside close button and the header's Notes trigger exist for the narrow
+	// drawer only; desktop keeps the always-visible margin-notes column.
+	rule(".ask-aside-toggle",
+		display("none"),
+	)
+	rule(".ask-aside-close",
+		display("none"),
+	)
+	rule(".ask-aside-backdrop",
+		display("none"),
+	)
+	ruleMedia("(max-width: 1100px)", ".ask-aside-toggle",
+		display("inline-flex"),
+	)
+	// Narrow widths: the aside becomes a right-hand slide-in drawer (it used to
+	// stack below the chat, burying saved conversations under the whole thread).
+	ruleMedia("(max-width: 1100px)", ".ask-aside",
+		position("fixed"),
+		top("0"),
+		right("0"),
+		bottom("0"),
+		width("min(20rem, 86vw)"),
+		background("var(--bg-card)"),
+		borderLeft("1px solid var(--border)"),
+		padding("2.6rem 1rem 1rem"),
+		prop("overflow-y", "auto"),
+		zIndex("95"),
+		transform("translateX(105%)"),
+		transition("transform .25s ease"),
+		boxShadow("-18px 0 40px -18px rgba(0,0,0,.6)"),
+	)
+	ruleMedia("(max-width: 1100px)", ".ask-aside.is-open",
+		transform("translateX(0)"),
+	)
+	ruleMedia("(max-width: 1100px)", ".ask-aside-close",
+		display("inline-flex"),
+		position("absolute"),
+		top("0.6rem"),
+		right("0.6rem"),
+		appearance("none"),
+		border("none"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		padding("0.3rem"),
+	)
+	ruleMedia("(max-width: 1100px)", ".ask-aside-backdrop",
+		display("block"),
+		position("fixed"),
+		inset("0"),
+		background("rgba(0,0,0,.45)"),
+		zIndex("90"),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".ask-aside",
+		transition("none"),
+	)
 }

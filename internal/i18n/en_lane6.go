@@ -26,6 +26,13 @@ var lane6Keys = Catalog{
 	// #74 (UX-10) — the to-do suggestion counts the SAME population as the
 	// transactions page's Review inbox and says so with the same name.
 	"todo.suggestReviewInbox": "Review %d transactions in the Review inbox",
+
+	// #73 (UX-09) — assistant restructure: settings drawer, aside drawer,
+	// composer-adjacent privacy + scope, honest cost.
+	"assistant.chatSettings":    "Chat settings",
+	"assistant.notesDrawer":     "Notes & chats",
+	"assistant.nextScope":       "Next message sends %s from this device · ~%d tokens",
+	"insights.usageCostUnknown": "Used %d tokens · cost unavailable",
 }
 
 func init() {

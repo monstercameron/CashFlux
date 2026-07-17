@@ -164,6 +164,56 @@ for (const [menuLabel, dlgTitle] of [["New goal", "Add goal"], ["New budget", "A
 }
 await c72.close();
 
+// ───────────── #73: assistant — conversation first, settings drawer ─────────────
+const c73 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p73 = await c73.newPage();
+await p73.goto(BASE + "/", { waitUntil: "load" });
+await p73.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p73.waitForTimeout(1500);
+await p73.evaluate(() => { history.pushState({}, "", "/assistant"); dispatchEvent(new PopStateEvent("popstate")); });
+await p73.waitForTimeout(2000);
+check("#73: settings drawer closed by default", (await p73.locator('[data-testid="assistant-controls"]').count()) === 0, "");
+check("#73: New chat lives in the header", await p73.locator('.ask-head [data-testid="assistant-new-chat"]').isVisible(), "");
+await p73.locator('[data-testid="assistant-settings-toggle"]').click();
+await p73.waitForTimeout(500);
+check("#73: Chat settings opens the controls drawer", await p73.locator('[data-testid="assistant-controls"]').isVisible(), "");
+await p73.locator('[data-testid="assistant-settings-toggle"]').click();
+await p73.waitForTimeout(500);
+check("#73: toggle closes the drawer again", (await p73.locator('[data-testid="assistant-controls"]').count()) === 0, "");
+const badge = p73.locator('[data-testid="assistant-privacy-badge"]');
+check("#73: privacy badge sits by the composer", await badge.isVisible(), await badge.innerText().catch(() => ""));
+const tier0 = (await badge.innerText()).trim();
+await badge.click();
+await p73.waitForTimeout(500);
+const tier1 = (await badge.innerText()).trim();
+check("#73: privacy badge toggles the tier", tier0 !== tier1, `${tier0} → ${tier1}`);
+await badge.click();
+await p73.waitForTimeout(300);
+const scopeLine = await p73.locator('[data-testid="assistant-scope-line"]').innerText().catch(() => "");
+check("#73: scope line states the next message's data scope", /Next message sends .+ · ~\d+ tokens/.test(scopeLine), scopeLine);
+await c73.close();
+// Mobile: composer on the first screen; aside is a drawer.
+const m73 = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+const mp73 = await m73.newPage();
+await mp73.goto(BASE + "/", { waitUntil: "load" });
+await mp73.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await mp73.waitForTimeout(1500);
+await mp73.evaluate(() => { history.pushState({}, "", "/assistant"); dispatchEvent(new PopStateEvent("popstate")); });
+await mp73.waitForTimeout(2000);
+const composerBox = await mp73.locator(".chat-dock textarea, .chat-dock input[type=text], .chat-dock [contenteditable]").first().boundingBox().catch(() => null);
+check("#73: mobile composer visible without scrolling", !!composerBox && composerBox.y + composerBox.height <= 844, composerBox ? `bottom=${Math.round(composerBox.y + composerBox.height)}` : "not found");
+const railBox = await mp73.locator('[data-testid="assistant-rail"]').boundingBox();
+check("#73: mobile aside off-canvas by default", !railBox || railBox.x >= 390, railBox ? `x=${Math.round(railBox.x)}` : "hidden");
+await mp73.locator('[data-testid="assistant-aside-toggle"]').click();
+await mp73.waitForTimeout(600);
+const railBox2 = await mp73.locator('[data-testid="assistant-rail"]').boundingBox();
+check("#73: Notes & chats slides the aside in", !!railBox2 && railBox2.x < 390, railBox2 ? `x=${Math.round(railBox2.x)}` : "");
+await mp73.locator('[data-testid="assistant-aside-backdrop"]').click({ position: { x: 10, y: 400 } });
+await mp73.waitForTimeout(600);
+const railBox3 = await mp73.locator('[data-testid="assistant-rail"]').boundingBox();
+check("#73: backdrop closes the aside", !railBox3 || railBox3.x >= 390, railBox3 ? `x=${Math.round(railBox3.x)}` : "hidden");
+await m73.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

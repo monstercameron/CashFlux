@@ -138,19 +138,38 @@ func (t *Tally) ActionPhrases() []string {
 }
 
 // CostPhrase returns the plain-English cost line ("~$0.04, 1,240 tokens"), or ""
-// when nothing has been spent/used yet.
+// when nothing has been spent/used yet. Honesty rules (UX-09): a sub-cent total
+// keeps four decimals instead of collapsing to a false "$0.00", and tokens spent
+// on a model with no known pricing say "cost unavailable" rather than implying
+// the turn was free.
 func (t *Tally) CostPhrase() string {
 	if t.Tokens <= 0 && !t.HasCost {
 		return ""
 	}
 	parts := make([]string, 0, 2)
 	if t.HasCost {
-		parts = append(parts, "~$"+strconv2f(t.CostUSD))
+		parts = append(parts, "~"+formatUSD(t.CostUSD))
 	}
 	if t.Tokens > 0 {
 		parts = append(parts, groupThousands(t.Tokens)+" tokens")
 	}
+	if !t.HasCost {
+		parts = append(parts, "cost unavailable")
+	}
 	return strings.Join(parts, ", ")
+}
+
+// formatUSD renders a dollar estimate without lying at the edges: zero-or-less
+// is "$0.00", sub-cent amounts keep four decimals, the rest use two.
+func formatUSD(v float64) string {
+	switch {
+	case v <= 0:
+		return "$0.00"
+	case v < 0.01:
+		return fmt.Sprintf("$%.4f", v)
+	default:
+		return "$" + strconv2f(v)
+	}
 }
 
 // Summary renders the full one-line cumulative receipt, e.g.

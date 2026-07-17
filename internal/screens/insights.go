@@ -1205,45 +1205,56 @@ func Insights() ui.Node {
 	// Standard header actions: New chat + Edit prompt as labeled .btn-tool buttons (the
 	// app-wide toolbar-button standard). The old "Advanced" expander that only revealed
 	// Edit prompt is gone — it was a click to hide a single option.
-	// The assistant CONTROLS as one clean, full-width bordered control cell (the
-	// app's toolbar/control-cell language): captioned model + thinking + privacy
-	// fields on the left, the New chat / Edit prompt actions grouped on the right —
-	// all standard styled controls, aligned on a single baseline. No loose inline
-	// label+select pairs, no raw OS-native dropdown.
+	// UX-09: the conversation leads the page. The model/thinking/privacy/share
+	// controls collapse behind ONE "Chat settings" header button (drawer below the
+	// title, default closed), New chat moves into the header, the privacy state
+	// stays visible as a compact badge beside the composer, and on narrow widths
+	// the aside becomes a slide-in drawer — so the thread + composer own the first
+	// screen on every viewport.
+	ctrlOpen := ui.UseState(false)
+	toggleCtrls := ui.UseEvent(Prevent(func() { ctrlOpen.Set(!ctrlOpen.Get()) }))
+	asideOpen := ui.UseState(false)
+	toggleAside := ui.UseEvent(Prevent(func() { asideOpen.Set(!asideOpen.Get()) }))
+	closeAside := ui.UseEvent(Prevent(func() { asideOpen.Set(false) }))
+	togglePrivacy := func() {
+		next := aicontext.TierAggregatesOnly
+		if tier == aicontext.TierAggregatesOnly {
+			next = aicontext.TierFull
+		}
+		privacyTier.Set(next)
+		uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
+	}
+	togglePrivacyEvt := ui.UseEvent(Prevent(func() { togglePrivacy() }))
+	tierLabel := uistate.T("insights.privacyFull")
+	if tier == aicontext.TierAggregatesOnly {
+		tierLabel = uistate.T("insights.privacyAggregates")
+	}
+	// Pre-send share estimate, hoisted so the drawer's full preview and the dock's
+	// one-line scope note read from the same numbers (mirrors buildMessages).
+	sharePersona := strings.TrimSpace(uistate.LoadSystemPrompt())
+	if sharePersona == "" {
+		sharePersona = defaultChatSystemPrompt
+	}
+	shareMem := uistate.LoadAgentMemory().Prompt()
+	shareChars := len(sharePersona) + len(aiCtx.Line()) + len(categoryNames(app.Categories())) + len(customFieldsSummary(app.CustomFieldDefs())) + len(shareMem)
+	for _, t := range turns.Get() {
+		shareChars += len(t.Text)
+	}
+	shareEstTokens := shareChars / 4
 	chatControls := Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
 		Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
 		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
 		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
-		privacyChip(privacyChipProps{Tier: tier, OnToggle: func() {
-			next := aicontext.TierAggregatesOnly
-			if tier == aicontext.TierAggregatesOnly {
-				next = aicontext.TierFull
-			}
-			privacyTier.Set(next)
-			uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
-		}}),
+		privacyChip(privacyChipProps{Tier: tier, OnToggle: togglePrivacy}),
 		// Pre-send data-sharing preview: what the NEXT message will carry, with a
 		// rough token estimate, mirroring buildMessages' actual inputs.
-		func() ui.Node {
-			persona := strings.TrimSpace(uistate.LoadSystemPrompt())
-			if persona == "" {
-				persona = defaultChatSystemPrompt
-			}
-			mem := uistate.LoadAgentMemory().Prompt()
-			chars := len(persona) + len(aiCtx.Line()) + len(categoryNames(app.Categories())) + len(customFieldsSummary(app.CustomFieldDefs())) + len(mem)
-			for _, t := range turns.Get() {
-				chars += len(t.Text)
-			}
-			return sharePreview(sharePreviewProps{
-				Tier: tier, CtxLine: aiCtx.Line(),
-				Categories: len(app.Categories()), CustomFields: len(app.CustomFieldDefs()),
-				MemoryOn: mem != "", Turns: len(turns.Get()),
-				EstTokens: chars / 4,
-			})
-		}(),
+		sharePreview(sharePreviewProps{
+			Tier: tier, CtxLine: aiCtx.Line(),
+			Categories: len(app.Categories()), CustomFields: len(app.CustomFieldDefs()),
+			MemoryOn: shareMem != "", Turns: len(turns.Get()),
+			EstTokens: shareEstTokens,
+		}),
 		Div(css.Class("ask-ctrl-actions"),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
-				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
 			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
 				Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
 				uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
@@ -1374,7 +1385,18 @@ func Insights() ui.Node {
 				ctxBubbles,
 				remedyChips,
 				composer,
-				P(css.Class("chat-dock-hint", tw.TextFaint), uistate.T("assistant.composerHint")),
+				// UX-09: the privacy state stays visible as a compact badge beside
+				// the composer (tap toggles the tier), and one short line states the
+				// data scope the NEXT message will carry.
+				Div(css.Class("chat-dock-meta"),
+					Button(css.Class("chat-privacy-badge"), Type("button"), Attr("data-testid", "assistant-privacy-badge"),
+						Attr("aria-label", uistate.T("insights.privacyAria", tierLabel)),
+						Title(uistate.T("insights.privacyLabel")), OnClick(togglePrivacyEvt),
+						uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W3, tw.H3)), Span(tierLabel)),
+					Span(css.Class("chat-dock-scope"), Attr("data-testid", "assistant-scope-line"),
+						uistate.T("assistant.nextScope", strings.ToLower(tierLabel), shareEstTokens)),
+					P(css.Class("chat-dock-hint", tw.TextFaint), uistate.T("assistant.composerHint")),
+				),
 			),
 		),
 	)
@@ -1386,9 +1408,26 @@ func Insights() ui.Node {
 	// and a quiet "margin notes" aside — chrome-less typographic groups, not tiles —
 	// for the agent's periphery and saved chats.
 	askHead := Div(css.Class("ask-head"),
-		Div(css.Class("ask-head-id"),
-			Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
-			H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
+		Div(css.Class("ask-head-row"),
+			Div(css.Class("ask-head-id"),
+				Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
+				H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
+			),
+			// UX-09 header actions: New chat is the everyday verb; Chat settings
+			// opens the collapsed controls drawer; Notes & chats slides the aside
+			// in on narrow widths (hidden on desktop, where the aside is visible).
+			Div(css.Class("ask-head-actions"),
+				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
+					uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
+				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-settings-toggle"),
+					Attr("aria-expanded", ariaBool(ctrlOpen.Get())), Attr("aria-controls", "ask-settings-drawer"),
+					OnClick(toggleCtrls),
+					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.chatSettings"))),
+				Button(css.Class("btn btn-tool ask-aside-toggle"), Type("button"), Attr("data-testid", "assistant-aside-toggle"),
+					Attr("aria-expanded", ariaBool(asideOpen.Get())),
+					OnClick(toggleAside),
+					uiw.Icon(icon.MessageCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.notesDrawer"))),
+			),
 		),
 		// The status/caption sits on its own subtitle line below the agent name, rather
 		// than sharing the title's baseline at a clashing scale.
@@ -1396,9 +1435,9 @@ func Insights() ui.Node {
 	)
 	askMain := Div(css.Class("ask-main"),
 		askHead,
-		// The controls sit in their own full-width cell below the title bar so they
-		// read as one aligned toolbar spanning the conversation column.
-		chatControls,
+		// The controls drawer: the full settings cell, revealed by the header's
+		// Chat settings button (default closed — the conversation leads).
+		If(ctrlOpen.Get(), Div(Attr("id", "ask-settings-drawer"), css.Class("ask-settings-drawer"), chatControls)),
 		chatConsole,
 	)
 
@@ -1421,8 +1460,19 @@ func Insights() ui.Node {
 		Div(css.Class("ask-deck"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
 			askMain,
 			// The agent's periphery as quiet margin notes: anomaly findings,
-			// spending highlights, pins, saved conversations.
-			Div(css.Class("ask-aside"), Attr("data-testid", "assistant-rail"), flagged, highlights, pinnedCard, railConvs),
+			// spending highlights, pins, saved conversations. On narrow widths it
+			// becomes a slide-in drawer opened from the header (UX-09).
+			If(asideOpen.Get(), Div(css.Class("ask-aside-backdrop"), Attr("data-testid", "assistant-aside-backdrop"), OnClick(closeAside))),
+			Div(ClassStr("ask-aside"+func() string {
+				if asideOpen.Get() {
+					return " is-open"
+				}
+				return ""
+			}()), Attr("data-testid", "assistant-rail"),
+				Button(css.Class("ask-aside-close"), Type("button"), Attr("data-testid", "assistant-aside-close"),
+					Attr("aria-label", uistate.T("action.close")), OnClick(closeAside),
+					uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+				flagged, highlights, pinnedCard, railConvs),
 		),
 		// The editable system-prompt overlay (persona only; live data + tools are always
 		// injected automatically by buildMessages).
@@ -1798,7 +1848,9 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 	}))
 	var note ui.Node = Fragment()
 	if p.Usage.TotalTokens > 0 {
-		txt := uistate.T("insights.usageTokens", p.Usage.TotalTokens)
+		// UX-09 honesty: unknown pricing says "cost unavailable" instead of the
+		// bare token count that read as a free (or $0.00) turn.
+		txt := uistate.T("insights.usageCostUnknown", p.Usage.TotalTokens)
 		if cost, ok := ai.EstimateCostUSD(p.Model, p.Usage); ok {
 			txt = uistate.T("insights.usageCost", p.Usage.TotalTokens, ai.FormatCostUSD(cost))
 		}

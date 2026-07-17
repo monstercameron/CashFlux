@@ -67,7 +67,17 @@ func TestEmptyTally(t *testing.T) {
 func TestTokensOnlyNoCost(t *testing.T) {
 	tally := NewTally()
 	tally.AddCost(1500000, 0, false)
-	if cp := tally.CostPhrase(); cp != "1,500,000 tokens" {
-		t.Fatalf("CostPhrase = %q, want %q", cp, "1,500,000 tokens")
+	// UX-09: unknown pricing must say so — never read as a free turn.
+	if cp := tally.CostPhrase(); cp != "1,500,000 tokens, cost unavailable" {
+		t.Fatalf("CostPhrase = %q, want %q", cp, "1,500,000 tokens, cost unavailable")
+	}
+}
+
+func TestSubCentCostKeepsPrecision(t *testing.T) {
+	tally := NewTally()
+	tally.AddCost(1240, 0.0004, true)
+	// UX-09: a sub-cent spend must not collapse to a false "$0.00".
+	if cp := tally.CostPhrase(); cp != "~$0.0004, 1,240 tokens" {
+		t.Fatalf("CostPhrase = %q, want %q", cp, "~$0.0004, 1,240 tokens")
 	}
 }
