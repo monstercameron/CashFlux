@@ -1,3 +1,12 @@
+## 2026-07-17 — Per-event alert prefs verified; the C2 landmine strikes again (item 24)
+
+The surface the scan asks for already existed and is better than expected: nine per-event enable
+toggles, per-rule thresholds (bill-due days, large-txn/low-balance/paycheck dollars), and a
+separate browser-notification channel toggle. The e2e's persistence leg failed on first run —
+alertRow wrote through SettingKVSet with no RequestPersist, so the choice lived only until the
+next autosave tick. Same class as the budgets-density and report-scope fixes; both write paths
+patched. 5/5 e2e.
+
 ## 2026-07-17 — Tax workflow: supporting transactions (parity-scan item 23)
 
 Most of the named workflow predated this pass (Deductible flag on categories, DeductibleTotals +

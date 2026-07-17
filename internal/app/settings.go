@@ -238,6 +238,10 @@ func alertRow(props alertRowProps) uic.Node {
 		}
 		cfg.Enabled[props.RuleID] = v
 		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
+		// Settings KV only reaches IndexedDB on the autosave ticker — without
+		// an immediate persist a toggle followed by a quick reload silently
+		// reverts (the C2 landmine; caught by the parity-scan e2e).
+		uistate.RequestPersist()
 	}
 	onThresh := uic.UseEvent(func(v string) {
 		n, err := strconv.Atoi(strings.TrimSpace(v))
@@ -257,6 +261,7 @@ func alertRow(props alertRowProps) uic.Node {
 		}
 		cfg.Thresholds[props.RuleID] = stored
 		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
+		uistate.RequestPersist() // same landmine as the toggle above
 	})
 
 	toggle := ui.ToggleRow(ui.ToggleRowProps{
