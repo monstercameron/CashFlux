@@ -837,6 +837,13 @@ type Goal struct {
 	// This lets an open-ended savings/investing goal (no target date) still take a
 	// flat monthly assignment. Optional/additive — existing goals load with zero.
 	MonthlyContribution money.Money `json:"monthlyContribution,omitempty"`
+	// ExpectedReturnBips is the expected annual return on this goal's balance in
+	// basis points (e.g. 700 = 7.00% APR), for an investment/long-horizon goal where
+	// compounding materially changes the completion date. When > 0 the goal projects
+	// its completion by growing the balance at this rate plus monthly contributions;
+	// zero means no growth assumed (the default — a plain savings goal). The rate is
+	// the user's own assumption; nothing is fetched. Optional/additive, JSON round-trips.
+	ExpectedReturnBips int `json:"expectedReturnBips,omitempty"`
 	// AccountIDs are the accounts this goal is funded from / draws on (0..N). It
 	// generalises the single AccountID (kept for the linked-account drill-down and
 	// back-compat); LinkedAccountIDs unions the two so readers see one list. Additive.

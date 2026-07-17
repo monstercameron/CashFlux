@@ -17,4 +17,14 @@ test.describe("gap features", () => {
     expect(text).toMatch(/\$68\.00/);
     expect(text).toMatch(/usual \$7\.35/i);
   });
+
+  test("goal growth projection: an investment goal shows a growth-adjusted date", async ({ app }) => {
+    // The seeded "Trade up to a bigger family home" goal carries a 5% expected
+    // annual return, so its card projects a completion date from compounding.
+    await nav(app, "/goals");
+    const figs = app.getByTestId("goal-figs-goal-house");
+    await expect(figs).toBeVisible();
+    await expect(figs).toContainText(/projected/i);
+    await expect(figs).toContainText(/5% growth/i);
+  });
 });

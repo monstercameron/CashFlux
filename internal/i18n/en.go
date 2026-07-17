@@ -988,6 +988,8 @@ var english = Catalog{
 	"goals.targetLabel":               "Target",
 	"goals.monthlyContribLabel":       "Monthly budget amount (optional)",
 	"goals.monthlyContribPlaceholder": "e.g. 500 — counts in zero-based budgets",
+	"goals.expectedReturnLabel":       "Expected annual return % (optional)",
+	"goals.expectedReturnPlaceholder": "e.g. 5 — projects growth toward the target",
 	"goals.contribute":                "Log saved",
 	"goals.setAside":                  "Set aside",
 	"goals.setAsideTitle":             "Reserve money you already have toward this goal — no money moves",

@@ -12,6 +12,7 @@ var goalsRedesignKeys = Catalog{
 	"goalsredesign.figToGo":    "To go",
 	"goalsredesign.figMonthly": "Monthly",
 	"goalsredesign.figTarget":  "Target date",
+	"goalsredesign.figProjected": "Projected · %s growth",
 
 	// --- Optional contribution planner (opt-in disclosure) ---
 	// The chip that reveals / hides the "Plan your contribution" slider.

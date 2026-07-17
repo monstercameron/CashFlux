@@ -27,6 +27,13 @@ import (
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
+// growthPctLabel formats an expected-annual-return in basis points as a compact
+// percent for the goal card's projection caption (700 → "7%", 750 → "7.5%").
+func growthPctLabel(bips int) string {
+	s := strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", float64(bips)/100), "0"), ".")
+	return s + "%"
+}
+
 // GoalRow renders one goal's progress toward its target, with contribute and
 // (inline) edit actions. All hooks are declared unconditionally so the edit
 // toggle never reorders them.
@@ -369,6 +376,23 @@ func GoalRow(props goalRowProps) ui.Node {
 			}
 			if !g.TargetDate.IsZero() {
 				figs = append(figs, goalFig(uistate.T("goalsredesign.figTarget"), pr.FormatDate(g.TargetDate)))
+			}
+			// Growth-adjusted projection: for a goal with an expected annual return, show
+			// when compounding + contributions actually reach the target — often sooner
+			// than the flat pace implies. On-device, using the user's own assumed rate.
+			if g.ExpectedReturnBips > 0 {
+				monthlyMinor := int64(0)
+				if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
+					monthlyMinor = per.Amount
+				} else if g.MonthlyContribution.Amount > 0 {
+					monthlyMinor = g.MonthlyContribution.Amount
+				}
+				proj := goalsvc.ProjectWithGrowth(goalsvc.CoverageMinor(g), g.TargetAmount.Amount, monthlyMinor, g.ExpectedReturnBips, now)
+				if proj.Reachable {
+					figs = append(figs, goalFig(
+						uistate.T("goalsredesign.figProjected", growthPctLabel(g.ExpectedReturnBips)),
+						pr.FormatDate(proj.Date)))
+				}
 			}
 		}
 		var figsNode ui.Node = Fragment()

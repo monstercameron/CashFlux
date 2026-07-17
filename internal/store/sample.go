@@ -846,7 +846,7 @@ func SampleDataset() Dataset {
 				Notes: "Cross-category lifestyle cap — counts anything tagged splurge, vacation, date-night, or big-purchase, whatever the category."},
 		},
 		Goals: []domain.Goal{
-			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(1150000), TargetDate: date(2029, time.June, 1), AccountID: hysa, Notes: "Aim for a 20% down payment on ~$400k so we skip PMI. Once the baby's here we'll want a 3rd bedroom and a real yard — start touring open houses in the spring."},
+			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(1150000), TargetDate: date(2029, time.June, 1), AccountID: hysa, ExpectedReturnBips: 500, Notes: "Aim for a 20% down payment on ~$400k so we skip PMI. Down-payment fund sits in the HYSA / a conservative index — assume ~5%/yr. Once the baby's here we'll want a 3rd bedroom and a real yard — start touring open houses in the spring."},
 			// Virtual allocation ("earmarks"): the Hartleys have mentally reserved part of their
 			// savings + checking toward the baby and emergency funds WITHOUT moving the money —
 			// so the Goals page shows partly-earmarked coverage and the Earmarks tab has real data.

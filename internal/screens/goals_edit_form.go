@@ -69,6 +69,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	targetMajor := ""
 	dateISO := ""
 	monthlyMajor := ""
+	returnMajor := ""
 	if found {
 		targetMajor = money.FormatMinor(g.TargetAmount.Amount, dec)
 		if !g.TargetDate.IsZero() {
@@ -76,6 +77,9 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		}
 		if g.MonthlyContribution.Amount > 0 {
 			monthlyMajor = money.FormatMinor(g.MonthlyContribution.Amount, dec)
+		}
+		if g.ExpectedReturnBips > 0 {
+			returnMajor = strconv.FormatFloat(float64(g.ExpectedReturnBips)/100, 'f', -1, 64)
 		}
 	}
 
@@ -94,6 +98,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	nameS := ui.UseState(g.Name)
 	targetS := ui.UseState(targetMajor)
 	monthlyS := ui.UseState(monthlyMajor)
+	returnS := ui.UseState(returnMajor)
 	dateS := ui.UseState(dateISO)
 	acctSetS := ui.UseState(seedLinkSet(g.LinkedAccountIDs()))
 	budgetSetS := ui.UseState(seedLinkSet(g.BudgetIDs))
@@ -114,6 +119,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onTarget := ui.UseEvent(func(v string) { targetS.Set(v) })
 	onMonthly := ui.UseEvent(func(v string) { monthlyS.Set(v) })
+	onReturn := ui.UseEvent(func(v string) { returnS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onHabitTarget := ui.UseEvent(func(v string) { habitTargetS.Set(v) })
 	onContrib := ui.UseEvent(func(v string) { contribS.Set(v) })
@@ -188,6 +194,17 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 					}
 				} else {
 					gg.MonthlyContribution = money.New(0, c)
+				}
+				// Optional expected annual return (%), stored as basis points for the
+				// growth-adjusted completion projection. Blank / <=0 clears it (no growth).
+				if rs := strings.TrimSpace(returnS.Get()); rs != "" {
+					if pct, rErr := strconv.ParseFloat(rs, 64); rErr == nil && pct > 0 {
+						gg.ExpectedReturnBips = int(pct*100 + 0.5)
+					} else {
+						gg.ExpectedReturnBips = 0
+					}
+				} else {
+					gg.ExpectedReturnBips = 0
 				}
 			case domain.GoalKindHabit:
 				n, err := strconv.Atoi(strings.TrimSpace(habitTargetS.Get()))
@@ -422,6 +439,11 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			If(financial, labeledField(uistate.T("goals.monthlyContribLabel"),
 				Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-edit-monthly"), Attr("min", "0"),
 					Placeholder(uistate.T("goals.monthlyContribPlaceholder")), Value(monthlyS.Get()), Step("0.01"), OnInput(onMonthly)))),
+			// Optional expected annual return — when set, the goal projects a growth-
+			// adjusted completion date on its card. The user's own assumption; nothing fetched.
+			If(financial, labeledField(uistate.T("goals.expectedReturnLabel"),
+				Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-edit-return"), Attr("min", "0"), Attr("max", "50"),
+					Placeholder(uistate.T("goals.expectedReturnPlaceholder")), Value(returnS.Get()), Step("0.1"), OnInput(onReturn)))),
 			If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options: habitCadenceOptions(), Selected: cadenceS.Get(), TestID: "goal-edit-cadence",
