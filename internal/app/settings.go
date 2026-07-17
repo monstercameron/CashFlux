@@ -818,6 +818,9 @@ func globalSettingsForm() uic.Node {
 	serverAuthMode := uic.UseState(initialAuth.AuthMode)
 	serverAuthProviders := uic.UseState(strings.Join(initialAuth.AuthProviders, ","))
 	billingInterval := uic.UseState("annual")
+	// Which payment provider the subscribe button uses. Default Stripe; the picker
+	// lets a user choose PayPal when the backend offers it.
+	billingProvider := uic.UseState("stripe")
 	saveOAuthSession := func(token, csrf, userID string) {
 		p := prefsAtom.Get()
 		p.ServerToken = token
@@ -925,7 +928,7 @@ func globalSettingsForm() uic.Node {
 		})
 	})
 	startCheckout := uic.UseEvent(func() {
-		startBillingCheckout(serverURL.Get(), serverToken.Get(), billingInterval.Get(), func(msg string) {
+		startBillingCheckout(serverURL.Get(), serverToken.Get(), billingInterval.Get(), billingProvider.Get(), func(msg string) {
 			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
 		})
 	})
@@ -1123,6 +1126,8 @@ func globalSettingsForm() uic.Node {
 		OnRemoveKey:       removeKey,
 		BillingInterval:   billingInterval.Get(),
 		OnBillingInterval: func(v string) { billingInterval.Set(v) },
+		BillingProvider:   billingProvider.Get(),
+		OnBillingProvider: func(v string) { billingProvider.Set(v) },
 		CloudPrice:        cloudPrice,
 		OnStartCheckout:   startCheckout,
 		OnOpenPortal:      openPortal,

@@ -142,6 +142,8 @@ type settingsRightProps struct {
 	OnUploadKey       uic.Handler // UseEvent
 	BillingInterval   string
 	OnBillingInterval func(string)
+	BillingProvider   string
+	OnBillingProvider func(string)
 	CloudPrice        string
 	OnStartCheckout   uic.Handler // UseEvent
 	OnOpenPortal      uic.Handler // UseEvent
@@ -441,6 +443,17 @@ func settingsCloudPane(p settingsRightProps) uic.Node {
 				},
 				Selected: p.BillingInterval,
 				OnSelect: p.OnBillingInterval,
+			}),
+			// Pay with Stripe (card) or PayPal. If the backend hasn't configured the
+			// chosen provider, checkout returns a clear "not configured" error.
+			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.cloudPayWith"),
+				Options: []ui.SegOption{
+					{Value: "stripe", Label: uistate.T("settings.cloudPayStripe")},
+					{Value: "paypal", Label: uistate.T("settings.cloudPayPayPal")},
+				},
+				Selected: p.BillingProvider,
+				OnSelect: p.OnBillingProvider,
 			}),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(p.OnStartCheckout), uistate.T("settings.cloudSubscribe")),

@@ -217,8 +217,14 @@ func signOutBackendOAuth(endpoint, token, csrf string, onDone func()) {
 	onDone()
 }
 
-func startBillingCheckout(endpoint, token, interval string, onError func(string)) {
-	createBillingSession(endpoint, token, "/v1/billing/checkout", map[string]string{"interval": strings.TrimSpace(interval)}, onError)
+func startBillingCheckout(endpoint, token, interval, provider string, onError func(string)) {
+	path := "/v1/billing/checkout"
+	// Only append the selector for a non-default provider so existing Stripe
+	// requests are byte-for-byte unchanged.
+	if p := strings.ToLower(strings.TrimSpace(provider)); p != "" && p != "stripe" {
+		path += "?provider=" + url.QueryEscape(p)
+	}
+	createBillingSession(endpoint, token, path, map[string]string{"interval": strings.TrimSpace(interval)}, onError)
 }
 
 func openBillingPortal(endpoint, token string, onError func(string)) {
