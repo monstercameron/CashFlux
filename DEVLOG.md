@@ -1,3 +1,35 @@
+## 2026-07-17 — R3 CF-01: the report scope that lied (lane 1)
+
+The High from round-3 QA: pick "Specific accounts → Regression Checking" on /reports, the toolbar
+says "Scope (1)", and every number stays household-wide. Root cause was in the pure resolver, not
+the UI — `ResolveScope` treated `AccountIDs` as additive-only, and with zero dimensional filters the
+dimensional loop degenerated into match-all, so the union added one account to *all of them*. The
+fix keeps both semantics: the dimensional loop only runs when a dimensional filter is non-empty, so
+AccountIDs-only is a restriction while AccountIDs-beside-dimensions stays a union (both locked by
+table tests).
+
+Two lessons from wiring the honesty layer:
+
+1. **Eager `If(...)` arguments run even when the guard is false.** The credit chart was wrapped in
+   `If(len(creditSeries) >= 2, …seriesMax(creditFloat)…)` — but Go evaluates the axis strings before
+   `If` looks at the condition, and `seriesMax` indexed `vs[0]` unguarded. Nobody had ever rendered
+   the report with an empty series until scoping made that a legitimate state (a 401(k)-only scope
+   has no cards), and the first checkbox click panicked the entire Reports render
+   (GWC-RUNTIME-PANIC-RENDER pointed straight at the frame — the framework's panic artifact with
+   appFrames is genuinely good at this). Guard the leaf helpers, not just the render branch.
+
+2. **Scope honesty is a sentence, not a badge.** The masthead now renders, panel-closed, "Showing
+   Marcus's 401(k) only · Aug 2025 — Jul 2026 — health score and Where you stand stay
+   household-wide" plus a Reset that clears only the report-local atom (the app-wide lens has its
+   own banner and must not be touched from a report page). Naming what *doesn't* follow the filter
+   matters as much as what does — the health score is a household construct and silently scoping it
+   would be a different lie.
+
+E2E (`lane1_verify.mjs`) drives the real checkbox path: household figures captured, one account
+ticked, all four masthead figures change ($87,196 → $0 income for the 401(k) view — correct, it has
+no cash flow), sentence + reset verified with the panel closed, reset round-trips to the exact
+household figures. 9/9, zero page errors.
+
 ## 2026-07-17 — R3 #51: the contribution slider learns to talk (lane 5)
 
 The goal planner's slider was mouse-only and told screen readers "84000" — raw minor units. Three

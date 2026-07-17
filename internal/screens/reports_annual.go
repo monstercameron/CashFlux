@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"syscall/js"
 	"time"
 
@@ -101,6 +102,12 @@ func Reports() ui.Node {
 	// ("Viewing as …") is announced by the top-bar banner, not this panel.
 	scopeOpen := ui.UseState(!scopeAtom.Get().IsAll())
 	onToggleScope := ui.UseEvent(Prevent(func() { scopeOpen.Set(!scopeOpen.Get()) }))
+	// QA CF-01/UX-03: a persisted report scope must stay conspicuous. One click
+	// clears the REPORT-local scope (never the app-wide lens).
+	onResetScope := ui.UseEvent(Prevent(func() {
+		uistate.SetReportScope(scope.ReportScope{})
+		scopeOpen.Set(false)
+	}))
 	showFormulas := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
 	exportOpen := ui.UseState(false)
@@ -189,10 +196,11 @@ func Reports() ui.Node {
 
 	// Credit proxy score at each month end (bounds[1..12] are the month-end
 	// cutoffs; transactions strictly before each cutoff count, mirroring
-	// NetWorthSeries). Household-wide like net worth — cards aren't scoped.
+	// NetWorthSeries). Scoped like net worth (QA CF-01): a report narrowed to
+	// accounts with no cards simply omits the credit section.
 	var creditSeries []int
 	hasCards := false
-	for _, a := range accounts {
+	for _, a := range scopedAccounts {
 		if a.Type == domain.TypeCreditCard && !a.Archived {
 			hasCards = true
 			break
@@ -201,14 +209,14 @@ func Reports() ui.Node {
 	if hasCards {
 		for k := 1; k < len(bounds); k++ {
 			cutoff := bounds[k]
-			upto := make([]domain.Transaction, 0, len(txns))
-			for _, t := range txns {
+			upto := make([]domain.Transaction, 0, len(scopedTxns))
+			for _, t := range scopedTxns {
 				if t.Date.Before(cutoff) {
 					upto = append(upto, t)
 				}
 			}
 			balances := make(map[string]int64, 4)
-			for _, a := range accounts {
+			for _, a := range scopedAccounts {
 				if a.Type != domain.TypeCreditCard || a.Archived {
 					continue
 				}
@@ -216,7 +224,7 @@ func Reports() ui.Node {
 					balances[a.ID] = bal.Amount
 				}
 			}
-			cr := credithealth.Evaluate(credithealth.Inputs{Accounts: accounts, Balances: balances, Transactions: upto, Now: cutoff})
+			cr := credithealth.Evaluate(credithealth.Inputs{Accounts: scopedAccounts, Balances: balances, Transactions: upto, Now: cutoff})
 			creditSeries = append(creditSeries, cr.ProxyScore)
 		}
 	}
@@ -435,10 +443,23 @@ func Reports() ui.Node {
 		partialChip = Span(css.Class("rpta-partial-chip"), Attr("data-testid", "rpta-partial-chip"),
 			uistate.T("rpta.partialMonth", nowM.Format("January"), daysIn, daysTotal))
 	}
+	// QA CF-01/UX-03: when a REPORT-local scope is active, a plain-language
+	// sentence stays visible in the masthead even with the Scope panel closed,
+	// with a one-click reset. Household-wide figures (health score, Where you
+	// stand) are named so a scoped report never implies they follow the filter.
+	var scopeLine ui.Node = Fragment()
+	if local := scopeAtom.Get(); !local.IsAll() {
+		scopeLine = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap), Attr("data-testid", "rpta-scope-line"),
+			Span(css.Class("rpta-partial-chip"), uistate.T("rpta.scopeShowing", rptaScopeSummary(local, accounts, app.Members()), windowLine)),
+			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "rpta-scope-reset"),
+				OnClick(onResetScope), uistate.T("rpta.scopeReset")),
+		)
+	}
 	masthead := Div(css.Class("rpta-masthead"), Attr("data-testid", "rpt-hero"), Attr("id", "rpta-top"),
 		P(css.Class("rpta-eyebrow"), uistate.T("rpta.eyebrow")),
 		H1(css.Class("rpta-title", tw.FontDisplay), windowLine),
 		partialChip,
+		scopeLine,
 		Div(ClassStr("rpta-verdict rpta-tone-"+verdictTone), Attr("data-testid", "rpta-verdict"),
 			Span(css.Class("rpta-verdict-score", tw.FontDisplay), rptaScoreText(health)),
 			Span(css.Class("rpta-verdict-line"), verdict),
@@ -1457,7 +1478,7 @@ func Reports() ui.Node {
 	if deductible != nil {
 		appendixBits = append(appendixBits, deductible)
 	}
-	if invperf := investmentPerformanceSection(accounts, scopedTxns, rates, base, fmtMinor, winForExports); invperf != nil {
+	if invperf := investmentPerformanceSection(scopedAccounts, scopedTxns, rates, base, fmtMinor, winForExports); invperf != nil {
 		appendixBits = append(appendixBits, invperf)
 	}
 	if len(cfDefs) > 0 {
@@ -2042,8 +2063,14 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 }
 
 // seriesMax/seriesMin/seriesMid give a plotted series' y-axis anchor values —
-// the chart normalizes to its own data range, so these ARE the axis.
+// the chart normalizes to its own data range, so these ARE the axis. An empty
+// series anchors at 0: chart axes are built as eager If(...) arguments, so
+// these run even when the guard hides the chart (a card-less report scope
+// empties creditSeries — QA CF-01).
 func seriesMax(vs []float64) float64 {
+	if len(vs) == 0 {
+		return 0
+	}
 	m := vs[0]
 	for _, v := range vs {
 		if v > m {
@@ -2054,6 +2081,9 @@ func seriesMax(vs []float64) float64 {
 }
 
 func seriesMin(vs []float64) float64 {
+	if len(vs) == 0 {
+		return 0
+	}
 	m := vs[0]
 	for _, v := range vs {
 		if v < m {
@@ -2072,4 +2102,39 @@ func anyify(nodes []ui.Node) []any {
 		out[i] = n
 	}
 	return out
+}
+
+// rptaScopeSummary names a report-local scope in plain English for the masthead
+// sentence (QA CF-01/UX-03): the selected account names, member names, types,
+// and institutions, comma-joined. Unknown IDs fall back to the raw value so a
+// stale scope is still visible rather than silently blank.
+func rptaScopeSummary(s scope.ReportScope, accounts []domain.Account, members []domain.Member) string {
+	var parts []string
+	acctName := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		acctName[a.ID] = a.Name
+	}
+	for _, id := range s.AccountIDs {
+		if n := acctName[id]; n != "" {
+			parts = append(parts, n)
+		} else {
+			parts = append(parts, id)
+		}
+	}
+	memberName := make(map[string]string, len(members))
+	for _, m := range members {
+		memberName[m.ID] = m.Name
+	}
+	for _, id := range s.Owners {
+		if n := memberName[id]; n != "" {
+			parts = append(parts, n)
+		} else {
+			parts = append(parts, id)
+		}
+	}
+	for _, t := range s.Types {
+		parts = append(parts, humanizeType(string(t)))
+	}
+	parts = append(parts, s.Institutions...)
+	return strings.Join(parts, ", ")
 }

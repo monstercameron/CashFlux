@@ -418,3 +418,23 @@ func TestMerge(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveScope_AccountIDsOnly_Restricts locks the QA CF-01/UX-03 fix: a
+// scope whose ONLY non-empty part is AccountIDs restricts to exactly those
+// accounts. The old code ran the dimensional loop with no dimensions — which
+// matches everything — so "Specific accounts: one account" resolved to the
+// whole household and every report figure stayed unchanged.
+func TestResolveScope_AccountIDsOnly_Restricts(t *testing.T) {
+	accounts := []domain.Account{
+		acct("a1", "alice", domain.TypeChecking, false, ""),
+		acct("a2", "bob", domain.TypeSavings, false, ""),
+		acct("a3", "bob", domain.TypeCash, false, ""),
+		acct("a4", "bob", domain.TypeCash, true, ""), // archived — never returned
+	}
+	s := scope.ReportScope{AccountIDs: []string{"a2", "a4"}}
+	got := scope.ResolveScope(accounts, s, noInstitution)
+	want := []string{"a2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AccountIDs-only scope resolved to %v, want %v (restriction, not the whole household)", got, want)
+	}
+}

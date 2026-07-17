@@ -34,10 +34,11 @@ import (
 // "no restriction on this dimension" (i.e., match all). Matching is AND
 // across non-empty dimensions, OR within a dimension.
 //
-// AccountIDs is an additive union: an account whose ID appears in this list
-// is always included, regardless of whether it satisfies the other dimensions.
-// The union is applied after the dimensional filter, so an archived account
-// referenced by ID is still excluded (archived accounts are never returned).
+// AccountIDs plays two roles (QA CF-01/UX-03): beside a non-empty dimensional
+// filter it is an additive union (listed IDs are included even when they miss
+// the dimensions); when it is the ONLY non-empty part of the scope it is a
+// restriction — the scope is exactly those accounts. Archived accounts are
+// never returned either way.
 //
 // Callers: keep ReportScope values comparable by always leaving unused
 // slices nil rather than empty.
@@ -58,8 +59,9 @@ type ReportScope struct {
 	// Types narrows to accounts whose Type matches any of these values.
 	Types []domain.AccountType
 
-	// AccountIDs is an additive override: these account IDs are always
-	// included in the resolved set (still subject to the archived exclusion).
+	// AccountIDs: additive beside a dimensional filter; the exact scope when it
+	// is the only non-empty part (see ResolveScope rule 4, QA CF-01/UX-03).
+	// Always subject to the archived exclusion.
 	AccountIDs []string
 }
 
@@ -78,11 +80,16 @@ func (s ReportScope) IsAll() bool {
 // Rules (applied in this order):
 //  1. Archived accounts are never returned.
 //  2. If IsAll(), every non-archived account is in scope.
-//  3. Otherwise an account qualifies dimensionally when it satisfies every
-//     non-empty dimension (Institutions, Owners, Types) simultaneously.
-//     Within each dimension membership is OR-tested.
-//  4. Any ID listed in s.AccountIDs that belongs to a non-archived account is
-//     unioned into the result regardless of whether that account satisfied step 3.
+//  3. When any dimensional filter (Institutions, Owners, Types) is non-empty,
+//     an account qualifies dimensionally when it satisfies every non-empty
+//     dimension simultaneously; within each dimension membership is OR-tested.
+//     Any ID listed in s.AccountIDs is then unioned in regardless of whether
+//     it satisfied the dimensions (AccountIDs stays additive beside dimensions).
+//  4. When AccountIDs is the ONLY non-empty part of the scope, it is a
+//     RESTRICTION, not an addition: the result is exactly those live accounts.
+//     (The old behavior ran the dimensional loop with no dimensions — which
+//     matches everything — so "Specific accounts: Regression Checking" showed
+//     "Scope (1)" while every figure stayed household-wide: QA CF-01/UX-03.)
 //
 // institutionOf must not be nil; pass func(domain.Account) string { return "" }
 // when no institution data is available (Institutions filter will then match
@@ -101,21 +108,25 @@ func ResolveScope(
 	}
 
 	seen := make(map[string]struct{}, len(live))
+	dimensional := len(s.Institutions) > 0 || len(s.Owners) > 0 || len(s.Types) > 0
 
-	if s.IsAll() {
+	switch {
+	case s.IsAll():
 		// All live accounts are in scope.
 		for id := range live {
 			seen[id] = struct{}{}
 		}
-	} else {
-		// Dimensional filter: AND across non-empty dimensions.
-		for _, a := range live {
-			if matchesDimensions(a, s, institutionOf) {
-				seen[a.ID] = struct{}{}
+	default:
+		if dimensional {
+			// Dimensional filter: AND across non-empty dimensions.
+			for _, a := range live {
+				if matchesDimensions(a, s, institutionOf) {
+					seen[a.ID] = struct{}{}
+				}
 			}
 		}
-
-		// AccountIDs union: add any explicitly listed live accounts.
+		// AccountIDs: additive beside a dimensional filter; the whole scope
+		// when it is the only thing selected.
 		for _, id := range s.AccountIDs {
 			if _, ok := live[id]; ok {
 				seen[id] = struct{}{}
