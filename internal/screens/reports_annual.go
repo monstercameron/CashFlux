@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -809,10 +810,19 @@ func Reports() ui.Node {
 			FmtMinor: fmtMinor,
 		})))
 	}
+	// The roll-up control is a state TOGGLE (aria-pressed), so it wears the
+	// page's toggle component — strip-toggle with is-on chrome — not a plain btn
+	// whose pressed state would be invisible.
+	rollupCls := "strip-toggle"
+	if rollupCats.Get() {
+		rollupCls += " is-on"
+	}
 	catActions := Div(css.Class(tw.Flex, tw.Gap2),
-		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
+		Button(ClassStr(rollupCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 			Attr("aria-pressed", boolStr(rollupCats.Get())), Title(uistate.T("reports.rollupTitle")),
-			OnClick(onToggleRollup), uistate.T(rollupLabelKey(rollupCats.Get()))),
+			OnClick(onToggleRollup),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T(rollupLabelKey(rollupCats.Get())))),
 	)
 	categories := rptaSectionWithAction("rpta-04", "04", uistate.T("rpta.secCats"), "neutral", uistate.T("rpta.secCatsSub"), narrative, catActions, Fragment(
 		P(css.Class("rpta-narrative", tw.FontDisplay), narrative),
@@ -1800,11 +1810,16 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 	if !exportOpenV {
 		exportHidden = " hidden-menu"
 	}
+	exportCls := "strip-toggle"
+	if exportOpenV {
+		exportCls += " is-on"
+	}
 	exportMenu := Div(css.Class("add-wrap"), Attr("id", "rpt-export"),
-		Button(css.Class("btn"), Type("button"), Attr("data-testid", "reports-export-toggle"),
+		Button(ClassStr(exportCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("data-testid", "reports-export-toggle"),
 			Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolStr(exportOpenV)),
 			Title(uistate.T("reports.exportTitle")), OnClick(onToggleExport),
-			uistate.T("reports.exportCsv")),
+			uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T("reports.exportCsv"))),
 		Div(ClassStr("add-menu"+exportHidden), Attr("role", "menu"), OnClick(onCloseExport),
 			exportItem("reports-export-category", uistate.T("reports.byCategory"), func() {
 				downloadBytes(reports.ExportFilename("spending-by-category", res, from), "text/csv", reports.CategoryCSV(rows, nameOf, csvAmount))
@@ -1832,12 +1847,16 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 	)
 	return Div(css.Class("rpta-toolbar"),
 		Div(css.Class("rpta-toolbar-row"),
-			Button(ClassStr(scopeCls), Type("button"), Attr("aria-pressed", boolStr(scopeOpenV)),
+			Button(ClassStr(scopeCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("aria-pressed", boolStr(scopeOpenV)),
 				Attr("data-testid", "reports-scope-toggle"), Title(uistate.T("reports.scopeHint")),
-				OnClick(onToggleScope), Text(scopeLabel)),
-			Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", boolStr(formulasOn)),
+				OnClick(onToggleScope),
+				uiw.Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(scopeLabel)),
+			Button(ClassStr(metricsCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("aria-pressed", boolStr(formulasOn)),
 				Attr("data-testid", "reports-toggle-formulas"), Title(uistate.T("reports.metricsTitle")),
-				OnClick(toggleFormulas), Text(metricsLabel)),
+				OnClick(toggleFormulas),
+				uiw.Icon(icon.Calculator, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(metricsLabel)),
 			exportMenu,
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),

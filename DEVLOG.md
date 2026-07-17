@@ -1,3 +1,23 @@
+## 2026-07-17 — Reports button audit: right components + glyphs
+
+Cam flagged the Export CSV trigger as the wrong button component — it was a generic `btn` between
+two `strip-toggle` pills in the /reports toolbar. Fixed, then audited every button on the page:
+- Toolbar (Scope / Report metrics / Export CSV): all strip-toggle now; export gets `is-on` while
+  its menu is open (matching scope's open-state convention). Glyphs from the icon registry
+  (compile-checked, not ad-hoc unicode): Filter, Calculator, FileText — icon + Span + gap, the
+  same pattern the rest of the app uses (`uiw.Icon(..., tw.ShrinkO/W4/H4)`).
+- §04 roll-up: the deeper find. It's a state toggle (aria-pressed) but wore `btn btn-sm`, so its
+  pressed state was INVISIBLE — only the label text changed. Now strip-toggle + is-on + List
+  glyph; off-state quiet, on-state accent. Verified both states live.
+- Appendix Download-CSV ×3 (deductible / invperf / custom-field): correctly `btn` (one-shot
+  actions, not toggles) — kept, but given the same FileText glyph so "CSV" reads as one vocabulary
+  everywhere on the page.
+- Left alone deliberately: rpta-ask (✦, own component), rpta-idx-item (zone dots ARE the glyph),
+  drill rows (rpta-hist-btn / rpta-cat-name — data, not chrome), add-item menu entries, shared
+  ScopeSelector/FormulaBuilder internals.
+No testid changes → no additional coverage-manifest impact beyond the already-pending regen.
+Verified via Playwright shots: toolbar with menu open, rollup on/off, appendix svg count.
+
 ## 2026-07-17 — Connective layer: adversarial review + hardening pass
 
 Ran an aggressive Sonnet reviewer over the four connective features (F1 driver panel, F2 deep-links, F3

@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -235,7 +236,7 @@ func customFieldSpendSection(
 			),
 			body,
 			If(!allUnvalued && len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"),
+				Button(css.Class("btn", tw.Gap2), Type("button"),
 					Attr("data-testid", "cf-download-csv"),
 					Title(uistate.T("reports.customFieldDownloadTitle")),
 					Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
@@ -244,7 +245,8 @@ func customFieldSpendSection(
 						filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
 						downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
 					}),
-					uistate.T("reports.downloadCsv"),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("reports.downloadCsv")),
 				),
 			)),
 		)))
@@ -315,7 +317,7 @@ func investmentPerformanceSection(
 			P(ClassStr("muted "+tw.ColorClass(totalTone)), Attr("data-testid", "invperf-total"),
 				uistate.T("reports.invPerfTotal", fmtMinor(totalCurrent), fmtMinor(totalGain), fmt.Sprintf("%+.1f%%", totalRet))),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"),
+				Button(css.Class("btn", tw.Gap2), Type("button"),
 					Attr("data-testid", "invperf-download-csv"),
 					Title(uistate.T("reports.invPerfDownloadTitle")),
 					Attr("aria-label", uistate.T("reports.invPerfDownloadTitle")),
@@ -323,7 +325,8 @@ func investmentPerformanceSection(
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 						downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
 					}),
-					uistate.T("reports.downloadCsv"),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("reports.downloadCsv")),
 				),
 			),
 		)))
@@ -400,7 +403,7 @@ func deductibleSection(
 			If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
 			body,
 			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn"), Type("button"),
+				Button(css.Class("btn", tw.Gap2), Type("button"),
 					Attr("data-testid", "deductible-download-csv"),
 					Title(uistate.T("reports.deductibleDownloadTitle")),
 					Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
@@ -408,7 +411,8 @@ func deductibleSection(
 						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
 						downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
 					}),
-					uistate.T("reports.downloadCsv"),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("reports.downloadCsv")),
 				),
 			)),
 		)))
