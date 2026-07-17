@@ -17,6 +17,20 @@ var lane1Keys = Catalog{
 	"activity.causeAI":     "AI assistant",
 	// %s = " · "-joined figure names (e.g. "account balance · budget progress").
 	"activity.recalc": "Recalculated: %s",
+	// #56 number provenance: the masthead figures' click-to-explain popovers.
+	"rpta.provHint": "How is this number built?",
+	// %s = "N income transactions" / "N spending transactions", %s = "N accounts".
+	"rpta.provCounted": "Built from %s across %s.",
+	// %s = "N transactions", %s = "N accounts".
+	"rpta.provKept": "Income minus spending — %s across %s.",
+	// %s = "N transfers".
+	"rpta.provTransfers": "%s ignored — money moving between your accounts is never income or spending.",
+	// %s = "N transactions".
+	"rpta.provExcluded": "%s marked \"exclude from reports\" are not counted.",
+	// %s = "N accounts" in scope.
+	"rpta.provNWAccounts": "Assets minus debts across %s.",
+	// %s = "N transactions", %s = the window's last month (e.g. "Jul 2026").
+	"rpta.provNWTxns": "Balances built from %s recorded through %s.",
 }
 
 func init() {

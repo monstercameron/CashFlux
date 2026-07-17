@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/provenance"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 	"github.com/monstercameron/CashFlux/internal/scope"
@@ -402,12 +403,44 @@ func Reports() ui.Node {
 	windowLine := uistate.T("rpta.window", bounds[0].Format("Jan 2006"), lastMonth.Format("Jan 2006"))
 
 	// ── Masthead: the verdict + four anchor figures. ──────────────────────────
+	// #56: each figure is clickable and opens a provenance popover naming the
+	// transactions counted, accounts in scope, window, and what was left out —
+	// derived by the pure provenance package with the SAME counting rules as
+	// the figures themselves.
 	verdict, verdictTone := rptaVerdict(health)
 	kept := money.New(flow.Net(), base)
+	provFlow := provenance.DescribeFlow(scopedTxns, scopedAccounts, as, ae)
+	provNW := provenance.DescribeBalance(scopedTxns, scopedAccounts, ae)
+	provLines := func(counted string) []string {
+		ls := []string{counted, windowLine}
+		if provFlow.TransferCount > 0 {
+			ls = append(ls, uistate.T("rpta.provTransfers", plural(provFlow.TransferCount, "transfer")))
+		}
+		if provFlow.ExcludedCount > 0 {
+			ls = append(ls, uistate.T("rpta.provExcluded", plural(provFlow.ExcludedCount, "transaction")))
+		}
+		return ls
+	}
 	mastFigs := []ui.Node{
-		rptaFig(uistate.T("dashboard.income"), fmtMoney(money.New(flow.Income, base)), "", ""),
-		rptaFig(uistate.T("dashboard.spending"), fmtMoney(money.New(flow.Expense, base)), "", ""),
-		rptaFig(uistate.T("rpta.kept"), fmtMoney(kept), rptaToneFor(kept.Amount), uistate.T("rpta.keptRate", flow.SavingsRate())),
+		ui.CreateElement(rptaProvFig, rptaProvFigProps{
+			ID: "rpta-prov-income", Label: uistate.T("dashboard.income"),
+			Value: fmtMoney(money.New(flow.Income, base)),
+			Title: uistate.T("dashboard.income"),
+			Lines: provLines(uistate.T("rpta.provCounted", plural(provFlow.IncomeCount, "income transaction"), plural(provFlow.AccountCount, "account"))),
+		}),
+		ui.CreateElement(rptaProvFig, rptaProvFigProps{
+			ID: "rpta-prov-spending", Label: uistate.T("dashboard.spending"),
+			Value: fmtMoney(money.New(flow.Expense, base)),
+			Title: uistate.T("dashboard.spending"),
+			Lines: provLines(uistate.T("rpta.provCounted", plural(provFlow.ExpenseCount, "spending transaction"), plural(provFlow.AccountCount, "account"))),
+		}),
+		ui.CreateElement(rptaProvFig, rptaProvFigProps{
+			ID: "rpta-prov-kept", Label: uistate.T("rpta.kept"),
+			Value: fmtMoney(kept), Tone: rptaToneFor(kept.Amount),
+			Sub:   uistate.T("rpta.keptRate", flow.SavingsRate()),
+			Title: uistate.T("rpta.kept"),
+			Lines: provLines(uistate.T("rpta.provKept", plural(provFlow.Counted(), "transaction"), plural(provFlow.AccountCount, "account"))),
+		}),
 	}
 	if len(accounts) > 0 {
 		sub := ""
@@ -424,14 +457,18 @@ func Reports() ui.Node {
 		for _, m := range nwSeries {
 			nwInts = append(nwInts, m.Amount)
 		}
-		mastFigs = append(mastFigs, Div(css.Class("rpta-fig"), Attr("data-testid", "reports-hero-networth"),
-			Span(css.Class("rpta-fig-k"), uistate.T("dashboard.netWorth")),
-			Span(css.Class("rpta-fig-v", tw.FontDisplay), fmtMoney(nwNet)),
-			If(sub != "", Span(ClassStr("rpta-fig-sub rpta-tone-"+tone), sub)),
-			If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), Title(uistate.T("rpta.nwSparkTitle")),
+		mastFigs = append(mastFigs, ui.CreateElement(rptaProvFig, rptaProvFigProps{
+			ID: "reports-hero-networth", Label: uistate.T("dashboard.netWorth"),
+			Value: fmtMoney(nwNet), Sub: sub, SubTone: tone,
+			Title: uistate.T("dashboard.netWorth"),
+			Lines: []string{
+				uistate.T("rpta.provNWAccounts", plural(provNW.AccountCount, "account")),
+				uistate.T("rpta.provNWTxns", plural(provNW.TxnCount, "transaction"), lastMonth.Format("Jan 2006")),
+			},
+			Extra: If(len(nwInts) >= 2, Div(css.Class("rpta-fig-spark"), Title(uistate.T("rpta.nwSparkTitle")),
 				sparklineSVG(nwInts, uistate.T("rpta.nwSparkAlt")),
 				Span(css.Class("rpta-fig-spark-cap"), uistate.T("rpta.nwSparkCap"), " · ", rptaSrcLink("nav.netWorth", "/networth")))),
-		))
+		}))
 	}
 	// Partial-period honesty (parity scan): when the window's newest month is
 	// still in progress, the masthead says so — a 17-day July beside eleven

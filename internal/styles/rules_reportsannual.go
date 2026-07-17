@@ -1006,6 +1006,41 @@ func registerReportsAnnual() {
 	)
 	rule(".rpta-plan-link:hover", textDecoration("underline"))
 
+	// #56: a masthead figure's value is a button that opens its provenance
+	// popover — the button must look exactly like the former span, with a
+	// quiet dotted underline on hover as the only affordance.
+	rule(".rpta-fig-btn",
+		prop("background", "none"),
+		prop("border", "0"),
+		prop("padding", "0"),
+		prop("font", "inherit"),
+		prop("color", "inherit"),
+		prop("text-align", "left"),
+		prop("cursor", "pointer"),
+	)
+	rule(".rpta-fig-btn:hover, .rpta-fig-btn:focus-visible",
+		prop("text-decoration", "underline dotted"),
+		prop("text-underline-offset", "0.35em"),
+	)
+	// No display here — .hidden-menu's display:none must keep winning when the
+	// popover is closed (same single-class specificity, later rule would win).
+	rule(".rpta-prov-pop",
+		prop("min-width", "17rem"),
+		prop("max-width", "23rem"),
+		prop("padding", "0.65rem 0.8rem"),
+		prop("gap", "0.35rem"),
+		prop("font-size", "0.8rem"),
+		prop("white-space", "normal"),
+		prop("font-family", "inherit"),
+	)
+	rule(".rpta-prov-title",
+		prop("font-weight", "600"),
+	)
+	rule(".rpta-prov-line",
+		prop("color", "var(--text-dim)"),
+		prop("line-height", "1.45"),
+	)
+
 	// Print: flatten stickiness so Save-as-PDF captures the whole document.
 	rawBlock(`@media print{.rpta-index{position:static;backdrop-filter:none}.rpta-sec{break-inside:avoid-page}}`)
 }

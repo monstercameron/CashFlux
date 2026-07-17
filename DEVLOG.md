@@ -1,3 +1,34 @@
+## 2026-07-17 — #56: the masthead numbers learn to show their work (lane 1)
+
+Provenance's whole value is that it CANNOT disagree with the figure it explains, so the design
+constraint was: one source of counting truth. `internal/provenance.DescribeFlow` re-states
+`ledger.PeriodTotals`' rules exactly — half-open [From, To), transfers out, exclude-from-reports
+out — and classifies every in-window transaction into counted / transfer / excluded, so the popover
+can say what was left out instead of silently not counting it. A transfer that is ALSO excluded
+reads as a transfer (the stronger, by-design reason), which the tests pin. Net worth gets a separate
+`DescribeBalance` because it's a balances-at-cutoff figure, not a flow — transfers DO feed it.
+
+Two integration lessons:
+
+1. **A single-class rule can defeat `.hidden-menu`.** The popover reuses the `.add-menu` overlay,
+   and my `.rpta-prov-pop { display: grid }` — same specificity, later in the sheet — overrode
+   `.hidden-menu { display: none }`, so every popover rendered open, invisibly intercepting clicks
+   over the toolbar (the e2e's scope-toggle click timing out on "subtree intercepts pointer events"
+   was the tell). Never set `display` on an add-menu variant; let the open/closed classes own it.
+
+2. **Fig markup → component correctness.** The figures were plain `rptaFig(...)` spans; the click
+   affordance needs per-figure hooks (open state + anchor/dismiss popover effects), so each figure
+   became its own `rptaProvFig` component — including the conditionally-rendered net-worth fig,
+   where CreateElement's per-component hook scope makes the conditional mount safe. The value keeps
+   the `rpta-fig-v` class so CountUp and the existing e2e figure-readers see no change; the button
+   is chrome-less (`font: inherit` etc.) so the masthead looks identical until hover.
+
+Deferred half, on purpose: the ticket also names the dashboard hero, but the hero is mid-rework in
+lane 2's concurrent pass — colliding there loses more than it gains. The pure package + component
+are the seam; wiring the hero is a follow-up once that lane lands. E2E 33/33 (the audit-trail
+section also grew a poll — the ~4s autosave tick means "read the feed immediately" is a race, which
+one green run had been quietly winning).
+
 ## 2026-07-17 — #57: imports stop being a leap of faith (lane 4)
 
 The import pipeline had pieces of trust scattered around (C88 dup warning, C74 profiles, C11

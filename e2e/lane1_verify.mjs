@@ -156,8 +156,10 @@ await page.waitForTimeout(1600);
 
 await nav("/activity");
 // Async KV autosaves and sample-seeded history share the feed — assert on OUR
-// entry: the one whose diff names the exclude-from-reports field.
+// entry: the one whose diff names the exclude-from-reports field. The audit
+// capture rides the ~4s autosave tick, so poll for it.
 const firstEntry = page.locator(".row.act-entry", { hasText: "exclude from reports" }).first();
+for (let i = 0; i < 8 && !(await firstEntry.count()); i++) await page.waitForTimeout(1200);
 check("#54: audit trail has entries", (await page.locator(".row.act-entry").count()) > 0);
 const entryText = (await firstEntry.innerText().catch(() => "")).replace(/\n/g, " ");
 const diffCount = await firstEntry.locator(".act-diff-line").count();
@@ -218,6 +220,49 @@ if ((await ruleForm.count()) && payeeWord.length >= 3) {
 } else {
   check("#54: rule creation preconditions", false, `form=${await ruleForm.count()} word=${payeeWord}`);
 }
+
+// ───────────── #56: number provenance — click a figure, see its inputs ─────────────
+await nav("/reports");
+const incBtn = page.locator('[data-testid="rpta-prov-income-btn"]');
+check("#56: income figure is clickable", (await incBtn.count()) === 1);
+await incBtn.click();
+await page.waitForTimeout(600);
+const incPop = page.locator('[data-testid="rpta-prov-income-pop"]');
+const incPopVisible = await incPop.isVisible().catch(() => false);
+check("#56: income provenance popover opens", incPopVisible);
+const incText = incPopVisible ? (await incPop.innerText()).replace(/\n/g, " ") : "";
+check("#56: popover names transactions and accounts", /Built from \d+ income transactions? across \d+ accounts?\./.test(incText), incText);
+check("#56: popover states the date range", /20\d\d/.test(incText), incText);
+// Dismiss by clicking elsewhere.
+await page.mouse.click(10, 400);
+await page.waitForTimeout(500);
+check("#56: popover dismisses on outside click", !(await incPop.isVisible().catch(() => false)));
+
+// Net worth explains itself as balances, not flows.
+await page.locator('[data-testid="reports-hero-networth-btn"]').click();
+await page.waitForTimeout(600);
+const nwPop = page.locator('[data-testid="reports-hero-networth-pop"]');
+const nwText = (await nwPop.isVisible().catch(() => false)) ? (await nwPop.innerText()).replace(/\n/g, " ") : "";
+check("#56: net-worth popover explains assets minus debts", /Assets minus debts across \d+ accounts?\./.test(nwText), nwText);
+check("#56: net-worth popover counts its transactions", /Balances built from \d+ transactions? recorded through/.test(nwText), nwText);
+await page.mouse.click(10, 400);
+await page.waitForTimeout(500);
+
+// Honesty under scope: a one-account scope must show "across 1 account".
+await page.locator('[data-testid="reports-scope-toggle"]').click();
+await page.waitForTimeout(700);
+await page.locator('[data-testid="scope-selector"] button:has-text("Specific accounts")').click();
+await page.waitForTimeout(500);
+await page.locator(".scope-acct-row").first().locator('input[type="checkbox"]').check();
+await page.waitForTimeout(1600);
+await page.locator('[data-testid="rpta-prov-income-btn"]').click();
+await page.waitForTimeout(600);
+const scopedProv = (await incPop.innerText().catch(() => "")).replace(/\n/g, " ");
+check("#56: provenance follows the report scope (across 1 account)", /across 1 account\./.test(scopedProv), scopedProv);
+await page.mouse.click(10, 400);
+await page.waitForTimeout(400);
+await page.locator('[data-testid="rpta-scope-reset"]').click();
+await page.waitForTimeout(1200);
 
 check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 
