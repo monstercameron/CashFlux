@@ -312,7 +312,11 @@ func classify(spent, limit money.Money, nearThreshold float64) State {
 		}
 		return StateOK
 	}
-	if spent.Amount >= limit.Amount {
+	// Strictly past the limit is over; landing EXACTLY on the limit is "near"
+	// (remaining is $0.00, nothing is overspent). The old >= classification
+	// forced cover flows to move one cent MORE than the displayed shortfall to
+	// clear the flag — the QA L1 "covered $49.64 by moving $49.65" discrepancy.
+	if spent.Amount > limit.Amount {
 		return StateOver
 	}
 	if float64(spent.Amount) >= nearThreshold*float64(limit.Amount) {

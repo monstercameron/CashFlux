@@ -192,7 +192,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			if src == "" || src == coverAllNextSource {
 				continue
 			}
-			drawn[src] += o.Shortfall.Amount + 1 // matches the cover-one-past-limit apply
+			drawn[src] += o.Shortfall.Amount
 		}
 		for id, amt := range drawn {
 			s := srcByID[id]
@@ -218,10 +218,10 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			if src == "" || o.Shortfall.Amount <= 0 {
 				continue
 			}
-			// Cover one minor unit PAST the shortfall: a budget at exactly its limit is
-			// still classified "over" (spent >= limit), so covering just the exact
-			// shortfall would leave it flagged. One cent more clears it (spent < limit).
-			cover := o.Shortfall.Amount + 1
+			// Cover the EXACT shortfall (QA L1: a $49.64 overage used to move $49.65).
+			// A budget landing exactly on its limit now classifies "near", not "over",
+			// so the extra clearing cent is no longer needed.
+			cover := o.Shortfall.Amount
 			switch src {
 			case coverAllNextSource:
 				// Borrow from next month's same budget: raise this period, lower the next.

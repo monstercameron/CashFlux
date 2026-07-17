@@ -292,6 +292,27 @@ if (await scopeChip.count()) {
   check("CF-07: scope chip for a member reachable", false);
 }
 
+// ──────────────── L1: covering an overage moves the exact shortfall ────────────────
+await nav("/budgets");
+await page.waitForTimeout(1500);
+const coverAllBtn = page.locator('[data-testid="budgets-cover-all"]');
+if (await coverAllBtn.count()) {
+  await coverAllBtn.click();
+  await page.waitForTimeout(900);
+  // pick a funding source for every over-row (first non-empty option per select)
+  const rowSelects = await page.locator(".cover-all select").all();
+  for (const s of rowSelects) {
+    const so = await s.locator("option").all();
+    for (const o of so) { const v = await o.getAttribute("value"); if (v) { await s.selectOption(v); break; } }
+  }
+  await page.locator('[data-testid="cover-all-apply"]').click();
+  await page.waitForTimeout(1500);
+  body = await bodyText();
+  check("L1: covered budget lands exactly at its limit ($0.00 left, no stray cent)", body.includes("$0.00 left") && !body.includes("$0.01 left"), "");
+} else {
+  check("L1: no over-budget in sample to cover (covered by table tests)", true, "");
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

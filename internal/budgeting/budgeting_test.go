@@ -402,6 +402,23 @@ func TestEvaluateStates(t *testing.T) {
 	}
 }
 
+// TestEvaluateExactlyAtLimit locks the QA L1 fix: spending exactly the limit is
+// "near" (remaining $0.00 — nothing overspent), not "over". The old >= rule
+// forced cover flows to move one cent past the displayed shortfall.
+func TestEvaluateExactlyAtLimit(t *testing.T) {
+	start, end := june()
+	rates := currency.Rates{Base: "USD"}
+	budget := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Limit: usd(10000)}
+	all := []domain.Transaction{expense(10000, "USD", "food", "", "2026-06-03")}
+	s, err := Evaluate(budget, all, start, end, rates, DefaultNearThreshold)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if s.State != StateNear || s.Percent != 100 || !s.Remaining.Equal(usd(0)) {
+		t.Errorf("at-limit: state=%s pct=%d remaining=%v, want near/100/$0.00", s.State, s.Percent, s.Remaining)
+	}
+}
+
 func TestEvaluateZeroLimit(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}

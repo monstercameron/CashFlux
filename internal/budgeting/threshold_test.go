@@ -24,7 +24,10 @@ func TestClassifyBoundaries(t *testing.T) {
 		{"one cent below near is OK", 7999, 0.8, StateOK},
 		{"exactly at near% is Near", 8000, 0.8, StateNear},
 		{"between near and limit is Near", 9999, 0.8, StateNear},
-		{"exactly at the limit is Over", 10000, 0.8, StateOver},
+		// QA L1: landing exactly on the limit leaves $0.00 remaining — nothing is
+		// overspent, so it reads Near (at the limit), not Over. Cover flows can
+		// therefore move the exact shortfall instead of one clearing cent extra.
+		{"exactly at the limit is Near", 10000, 0.8, StateNear},
 		{"above the limit is Over", 12000, 0.8, StateOver},
 		{"zero spend is OK", 0, 0.8, StateOK},
 		{"different threshold: at 90% is Near", 9000, 0.9, StateNear},
