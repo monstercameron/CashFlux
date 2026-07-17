@@ -1420,21 +1420,14 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				})
 			},
 		)
-		// C9: a page-level cue whenever the view axis deviates from the default — the
-		// last-month overlay reshapes every card's figures, so name it above the grid
-		// (the per-card LAST MONTH tags detail it) instead of leaving numbers that
-		// silently disagree with other surfaces.
-		var viewStatus ui.Node = Fragment()
-		if showLastMonth {
-			viewStatus = Div(css.Class("budget-viewstatus"), Attr("data-testid", "budgets-viewstatus"),
-				Attr("role", "status"),
-				uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(uistate.T("budgets.viewingStatus", uistate.T("budgets.viewingLastMonth"))))
-		}
+		// The overlay banner that used to sit here (C9) is retired: the toolbar toggle's
+		// pressed state ("Showing last month's spend") plus the LAST MONTH chips on the
+		// summary and every card already say the same thing three ways — a fourth,
+		// full-width repetition just spent attention (design critique #2).
 		// G8: contextual creation — categories with real spending this month and no
 		// budget, each one click from a pre-filled add form (category + suggested limit).
 		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{App: app, Base: v.Base, CatName: v.CatName})
-		body = Fragment(searchBar, viewStatus, matchNote, Div(css.Class("budget-grid"), rows), unbudgeted)
+		body = Fragment(searchBar, matchNote, Div(css.Class("budget-grid"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{

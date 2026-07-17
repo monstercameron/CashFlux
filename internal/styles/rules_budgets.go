@@ -538,21 +538,6 @@ func registerBudgetsSurface() {
 		borderRadius("8px"),
 	)
 
-	// C9: page-level view-status cue — named whenever the last-month overlay reshapes
-	// every card's figures, so the deviation from the default view is unmistakable.
-	rule(".budget-viewstatus",
-		display("flex"),
-		alignItems("center"),
-		gap("0.45rem"),
-		padding("0.45rem 0.75rem"),
-		marginBottom("0.6rem"),
-		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
-		borderRadius("8px"),
-		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
-		color("var(--text)"),
-		fontSize("0.82rem"),
-	)
-
 	// G8: the "Unbudgeted spending" strip — an invitation to budget the categories
 	// that are actually taking money this month. Quiet dashed frame so it reads as an
 	// offer, not another data card.

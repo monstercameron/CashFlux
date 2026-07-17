@@ -1,3 +1,14 @@
+## 2026-07-17 — Budgets fix 6/7: the overlay banner retires
+
+Removed the C9 `budget-viewstatus` banner from `budgetListWidget` and its rule from
+`rules_budgets.go`. Rationale logged in the critique reconciliation: the overlay state is already
+carried by the toggle's `aria-pressed` + label flip (e2e-locked in interactions.spec.mjs) and the
+LAST MONTH chips on summary + cards (which fix 4 made visually distinct from live-state colors, so
+they now do the naming job the banner existed for). Four signals → three, and the full-width row
+above the grid returns to content. The two `budgets.viewing*` strings stay in en.go untouched
+(concurrent thread owns that file right now) — flagged for the next i18n cull. No e2e referenced
+the banner testid.
+
 ## 2026-07-17 — Budgets fix 5/7: the card footer goes on a diet
 
 Footer now = Cover|Top-up + Transactions + ⋯. Edit budget / Edit tracking / Notes / Formulas moved
