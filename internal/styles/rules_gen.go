@@ -7014,8 +7014,14 @@ func registerGenerated() {
 		prop("outline-offset", "2px"),
 		borderRadius("8px"),
 	)
+	// 2026-07-17 audit: read ≠ resolved. A gentler dim for read rows, and a
+	// critical alert keeps nearly full ink even after it's been seen — "read"
+	// must never file away unresolved urgency.
 	rule(".notif.is-read",
-		opacity("0.6"),
+		opacity("0.78"),
+	)
+	rule(".notif.is-read.sev-critical",
+		opacity("0.95"),
 	)
 	rule(".notif.sev-critical",
 		borderLeftColor("#ef4444"),

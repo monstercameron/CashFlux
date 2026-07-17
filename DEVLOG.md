@@ -92,6 +92,10 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Eighth slice: Notifications — two one-line fixes with outsized reads. Wins below the feed (the
+widget-spec order was literally the bug), and a severity-aware read-dim: the flat 0.6 opacity
+encoded "seen == handled", which is false precisely for the rows that matter most.
+
 Seventh slice: Goals got a pure density pass, deliberately NOT a structure change. Two reasons:
 the 2026-07-16 goals overhaul already solved the structural stuff (opt-in planner, capped steps,
 clamped notes), and the inline action row the audit might have counted as verbosity is Cam's

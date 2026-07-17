@@ -46,10 +46,12 @@ func NotificationCenter() ui.Node {
 		Start: time.Time{}, End: time.Now(),
 	}
 
+	// 2026-07-17 audit: alerts outrank celebration — the prioritized feed (critical
+	// first) renders directly under the summary, and "Recent wins" moves BELOW it.
 	specs := []domain.WidgetSpec{
 		notifNativeSpec("notif-summary"),
-		notifNativeSpec("notif-wins"),
 		notifNativeSpec("notif-list"),
+		notifNativeSpec("notif-wins"),
 	}
 
 	live := Div(css.Class("bento bento-notif"),
