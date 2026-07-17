@@ -1371,6 +1371,31 @@ FROM subscriptions
 WHERE provider = ? AND provider_subscription = ?`, provider, strings.TrimSpace(providerSubscription)))
 }
 
+// RecordWebhookEventOnce records a provider webhook event id for replay dedupe and
+// returns true when the event is NEW (first time seen), false when it was already
+// recorded. Providers retry webhooks aggressively, so the handler applies each
+// event at most once. An empty provider/event id can't be deduped and is treated
+// as new (apply) — the caller falls back to the event's own idempotency.
+func (s *Store) RecordWebhookEventOnce(provider, eventID string, now time.Time) (bool, error) {
+	provider = strings.TrimSpace(provider)
+	eventID = strings.TrimSpace(eventID)
+	if provider == "" || eventID == "" {
+		return true, nil
+	}
+	defer s.observeDB("RecordWebhookEventOnce", time.Now())
+	res, err := s.db.Exec(
+		`INSERT INTO webhook_events(provider, event_id, received_at) VALUES(?, ?, ?) ON CONFLICT(provider, event_id) DO NOTHING`,
+		provider, eventID, formatTime(now.UTC()))
+	if err != nil {
+		return false, fmt.Errorf("server store: record webhook event: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("server store: webhook event rows: %w", err)
+	}
+	return n > 0, nil
+}
+
 // UsageWithinLimit reports whether the user has not exceeded the supplied daily limits.
 func (s *Store) UsageWithinLimit(userID string, day time.Time, maxRequests, maxTokens int64) (bool, error) {
 	if maxRequests < 0 || maxTokens < 0 {

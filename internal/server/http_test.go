@@ -588,24 +588,24 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 		t.Fatalf("AddUsage: %v", err)
 	}
 	if err := store.PutSubscription(Subscription{
-		UserID:             user.ID,
+		UserID:               user.ID,
 		ProviderCustomer:     "cus_export",
 		ProviderSubscription: "sub_export",
-		Status:             "active",
-		Plan:               "personal_annual",
-		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		CurrentPeriodEnd:     now.Add(30 * 24 * time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
 	if err := store.PutSubscription(Subscription{
-		UserID:             other.ID,
+		UserID:               other.ID,
 		ProviderCustomer:     "cus_other",
 		ProviderSubscription: "sub_other",
-		Status:             "active",
-		Plan:               "personal_annual",
-		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		CurrentPeriodEnd:     now.Add(30 * 24 * time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription other: %v", err)
 	}
@@ -2265,13 +2265,13 @@ func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
 		t.Fatalf("UpsertUser: %v", err)
 	}
 	if err := store.PutSubscription(Subscription{
-		UserID:             "u1",
+		UserID:               "u1",
 		ProviderCustomer:     "cus_123",
 		ProviderSubscription: "sub_123",
-		Status:             "active",
-		Plan:               "personal_annual",
-		CurrentPeriodEnd:   now.Add(24 * time.Hour),
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		CurrentPeriodEnd:     now.Add(24 * time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -2298,13 +2298,13 @@ func TestStripeWebhookSubscriptionDeletedMarksCanceled(t *testing.T) {
 		t.Fatalf("UpsertUser: %v", err)
 	}
 	if err := store.PutSubscription(Subscription{
-		UserID:             "u1",
+		UserID:               "u1",
 		ProviderCustomer:     "cus_123",
 		ProviderSubscription: "sub_123",
-		Status:             "active",
-		Plan:               "personal_annual",
-		CurrentPeriodEnd:   now.Add(24 * time.Hour),
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		CurrentPeriodEnd:     now.Add(24 * time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -2455,12 +2455,12 @@ func TestBillingPortalCreatesStripeSession(t *testing.T) {
 	now := time.Date(2026, time.June, 19, 15, 5, 0, 0, time.UTC)
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
-		UserID:             user.ID,
+		UserID:               user.ID,
 		ProviderCustomer:     "cus_123",
 		ProviderSubscription: "sub_123",
-		Status:             "active",
-		Plan:               "personal_annual",
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -2586,12 +2586,12 @@ func TestBillingPortalReplaysIdempotencyKey(t *testing.T) {
 	now := time.Now().UTC()
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
-		UserID:             user.ID,
+		UserID:               user.ID,
 		ProviderCustomer:     "cus_123",
 		ProviderSubscription: "sub_123",
-		Status:             "active",
-		Plan:               "personal_annual",
-		UpdatedAt:          now,
+		Status:               "active",
+		Plan:                 "personal_annual",
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -2739,13 +2739,13 @@ func TestBillingCheckoutRejectsUsedTrial(t *testing.T) {
 	now := time.Date(2026, time.June, 19, 15, 20, 0, 0, time.UTC)
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
-		UserID:             user.ID,
+		UserID:               user.ID,
 		ProviderCustomer:     "cus_123",
 		ProviderSubscription: "sub_123",
-		Status:             "canceled",
-		Plan:               "personal_annual",
-		TrialEnd:           now.Add(-24 * time.Hour),
-		UpdatedAt:          now,
+		Status:               "canceled",
+		Plan:                 "personal_annual",
+		TrialEnd:             now.Add(-24 * time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -2809,4 +2809,72 @@ func testIDToken(t *testing.T, claims map[string]any) string {
 func strconvQuote(value string) string {
 	data, _ := json.Marshal(value)
 	return string(data)
+}
+
+// TestStripeWebhookCreatedEventUpserts covers customer.subscription.created (the
+// event that seeds a real subscription with plan + periods, not just the
+// metadata-defaulted checkout.session.completed) — previously unhandled.
+func TestStripeWebhookCreatedEventUpserts(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 14, 30, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	payload := []byte(`{
+		"id":"evt_created_1",
+		"type":"customer.subscription.created",
+		"data":{"object":{
+			"id":"sub_new","customer":"cus_new","status":"active",
+			"current_period_end":1781820000,
+			"metadata":{"user_id":"u1","plan":"personal_monthly"}
+		}}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+	req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("created webhook status = %d body %q", rr.Code, rr.Body.String())
+	}
+	got, ok, err := store.GetSubscription("u1")
+	if err != nil || !ok || got.Status != "active" || got.Plan != "personal_monthly" || got.ProviderSubscription != "sub_new" {
+		t.Fatalf("created subscription = %+v/%v/%v", got, ok, err)
+	}
+}
+
+// TestStripeWebhookDedupesReplay covers the replay guard: a re-sent event id is
+// acknowledged but NOT re-applied, so a stale replay can't overwrite newer state.
+func TestStripeWebhookDedupesReplay(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Date(2026, time.June, 19, 14, 30, 0, 0, time.UTC)
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	cfg := Config{AuthMode: "token", Billing: true, StripeWebhookSecret: "whsec_test"}
+	h := NewMux(cfg, store)
+	send := func(payload []byte) int {
+		req := httptest.NewRequest(http.MethodPost, "/v1/billing/stripe/webhook", bytes.NewReader(payload))
+		req.Header.Set(stripeSignatureHeader, testStripeSignature(t, payload, cfg.StripeWebhookSecret, time.Now().UTC()))
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr.Code
+	}
+	first := []byte(`{"id":"evt_dup","type":"customer.subscription.updated","data":{"object":{"id":"sub_1","customer":"cus_1","status":"active","metadata":{"user_id":"u1","plan":"personal_annual"}}}}`)
+	if code := send(first); code != http.StatusNoContent {
+		t.Fatalf("first webhook = %d", code)
+	}
+	// Same event id, but a canceled status — must be ignored as a replay.
+	replay := []byte(`{"id":"evt_dup","type":"customer.subscription.updated","data":{"object":{"id":"sub_1","customer":"cus_1","status":"canceled","metadata":{"user_id":"u1","plan":"personal_annual"}}}}`)
+	if code := send(replay); code != http.StatusNoContent {
+		t.Fatalf("replay webhook = %d", code)
+	}
+	got, ok, err := store.GetSubscription("u1")
+	if err != nil || !ok {
+		t.Fatalf("GetSubscription = %v/%v", ok, err)
+	}
+	if got.Status != "active" {
+		t.Fatalf("replay overwrote state: status = %q, want active (replay ignored)", got.Status)
+	}
 }

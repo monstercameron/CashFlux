@@ -455,6 +455,16 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "stripe event is invalid")
 			return
 		}
+		// Replay dedupe: Stripe retries webhooks until it gets a 2xx (and re-sends on
+		// its own schedule), so applying the same event twice must be a no-op. Record
+		// the event id first; if it was already seen, ack without re-applying.
+		if isNew, err := store.RecordWebhookEventOnce("stripe", event.ID, time.Now().UTC()); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "webhook dedupe failed")
+			return
+		} else if !isNew {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		if err := applyStripeEvent(store, event, time.Now().UTC(), cfg.Metrics); err != nil {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
 			return
@@ -522,7 +532,7 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		}
 		observeBillingTransition(metrics, event.Type, Subscription{}, next)
 		return nil
-	case "customer.subscription.updated", "customer.subscription.deleted":
+	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
 		var sub stripeSubscriptionObject
 		if err := json.Unmarshal(event.Data.Object, &sub); err != nil {
 			return fmt.Errorf("stripe subscription is invalid")
@@ -566,14 +576,6 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 	default:
 		return nil
 	}
-}
-
-func putStripeSubscription(store *Store, sub stripeSubscriptionObject, now time.Time) error {
-	record, err := stripeSubscriptionRecord(store, sub, now)
-	if err != nil {
-		return err
-	}
-	return store.PutSubscription(record)
 }
 
 func stripeSubscriptionRecord(store *Store, sub stripeSubscriptionObject, now time.Time) (Subscription, error) {

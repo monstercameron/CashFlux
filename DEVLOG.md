@@ -24732,3 +24732,12 @@ applyStripeEvent) rather than rewriting them. Refactored createStripeSession to 
 it surface Stripe's error message (bad price/key becomes diagnosable). Added the stripeEvent id for
 replay dedupe. paypalProvider is a fail-closed stub (Configured=false) until 3d fills it in; PayPal
 config fields added now so the registry compiles. Entitlement seam untouched.
+
+Phase 3c: productionized the Stripe path. Added customer.subscription.created (the event that
+carries the real plan+periods; before, only checkout.session.completed seeded the row with
+metadata defaults of trialing/unknown until an update landed). Wired the webhook_events table into
+the handler for replay dedupe — record the event id first, ack-without-applying if already seen —
+and proved with a test that a stale replay carrying a canceled status can't clobber the newer
+active state. createStripeSession already got its timeout+error-body in 3b. Deleted the dead
+putStripeSubscription. The webhook-signing tests that use no top-level event id still pass because
+an empty id is treated as new (apply) — the id only gates when present.
