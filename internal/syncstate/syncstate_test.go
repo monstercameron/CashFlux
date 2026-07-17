@@ -60,3 +60,25 @@ func TestPendingQueueUpsertAndRemove(t *testing.T) {
 		t.Fatalf("remove accepted queue = %+v", queue)
 	}
 }
+
+func TestShouldResetBackoff(t *testing.T) {
+	const healthy = 30 * time.Second
+	tests := []struct {
+		name         string
+		received     bool
+		connectedFor time.Duration
+		want         bool
+	}{
+		{"delivered a message resets", true, time.Second, true},
+		{"survived long enough resets", false, healthy, true},
+		{"survived well past threshold resets", false, 2 * healthy, true},
+		{"immediate error does NOT reset (thrash guard)", false, 50 * time.Millisecond, false},
+		{"short-lived silent stream does NOT reset", false, 5 * time.Second, false},
+		{"message beats a short lifetime", true, time.Millisecond, true},
+	}
+	for _, tc := range tests {
+		if got := ShouldResetBackoff(tc.received, tc.connectedFor, healthy); got != tc.want {
+			t.Errorf("%s: ShouldResetBackoff(%v, %v) = %v, want %v", tc.name, tc.received, tc.connectedFor, got, tc.want)
+		}
+	}
+}

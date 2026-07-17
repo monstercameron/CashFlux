@@ -215,15 +215,22 @@ func startBackendWatch() {
 	go func() {
 		// C322: exponential backoff + jitter (2s→120s cap) instead of fixed
 		// 10s/3s sleeps, so a flapping network doesn't hammer the backend and many
-		// clients don't reconnect in lockstep. attempt resets to 0 whenever a watch
-		// stream is established (a healthy connection), so a brief blip recovers fast.
+		// clients don't reconnect in lockstep.
 		const baseDelay, capDelay, jitterFrac = 2 * time.Second, 120 * time.Second, 0.3
+		// healthyAfter is how long a stream must stay up (absent any received
+		// message) to count as a healthy connection worth resetting the backoff for
+		// — the thrash guard against a stream that opens then instantly errors.
+		const healthyAfter = 30 * time.Second
 		attempt := 0
 		sleepBackoff := func() {
 			d := backoff.Jitter(backoff.Delay(attempt, baseDelay, capDelay), jitterFrac, rand.Float64())
 			time.Sleep(d)
 			attempt++
 		}
+		// firstConnect skips the reconcile pull on the very first successful
+		// subscribe, because startBackendSync already pulled at boot — only
+		// RE-connects need to reconcile the gap.
+		firstConnect := true
 		for {
 			ctx := context.Background()
 			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
@@ -240,8 +247,23 @@ func startBackendWatch() {
 				err = stream.CloseSend()
 			}
 			if err == nil {
-				attempt = 0 // healthy connection — reset the backoff window
-				readBackendWatch(stream)
+				// Reconcile on every RE-subscribe: the server streams only FUTURE
+				// events and silently drops on a full send buffer, so a client that
+				// was briefly disconnected (or whose buffer overflowed) would miss
+				// other devices' changes with no signal. Pulling the active workspace
+				// now closes that gap — the push stream alone is best-effort.
+				if !firstConnect {
+					pullActiveWorkspaceFromBackend(true)
+				}
+				firstConnect = false
+				connectedAt := time.Now()
+				received := readBackendWatch(stream)
+				// Reset the backoff only when the stream proved healthy (delivered a
+				// message or stayed up long enough); an immediate error keeps the
+				// backoff climbing instead of reconnecting at the floor forever.
+				if syncstate.ShouldResetBackoff(received, time.Since(connectedAt), healthyAfter) {
+					attempt = 0
+				}
 			} else {
 				logSyncError("backend sync watch failed", err)
 			}
@@ -251,13 +273,18 @@ func startBackendWatch() {
 	}()
 }
 
-func readBackendWatch(stream grpc.ClientStream) {
+// readBackendWatch reads live workspace events until the stream ends, pulling the
+// active workspace whenever another device changes it. It returns whether it
+// received at least one event, which the reconnect loop uses as a health signal
+// (a stream that delivered data was healthy even if it was short-lived).
+func readBackendWatch(stream grpc.ClientStream) (received bool) {
 	for {
 		var event backendrpc.WatchWorkspacesResponse
 		if err := stream.RecvMsg(&event); err != nil {
 			logSyncError("backend sync watch closed", err)
-			return
+			return received
 		}
+		received = true
 		if strings.TrimSpace(event.Workspace.ID) == "" || event.Workspace.DeviceID == syncDeviceID() {
 			continue
 		}

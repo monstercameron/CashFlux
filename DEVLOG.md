@@ -1255,6 +1255,16 @@ with the server token. Non-operators now get an actor-scoped audit read (`ListAu
 already indexed by `idx_audit_events_actor`) — their own events only — and 403 on metrics. Tests
 now assert the isolation both ways; the old ones only checked authentication.
 
+Phase 1 (gRPC idle/reconnect), slices 1a+1b: the watch loop's two idle defects. It reconnected
+fine (infinite loop, backoff+jitter) but never reconciled — the server streams only future events
+and drops on a full 16-slot buffer, so a brief blip lost other devices' changes silently. Now it
+pulls the active workspace after every RE-subscribe (skipping the first, since boot already
+pulled). And the backoff reset on stream *establishment*, not health — a stream rejected on first
+receive (the per-user stream cap) reconnected at the 2s floor forever; the reset is now gated on a
+pure `syncstate.ShouldResetBackoff(received, connectedFor, healthyAfter=30s)` so only a
+message-delivering or long-lived stream resets it. Extracted the decision to the native-testable
+syncstate package rather than burying it in the wasm-only app loop.
+
 Interjection mid-Phase-1: Cam asked for a Settings page to connect the backend + sync DB/artifacts,
 toggleable. Checked first — it already existed (Settings → Cloud tab: toggle, server URL/token,
 Sync-now that pushes dataset + uploads artifact blobs, OAuth, devices, billing). Asked what he
