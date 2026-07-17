@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
@@ -95,5 +96,53 @@ func TestImportReceiptRejectsBadInput(t *testing.T) {
 	ok := extract.Receipt{Merchant: "Costco", Total: "10.00", Lines: []extract.ReceiptLine{{Description: "Milk", Category: "Groceries", Amount: "10.00"}}}
 	if _, err := a.ImportReceipt(ok, "", time.Now()); err == nil {
 		t.Error("expected an error when no account is given")
+	}
+}
+
+func TestAttachReceiptToExistingTransaction(t *testing.T) {
+	a := receiptTestApp(t)
+	orig := domain.Transaction{
+		ID: "t-card", AccountID: "a1", Desc: "COSTCO WHOLESALE",
+		Date:   time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		Amount: money.New(-1500, "USD"), Source: domain.TxnSourceImported,
+	}
+	if err := a.PutTransaction(orig); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	r := extract.Receipt{
+		Merchant: "Costco", Total: "15.00",
+		Lines: []extract.ReceiptLine{
+			{Description: "Milk", Category: "Groceries", Amount: "10.00"},
+			{Description: "Paper towels", Category: "Household", Amount: "5.00"},
+		},
+	}
+	tx, err := a.AttachReceiptToTransaction("t-card", r)
+	if err != nil {
+		t.Fatalf("AttachReceiptToTransaction: %v", err)
+	}
+	if all := a.Transactions(); len(all) != 1 {
+		t.Fatalf("attach must not create a row: got %d transactions", len(all))
+	}
+	if len(tx.Splits) != 2 || !tx.SplitsReconcile() {
+		t.Fatalf("want 2 reconciling splits, got %+v", tx.Splits)
+	}
+	if tx.Splits[0].CategoryID != "groc" || tx.Splits[1].CategoryID != "house" {
+		t.Errorf("split categories = %q/%q, want groc/house", tx.Splits[0].CategoryID, tx.Splits[1].CategoryID)
+	}
+	if !tx.Reviewed {
+		t.Error("an attached row should be marked reviewed")
+	}
+	if tx.Source != domain.TxnSourceImported {
+		t.Errorf("source must stay %q, got %q", domain.TxnSourceImported, tx.Source)
+	}
+
+	// A mismatched total must refuse rather than rewrite money.
+	bad := extract.Receipt{Merchant: "Costco", Total: "20.00",
+		Lines: []extract.ReceiptLine{{Description: "x", Category: "Groceries", Amount: "20.00"}}}
+	if _, err := a.AttachReceiptToTransaction("t-card", bad); err == nil {
+		t.Fatal("mismatched total must error")
+	}
+	if _, err := a.AttachReceiptToTransaction("nope", r); err == nil {
+		t.Fatal("unknown transaction must error")
 	}
 }

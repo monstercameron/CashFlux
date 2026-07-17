@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -25,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pdftext"
+	"github.com/monstercameron/CashFlux/internal/receiptmatch"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -1013,6 +1015,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			return false
 		}
 		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows), 0, cpID)
+		// #58: a confirmed create also teaches the learn tally this merchant's
+		// category choices, same as an attach.
+		learnReceiptChoices(rec.Merchant, tx.Splits)
 		setDraft([]extract.Row{})
 		imageURL.Set("")
 		imageDraftAtom.Set("") // C98: clear persisted image after successful import
@@ -1097,6 +1102,52 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		recBaseCur = "USD"
 	}
 	recDec := currency.Decimals(recBaseCur)
+
+	// #58: receipt-to-transaction matching — when the reviewed receipt's total
+	// matches an existing charge near its date, offer "attach to that charge"
+	// instead of always creating a new transaction (the classic double-entry:
+	// the card import already recorded the purchase the receipt documents).
+	var receiptCands []receiptmatch.Candidate
+	if receiptMode.Get() {
+		if totalMinor, terr := money.ParseMinor(absAmount(receiptTotal.Get()), recDec); terr == nil && totalMinor > 0 {
+			recWhen := time.Now()
+			if len(rows) > 0 {
+				if d, derr := dateutil.ParseDate(strings.TrimSpace(rows[0].Date)); derr == nil {
+					recWhen = d
+				}
+			}
+			receiptCands = receiptmatch.Match(totalMinor, receiptMerchant.Get(), recWhen, app.Transactions(), receiptmatch.DefaultWindowDays)
+		}
+	}
+	// attachReceipt documents the chosen existing transaction with the reviewed
+	// lines (splits + reviewed), records the merchant→category choices in the
+	// learn tally, and clears the draft — no new row is created.
+	attachReceipt := func(txnID string) {
+		rowsNow := draft.Get()
+		lines := make([]extract.ReceiptLine, 0, len(rowsNow))
+		for _, r := range rowsNow {
+			lines = append(lines, extract.ReceiptLine{Description: r.Description, Category: r.Category, Amount: absAmount(r.Amount)})
+		}
+		rec := extract.Receipt{Merchant: strings.TrimSpace(receiptMerchant.Get()), Total: absAmount(receiptTotal.Get()), Lines: lines}
+		tx, err := app.AttachReceiptToTransaction(txnID, rec)
+		if err != nil {
+			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
+			return
+		}
+		learnReceiptChoices(rec.Merchant, tx.Splits)
+		setDraft([]extract.Row{})
+		imageURL.Set("")
+		imageDraftAtom.Set("")
+		receiptTotal.Set("")
+		receiptMerchant.Set("")
+		receiptMode.Set(false)
+		aiErr.Set("")
+		// A toast, not the panel msg line — the attach clears the draft, which
+		// swaps the review stage's layout out from under an inline message.
+		uistate.PostNotice(uistate.T("documents.receiptAttached", tx.Desc, plural(len(tx.Splits), "category")), false)
+		uistate.BumpDataRevision()
+		rev.Set(rev.Get() + 1)
+	}
 	receiptToggle := uiw.ToggleRow(uiw.ToggleRowProps{
 		Label: "Import as one receipt (split across categories)",
 		On:    receiptMode.Get(),
@@ -1412,6 +1463,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				OnRemoveDraft:     removeDraft,
 				OnUpdateDraft:     updateDraft,
 			}),
+			// #58: when the receipt's total matches an existing charge, lead with
+			// the attach-to-existing offer — "Import" below stays the create-new path.
+			If(receiptMode.Get() && len(receiptCands) > 0,
+				receiptMatchOffer(receiptCands, attachReceipt)),
 			// #57: pre-commit balance impact for the reviewed draft — where the
 			// import account's balance lands if every row commits, with the
 			// implausible-jump warning.

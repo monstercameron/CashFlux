@@ -107,6 +107,19 @@ var lane4Keys = Catalog{
 	"txnhistory.actorYou":             "You",
 	// %d = estimated minutes remaining at the session's pace.
 	"review.paceEstimate": "≈ %d min left at this pace",
+
+	// #58 — receipt-to-transaction matching.
+	// %d = candidate count.
+	"documents.receiptMatchLead": "This receipt looks like %d charges already in your ledger — attach it instead of creating a duplicate:",
+	"documents.receiptMatchHint": "Attaching puts the receipt's category breakdown on the existing charge. \"Import\" below still creates a new transaction.",
+	"documents.receiptMatchSameDay": "same day",
+	// %d = days between receipt and charge.
+	"documents.receiptMatchDaysApart": "%d days apart",
+	"documents.receiptMatchMerchant":  "merchant matches",
+	"documents.receiptAttachBtn":      "Attach to this charge",
+	"documents.receiptAttachTitle":    "Put this receipt's breakdown on the existing transaction — no new row",
+	// %s ×2 = the charge's description, "N categories".
+	"documents.receiptAttached": "Attached the receipt to \"%s\" — split across %s, no new transaction created.",
 }
 
 func init() {

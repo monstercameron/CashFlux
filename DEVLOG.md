@@ -1,3 +1,19 @@
+## 2026-07-17 — #58: receipts learn the ledger already knows (lane 4)
+
+The double-entry trap: the card import records the Costco run, then the receipt scan records it
+again. Fix is a pure matcher (internal/receiptmatch) with a deliberately hard entry bar — EXACT
+amount within a 5-day window — because a receipt documents a specific charge, not a similar one;
+scoring only orders candidates (date proximity + merchant-token overlap, tokens ≥3 chars so
+"SQ *" fragments can't match everything). Attach lives in appstate
+(AttachReceiptToTransaction): splits land on the existing row, validated to reconcile, reviewed
+flag set, source preserved — and a mismatched total REFUSES rather than rewriting money.
+Learn-tally extension rides both confirm paths. Two e2e lessons: (1) the attach confirmation
+must be a toast — clearing the draft swaps the review layout out from under an inline message;
+(2) my own #48 e2e leg persisted an account+cleared ledger filter that made a later "count the
+rows" assertion see zero — persisted filters are session-global state the suite must clear.
+The whole flow verifies key-free via the statement-parse path; the vision extractor upstream is
+unchanged.
+
 ## 2026-07-17 — #68: five words for "how is this doing" + density gets a front door (lane 6)
 
 The ticket warned most of this ground belongs to the concurrent visual-audit session, so this is

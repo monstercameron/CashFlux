@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/importsafe"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/receiptmatch"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -133,6 +134,67 @@ func reviewImpactCard(app *appstate.App, accounts []domain.Account, acctID strin
 		If(importsafe.JumpWarning(bal.Amount, net), Div(css.Class("notice notice-warn", tw.Mt1),
 			Attr("role", "alert"), Attr("data-testid", "review-jump-warn"),
 			uistate.T("documents.preflightJumpWarn"))),
+	)
+}
+
+// learnReceiptChoices extends the learn tally (#58): every confirmed receipt —
+// attached or created — records its merchant→category choices so future
+// categorization suggestions remember what this household calls this store.
+func learnReceiptChoices(merchant string, splits []domain.CategorySplit) {
+	merchant = strings.TrimSpace(merchant)
+	if merchant == "" {
+		return
+	}
+	seen := map[string]bool{}
+	for _, s := range splits {
+		if s.CategoryID != "" && !seen[s.CategoryID] {
+			seen[s.CategoryID] = true
+			uistate.IncrementLearnTally(merchant, s.CategoryID)
+		}
+	}
+}
+
+// receiptMatchOffer renders the #58 attach-to-existing offer: the ledger
+// charges whose amount exactly matches the reviewed receipt near its date,
+// each with a one-click Attach. "Create new" stays the Import button below.
+func receiptMatchOffer(cands []receiptmatch.Candidate, onAttach func(txnID string)) ui.Node {
+	keyOf := func(c receiptmatch.Candidate) any { return c.Txn.ID }
+	render := func(c receiptmatch.Candidate) ui.Node {
+		return ui.CreateElement(receiptMatchRow, receiptMatchRowProps{Cand: c, OnAttach: onAttach})
+	}
+	return Div(css.Class("notice", tw.Mt2), Attr("data-testid", "receipt-match-offer"),
+		P(uistate.T("documents.receiptMatchLead", len(cands))),
+		Div(css.Class("rows"), MapKeyed(cands, keyOf, render)),
+		P(css.Class("muted", tw.Text12), uistate.T("documents.receiptMatchHint")),
+	)
+}
+
+// receiptMatchRowProps feeds one candidate row.
+type receiptMatchRowProps struct {
+	Cand     receiptmatch.Candidate
+	OnAttach func(txnID string)
+}
+
+// receiptMatchRow is its own component so the Attach click hook sits at a
+// stable position per row.
+func receiptMatchRow(p receiptMatchRowProps) ui.Node {
+	attach := ui.UseEvent(Prevent(func() { p.OnAttach(p.Cand.Txn.ID) }))
+	t := p.Cand.Txn
+	why := uistate.T("documents.receiptMatchSameDay")
+	if p.Cand.DaysApart > 0 {
+		why = uistate.T("documents.receiptMatchDaysApart", p.Cand.DaysApart)
+	}
+	if p.Cand.MerchantHit {
+		why += " · " + uistate.T("documents.receiptMatchMerchant")
+	}
+	return Div(css.Class("row"), Attr("data-testid", "receipt-match-row"),
+		Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "center", "gap": "1rem"}),
+		Div(
+			Div(t.Date.Format("Jan 2, 2006")+" · "+t.Desc+" · "+fmtMoney(t.Amount)),
+			Div(css.Class(tw.TextFaint, tw.Text12), why),
+		),
+		Button(css.Class("btn btn-primary", tw.ShrinkO), Type("button"), Attr("data-testid", "receipt-match-attach"),
+			Title(uistate.T("documents.receiptAttachTitle")), OnClick(attach), uistate.T("documents.receiptAttachBtn")),
 	)
 }
 

@@ -114,6 +114,71 @@ func (a *App) ImportReceipt(r extract.Receipt, accountID string, date time.Time)
 	return tx, nil
 }
 
+// AttachReceiptToTransaction documents an EXISTING transaction with a scanned
+// receipt (#58) instead of creating a duplicate row: the receipt's lines become
+// the transaction's category splits (validated against its amount), a blank
+// payee takes the merchant, and the row is marked reviewed — the charge was
+// just confirmed against paper. The transaction's amount must equal the
+// receipt total exactly; a mismatched attach would silently rewrite money.
+func (a *App) AttachReceiptToTransaction(txnID string, r extract.Receipt) (domain.Transaction, error) {
+	var tx domain.Transaction
+	found := false
+	for _, t := range a.Transactions() {
+		if t.ID == txnID {
+			tx, found = t, true
+			break
+		}
+	}
+	if !found {
+		return domain.Transaction{}, fmt.Errorf("appstate: transaction %q not found", txnID)
+	}
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	dec := currency.Decimals(base)
+	if !r.Reconciles(dec) {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt line splits do not sum to the total")
+	}
+	totalMinor, err := r.TotalMinor(dec)
+	if err != nil {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt total: %w", err)
+	}
+	if tx.Amount.Amount != -totalMinor || tx.Amount.Currency != base {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt total %d does not match the transaction amount %d", -totalMinor, tx.Amount.Amount)
+	}
+
+	cats := a.Categories()
+	userRules := a.Rules()
+	splits := make([]domain.CategorySplit, 0, len(r.Lines))
+	for _, line := range r.Lines {
+		lineMinor, lerr := line.AmountMinor(dec)
+		if lerr != nil {
+			return domain.Transaction{}, fmt.Errorf("appstate: receipt line %q: %w", line.Description, lerr)
+		}
+		splits = append(splits, domain.CategorySplit{
+			CategoryID: a.mapReceiptCategory(cats, userRules, line, r.Merchant),
+			Amount:     money.New(-lineMinor, base),
+		})
+	}
+	tx.Splits = splits
+	if cat := singleCategory(splits); cat != "" {
+		tx.CategoryID = cat
+	}
+	if strings.TrimSpace(tx.Payee) == "" {
+		tx.Payee = strings.TrimSpace(r.Merchant)
+	}
+	tx.Reviewed = true
+	if !tx.SplitsReconcile() {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt splits do not reconcile to the transaction amount")
+	}
+	if err := a.PutTransaction(tx); err != nil {
+		return domain.Transaction{}, err
+	}
+	a.log.Info("receipt attached", "id", tx.ID, "lines", len(splits), "total", tx.Amount.String())
+	return tx, nil
+}
+
 // singleCategory returns the shared category id when every split carries the same
 // non-empty category, else "".
 func singleCategory(splits []domain.CategorySplit) string {

@@ -336,6 +336,50 @@ await shot(page, "63-transfer-semantics");
 await page.keyboard.press("Escape");
 await page.waitForTimeout(600);
 
+// ─────────────── #58: receipt-to-transaction matching ───────────────
+// Seed an existing card charge via CSV, then review a matching "receipt"
+// (statement-parsed, so no AI key is needed) and attach instead of creating.
+await nav("/documents");
+await page.waitForTimeout(1200);
+await page.locator('[data-testid="import-type-csv"]').click();
+await page.waitForTimeout(800);
+await page.locator(".doc-form-body textarea").first().fill("date,payee,amount\n2026-07-15,COSTCO WHOLESALE,-87.42");
+await page.locator('.doc-form-body button[type="submit"]').first().click();
+await page.waitForTimeout(900);
+await page.locator('[data-testid="csv-preflight-confirm"]').click();
+await page.waitForTimeout(1200);
+// Parse the receipt's lines through the statement path into the review draft.
+await page.locator('[data-testid="import-back-types"]').click().catch(() => {});
+await page.waitForTimeout(500);
+await page.locator('[data-testid="import-type-stmt"]').click();
+await page.waitForTimeout(800);
+await page.locator(".doc-form-body textarea").first().fill("date,description,amount\n2026-07-15,Milk,-50.00\n2026-07-15,Paper Towels,-37.42");
+await page.locator('.doc-form-body button[type="submit"]').first().click();
+await page.waitForTimeout(1500);
+// Receipt mode: total auto-sums (87.42); name the merchant so the match scores.
+await page.locator('[aria-label="Import as one receipt (split across categories)"]').click();
+await page.waitForTimeout(600);
+await page.locator('input[aria-label="Store name (optional)"]').fill("Costco");
+await page.waitForTimeout(800);
+const matchOffer = page.locator('[data-testid="receipt-match-offer"]');
+check("#58: attach-to-existing offer appears on an amount+date match", await matchOffer.isVisible());
+const matchRow = page.locator('[data-testid="receipt-match-row"]').first();
+const matchTxt = await matchRow.innerText().catch(() => "");
+check("#58: candidate names the existing charge + why", /COSTCO WHOLESALE/.test(matchTxt) && /same day/.test(matchTxt) && /merchant matches/.test(matchTxt), matchTxt.replace(/\n/g, " · "));
+await shot(page, "58-match-offer");
+await matchRow.locator('[data-testid="receipt-match-attach"]').click();
+await page.waitForTimeout(1200);
+check("#58: attach confirms without creating a row", /Attached the receipt to "COSTCO WHOLESALE"/.test(await bodyText()));
+// The ledger still has exactly ONE Costco charge — now carrying the split.
+// (#48's investigate step persisted an account+cleared filter; clear it first.)
+await nav("/transactions");
+await page.waitForTimeout(1500);
+const clearBtn = page.locator("button", { hasText: "Clear filters" }).first();
+if (await clearBtn.count()) { await clearBtn.click(); await page.waitForTimeout(1000); }
+await page.locator('tr[data-testid^="txn-row-"]').first().waitFor({ timeout: 20000 });
+const costcoRows = await page.locator(".row-desc-text", { hasText: "COSTCO WHOLESALE" }).count();
+check("#58: no duplicate created — one Costco charge in the ledger", costcoRows === 1, `count=${costcoRows}`);
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();
