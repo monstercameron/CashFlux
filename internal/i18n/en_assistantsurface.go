@@ -91,6 +91,8 @@ var assistantSurfaceKeys = Catalog{
 	// thing a third and second time on the same screen).
 	"assistant.statusLocal":          "On-device answers",
 	"assistant.composerHint":         "Enter to send · ↑ cycles your past questions",
+	"assistant.voiceStart":           "Ask by voice",
+	"assistant.voiceListening":       "Listening… speak your question",
 	"assistant.speaker":              "✦ Agent",
 	"insights.askPlaceholderKeyless": "Ask about your money…",
 	"insights.advancedTitle":         "Model backend and the agent's editable system prompt",

@@ -33,6 +33,7 @@ const (
 	Menu          Name = "menu"
 	Tag           Name = "tag"
 	Users         Name = "users"
+	Mic           Name = "mic"
 	Planning      Name = "planning"
 	Allocate      Name = "allocate"
 	Insights      Name = "insights"
@@ -127,6 +128,7 @@ var inner = map[Name]string{
 	Menu:          `<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>`,
 	Tag:           `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.4"/>`,
 	Users:         `<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.3a3 3 0 0 1 0 5.4"/><path d="M21 20c0-2.6-1.6-4.8-3.9-5.7"/>`,
+	Mic:           `<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path d="M8 21h8"/>`,
 	Planning:      `<path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l3-4 3 2 4-6"/>`,
 	Allocate:      `<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7 4"/>`,
 	Insights:      `<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 1 4 10.5c-.7.7-1 1.2-1 2.5H9c0-1.3-.3-1.8-1-2.5A6 6 0 0 1 12 3z"/>`,

@@ -1090,6 +1090,22 @@ func Insights() ui.Node {
 				return uistate.T("insights.askPlaceholder")
 			}()),
 			Value(input.Get()), OnInput(onInput)),
+		// Voice input: dictate a question via the browser's built-in speech engine
+		// (no service, no key). Renders nothing where the API is unavailable. The
+		// transcript arrives on a raw speech callback (outside the framework's event
+		// loop), so — like the Enter/arrow composer keys above — it writes the DOM
+		// input value and dispatches a native 'input' event so OnInput syncs the bound
+		// state and the vdom stays in agreement (a plain state.Set here wouldn't re-render).
+		ui.CreateElement(asstVoiceButton, asstVoiceButtonProps{OnResult: func(t string) {
+			el := js.Global().Get("document").Call("getElementById", "cf-chat-input")
+			if !el.Truthy() {
+				return
+			}
+			el.Set("value", strings.TrimSpace(t))
+			ev := js.Global().Get("Event").New("input", map[string]any{"bubbles": true})
+			el.Call("dispatchEvent", ev)
+			el.Call("focus")
+		}}),
 		trailing,
 	)
 	composer := inputRow
@@ -1464,6 +1480,92 @@ type chatTurn struct {
 	Role  string // "user" | "assistant"
 	Text  string
 	Usage ai.Usage
+}
+
+// asstVoiceButtonProps carries the callback the mic fills the composer with.
+type asstVoiceButtonProps struct {
+	OnResult func(string)
+}
+
+// asstVoiceButton is the composer's dictation control: a mic that uses the browser's
+// built-in Web Speech API (SpeechRecognition) to transcribe a spoken question into
+// the input — entirely on the device's own speech engine, no CashFlux service and no
+// API key. It renders NOTHING on browsers without the API (Firefox, some mobile), so
+// it's a progressive enhancement that never shows a dead control. Its own component so
+// the recognition hooks sit at stable positions.
+func asstVoiceButton(props asstVoiceButtonProps) ui.Node {
+	supported := ui.UseState(false)
+	listening := ui.UseState(false)
+	ui.UseEffect(func() func() {
+		g := js.Global()
+		if g.Get("SpeechRecognition").Truthy() || g.Get("webkitSpeechRecognition").Truthy() {
+			supported.Set(true)
+		}
+		return nil
+	}, "asst-voice-support")
+
+	start := ui.UseEvent(Prevent(func() {
+		if listening.Get() {
+			return
+		}
+		// Some browsers throw from recognition.start() (permission denied, already
+		// started, or an unimplemented stub) — a JS throw would otherwise panic the
+		// wasm app. Recover so a mic hiccup is a no-op, never a crash.
+		defer func() {
+			if r := recover(); r != nil {
+				listening.Set(false)
+			}
+		}()
+		g := js.Global()
+		ctor := g.Get("SpeechRecognition")
+		if !ctor.Truthy() {
+			ctor = g.Get("webkitSpeechRecognition")
+		}
+		if !ctor.Truthy() {
+			return
+		}
+		rec := ctor.New()
+		rec.Set("lang", "en-US")
+		rec.Set("interimResults", false)
+		rec.Set("maxAlternatives", 1)
+		var onResult, onEnd, onErr js.Func
+		release := func() { onResult.Release(); onEnd.Release(); onErr.Release() }
+		onResult = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) > 0 {
+				res := args[0].Get("results")
+				if res.Truthy() && res.Length() > 0 {
+					first := res.Index(0)
+					if first.Length() > 0 {
+						if txt := first.Index(0).Get("transcript"); txt.Truthy() && props.OnResult != nil {
+							props.OnResult(txt.String())
+						}
+					}
+				}
+			}
+			return nil
+		})
+		onEnd = js.FuncOf(func(_ js.Value, _ []js.Value) any { listening.Set(false); release(); return nil })
+		onErr = js.FuncOf(func(_ js.Value, _ []js.Value) any { listening.Set(false); release(); return nil })
+		rec.Set("onresult", onResult)
+		rec.Set("onend", onEnd)
+		rec.Set("onerror", onErr)
+		rec.Call("start")
+		listening.Set(true)
+	}))
+
+	if !supported.Get() {
+		return Fragment()
+	}
+	cls := "icon-btn asst-mic"
+	label := uistate.T("assistant.voiceStart")
+	if listening.Get() {
+		cls += " is-listening"
+		label = uistate.T("assistant.voiceListening")
+	}
+	return Button(ClassStr(cls), Type("button"), Attr("data-testid", "asst-voice-btn"),
+		Attr("aria-label", label), Attr("aria-pressed", ariaBool(listening.Get())),
+		Title(label), OnClick(start),
+		uiw.Icon(icon.Mic, css.Class(tw.W5, tw.H5)))
 }
 
 // flagContext is a flagged-activity item attached to the composer as a context

@@ -4,7 +4,7 @@
 // forecast + safe-to-spend, tax/investment reports, and assistant voice input.
 // Each test drives the seeded dataset (clock pinned to FIXED_NOW by boot) and
 // asserts the real result.
-import { test, expect, nav, mainText } from "./fixtures.mjs";
+import { test, expect, nav, mainText, boot } from "./fixtures.mjs";
 
 test.describe("gap features", () => {
   test("unusual-charge alert: a merchant billing far above its own normal surfaces", async ({ app }) => {
@@ -63,5 +63,23 @@ test.describe("gap features", () => {
     await expect(app.getByTestId("invperf-row")).toHaveCount(3);
     await expect(app.getByTestId("invperf-total")).toContainText(/across all investments/i);
     await expect(app.getByTestId("invperf-total")).toContainText(/gain/i);
+  });
+
+  // Uses `page` (not `app`) so a fake Web Speech API can be injected BEFORE boot;
+  // Playwright Chromium ships a native SpeechRecognition stub that won't transcribe,
+  // so we stub both API names to return a deterministic transcript.
+  test("assistant voice input: the mic dictates a question into the composer", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.SpeechRecognition = window.webkitSpeechRecognition = class {
+        start() { const s = this; setTimeout(() => { if (s.onresult) s.onresult({ results: [[{ transcript: "how much did we spend on groceries" }]] }); if (s.onend) s.onend(); }, 30); }
+        stop() {}
+      };
+    });
+    await boot(page);
+    await nav(page, "/assistant");
+    const mic = page.getByTestId("asst-voice-btn");
+    await expect(mic).toBeVisible();
+    await mic.click();
+    await expect(page.locator("#cf-chat-input")).toHaveValue(/how much did we spend on groceries/i, { timeout: 10_000 });
   });
 });
