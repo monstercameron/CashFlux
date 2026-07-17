@@ -499,6 +499,23 @@ if (realTaskID) {
   check("CF-28: task list has rows", false);
 }
 
+// ──────────── CF-10: balance click opens a value-focused dialog ────────────
+await nav("/accounts");
+await page.waitForTimeout(1200);
+const balBtn = page.locator('[data-testid^="acct-balance-btn-"]').first();
+if (await balBtn.count()) {
+  await balBtn.click();
+  await page.waitForTimeout(900);
+  const fold = page.locator('[data-testid="acct-edit-details-fold"]');
+  check("CF-10: metadata folds behind a disclosure from the balance click", (await fold.count()) > 0);
+  const foldOpen = await fold.evaluate((el) => el.open).catch(() => true);
+  check("CF-10: the details fold starts collapsed", foldOpen === false);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+} else {
+  check("CF-10: balance button reachable", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();
