@@ -45,6 +45,17 @@ var lane6Keys = Catalog{
 	"subs.confirmBtn":       "Confirm",
 	"subs.confirmTitle":     "Confirm this is a real subscription",
 	"subs.confirmedNotice":  "Confirmed %s as a subscription.",
+
+	// #68 — shared five-state visual vocabulary + first-class density preference.
+	"state.healthy":               "Healthy",
+	"state.watch":                 "Watch",
+	"state.action":                "Action needed",
+	"state.blocked":               "Blocked",
+	"state.unconfirmed":           "Unconfirmed",
+	"settings.densityLabel":       "Density",
+	"settings.densityComfortable": "Comfortable",
+	"settings.densityCompact":     "Compact",
+	"settings.densityHint":        "Compact tightens rows, cards, and controls across the whole app — the same setting the theme editor and the budgets list use.",
 }
 
 func init() {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -129,7 +130,10 @@ func subsReviewInboxRow(props subsReviewRowProps) ui.Node {
 	}))
 	return Div(css.Class("row"), Attr("data-testid", "subs-review-row-"+slug),
 		Div(css.Class("row-main"),
-			Span(css.Class("row-desc"), s.Name),
+			Span(css.Class("row-desc"), s.Name,
+				// The shared #68 state token: detected-but-unverified wears the
+				// same Unconfirmed chip here as anywhere else in the app.
+				uiw.StateChip(uiw.StateChipProps{State: uiw.StateUnconfirmed, Title: props.Why, TestID: "state-unconfirmed-" + slug})),
 			Span(css.Class("row-meta"), props.Why),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),

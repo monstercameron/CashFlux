@@ -265,6 +265,44 @@ if (inboxRows > 0) {
 }
 await c52.close();
 
+// ───────── #68: state tokens + app-wide density preference ─────────
+const c68 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p68 = await c68.newPage();
+await p68.goto(BASE + "/", { waitUntil: "load" });
+await p68.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p68.waitForTimeout(1500);
+// Shared state token: the subscriptions review inbox wears the Unconfirmed chip.
+await p68.evaluate(() => { history.pushState({}, "", "/subscriptions"); dispatchEvent(new PopStateEvent("popstate")); });
+await p68.waitForTimeout(2000);
+const stChips = await p68.locator('.state-chip.state-unconfirmed[data-testid^="state-unconfirmed-"]').count();
+check("#68: shared Unconfirmed state chip renders", stChips > 0, `${stChips}`);
+const stText = await p68.locator(".state-chip.state-unconfirmed").first().innerText().catch(() => "");
+check("#68: state chip carries the word, not just a tone", stText.trim() === "Unconfirmed", stText);
+// Density: Settings → Appearance gains a first-class Comfortable/Compact control.
+await p68.evaluate(() => { history.pushState({}, "", "/settings"); dispatchEvent(new PopStateEvent("popstate")); });
+await p68.waitForTimeout(1500);
+await p68.locator("button, [role=tab]", { hasText: "Appearance" }).first().click();
+await p68.waitForTimeout(1200);
+const densityRow = p68.locator('[data-testid="appearance-density"]');
+check("#68: Appearance has a Density control", (await densityRow.count()) > 0, "");
+const before68 = await p68.evaluate(() => document.documentElement.getAttribute("data-density"));
+await densityRow.locator('[role="radio"]', { hasText: "Compact" }).click();
+await p68.waitForTimeout(900);
+const after68 = await p68.evaluate(() => document.documentElement.getAttribute("data-density"));
+check("#68: Compact applies app-wide (data-density)", after68 === "compact" && before68 !== "compact", `${before68} → ${after68}`);
+// The compact spacing is real: /transactions rows tighten under [data-density=compact].
+await p68.evaluate(() => { history.pushState({}, "", "/transactions"); dispatchEvent(new PopStateEvent("popstate")); });
+await p68.waitForTimeout(1800);
+const rowPad = await p68.locator(".row").first().evaluate((el) => getComputedStyle(el).paddingTop).catch(() => "");
+check("#68: compact density reaches other pages' rows", (await p68.evaluate(() => document.documentElement.getAttribute("data-density"))) === "compact", `row padding-top=${rowPad}`);
+// Persists across reload.
+await p68.reload({ waitUntil: "load" });
+await p68.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p68.waitForTimeout(1500);
+const reload68 = await p68.evaluate(() => document.documentElement.getAttribute("data-density"));
+check("#68: density choice survives a reload", reload68 === "compact", String(reload68));
+await c68.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

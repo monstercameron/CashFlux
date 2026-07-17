@@ -163,4 +163,46 @@ func registerLane6Fixes() {
 		color("color-mix(in srgb, #f59e0b 65%, var(--text))"),
 		background("color-mix(in srgb, #f59e0b 10%, transparent)"),
 	)
+
+	// ── #68: the shared five-state chip vocabulary ─────────────────────────────
+	// One base shape; five state tones. Healthy green / Watch amber / Action red /
+	// Blocked neutral / Unconfirmed violet — always paired with the word, so the
+	// tone is never the only cue.
+	rule(".state-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.45rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		fontSize("0.68rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".state-chip.state-healthy",
+		borderColor("color-mix(in srgb, #22c55e 45%, var(--border))"),
+		color("color-mix(in srgb, #22c55e 60%, var(--text))"),
+		background("color-mix(in srgb, #22c55e 10%, transparent)"),
+	)
+	rule(".state-chip.state-watch",
+		borderColor("color-mix(in srgb, #f59e0b 50%, var(--border))"),
+		color("color-mix(in srgb, #f59e0b 65%, var(--text))"),
+		background("color-mix(in srgb, #f59e0b 10%, transparent)"),
+	)
+	rule(".state-chip.state-action",
+		borderColor("color-mix(in srgb, #ef4444 50%, var(--border))"),
+		color("color-mix(in srgb, #ef4444 65%, var(--text))"),
+		background("color-mix(in srgb, #ef4444 10%, transparent)"),
+	)
+	rule(".state-chip.state-blocked",
+		borderColor("var(--border)"),
+		color("var(--text-faint)"),
+		background("color-mix(in srgb, var(--text) 5%, transparent)"),
+	)
+	rule(".state-chip.state-unconfirmed",
+		borderColor("color-mix(in srgb, #7c83ff 50%, var(--border))"),
+		color("color-mix(in srgb, #7c83ff 65%, var(--text))"),
+		background("color-mix(in srgb, #7c83ff 10%, transparent)"),
+	)
 }

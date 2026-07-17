@@ -6,6 +6,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/theme"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -144,6 +145,34 @@ func Appearance() uic.Node {
 				},
 			}),
 		),
+		// #68: density as a first-class appearance preference. It drives the theme
+		// engine's app-wide data-density attribute — the same lever the theme
+		// editor's density control and the budgets compact list already use — so
+		// one choice tightens rows, cards, and controls everywhere.
+		Div(css.Class("toggle-row", tw.Mt2), Attr("data-testid", "appearance-density"),
+			Span(uistate.T("settings.densityLabel")),
+			ui.Segmented(ui.SegmentedProps{
+				Label: uistate.T("settings.densityLabel"),
+				Options: []ui.SegOption{
+					{Value: string(theme.Comfortable), Label: uistate.T("settings.densityComfortable")},
+					{Value: string(theme.Compact), Label: uistate.T("settings.densityCompact")},
+				},
+				Selected: string(uistate.LoadTheme().Density),
+				OnSelect: func(v string) {
+					t := uistate.LoadTheme()
+					t.Density = theme.Density(v)
+					uistate.ApplyTheme(t)
+					uistate.PersistTheme(t)
+					// Mirror into legacy prefs (one appearance system, two stores
+					// in lockstep — same rule as the theme editor's apply path).
+					p := prefsAtom.Get()
+					p.Compact = t.Density == theme.Compact
+					savePrefs(p)
+					uistate.BumpDataRevision()
+				},
+			}),
+		),
+		P(css.Class("muted", tw.TextXs), uistate.T("settings.densityHint")),
 	)
 
 	return Div(css.Class("bento bento-sys"),

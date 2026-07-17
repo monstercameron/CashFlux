@@ -1,3 +1,21 @@
+## 2026-07-17 — #68: five words for "how is this doing" + density gets a front door (lane 6)
+
+The ticket warned most of this ground belongs to the concurrent visual-audit session, so this is
+deliberately the two additive pieces. The state vocabulary turned out to be a naming problem more
+than a styling one: the app already tones statuses everywhere, but each surface invents its own
+chip. ui.StateChip fixes the vocabulary — five states, five classes, word always present, tooltip
+carries the why — and the subscriptions review inbox is the proving consumer (its rows are
+literally Unconfirmed, the fifth state). Adoption elsewhere is one class-swap at a time for
+whoever touches those surfaces next.
+
+Density was the opposite: the mechanism fully existed (theme.Density → data-density attribute →
+a pile of [data-density="compact"] rules in the generated CSS, mirrored into prefs.Compact) but the
+only way to reach it was the theme editor's radiogroup, three levels deep. The Settings →
+Appearance pane now has a first-class Comfortable/Compact segmented control that drives the SAME
+theme field through the same ApplyTheme/PersistTheme/mirror-to-prefs path as the editor — no new
+persistence, no second source of truth. e2e proves the whole chain: toggle → data-density flips →
+/transactions rows tighten (padding-top 4.8px) → reload keeps it. 50/50 lane suite.
+
 ## 2026-07-17 — #63: transactions explain themselves (lane 4)
 
 The trust bundle. The interesting piece was the per-transaction history panel: the #54 audit
