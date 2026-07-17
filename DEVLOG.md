@@ -569,6 +569,26 @@ it. Design decision worth keeping: the adjustment path doesn't auto-record — i
 difference and lets the normal Record button appear, so there's exactly one recording path.
 26 e2e assertions on the lane server, 0 page errors, first run green.
 
+## 2026-07-17 — The palette "theme crash" was never about the theme (#61)
+
+The memory said "Ctrl+K theme toggle panics"; the truth was better and worse: EVERY palette
+command panicked, because two different hook-outside-render defects sat on the Enter path.
+buildPaletteCommands ran from the keydown callback and called navGroup — whose AdminOnly gate is
+UseAdminConsoleAvailable, a framework hook; and each navigate command called router.Navigate,
+which reads the router atom (GoUseAtomGlobal still requires a fiber in v4.2.0). Either one
+aborts the wasm runtime — "Go program has already exited" — while the palette DOM (owned by the
+shortcut layer, not the reconciler) keeps rendering, so the app LOOKS alive. The theme toggle
+took the blame because it was the command people tried.
+
+Fixes follow the codebase's own established seams: navGroupStatic mirrors primaryNavStatic
+(created for exactly this class of bug at boot) over a new captured fail-closed
+AdminConsoleAvailable() read; uistate.NavigateTo generalizes OpenGlobalSettingsAt's
+pushState+synthetic-popstate pattern for all non-render navigation. The synthetic popstate then
+collided with #60's scroll memory (it would read palette jumps as Back) — a one-shot
+__cfSyntheticNav flag disambiguates. Bonus flush fix: PersistCollapsedToolGroups needed
+RequestPersist (the recurring kvSet landmine) — the #60 verify caught it as a reload flake.
+9/9 palette e2e with zero page errors; #60 suite re-run green.
+
 ## 2026-07-17 — The rail goes lean; Back finally remembers (#60)
 
 The IA machinery already existed — collapsible Tools sub-groups, a collapsible System section,

@@ -430,18 +430,17 @@ func navGroup(group string) []railItem {
 // primaryNav is the candidate-C rail's main navigation group.
 func primaryNav() []railItem { return navGroup(screens.GroupPrimary) }
 
-// primaryNavStatic enumerates the primary-group rail items WITHOUT calling any
-// framework hook, so it is safe to call outside a component render (e.g. from
-// wireKeyboardShortcuts at boot). navGroup calls UseAdminConsoleAvailable (a hook)
-// to gate AdminOnly routes; invoking it at boot panics with "GoUseAtom called
-// outside component context" and the whole app fails to start. Keyboard digit-nav
-// only needs the ordered primary screen set, and AdminOnly routes never live in the
-// primary group — so the hook-gated filter is irrelevant here. AdminOnly routes are
-// excluded defensively to keep the digit order matching the visible (non-admin) rail.
-func primaryNavStatic() []railItem {
+// navGroupStatic enumerates one screen group's rail items WITHOUT calling any
+// framework hook, so it is safe outside a component render (boot wiring, the
+// Ctrl+K palette build — navGroup's UseAdminConsoleAvailable hook panics there
+// with "GoUseAtom called outside component context", killing the whole app on
+// the first palette command). AdminOnly routes are gated by the captured-atom
+// read, which is fail-closed until a render captures it.
+func navGroupStatic(group string) []railItem {
+	isAdmin := uistate.AdminConsoleAvailable()
 	var items []railItem
 	for _, r := range screens.All() {
-		if r.Group != screens.GroupPrimary || r.AdminOnly {
+		if r.Group != group || (r.AdminOnly && !isAdmin) {
 			continue
 		}
 		if meta, ok := railMeta[r.Path]; ok {
@@ -452,6 +451,9 @@ func primaryNavStatic() []railItem {
 	}
 	return items
 }
+
+// primaryNavStatic is the hook-free primary group (keyboard digit-nav, palette).
+func primaryNavStatic() []railItem { return navGroupStatic(screens.GroupPrimary) }
 
 // toolsNav is the Phase-2 "Tools" group: the routed power-tool screens that were
 // otherwise only reachable by URL.

@@ -5,8 +5,6 @@
 package uistate
 
 import (
-	"syscall/js"
-
 	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
@@ -62,9 +60,7 @@ func OpenGlobalSettings() { OpenGlobalSettingsAt("") }
 // something on a specific tab should land them on that tab.
 func OpenGlobalSettingsAt(tab string) {
 	requestedSettingsTab = tab
-	js.Global().Get("history").Call("pushState", js.Null(), "", RoutePath("/settings"))
-	// The history router re-resolves on popstate; pushState alone doesn't fire one.
-	js.Global().Call("dispatchEvent", js.Global().Get("PopStateEvent").New("popstate"))
+	NavigateTo("/settings")
 }
 
 // ConsumeRequestedSettingsTab returns the pending deep-link tab once, then

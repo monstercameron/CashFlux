@@ -38,3 +38,14 @@ func SetAdminConsoleAvailable(v bool) {
 		adminConsoleAtom.Set(v)
 	}
 }
+
+// AdminConsoleAvailable reads the captured admin flag from OUTSIDE a component
+// render (palette builds, shortcut callbacks — the hook variant panics there).
+// False until a render has captured the atom, which matches the gate's
+// fail-closed default.
+func AdminConsoleAvailable() bool {
+	if adminConsoleReady {
+		return adminConsoleAtom.Get()
+	}
+	return false
+}

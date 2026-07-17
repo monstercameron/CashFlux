@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 
 //go:build js && wasm
 
@@ -12,8 +12,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cmdmatch"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/router"
 )
 
 // wireKeyboardShortcuts installs global keyboard shortcuts. Alt+1..9 jumps to the
@@ -109,7 +109,7 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		e.Call("preventDefault")
-		router.Navigate(uistate.RoutePath(nav[idx].Path))
+		uistate.NavigateTo(nav[idx].Path)
 		return nil
 	})
 	doc.Call("addEventListener", "keydown", onKeyDown)
@@ -273,12 +273,14 @@ func buildPaletteCommands() []paletteCmd {
 			if i == 0 {
 				g = groupLabel
 			}
-			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), group: g, run: func() { router.Navigate(uistate.RoutePath(path)) }})
+			cmds = append(cmds, paletteCmd{label: uistate.T(it.Key), group: g, run: func() { uistate.NavigateTo(path) }})
 		}
 	}
-	addNav(primaryNav(), uistate.T("palette.groupNavigate"))
-	addNav(toolsNav(), "")
-	addNav(systemNav(), "")
+	// Hook-free static variants: this runs from the Ctrl+K keydown callback,
+	// not a component render — the hook-ful navGroup panics here (#61 crash).
+	addNav(primaryNavStatic(), uistate.T("palette.groupNavigate"))
+	addNav(navGroupStatic(screens.GroupTools), "")
+	addNav(navGroupStatic(screens.GroupSystem), "")
 	cmds = append(cmds,
 		paletteCmd{label: uistate.T("addmenu.transaction"), group: uistate.T("palette.groupActions"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
@@ -287,7 +289,7 @@ func buildPaletteCommands() []paletteCmd {
 		// C325/C327/C328: make the help center findable under the words people actually
 		// type when they're stuck — help/support/feedback/bug/contact/docs/faq — instead
 		// of returning nothing. Routes to /help (topics, what's-new, bug-report path).
-		paletteCmd{label: uistate.T("nav.help"), keywords: []string{"help", "support", "feedback", "bug", "report", "contact", "docs", "documentation", "faq", "guide"}, run: func() { router.Navigate(uistate.RoutePath("/help")) }},
+		paletteCmd{label: uistate.T("nav.help"), keywords: []string{"help", "support", "feedback", "bug", "report", "contact", "docs", "documentation", "faq", "guide"}, run: func() { uistate.NavigateTo("/help") }},
 		paletteCmd{label: uistate.T("cmd.undo"), keywords: []string{"undo", "revert", "back"}, run: func() {
 			if undoLastChange() {
 				paletteNotify(uistate.T("cmd.undone"), false)
@@ -386,7 +388,7 @@ func entityJumpCommands() []paletteCmd {
 		cmds = append(cmds, paletteCmd{
 			label:    name + " · " + typeWord,
 			keywords: []string{name, typeWord, "go", "open", "jump"},
-			run:      func() { router.Navigate(uistate.RoutePath(path)) },
+			run:      func() { uistate.NavigateTo(path) },
 		})
 	}
 	for _, a := range app.Accounts() {

@@ -31,6 +31,9 @@ func PersistCollapsedToolGroups(m map[string]bool) {
 		return
 	}
 	SettingKVSet(toolGroupsStoreID, string(data))
+	// SettingKVSet writes through the dataset, which only reaches disk on the
+	// autosave tick — a reload before the tick silently dropped the choice.
+	RequestPersist()
 }
 
 func loadCollapsedToolGroups() map[string]bool {

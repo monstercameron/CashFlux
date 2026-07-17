@@ -37,6 +37,13 @@ func scrollMemoryHost(props scrollMemoryProps) uic.Node {
 	// path-change effect below runs for the new route.
 	uic.UseEffect(func() func() {
 		cb := js.FuncOf(func(js.Value, []js.Value) any {
+			// Synthetic popstates (palette/shortcut navigation, settings deep
+			// links) are forward navigations — only REAL Back/Forward restores.
+			w := js.Global().Get("window")
+			if w.Get("__cfSyntheticNav").Truthy() {
+				w.Set("__cfSyntheticNav", false)
+				return nil
+			}
 			backNavPending = true
 			return nil
 		})
