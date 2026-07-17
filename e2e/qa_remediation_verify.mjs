@@ -257,6 +257,30 @@ if (await applyBtn.count()) {
   check("L4: Apply allocation button reachable", false, JSON.stringify(btns));
 }
 
+// ──────────────── CF-07: report net worth follows the report scope ────────────────
+await nav("/reports");
+await page.waitForTimeout(1500);
+const nwOf = async () => {
+  const t = await bodyText();
+  const m = t.match(/Net worth[\s\S]{0,80}?\$([\d,]+\.\d{2})/i);
+  return m ? m[1] : "(none)";
+};
+const nwAll = await nwOf();
+await page.locator('button:has-text("Scope")').first().click();
+await page.waitForTimeout(600);
+const scopeChip = page.locator(".scope-chip", { hasText: "Marcus Hartley" }).first();
+if (await scopeChip.count()) {
+  await scopeChip.click();
+  await page.waitForTimeout(1200);
+  const nwScoped = await nwOf();
+  check("CF-07: net worth changes under the report scope", nwScoped !== "(none)" && nwScoped !== nwAll, `all=$${nwAll} scoped=$${nwScoped}`);
+  // clear the scope for a clean state
+  await page.locator('button:has-text("Clear")').first().click().catch(() => {});
+  await page.waitForTimeout(600);
+} else {
+  check("CF-07: scope chip for a member reachable", false);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

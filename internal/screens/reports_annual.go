@@ -162,10 +162,23 @@ func Reports() ui.Node {
 		monthLabels = append(monthLabels, bounds[k].Format("Jan"))
 	}
 
-	// Net worth: full-household (unscoped) monthly series across the window.
+	// Net worth follows the report's scope like every other figure (QA CF-07:
+	// scoped income/spending beside an unscoped $152k net worth read as a broken
+	// filter). The scope resolves to account IDs, so filter the accounts and use
+	// the already-scoped transactions for the series and the level.
+	inScope := make(map[string]bool, len(scopeIDs))
+	for _, id := range scopeIDs {
+		inScope[id] = true
+	}
+	scopedAccounts := make([]domain.Account, 0, len(accounts))
+	for _, a := range accounts {
+		if inScope[a.ID] {
+			scopedAccounts = append(scopedAccounts, a)
+		}
+	}
 	nwBounds := append([]time.Time{}, bounds...)
-	nwSeries, _ := ledger.NetWorthSeries(accounts, txns, nwBounds, rates)
-	nwNet, _, _, _ := ledger.NetWorth(accounts, txns, rates)
+	nwSeries, _ := ledger.NetWorthSeries(scopedAccounts, scopedTxns, nwBounds, rates)
+	nwNet, _, _, _ := ledger.NetWorth(scopedAccounts, scopedTxns, rates)
 	var nwChange int64
 	if n := len(nwSeries); n >= 2 {
 		nwChange = nwSeries[n-1].Amount - nwSeries[0].Amount
