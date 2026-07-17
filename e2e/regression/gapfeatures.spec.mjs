@@ -18,6 +18,18 @@ test.describe("gap features", () => {
     expect(text).toMatch(/usual \$7\.35/i);
   });
 
+  test("cash forecast widget: 30/60/90-day projected available cash on the dashboard", async ({ app }) => {
+    await nav(app, "/");
+    const tile = app.getByTestId("dash-forecast");
+    await tile.scrollIntoViewIfNeeded();
+    await expect(tile).toBeVisible();
+    // Three horizons, each a real money figure, plus the explainer with today's total.
+    await expect(tile.getByTestId("forecast-30")).toContainText(/[\d,]+\.\d{2}/);
+    await expect(tile.getByTestId("forecast-60")).toContainText(/[\d,]+\.\d{2}/);
+    await expect(tile.getByTestId("forecast-90")).toContainText(/[\d,]+\.\d{2}/);
+    await expect(tile).toContainText(/available cash accounts/i);
+  });
+
   test("goal growth projection: an investment goal shows a growth-adjusted date", async ({ app }) => {
     // The seeded "Trade up to a bigger family home" goal carries a 5% expected
     // annual return, so its card projects a completion date from compounding.

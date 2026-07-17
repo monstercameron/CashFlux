@@ -105,6 +105,19 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Cash forecast tile: sum the per-account curves, don't build a new engine
+
+The report wanted a 30/60/90-day dashboard forecast. Two candidate engines already existed:
+`internal/forecast` (month-granular, used by Planning) and `internal/acctproject` (day-granular
+recurring drivers, powers the account rows' AC13 low-dip line). Chose acctproject via
+`App.ProjectAccount` per cash account × three horizons — the dashboard figure is then BY
+CONSTRUCTION the sum of what each account row already claims, one story everywhere. Scope =
+liquidity.Available accounts only (yesterday's package paying off), FX-converted, whole-account
+skip on a missing rate. Two dashlayout invariants bit as expected: the catalog arrangement test
+enumerates every widget (added {1,14} — spotlight's 2×2 owns rows 12-13 cols 3-4), and the
+curated layout's gap-free test forced the tile to full width (rows must sum to 4). Sample
+household reads 47.5k/48.8k/48.2k vs 49.0k today — red tones, honestly cash-negative near-term.
+
 ## 2026-07-17 — Goal priority + compare: reuse the card's own math
 
 Priority is the small half: an int on the Goal (1..3, 0 = unset), a select in the edit form, a

@@ -61,6 +61,9 @@ func DefaultItems() []Item {
 		// in the catalog so it never shifts the arrangement above it; the curated default
 		// layout places its own (full-width) copy up in tier 2.
 		{ID: "goal-states", ColSpan: 2, RowSpan: 1},
+		// forecast: projected available cash at 30/60/90 days from each cash
+		// account's recurring-driver projection. Appended last for the same reason.
+		{ID: "forecast", ColSpan: 2, RowSpan: 1},
 	}
 }
 
@@ -110,6 +113,10 @@ func DefaultLayoutItems() []Item {
 		{ID: "accounts", ColSpan: 2, RowSpan: 2, Importance: 64},
 		{ID: "recent", ColSpan: 2, RowSpan: 2, Importance: 62},
 		{ID: "breakdown", ColSpan: 2, RowSpan: 1, Importance: 54},
+		// Full-width so the row sums to 4 on its own (gap-free invariant): the
+		// forward view (projected cash at 30/60/90 days) as a banner right after
+		// the backward view (where the month's money went).
+		{ID: "forecast", ColSpan: 4, RowSpan: 1, Importance: 53},
 		// Goals and to-do sit two-wide as a paired row so their content has room: the
 		// goal's "(due …)" title no longer wraps below its siblings, and to-do task
 		// titles read in full instead of truncating mid-word.

@@ -197,6 +197,8 @@ func init() {
 		return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates)
 	})
 	R("monthly-recap", monthlyRecapWidget)
+	// 30/60/90-day available-cash forecast from per-account recurring projections.
+	R("forecast", forecastWidget)
 	R("smart-digest", func(c widgetrender.RenderCtx) ui.Node { return smartDigestWidget(c.App) })
 	R("anomaly-hub", func(c widgetrender.RenderCtx) ui.Node { return ui.CreateElement(anomalyHubWidget, c.App) })
 }

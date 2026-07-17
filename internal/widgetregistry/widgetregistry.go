@@ -164,6 +164,7 @@ var nameKeys = map[string]string{
 	"smart-digest":    "dashboard.smartDigest",
 	"anomaly-hub":     "dashboard.anomalyHub",
 	"spotlight":       "dashboard.spotlight",
+	"forecast":        "dashboard.forecast",
 }
 
 // iconIDs maps each built-in id to its header glyph id (resolved in the UI).
@@ -188,6 +189,7 @@ var iconIDs = map[string]string{
 	"todo":            "todo",
 	"highlight":       "insights",
 	"spotlight":       "sparkles",
+	"forecast":        "trendingUp",
 }
 
 // kpiBindings holds the declarative scalar binding for each DataDriven KPI: the

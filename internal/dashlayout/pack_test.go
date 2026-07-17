@@ -51,6 +51,7 @@ func TestPackDefaultReproducesArrangement(t *testing.T) {
 		"anomaly-hub":  {3, 11}, // R25 always-on anomaly hub (added to DefaultItems)
 		"spotlight":    {3, 12}, // compound content-layout demo (backfills beside smart-digest's 2nd row)
 		"goal-states":  {1, 13}, // appended last; first-fits the free row-13 cols 1-2 below smart-digest
+		"forecast":     {1, 14}, // 30/60/90 cash forecast; spotlight (2×2) holds rows 12-13 cols 3-4, so this opens row 14
 	}
 	for _, p := range got {
 		w, ok := want[p.ID]
