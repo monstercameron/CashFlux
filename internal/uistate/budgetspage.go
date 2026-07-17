@@ -213,7 +213,12 @@ func UseBudgetDensity() state.Atom[string] {
 }
 
 // PersistBudgetDensity saves the density choice so the next visit opens the same way.
-func PersistBudgetDensity(d string) { kvSet(budgetDensityStoreID, d) }
+// kvSet writes into the SQLite dataset, which only reaches IndexedDB on the autosave
+// ticker/pagehide — RequestPersist flushes it now so a prompt reload keeps the choice.
+func PersistBudgetDensity(d string) {
+	kvSet(budgetDensityStoreID, d)
+	RequestPersist()
+}
 
 // UseBudgetsLastMonth returns the shared atom for the budgets "Last month's spend"
 // toggle: when true, each budget row OVERLAYS last period's actual spending in its

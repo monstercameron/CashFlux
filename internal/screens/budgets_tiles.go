@@ -1125,11 +1125,16 @@ type budgetFundShortProps struct {
 func budgetFundShortAlert(props budgetFundShortProps) ui.Node {
 	nav := router.UseNavigate()
 	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
+	// With money still free, the shortfall is the uncovered slice; with NOTHING free
+	// the whole set-aside is short — never setAside − negativePool, which would fold
+	// the over-allocation (already reported by the over-income chip) in twice and
+	// claim a shortfall bigger than the need itself.
 	short := props.SetAside - props.Free
 	need := fmtMoney(money.New(props.SetAside, props.Base))
-	body := uistate.T("budgets.fundShortBodyNone", need)
-	if props.Free > 0 {
-		body = uistate.T("budgets.fundShortBody", need, fmtMoney(money.New(props.Free, props.Base)))
+	body := uistate.T("budgets.fundShortBody", need, fmtMoney(money.New(props.Free, props.Base)))
+	if props.Free <= 0 {
+		short = props.SetAside
+		body = uistate.T("budgets.fundShortBodyNone", need)
 	}
 	return Div(css.Class("budget-fundshort"), Attr("role", "status"), Attr("data-testid", "budgets-fund-short"),
 		uiw.Icon(icon.AlertTriangle, css.Class("budget-fundshort-icon", tw.ShrinkO, tw.W4, tw.H4)),

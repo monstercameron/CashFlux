@@ -381,7 +381,9 @@ test.describe("budgets last-month toggle", () => {
 test.describe("budgets actions widget", () => {
   test("icon+label actions, a Sort picker, and no metrics/template/smart buttons", async ({ app }) => {
     await nav(app, "/budgets");
-    const actions = app.locator(".budgets-toolbar-actions");
+    // The budgets toolbar now uses the shared filter-toolbar vocabulary (the old
+    // .budgets-toolbar-actions wrapper was retired with the 2-row toolbar).
+    const actions = app.locator(".budgets-tb .filter-toolbar-actions");
     await expect(actions).toBeVisible();
     // Retired from the toolbar: the Smart sparkle shortcut, the Budget-metrics toggle,
     // and the 50/30/20 template (moved into the Add-budget modal).

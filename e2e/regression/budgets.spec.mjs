@@ -103,9 +103,11 @@ test.describe("budgets: notes modal", () => {
     const line = app.locator(`[data-testid="budget-notes-${bid}"]`);
     await expect(line).toBeVisible();
     await expect(line).toContainText("Trim this once");
-    await expect(line).toHaveAttribute("aria-expanded", "false");
+    // Clicking the clamped preview reopens the full note in the flip modal (the
+    // old inline aria-expanded expander was retired with the side-panel design).
     await line.click();
-    await expect(line).toHaveAttribute("aria-expanded", "true");
+    await app.waitForTimeout(650);
+    await expect(app.locator('[role="dialog"] textarea').first()).toHaveValue(note);
   });
 });
 

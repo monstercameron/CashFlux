@@ -1,3 +1,26 @@
+## 2026-07-17 — Budgets design pass: the verification round
+
+Closed the loop on fixes 1–7 with e2e + screenshots (dark/light × cards/compact × live/overlay,
+kebabs open, shortfall alert forced via a scripted sinking-fund goal — `e2e/_budgets7_shots{,2}.mjs`).
+What the round caught:
+
+1. **Shortfall double-count.** With the free pool negative, `setAside − free` folded the
+   over-allocation in twice — the alert claimed "short by $3,276.70" against a $1,200 need, right
+   under the chip already reporting "$2,076.70 over income". Clamped: pool ≤ 0 → short = setAside.
+   A screenshot caught this in a way the code read didn't — the two numbers sat one line apart.
+2. **Density didn't survive an immediate reload** (e2e caught it): kvSet lands in the dataset, the
+   dataset lands in IndexedDB on the ticker. `PersistBudgetDensity` now calls `RequestPersist()`.
+3. **Two stale specs repaired** (both pre-dated this pass — they were failing before it): the
+   notes-line `aria-expanded` inline-expander contract (retired with the side-panel design; clicking
+   the preview opens the flip modal, asserted now) and `.budgets-toolbar-actions` (retired with the
+   2-row toolbar; now `.budgets-tb .filter-toolbar-actions`).
+
+Final state: 13/13 budget-related regression tests green; full native `go test ./...` green; the
+other 16 failures in the interactions run are pre-existing (import wizard / duplicates / pager /
+search pills — untouched surfaces, tracked separately). Visual verdicts: compact ledger scans the
+way the critique wanted; the amber/red plan-vs-fact split reads instantly; neutral history bars keep
+green meaning "healthy now"; light theme contrast fine on all new elements.
+
 ## 2026-07-17 — Reports button audit: right components + glyphs
 
 Cam flagged the Export CSV trigger as the wrong button component — it was a generic `btn` between
