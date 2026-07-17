@@ -1,3 +1,23 @@
+## 2026-07-17 — UX-06: the goal card learns restraint (lane 5)
+
+Probed before designing: the first sample goal card was 617px tall with 14 buttons and every
+disclosure open — "a page of expanded details without a truly collapsed card", as the deep dive
+put it. The fix is a per-card `cardExpanded` state defaulting to false. The compact card keeps
+exactly what a glance needs (name, pace badge, loader, To go / Needed / landing date, one
+primary action, a Details chip); the expanded card is the previous card unchanged plus a "Less"
+control. Implementation note: the loader node is built once into a variable and rendered by
+whichever branch returns — the compact path is an early return, so all hooks stay above it at
+stable positions.
+
+The "Sinking funds · 2" wrap bug had a satisfying root cause: the count span wore `.budget-sub`,
+which is `display:block` — inside an H2 that's a guaranteed line break. New `.goal-count-inline`
+class (inline, nowrap) applied to the funds/missed/achieved heading counts. The $1,956.92
+waterfall misalignment turned out to be already fixed by the `.wf-line` flex+tabular CSS; the
+probe showed all three amounts sharing right edge 1397 — so the e2e now locks the alignment
+(every `.wf-line-amt` right edge within 1px) rather than re-fixing fixed code. Existing goals
+e2e that reach the planner/steps must click `goal-expand-<id>` first — my own #51 block was the
+first such caller and now does. 21/21 lane assertions green, 0 page errors.
+
 ## 2026-07-17 — #74: two "review" numbers become one (lane 6)
 
 The deep-dive flagged "Review inbox (252)" vs "Review 2274 waiting transactions" as terminology

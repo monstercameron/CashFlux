@@ -21,9 +21,55 @@ await page.goto(BASE + "/", { waitUntil: "load" });
 await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
 await page.waitForTimeout(1800);
 
-// ───────── #51: contribution slider keyboard + valuetext + numeric entry ─────────
+// ───────── #71 (UX-06): compact goal card default + formatting fixes ─────────
 await nav("/goals");
-// open the first goal's Plan contribution disclosure
+const firstCard = page.locator('[data-testid^="goal-row-"]').first();
+if (await firstCard.count()) {
+  const compact = await firstCard.evaluate((el) => el.classList.contains("is-compact"));
+  const btns = await firstCard.locator("button").count();
+  check("#71: goal card defaults to compact", compact, `${btns} buttons`);
+  check("#71: compact card has few controls", btns <= 5, `${btns} buttons`);
+  const planHidden = !(await firstCard.locator('[data-testid^="goal-plan-toggle-"]').count());
+  const delHidden = !(await firstCard.locator('[data-testid^="goal-delete-btn-"]').count());
+  check("#71: planner + delete live outside the compact state", planHidden && delHidden);
+  await firstCard.locator('[data-testid^="goal-expand-"]').click();
+  await page.waitForTimeout(500);
+  const expanded = page.locator('[data-testid^="goal-row-"]').first();
+  const nowCompact = await expanded.evaluate((el) => el.classList.contains("is-compact"));
+  const planVisible = (await expanded.locator('[data-testid^="goal-plan-toggle-"]').count()) > 0;
+  const kebab = (await expanded.locator('[data-testid^="goal-menu-btn-"]').count()) > 0;
+  check("#71: Details expands to the full card (planner + kebab present)", !nowCompact && planVisible && kebab);
+  await expanded.locator('[data-testid^="goal-collapse-"]').click();
+  await page.waitForTimeout(400);
+  const backCompact = await page.locator('[data-testid^="goal-row-"]').first().evaluate((el) => el.classList.contains("is-compact"));
+  check("#71: Less returns to the compact card", backCompact);
+} else {
+  check("#71: goal cards reachable", false);
+}
+// Formatting: payday-waterfall amounts share one right edge regardless of name length.
+const wfAmts = await page.locator('[data-testid="goals-waterfall-card"] .wf-line-amt').evaluateAll(
+  (els) => els.map((e) => Math.round(e.getBoundingClientRect().right)));
+if (wfAmts.length > 1) {
+  check("#71: waterfall amounts right-align", wfAmts.every((r) => Math.abs(r - wfAmts[0]) <= 1), wfAmts.join(","));
+} else {
+  console.log("SKIP: #71 waterfall alignment — card not showing in this dataset");
+}
+// Formatting: a section-count span never wraps below its heading.
+const fundsCount = page.locator('[data-testid="goals-funds-count"]');
+if (await fundsCount.count()) {
+  const sameLine = await fundsCount.evaluate((el) => {
+    const h = el.closest("h2");
+    return Math.abs(el.getBoundingClientRect().top - h.getBoundingClientRect().top) < h.getBoundingClientRect().height;
+  });
+  check("#71: 'Sinking funds · N' count stays on the heading line", sameLine);
+} else {
+  console.log("SKIP: #71 sinking-funds heading — no sinking funds in this dataset");
+}
+
+// ───────── #51: contribution slider keyboard + valuetext + numeric entry ─────────
+// The planner now lives in the expanded card (UX-06) — expand the first card first.
+const exp51 = page.locator('[data-testid^="goal-expand-"]').first();
+if (await exp51.count()) { await exp51.click(); await page.waitForTimeout(500); }
 const planToggle = page.locator('button:has-text("Plan contribution") >> visible=true').first();
 if (await planToggle.count()) { await planToggle.click(); await page.waitForTimeout(700); }
 const slider = page.locator('[data-testid^="goal-plan-slider-"]').first();

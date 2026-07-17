@@ -279,9 +279,12 @@ func goalListWidget(props goalListProps) ui.Node {
 		})
 		fundsSection = uiw.Card(uiw.CardProps{
 			Attrs: []any{Attr("aria-label", uistate.T("goals.fundsSection"))},
+			// The count span is .goal-count-inline, NOT .budget-sub — budget-sub is
+			// display:block, which wrapped the " · 2" onto its own line under the
+			// heading (UX-06 formatting bug).
 			Header: H2(css.Class("card-title"),
 				uistate.T("goals.fundsSection"),
-				Span(css.Class("budget-sub"), fmt.Sprintf(" · %d", len(v.Fund))),
+				Span(css.Class("goal-count-inline"), Attr("data-testid", "goals-funds-count"), fmt.Sprintf(" · %d", len(v.Fund))),
 			),
 			Body: Div(css.Class("goal-list"), fundRows),
 		})
@@ -317,7 +320,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			Attrs: []any{Attr("aria-label", uistate.T("goals.missedSection")), Attr("data-testid", "goals-missed-section")},
 			Header: H2(css.Class("card-title", "goals-missed-title"),
 				uistate.T("goals.missedSection"),
-				Span(css.Class("budget-sub"), fmt.Sprintf(" · %d", len(v.Missed))),
+				Span(css.Class("goal-count-inline"), fmt.Sprintf(" · %d", len(v.Missed))),
 			),
 			Body: Fragment(
 				P(css.Class("budget-sub"), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("goals.missedHint")),
@@ -339,7 +342,7 @@ func goalListWidget(props goalListProps) ui.Node {
 					Attr("aria-expanded", fmt.Sprintf("%t", achievedOpen.Get())),
 					Attr("aria-controls", "goals-achieved-list"), OnClick(toggleAchieved),
 					uistate.T("goals.achieved"),
-					Span(css.Class("budget-sub"), uistate.T("goals.achievedCount", len(v.Achieved))),
+					Span(css.Class("goal-count-inline"), uistate.T("goals.achievedCount", len(v.Achieved))),
 				),
 			),
 			Body: If(achievedOpen.Get(), Div(Attr("id", "goals-achieved-list"), achievedRows)),

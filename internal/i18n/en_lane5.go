@@ -32,6 +32,12 @@ var lane5Keys = Catalog{
 	"budgets.automateTitle":     "Bulk budget tools — last month's spend, auto budget, sweep leftovers, adjust all",
 	"budgets.followUpsShow":     "Show the follow-ups",
 	"budgets.followUpsHide":     "Hide the follow-ups",
+
+	// #71 (UX-06) — the compact goal card's expand/collapse control.
+	"goals.expand":        "Details",
+	"goals.expandTitle":   "Show everything on this goal",
+	"goals.collapse":      "Less",
+	"goals.collapseTitle": "Back to the compact card",
 }
 
 func init() {

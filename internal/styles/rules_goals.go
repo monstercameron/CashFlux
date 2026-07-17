@@ -19,6 +19,17 @@ func registerGoalsSurface() {
 		track = "color-mix(in srgb, var(--text) 9%, transparent)"
 	)
 
+	// Section-heading counts ("Sinking funds · 2"): inline with the title, never a
+	// block of their own (.budget-sub is display:block, which wrapped the count onto
+	// its own line — the UX-06 formatting bug).
+	rule(".goal-count-inline",
+		display("inline"),
+		color("var(--text-dim)"),
+		fontSize("0.82rem"),
+		fontWeight("500"),
+		whiteSpace("nowrap"),
+	)
+
 	// Payday waterfall funding lines: goal name on the left, amount right-aligned in a
 	// tabular column so the figures line up regardless of name length (no ragged edge).
 	rule(".wf-lines",
