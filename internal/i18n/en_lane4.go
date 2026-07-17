@@ -58,6 +58,40 @@ var lane4Keys = Catalog{
 	"ckpt.beforeCSVImport":     "Before a CSV import",
 	"ckpt.beforeDocImport":     "Before importing %s from a document",
 	"ckpt.beforeReceiptImport": "Before importing a receipt",
+
+	// #57 — import dependability: preflight preview, why-matched duplicates,
+	// transfer-pair detection, richer summaries, per-run roll-back.
+	// %s = "N new transactions", %d = duplicate count.
+	"documents.preflightCounts": "Ready to import %s. %d duplicates will be skipped.",
+	// %s ×4 = account name, balance before, balance after, signed net.
+	"documents.preflightBalance": "%s: %s → %s (%s).",
+	"documents.preflightJumpWarn": "This is a big jump for this account — double-check the file (and its sign convention) before importing.",
+	// %d = duplicate count.
+	"documents.preflightWhyDups":  "Why are %d rows duplicates?",
+	"documents.preflightDupLedger": "already in your ledger (same date, amount, and description)",
+	"documents.preflightDupBatch":  "repeated within this file",
+	// %d = how many more beyond the shown sample.
+	"documents.preflightMoreDups": "…and %d more.",
+	// %d = detected pair count.
+	"documents.preflightPairs": "%d rows look like transfers you already recorded in another account — importing them may double-count the move:",
+	// %s ×3 = incoming desc, amount, matching existing desc.
+	"documents.preflightPairLine": "\"%s\" (%s) mirrors \"%s\"",
+	// %d = new-row count.
+	"documents.preflightImportNow": "Import %d rows",
+	// %s ×2 = balance before, balance after.
+	"documents.balanceMoved": "Balance moved %s → %s.",
+	"documents.historyHeading": "Recent imports",
+	"documents.historyHint":    "Each run's full result — Roll back restores your data to just before that import.",
+	"documents.historyKindCSV": "CSV import",
+	"documents.historyKindDoc": "Document import",
+	// %s = "N transactions".
+	"documents.historyImported": "%s imported",
+	// %d = skipped count.
+	"documents.historySkipped":  "· %d skipped",
+	"documents.rollbackBtn":     "Roll back",
+	"documents.rollbackTitle":   "Restore your data to just before this import",
+	"documents.rollbackConfirm": "Roll back this import? Your data returns to the moment before it ran — the imported rows and anything you changed since will be lost.",
+	"documents.rolledBack":      "Rolled back — your data is back to just before that import.",
 }
 
 func init() {

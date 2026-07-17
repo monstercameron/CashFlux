@@ -21,6 +21,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/importmap"
+	"github.com/monstercameron/CashFlux/internal/importsafe"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pdftext"
 	"github.com/monstercameron/CashFlux/internal/rules"
@@ -185,6 +187,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	cadenceMsg := ui.UseState("") // C18: inline confirmation shown next to the reminder button
 
 	// C88: pre-import duplicate warning state.
+	// csvPreflightS holds the staged CSV import's pre-commit preview (#57);
+	// non-nil = the preflight card is visible and pendingCSV holds the bytes.
+	csvPreflightS := ui.UseState((*csvPreflightInfo)(nil))
 	// csvDupWarn holds the human-readable warning string (non-empty = warning visible).
 	// pendingCSV holds the raw CSV bytes awaiting user confirmation; cleared on import or cancel.
 	csvDupWarn := ui.UseState("")
@@ -311,10 +316,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	// recordDocument saves a best-effort audit record of an import (logged by
 	// appstate on failure). Declared before the import handlers that call it.
-	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row, rowCount int) {
+	// skipped + cpID enrich the history row (#57): the full result and the
+	// pre-import checkpoint that can roll this exact run back.
+	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row, rowCount, skipped int, cpID string) {
 		_ = app.PutDocument(domain.Document{
 			ID: id.New(), Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
 			Status: domain.DocImported, Extracted: toDocumentRows(rows), RowCount: rowCount,
+			SkippedCount: skipped, CheckpointID: cpID,
 		})
 	}
 
@@ -323,18 +331,30 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
 	commitCSVImport := func(data []byte) bool {
 		// #55: checkpoint the dataset before the import writes so a bad file can
-		// be rolled back in one click from Settings → Data.
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeCSVImport"))
+		// be rolled back in one click from Settings → Data (or from the import
+		// history's per-run roll-back, which is why the ID rides the record).
+		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeCSVImport"))
+		// #57: capture the pre-import balance so the summary can state the move.
+		var beforeMinor int64
+		var balDec int
+		haveBal := false
+		if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
+			balDec = currency.Decimals(acc.Currency)
+			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
+				beforeMinor, haveBal = b.Amount, true
+			}
+		}
 		n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
 		csvDupWarn.Set("")
 		pendingCSV.Set(nil)
+		csvPreflightS.Set(nil)
 		if err != nil {
 			friendly := strings.TrimPrefix(err.Error(), "store: ")
 			msg.Set(uistate.T("documents.csvError", friendly))
 			return false
 		}
 		if n > 0 {
-			recordDocument(domain.DocCSV, importAcct.Get(), nil, n)
+			recordDocument(domain.DocCSV, importAcct.Get(), nil, n, len(skipped), cpID)
 		}
 		summary := csvImportSummary(accounts, importAcct.Get(), n)
 		if len(skipped) > 0 {
@@ -343,14 +363,23 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				summary += " " + d
 			}
 		}
+		// #57: full result — say where the balance landed.
+		if haveBal && n > 0 {
+			if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
+				if after, aerr := ledger.Balance(acc, app.Transactions()); aerr == nil {
+					summary += " " + uistate.T("documents.balanceMoved",
+						money.FormatMinor(beforeMinor, balDec), money.FormatMinor(after.Amount, balDec))
+				}
+			}
+		}
 		msg.Set(summary)
 		csvText.Set("") // clear the paste box after a successful import
 		rev.Set(rev.Get() + 1)
 		return true
 	}
 
-	// confirmCSV is the "Import anyway" handler: commits the pending CSV bytes
-	// that were held after the user saw the duplicate warning (C88).
+	// confirmCSV is the preflight's "Import now" handler: commits the pending
+	// CSV bytes staged when the preview card was built (#57, ex-C88).
 	confirmCSV := ui.UseEvent(func() {
 		data := pendingCSV.Get()
 		if len(data) == 0 {
@@ -358,56 +387,71 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		commitCSVImport(data)
 	})
+	cancelCSVPreflight := ui.UseEvent(Prevent(func() {
+		pendingCSV.Set(nil)
+		csvPreflightS.Set(nil)
+	}))
 
-	// previewCSVDuplicates checks incoming CSV bytes for duplicate rows. If any
-	// are found it stores the bytes and sets the warning text, returning true so
-	// the caller knows to pause before importing. If no dupes, returns false and
-	// the caller should proceed directly.
-	previewCSVDuplicates := func(data []byte) (hasDupes bool) {
-		total, dupes, err := app.PreviewCSVImport(data, importAcct.Get())
-		if err != nil || dupes == 0 {
-			return false
+	// buildCSVPreflight parses the incoming bytes exactly as the import would
+	// (#57) and stages them behind a pre-commit preview: row/duplicate counts
+	// with per-row "why matched" detail, the balance impact on the import
+	// account with an implausible-jump warning, and incoming rows that look
+	// like the second leg of a transfer already in the ledger. Nothing writes
+	// until the user confirms.
+	buildCSVPreflight := func(data []byte) {
+		txns, err := app.ParseCSVForPreview(data, importAcct.Get())
+		if err != nil {
+			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(err.Error(), "store: ")))
+			return
+		}
+		if len(txns) == 0 {
+			msg.Set(uistate.T("documents.csvEmpty"))
+			return
+		}
+		info := &csvPreflightInfo{Total: len(txns)}
+		info.Whys = importsafe.Duplicates(txns, app.Transactions(), importAcct.Get())
+		info.Dupes = len(info.Whys)
+		info.Pairs = importsafe.TransferPairs(txns, app.Transactions(), importAcct.Get(), 3)
+		if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
+			info.Dec = currency.Decimals(acc.Currency)
+			info.AcctName = acc.Name
+			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
+				info.HasBal = true
+				info.BeforeMinor = b.Amount
+				info.NetMinor, info.AfterMinor = importsafe.Impact(b.Amount, txns, acc.ID)
+				info.Jump = importsafe.JumpWarning(b.Amount, info.NetMinor)
+			}
 		}
 		pendingCSV.Set(data)
-		if dupes == total {
-			csvDupWarn.Set(uistate.T("documents.dupWarnAllDups", dupes))
-		} else {
-			csvDupWarn.Set(uistate.T("documents.dupWarnBanner", dupes, total))
-		}
-		return true
+		csvDupWarn.Set("")
+		msg.Set("")
+		csvPreflightS.Set(info)
 	}
 
-	// chooseCsvFile opens a file picker for .csv files and feeds the bytes
-	// directly into the CSV import pipeline, skipping the paste step (C60).
-	// C88: if duplicates are detected the bytes are staged and a warning is shown;
-	// the user confirms via "Import anyway" before the write happens.
+	// chooseCsvFile opens a file picker for .csv files and feeds the bytes into
+	// the same staged preflight the paste path uses (C60 → #57).
 	chooseCsvFile := ui.UseEvent(func() {
 		pickFile(".csv,text/csv", func(_, _ string, data []byte) {
 			if len(data) == 0 {
 				msg.Set(uistate.T("documents.csvFileEmpty"))
 				return
 			}
-			if previewCSVDuplicates(data) {
-				// Warning is now visible; import is held until user confirms.
-				return
-			}
-			commitCSVImport(data)
+			buildCSVPreflight(data)
 		})
 	})
 	onAcct := ui.UseEvent(func(e ui.Event) { importAcct.Set(e.GetValue()) })
 	onReceiptTotal := ui.UseEvent(func(v string) { receiptTotal.Set(v) })
 	onReceiptMerchant := ui.UseEvent(func(v string) { receiptMerchant.Set(v) })
 
-	// importCSV is the paste-path import handler (C88: two-step with dup warning).
-	// First call: runs a preview — if duplicates are found, stores the bytes and
-	// surfaces the warning; the user then clicks "Import anyway" (confirmCSV).
-	// If no duplicates, proceeds directly to commitCSVImport.
+	// importCSV is the paste-path import handler (#57): every first click runs
+	// the staged preflight — the commit happens from the preview card's
+	// "Import now" (confirmCSV).
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
 		if data == "" {
-			// QA H2/CF-03: a file picked via "Choose a CSV file" whose duplicate
-			// preview staged its bytes leaves the paste box empty — the primary
-			// Import must commit those staged bytes, not demand a paste.
+			// QA H2/CF-03: a file picked via "Choose a CSV file" stages its bytes
+			// while the paste box stays empty — the primary Import must work with
+			// those staged bytes, not demand a paste.
 			if staged := pendingCSV.Get(); len(staged) > 0 {
 				commitCSVImport(staged)
 				return
@@ -415,12 +459,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
-		raw := []byte(data)
-		if previewCSVDuplicates(raw) {
-			// Duplicate warning is now shown; import waits for user confirmation.
-			return
-		}
-		commitCSVImport(raw)
+		buildCSVPreflight([]byte(data))
 	}))
 
 	// parseStatement (C74) parses a pasted bank/credit-card statement in any common
@@ -894,11 +933,22 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	doImportDraft := func() bool {
 		rows := draft.Get()
 		// #55: checkpoint before the reviewed-rows import commits.
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")))
+		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")))
 		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
 		if err != nil {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
 			return false
+		}
+		// #57: attach the pre-import checkpoint to the history record appstate
+		// just created, so this run's roll-back is one click from the history.
+		if cpID != "" && result.DocumentID != "" {
+			for _, d := range app.Documents() {
+				if d.ID == result.DocumentID {
+					d.CheckpointID = cpID
+					_ = app.PutDocument(d)
+					break
+				}
+			}
 		}
 		// If the draft came from a statement PDF and the user asked to keep a copy,
 		// store the source PDF in the Artifacts vault. Its bytes go to the IndexedDB
@@ -956,13 +1006,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		rec := extract.Receipt{Merchant: strings.TrimSpace(receiptMerchant.Get()), Total: absAmount(receiptTotal.Get()), Lines: lines}
 		// #55: checkpoint before the receipt import commits.
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeReceiptImport"))
+		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeReceiptImport"))
 		tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
 		if err != nil {
 			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
 			return false
 		}
-		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows))
+		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows), 0, cpID)
 		setDraft([]extract.Row{})
 		imageURL.Set("")
 		imageDraftAtom.Set("") // C98: clear persisted image after successful import
@@ -1085,6 +1135,22 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// on first load. Declared here so it can close over draft.
 	clearDraft := ui.UseEvent(func() { setDraft([]extract.Row{}) })
 
+	// #57: per-run import roll-back — restores the pre-import checkpoint that
+	// rode the history record. Confirmed; a restore replaces the LIVE dataset.
+	rollbackImport := func(d domain.Document) {
+		uistate.ConfirmModal(uistate.T("documents.rollbackConfirm"), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			if uistate.RestoreCheckpoint(d.CheckpointID) {
+				uistate.PostNotice(uistate.T("documents.rolledBack"), false)
+				rev.Set(rev.Get() + 1)
+			} else {
+				uistate.PostNotice(uistate.T("ckpt.restoreErr"), true)
+			}
+		})
+	}
+
 	// Statement-PDF source card (Stage 1), folded in from the former standalone
 	// "Import statement" modal. Choose a PDF → the AI reads it natively → rows land in
 	// the shared review draft (which advances to Stage 2). Optionally keeps a copy of
@@ -1185,6 +1251,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 							OnCsvInput:   onCsv,
 							OnImportCSV:  importCSV,
 							OnConfirmCSV: confirmCSV,
+							Preflight:    csvPreflightCard(csvPreflightS.Get(), confirmCSV, cancelCSVPreflight),
 						}),
 					)),
 
@@ -1296,6 +1363,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					),
 				),
 			),
+			// #57: recent import runs with their full results and per-run
+			// roll-back (while the pre-import checkpoint is still in the ring).
+			importHistorySection(app.Documents(), accounts, rollbackImport),
 		)),
 
 		// STAGE 2 — "Review & import": the shared editable draft table + spend summary,
@@ -1342,6 +1412,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				OnRemoveDraft:     removeDraft,
 				OnUpdateDraft:     updateDraft,
 			}),
+			// #57: pre-commit balance impact for the reviewed draft — where the
+			// import account's balance lands if every row commits, with the
+			// implausible-jump warning.
+			reviewImpactCard(app, accounts, importAcct.Get(), rows, receiptMode.Get()),
 			SpendSummaryCard(spendSummaryCardProps{
 				Rows:         rows,
 				Accounts:     accounts,

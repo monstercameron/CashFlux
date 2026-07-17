@@ -1,3 +1,19 @@
+## 2026-07-17 — #57: imports stop being a leap of faith (lane 4)
+
+The import pipeline had pieces of trust scattered around (C88 dup warning, C74 profiles, C11
+history records nobody rendered) but the commit itself was still a leap. Now every CSV import
+stages behind a preflight: counts, the account's balance before → after, a jump warning
+(importsafe.JumpWarning — ≥$10k AND >3× the balance, both thresholds so a first import into an
+empty account or a big-but-proportionate statement never nags), why each duplicate matched, and
+incoming rows that mirror an existing transaction in another account (the missed-transfer
+double-count). Design decisions worth keeping: ParseCSVForPreview is the SAME parse+resolution
+path the import uses (refactored out of PreviewCSVImport), so the preview can't lie; and
+importsafe.Duplicates mirrors dedupe.CountIncomingDuplicates row-for-row so the counts always
+agree. The dormant Document history records finally earn a surface — "Recent imports" with full
+results — and each run carries its #55 checkpoint ID, making "roll back this exact import" one
+click. Gotcha found by e2e: the sample dataset seeds Document rows with PAST dates but stores
+them after fresh ones — history must sort by UploadedAt, never store order.
+
 ## 2026-07-17 — #66: the household model gets explained instead of assumed (lane 5)
 
 The ticket's five items share one thesis: the app has a real permission/ownership model (roles,

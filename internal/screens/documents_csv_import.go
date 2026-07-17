@@ -32,6 +32,10 @@ type csvImportCardProps struct {
 	OnImportCSV ui.Handler
 	// OnConfirmCSV commits the import after the user acknowledges the warning.
 	OnConfirmCSV ui.Handler
+	// Preflight is the staged import's pre-commit preview card (#57): counts,
+	// balance impact + jump warning, duplicate reasons, transfer pairs, and
+	// the Import now / Cancel actions. Nil when nothing is staged.
+	Preflight ui.Node
 }
 
 // CsvImportCard renders the CSV import inputs: a file picker, an account selector, a
@@ -68,6 +72,9 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 			P(css.Class("muted", tw.Mt1), uistate.T("documents.bankCsvHelpBody")),
 			P(css.Class("muted", tw.Mt1), uistate.T("documents.localFirstNote")),
 		),
+		// #57: the staged pre-commit preview (replaces the old dup-only warning
+		// as the primary two-step; DupWarn is kept for any legacy setters).
+		props.Preflight,
 		// C88: pre-import duplicate warning — shown when the preview step detects that
 		// some incoming rows match existing transactions.
 		If(props.DupWarn != "",

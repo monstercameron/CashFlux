@@ -292,13 +292,27 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 // writing anything to the store. Use the returned counts to surface a pre-import
 // duplicate warning to the user before calling ImportTransactionsCSV.
 func (a *App) PreviewCSVImport(data []byte, fallbackAccountID string) (total, dupes int, err error) {
+	txns, err := a.ParseCSVForPreview(data, fallbackAccountID)
+	if err != nil {
+		return 0, 0, err
+	}
+	d := dedupe.CountIncomingDuplicates(txns, a.Transactions(), fallbackAccountID)
+	return len(txns), d, nil
+}
+
+// ParseCSVForPreview parses data as CSV transactions with the same resolution
+// (account/category/member names → ids, fallback account) the real import
+// applies, WITHOUT writing anything — so pre-commit previews (#57: balance
+// impact, duplicate detail, transfer-pair detection) see exactly the rows the
+// import would store.
+func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domain.Transaction, error) {
 	base := "USD"
 	if s := a.Settings(); s.BaseCurrency != "" {
 		base = s.BaseCurrency
 	}
 	txns, _, parseErr := store.TransactionsFromCSVResilient(data, base)
 	if parseErr != nil {
-		return 0, 0, parseErr
+		return nil, parseErr
 	}
 	// Apply the same account/category/member resolution so AccountIDs match.
 	accPairs := make([][2]string, 0, len(a.Accounts()))
@@ -323,8 +337,7 @@ func (a *App) PreviewCSVImport(data []byte, fallbackAccountID string) (total, du
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
 		txns[i].MemberID = resolveMem(txns[i].MemberID)
 	}
-	d := dedupe.CountIncomingDuplicates(txns, a.Transactions(), fallbackAccountID)
-	return len(txns), d, nil
+	return txns, nil
 }
 
 // idResolver builds a function that maps a CSV reference cell to an entity id:
@@ -1147,6 +1160,7 @@ func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID str
 	if err := a.PutDocument(domain.Document{
 		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: acc.ID,
 		Status: domain.DocImported, Extracted: documentRowsFromExtract(importedRows),
+		SkippedCount: result.Skipped,
 	}); err != nil {
 		return result, err
 	}

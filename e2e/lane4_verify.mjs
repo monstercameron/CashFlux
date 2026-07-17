@@ -194,6 +194,64 @@ await page.locator('tr[data-testid^="txn-row-"]').first().waitFor({ timeout: 200
 const descCountAfter = await page.locator(".row-desc-text", { hasText: firstRowDesc }).count();
 check("#55: restored dataset has the deleted transaction back", descCountAfter === descCountBefore, `${descCountBefore} → ${descCountAfter} ("${firstRowDesc}")`);
 
+// ─────────────── #57: import dependability ───────────────
+await nav("/documents");
+await page.waitForTimeout(1200);
+await page.locator('[data-testid="import-type-csv"]').click();
+await page.waitForTimeout(800);
+const csvArea = page.locator(".doc-form-body textarea").first();
+const importBtn = page.locator('.doc-form-body button[type="submit"]').first();
+const preflight = page.locator('[data-testid="csv-preflight"]');
+
+// A) Preflight: counts, balance impact, jump warning, in-file duplicate reason.
+await csvArea.fill("date,payee,amount\n2026-07-12,Huge Deposit,999999.00\n2026-07-12,Huge Deposit,999999.00\n2026-07-13,Small Coffee,-4.50");
+await importBtn.click();
+await page.waitForTimeout(900);
+check("#57: preflight card appears before any write", await preflight.isVisible());
+const counts = await page.locator('[data-testid="csv-preflight-counts"]').innerText().catch(() => "");
+check("#57: preflight counts rows + duplicates", /Ready to import 2 new transactions\. 1 duplicate/.test(counts), counts);
+check("#57: preflight shows the balance impact", await page.locator('[data-testid="csv-preflight-balance"]').isVisible());
+check("#57: implausible jump warned", await page.locator('[data-testid="csv-preflight-jump"]').isVisible());
+await page.locator('[data-testid="csv-preflight-dups"] summary').click();
+await page.waitForTimeout(400);
+check("#57: duplicate row explains WHY it matched", /repeated within this file/.test(await page.locator('[data-testid="csv-preflight-why"]').first().innerText().catch(() => "")));
+await shot(page, "57-preflight");
+// B) Cancel is a true no-op.
+await page.locator('[data-testid="csv-preflight-cancel"]').click();
+await page.waitForTimeout(500);
+check("#57: cancel drops the staged import", !(await preflight.isVisible().catch(() => false)));
+
+// C) A real import: confirm → richer summary with the balance move.
+await csvArea.fill("date,payee,amount\n2026-07-12,Lane4 Import A,-12.34");
+await importBtn.click();
+await page.waitForTimeout(900);
+await page.locator('[data-testid="csv-preflight-confirm"]').click();
+await page.waitForTimeout(1200);
+const csvMsg = await page.locator('[data-testid="csv-import-msg"]').innerText().catch(() => "");
+check("#57: summary states the balance move", /Balance moved .* → /.test(csvMsg), csvMsg.slice(0, 120));
+
+// D) Import history lists the run with counts + a per-run roll-back.
+const histRow = page.locator('[data-testid="import-history-row"]').first();
+check("#57: import history section renders", await page.locator('[data-testid="import-history"]').isVisible());
+check("#57: newest run shows kind + result", /CSV import/.test(await histRow.innerText().catch(() => "")) && /1 transaction imported/.test(await histRow.innerText().catch(() => "")), (await histRow.innerText().catch(() => "")).replace(/\n/g, " · "));
+check("#57: run offers roll-back while its checkpoint lives", (await histRow.locator('[data-testid="import-rollback"]').count()) > 0);
+await shot(page, "57-import-history");
+
+// E) Transfer-pair detection: an incoming mirror of the row just imported.
+await csvArea.fill("date,payee,amount,account\n2026-07-13,Pair Echo,12.34,Rewards Credit Card");
+await importBtn.click();
+await page.waitForTimeout(900);
+check("#57: incoming transfer leg detected against the ledger", (await page.locator('[data-testid="csv-preflight-pair"]').count()) > 0 && /Lane4 Import A/.test(await page.locator('[data-testid="csv-preflight-pair"]').first().innerText().catch(() => "")));
+await page.locator('[data-testid="csv-preflight-cancel"]').click();
+await page.waitForTimeout(400);
+
+// F) Roll back the import from its history row.
+await histRow.locator('[data-testid="import-rollback"]').click();
+await page.waitForTimeout(500);
+await page.locator("#cf-dialog-confirm").click();
+await page.waitForTimeout(2000);
+check("#57: roll-back restores pre-import data", /Rolled back/.test(await bodyText()));
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

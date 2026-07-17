@@ -32,17 +32,19 @@ func Checkpoints() []checkpoint.Checkpoint {
 }
 
 // SaveCheckpoint snapshots the current dataset under the given plain-English
-// label ("Before applying rules to 12 transactions") and reports success.
-// Oldest checkpoints beyond the ring cap are deleted, blob and all.
-func SaveCheckpoint(label string) bool {
+// label ("Before applying rules to 12 transactions") and returns the new
+// checkpoint's ID ("" on failure) so callers can associate the snapshot with
+// what they're about to do (#57: per-import roll-back). Oldest checkpoints
+// beyond the ring cap are deleted, blob and all.
+func SaveCheckpoint(label string) string {
 	app := appstate.Default
 	if app == nil {
-		return false
+		return ""
 	}
 	data, err := app.ExportJSONRedacted()
 	if err != nil {
 		app.Log().Error("checkpoint: export failed", "err", err)
-		return false
+		return ""
 	}
 	cp := checkpoint.Checkpoint{ID: id.New(), At: time.Now(), Label: label, Size: len(data)}
 	kept, dropped := checkpoint.Push(Checkpoints(), cp, checkpoint.MaxEntries)
@@ -51,7 +53,16 @@ func SaveCheckpoint(label string) bool {
 	}
 	browserstore.Set(ckptBlobPrefix+cp.ID, string(data))
 	browserstore.Set(ckptIndexKey, checkpoint.EncodeIndex(kept))
-	return true
+	return cp.ID
+}
+
+// HasCheckpoint reports whether cpID is still in the ring (its blob restorable).
+func HasCheckpoint(cpID string) bool {
+	if cpID == "" {
+		return false
+	}
+	_, ok := checkpoint.Find(Checkpoints(), cpID)
+	return ok
 }
 
 // RestoreCheckpoint replaces the live dataset with the snapshot saved under

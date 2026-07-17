@@ -569,6 +569,13 @@ type Document struct {
 	// imports the raw rows aren't retained, so this records the count for the
 	// import-history row (C11) when Extracted is empty.
 	RowCount int `json:"rowCount,omitempty"`
+	// SkippedCount records how many rows the import skipped as duplicates or
+	// parse failures, so the history row can state the full result (#57).
+	SkippedCount int `json:"skippedCount,omitempty"`
+	// CheckpointID names the pre-import safety checkpoint (#55) taken just
+	// before this import committed, enabling per-run "roll back this import"
+	// from the history while the checkpoint is still in the ring.
+	CheckpointID string `json:"checkpointId,omitempty"`
 }
 
 // IsTransfer reports whether the transaction is a transfer between accounts.
