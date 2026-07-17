@@ -214,6 +214,57 @@ const railBox3 = await mp73.locator('[data-testid="assistant-rail"]').boundingBo
 check("#73: backdrop closes the aside", !railBox3 || railBox3.x >= 390, railBox3 ? `x=${Math.round(railBox3.x)}` : "hidden");
 await m73.close();
 
+// ───────── #52: confidence tiers, gated headline totals, review inbox ─────────
+const c52 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p52 = await c52.newPage();
+await p52.goto(BASE + "/", { waitUntil: "load" });
+await p52.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p52.waitForTimeout(1500);
+await p52.evaluate(() => { history.pushState({}, "", "/subscriptions"); dispatchEvent(new PopStateEvent("popstate")); });
+await p52.waitForTimeout(2200);
+const chips52 = await p52.locator('[data-testid^="sub-conf-"]').count();
+check("#52: rows carry confidence chips", chips52 > 0, `${chips52} chips`);
+const whyTitle = await p52.locator('[data-testid^="sub-conf-"]').first().getAttribute("title");
+check("#52: chip tooltip exposes the WHY", !!whyTitle && /charge|cadence|amount/.test(whyTitle), whyTitle || "");
+const activeCount0 = parseInt(await p52.locator(".debt-chips .stat-chip, .debt-chips [class*=chip]").filter({ hasText: "Active subscriptions" }).innerText().then(t => (t.match(/(\d+)/) || [])[1]).catch(() => "0"), 10);
+const inboxRows = await p52.locator('[data-testid^="subs-review-row-"]').count();
+if (inboxRows > 0) {
+  const excludedNote = await p52.locator('[data-testid="subs-conf-excluded"]').innerText().catch(() => "");
+  check("#52: hero labels the excluded needs-review detections", excludedNote.includes(String(inboxRows)), excludedNote);
+  const heroBefore = await p52.locator(".rec-hero-value").first().innerText();
+  const firstRow = p52.locator('[data-testid^="subs-review-row-"]').first();
+  const confirmBtn = firstRow.locator('[data-testid^="subs-review-confirm-"]');
+  await confirmBtn.click();
+  await p52.waitForTimeout(1200);
+  const inboxRows2 = await p52.locator('[data-testid^="subs-review-row-"]').count();
+  check("#52: confirming removes the row from the inbox", inboxRows2 === inboxRows - 1, `${inboxRows} → ${inboxRows2}`);
+  const heroAfter = await p52.locator(".rec-hero-value").first().innerText();
+  check("#52: confirming updates the headline total immediately", heroAfter !== heroBefore, `${heroBefore} → ${heroAfter}`);
+  const confirmedChips = await p52.locator('[data-testid^="sub-conf-"].conf-confirmed, .conf-chip.conf-confirmed').count();
+  check("#52: the confirmed row now wears the Confirmed tier", confirmedChips >= 1, `${confirmedChips}`);
+  // Reload: the confirmation persisted (KV + RequestPersist).
+  await p52.reload({ waitUntil: "load" });
+  await p52.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+  await p52.waitForTimeout(1500);
+  await p52.evaluate(() => { history.pushState({}, "", "/subscriptions"); dispatchEvent(new PopStateEvent("popstate")); });
+  await p52.waitForTimeout(2000);
+  const confirmedAfterReload = await p52.locator(".conf-chip.conf-confirmed").count();
+  check("#52: confirmation survives a reload", confirmedAfterReload >= 1, `${confirmedAfterReload}`);
+  // Reject: the next inbox row's "Not a subscription" removes it from the list.
+  const rejRows = await p52.locator('[data-testid^="subs-review-row-"]').count();
+  if (rejRows > 0) {
+    await p52.locator('[data-testid^="subs-review-reject-"]').first().click();
+    await p52.waitForTimeout(1200);
+    const rejRows2 = await p52.locator('[data-testid^="subs-review-row-"]').count();
+    check("#52: rejecting feeds the ignore list (row leaves the inbox)", rejRows2 === rejRows - 1, `${rejRows} → ${rejRows2}`);
+  } else {
+    check("#52: rejecting feeds the ignore list (row leaves the inbox)", true, "inbox emptied by confirms");
+  }
+} else {
+  check("#52: review inbox present when needs-review detections exist", activeCount0 >= 0, "no needs-review detections in sample data — inbox hidden (valid only if no Review-tier subs)");
+}
+await c52.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

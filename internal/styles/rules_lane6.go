@@ -135,4 +135,32 @@ func registerLane6Fixes() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".ask-aside",
 		transition("none"),
 	)
+
+	// ── #52: detection-confidence chips ────────────────────────────────────────
+	// Small labeled tier chips on subscription rows; the WHY lives in the
+	// tooltip/aria. Confirmed reads settled (green tint), Likely stays neutral,
+	// Needs review carries the amber "look at me" tint.
+	rule(".conf-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.05rem 0.45rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		fontSize("0.68rem"),
+		fontWeight("600"),
+		letterSpacing("0.03em"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+		cursor("help"),
+	)
+	rule(".conf-chip.conf-confirmed",
+		borderColor("color-mix(in srgb, #22c55e 45%, var(--border))"),
+		color("color-mix(in srgb, #22c55e 60%, var(--text))"),
+		background("color-mix(in srgb, #22c55e 10%, transparent)"),
+	)
+	rule(".conf-chip.conf-review",
+		borderColor("color-mix(in srgb, #f59e0b 50%, var(--border))"),
+		color("color-mix(in srgb, #f59e0b 65%, var(--text))"),
+		background("color-mix(in srgb, #f59e0b 10%, transparent)"),
+	)
 }

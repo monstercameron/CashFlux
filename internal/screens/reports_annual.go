@@ -263,12 +263,21 @@ func Reports() ui.Node {
 	subsCatNameOf := func(id string) string { return catName[id] }
 	subsAccounts := app.Accounts()
 	subs, _ := subscriptions.Detect(scopedTxns, rates, 3)
+	// #52: needs-review detections never fold into the annual headline either —
+	// only Confirmed (user-verified) and Likely (strong evidence) count. The
+	// name-keyed levels also gate the price-rise callout below.
+	subsConfirmed := loadConfirmedSubs()
+	subsLevel := make(map[string]subscriptions.Confidence, len(subs))
 	liveSubs := subs[:0:0]
 	for _, s := range subs {
+		subsLevel[subscriptions.ConfirmKey(s.Name)] = subscriptions.Assess(s, subsConfirmed).Level
 		if s.Lapsed(time.Now()) {
 			continue
 		}
 		if !subscriptions.IsRealSubscriptionName(s.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
+			continue
+		}
+		if subsLevel[subscriptions.ConfirmKey(s.Name)] == subscriptions.ConfidenceReview {
 			continue
 		}
 		liveSubs = append(liveSubs, s)
@@ -276,7 +285,10 @@ func Reports() ui.Node {
 	priceRises, _ := subscriptions.DetectPriceChanges(scopedTxns, rates, 3)
 	rises := priceRises[:0:0]
 	for _, pc := range priceRises {
-		if pc.Delta > 0 && subscriptions.IsRealSubscriptionName(pc.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
+		if pc.Delta <= 0 || subsLevel[subscriptions.ConfirmKey(pc.Name)] == subscriptions.ConfidenceReview {
+			continue
+		}
+		if subscriptions.IsRealSubscriptionName(pc.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
 			rises = append(rises, pc)
 		}
 	}

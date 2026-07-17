@@ -33,6 +33,18 @@ var lane6Keys = Catalog{
 	"assistant.notesDrawer":     "Notes & chats",
 	"assistant.nextScope":       "Next message sends %s from this device · ~%d tokens",
 	"insights.usageCostUnknown": "Used %d tokens · cost unavailable",
+
+	// #52 — detection confidence tiers + review inbox.
+	"subs.confConfirmed":    "Confirmed",
+	"subs.confLikely":       "Likely",
+	"subs.confReview":       "Needs review",
+	"subs.confAria":         "Detection confidence: %s. Why: %s",
+	"subs.confExcluded":     "Excludes %d detections awaiting your review below.",
+	"subs.reviewInboxTitle": "Review detections",
+	"subs.reviewInboxDesc":  "These patterns look like subscriptions, but the evidence is thin. Confirm the real ones; reject the rest and they stay out of your totals.",
+	"subs.confirmBtn":       "Confirm",
+	"subs.confirmTitle":     "Confirm this is a real subscription",
+	"subs.confirmedNotice":  "Confirmed %s as a subscription.",
 }
 
 func init() {

@@ -37,6 +37,15 @@ type Subscription struct {
 	Count       int       // how many occurrences were detected
 	Last        time.Time // most recent occurrence
 	NextRenewal time.Time // Last advanced by one cadence interval
+
+	// Detection-evidence signals (task #52) — how tight the pattern is, so the
+	// confidence assessment can say WHY it believes (or doubts) a detection.
+	// AmountVarPct is the largest deviation of any charge from the median
+	// amount, as a whole percent (0 = identical amounts every time).
+	AmountVarPct int
+	// GapVarDays is the largest deviation of any charge gap from the median
+	// gap, in whole days (0 = perfectly regular spacing).
+	GapVarDays int
 }
 
 // Lapsed reports whether the pattern looks no longer active: now is more than
@@ -141,14 +150,46 @@ func Detect(txns []domain.Transaction, rates currency.Rates, minCount int) ([]Su
 			continue
 		}
 		last := g.charges[len(g.charges)-1]
+		// Evidence signals (#52): amount spread vs the median charge, and gap
+		// regularity vs the median gap — the raw material for confidence tiers.
+		amts := make([]int64, len(g.charges))
+		for i, c := range g.charges {
+			amts[i] = c.amt
+		}
+		medAmt := medianInt64(amts)
+		amountVar := 0
+		if medAmt > 0 {
+			for _, a := range amts {
+				dev := a - medAmt
+				if dev < 0 {
+					dev = -dev
+				}
+				if pct := int(dev * 100 / medAmt); pct > amountVar {
+					amountVar = pct
+				}
+			}
+		}
+		medGap := medianInt(gaps)
+		gapVar := 0
+		for _, gp := range gaps {
+			dev := gp - medGap
+			if dev < 0 {
+				dev = -dev
+			}
+			if dev > gapVar {
+				gapVar = dev
+			}
+		}
 		out = append(out, Subscription{
-			Name:        g.name,
-			Cadence:     cad,
-			Amount:      last.amt, // current price = most recent charge
-			Currency:    rates.Base,
-			Count:       len(g.charges),
-			Last:        last.date,
-			NextRenewal: advance(last.date, cad),
+			Name:         g.name,
+			Cadence:      cad,
+			Amount:       last.amt, // current price = most recent charge
+			Currency:     rates.Base,
+			Count:        len(g.charges),
+			Last:         last.date,
+			NextRenewal:  advance(last.date, cad),
+			AmountVarPct: amountVar,
+			GapVarDays:   gapVar,
 		})
 	}
 
@@ -197,6 +238,21 @@ func advance(t time.Time, c Cadence) time.Time {
 	default: // monthly
 		return t.AddDate(0, 1, 0)
 	}
+}
+
+// medianInt64 returns the median of xs, 0 for an empty slice. For an even count
+// it averages the two middle values (truncating).
+func medianInt64(xs []int64) int64 {
+	s := append([]int64(nil), xs...)
+	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
+	n := len(s)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return s[n/2]
+	}
+	return (s[n/2-1] + s[n/2]) / 2
 }
 
 // medianInt returns the median of xs (which must be non-empty). For an even

@@ -283,10 +283,37 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	}
 	soon := subscriptions.UpcomingRenewals(subs, 7, time.Now())
 
+	// #52: confidence tiers. Confirmed names persist in the settings KV; the
+	// assessor grades everything else on detection evidence (charge count,
+	// cadence regularity, amount spread). The needs-review tier stays VISIBLE in
+	// the list (with its chip and a review inbox below) but never folds into the
+	// headline totals — the hero carries an explicit exclusion caption instead —
+	// and its names are kept out of the price-change section until resolved.
+	confirmedSet := loadConfirmedSubs()
+	assess := func(s subscriptions.Subscription) subscriptions.Assessment {
+		return subscriptions.Assess(s, confirmedSet)
+	}
+	var reviewSubs []subscriptions.Subscription
+	reviewNames := map[string]bool{}
+	countedSubs := subs[:0:0]
 	var annual int64
 	for _, s := range subs {
+		if assess(s).Level == subscriptions.ConfidenceReview {
+			reviewSubs = append(reviewSubs, s)
+			reviewNames[subscriptions.ConfirmKey(s.Name)] = true
+			continue
+		}
+		countedSubs = append(countedSubs, s)
 		annual += s.AnnualAmount()
 	}
+	changesKept := changes[:0:0]
+	for _, pc := range changes {
+		if reviewNames[subscriptions.ConfirmKey(pc.Name)] {
+			continue
+		}
+		changesKept = append(changesKept, pc)
+	}
+	changes = changesKept
 
 	// Build a lookup of cancelled subscriptions by lower-case name.
 	cancelList := app.Cancellations()
@@ -377,6 +404,15 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		// Success notice triggers a re-render so the row immediately shows its
 		// active state again (L49).
 		notice.Set(notice.Get().With(uistate.T("subs.uncancelledConfirm", name), false))
+	}
+
+	// #52: confirming a detection promotes it to the Confirmed tier and folds it
+	// into the headline totals on the very next render (the notice re-render);
+	// BumpDataRevision refreshes the annual report's figures immediately too.
+	doConfirm := func(name string) {
+		addConfirmedSub(name)
+		uistate.BumpDataRevision()
+		notice.Set(notice.Get().With(uistate.T("subs.confirmedNotice", name), false))
 	}
 
 	doIgnore := func(name string) {
@@ -513,6 +549,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				CancelledOn:    cancelledDate,
 				Selected:       sel[s.Name],
 				NeedsReview:    !isCancelled && subscriptions.NeedsReview(s, now),
+				Conf:           assess(s),
 				MonthlyTotal:   monthlyTotal,
 				OnRemind:       remind,
 				OnGuide:        guide,
@@ -610,7 +647,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		}
 	}
 	if trailingMonths > 0 {
-		pct := subscriptions.MonthlyTotal(subs) * 100 * int64(trailingMonths) / trailingExpense
+		pct := subscriptions.MonthlyTotal(countedSubs) * 100 * int64(trailingMonths) / trailingExpense
 		shareStat = stat(uistate.T("subs.shareOfSpending"), fmt.Sprintf("%d%%", pct), "")
 	}
 
@@ -658,13 +695,16 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				uistate.T("subs.monthlyBurden"),
 				smartTooltipFor(subSmartSettings, "subs-monthly", uistate.T("subs.monthlyBurden"), uistate.T("smart.tipSubsMonthly")),
 			),
-			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(subs), base))),
+			Div(ClassStr("rec-hero-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-down")), fmtMoney(money.New(subscriptions.MonthlyTotal(countedSubs), base))),
 		),
 		Div(css.Class("debt-chips"),
 			recurStatChip(uistate.T("subs.annualBurden"), fmtMoney(money.New(annual, base)), ""),
-			recurStatChip(uistate.T("subs.count"), fmt.Sprintf("%d", len(subs)), ""),
+			recurStatChip(uistate.T("subs.count"), fmt.Sprintf("%d", len(countedSubs)), ""),
 			shareStat,
 		),
+		// #52 headline honesty: needs-review detections are excluded from every
+		// figure above, and the hero says so rather than silently folding them in.
+		subsConfExcludedNote(len(reviewSubs)),
 	)
 
 	return Div(css.Class("bento bento-recurring"),
@@ -696,6 +736,16 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				savingsSummary,
 			),
 		)),
+		// #52: the review inbox — every needs-review detection with its evidence
+		// and one-click Confirm / Not-a-subscription resolutions. Confirming folds
+		// it into the totals immediately; rejecting feeds the persisted ignore
+		// list, so future detection runs skip it everywhere.
+		If(len(reviewSubs) > 0, recurTile("subs-review", recurSection("sec-subs-review", uistate.T("subs.reviewInboxTitle"), nil,
+			SubsReviewInbox(subsReviewInboxProps{
+				Subs: reviewSubs, Assess: assess, Base: base,
+				OnConfirm: doConfirm, OnReject: doIgnore,
+			}),
+		))),
 		If(len(changes) > 0, recurTile("subs-changes", recurSection("sec-subs-changes", uistate.T("subs.priceChangesTitle"), nil,
 			Fragment(
 				// Net summary line (G10 §5): "Your subscriptions cost $X more/less
@@ -726,6 +776,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						CancelledOn:    cancelledDate,
 						Selected:       sel[s.Name],
 						NeedsReview:    false, // renewing soon ≠ stale
+						Conf:           assess(s),
 						MonthlyTotal:   monthlyTotal,
 						OnRemind:       remind,
 						OnGuide:        guide,
@@ -800,14 +851,17 @@ func Subscriptions() ui.Node {
 
 // subscriptionRowProps holds the props for a single subscription row.
 type subscriptionRowProps struct {
-	Sub            subscriptions.Subscription
-	Base           string
-	NextDate       string // pre-formatted next-renewal date
-	Cancelled      bool
-	CancelledOn    string // pre-formatted cancellation date, set when Cancelled is true
-	Selected       bool   // whether the row's cancel-candidate checkbox is checked
-	NeedsReview    bool   // whether the subscription hasn't been charged in 2+ cadence intervals
-	MonthlyTotal   int64  // sum of all active subscriptions' monthly amounts; drives the per-row share-bar
+	Sub         subscriptions.Subscription
+	Base        string
+	NextDate    string // pre-formatted next-renewal date
+	Cancelled   bool
+	CancelledOn string // pre-formatted cancellation date, set when Cancelled is true
+	Selected    bool   // whether the row's cancel-candidate checkbox is checked
+	NeedsReview bool   // whether the subscription hasn't been charged in 2+ cadence intervals
+	// Conf is the detection's confidence assessment (#52): tier + the
+	// plain-English evidence rendered as a chip with the WHY in its tooltip.
+	Conf           subscriptions.Assessment
+	MonthlyTotal   int64 // sum of all active subscriptions' monthly amounts; drives the per-row share-bar
 	OnRemind       func(subscriptions.Subscription)
 	OnGuide        func(subscriptions.Subscription) // file the local how-to-cancel checklist (QA R3 CF-03)
 	OnDrill        func(payee string)               // open Transactions searched for this subscription's payee
@@ -895,6 +949,13 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	// Quiet "worth reviewing?" nudge — only shown for non-cancelled rows where the
 	// last charge is suspiciously old (2+ cadence intervals). Not shown for
 	// cancelled subs (the user already knows they cancelled it).
+	// #52: detection-confidence chip — tier label with the concrete evidence in
+	// its tooltip/aria. Hidden on cancelled rows (their state chip already leads).
+	confChip := Fragment()
+	if !props.Cancelled && props.Conf.Level != "" {
+		confChip = subConfidenceChip(props.Conf, slug)
+	}
+
 	reviewBadge := Fragment()
 	if props.NeedsReview {
 		reviewBadge = Span(
@@ -1029,6 +1090,7 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			Span(css.Class("row-meta"), meta),
 			payNode,
 			statusArea,
+			confChip,
 			reviewBadge,
 			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),
 		),

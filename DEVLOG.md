@@ -1,3 +1,28 @@
+## 2026-07-17 — #52: detections learn to say how sure they are (lane 6)
+
+The strategy doc's correctness pillar, applied to the subscription detector. The old pipeline was
+binary — a pattern either survived the classification filters or it didn't — so a 60-charge
+"Household & shopping" pattern whose amounts vary by 83% counted in the headline exactly like
+Netflix. The fix is a tier system built on evidence the detector already had but threw away:
+Detect now records AmountVarPct (max deviation from the median charge) and GapVarDays (max
+deviation from the median gap), and a pure Assess() grades Confirmed (user said so, persisted) /
+Likely (≥4 charges + steady cadence + amounts within 10%) / Needs review — with every reason as a
+concrete sentence, so the chip tooltip IS the explanation. Calibration note: calendar months make
+even a perfect 1st-of-month charge drift 3 days from the median gap, so the monthly steady
+tolerance is 4 days — a test caught me assuming ≤1.
+
+The honesty half: needs-review detections stay visible (chip + a Review detections inbox with
+Confirm / Not-a-subscription) but never headline — hero, yearly, count, share, the page's
+price-change list, and the annual report's subscription section all gate on the tier, and the hero
+carries an explicit exclusion caption. On sample data the monthly figure drops $562 → $113, which
+is the honest number: the other $449/mo was groceries and shop supplies wearing a subscription
+costume. Confirmations persist as a KV name-set (RequestPersist) rather than a new store table —
+proportionate for a name-keyed set that rides the dataset save. Two UI potholes: recurSection
+renders a CreateElement body ABOVE its title (call the builder directly — it has no hooks of its
+own; its rows are components), and the price-change section needed its own gate or the just-
+quarantined names kept headlining price hikes. 9 native test cases; 8 e2e assertions incl. the
+confirm → total-update → reload-persistence cycle.
+
 ## 2026-07-17 — #56: the masthead numbers learn to show their work (lane 1)
 
 Provenance's whole value is that it CANNOT disagree with the figure it explains, so the design
