@@ -7,11 +7,13 @@ package screens
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -22,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -338,6 +341,44 @@ func investmentPerformanceSection(
 		)))
 }
 
+// deductibleRowProps drives one drillable deductible-category line.
+type deductibleRowProps struct {
+	CategoryID string
+	Name       string
+	Amount     string
+	From, To   string // inclusive ledger-filter dates for the report window
+	Bar        ui.Node
+}
+
+// deductibleRow renders one deductible line as a drill into its supporting
+// transactions: the ledger filtered to the category's subtree within the
+// report window. Own component so the hooks sit at a stable call-site.
+func deductibleRow(props deductibleRowProps) ui.Node {
+	nav := router.UseNavigate()
+	filterAtom := uistate.UseTxFilter()
+	drill := ui.UseEvent(Prevent(func() {
+		f := uistate.TxFilter{From: props.From, To: props.To}
+		set := drillCategorySet([]string{props.CategoryID})
+		if strings.Contains(set, ",") {
+			f.Categories = set
+		} else {
+			f.Category = props.CategoryID
+		}
+		f = f.Normalize()
+		filterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}))
+	return Button(css.Class("row", "dash-drill", tw.WFull, tw.TextLeft),
+		Type("button"),
+		Attr("data-testid", "deductible-row-"+props.CategoryID),
+		Attr("title", uistate.T("reports.deductibleDrillTitle", props.Name)),
+		OnClick(drill),
+		Div(css.Class("row-main"), Span(css.Class("row-desc"), props.Name), props.Bar),
+		Span(css.Class("budget-amount"), props.Amount),
+	)
+}
+
 // deductibleSection renders the "Deductible totals" section body (L16/L58): a
 // ranked list of deductible-flagged categories with their expense totals for
 // the period, a headline total, and a CSV export. Returns nil when no
@@ -390,10 +431,17 @@ func deductibleSection(
 		}
 		bar := Div(css.Class("share-bar", "share-bar-thin"),
 			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
-		rowNodes = append(rowNodes, Div(css.Class("row"),
-			Div(css.Class("row-main"), Span(css.Class("row-desc"), nameOf(r.CategoryID)), bar),
-			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
-		))
+		// Each deductible line drills to its SUPPORTING TRANSACTIONS — the
+		// ledger filtered to the category subtree within the report window
+		// (parity scan: a tax workflow needs the receipts behind the totals).
+		rowNodes = append(rowNodes, ui.CreateElement(deductibleRow, deductibleRowProps{
+			CategoryID: r.CategoryID,
+			Name:       nameOf(r.CategoryID),
+			Amount:     fmtMinor(r.Amount),
+			From:       start.Format(dateutil.Layout),
+			To:         end.AddDate(0, 0, -1).Format(dateutil.Layout),
+			Bar:        bar,
+		}))
 	}
 
 	var body ui.Node

@@ -1,3 +1,11 @@
+## 2026-07-17 — Tax workflow: supporting transactions (parity-scan item 23)
+
+Most of the named workflow predated this pass (Deductible flag on categories, DeductibleTotals +
+CSV in the review's appendix, the assistant's tax gathering). The scan's bar adds "supporting
+transactions" — so the section's category lines became drills (same subtree+window filter recipe
+as the dashboard breakdown and the month rows). One e2e locks the whole loop from checkbox to
+filtered ledger.
+
 ## 2026-07-17 — Reports parity batch: drills, partial labels, saved views (items 19-22)
 
 Scoped deliberately: the review's 12-month length stays fixed (the document IS an annual review —

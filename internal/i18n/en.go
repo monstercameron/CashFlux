@@ -2180,6 +2180,7 @@ var english = Catalog{
 	"rpta.partialMonth":             "%s is in progress — %d of %d days. Its figures are partial.",
 	"rpta.inProgress":               "in progress",
 	"rpta.monthDrillTitle":          "See %s's transactions",
+	"reports.deductibleDrillTitle":  "See the transactions behind %s",
 	"rpta.kept":                     "Kept",
 	"rpta.keptRate":                 "%d%% of income",
 	"rpta.overYear":                 "over the year",
