@@ -3839,6 +3839,15 @@ func registerGenerated() {
 	rule(".smart-peek-chev",
 		opacity("0.55"),
 	)
+	// Top-bar variant of the Smart trigger (audit P0): icon + count in the title
+	// row — no bottom margin (it's not a bar above content any more) and tighter
+	// padding so it sits flush with the other top-bar chips.
+	rule(".smart-peek.smart-peek-tb",
+		marginBottom("0"),
+		minHeight("26px"),
+		padding("0.15rem 0.5rem"),
+		gap("0.3rem"),
+	)
 	// Stable wrapper for the Smart strip: keeps the component root a <div> across the
 	// peek↔card swap so the reconciler updates in place (see smartStripSlot). Purely
 	// structural — no box of its own.

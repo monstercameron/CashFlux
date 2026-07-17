@@ -206,6 +206,9 @@ func Shell(props ShellProps) uic.Node {
 			firstRender.Set(false)
 			return nil
 		}
+		// The Smart strip resets to collapsed on navigation so the decision-first
+		// default holds page to page (its trigger lives in the top bar).
+		uistate.SetSmartStripOpen(false)
 		focusMain()
 		triggerPageEnter()
 		return nil
@@ -953,6 +956,10 @@ func TopBar(props topBarProps) uic.Node {
 			// Lock-now button, beside the music toggle — shown only when an app-lock
 			// passcode is set, so the app can be locked in one click from anywhere.
 			uic.CreateElement(LockToggle),
+			// Smart-insights trigger (audit P0): the per-page insight strip's
+			// icon+count toggle lives here in the title row, not as a bar above
+			// the page's content. Renders nothing when the page has none.
+			screens.SmartPeekForPath(curPath),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
 			// The "⋯ More" overflow menu sits last, against the right edge.

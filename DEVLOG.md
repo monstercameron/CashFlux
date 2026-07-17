@@ -51,6 +51,15 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Third slice: the Smart layer's last row of chrome. The strip already collapsed to a peek bar, but
+a peek bar is still a bar — the audit counts rows, and every page paid one. The peek is now a
+top-bar icon+count trigger (NotifyBell's grammar: glyph + severity-toned 9+ badge) and the strip
+renders nothing at all until asked; a shared atom carries open state and the Shell's route effect
+resets it so each page lands collapsed. Two framework landmines dodged deliberately: the trigger
+component always mounts (a zero↔one node flip would shift the top-bar's positional children — the
+LockToggle lesson), and the strip keeps its stable slot div so the card opens in place. The
+smart.spec.mjs contract was rewritten — it pinned the old in-page peek geometry.
+
 Second slice: the sample-data chip joins the top bar's context zone (it was already chip-shaped
 from R41, but still spent a full row above content on every page — the audit's point was the row,
 not the shape). Dismiss compacts to a ✕; "Start fresh" stays a labeled verb since it's the chip's

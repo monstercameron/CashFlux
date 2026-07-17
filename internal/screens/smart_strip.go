@@ -99,30 +99,23 @@ func SmartStrip(props smartStripProps) ui.Node {
 	expanded := ui.UseState(false)
 	toggleExpand := ui.UseEvent(func() { expanded.Set(!expanded.Get()) })
 
-	// Collapsed by DEFAULT to a slim one-line "peek" bar: the Smart layer just signals that
-	// there are N alerts for this page without eating vertical space above its content.
-	// Clicking the peek opens the full strip in place; a header control re-collapses it.
-	open := ui.UseState(false)
-	toggleOpen := ui.UseEvent(func() { open.Set(!open.Get()) })
+	// Collapsed by DEFAULT (audit P0 "reduce persistent vertical chrome"): the
+	// in-page strip renders NOTHING until the top bar's Smart trigger (icon +
+	// count — see SmartPeekForPath) opens it, so pages carry zero insight chrome
+	// unless asked. The shared atom resets to collapsed on navigation.
+	open := uistate.UseSmartStripOpen()
 	collapse := ui.UseEvent(func() { open.Set(false) })
 
 	pageKey := string(props.Page)
 	if pageKey == "" {
 		pageKey = "all"
 	}
-	// Render into a STABLE wrapper element (smartStripSlot) whose type never changes
-	// between the collapsed peek (a <button>) and the open card (a <div>). Without it
-	// the component's ROOT element type flips button↔div across renders, and GWC's
-	// reconciler re-anchors the replacement at the wrong position — the opened card
-	// detached to the BOTTOM of the page (and sometimes vanished) instead of updating
-	// in place where the peek sat. Keeping the root a <div> lets the reconciler swap
-	// only the inner child, so opening/closing stays put. (User-reported regression.)
+	// Render into a STABLE wrapper element (smartStripSlot) whose type never
+	// changes between the collapsed (empty) and open (card) states, so GWC's
+	// reconciler swaps only the inner child and the card opens in place at the
+	// top of the content column.
 	if !open.Get() {
-		var sev smart.Severity
-		if len(insights) > 0 {
-			sev = insights[0].Severity
-		}
-		return smartStripSlot(pageKey, smartPeekBar(props.Page, total, len(aiFeats), sev, toggleOpen))
+		return smartStripSlot(pageKey, Fragment())
 	}
 
 	// "View all (N)" link in the card header — the count suffix only when more exist
@@ -285,19 +278,69 @@ func SmartStripForPath(path string) ui.Node {
 	return ui.CreateElement(SmartStrip, smartStripProps{Page: page})
 }
 
-// smartPeekBar is the COLLAPSED Smart strip: a slim one-line bar that merely signals there
-// are N alerts (or AI tools) for the page and opens the full strip on click. Its whole point
-// is a near-zero vertical footprint — the Smart layer is present but never buries the page's
-// own content the way the always-open card did.
-func smartPeekBar(page smart.Page, alerts, aiTools int, sev smart.Severity, onOpen ui.Handler) ui.Node {
+// SmartPeekForPath renders the top bar's compact Smart trigger for the given
+// route: the sparkle glyph plus an insight-count badge (audit P0 — the Smart
+// layer integrates into the title row as an icon/count instead of spending a
+// row above every page's content). Renders nothing when the route has no SMART
+// page, the strip is snoozed, or nothing is enabled/active — strictly additive,
+// exactly like the strip itself. Clicking toggles the shared open atom that the
+// in-page strip card reads.
+func SmartPeekForPath(path string) ui.Node {
+	// Always mount the component — even on routes with no SMART page — so the
+	// trigger occupies a stable child position in the top bar's actions row (the
+	// zero↔one node flip would shift its siblings in the positional child list).
+	return ui.CreateElement(smartPeekTrigger, smartPeekProps{Path: path})
+}
+
+// smartPeekProps carries the active route into the top-bar Smart trigger.
+type smartPeekProps struct {
+	Path string
+}
+
+// smartPeekTrigger is the top-bar Smart trigger component. It runs the same
+// Free-engine pass the strip does to know whether (and how urgently) to show
+// itself; when the strip is open it stays mounted with aria-expanded="true" so
+// it reads as the toggle it is.
+func smartPeekTrigger(props smartPeekProps) ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	_ = uistate.UseDataRevision().Get() // re-render on data/settings/dismiss/snooze change
+	pr := uistate.UsePrefs().Get()
+	open := uistate.UseSmartStripOpen()
+	toggle := ui.UseEvent(func() { open.Set(!open.Get()) })
+
+	page, ok := stripPageForPath(props.Path)
+	if !ok {
+		return Fragment()
+	}
+	settings := uistate.LoadSmartSettings()
+	if settings.IsSnoozed(time.Now().Unix()) {
+		return Fragment()
+	}
+	in := buildSmartInput(app, pr.WeekStartWeekday())
+	var insights []smart.Insight
+	if page == "" {
+		insights = smartengine.Run(in, settings)
+	} else {
+		insights = smartengine.RunPage(in, settings, page)
+	}
+	var aiFeats []smart.Feature
+	if page != "" {
+		aiFeats = enabledPageAIFeatures(settings, page)
+	}
+	if len(insights) == 0 && len(aiFeats) == 0 {
+		return Fragment()
+	}
+
 	pageKey := string(page)
 	if pageKey == "" {
 		pageKey = "all"
 	}
-	// The collapsed peek used to read a bare "Smart" + a raw number (e.g. "Smart 232"),
-	// which said nothing about WHAT the number counts. Give it a clear noun ("Smart
-	// insights") and cap the badge at 9+ like the notify bell, so it reads as "a few
-	// insights to look at", never an alarming 232 (task: clarify the Smart badge).
+	alerts := len(insights)
+	// A clear noun + a 9+-capped badge (like the notify bell) so it reads as "a
+	// few insights to look at", never an alarming raw count.
 	title := uistate.T("smart.peekInsights")
 	aria := uistate.T("smart.peekToolsAria")
 	var badge ui.Node = Fragment()
@@ -306,18 +349,25 @@ func smartPeekBar(page smart.Page, alerts, aiTools int, sev smart.Severity, onOp
 		if alerts > 9 {
 			badgeText = "9+"
 		}
+		var sev smart.Severity
+		if len(insights) > 0 {
+			sev = insights[0].Severity
+		}
 		badge = Span(ClassStr("smart-peek-badge "+tw.ColorClass(severityTone(sev))), badgeText)
 		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), alerts)
 	} else {
 		title = uistate.T("smart.peekTools")
 	}
-	return Button(css.Class("smart-peek"), Type("button"),
-		Attr("data-testid", "smart-peek-"+pageKey), Attr("aria-expanded", "false"),
-		Attr("aria-label", aria), Title(aria), OnClick(onOpen),
+	expanded := "false"
+	if open.Get() {
+		expanded = "true"
+	}
+	return Button(css.Class("smart-peek smart-peek-tb"), Type("button"),
+		Attr("data-testid", "smart-peek-"+pageKey), Attr("aria-expanded", expanded),
+		Attr("aria-label", aria), Title(aria+" · "+title), OnClick(toggle),
 		smartGlyph(false, tw.Fold(tw.W35, tw.H35)),
-		Span(css.Class("smart-peek-title"), title),
 		badge,
-		uiw.Icon(icon.ChevronDown, css.Class("smart-peek-chev", tw.W35, tw.H35)),
+		uiw.Icon(icon.ChevronDown, css.Class("smart-peek-chev", tw.W3, tw.H3)),
 	)
 }
 
