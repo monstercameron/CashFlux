@@ -31,7 +31,9 @@ var (
 // SetSmartStripOpen opens or collapses the Smart strip from outside a component
 // render (e.g. the Shell's navigation effect). No-op until a reader has rendered.
 func SetSmartStripOpen(open bool) {
-	if smartStripOpenCaptured {
+	// No-op guard: the Shell calls this on EVERY route change; skipping the
+	// already-collapsed common case avoids a redundant atom write per navigation.
+	if smartStripOpenCaptured && capturedSmartStripOpen.Get() != open {
 		capturedSmartStripOpen.Set(open)
 	}
 }
