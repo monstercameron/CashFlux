@@ -82,8 +82,31 @@ var capturedSkipCollections = map[string]bool{
 	"auditEntries": true,
 }
 
+// derivedKVKeys maps the dataset's scalar KV collections to the keys inside
+// them that mutate as DERIVED, self-healing state rather than user actions:
+// the notification feed auto-resolves alerts whose condition cleared (e.g.
+// right after "Mark all updated" refreshes every stale balance), the engines
+// re-persist their delivery log / detection state, and the health score
+// records a trend point on every recompute. If such a write lands after a
+// user mutation's capture, it becomes the stack's top entry and STEALS the
+// undoable toast's target — clicking Undo silently reverts an invisible blob
+// instead of the user's change (#77). Same rationale as placements above.
+var derivedKVKeys = map[string]map[string]bool{
+	"_meta:appState": {
+		"cashflux:notify:feed":      true,
+		"cashflux:notify:delivered": true,
+		"cashflux:health:trend":     true,
+	},
+	"_meta:settingsState": {
+		"cashflux:smart-settings": true,
+	},
+}
+
 // filterCapturedChanges removes derived-UI-state changes from a change set so
-// only genuine user mutations reach the undo stack and the activity feed.
+// only genuine user mutations reach the undo stack and the activity feed. A
+// change set whose ONLY real content is scalar-KV updates confined to derived
+// keys (or no-op re-serializations) is emptied entirely — absorbed into the
+// baseline, not undoable, not shown.
 func filterCapturedChanges(cs history.ChangeSet) history.ChangeSet {
 	kept := cs.Changes[:0:0]
 	for _, c := range cs.Changes {
@@ -93,7 +116,36 @@ func filterCapturedChanges(cs history.ChangeSet) history.ChangeSet {
 		kept = append(kept, c)
 	}
 	cs.Changes = kept
+	if derivedKVOnly(cs) {
+		cs.Changes = nil
+	}
 	return cs
+}
+
+// derivedKVOnly reports whether every change in cs is an update to a scalar KV
+// collection whose before/after differ only in that collection's derived keys.
+// An update whose diff is EMPTY (a byte-level re-serialization of identical
+// state) counts too — undoing it would visibly do nothing.
+func derivedKVOnly(cs history.ChangeSet) bool {
+	if len(cs.Changes) == 0 {
+		return false
+	}
+	for _, c := range cs.Changes {
+		derived, kvColl := derivedKVKeys[c.Collection]
+		if !kvColl || c.Op != history.OpUpdate {
+			return false
+		}
+		keys, ok := history.ScalarMapDiffKeys(c.Before, c.After)
+		if !ok {
+			return false
+		}
+		for _, k := range keys {
+			if !derived[k] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // undoLastChange pops the most recent change from the stack, applies its
