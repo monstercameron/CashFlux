@@ -93,7 +93,8 @@ await page.waitForTimeout(700);
 // first upload: unique rows import directly (file path sanity)
 const [fc1] = await Promise.all([page.waitForEvent("filechooser"), page.locator('[data-testid="csv-file-picker"]').click()]);
 await fc1.setFiles(csv1);
-await page.waitForTimeout(1500);
+await page.locator('[data-testid="csv-import-msg"]').waitFor({ timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(400);
 let msg = (await page.locator('[data-testid="csv-import-msg"]').count()) ? await page.locator('[data-testid="csv-import-msg"]').innerText() : "(none)";
 check("H2 setup: clean file import succeeded", /imported/i.test(msg), msg);
 
@@ -164,6 +165,26 @@ await page.waitForTimeout(600);
 const sw = page.locator('[data-testid="member-switcher"]');
 const swOpts = await sw.locator("option").allInnerTexts();
 check("M1: topbar view-as lens lists the new member", swOpts.some((o) => o.includes("QA Probe Viewer")), JSON.stringify(swOpts));
+
+// ───────────────────────── CF-04: per-item notification read state ─────────────────────────
+await nav("/notifications");
+const unreadRows = page.locator(".notif.is-unread");
+const unread0 = await unreadRows.count();
+check("CF-04 setup: inbox has unread items", unread0 > 1, `${unread0} unread rows`);
+// open ONE linked unread notification (its main region routes to the resource)
+const linked = page.locator(".notif.is-unread .notif-main.is-linked").first();
+if (await linked.count()) {
+  await linked.click();
+  await page.waitForTimeout(1200);
+  // we navigated away; come back
+  await nav("/notifications");
+  await page.waitForTimeout(600);
+  const unread1 = await page.locator(".notif.is-unread").count();
+  check("CF-04: exactly one notification became read", unread1 === unread0 - 1, `${unread0} → ${unread1}`);
+  check("CF-04: inbox did not flip to all-read", unread1 > 0, `${unread1} still unread`);
+} else {
+  check("CF-04: found a linked unread notification to open", false);
+}
 
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);

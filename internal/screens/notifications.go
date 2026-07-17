@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -64,7 +63,7 @@ type notifGroupRowProps struct {
 	Severity     string
 	Summary      string
 	Count        int
-	Children      []ui.Node
+	Children     []ui.Node
 	OnDismissAll func()
 }
 
@@ -127,9 +126,8 @@ func notifGroupRow(props notifGroupRowProps) ui.Node {
 	)
 }
 
-// notifyLastSeenKey is the SQLite-backed KV key that persists the unix-second
-// timestamp of the last time the user viewed the Notification Center (C271).
-const notifyLastSeenKey = "cashflux:notify:lastSeen"
+// The last-seen stamp moved to uistate (UseNotifyLastSeen and friends) so the
+// shell's bell badge can share it — see QA CF-04.
 
 // UseNotifyView is the shared Live/History view selector for the Notifications
 // surface ("live" = the current feed, the default; "history" = the persisted
@@ -261,23 +259,10 @@ func relativeTime(at, now int64) string {
 	}
 }
 
-// loadLastSeen reads the persisted last-seen timestamp from the SQLite-backed KV store
-// (C271). Returns 0 when absent/unparseable (treat as first open — suppress the banner).
-func loadLastSeen() int64 {
-	raw := uistate.KVGet(notifyLastSeenKey)
-	if raw == "" {
-		return 0
-	}
-	v, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return v
-}
-
-// saveLastSeen persists the current unix-second timestamp as the last time the user
-// viewed the Notification Center (C271).
-func saveLastSeen(ts int64) { uistate.KVSet(notifyLastSeenKey, strconv.FormatInt(ts, 10)) }
+// loadLastSeen / saveLastSeen delegate to the uistate-owned stamp (C271, moved
+// for QA CF-04 so the shell bell shares it).
+func loadLastSeen() int64   { return uistate.LoadNotifyLastSeen() }
+func saveLastSeen(ts int64) { uistate.SetNotifyLastSeen(ts) }
 
 // notifyRowProps are the props for one notification card. Callbacks are plain funcs
 // closed over the item ID in the parent; the row wraps them in its OWN On* hooks (at a
@@ -335,6 +320,9 @@ func notifyRow(props notifyRowProps) ui.Node {
 		if route == "" {
 			return
 		}
+		// Opening a notification resolves it — mark THIS one read (and only this
+		// one; the page no longer bulk-marks the inbox on open, QA CF-04).
+		uistate.MarkFeedItemRead(it.ID, true)
 		switch tgt := notify.ParseTarget(it.ID); tgt.Kind {
 		case notify.TargetTxn:
 			if label := notifyTxnSearchLabel(tgt.ID); label != "" {

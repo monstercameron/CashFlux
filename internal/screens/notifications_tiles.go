@@ -54,15 +54,13 @@ func notifSummaryWidget(props notifProps) ui.Node {
 	unread := uistate.UnreadNotifyCount(visible)
 	crit, warn, info := notifSeverityCounts(visible)
 
-	// Mark everything read on open + record last-seen for the next visit. Read the LIVE
-	// feed inside the effect (not the render-time closure) — the effect fires a tick after
-	// mount, and using a stale snapshot would clobber a snooze/dismiss the user managed to
-	// click in that window (their action would be overwritten by the old feed).
+	// Record last-seen for the next visit (feeds the bell badge and the catch-up
+	// line). Opening the center no longer bulk-marks the inbox read — QA CF-04:
+	// following ONE notification flipped all 16 to read and destroyed the unread
+	// triage state. Read state now changes per item (open/mark-read) only; the
+	// bell badge calms via this stamp instead.
 	ui.UseEffect(func() func() {
 		saveLastSeen(now)
-		// Mark read off the LIVE persisted feed (not the render snapshot) so this can't
-		// overwrite a snooze/dismiss the user clicked before the effect fired.
-		uistate.MarkAllNotifyRead()
 		return nil
 	}, "notif-open-once")
 

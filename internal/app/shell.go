@@ -1058,22 +1058,31 @@ func OfflineIndicator() uic.Node {
 	)
 }
 
-// NotifyBell is the top-bar bell that opens the Notification Center, with a count
-// badge for unread items. The persisted feed drives the badge; clicking routes to
-// /notifications (which marks everything read).
+// NotifyBell is the top-bar bell that opens the Notification Center, badged with
+// how many visible items arrived since the center was last VIEWED (QA CF-04:
+// the badge used to count unread and the center bulk-marked everything read on
+// open to calm it — which destroyed per-item triage state; the last-seen stamp
+// calms the bell without touching read flags).
 func NotifyBell() uic.Node {
 	feed := uistate.UseNotifyFeed().Get()
-	// C159: count unread over the VISIBLE feed (snoozed items are hidden in the
+	lastSeen := uistate.UseNotifyLastSeen().Get()
+	// C159: count over the VISIBLE feed (snoozed items are hidden in the
 	// Notification Center), so the badge matches what the user actually sees when
 	// they open it — previously a snoozed-but-unread item inflated the badge.
-	unread := uistate.UnreadNotifyCount(uistate.VisibleFeed(feed, time.Now().Unix()))
+	visible := uistate.VisibleFeed(feed, time.Now().Unix())
+	fresh := len(uistate.NewSinceLastSeen(visible, lastSeen))
+	if lastSeen == 0 {
+		// First-ever open: everything is "new"; fall back to unread so a fresh
+		// install still advertises the seeded feed sensibly.
+		fresh = uistate.UnreadNotifyCount(visible)
+	}
 	nav := router.UseNavigate()
 	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/notifications")) })
 	badge := Fragment()
-	if unread > 0 {
-		label := fmt.Sprintf("%d", unread)
-		if unread > 9 {
-			label = "9+"
+	if fresh > 0 {
+		label := fmt.Sprintf("%d", fresh)
+		if fresh > 99 {
+			label = "99+" // exact counts up to two digits (QA CF-04 flagged "9+" vs the page's 16)
 		}
 		badge = Span(css.Class("notify-badge"), label)
 	}

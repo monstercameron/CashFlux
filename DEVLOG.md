@@ -1,3 +1,20 @@
+## 2026-07-17 — QA remediation: notification read state becomes per-item (CF-04)
+
+The Notification Center's mark-all-read-on-open effect was a deliberate design (calm the bell by
+declaring everything seen), but the audit's framing is right: read/unread IS triage state, and a
+page-open side effect that flips 16 flags destroys it. The two jobs were conflated — "calm the
+badge" and "track what I've handled" need different state. Split them: the bell badge now counts
+items NEW since the last visit (the C271 last-seen stamp, promoted from a screens-local KV helper
+to an atom-mirrored uistate value so the badge re-renders the moment the center stamps a visit),
+and read flags change only per item — opening a notification marks that one read, mark-read/unread
+buttons unchanged. Badge shows exact counts to 99 now (the audit caught "9+" beside the page's
+16). First-ever-open falls back to unread count so a fresh install still advertises its seeded
+feed. E2E: open one of 8 unread → exactly 7 remain unread.
+
+Shared-tree note: a concurrent session is running the visual-audit remediation and its smart-strip
+work is entangled with shell.go — the NotifyBell hunk was staged surgically (git apply --cached)
+so this commit carries only the badge change; their WIP hunks stay in the working tree untouched.
+
 ## 2026-07-17 — QA remediation: the "stuck" review inbox and the stale member roster
 
 CF-02 ("review inbox cannot advance") resisted the obvious theories. Live-driving the deployed
