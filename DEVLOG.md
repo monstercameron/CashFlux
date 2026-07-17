@@ -43,6 +43,23 @@ resolve), and >6 budgets now seed the compact list when no density was ever chos
 persisted choice always wins. 11 new e2e assertions green on the lane server, 0 page errors;
 follow-ups-collapse asserted structurally (sample data has no budget-linked to-dos to click).
 
+## 2026-07-17 — #44: the Focus select that forgot, and the layout that un-applied itself (lane 2)
+
+The QA read was "the select doesn't reflect the current state" — true, but shallow. Driving it
+e2e exposed a chain: the `ui.UseState("")` seed meant the select ALWAYS booted on the placeholder;
+fixing that with a persisted preset key (`uistate/dashpreset.go`, kv-backed like the layout)
+revealed the pick didn't survive reload at all — `kvSet` writes the appstate snapshot in memory
+and nothing flushed it (the known RequestPersist landmine, hit again). And fixing THAT revealed
+the deepest layer: the reloaded select said "Daily check-in" while the grid rendered all 19
+widgets. `loadItems` runs `dashlayout.Reconcile` on every boot, whose contract — "append widgets
+missing from the saved set, they must be new in this build" — is exactly wrong for a preset,
+which is a DELIBERATE subset. Reload → 6 saved items reconciled back to 19 → curated view gone,
+select still claiming it. The fix scopes reconciliation: skipped while a non-default preset is
+the saved view (the curated set is authoritative), kept for "default" (the full set SHOULD gain
+new-build widgets) and for preset-less hand-arranged layouts (the migration case it was built
+for). Three-layer verify in lane2_verify.mjs: immediate label, post-reload label, post-reload
+row count.
+
 ## 2026-07-17 — #43: the quote that could never speak (lane 2)
 
 "Dashboard quotes not working" turned out to be a compound failure with a nasty amplifier. Root

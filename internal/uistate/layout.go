@@ -47,6 +47,15 @@ func loadItems() []dashlayout.Item {
 	if err := json.Unmarshal([]byte(raw), &items); err != nil || len(items) == 0 || items[0].ID == "" {
 		return dashlayout.DefaultLayoutItems()
 	}
+	// A focus preset is a deliberate SUBSET of widgets. Reconcile would treat
+	// every widget the preset omits as "newly introduced" and append it back,
+	// silently reverting the curated view on the next load while the Focus
+	// select still claims it's active (QA #44/#45). While a preset is the saved
+	// view, the items are authoritative as-is.
+	// "default" is exempt: it's the full set, and reconciling keeps it current.
+	if k := LoadDashPreset(); k != "" && k != "default" {
+		return items
+	}
 	// Reconcile against the current widget set so a layout saved by an older build
 	// gains newly-introduced widgets (e.g. "attention") and sheds retired ones,
 	// while keeping the user's order and sizes.

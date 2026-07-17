@@ -22,10 +22,14 @@ import (
 func dashPresetPicker(props struct{}) ui.Node {
 	layoutAtom := uistate.UseLayoutItems()
 	modeAtom := uistate.UseLayoutMode()
-	sel := ui.UseState("")
+	// Seeded from persistence (QA task #44): the applied layout already survived
+	// reloads, but this select fell back to "Choose a view…" — a control lying
+	// about the state it controls. It now reads the active view's name.
+	sel := ui.UseState(uistate.LoadDashPreset())
 	onPick := ui.UseEvent(func(e ui.Event) {
 		key := e.GetValue()
 		sel.Set(key)
+		uistate.PersistDashPreset(key)
 		var items []dashlayout.Item
 		if key == "default" {
 			items = dashlayout.DefaultLayoutItems()
@@ -38,6 +42,9 @@ func dashPresetPicker(props struct{}) ui.Node {
 		uistate.PersistItems(items)
 		modeAtom.Set(dashlayout.ModeCustom)
 		uistate.PersistLayoutMode(dashlayout.ModeCustom)
+		// kvSet only stages in the appstate snapshot; without an explicit flush
+		// the preset pick AND the applied layout evaporate on reload (QA #44).
+		uistate.RequestPersist()
 		uistate.PostNotice(uistate.T("dashboard.presetApplied", uistate.T(dashPresetLabelKey(key))), false)
 	})
 
