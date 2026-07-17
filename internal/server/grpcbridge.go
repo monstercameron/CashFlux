@@ -13,6 +13,7 @@ import (
 
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
@@ -23,6 +24,14 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
 		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		// Permit the client's ~40s keepalive PINGs (syncbridge clientKeepaliveInterval)
+		// during an active watch stream so a half-open connection is detected
+		// client-side, without earning a GOAWAY. MinTime is set below that interval;
+		// pings without an active stream are still not permitted.
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             20 * time.Second,
+			PermitWithoutStream: false,
+		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
 	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))

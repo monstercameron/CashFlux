@@ -38,6 +38,8 @@ Two auth modes share one binary:
 
 **Transport.** CORS is deny-by-default: only the configured `AppOrigin` (an https origin, or an http loopback for dev) is allowed; credentials are permitted only for that origin. Security headers (HSTS, `nosniff`, COOP/COEP, `frame-ancestors 'none'`) are set on every response. The gRPC websocket bridge enforces the same origin check.
 
+**Sync stream liveness.** The workspace watch is a long-lived server stream over the websocket bridge, kept alive on three layers so a dead peer is always reclaimed and a live one is never dropped: (1) the server pings idle tunnels every `CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL` (default 30s) and closes any that fail to pong within `CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT` (default 90s) — the invariant `0 < keepalive < idle` is enforced at startup; (2) the browser client runs gRPC-level keepalive (~40s, only while a stream is open) so a half-open connection is detected client-side and the read unblocks, with the server's ping-enforcement floor set below that interval so it never earns a GOAWAY; (3) the client reconnect loop uses capped exponential backoff+jitter that resets only on a proven-healthy stream, re-reads prefs each attempt (so a runtime backend toggle / server change takes effect without a reload), and reconciles by pulling the active workspace after every re-subscribe — because the push stream is best-effort (the server drops on a full send buffer) and replays no history.
+
 ## Production Data Access Logging Policy
 
 Production operators must not read customer sync snapshots, blob contents, or decrypted AI-key material during

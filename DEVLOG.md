@@ -1265,6 +1265,17 @@ pure `syncstate.ShouldResetBackoff(received, connectedFor, healthyAfter=30s)` so
 message-delivering or long-lived stream resets it. Extracted the decision to the native-testable
 syncstate package rather than burying it in the wasm-only app loop.
 
+Phase 1d: client keepalive + docs. The half-open case (peer gone, local stack hasn't noticed) was
+the one gap the app-level reconnect couldn't cover — RecvMsg just blocks, so the loop never runs.
+Added grpc.WithKeepaliveParams (~40s, PermitWithoutStream:false) to syncbridge so gRPC PINGs the
+server during the stream and closes the transport on no-ack, unblocking RecvMsg. Since the tunnel
+carries real HTTP/2, the PINGs traverse it. Paired it with a server KeepaliveEnforcementPolicy
+(MinTime 20s) so the 40s client ping can't earn a GOAWAY. Documented the three-layer liveness model
+(server websocket ping/idle · client gRPC keepalive · app reconnect+reconcile) and surfaced the
+previously-undocumented KEEPALIVE_INTERVAL/IDLE_TIMEOUT env vars. That closes Phase 1 — the sync
+watch now: reconciles on reconnect, backs off on health not establishment, restarts on runtime pref
+changes, and detects half-open connections client-side.
+
 Phase 1c: the watch was fire-once-at-boot with `context.Background()` and prefs captured once, so
 runtime toggle/URL/sign-in changes were dead until reload. Made it a cancelable, restartable loop
 behind a watchMu + watchCancel: `startBackendWatch` cancels any prior loop and starts a fresh one

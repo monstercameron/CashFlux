@@ -8,13 +8,28 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
 const defaultGRPCPath = "/grpc"
+
+// Client-side keepalive: without it a half-open connection (the peer is gone but
+// the local TCP/websocket stack hasn't noticed) leaves a streaming RecvMsg blocked
+// indefinitely — the app-level reconnect loop can't kick in because the read never
+// returns. With it, gRPC PINGs the server during an active stream; if no ack
+// arrives within the timeout the transport is closed, RecvMsg errors, and the
+// watch loop reconnects. The interval is comfortably above the server's ping-
+// enforcement floor (see grpcbridge KeepaliveEnforcementPolicy) so it never earns
+// a GOAWAY.
+const (
+	clientKeepaliveInterval = 40 * time.Second
+	clientKeepaliveTimeout  = 20 * time.Second
+)
 
 // Config carries the backend endpoint and bearer token saved in local prefs.
 type Config struct {
@@ -67,6 +82,11 @@ func TunnelConfig(cfg Config, extra ...grpc.DialOption) (grpctunnel.TunnelConfig
 	opts = append(opts,
 		grpc.WithUnaryInterceptor(UnaryBearerInterceptor(token)),
 		grpc.WithStreamInterceptor(StreamBearerInterceptor(token)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                clientKeepaliveInterval,
+			Timeout:             clientKeepaliveTimeout,
+			PermitWithoutStream: false, // only ping while the watch stream is open
+		}),
 	)
 	return grpctunnel.TunnelConfig{Target: target, GRPCOptions: opts}, nil
 }
