@@ -1,3 +1,21 @@
+## 2026-07-17 — #72: the second dialog title was hiding on the back of the card (lane 6)
+
+Verification ticket that turned up a real residue. The L3 fix already aria-hidden'd the flip
+modal's decorative front face, and a live audit of Add goal / Add budget / Add task shows one
+VISUALLY visible title each — but the front face's H3 still counts as "visible" to Playwright and
+similar AT heuristics, because backface-visibility only removes it from paint, not from layout/
+hit-testing. That's exactly the kind of ambiguity the audit tripped on. Fix: after the 550ms flip
+completes, the front face goes visibility:hidden via a transition-delayed rule (the animation is
+untouched — the delay IS the animation duration; reduced-motion drops the delay). Also upgraded
+the dialog's naming from aria-label (a parallel copy of the title) to aria-labelledby pointing at
+the back-face H3 (id = slug of the title), so the accessible name is definitionally the visible
+one. e2e asserts exactly-one visible title + the labelledby wiring for all three add forms.
+
+Sibling-lane note: a concurrent #76 commit swept my registerLane6Fixes() install line before this
+commit landed rules_lane6.go — the tree only compiled again once this commit followed. The
+until-loop build pattern absorbed it, but it's a reminder that path-scoped staging protects hunks,
+not cross-file compile invariants.
+
 ## 2026-07-17 — #64: month-close becomes a walk, not a scavenger hunt (lane 5)
 
 The strategy doc's ask was composition, not invention: cover-all, rollover, boosts, and sweep all

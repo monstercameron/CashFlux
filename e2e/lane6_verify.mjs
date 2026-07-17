@@ -136,6 +136,34 @@ if (suggestM) {
 }
 await c74.close();
 
+// ───────────── #72: one visible dialog title, aria-labelledby wired ─────────────
+const c72 = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" });
+const p72 = await c72.newPage();
+await p72.goto(BASE + "/", { waitUntil: "load" });
+await p72.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", { timeout: 90000 });
+await p72.waitForTimeout(1500);
+for (const [menuLabel, dlgTitle] of [["New goal", "Add goal"], ["New budget", "Add budget"], ["New task", "Add task"]]) {
+  await p72.locator('[data-testid="add-menu-caret"]').click();
+  await p72.waitForTimeout(400);
+  await p72.locator(".add-menu:not(.hidden-menu) button", { hasText: menuLabel }).first().click();
+  await p72.waitForTimeout(1100);
+  // Exactly ONE visible heading equal to the dialog title (the front-face copy is aria-hidden).
+  let matches = 0;
+  for (const h of await p72.locator(".flip-wrap h1, .flip-wrap h2, .flip-wrap h3, .flip-wrap h4").all()) {
+    if ((await h.isVisible()) && (await h.innerText()).trim() === dlgTitle) matches++;
+  }
+  check(`#72: '${dlgTitle}' shows its title exactly once`, matches === 1, `${matches}`);
+  const labelled = await p72.locator('.flip-wrap[role="dialog"]').first().evaluate((el) => {
+    const id = el.getAttribute("aria-labelledby");
+    const t = id && document.getElementById(id);
+    return t ? t.textContent.trim() : null;
+  });
+  check(`#72: '${dlgTitle}' dialog is aria-labelledby its visible title`, labelled === dlgTitle, String(labelled));
+  await p72.locator(".set-close").last().click().catch(() => {});
+  await p72.waitForTimeout(600);
+}
+await c72.close();
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

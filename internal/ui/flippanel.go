@@ -5,6 +5,7 @@
 package ui
 
 import (
+	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -320,9 +321,14 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		)
 	}
 
+	// UX-08: the dialog is labelled BY its one visible back-face H3
+	// (aria-labelledby) instead of a parallel aria-label, so the accessible name
+	// and the visible title can never drift apart. The id is derived from the
+	// title (only one flip modal is ever open at a time).
+	titleID := "flip-title-" + slugifyTitle(props.Title)
 	return Div(ClassStr(backdropCls),
 		Div(css.Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
-			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-label", props.Title),
+			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-labelledby", titleID),
 			Div(ClassStr(innerCls),
 				// Front face — a neutral card briefly seen during the flip. It is
 				// DECORATIVE: without aria-hidden its H3 title sat in the
@@ -335,7 +341,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 				Div(css.Class("flip-face flip-back"),
 					Div(css.Class("set-h"),
 						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
-						H3(props.Title),
+						H3(Attr("id", titleID), props.Title),
 						// GM4-17: tabindex="-1" removes the close button from the Tab order so
 						// initial focus lands on the first form control (a setting), not the ×
 						// button. The button remains fully mouse/click accessible.
@@ -354,4 +360,19 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			),
 		),
 	)
+}
+
+// slugifyTitle lower-cases a dialog title and keeps [a-z0-9-] so it can serve
+// as the back-face H3's element id for aria-labelledby.
+func slugifyTitle(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-':
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
