@@ -184,6 +184,130 @@ func registerR4Surface() {
 		background("color-mix(in srgb, #f59e0b 20%, transparent)"),
 	)
 
+	// "Recent wins" celebration card — the ONE place the app spends boldness. The
+	// Notification Center is otherwise all warnings; this warm, accent-tinted card
+	// leads with what's going right, and a newly-reached win triggers a one-shot
+	// confetti burst. Everything else in the app stays calm, so this moment lands.
+	rule(".wins-card",
+		prop("grid-column", "1 / -1"), // span the full notifications surface width
+		position("relative"),
+		overflow("hidden"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.75rem"),
+		padding("1.05rem 1.15rem"),
+		marginBottom("0.9rem"),
+		borderRadius("16px"),
+		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
+		background("linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--bg-card)) 0%, var(--bg-card) 60%)"),
+	)
+	// A fresh win rises the card in gently on mount, once.
+	rule(".wins-card-fresh",
+		animation("wins-rise .5s cubic-bezier(.16,1,.3,1)"),
+	)
+	keyframes("wins-rise",
+		at("0%", opacity("0"), transform("translateY(10px) scale(.99)")),
+		at("100%", opacity("1"), transform("translateY(0) scale(1)")),
+	)
+
+	rule(".wins-head",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+	)
+	rule(".wins-head-icon",
+		width("1.35rem"),
+		height("1.35rem"),
+		color("var(--accent)"),
+		flex("none"),
+	)
+	rule(".wins-title",
+		fontWeight("700"),
+		fontSize("1rem"),
+		color("var(--text)"),
+	)
+	rule(".wins-sub",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".wins-list",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.55rem"),
+	)
+	rule(".wins-row",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.6rem"),
+	)
+	rule(".wins-row-icon",
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		width("1.75rem"),
+		height("1.75rem"),
+		flex("none"),
+		borderRadius("999px"),
+		color("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
+	)
+	rule(".wins-icon-svg",
+		width("1rem"),
+		height("1rem"),
+	)
+	rule(".wins-row-title",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		fontWeight("600"),
+		fontSize("0.9rem"),
+		color("var(--text)"),
+	)
+	rule(".wins-row-msg",
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+		marginTop("0.05rem"),
+	)
+	rule(".wins-new",
+		fontSize("0.6rem"),
+		fontWeight("700"),
+		textTransform("uppercase"),
+		letterSpacing("0.06em"),
+		color("var(--accent)"),
+		border("1px solid color-mix(in srgb, var(--accent) 50%, var(--border))"),
+		borderRadius("999px"),
+		padding("0.02rem 0.35rem"),
+	)
+
+	// Confetti burst: a handful of small pieces (positions/delays/hues set inline)
+	// falling once across the card. pointer-events off so it never blocks a click.
+	rule(".wins-confetti",
+		position("absolute"),
+		prop("inset", "0"),
+		prop("pointer-events", "none"),
+		overflow("hidden"),
+	)
+	rule(".wins-confetti-piece",
+		position("absolute"),
+		top("-8px"),
+		width("7px"),
+		height("7px"),
+		opacity("0"),
+		animation("wins-confetti-fall 1.35s ease-in forwards"),
+	)
+	keyframes("wins-confetti-fall",
+		at("0%", opacity("1"), transform("translateY(-8px) rotate(0deg)")),
+		at("100%", opacity("0"), transform("translateY(150px) rotate(360deg)")),
+	)
+	// Reduced motion: no rise, no confetti — the card still leads with the wins,
+	// just without animation.
+	ruleMedia("(prefers-reduced-motion:reduce)", ".wins-card-fresh",
+		animation("none"),
+	)
+	ruleMedia("(prefers-reduced-motion:reduce)", ".wins-confetti",
+		display("none"),
+	)
+
 	// The "?" smart-tooltip renders through IconButton, which prepends the full `.btn`
 	// base — giving it a ~41px bordered square next to a ~14px caps label on the hero /
 	// budgets / goals stat labels (only the `.stat-label` scope shrank it, so Accounts was

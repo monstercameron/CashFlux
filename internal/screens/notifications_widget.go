@@ -48,6 +48,7 @@ func NotificationCenter() ui.Node {
 
 	specs := []domain.WidgetSpec{
 		notifNativeSpec("notif-summary"),
+		notifNativeSpec("notif-wins"),
 		notifNativeSpec("notif-list"),
 	}
 
@@ -74,6 +75,9 @@ func init() {
 	R := widgetrender.Register
 	R("notif-summary", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(notifSummaryWidget, notifProps{App: c.App})
+	})
+	R("notif-wins", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(notifWinsWidget, notifProps{App: c.App})
 	})
 	R("notif-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(notifListWidget, notifProps{App: c.App})

@@ -111,6 +111,17 @@ test.describe("gap features", () => {
     }
   });
 
+  test("milestone celebrations: the Notification Center leads with a 'Recent wins' card", async ({ app }) => {
+    // The warning-heavy feed gets a positive counterweight: the seeded household has
+    // real net worth and kept budgets last month, so at least one win is celebrated.
+    await nav(app, "/notifications");
+    const wins = app.getByTestId("wins-card");
+    await expect(wins).toBeVisible({ timeout: 15_000 });
+    await expect(wins).toContainText(/recent wins/i);
+    // At least one milestone row is present.
+    await expect(app.locator('[data-testid^="wins-row-"]').first()).toBeVisible();
+  });
+
   test("bill → budget-fit chip: an upcoming bill shows whether it fits its budget", async ({ app }) => {
     // The seeded "Streaming & apps" recurring ($38) maps to the Subscriptions budget
     // ($40), and car payments map to Transportation — so at least one bill row shows a

@@ -21,6 +21,19 @@ var connectKeys = Catalog{
 	"bills.budgetFits":    "Fits %s · %s left",
 	"bills.budgetOver":    "%s over %s",
 	"bills.budgetFitAria": "Open the %s budget",
+
+	// Milestone celebrations: the positive counterweight to the warning feed.
+	"wins.title":         "Recent wins",
+	"wins.subtitle":      "A quick note on what's going right.",
+	"wins.newBadge":      "New",
+	"wins.goalTitle":     "Goal reached: %s",
+	"wins.goalMsg":       "You fully funded %s. Time to pick the next one.",
+	"wins.netWorthTitle": "Net worth past %s",
+	"wins.netWorthMsg":   "Your net worth crossed %s — the slow climb is working.",
+	"wins.noSpendTitle":  "%d days, no spending",
+	"wins.noSpendMsg":    "You've gone %d days without a purchase. Nice restraint.",
+	"wins.keptTitle":     "%d budgets kept last month",
+	"wins.keptMsg":       "You finished last month within %d of your budgets. Keep it up.",
 }
 
 func init() {
