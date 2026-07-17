@@ -339,6 +339,52 @@ func registerGoalsSurface() {
 	rule(".goals-missed-title",
 		color("var(--warn, #d8a24a)"),
 	)
+	// The bar legend: swatches that sample the loader's two fills (solid = saved,
+	// hatched = set aside) with their figures, plus the quiet "money stays put"
+	// reassurance — so the striped band is self-explanatory without a tooltip.
+	rule(".goal-legend",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.3rem 0.9rem"),
+		margin("0.5rem 0 0.1rem"),
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".goal-legend-item",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		fontVariantNumeric("tabular-nums"),
+		fontWeight("500"),
+		color("var(--text)"),
+	)
+	// Swatches are little bar segments (wider than tall) so the earmark hatch has
+	// room to read as a PATTERN at legend scale — a square this size would blur the
+	// stripes into a flat lighter green.
+	rule(".goal-legend-swatch",
+		display("inline-block"),
+		width("20px"),
+		height("11px"),
+		borderRadius("3px"),
+		flexShrink("0"),
+	)
+	rule(".goal-legend-swatch.is-saved",
+		background("var(--accent)"),
+	)
+	// The bar's hatch language, re-tuned for the small size: fewer, harder stripes.
+	rule(".goal-legend-swatch.is-earmark",
+		background("repeating-linear-gradient(-45deg, color-mix(in srgb, var(--accent) 55%, transparent) 0, color-mix(in srgb, var(--accent) 55%, transparent) 3px, color-mix(in srgb, var(--accent) 12%, transparent) 3px, color-mix(in srgb, var(--accent) 12%, transparent) 7px)"),
+		border("1px solid color-mix(in srgb, var(--accent) 45%, transparent)"),
+	)
+	rule(".goal-legend-note",
+		color("var(--text-dim)"),
+	)
+	rule(".goal-legend-note::before",
+		prop("content", "\"—\""),
+		marginRight("0.4rem"),
+	)
+
 	// G8: the one-click quick-fund chip under the card's bar — accent-tinted (it's the
 	// primary planning gesture made instant), compact, self-explaining.
 	rule(".goal-quickfund",
@@ -367,6 +413,18 @@ func registerGoalsSurface() {
 	rule(".goal-quickfund-btn:focus-visible",
 		outline("2px solid var(--accent)"),
 		outlineOffset("2px"),
+	)
+	// The eyebrow inside the chip: a tiny tracked-caps "Suggested" in the accent, so
+	// the chip reads as a proposed action rather than a done deed.
+	rule(".goal-quickfund-eyebrow",
+		fontSize("0.6rem"),
+		letterSpacing("0.09em"),
+		prop("text-transform", "uppercase"),
+		fontWeight("700"),
+		color("var(--accent)"),
+		paddingRight("0.5rem"),
+		marginRight("0.1rem"),
+		borderRight("1px solid color-mix(in srgb, var(--accent) 35%, transparent)"),
 	)
 
 	// Money map: the household reconciliation strip at the top of the Earmarks tab —

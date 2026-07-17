@@ -96,7 +96,7 @@ test.describe("goals: edit form — review cadence + multi-link", () => {
 });
 
 test.describe("goals: virtual allocation", () => {
-  test("Set aside opens straight to the account list; earmarking shows coverage + a status badge", async ({ app }) => {
+  test("Set aside opens straight to the account list; earmarking shows the saved/set-aside legend", async ({ app }) => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
@@ -118,9 +118,9 @@ test.describe("goals: virtual allocation", () => {
     await dialog.getByTestId("goal-alloc-save").click();
     await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
 
-    // The card now shows the earmarked/coverage line AND a "partly/fully earmarked" badge.
-    await expect(app.locator(`[data-testid="goal-earmarked-${fid}"]`)).toContainText(/earmarked/i);
-    await expect(app.locator(`[data-testid="goal-earmark-status-${fid}"]`)).toContainText(/earmarked/i);
+    // The card now shows the saved/set-aside legend under the bar (the old status
+    // badge and "% covered" sentence are gone — the bar + legend carry that state).
+    await expect(app.locator(`[data-testid="goal-earmarked-${fid}"]`)).toContainText(/set aside/i);
   });
 
   test("an amount over the account's free balance blocks the save with a named error", async ({ app }) => {
@@ -252,7 +252,7 @@ test.describe("goals: earmark-first reframe", () => {
     // extends the bar out to coverage, and the coverage line reports the reserved money.
     await earmarkGoal(app, fid, 500);
     await expect(app.locator(`[data-testid="goal-bar-earmark-${fid}"]`)).toBeVisible();
-    await expect(app.locator(`[data-testid="goal-earmarked-${fid}"]`)).toContainText(/earmarked/i);
+    await expect(app.locator(`[data-testid="goal-earmarked-${fid}"]`)).toContainText(/set aside/i);
   });
 
   test("the Earmarks tab opens with a money-map reconciliation (in accounts → earmarked → free)", async ({ app }) => {

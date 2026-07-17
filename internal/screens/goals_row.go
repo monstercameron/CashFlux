@@ -278,18 +278,12 @@ func GoalRow(props goalRowProps) ui.Node {
 		pctFig = Span(css.Class("budget-pct"), fmt.Sprintf("%d%%", coveragePct))
 	}
 
-	// Header chips. Financial: pace badge + monthly-needed + sinking-fund set-aside.
-	// Habit: a streak chip. Others: none.
-	var paceBadgeNode, monthlyChip, fundChip, streakChip ui.Node = Fragment(), Fragment(), Fragment(), Fragment()
+	// Header chips. Financial: pace badge + sinking-fund set-aside. Habit: a streak
+	// chip. Others: none. (The monthly-needed rate lives ONLY in the figures grid —
+	// one fact, one place.)
+	var paceBadgeNode, fundChip, streakChip ui.Node = Fragment(), Fragment(), Fragment()
 	if financial {
 		paceBadgeNode = paceBadge(pace)
-		if !complete && !g.TargetDate.IsZero() {
-			if per, ok, _ := goalsvc.MonthlyNeeded(g, now); ok {
-				monthlyChip = Span(ClassStr("pace-badge pace-rate"),
-					Attr("title", uistate.T("goals.paceNeededTitle")),
-					uistate.T("goals.paceNeeded", fmtMoney(per)))
-			}
-		}
 		if g.IsSinkingFund && props.FundSetAside > 0 {
 			fundAmt := money.New(props.FundSetAside, g.CurrentAmount.Currency)
 			fundChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "fund-setaside-"+g.ID),
@@ -317,30 +311,19 @@ func GoalRow(props goalRowProps) ui.Node {
 		budgetChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-budgets-"+g.ID),
 			uistate.T("goals.linkedBudgetChip", len(g.BudgetIDs)))
 	}
-	// Earmark status badge (financial, not-yet-complete goals only): partly / fully
-	// earmarked. We deliberately show NOTHING when nothing is earmarked — the absence of the
-	// chip already says "not earmarked", so every card isn't cluttered with a dead badge. A
-	// complete goal is funded, so its earmark state is moot and suppressed entirely.
-	var earmarkChip ui.Node = Fragment()
-	if financial && !g.Archived && !complete {
-		switch goalsvc.EarmarkOf(g) {
-		case goalsvc.EarmarkFull:
-			earmarkChip = Span(ClassStr("pace-badge earmark-full"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkFull"))
-		case goalsvc.EarmarkPartial:
-			earmarkChip = Span(ClassStr("pace-badge earmark-partial"), Attr("data-testid", "goal-earmark-status-"+g.ID), uistate.T("goals.earmarkPartial"))
-		}
-	}
-
 	// G8 quick-fund chip (computed at render; the click handler re-derives the same
 	// figures so a stale card can never over-reserve).
 	var quickFundChip ui.Node = Fragment()
 	if financial && !g.Archived && !complete {
 		if app := appstate.Default; app != nil {
 			if _, qName, qAmt := bestQuickEarmark(app, g.ID); qAmt > 0 {
+				// A "Suggested" eyebrow marks this unambiguously as a proposed action —
+				// without it, "Set aside $X from Y" can read as a completed statement.
 				quickFundChip = Div(css.Class("goal-quickfund"),
 					Button(css.Class("goal-quickfund-btn"), Type("button"),
 						Attr("data-testid", "goal-quickfund-"+g.ID),
 						Title(uistate.T("goals.quickFundTitle")), OnClick(quickFund),
+						Span(css.Class("goal-quickfund-eyebrow"), uistate.T("goals.quickFundEyebrow")),
 						uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 						Span(uistate.T("goals.quickFundChip", fmtMoney(money.New(qAmt, g.TargetAmount.Currency)), qName)),
 					))
@@ -350,7 +333,10 @@ func GoalRow(props goalRowProps) ui.Node {
 
 	// Sub-section under the bar. Financial keeps its rich actionable copy (remaining,
 	// deadline, monthly, over-fund, what-next, linked account, fund category). Non-
-	// financial goals get a compact deadline / complete line.
+	// financial goals get a compact deadline / complete line. The earmark legend is
+	// hoisted to card scope because it renders directly under the bar it explains,
+	// not in the meta strip.
+	var earmarkLegend ui.Node = Fragment()
 	var subSection ui.Node
 	if financial {
 		overfund, _ := goalsvc.Overfund(g)
@@ -432,26 +418,34 @@ func GoalRow(props goalRowProps) ui.Node {
 			catLine = Span(css.Class("budget-sub"), Attr("data-testid", "fund-category-"+g.ID),
 				uistate.T("goals.fundLinkedCategory", props.LinkedCategoryName))
 		}
-		// Virtual allocation payoff: how much is earmarked (reserved in place, no txn) and
-		// what committed-plus-earmarked coverage that buys toward the target. Suppressed on a
-		// complete goal (already funded). If the earmark no longer fits the account balance
-		// (spent down since), flag it in a warning tone rather than claiming false coverage.
-		var earmarkLine ui.Node = Fragment()
+		// Virtual allocation payoff: a legend that explains the bar's two fills with the
+		// actual figures — a solid swatch for money saved (moved), a hatched swatch for
+		// money set aside (reserved in place), and the one visible statement that set-aside
+		// money never moves. Suppressed on a complete goal (already funded). If the earmark
+		// no longer fits the account balance (spent down since), flag it in a warning tone
+		// rather than claiming false coverage.
 		if am := g.AllocatedMinor(); am > 0 && !complete {
 			earmarkMoney := fmtMoney(money.New(am, g.TargetAmount.Currency))
 			if props.EarmarkOverbooked {
-				earmarkLine = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
+				earmarkLegend = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
 					uistate.T("goals.earmarkOverbooked", earmarkMoney))
 			} else {
-				earmarkLine = Span(css.Class("budget-sub"), Attr("data-testid", "goal-earmarked-"+g.ID),
-					Style(map[string]string{"color": "var(--up)"}),
-					uistate.T("goals.earmarkedLine", earmarkMoney, plural(len(g.Allocations), "account"), goalsvc.CoveragePercent(g)))
+				savedMoney := fmtMoney(money.New(g.CurrentAmount.Amount, g.TargetAmount.Currency))
+				earmarkLegend = Div(css.Class("goal-legend"), Attr("data-testid", "goal-earmarked-"+g.ID),
+					Span(css.Class("goal-legend-item"),
+						Span(css.Class("goal-legend-swatch is-saved"), Attr("aria-hidden", "true")),
+						uistate.T("goals.legendSaved", savedMoney)),
+					Span(css.Class("goal-legend-item"),
+						Span(css.Class("goal-legend-swatch is-earmark"), Attr("aria-hidden", "true")),
+						uistate.T("goals.legendSetAside", earmarkMoney)),
+					Span(css.Class("goal-legend-note"), uistate.T("goals.legendNote")),
+				)
 			}
 		}
 		subSection = Fragment(
 			figsNode,
 			Div(css.Class("goal-meta"),
-				overfundNote, whatNext, linkedLine, catLine, earmarkLine,
+				overfundNote, whatNext, linkedLine, catLine,
 				goalInterestEtaLine(g, props.Accounts, now),
 			),
 			// The savings-pace rail lives INSIDE the card's metadata block (right below the
@@ -548,12 +542,14 @@ func GoalRow(props goalRowProps) ui.Node {
 		}
 	}
 
-	// Archive / Unarchive live in the ⋯ menu (archive shows on any complete active goal).
+	// Archive / Unarchive as inline tool buttons. A complete FINANCIAL goal already
+	// leads with Archive as its primary action, so the tool-row duplicate is
+	// suppressed there — one action, one entry point.
 	var archiveItem ui.Node = Fragment()
 	if g.Archived {
 		archiveItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-unarchive-"+g.ID), OnClick(doUnarchive), uistate.T("goals.unarchive"))
-	} else if complete {
+	} else if complete && kind != domain.GoalKindFinancial {
 		archiveItem = Button(css.Class("btn btn-tool"), Type("button"),
 			Attr("data-testid", "goal-archive-"+g.ID), OnClick(doArchive), uistate.T("goals.archive"))
 	}
@@ -657,11 +653,9 @@ func GoalRow(props goalRowProps) ui.Node {
 			Span(css.Class("goal-card-title"), g.Name),
 			paceBadgeNode,
 			pausedChip,
-			monthlyChip,
 			fundChip,
 			streakChip,
 			budgetChip,
-			earmarkChip,
 			reviewChip,
 		),
 		// The card's "loader": a progress bar with a kind-appropriate label + percent inside it.
@@ -678,6 +672,9 @@ func GoalRow(props goalRowProps) ui.Node {
 				pctFig,
 			),
 		),
+		// The bar's legend sits directly beneath it: what's saved (solid) vs set
+		// aside (hatched), and the reassurance that reserved money hasn't moved.
+		earmarkLegend,
 		// G8: the one-click funding gesture — "Set aside $X from <account>" earmarks the
 		// remaining gap (capped at the account's free cash) without opening the modal.
 		quickFundChip,
