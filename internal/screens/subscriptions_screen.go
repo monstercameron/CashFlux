@@ -270,7 +270,17 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		subs = live
 	}
 
-	changes, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
+	// QA R3 CF-03: the price-change list used to bypass every classification
+	// filter, so Cigarettes/Gas/Pharmacy "price changes" survived the M5 cleanup.
+	// It now shares the exact rule the active list applies (essential spend,
+	// liability payments, planned recurring flows all excluded).
+	rawChanges, _ := subscriptions.DetectPriceChanges(app.Transactions(), rates, 3)
+	changes := rawChanges[:0:0]
+	for _, pc := range rawChanges {
+		if subscriptions.IsRealSubscriptionName(pc.Name, allTxns, allAccts, catNameOf, recurringNames) {
+			changes = append(changes, pc)
+		}
+	}
 	soon := subscriptions.UpcomingRenewals(subs, 7, time.Now())
 
 	var annual int64
@@ -313,6 +323,33 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 			return
 		}
 		notice.Set(notice.Get().With(uistate.T("subs.reminderAdded", s.Name), false))
+	}
+
+	// guide is the LOCAL "How to cancel" path (QA R3 CF-03: a local-first product
+	// shouldn't lead with a DuckDuckGo hop): it files the guided cancellation
+	// checklist as a due-today task — savings headline, step-by-step checklist,
+	// post-cancellation re-charge check — all on-device. The web search remains
+	// as a small secondary link on the row.
+	guide := func(s subscriptions.Subscription) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		savingsLine := uistate.T("subs.cancelSaveLine", fmtMoney(money.New(s.AnnualAmount(), base)))
+		task := domain.Task{
+			ID:       id.New(),
+			Title:    uistate.T("subs.guideTitle", s.Name),
+			Notes:    subscriptions.ChecklistNotes(savingsLine, subscriptions.CancelChecklist(s.Name)),
+			Status:   domain.StatusOpen,
+			Priority: domain.PriorityMedium,
+			Due:      time.Now(),
+			Source:   domain.SourceNudge,
+		}
+		if err := app.PutTask(task); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		notice.Set(notice.Get().With(uistate.T("subs.guideAdded", s.Name), false))
 	}
 
 	doCancel := func(name string) {
@@ -478,6 +515,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				NeedsReview:    !isCancelled && subscriptions.NeedsReview(s, now),
 				MonthlyTotal:   monthlyTotal,
 				OnRemind:       remind,
+				OnGuide:        guide,
 				OnDrill:        viewCharges,
 				OnCancel:       doCancel,
 				OnUncancel:     doUncancel,
@@ -690,6 +728,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 						NeedsReview:    false, // renewing soon ≠ stale
 						MonthlyTotal:   monthlyTotal,
 						OnRemind:       remind,
+						OnGuide:        guide,
 						OnDrill:        viewCharges,
 						OnCancel:       doCancel,
 						OnUncancel:     doUncancel,
@@ -770,7 +809,8 @@ type subscriptionRowProps struct {
 	NeedsReview    bool   // whether the subscription hasn't been charged in 2+ cadence intervals
 	MonthlyTotal   int64  // sum of all active subscriptions' monthly amounts; drives the per-row share-bar
 	OnRemind       func(subscriptions.Subscription)
-	OnDrill        func(payee string) // open Transactions searched for this subscription's payee
+	OnGuide        func(subscriptions.Subscription) // file the local how-to-cancel checklist (QA R3 CF-03)
+	OnDrill        func(payee string)               // open Transactions searched for this subscription's payee
 	OnCancel       func(name string)
 	OnUncancel     func(name string)
 	OnToggleSelect func(name string) // toggle cancel-candidate selection for this row
@@ -802,6 +842,11 @@ type subscriptionRowProps struct {
 func SubscriptionRow(props subscriptionRowProps) ui.Node {
 	s := props.Sub
 	remind := ui.UseEvent(Prevent(func() { props.OnRemind(s) }))
+	guideEvt := ui.UseEvent(Prevent(func() {
+		if props.OnGuide != nil {
+			props.OnGuide(s)
+		}
+	}))
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
 			props.OnDrill(s.Name)
@@ -893,18 +938,27 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 				OnClick(cancel),
 				uistate.T("subs.cancel"),
 			),
-			// C163: "Cancel" only records the cancellation in CashFlux — it can't cancel
-			// with the provider. Offer real guidance: a link that opens a web search for
-			// this merchant's cancellation steps (local-first — nothing leaves until the
-			// user clicks it). Opens in a new tab.
-			A(
+			// QA R3 CF-03: "How to cancel" now leads with LOCAL guidance — it files
+			// the step-by-step cancellation checklist as a due-today task — and the
+			// external web search demotes to a small secondary link (local-first:
+			// nothing leaves the device unless that link is deliberately clicked).
+			Button(
 				css.Class("btn btn-sm"),
+				Type("button"),
+				Attr("data-testid", "sub-howto-cancel-"+slug),
+				Title(uistate.T("subs.guideBtnTitle")),
+				Attr("aria-label", uistate.T("subs.guideBtnTitle")+" "+s.Name),
+				OnClick(guideEvt),
+				uistate.T("subs.howToCancel"),
+			),
+			A(
+				css.Class("btn-link", tw.Text12),
 				Attr("href", "https://duckduckgo.com/?q="+url.QueryEscape("how to cancel "+s.Name+" subscription")),
 				Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
-				Attr("data-testid", "sub-howto-cancel-"+slug),
+				Attr("data-testid", "sub-cancel-web-"+slug),
 				Title(uistate.T("subs.howToCancelTitle")),
 				Attr("aria-label", uistate.T("subs.howToCancelTitle")+" "+s.Name),
-				uistate.T("subs.howToCancel"),
+				uistate.T("subs.webSearch"),
 			),
 			If(props.OnIgnore != nil, Button(
 				css.Class("btn btn-sm"),

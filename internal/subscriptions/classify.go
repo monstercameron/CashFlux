@@ -105,6 +105,32 @@ func containsLenderPhrase(s string) bool {
 	return false
 }
 
+// IsRealSubscriptionName reports whether a detected recurring-charge NAME may be
+// presented as a cancellable subscription: not a planned recurring flow the
+// user already models, not a liability payment, and not essential everyday
+// spending. It builds a name-only probe so callers that hold just a display
+// name — the price-change list, renewals, the annual report's subscription
+// section — share exactly the rule the active subscriptions list applies
+// (QA R3 CF-03: Cigarettes/Gas/Pharmacy price changes and a "$27k/yr recurring"
+// headline survived the active-list filter because each surface re-derived
+// membership its own way).
+//
+// plannedRecurring is a lower-cased set of the household's recurring labels
+// (nil = none); catNameOf resolves a category ID to its display name (nil ok).
+func IsRealSubscriptionName(name string, txns []domain.Transaction, accounts []domain.Account, catNameOf func(string) string, plannedRecurring map[string]bool) bool {
+	if plannedRecurring != nil && plannedRecurring[strings.ToLower(strings.TrimSpace(name))] {
+		return false
+	}
+	probe := Subscription{Name: name}
+	if IsLiabilityPayment(probe, txns, accounts) {
+		return false
+	}
+	if IsEssentialSpend(probe, txns, catNameOf) {
+		return false
+	}
+	return true
+}
+
 // essentialPhrases marks recurring EVERYDAY SPENDING that is not a cancellable
 // subscription: utilities, fuel, groceries, pharmacy/tobacco runs, rent,
 // insurance, taxes. Offering "How to cancel" for Electricity or Pharmacy (QA

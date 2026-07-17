@@ -322,3 +322,36 @@ func TestIsEssentialSpend(t *testing.T) {
 		})
 	}
 }
+
+// TestIsRealSubscriptionName locks the QA R3 CF-03 shared rule: price changes,
+// renewals, and the annual report must classify a NAME exactly like the active
+// subscriptions list — essentials, liability payments, and planned recurring
+// flows are never presented as cancellable subscriptions.
+func TestIsRealSubscriptionName(t *testing.T) {
+	catNameOf := func(id string) string {
+		return map[string]string{"cat-util": "Utilities"}[id]
+	}
+	planned := map[string]bool{"hoa dues": true}
+	utilTxn := txnWithAccount("City Power", "acct-chk", 9000)
+	utilTxn.CategoryID = "cat-util"
+
+	cases := []struct {
+		name string
+		txns []domain.Transaction
+		want bool
+	}{
+		{"Netflix", nil, true},
+		{"Cigarettes", nil, false},
+		{"Gas (Priya's car)", nil, false},
+		{"Pharmacy", nil, false},
+		{"HOA Dues", nil, false}, // planned recurring flow
+		{"Chase Card Payment", nil, false},
+		{"City Power", []domain.Transaction{utilTxn}, false}, // essential via category
+		{"Planet Fitness", nil, true},
+	}
+	for _, tc := range cases {
+		if got := IsRealSubscriptionName(tc.name, tc.txns, nil, catNameOf, planned); got != tc.want {
+			t.Errorf("IsRealSubscriptionName(%q) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

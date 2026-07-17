@@ -1,3 +1,22 @@
+## 2026-07-17 — R3 CF-03: one subscription rule for every surface (lane 6)
+
+Round-3 QA caught the M5 essentials filter being only skin-deep: the ACTIVE subscriptions list was
+clean, but "Recent price changes" still surfaced Cigarettes/Gas/Pharmacy hikes and the annual
+report still shouted "25 recurring charges, ~$27k/yr" — because each surface re-derived what counts
+as a subscription its own way. The fix is structural, not another inline filter: a shared name-only
+probe rule in the pure package, `subscriptions.IsRealSubscriptionName(name, txns, accounts,
+catNameOf, plannedRecurring)`, composing the three existing negatives (planned-recurring label,
+`IsLiabilityPayment`, `IsEssentialSpend`). The subscriptions screen's price-change list, the annual
+report's subscription section (both the live-subs list and the price-rise callout), and — by
+derivation — renewing-soon all go through it now; the annual count dropped 25 → 5 on sample data.
+
+Also in this pass, "How to cancel" goes local-first (the QA note: a DuckDuckGo link as the primary
+cancel affordance reads as a shrug). The primary button now files the existing cancelhelp
+step-by-step checklist as a due-today to-do (reusing `CancelChecklist`/`ChecklistNotes` and the
+remind() task plumbing) with the web search demoted to a small secondary link. The old
+`sub-howto-cancel-*` testid stays on the new button so the M5 e2e contract holds. 8-case table test
+on the classifier; 5 e2e assertions green on the lane server, 0 page errors.
+
 ## 2026-07-17 — R3 CF-02: the reconcile dead-end gets its exits (lane 4)
 
 Round-3 QA's sharpest finding: type a statement balance that doesn't match and the reconcile modal
