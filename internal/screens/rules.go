@@ -429,7 +429,7 @@ func Rules() ui.Node {
 				// match-count preview + validation) the modal uses.
 				Div(css.Class(tw.Mb2),
 					H3(css.Class("set-label"), uistate.T("rules.quickAddTitle")),
-					RuleAddForm(RuleAddFormProps{MatchInputID: "rule-quick-match", OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
+					RuleAddForm(RuleAddFormProps{MatchInputID: "rule-quick-match", InlineSubmit: true, OnDone: func() { uistate.PostNotice(uistate.T("rules.added"), false) }}),
 				),
 				If(len(rs) > 1, P(css.Class("muted"), uistate.T("rules.dragHint"))),
 				list,

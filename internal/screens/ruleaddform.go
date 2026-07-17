@@ -39,6 +39,13 @@ type RuleAddFormProps struct {
 	// affordance can focus the form (only ONE instance may set it — a static id
 	// on both the inline form and the AddHost modal produced duplicate ids, C107).
 	MatchInputID string
+	// InlineSubmit renders an in-form "Add rule" submit button and DROPS the
+	// shared form id. The inline /rules quick-add had neither a submit button
+	// nor Enter affordance users could find — the header "+ Add rule" only
+	// focuses the form — so a filled form went nowhere (QA M2). It also
+	// duplicated id="rule-add-form" with the AddHost modal instance, letting the
+	// modal's footer Save submit the wrong (empty, inline) form.
+	InlineSubmit bool
 }
 
 // condSlotOpts returns the field dropdown options for a structured condition slot.
@@ -247,7 +254,14 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 	catOpts := categorySelectOptions(cats, categoryID.Get())
 
-	return Form(css.Class("form-grid"), Attr("id", "rule-add-form"), Attr("data-testid", "rule-add-form"), OnSubmit(add),
+	// Only the AddHost modal instance carries the shared form id (its FlipPanel
+	// footer Save submits by id); the inline instance owns its submit button, so
+	// the id would be a duplicate (C107 / QA M2).
+	formArgs := []any{css.Class("form-grid"), Attr("data-testid", "rule-add-form"), OnSubmit(add)}
+	if !props.InlineSubmit {
+		formArgs = append(formArgs, Attr("id", "rule-add-form"))
+	}
+	formArgs = append(formArgs,
 		// No static id (C107): RuleAddForm renders both inline on /rules and inside the
 		// AddHost modal, so a hardcoded id="rule-add" produced a duplicate id when the
 		// modal opened over the screen. Nothing references the id (the aria-label is the
@@ -323,7 +337,13 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			return P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))
 		}(),
 		errText("rule-err", errMsg.Get()),
+		// The inline quick-add's own primary action (QA M2) — the modal instance
+		// gets its submit from the FlipPanel footer instead.
+		If(props.InlineSubmit,
+			Div(Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "rule-add-submit"),
+				uistate.T("rules.addRule")))),
 	)
+	return Form(formArgs...)
 }
 
 // ruleTxnCtxs projects the household's non-transfer transactions into the
