@@ -18,7 +18,25 @@ Protected gRPC services:
 - `cashflux.v1.SyncService`
 - `cashflux.v1.AIService`
 
-The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/audit/admin/metrics handlers reject missing or invalid bearer tokens before reading or returning data.
+The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/admin handlers reject missing or invalid bearer tokens before reading or returning data. The cross-tenant operator surfaces — `/metrics` and the global `/v1/audit` log — additionally require *operator* authority (the static server token, whose holder is the operator in self-host token mode, or an `CASHFLUX_SERVER_ADMIN_USER_IDS` admin); a regular authenticated Cloud user is denied metrics and gets only their own actor-scoped audit events.
+
+## Authentication & Token Model (backend ↔ frontend)
+
+Two auth modes share one binary:
+
+- **Token mode (`AuthMode=token`, self-host).** A single static bearer (`CASHFLUX_SERVER_TOKEN`, or its `CASHFLUX_SERVER_TOKEN_SHA256` digest) authenticates all requests as one synthetic principal `token:<sha256[:24]>`. Possessing this token is operator authority. Compared constant-time (`crypto/subtle`).
+- **OAuth mode (`AuthMode=oauth`, multi-tenant Cloud).** Per-user sessions via Google/GitHub OAuth with PKCE + state/nonce. The browser receives:
+  - a **short-lived access token** (HS256 JWT, 15 min) sent as `Authorization: Bearer` on API/gRPC calls;
+  - a **rotating refresh token** in an `HttpOnly` + `Secure` + `SameSite` cookie (30 days), single-use — each refresh issues a new access+refresh pair and invalidates the old refresh (`refresh_tokens` table);
+  - a **CSRF token** (double-submit cookie + `X-CashFlux-CSRF` header) required on every mutating auth route (refresh, logout, session revoke).
+
+**Refresh-token reuse detection.** A replayed (already-consumed) refresh token revokes the entire session *family* and appends an `auth.token.reuse` audit event — a stolen refresh cookie can be used at most once before the whole family is killed.
+
+**Key separation.** Session JWTs are signed with a dedicated `CASHFLUX_SERVER_SESSION_KEY` (HMAC-SHA256), distinct from the `CASHFLUX_SERVER_MASTER_KEY` used for AES-GCM at-rest encryption of AI keys — so an encryption-key rotation does not invalidate sessions, and a leak of one secret does not compromise the other. `CASHFLUX_SERVER_SESSION_KEY_PREVIOUS` is accepted on verify only, for zero-downtime key rotation. When no dedicated key is set the signer falls back to the master key/token (non-breaking) and the server logs a warning in oauth mode.
+
+**Frontend surfaces.** The desktop/PWA app uses the bearer directly (self-host token, or a Cloud access token). The operator console (`/console/`) and the customer portal (`/portal/`) run in the browser; the console is token-gated for operators, the portal uses the OAuth session flow above. Cookies are `Secure` except on http loopback for local development (`requestIsSecure`).
+
+**Transport.** CORS is deny-by-default: only the configured `AppOrigin` (an https origin, or an http loopback for dev) is allowed; credentials are permitted only for that origin. Security headers (HSTS, `nosniff`, COOP/COEP, `frame-ancestors 'none'`) are set on every response. The gRPC websocket bridge enforces the same origin check.
 
 ## Production Data Access Logging Policy
 
@@ -43,6 +61,13 @@ section 7.14:
   rotation path.
 - Strict tenant isolation is enforced at the repository and service layers: workspace, blob, AI-key, usage, and
   audit queries are scoped by authenticated user id, with cross-user tests covering workspace and blob access.
+  The `/v1/audit` stream serves the *global* log only to operators (static server token or an admin); regular
+  Cloud users get an actor-scoped read (`ListAuditEventsForActor`). `/metrics` requires operator authority. Both
+  are covered by isolation tests (global-vs-actor-scoped audit, tenant-403/admin-200 metrics).
+- Session tokens are signed with a dedicated `CASHFLUX_SERVER_SESSION_KEY` separate from the AES master key, so
+  encryption-key rotation never invalidates sessions and neither secret's leak compromises the other;
+  `CASHFLUX_SERVER_SESSION_KEY_PREVIOUS` supports zero-downtime rotation. Tests cover key isolation, the rotation
+  window, and the master-key fallback.
 - The read-only `/v1/admin/usage` support view ignores caller-supplied user ids and returns only the
   authenticated user's daily request/token counters.
 - Self-serve account export and delete-account routes are authenticated and scoped to the caller. Export omits
