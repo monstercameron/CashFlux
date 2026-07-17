@@ -44,6 +44,31 @@ test.describe("goals: decluttered toolbar", () => {
   });
 });
 
+test.describe("goals: life-event templates", () => {
+  test("a life-event chip seeds the name and an editable deadline horizon", async ({ app }) => {
+    await nav(app, "/goals");
+    await app.getByTestId("goals-add").click();
+    await app.waitForTimeout(650); // past the FlipPanel flip
+    const form = app.getByTestId("goal-add-form");
+    await expect(form).toBeVisible();
+    // The classic chips are still there; the life-event set joins them.
+    await expect(form.getByTestId("goal-tmpl-emergency-fund")).toBeVisible();
+    const wedding = form.getByTestId("goal-tmpl-wedding");
+    await expect(wedding).toBeVisible();
+    await expect(form.getByTestId("goal-tmpl-new-baby")).toBeVisible();
+    await expect(form.getByTestId("goal-tmpl-home-down-payment")).toBeVisible();
+    await expect(form.getByTestId("goal-tmpl-moving")).toBeVisible();
+    // Picking Wedding seeds the name and a target date ~18 months out.
+    await wedding.click();
+    await expect(form.locator("#goal-add")).toHaveValue("Wedding");
+    const dateVal = await form.locator('input[type="date"]').first().inputValue();
+    expect(dateVal).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const months = (new Date(dateVal) - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
+    expect(months).toBeGreaterThan(16);
+    expect(months).toBeLessThan(20);
+  });
+});
+
 test.describe("goals: landing-range scenarios", () => {
   test("a paced financial goal shows Best/Expected/Conservative landing dates", async ({ app }) => {
     await nav(app, "/goals");

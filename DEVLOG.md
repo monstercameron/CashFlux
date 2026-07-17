@@ -47,6 +47,15 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Life-event goal templates: names + horizons, not presumed amounts
+
+Small slice. The report wanted life-event framing (wedding/baby/home) on goal creation; the
+existing chips already had the seeding mechanics, so the change is a `MonthsOut` field on the
+chip props threaded through `applyTemplate` into the target-date field. Deliberately NO seeded
+target amounts — a wedding costs wildly different sums per household and a prefilled figure
+reads as advice; a deadline horizon ("18 months out") is the useful nudge and is obviously
+editable. Screenshot-verified (Wedding → name + 01/2028 from the pinned e2e clock).
+
 ## 2026-07-17 — Goal landing range: a what-if band, not a fake probability
 
 The report item asked for best/expected/conservative completion dates plus "completion

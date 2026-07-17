@@ -67,6 +67,7 @@ var english = Catalog{
 	"resolution.toEarlier":       "Move end earlier",
 	"resolution.toLater":         "Move end later",
 	"resolution.prevPeriod":      "Previous period",
+	"resolution.yearEnding":      "Year ending %s", // /reports: the pill drives a rolling annual window (QA CF-24)
 	"resolution.nextPeriod":      "Next period",
 	"resolution.thisPeriod":      "This period",
 	"resolution.thisPeriodTitle": "Jump back to the current period",
@@ -930,6 +931,10 @@ var english = Catalog{
 	"goals.tmplVacation":              "Vacation",
 	"goals.tmplCar":                   "New car",
 	"goals.tmplRepairs":               "Car repairs fund",
+	"goals.tmplWedding":               "Wedding",
+	"goals.tmplBaby":                  "New baby",
+	"goals.tmplDownPayment":           "Home down payment",
+	"goals.tmplMoving":                "Moving",
 	"goals.linkExplain":               "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
 	"goals.quickFundChip":             "Set aside %s from %s",
 	"goals.quickFundEyebrow":          "Suggested",

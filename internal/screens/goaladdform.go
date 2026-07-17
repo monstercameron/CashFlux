@@ -82,12 +82,16 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 	// disclosure so the common case reads as a three-field form.
 	toggleAdv := ui.UseEvent(Prevent(func() { advOpen.Set(!advOpen.Get()) }))
 	// Quick-start templates: one click seeds the name (and the sinking-fund flag where
-	// that's the right shape) so a blank form never stares back. Plain closure — the
-	// chips are a fixed set rendered by hook-owning child components.
-	applyTemplate := func(tName string, sinking bool) {
+	// that's the right shape) so a blank form never stares back. Life-event templates
+	// also seed a realistic deadline horizon (months out) the user can edit. Plain
+	// closure — the chips are a fixed set rendered by hook-owning child components.
+	applyTemplate := func(tName string, sinking bool, monthsOut int) {
 		name.Set(tName)
 		isSinkingFund.Set(sinking)
 		kindS.Set(string(domain.GoalKindFinancial))
+		if monthsOut > 0 {
+			dateStr.Set(dateutil.AddMonths(time.Now(), monthsOut).Format("2006-01-02"))
+		}
 		if sinking {
 			advOpen.Set(true) // the seeded flag lives in More options — show it
 		}
@@ -269,6 +273,11 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplVacation"), Sinking: false, OnPick: applyTemplate}),
 					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplCar"), Sinking: false, OnPick: applyTemplate}),
 					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplRepairs"), Sinking: true, OnPick: applyTemplate}),
+					// Life-event templates: name + an editable deadline horizon.
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplWedding"), MonthsOut: 18, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplBaby"), MonthsOut: 9, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplDownPayment"), MonthsOut: 36, OnPick: applyTemplate}),
+					ui.CreateElement(goalTemplateChip, goalTemplateChipProps{Label: uistate.T("goals.tmplMoving"), MonthsOut: 6, OnPick: applyTemplate}),
 				),
 				If(len(copyOptions) > 1, uiw.SelectInput(uiw.SelectInputProps{
 					Options: copyOptions, Selected: "", TestID: "goal-copy-existing",
@@ -360,13 +369,16 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 type goalTemplateChipProps struct {
 	Label   string
 	Sinking bool
-	OnPick  func(name string, sinking bool) // plain closure — the chip owns its hook
+	// MonthsOut, when positive, seeds the target date that many months from today
+	// (life-event templates: wedding, baby, down payment, moving).
+	MonthsOut int
+	OnPick    func(name string, sinking bool, monthsOut int) // plain closure — the chip owns its hook
 }
 
 // goalTemplateChip seeds the add form with a template's name (and sinking-fund shape
 // where that fits). Its own component so the click hook sits at a stable call-site.
 func goalTemplateChip(props goalTemplateChipProps) ui.Node {
-	pick := ui.UseEvent(Prevent(func() { props.OnPick(props.Label, props.Sinking) }))
+	pick := ui.UseEvent(Prevent(func() { props.OnPick(props.Label, props.Sinking, props.MonthsOut) }))
 	slug := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(props.Label), " ", "-"))
 	return Button(css.Class("goal-tmpl-chip"), Type("button"),
 		Attr("data-testid", "goal-tmpl-"+slug),
