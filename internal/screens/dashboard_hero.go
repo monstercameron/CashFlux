@@ -461,7 +461,11 @@ func heroQuote(_ struct{}) ui.Node {
 	// rollover all re-fire it, while a fresh same-day cache does not.
 	autoKey := fmt.Sprintf("quote|%v|%s|%v|%v|%d|%s", enabled, theme, useContext, hasProvider, last.Unix(), now.Format("2006-01-02"))
 	ui.UseEffect(func() func() {
-		if !enabled || app == nil || !hasProvider || fresh || loading.Get() {
+		// errored gates re-entry (QA task #43): a failed generation used to
+		// re-fire this effect endlessly — MarkSmartRun changes autoKey on every
+		// attempt — hammering the API. Now a failure rests on the calm retry
+		// line until the user asks again (↻ / theme change clear errored).
+		if !enabled || app == nil || !hasProvider || fresh || loading.Get() || errored.Get() {
 			return nil
 		}
 		loading.Set(true)
@@ -484,10 +488,19 @@ func heroQuote(_ struct{}) ui.Node {
 			tick.Set(tick.Get() + 1)
 		}
 		onErr := func(_ string) { loading.Set(false); errored.Set(true); tick.Set(tick.Get() + 1) }
+		// QA task #43 root cause: 0.85 was sent unconditionally, but the DEFAULT
+		// model (gpt-5.4-mini) is a reasoning model that REJECTS a custom
+		// temperature on /chat/completions — every quote request 400'd, so the
+		// feature never worked out of the box. Mirror the chat assistant's
+		// reasoningModel gate: 0 omits the field (temperature,omitempty).
+		temp := 0.85
+		if reasoningModel(model) {
+			temp = 0
+		}
 		if useBackend {
-			ai.SendProxyChat(prefs.ServerURL, prefs.ServerToken, model, messages, 0.85, onOK, onErr)
+			ai.SendProxyChat(prefs.ServerURL, prefs.ServerToken, model, messages, temp, onOK, onErr)
 		} else {
-			ai.SendChat(aiKey, ai.DefaultBaseURL, model, messages, 0.85, onOK, onErr)
+			ai.SendChat(aiKey, ai.DefaultBaseURL, model, messages, temp, onOK, onErr)
 		}
 		return nil
 	}, autoKey)

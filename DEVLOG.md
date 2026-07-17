@@ -18,6 +18,24 @@ resolve), and >6 budgets now seed the compact list when no density was ever chos
 persisted choice always wins. 11 new e2e assertions green on the lane server, 0 page errors;
 follow-ups-collapse asserted structurally (sample data has no budget-linked to-dos to click).
 
+## 2026-07-17 — #43: the quote that could never speak (lane 2)
+
+"Dashboard quotes not working" turned out to be a compound failure with a nasty amplifier. Root
+cause one: `heroQuote` sent `temperature: 0.85` unconditionally, and the DEFAULT model is
+gpt-5.4-mini — a reasoning model that rejects custom temperatures on /chat/completions. So the
+out-of-the-box experience was a guaranteed 400 on every attempt. The fix reuses the assistant's
+existing `reasoningModel()` prefix gate; since the transport's Temperature field is `omitempty`,
+passing 0 cleanly omits it for reasoning models while classic models keep the stylistic 0.85.
+
+Root cause two made it dangerous rather than just broken: the auto-generate effect's key embeds
+`LastRun`, and the effect stamps `MarkSmartRun` before calling out (a sensible same-day re-entry
+guard for the SUCCESS path). But on failure the stamp CHANGES the key, which re-fires the effect,
+which stamps again — an endless failed-request loop against the user's paid key. `errored` now
+gates the effect alongside `loading`; a failure parks on the calm retry line and only the explicit
+user actions (↻ / theme change / context toggle) clear it. Verified with the live key: exactly one
+generation call produced "Wealth consists not in having great possessions, but in having few
+wants." — Epictetus, and the idle watch counted zero follow-on requests.
+
 ## 2026-07-17 — #75: Notifications polish — the 8.4 page gets its last mile (lane 6)
 
 Three small dents in the deep-dive's strongest page. "Due in 0 days" is the classic
