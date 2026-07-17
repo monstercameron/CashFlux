@@ -643,7 +643,10 @@ func budgetTopDriversFor(b domain.Budget, n int) ([]budgeting.Driver, string) {
 	start, end := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	covers := func(id string) bool { return descendants[id] }
-	drivers, err := budgeting.TopDrivers(b, app.Transactions(), start, end, rates, covers, n)
+	// Group charges by the clean merchant name (payee aliases + rule-pack normalization)
+	// so a store under several raw descriptors, or many small charges, reads as one line.
+	normalize := app.PayeeResolver().Resolve
+	drivers, err := budgeting.TopDrivers(b, app.Transactions(), start, end, rates, covers, n, normalize)
 	if err != nil {
 		return nil, base
 	}
@@ -690,9 +693,10 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 	if open {
 		discLabel = uistate.T("budgets.driversHide")
 	}
+	listID := "budget-drivers-list-" + props.Budget.ID
 	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
 		Attr("data-testid", "budget-drivers-toggle-"+props.Budget.ID),
-		Attr("aria-expanded", ariaBool(open)), OnClick(toggle),
+		Attr("aria-expanded", ariaBool(open)), Attr("aria-controls", listID), OnClick(toggle),
 		Span(discLabel),
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))
 
@@ -700,7 +704,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 	if open {
 		drivers, base := budgetTopDriversFor(props.Budget, 3)
 		if len(drivers) == 0 {
-			body = P(css.Class("budget-drivers-empty"), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
+			body = P(css.Class("budget-drivers-empty"), Attr("id", listID), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
 				uistate.T("budgets.driversNone"))
 		} else {
 			recSet := recurringLabelSet()
@@ -727,7 +731,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 					Amount: fmtMoney(money.New(d.Amount, base)), Recurring: isRec, OnDrill: drill,
 				}))
 			}
-			body = Div(css.Class("budget-drivers-list"), rows)
+			body = Div(css.Class("budget-drivers-list"), Attr("id", listID), rows)
 		}
 	}
 	return Div(css.Class("budget-drivers"), head, body)

@@ -37,6 +37,9 @@ func registerR4Surface() {
 		gap("0.2rem"),
 		marginTop("0.1rem"),
 	)
+	// The toggle sits in a stack of static captions, so it needs to read as a CONTROL,
+	// not another sentence: accent text with a persistent underline (offset), turning
+	// solid accent on hover. That's enough affordance without shouting.
 	rule(".budget-drivers-toggle",
 		appearance("none"),
 		fontFamily("inherit"),
@@ -48,12 +51,17 @@ func registerR4Surface() {
 		padding("0"),
 		border("none"),
 		background("transparent"),
-		color("var(--text-dim)"),
+		color("color-mix(in srgb, var(--accent) 82%, var(--text))"),
 		fontSize("0.8rem"),
+		fontWeight("500"),
+		prop("text-decoration", "underline"),
+		prop("text-decoration-color", "color-mix(in srgb, var(--accent) 40%, transparent)"),
+		prop("text-underline-offset", "2px"),
 		transition("color .12s ease"),
 	)
 	rule(".budget-drivers-toggle:hover",
-		color("var(--text)"),
+		color("var(--accent)"),
+		prop("text-decoration-color", "var(--accent)"),
 	)
 	rule(".budget-drivers-chev",
 		transition("transform .15s ease"),
@@ -96,7 +104,7 @@ func registerR4Surface() {
 	)
 	rule(".budget-driver-recurring",
 		flex("none"),
-		fontSize("0.64rem"),
+		fontSize("0.68rem"),
 		textTransform("uppercase"),
 		letterSpacing("0.05em"),
 		color("var(--text-dim)"),
@@ -175,8 +183,11 @@ func registerR4Surface() {
 		borderColor("var(--accent)"),
 		color("var(--text)"),
 	)
+	// Over-state is AMBER only — the amber border/fill plus the word "over" carry the
+	// signal, and the text stays neutral (--text) rather than the red --text-down, so a
+	// bill that's also due-soon doesn't stack two red cues (the "one red signal" rule).
 	rule(".bill-fit-over",
-		color("var(--text-down)"),
+		color("var(--text)"),
 		borderColor("color-mix(in srgb, #f59e0b 55%, var(--border))"),
 		background("color-mix(in srgb, #f59e0b 12%, transparent)"),
 	)
@@ -269,7 +280,7 @@ func registerR4Surface() {
 		marginTop("0.05rem"),
 	)
 	rule(".wins-new",
-		fontSize("0.6rem"),
+		fontSize("0.66rem"),
 		fontWeight("700"),
 		textTransform("uppercase"),
 		letterSpacing("0.06em"),

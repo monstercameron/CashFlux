@@ -1,3 +1,31 @@
+## 2026-07-17 — Connective layer: adversarial review + hardening pass
+
+Ran an aggressive Sonnet reviewer over the four connective features (F1 driver panel, F2 deep-links, F3
+fit chip, F4 wins/confetti) against a hard 9/10 bar. It came back 6.5 with one blocker and five majors —
+all legitimate. Fixed them:
+- **Confetti "once" was a lie (blocker):** the no-spend milestone key was `nospend:<exact-day-count>`, so
+  every day a streak grew it minted a new never-seen key → fresh confetti daily. Reworked to key on a
+  threshold rung (3/7/14/30/60/90, mirroring the net-worth ladder) while carrying the true day count as
+  the display value. Added a test asserting day 5→6 keeps the same key but 7 crosses to a new one.
+- **Fit chip didn't reconcile siblings (major):** each bill compared against posted-spend only, so three
+  subs each due this month all said "fits" then collectively blew the budget. Now folds the other
+  same-period, same-budget upcoming bills into the baseline before the verdict.
+- **Drivers were per-transaction (major):** aggregated by normalized merchant (payee-alias resolver)
+  before ranking, so raw-descriptor duplicates collapse and death-by-1000-small-charges surfaces at its
+  true total. The resolver still can't unify "Greenfield Market" vs "Greenfield Mkt" without a learned
+  alias — that's the user-facing alias feature's job — but the small-charges blind spot is gone (tested).
+- **Color clash (major):** the over-budget chip used the red `--text-down` token on an amber pill — two
+  signals in one. Neutral text now; amber chrome + the word "over" carry it, keeping red for due-date
+  urgency only.
+- **Copy + a11y + polish:** fixed a genuinely broken "kept budgets" sentence, added the missing "?" to
+  the drivers label, wired `aria-controls`, gave the drivers toggle a link affordance (it read as prose),
+  unique-ified wins-row testids, bumped two sub-10px labels, and retuned confetti to accent+gold (dropped
+  the off-brand pink and near-duplicate green) with a non-uniform scatter.
+Deferred one minor: the transaction deep-link lands on a pre-searched ledger rather than flashing the
+single row — acceptable, and flashing a post-filter result is a timing job for later. All pure tests +
+wasm build + the 12-test gapfeatures e2e green; re-screenshotted budgets/notifications to confirm the
+toggle affordance, merchant merge, and new confetti read well. Re-review pending.
+
 ## 2026-07-17 — Connective layer: celebrate the wins (the app is warning-heavy)
 
 Last of the four connective features, and the one where the design brief said to spend boldness. The

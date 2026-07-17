@@ -43,9 +43,23 @@ type Input struct {
 	Now           time.Time // reserved for future time-based milestones
 }
 
-// noSpendMinDays is the shortest no-spend run worth celebrating — below this it's
-// noise, not a streak.
-const noSpendMinDays = 3
+// noSpendRungs are the no-spend-streak lengths (days) worth celebrating. Keying the
+// milestone on the RUNG reached — not the exact day count — is what makes the win
+// fire once per threshold crossed, rather than a fresh "new" key (and fresh confetti)
+// every single day a streak lengthens.
+var noSpendRungs = []int{3, 7, 14, 30, 60, 90}
+
+// highestNoSpendRung returns the largest rung at or below days, or 0 when the streak
+// hasn't reached the first rung.
+func highestNoSpendRung(days int) int {
+	best := 0
+	for _, r := range noSpendRungs {
+		if days >= r {
+			best = r
+		}
+	}
+	return best
+}
 
 // netWorthLadder are the round-number net-worth rungs worth a nod, in base-currency
 // minor units ($10k, $25k, $50k, $100k, $250k, $500k, $1M, $2M, $5M). Ascending.
@@ -88,8 +102,10 @@ func Detect(in Input) []Milestone {
 	if rung := highestRungBelow(in.NetWorthMinor); rung > 0 {
 		out = append(out, Milestone{Key: "networth:" + strconv.FormatInt(rung, 10), Kind: KindNetWorth, Value: rung})
 	}
-	if in.NoSpendDays >= noSpendMinDays {
-		out = append(out, Milestone{Key: "nospend:" + strconv.Itoa(in.NoSpendDays), Kind: KindNoSpendStreak, Value: int64(in.NoSpendDays)})
+	if rung := highestNoSpendRung(in.NoSpendDays); rung > 0 {
+		// Key on the rung so the confetti fires once per threshold crossed; carry the
+		// actual day count as Value so the copy stays truthful ("11 days, no spending").
+		out = append(out, Milestone{Key: "nospend:" + strconv.Itoa(rung), Kind: KindNoSpendStreak, Value: int64(in.NoSpendDays)})
 	}
 	if in.KeptBudgets > 0 && in.KeptPeriodKey != "" {
 		out = append(out, Milestone{Key: "kept:" + in.KeptPeriodKey, Kind: KindKeptBudgets, Value: int64(in.KeptBudgets)})

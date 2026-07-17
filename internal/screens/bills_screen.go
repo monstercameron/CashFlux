@@ -630,11 +630,13 @@ func billBudgetFit(b bills.Bill) (billFitChip, bool) {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	cats := app.Categories()
 	var matched domain.Budget
+	var matchedDesc map[string]bool
 	found := false
 	for _, bd := range app.Budgets() {
 		desc := categorytree.DescendantsOfAll(cats, bd.TrackedCategoryIDs())
 		if desc[catID] {
 			matched = bd
+			matchedDesc = desc
 			found = true
 			break
 		}
@@ -654,11 +656,33 @@ func billBudgetFit(b bills.Bill) (billFitChip, bool) {
 	if err != nil {
 		return billFitChip{}, false
 	}
+	// Reconcile against the OTHER upcoming bills that also land in this budget and
+	// period: without this, three subscriptions each due this month would every one
+	// report "fits" against the same posted-only baseline, then together blow the
+	// budget. Folding the siblings into the baseline makes each chip honest — it's
+	// the verdict for paying this bill on top of everything else already committed.
+	now := time.Now()
+	var pending int64
+	for _, ob := range bills.UpcomingAll(app.Accounts(), app.Recurring(), now) {
+		if ob.AccountID == b.AccountID && ob.DueDate.Equal(b.DueDate) {
+			continue // this bill itself
+		}
+		if ob.DueDate.Before(start) || !ob.DueDate.Before(end) {
+			continue // a different period
+		}
+		ocat := billCategoryID(app, ob)
+		if ocat == "" || !matchedDesc[ocat] {
+			continue // not this budget
+		}
+		if conv, err := rates.Convert(ob.Amount, limit.Currency); err == nil {
+			pending += conv.Amount
+		}
+	}
 	billConv, err := rates.Convert(b.Amount, limit.Currency)
 	if err != nil {
 		return billFitChip{}, false
 	}
-	fit := budgeting.FitBill(limit.Amount, spent.Amount, billConv.Amount)
+	fit := budgeting.FitBill(limit.Amount, spent.Amount+pending, billConv.Amount)
 	chip := billFitChip{BudgetID: matched.ID, BudgetName: matched.Name, Fits: fit.Fits}
 	if fit.Fits {
 		chip.Amount = fmtMoney(money.New(fit.LeftAfter, limit.Currency))

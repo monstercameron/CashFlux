@@ -206,10 +206,10 @@ func notifWinsWidget(props notifProps) ui.Node {
 	}, joined)
 
 	rows := make([]ui.Node, 0, len(found))
-	for _, m := range found {
+	for i, m := range found {
 		title, msg := milestoneCopy(m, base)
 		fresh := !seen[m.Key]
-		rows = append(rows, winsRow(m, title, msg, fresh))
+		rows = append(rows, winsRow(i, m, title, msg, fresh))
 	}
 
 	cardCls := "wins-card"
@@ -233,13 +233,14 @@ func notifWinsWidget(props notifProps) ui.Node {
 }
 
 // winsRow renders one milestone line. A freshly-reached win carries a small "New"
-// badge so the eye finds it among any it's already seen.
-func winsRow(m milestones.Milestone, title, msg string, fresh bool) ui.Node {
+// badge so the eye finds it among any it's already seen. idx keeps the testid unique
+// even when two wins share a kind (e.g. two goals reached in the same window).
+func winsRow(idx int, m milestones.Milestone, title, msg string, fresh bool) ui.Node {
 	var badge ui.Node = Fragment()
 	if fresh {
 		badge = Span(css.Class("wins-new"), uistate.T("wins.newBadge"))
 	}
-	return Div(css.Class("wins-row"), Attr("data-testid", "wins-row-"+string(m.Kind)),
+	return Div(css.Class("wins-row"), Attr("data-testid", "wins-row-"+string(m.Kind)+"-"+strconv.Itoa(idx)),
 		Span(css.Class("wins-row-icon"), uiw.Icon(milestoneIcon(m.Kind), css.Class("wins-icon-svg"))),
 		Div(css.Class("wins-row-text"),
 			Div(css.Class("wins-row-title"), title, badge),
@@ -248,21 +249,23 @@ func winsRow(m milestones.Milestone, title, msg string, fresh bool) ui.Node {
 	)
 }
 
-// winsConfettiCount is how many confetti pieces the burst drops.
-const winsConfettiCount = 14
+// winsConfettiHues is a tight, on-brand palette: the accent plus two warm golds —
+// no off-brand pink or near-duplicate green, so the burst reads as this product's
+// celebration rather than stock party confetti.
+var winsConfettiHues = []string{"var(--accent)", "#f59e0b", "#fbbf24"}
 
-// winsConfettiHues cycles a small warm+accent palette across the pieces.
-var winsConfettiHues = []string{"var(--accent)", "#f59e0b", "#34d399", "#f472b6"}
+// winsConfettiLefts are hand-tuned horizontal positions (percent). They cluster
+// toward the header/left where the burst originates and thin out to the right, so the
+// scatter looks organic instead of the evenly-spaced grid a simple i*k formula gives.
+var winsConfettiLefts = []int{4, 9, 12, 18, 21, 27, 33, 38, 46, 52, 61, 70, 82, 93}
 
 // winsConfetti builds the one-shot confetti layer: a handful of small pieces with
-// deterministic (index-derived) horizontal positions, delays, and hues, so the burst
-// is lively but never random-looking. CSS animates them once and prefers-reduced-motion
-// hides the whole layer.
+// deterministic positions, delays, and hues, so the burst is lively but never
+// random-looking. CSS animates them once and prefers-reduced-motion hides the layer.
 func winsConfetti() ui.Node {
-	pieces := make([]ui.Node, 0, winsConfettiCount)
-	for i := 0; i < winsConfettiCount; i++ {
-		left := (i*13 + 6) % 100
-		delayMS := (i % 5) * 90
+	pieces := make([]ui.Node, 0, len(winsConfettiLefts))
+	for i, left := range winsConfettiLefts {
+		delayMS := (i * 60) % 420 // staggered, not uniform
 		hue := winsConfettiHues[i%len(winsConfettiHues)]
 		style := "left:" + strconv.Itoa(left) + "%;" +
 			"animation-delay:" + strconv.Itoa(delayMS) + "ms;" +

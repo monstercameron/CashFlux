@@ -39,7 +39,8 @@ func TestDetect(t *testing.T) {
 	want := []Milestone{
 		{Key: "goal:Emergency fund", Kind: KindGoalReached, Name: "Emergency fund"},
 		{Key: "networth:10000000", Kind: KindNetWorth, Value: 10_000_000},
-		{Key: "nospend:5", Kind: KindNoSpendStreak, Value: 5},
+		// 5-day streak keys on rung 3 (fired once per crossing) but reports the real 5.
+		{Key: "nospend:3", Kind: KindNoSpendStreak, Value: 5},
 		{Key: "kept:2026-06", Kind: KindKeptBudgets, Value: 3},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -55,6 +56,24 @@ func TestDetectNothingToCelebrate(t *testing.T) {
 	}
 	if got := Detect(in); len(got) != 0 {
 		t.Errorf("Detect() = %+v, want empty", got)
+	}
+}
+
+func TestNoSpendKeyIsRungNotDayCount(t *testing.T) {
+	// The streak lengthening from 5 to 6 days must NOT mint a new key (which would
+	// re-fire the "new win" confetti daily) — both sit on the same rung-3 key.
+	d5 := Detect(Input{NoSpendDays: 5})
+	d6 := Detect(Input{NoSpendDays: 6})
+	if len(d5) != 1 || len(d6) != 1 {
+		t.Fatalf("expected one milestone each, got %d and %d", len(d5), len(d6))
+	}
+	if d5[0].Key != d6[0].Key {
+		t.Errorf("day 5 key %q != day 6 key %q — a lengthening streak must not re-fire", d5[0].Key, d6[0].Key)
+	}
+	// Crossing to the next rung (7) DOES mint a new key so the bigger milestone lands.
+	d7 := Detect(Input{NoSpendDays: 7})
+	if d7[0].Key == d5[0].Key {
+		t.Errorf("crossing to a 7-day rung should be a new key, got %q", d7[0].Key)
 	}
 }
 

@@ -9,7 +9,7 @@ package i18n
 // en.go, and registered into the shared catalog at init.
 var connectKeys = Catalog{
 	// Budget "what's driving this?" driver panel.
-	"budgets.driversShow":              "What's driving this",
+	"budgets.driversShow":              "What's driving this?",
 	"budgets.driversHide":              "Hide drivers",
 	"budgets.driversNone":              "No matching charges this period yet.",
 	"budgets.driverRecurring":          "recurring",
@@ -33,7 +33,7 @@ var connectKeys = Catalog{
 	"wins.noSpendTitle":  "%d days, no spending",
 	"wins.noSpendMsg":    "You've gone %d days without a purchase. Nice restraint.",
 	"wins.keptTitle":     "%d budgets kept last month",
-	"wins.keptMsg":       "You finished last month within %d of your budgets. Keep it up.",
+	"wins.keptMsg":       "You stayed within budget on %d of them last month. Keep it up.",
 }
 
 func init() {
