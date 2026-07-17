@@ -52,3 +52,32 @@ func AverageMonthlyExpense(flows []PeriodFlow) int64 {
 	}
 	return sum / n
 }
+
+// AverageMonthlyIncome is AverageMonthlyExpense's income twin: the trailing
+// monthly income average over the active buckets, 0 when none had activity.
+func AverageMonthlyIncome(flows []PeriodFlow) int64 {
+	var sum, n int64
+	for _, f := range flows {
+		if f.Income == 0 && f.Expense == 0 {
+			continue
+		}
+		sum += f.Income
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / n
+}
+
+// ActiveMonths counts the buckets with any activity — the honest "averaged over
+// N months" caption for the two averages above.
+func ActiveMonths(flows []PeriodFlow) int {
+	n := 0
+	for _, f := range flows {
+		if f.Income != 0 || f.Expense != 0 {
+			n++
+		}
+	}
+	return n
+}

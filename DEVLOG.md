@@ -1,3 +1,56 @@
+## 2026-07-17 — Vitals core: the report gets a balance-sheet dimension (1/2)
+
+Cam wants the Reports page to carry derived position metrics (his reference list: annual debt
+service, DTI, weighted APR, emergency-fund target/gap/coverage, runway after debt service,
+utilization, months-until-debt-free, discretionary, …). The Annual Review is all FLOW — a year of
+income/spending — so the missing dimension is STOCK: where the household stands today. Plan: a
+"00 · Where you stand" section ahead of "01 · What's strong" (position precedes the year's story;
+00 keeps the existing rpta-01..11 ids/testids stable).
+
+This commit is the SDLC bottom half: `internal/vitals`, healthscore-style — pre-derived Inputs in
+(trailing monthly averages, essential month, liquid cash, debt list, card aggregates), explainable
+Result out, every judged figure toned by documented thresholds that match the app's existing bands
+(healthscore's 36/43 DTI breakpoints, 30% utilization, 3/6-month coverage, 20% savings). Decisions:
+- Discretionary = surplus − minimums, so the cash-flow column reconciles internally (income −
+  spending = kept; kept − minimums = free). NOT income − essential-month — mixing bases would make
+  the rows non-additive.
+- Debt minimums are NOT double-counted against expenses: loan payments in CashFlux are transfer
+  legs, and transfers are excluded from expense totals — noted in the package doc.
+- Payoff horizon runs `payoff.BuildPlan(minimums, extra=0, Avalanche)` over `IncludedInPayoff()`
+  debts; ok=false surfaces as PayoffNeverClears (down tone) rather than being hidden — the most
+  actionable single fact a minimums-only household can see.
+- Coverage/runway in integer TENTHS of a month (money rule 6: no floats in domain math; APR is the
+  one float, matching payoff/domain).
+Also added `reports.AverageMonthlyIncome` + `ActiveMonths` beside `AverageMonthlyExpense` — the
+screen will feed trailing 6-month averages and caption them honestly ("averaged over N months").
+All native-Go tested. Next commit: the section UI (3-column vitals ledger, target-tick meters).
+
+## 2026-07-17 — Goals-page design review: 5 adopted changes
+
+Cam ran the goal card through an external design critique (8.3/10) and we reconciled it against the
+code: 5 points adopted, 2 rejected. Rejected: renaming the verb to "Earmark" / a "Manage earmarked
+funds" CTA (plain-English rule; "Set aside" is the established verb, "earmarked" the state — the fix
+is explicitness, not vocabulary churn) and "Transfer $X" language (nothing on the card moves money).
+The critique also miscounted one thing in our favor: the quick-fund chip and the primary button do
+the SAME thing (earmark), so there was no semantic split — only a legibility one.
+
+Adopted, in two commits:
+1. Card pass (`goals_row.go`): removed the header "$X/mo" chip (figures grid owns it), the
+   partly/fully-earmarked badge, and the "% covered" sentence tail — the critique's real finding was
+   the same three facts stated twice each. Replaced the earmark sentence with a bar legend whose
+   swatches sample the actual fills (solid=saved, hatch=set aside) + the visible "set-aside money
+   stays in your accounts" (was tooltip-only). Quick-fund chip gains a tracked-caps "Suggested"
+   eyebrow — "Set aside $4,500.11 from SCCU Savings" could read as a receipt; now it can't.
+2. Trajectory (`goals_trajectory.go`): compact heading+sentence form when reached / no target date /
+   exactly on pace; the pill+rail only earns its height when the flag-vs-tick spatial read carries
+   information (ahead/behind/off-pace). This also kills the "On track badge + On pace pill" dup.
+
+Retired i18n keys removed outright (no dead code): earmarkedLine, paceNeeded(Title),
+earmark{None,Partial,Full}. Goals e2e updated: legend testid keeps `goal-earmarked-<id>`, text
+contract moves /earmarked/i → /set aside/i, badge assertion dropped. Note: `en.go` reports
+gofmt-dirty but HEAD's copy does too (pre-existing, the CRLF thing) — not reformatting a shared
+3k-line file under concurrent work.
+
 ## 2026-07-17 — Budgets fix 3/7: the overlay summary stops subtracting across periods
 
 In overlay mode the summary loader showed `thisBudget − lastSpent` as "Left". Fixed by summing last

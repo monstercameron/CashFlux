@@ -66,6 +66,44 @@ func TestAverageMonthlyExpense(t *testing.T) {
 	}
 }
 
+func TestAverageMonthlyIncome(t *testing.T) {
+	tests := []struct {
+		name  string
+		flows []PeriodFlow
+		want  int64
+	}{
+		{"empty", nil, 0},
+		{"all inactive", []PeriodFlow{{}, {}}, 0},
+		{
+			"averages active buckets, skips empty",
+			[]PeriodFlow{{Income: 6000, Expense: 3000}, {}, {Income: 4000, Expense: 5000}},
+			5000,
+		},
+		{
+			"expense-only month counts as a zero-income month",
+			[]PeriodFlow{{Income: 6000, Expense: 4000}, {Income: 0, Expense: 2000}},
+			3000, // (6000 + 0) / 2
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AverageMonthlyIncome(tc.flows); got != tc.want {
+				t.Errorf("AverageMonthlyIncome = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestActiveMonths(t *testing.T) {
+	flows := []PeriodFlow{{Income: 1, Expense: 0}, {}, {Income: 0, Expense: 2}, {}}
+	if got := ActiveMonths(flows); got != 2 {
+		t.Errorf("ActiveMonths = %d, want 2", got)
+	}
+	if got := ActiveMonths(nil); got != 0 {
+		t.Errorf("ActiveMonths(nil) = %d, want 0", got)
+	}
+}
+
 func TestRunwayFromAverage(t *testing.T) {
 	// End-to-end: balance lasts balance/avg months.
 	flows := []PeriodFlow{
