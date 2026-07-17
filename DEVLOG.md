@@ -24741,3 +24741,15 @@ and proved with a test that a stale replay carrying a canceled status can't clob
 active state. createStripeSession already got its timeout+error-body in 3b. Deleted the dead
 putStripeSubscription. The webhook-signing tests that use no top-level event id still pass because
 an empty id is treated as new (apply) — the id only gates when present.
+
+Phase 3d: PayPal, the meatiest slice — a real Subscriptions API v2 provider (not a stub). Flow
+diverges from Stripe: Checkout creates an APPROVAL_PENDING subscription and returns the payer
+approval link; the row only becomes real when PayPal posts BILLING.SUBSCRIPTION.ACTIVATED to the
+webhook (custom_id carries our user id). No hosted per-subscription portal exists, so Portal returns
+the payer's auto-payments page (sandbox/live derived from the API base). Webhook auth isn't an HMAC
+like Stripe — you echo the transmission headers + raw event to PayPal's verify-webhook-signature
+API and check verification_status. Mapped the PayPal status vocabulary (ACTIVATED/CANCELLED/
+SUSPENDED/UPDATED) to ours. Defaulted the API base to SANDBOX so a half-configured deploy can't
+accidentally transact against live PayPal. Tested against a mock PayPal server (token + subscription
++ verify endpoints) plus a pure status-mapping table and an apply-webhook that drives the shared
+entitlement seam active — proving Stripe and PayPal are truly interchangeable below the seam.
