@@ -124,6 +124,13 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Twelfth slice: contrast. One token change fixes every flagged surface at once — that's the point
+of the tier system. The landmine audit (var(--fg/--line/--dim/--faint)) found exactly one live
+offender: the widget-engine divider block painting var(--line), i.e. painting nothing. The style
+files' header comments warning about these tokens did their job everywhere else. Visual-baseline
+screenshots will need regeneration in the verify pass — contrast+type changes shift pixels
+globally by design.
+
 Eleventh slice: the type system. A full serif census (137 FontDisplay sites) showed most uses
 already conform — hero figures, page/section titles on the tools pages, the Annual Review's
 editorial headings. The genuine violations were goal-card TITLES (cards read sans per the

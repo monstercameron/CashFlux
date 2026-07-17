@@ -21,8 +21,12 @@ func registerGenerated() {
 		customProp("--hover", "#26262b"),
 		customProp("--border", "#2a2a2c"),
 		customProp("--text", "#f4f4f5"),
-		customProp("--text-dim", "#ababb3"),
-		customProp("--text-faint", "#888890"),
+		// 2026-07-17 audit: secondary text ran below comfortable contrast (account
+		// metadata, task notes, notification copy, chart labels). Both tiers rise
+		// one step — dim ~9.1:1, faint ~6.3:1 on the near-black base — still
+		// clearly subordinate to --text, no longer straining.
+		customProp("--text-dim", "#b6b6be"),
+		customProp("--text-faint", "#9a9aa2"),
 		customProp("--accent", "#2e8b57"),
 		customProp("--accent-dim", "#1f2c24"),
 		customProp("--brand", "#7c83ff"),
@@ -1169,8 +1173,9 @@ func registerGenerated() {
 		customProp("--bg-card", "#ffffff"),
 		customProp("--border", "#e4e2dd"),
 		customProp("--text", "#1c1c1e"),
-		customProp("--text-dim", "#56565c"),
-		customProp("--text-faint", "#686870"),
+		customProp("--text-dim", "#4e4e55"),
+		// Audit contrast raise: the light faint tier steps from ~5.2:1 to ~6.1:1.
+		customProp("--text-faint", "#5e5e66"),
 		customProp("--muted", "#56565c"),
 		customProp("--accent-dim", "#e4f3ea"),
 		customProp("--hover", "#e8e6e1"),

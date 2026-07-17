@@ -155,6 +155,17 @@ func safeRenderSpec(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) (node ui
 	return widgetrender.Render(spec.NativeID, ctx)
 }
 
+// periodChartAnchor is the time trailing series charts anchor their last month
+// on: today while the viewed period contains it, else the period's last
+// instant — so a dashboard paged to June trends UP TO June, and a future month
+// trends up to that month, instead of every chart silently ending at now.
+func periodChartAnchor(start, end time.Time) time.Time {
+	if now := time.Now(); !now.Before(start) && now.Before(end) {
+		return now
+	}
+	return end.Add(-time.Second)
+}
+
 // frameDataCtx builds the engine DataCtx for a spec's Pipeline over the SCOPED data
 // (member/institution scope), so collection/chart widgets and embedded data-view
 // blocks show the same figures as the scoped KPI tiles.
@@ -168,6 +179,11 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 		Recurring:    ctx.App.Recurring(),
 		Rates:        ctx.Rates,
 		Start:        ctx.Start, End: ctx.End, Now: time.Now(),
+		// Trailing chart windows follow the VIEWED period, not the wall clock,
+		// so paging the dashboard to another month moves the series with it
+		// (parity-scan dashboard period contract). Bills/current-state sources
+		// keep reading Now.
+		ChartAnchor: periodChartAnchor(ctx.Start, ctx.End),
 		// The per-month variable surface behind "formula" series charts —
 		// scoped like the KPI tiles, re-windowed per month, and memoized per
 		// (revision, scope, window) so a chart's trailing months compute once,
@@ -444,7 +460,9 @@ func renderBlock(spec domain.WidgetSpec, b domain.Block, ctx widgetrender.Render
 		}
 		return Div(Style(style), uiw.Icon(icon.Name(name), css.Class(tw.W5, tw.H5)))
 	case domain.BlockDivider:
-		return Div(Style(map[string]string{"grid-column": "1 / -1", "height": "1px", "margin": "6px 0", "background": "var(--line)"}))
+		// var(--border), not var(--line) — --line is an undefined token (the C2
+		// landmine): it resolved to nothing and the divider rendered invisible.
+		return Div(Style(map[string]string{"grid-column": "1 / -1", "height": "1px", "margin": "6px 0", "background": "var(--border)"}))
 	case domain.BlockSpacer:
 		return Div(Style(map[string]string{"grid-column": fmt.Sprintf("span %d", max(b.ColSpan, 1))}))
 	case domain.BlockDataView:
@@ -717,8 +735,15 @@ func Dashboard() ui.Node {
 
 	// Net-worth change since the start of this month (end of last month).
 	// MIA-extend (#445-8): use scopedAccounts so the scoped NW drives the tile.
+	// When the dashboard is paged to ANOTHER period, the "this month" delta is
+	// replaced with an explicit as-of-today label — net worth is position, not
+	// period activity, and the tile must say so (parity-scan period contract).
+	nowT := time.Now()
+	viewingCurrent := !nowT.Before(start) && nowT.Before(end)
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
-	if prev, _ := ledger.NetWorthSeries(scopedAccounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
+	if !viewingCurrent {
+		nwSub = uistate.T("dashboard.netWorthAsOfToday")
+	} else if prev, _ := ledger.NetWorthSeries(scopedAccounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
 		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
 			// A flat 0% reads as "nothing moved" rather than "income == spending";
 			// say so plainly with the absolute delta instead of a misleading "▲ 0%"
