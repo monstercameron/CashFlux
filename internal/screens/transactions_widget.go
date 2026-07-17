@@ -1005,8 +1005,10 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				If(props.TrendMerchant != "" && props.ShowTrend, ui.CreateElement(merchantTrendChip, merchantTrendChipProps{
 					Merchant: props.TrendMerchant, TxnID: props.ID, Amount: props.AmountMoney,
 				})))),
-		If(props.Vis.Account, Td(props.Account)),
-		If(props.Vis.Category, Td(props.Category)),
+		// td-acct/td-cat mark the secondary columns so the stylesheet can dim them
+		// (2026-07-17 audit: the description column carries the reading priority).
+		If(props.Vis.Account, Td(ClassStr("td-acct"), props.Account)),
+		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
 		Td(ClassStr("td-actions"), OnClick(stop), txnRowMenu(props)),

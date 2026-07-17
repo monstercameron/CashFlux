@@ -257,6 +257,27 @@ func registerTxcFieldsSurface() {
 		whiteSpace("nowrap"),
 		minWidth("0"),
 	)
+	// 2026-07-17 audit: the description is what a ledger is FOR — give its column
+	// the width priority (auto table layout yields the slack to the widest hint)
+	// and full-strength ink at a solid weight; the secondary columns (account,
+	// category, source, user) stay quiet, dimmed one tier and slightly smaller so
+	// the eye lands on payee + amount first.
+	rule(".txn-table td.row-desc-cell",
+		width("38%"),
+		minWidth("14rem"),
+	)
+	rule(".txn-table td.row-desc-cell .row-desc-text",
+		color("var(--text)"),
+		fontWeight("500"),
+	)
+	rule(".txn-table .td-acct, .txn-table .td-cat, .txn-table .td-user",
+		color("var(--text-dim)"),
+		fontSize("0.82rem"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		maxWidth("11rem"),
+	)
 	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text):not(.txn-desc-tags)",
 		flex("none"),
 	)

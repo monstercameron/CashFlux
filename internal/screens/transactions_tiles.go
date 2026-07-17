@@ -377,7 +377,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// Export CSV and Columns are now items in the "⋯ More" overflow (built below), so
 	// they use the doExportCSV closure / colsModalAtom directly — no separate handlers.
 
-	selectAllFiltered := ui.UseEvent(Prevent(func() {
+	// Plain func (not UseEvent): Select-all runs from the "⋯ More" overflow menu
+	// (2026-07-17 audit — thin the resting toolbar row), whose item component owns
+	// the click hook.
+	selectAllFiltered := func() {
 		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
 		cur := selAtom.Get()
 		// Toggle: if every shown row is already selected, clear the selection;
@@ -398,7 +401,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			nm[t.ID] = true
 		}
 		selAtom.Set(nm)
-	}))
+	}
 
 	// Filter option lists, built once from the entity slices via the reusable
 	// OptionsFrom helper (value extractor + label extractor) rather than per-field loops.
@@ -659,6 +662,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
 			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
 			{Label: uistate.T("smartcat.button"), Icon: icon.Sparkles, TestID: "txn-smartcat-btn", OnSelect: func() { smartCatAtom.Set(true) }},
+			// Select-all joined the overflow (2026-07-17 audit): a bulk-selection
+			// setup step, not an everyday resting-row verb.
+			{Label: uistate.T("transactions.selectAllFiltered"), Icon: icon.CheckCircle, TestID: "txn-selectall-btn",
+				OnSelect: selectAllFiltered, Hidden: len(props.Shown) == 0},
 			{Label: uistate.T("transactions.exportCsv"), Icon: icon.ArrowDown, TestID: "txn-export-btn", OnSelect: doExportCSV},
 			{Label: uistate.T("transactions.columns"), Icon: icon.List, TestID: "txn-columns-btn", OnSelect: func() { colsModalAtom.Set(true) }},
 		},
@@ -693,12 +700,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// something needs review, with a live count so the backlog is visible.
 			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
-			// Select-all lives in the toolbar row with the other labeled actions (shown
-			// once there are rows to select). Uses the SHORT "Select all" label — the
-			// verbose "…in the current filtered view" form was fine as a hover tooltip but
-			// is too long as an always-visible button label.
-			If(len(props.Shown) > 0,
-				toolbarIconBtn("txn-selectall-btn", icon.CheckCircle, uistate.T("transactions.selectAllFiltered"), selectAllFiltered, "")),
+			// Select-all moved into the "⋯ More" overflow (2026-07-17 audit): the
+			// resting row keeps only the everyday verbs.
 			// View mode: Calendar toggles the month grid (TX8); Register (shown only when
 			// scoped to one account) toggles the running-balance column (TX12).
 			toolbarIconBtnOpen("txn-calendar-btn", icon.Calendar, uistate.T("transactions.calendarView"), toggleCalendar, "", calActive),

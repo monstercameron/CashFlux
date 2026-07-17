@@ -80,6 +80,12 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Sixth slice: the ledger's reading order. The description cell already had the right flex
+anatomy (truncating text, natural-size badges) — what it lacked was column-level priority, so
+auto table layout let account/category eat its width. A width hint on the td plus dim/size-capped
+secondary columns fixes the scan: date → payee → amount, secondaries in the periphery. Select-all
+demoted to the More overflow — it's bulk-op setup, not an everyday verb.
+
 Fifth slice: the /accounts toolbar's verb pile. The interesting call was WHICH buttons keep their
 place: frequency, not feature age. Groups/Institutions/Sweeps/FX are setup surfaces you touch
 monthly at most — they take the "Manage" menu; Mark-all/Transfer/Add are the daily verbs and stay
