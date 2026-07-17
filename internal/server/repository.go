@@ -68,16 +68,20 @@ type Usage struct {
 	Tokens   int64
 }
 
-// Subscription is the server-side Stripe subscription state for one Cloud user.
+// Subscription is the server-side subscription state for one Cloud user, held
+// provider-neutrally so Stripe and PayPal share one row shape. Provider is the
+// payment provider that owns this subscription ("stripe" | "paypal"); the
+// customer/subscription ids are that provider's opaque handles.
 type Subscription struct {
-	UserID             string
-	StripeCustomer     string
-	StripeSubscription string
-	Status             string
-	Plan               string
-	CurrentPeriodEnd   time.Time
-	TrialEnd           time.Time
-	UpdatedAt          time.Time
+	UserID               string
+	Provider             string
+	ProviderCustomer     string
+	ProviderSubscription string
+	Status               string
+	Plan                 string
+	CurrentPeriodEnd     time.Time
+	TrialEnd             time.Time
+	UpdatedAt            time.Time
 }
 
 // AccountExport is the self-serve server-side data bundle for a user.
@@ -607,8 +611,9 @@ func scanSubscription(row subscriptionScanner) (Subscription, bool, error) {
 	var currentPeriodEnd, trialEnd, updatedAt string
 	err := row.Scan(
 		&sub.UserID,
-		&sub.StripeCustomer,
-		&sub.StripeSubscription,
+		&sub.Provider,
+		&sub.ProviderCustomer,
+		&sub.ProviderSubscription,
 		&sub.Status,
 		&sub.Plan,
 		&currentPeriodEnd,
@@ -1296,10 +1301,15 @@ func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error
 	return out, rows.Err()
 }
 
-// PutSubscription upserts the current Stripe subscription state for a user.
+// PutSubscription upserts the current subscription state for a user. Provider
+// defaults to "stripe" when unset so existing single-provider callers are
+// unaffected.
 func (s *Store) PutSubscription(sub Subscription) error {
-	if strings.TrimSpace(sub.UserID) == "" || strings.TrimSpace(sub.StripeCustomer) == "" ||
-		strings.TrimSpace(sub.StripeSubscription) == "" || strings.TrimSpace(sub.Status) == "" ||
+	if strings.TrimSpace(sub.Provider) == "" {
+		sub.Provider = "stripe"
+	}
+	if strings.TrimSpace(sub.UserID) == "" || strings.TrimSpace(sub.ProviderCustomer) == "" ||
+		strings.TrimSpace(sub.ProviderSubscription) == "" || strings.TrimSpace(sub.Status) == "" ||
 		strings.TrimSpace(sub.Plan) == "" {
 		return fmt.Errorf("server store: subscription user, customer, subscription, status, and plan are required")
 	}
@@ -1308,19 +1318,21 @@ func (s *Store) PutSubscription(sub Subscription) error {
 	}
 	defer s.observeDB("PutSubscription", time.Now())
 	_, err := s.db.Exec(`
-INSERT INTO subscriptions(user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO subscriptions(user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET
-  stripe_customer = excluded.stripe_customer,
-  stripe_subscription = excluded.stripe_subscription,
+  provider = excluded.provider,
+  provider_customer = excluded.provider_customer,
+  provider_subscription = excluded.provider_subscription,
   status = excluded.status,
   plan = excluded.plan,
   current_period_end = excluded.current_period_end,
   trial_end = excluded.trial_end,
   updated_at = excluded.updated_at`,
 		strings.TrimSpace(sub.UserID),
-		strings.TrimSpace(sub.StripeCustomer),
-		strings.TrimSpace(sub.StripeSubscription),
+		strings.TrimSpace(sub.Provider),
+		strings.TrimSpace(sub.ProviderCustomer),
+		strings.TrimSpace(sub.ProviderSubscription),
 		strings.TrimSpace(sub.Status),
 		strings.TrimSpace(sub.Plan),
 		formatOptionalTime(sub.CurrentPeriodEnd),
@@ -1336,18 +1348,27 @@ ON CONFLICT(user_id) DO UPDATE SET
 func (s *Store) GetSubscription(userID string) (Subscription, bool, error) {
 	defer s.observeDB("GetSubscription", time.Now())
 	return scanSubscription(s.db.QueryRow(`
-SELECT user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
 FROM subscriptions
 WHERE user_id = ?`, strings.TrimSpace(userID)))
 }
 
-// GetSubscriptionByStripeID returns a row by Stripe subscription id for webhook updates.
-func (s *Store) GetSubscriptionByStripeID(stripeSubscription string) (Subscription, bool, error) {
-	defer s.observeDB("GetSubscriptionByStripeID", time.Now())
-	return scanSubscription(s.db.QueryRow(`
-SELECT user_id, stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at
+// GetSubscriptionByProviderID returns a row by (provider, provider subscription
+// id) for webhook updates. An empty provider matches any provider for that
+// subscription id (back-compat for callers that only have the id).
+func (s *Store) GetSubscriptionByProviderID(provider, providerSubscription string) (Subscription, bool, error) {
+	defer s.observeDB("GetSubscriptionByProviderID", time.Now())
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return scanSubscription(s.db.QueryRow(`
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
 FROM subscriptions
-WHERE stripe_subscription = ?`, strings.TrimSpace(stripeSubscription)))
+WHERE provider_subscription = ?`, strings.TrimSpace(providerSubscription)))
+	}
+	return scanSubscription(s.db.QueryRow(`
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
+FROM subscriptions
+WHERE provider = ? AND provider_subscription = ?`, provider, strings.TrimSpace(providerSubscription)))
 }
 
 // UsageWithinLimit reports whether the user has not exceeded the supplied daily limits.

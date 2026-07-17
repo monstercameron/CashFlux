@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 5
+const CurrentServerSchemaVersion = 6
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -204,6 +204,12 @@ func (s *Store) migrate() error {
 		}
 		version = 5
 	}
+	if version < 6 {
+		if err := s.migrateTo6(); err != nil {
+			return err
+		}
+		version = 6
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -246,6 +252,13 @@ func (s *Store) migrateTo4() error {
 func (s *Store) migrateTo5() error {
 	if _, err := s.db.Exec(serverSchemaV5); err != nil {
 		return fmt.Errorf("server store: migrate v5: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTo6() error {
+	if _, err := s.db.Exec(serverSchemaV6); err != nil {
+		return fmt.Errorf("server store: migrate v6: %w", err)
 	}
 	return nil
 }
@@ -377,4 +390,40 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   PRIMARY KEY(user_id, route, key)
 );
 CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
+`
+
+// serverSchemaV6 generalizes the subscriptions table for multiple payment
+// providers (Stripe + PayPal): a provider discriminator column and
+// provider-neutral customer/subscription id columns, with the uniqueness moved
+// to (provider, provider_subscription). A single-column UNIQUE can't be altered
+// in place, so the table is rebuilt and existing rows are migrated as 'stripe'.
+// Also adds a webhook-event dedupe table so replayed provider webhooks are
+// applied at most once.
+const serverSchemaV6 = `
+CREATE TABLE subscriptions_v6 (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL DEFAULT 'stripe',
+  provider_customer TEXT NOT NULL,
+  provider_subscription TEXT NOT NULL,
+  status TEXT NOT NULL,
+  plan TEXT NOT NULL,
+  current_period_end TEXT NOT NULL,
+  trial_end TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(provider, provider_customer),
+  UNIQUE(provider, provider_subscription)
+);
+INSERT INTO subscriptions_v6(user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at)
+  SELECT user_id, 'stripe', stripe_customer, stripe_subscription, status, plan, current_period_end, trial_end, updated_at FROM subscriptions;
+DROP TABLE subscriptions;
+ALTER TABLE subscriptions_v6 RENAME TO subscriptions;
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+  provider TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  PRIMARY KEY(provider, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_received ON webhook_events(received_at);
 `

@@ -216,3 +216,45 @@ func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	}
 	return got == name
 }
+
+// TestMigrateV5ToV6PreservesSubscriptions guards the commercial-critical property
+// that upgrading the schema never loses a customer's subscription: it reconstructs
+// a pre-v6 (stripe_*) subscriptions table with a row, rewinds the schema version,
+// re-runs the migration, and asserts the row survived with provider "stripe" and
+// the generalized ids intact.
+func TestMigrateV5ToV6PreservesSubscriptions(t *testing.T) {
+	s := openTestStore(t) // already migrated to the current version
+	if _, err := s.db.Exec(`
+DROP TABLE subscriptions;
+CREATE TABLE subscriptions (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  stripe_customer TEXT NOT NULL,
+  stripe_subscription TEXT NOT NULL,
+  status TEXT NOT NULL,
+  plan TEXT NOT NULL,
+  current_period_end TEXT NOT NULL,
+  trial_end TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(stripe_customer),
+  UNIQUE(stripe_subscription)
+);
+INSERT INTO users(id, provider, subject, email, created_at) VALUES('u1','token','u1','', '2026-01-01T00:00:00Z');
+INSERT INTO subscriptions VALUES('u1','cus_old','sub_old','active','personal_monthly','','', '2026-01-01T00:00:00Z');
+UPDATE schema_meta SET version = 5;`); err != nil {
+		t.Fatalf("stage v5 fixture: %v", err)
+	}
+	if err := s.migrate(); err != nil {
+		t.Fatalf("re-migrate to v6: %v", err)
+	}
+	got, ok, err := s.GetSubscription("u1")
+	if err != nil || !ok {
+		t.Fatalf("subscription lost after migration: ok=%v err=%v", ok, err)
+	}
+	if got.Provider != "stripe" || got.ProviderCustomer != "cus_old" || got.ProviderSubscription != "sub_old" || got.Plan != "personal_monthly" {
+		t.Fatalf("migrated subscription = %+v", got)
+	}
+	// The generalized lookup finds it by (provider, subscription id).
+	if _, ok, err := s.GetSubscriptionByProviderID("stripe", "sub_old"); err != nil || !ok {
+		t.Fatalf("lookup by provider id after migration: ok=%v err=%v", ok, err)
+	}
+}

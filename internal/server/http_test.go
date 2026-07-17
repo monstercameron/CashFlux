@@ -589,8 +589,8 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	}
 	if err := store.PutSubscription(Subscription{
 		UserID:             user.ID,
-		StripeCustomer:     "cus_export",
-		StripeSubscription: "sub_export",
+		ProviderCustomer:     "cus_export",
+		ProviderSubscription: "sub_export",
 		Status:             "active",
 		Plan:               "personal_annual",
 		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
@@ -600,8 +600,8 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	}
 	if err := store.PutSubscription(Subscription{
 		UserID:             other.ID,
-		StripeCustomer:     "cus_other",
-		StripeSubscription: "sub_other",
+		ProviderCustomer:     "cus_other",
+		ProviderSubscription: "sub_other",
 		Status:             "active",
 		Plan:               "personal_annual",
 		CurrentPeriodEnd:   now.Add(30 * 24 * time.Hour),
@@ -639,7 +639,7 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 		t.Fatalf("export related rows = snapshots %d blobs %d usage %d providers %d audit %d",
 			len(export.Snapshots), len(export.Blobs), len(export.Usage), len(export.AIKeyProviders), len(export.AuditEvents))
 	}
-	if export.Subscription == nil || export.Subscription.StripeCustomer != "cus_export" || export.Subscription.StripeSubscription != "sub_export" {
+	if export.Subscription == nil || export.Subscription.ProviderCustomer != "cus_export" || export.Subscription.ProviderSubscription != "sub_export" {
 		t.Fatalf("export subscription = %+v", export.Subscription)
 	}
 	if strings.Contains(rr.Body.String(), "sk-secret-export") || strings.Contains(rr.Body.String(), "w-other") || strings.Contains(rr.Body.String(), "sub_other") {
@@ -2223,7 +2223,7 @@ func TestStripeWebhookUpsertsSubscriptionState(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetSubscription = %+v/%v/%v", got, ok, err)
 	}
-	if got.StripeCustomer != "cus_123" || got.StripeSubscription != "sub_123" ||
+	if got.ProviderCustomer != "cus_123" || got.ProviderSubscription != "sub_123" ||
 		got.Status != "trialing" || got.Plan != "personal_annual" ||
 		got.CurrentPeriodEnd.IsZero() || got.TrialEnd.IsZero() {
 		t.Fatalf("subscription = %+v", got)
@@ -2266,8 +2266,8 @@ func TestStripeWebhookPaymentFailedMarksPastDue(t *testing.T) {
 	}
 	if err := store.PutSubscription(Subscription{
 		UserID:             "u1",
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
 		Status:             "active",
 		Plan:               "personal_annual",
 		CurrentPeriodEnd:   now.Add(24 * time.Hour),
@@ -2299,8 +2299,8 @@ func TestStripeWebhookSubscriptionDeletedMarksCanceled(t *testing.T) {
 	}
 	if err := store.PutSubscription(Subscription{
 		UserID:             "u1",
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
 		Status:             "active",
 		Plan:               "personal_annual",
 		CurrentPeriodEnd:   now.Add(24 * time.Hour),
@@ -2456,8 +2456,8 @@ func TestBillingPortalCreatesStripeSession(t *testing.T) {
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
 		UserID:             user.ID,
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
 		Status:             "active",
 		Plan:               "personal_annual",
 		UpdatedAt:          now,
@@ -2587,8 +2587,8 @@ func TestBillingPortalReplaysIdempotencyKey(t *testing.T) {
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
 		UserID:             user.ID,
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
 		Status:             "active",
 		Plan:               "personal_annual",
 		UpdatedAt:          now,
@@ -2740,8 +2740,8 @@ func TestBillingCheckoutRejectsUsedTrial(t *testing.T) {
 	seedSyncUser(t, store, user.ID, now)
 	if err := store.PutSubscription(Subscription{
 		UserID:             user.ID,
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
 		Status:             "canceled",
 		Plan:               "personal_annual",
 		TrialEnd:           now.Add(-24 * time.Hour),

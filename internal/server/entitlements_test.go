@@ -77,8 +77,8 @@ func TestIsCloudActiveReadsSubscription(t *testing.T) {
 	}
 	if err := store.PutSubscription(Subscription{
 		UserID:             "u1",
-		StripeCustomer:     "cus_active",
-		StripeSubscription: "sub_active",
+		ProviderCustomer:     "cus_active",
+		ProviderSubscription: "sub_active",
 		Status:             "trialing",
 		Plan:               "personal_annual",
 		TrialEnd:           now.Add(time.Hour),

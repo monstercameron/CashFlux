@@ -139,16 +139,16 @@ func handleBillingPortal(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
 			return
 		}
-		if !ok || strings.TrimSpace(sub.StripeCustomer) == "" {
+		if !ok || strings.TrimSpace(sub.ProviderCustomer) == "" {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "stripe customer is not configured")
 			return
 		}
-		requestHash := billingRequestHash("portal", user.ID, sub.StripeCustomer, strings.TrimSpace(cfg.StripePortalReturnURL))
+		requestHash := billingRequestHash("portal", user.ID, sub.ProviderCustomer, strings.TrimSpace(cfg.StripePortalReturnURL))
 		if replayBillingIdempotency(w, r, store, user.ID, requestHash) {
 			return
 		}
 		form := url.Values{}
-		form.Set("customer", sub.StripeCustomer)
+		form.Set("customer", sub.ProviderCustomer)
 		form.Set("return_url", strings.TrimSpace(cfg.StripePortalReturnURL))
 		sessionURL, err := createStripeSession(r, cfg, "/billing_portal/sessions", form)
 		if err != nil {
@@ -477,8 +477,8 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		}
 		next := Subscription{
 			UserID:             userID,
-			StripeCustomer:     session.Customer,
-			StripeSubscription: session.Subscription,
+			ProviderCustomer:     session.Customer,
+			ProviderSubscription: session.Subscription,
 			Status:             metadataValueDefault(session.Metadata, "trialing", "subscription_status", "status"),
 			Plan:               metadataValueDefault(session.Metadata, "unknown", "plan", "price"),
 			UpdatedAt:          now,
@@ -511,7 +511,7 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		if err := json.Unmarshal(event.Data.Object, &invoice); err != nil {
 			return fmt.Errorf("stripe invoice is invalid")
 		}
-		existing, ok, err := store.GetSubscriptionByStripeID(invoice.Subscription)
+		existing, ok, err := store.GetSubscriptionByProviderID("stripe", invoice.Subscription)
 		if err != nil {
 			return err
 		}
@@ -522,7 +522,7 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		existing.Status = "past_due"
 		existing.UpdatedAt = now
 		if strings.TrimSpace(invoice.Customer) != "" {
-			existing.StripeCustomer = invoice.Customer
+			existing.ProviderCustomer = invoice.Customer
 		}
 		if err := store.PutSubscription(existing); err != nil {
 			return err
@@ -545,7 +545,7 @@ func putStripeSubscription(store *Store, sub stripeSubscriptionObject, now time.
 func stripeSubscriptionRecord(store *Store, sub stripeSubscriptionObject, now time.Time) (Subscription, error) {
 	userID := metadataValue(sub.Metadata, "user_id", "cashflux_user_id")
 	if userID == "" {
-		if existing, ok, err := store.GetSubscriptionByStripeID(sub.ID); err != nil {
+		if existing, ok, err := store.GetSubscriptionByProviderID("stripe", sub.ID); err != nil {
 			return Subscription{}, err
 		} else if ok {
 			userID = existing.UserID
@@ -557,8 +557,8 @@ func stripeSubscriptionRecord(store *Store, sub stripeSubscriptionObject, now ti
 	}
 	return Subscription{
 		UserID:             userID,
-		StripeCustomer:     sub.Customer,
-		StripeSubscription: sub.ID,
+		ProviderCustomer:     sub.Customer,
+		ProviderSubscription: sub.ID,
 		Status:             sub.Status,
 		Plan:               stripeSubscriptionPlan(sub),
 		CurrentPeriodEnd:   unixTime(sub.CurrentPeriodEnd),
@@ -584,7 +584,7 @@ func stripeSubscriptionPlan(sub stripeSubscriptionObject) string {
 }
 
 func existingSubscriptionForStripe(store *Store, stripeSubscription string) Subscription {
-	existing, ok, err := store.GetSubscriptionByStripeID(stripeSubscription)
+	existing, ok, err := store.GetSubscriptionByProviderID("stripe", stripeSubscription)
 	if err != nil || !ok {
 		return Subscription{}
 	}

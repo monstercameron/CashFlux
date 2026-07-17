@@ -816,14 +816,14 @@ func TestSubscriptionStoreUpsertAndLookup(t *testing.T) {
 	trialEnd := now.Add(14 * 24 * time.Hour)
 	periodEnd := now.Add(30 * 24 * time.Hour)
 	if err := s.PutSubscription(Subscription{
-		UserID:             "u1",
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
-		Status:             "trialing",
-		Plan:               "personal_annual",
-		CurrentPeriodEnd:   periodEnd,
-		TrialEnd:           trialEnd,
-		UpdatedAt:          now,
+		UserID:               "u1",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
+		Status:               "trialing",
+		Plan:                 "personal_annual",
+		CurrentPeriodEnd:     periodEnd,
+		TrialEnd:             trialEnd,
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
@@ -832,10 +832,10 @@ func TestSubscriptionStoreUpsertAndLookup(t *testing.T) {
 		t.Fatalf("GetSubscription = %+v/%v/%v", got, ok, err)
 	}
 	if got.Status != "trialing" || got.Plan != "personal_annual" || !got.TrialEnd.Equal(trialEnd) ||
-		!got.CurrentPeriodEnd.Equal(periodEnd) || got.StripeCustomer != "cus_123" {
+		!got.CurrentPeriodEnd.Equal(periodEnd) || got.ProviderCustomer != "cus_123" {
 		t.Fatalf("subscription = %+v", got)
 	}
-	byStripe, ok, err := s.GetSubscriptionByStripeID("sub_123")
+	byStripe, ok, err := s.GetSubscriptionByProviderID("stripe", "sub_123")
 	if err != nil || !ok || byStripe.UserID != "u1" {
 		t.Fatalf("GetSubscriptionByStripeID = %+v/%v/%v", byStripe, ok, err)
 	}
@@ -844,13 +844,13 @@ func TestSubscriptionStoreUpsertAndLookup(t *testing.T) {
 	}
 
 	if err := s.PutSubscription(Subscription{
-		UserID:             "u1",
-		StripeCustomer:     "cus_123",
-		StripeSubscription: "sub_123",
-		Status:             "active",
-		Plan:               "personal_monthly",
-		CurrentPeriodEnd:   periodEnd.Add(30 * 24 * time.Hour),
-		UpdatedAt:          now.Add(time.Hour),
+		UserID:               "u1",
+		ProviderCustomer:     "cus_123",
+		ProviderSubscription: "sub_123",
+		Status:               "active",
+		Plan:                 "personal_monthly",
+		CurrentPeriodEnd:     periodEnd.Add(30 * 24 * time.Hour),
+		UpdatedAt:            now.Add(time.Hour),
 	}); err != nil {
 		t.Fatalf("PutSubscription update: %v", err)
 	}
@@ -858,13 +858,13 @@ func TestSubscriptionStoreUpsertAndLookup(t *testing.T) {
 	if err != nil || !ok || got.Status != "active" || got.Plan != "personal_monthly" || !got.TrialEnd.IsZero() {
 		t.Fatalf("updated subscription = %+v/%v/%v", got, ok, err)
 	}
-	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_123", StripeSubscription: "sub_456", Status: "active", Plan: "personal_annual"}); err == nil {
+	if err := s.PutSubscription(Subscription{UserID: "u2", ProviderCustomer: "cus_123", ProviderSubscription: "sub_456", Status: "active", Plan: "personal_annual"}); err == nil {
 		t.Fatal("duplicate stripe customer accepted")
 	}
-	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_456", StripeSubscription: "sub_123", Status: "active", Plan: "personal_annual"}); err == nil {
+	if err := s.PutSubscription(Subscription{UserID: "u2", ProviderCustomer: "cus_456", ProviderSubscription: "sub_123", Status: "active", Plan: "personal_annual"}); err == nil {
 		t.Fatal("duplicate stripe subscription accepted")
 	}
-	if err := s.PutSubscription(Subscription{UserID: "u2", StripeCustomer: "cus_456", StripeSubscription: "", Status: "active", Plan: "personal_annual"}); err == nil {
+	if err := s.PutSubscription(Subscription{UserID: "u2", ProviderCustomer: "cus_456", ProviderSubscription: "", Status: "active", Plan: "personal_annual"}); err == nil {
 		t.Fatal("missing stripe subscription accepted")
 	}
 }

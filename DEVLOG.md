@@ -24708,3 +24708,17 @@ Full C279 ticket. Built bottom-up per CLAUDE.md: domain → pure logic + tests �
 - `shares_test.go` sum invariant fired on empty/nil cases (sum 0 ≠ amountMinor). Fixed by wrapping the assertion in `if len(c.shares) > 0`.
 
 **Files changed:** `internal/domain/entities.go`, `internal/ledger/shares.go` (new), `internal/ledger/shares_test.go` (new), `internal/ledger/ledger.go`, `internal/ledger/ledger_test.go`, `internal/screens/accounts_row.go`, `internal/screens/accountaddform.go`, `internal/i18n/en_ownershares.go` (new), `CHANGELOG.md`, `DEVLOG.md`.
+
+## 2026-07-17 — Cloud commercial viability: payments (Phase 3) begins
+
+"Finish all the work to make it commercially viable." Re-sequenced the plan for commercial
+priority + contention: payments first (can't charge without it; server-side so low conflict with
+the other session's client-app churn), then portal, then console, then zero-knowledge sync last
+(least launch-blocking, highest contention). Phase 3a: made subscriptions provider-neutral —
+schema v6 rebuilds the table with a `provider` column + generalized `provider_customer`/
+`provider_subscription` and per-provider composite uniques, plus a `webhook_events` dedupe table.
+The risky part is data preservation on upgrade; wrote a v5→v6 migration test that stages a
+stripe_* row, rewinds the version, re-migrates, and asserts the row survives as provider=stripe.
+Renamed the Subscription struct fields (StripeCustomer→ProviderCustomer etc.) and
+GetSubscriptionByStripeID→GetSubscriptionByProviderID; the entitlement seam
+(subscriptionCloudActive) stayed untouched since it only reads status/dates.

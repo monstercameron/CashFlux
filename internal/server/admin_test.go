@@ -93,10 +93,10 @@ func seedAdminFixture(t *testing.T, store *Store) {
 		}
 	}
 	subs := []Subscription{
-		{UserID: "ua", StripeCustomer: "cus_1", StripeSubscription: "sub_1", Status: "active", Plan: "monthly", UpdatedAt: now},
-		{UserID: "ub", StripeCustomer: "cus_2", StripeSubscription: "sub_2", Status: "trialing", Plan: "annual", UpdatedAt: now},
-		{UserID: "uc", StripeCustomer: "cus_3", StripeSubscription: "sub_3", Status: "past_due", Plan: "monthly", UpdatedAt: now},
-		{UserID: "ud", StripeCustomer: "cus_4", StripeSubscription: "sub_4", Status: "canceled", Plan: "monthly", UpdatedAt: now},
+		{UserID: "ua", ProviderCustomer: "cus_1", ProviderSubscription: "sub_1", Status: "active", Plan: "monthly", UpdatedAt: now},
+		{UserID: "ub", ProviderCustomer: "cus_2", ProviderSubscription: "sub_2", Status: "trialing", Plan: "annual", UpdatedAt: now},
+		{UserID: "uc", ProviderCustomer: "cus_3", ProviderSubscription: "sub_3", Status: "past_due", Plan: "monthly", UpdatedAt: now},
+		{UserID: "ud", ProviderCustomer: "cus_4", ProviderSubscription: "sub_4", Status: "canceled", Plan: "monthly", UpdatedAt: now},
 	}
 	for _, sub := range subs {
 		if err := store.PutSubscription(sub); err != nil {

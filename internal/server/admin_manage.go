@@ -161,7 +161,7 @@ func seedDemoData(store *Store, now time.Time) (int, error) {
 			return count, err
 		}
 		if err := store.PutSubscription(Subscription{
-			UserID: d.id, StripeCustomer: "cus_" + d.id, StripeSubscription: "sub_" + d.id,
+			UserID: d.id, ProviderCustomer: "cus_" + d.id, ProviderSubscription: "sub_" + d.id,
 			Status: d.status, Plan: d.plan, CurrentPeriodEnd: now.AddDate(0, 0, 20), UpdatedAt: now,
 		}); err != nil {
 			return count, err
