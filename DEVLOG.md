@@ -34,6 +34,22 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Percent split mode: basis points, not floats
+
+Second slice of the UI-refinement sweep. The split editor only took exact amounts; a 60/40 rent
+split meant doing the arithmetic yourself. Percent mode reuses the existing draft rows — one Amt
+string per line, the mode decides how it's read — so the whole save/validate/row pipeline stayed
+intact. Money discipline: percentages are parsed with `money.ParseMinor(s, 2)` straight into basis
+points (10000 = 100%), and `split.ByPercents` distributes by the same largest-remainder method as
+the settle-up `ByWeights`, so `Σ shares == total` is structural. Two honest edges surfaced:
+percentages that don't total exactly 100.00% are an error (not a silent renormalize), and a share
+that would round to zero minor units (1¢ split three ways) refuses with its own message rather
+than writing a zero-amount split line. Mode switches convert parseable rows in place both
+directions (round-half-up on the bp conversion) so drafts survive. E2E drives the kebab →
+flip-modal path (`txn-split-open`, footer `split-save`); screenshot-verified. Ops note: a zombie
+:8099 node server from an interrupted earlier run held `web/bin/main.wasm.gz` and EPERM'd the e2e
+global-setup — killed by PID, per the e2e-zombie playbook.
+
 ## 2026-07-17 — Transfer preview: before/after balances from the post's own math
 
 First slice of the local-first UI-refinement sweep (the "product boundaries" report → 23-item

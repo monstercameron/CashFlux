@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -81,6 +82,47 @@ func SplitEditor(props splitEditorProps) ui.Node {
 
 	splits := ui.UseState(seed())
 	errMsg := ui.UseState("")
+	// Entry mode: exact amounts (the default) or percentages of the whole. Rows
+	// keep one Amt string; the mode decides how it is read. Percentages are
+	// fixed-point basis points (split.PercentScale), never floats.
+	pctMode := ui.UseState(false)
+
+	txnAbsEarly := absMinor(props.Txn.Amount.Amount)
+	// Switching modes converts each parseable row in place — amounts become the
+	// percentage they represent, percentages become their share of the total — so
+	// the draft carries over instead of resetting.
+	toAmounts := ui.UseEvent(func() {
+		if !pctMode.Get() {
+			return
+		}
+		cur := append([]splitDraft(nil), splits.Get()...)
+		for i, d := range cur {
+			bp, err := money.ParseMinor(d.Amt, 2)
+			if err != nil || bp <= 0 || txnAbsEarly == 0 {
+				continue
+			}
+			amt := txnAbsEarly * bp / split.PercentScale
+			cur[i].Amt = money.FormatMinor(amt, dec)
+		}
+		splits.Set(cur)
+		pctMode.Set(false)
+	})
+	toPercents := ui.UseEvent(func() {
+		if pctMode.Get() {
+			return
+		}
+		cur := append([]splitDraft(nil), splits.Get()...)
+		for i, d := range cur {
+			v, err := money.ParseMinor(d.Amt, dec)
+			if err != nil || v <= 0 || txnAbsEarly == 0 {
+				continue
+			}
+			bp := (absMinor(v)*split.PercentScale + txnAbsEarly/2) / txnAbsEarly
+			cur[i].Amt = money.FormatMinor(bp, 2)
+		}
+		splits.Set(cur)
+		pctMode.Set(true)
+	})
 
 	setCat := func(i int, v string) {
 		cur := append([]splitDraft(nil), splits.Get()...)
@@ -113,16 +155,22 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		splits.Set(out)
 	}
 
-	// Live total of the entered split amounts (minor units, unsigned) and the
-	// transaction's own amount, so the remainder line tells the user how much is
-	// still unallocated before they can save.
+	// Live total of the entered split values and the target they must reach —
+	// minor units against the transaction amount in amounts mode, basis points
+	// against 100% in percent mode — so the remainder line tells the user how
+	// much is still unallocated before they can save.
+	inPct := pctMode.Get()
+	valDec := dec
+	if inPct {
+		valDec = 2 // percent entries: two decimals = basis points
+	}
 	var total int64
 	parseErr := false
 	for _, d := range splits.Get() {
 		if d.Amt == "" {
 			continue
 		}
-		v, err := money.ParseMinor(d.Amt, dec)
+		v, err := money.ParseMinor(d.Amt, valDec)
 		if err != nil {
 			parseErr = true
 			continue
@@ -130,35 +178,79 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		total += absMinor(v)
 	}
 	txnAbs := absMinor(props.Txn.Amount.Amount)
-	remainder := txnAbs - total
+	target := txnAbs
+	if inPct {
+		target = split.PercentScale
+	}
+	remainder := target - total
 
 	save := ui.UseEvent(Prevent(func() {
 		cur := splits.Get()
-		built := make([]domain.CategorySplit, 0, len(cur))
-		var sum int64
+		type line struct {
+			cat, owner string
+			val        int64 // minor units (amounts mode) or basis points (percent mode)
+		}
+		lines := make([]line, 0, len(cur))
+		usePct := pctMode.Get()
+		parseDec := dec
+		if usePct {
+			parseDec = 2
+		}
 		for _, d := range cur {
 			if d.Cat == "" || d.Amt == "" {
 				continue
 			}
-			v, err := money.ParseMinor(d.Amt, dec)
+			v, err := money.ParseMinor(d.Amt, parseDec)
 			if err != nil || v <= 0 {
-				errMsg.Set(uistate.T("splitEditor.badAmount"))
+				if usePct {
+					errMsg.Set(uistate.T("splitEditor.badPercent"))
+				} else {
+					errMsg.Set(uistate.T("splitEditor.badAmount"))
+				}
 				return
 			}
-			signed := v
-			if props.Txn.Amount.IsNegative() {
-				signed = -v
-			}
-			built = append(built, domain.CategorySplit{CategoryID: d.Cat, Amount: money.New(signed, props.Txn.Amount.Currency), MemberID: d.Owner})
-			sum += v
+			lines = append(lines, line{cat: d.Cat, owner: d.Owner, val: v})
 		}
-		if len(built) < 2 {
+		if len(lines) < 2 {
 			errMsg.Set(uistate.T("splitEditor.needTwo"))
 			return
 		}
-		if sum != txnAbs {
-			errMsg.Set(uistate.T("splitEditor.mustBalance"))
-			return
+		amounts := make([]int64, len(lines))
+		if usePct {
+			bps := make([]int64, len(lines))
+			for i, l := range lines {
+				bps[i] = l.val
+			}
+			shares, err := split.ByPercents(txnAbs, bps)
+			if err != nil {
+				errMsg.Set(uistate.T("splitEditor.pctMustBalance"))
+				return
+			}
+			for _, s := range shares {
+				if s == 0 {
+					errMsg.Set(uistate.T("splitEditor.pctTooSmall"))
+					return
+				}
+			}
+			amounts = shares
+		} else {
+			var sum int64
+			for i, l := range lines {
+				amounts[i] = l.val
+				sum += l.val
+			}
+			if sum != txnAbs {
+				errMsg.Set(uistate.T("splitEditor.mustBalance"))
+				return
+			}
+		}
+		built := make([]domain.CategorySplit, 0, len(lines))
+		for i, l := range lines {
+			signed := amounts[i]
+			if props.Txn.Amount.IsNegative() {
+				signed = -signed
+			}
+			built = append(built, domain.CategorySplit{CategoryID: l.cat, Amount: money.New(signed, props.Txn.Amount.Currency), MemberID: l.owner})
 		}
 		t := props.Txn
 		t.Splits = built
@@ -207,6 +299,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			OwnerOpts: ownerOpts,
 			ShowOwner: showOwner,
 			Dec:       dec,
+			Percent:   inPct,
 			OnCat:     setCat,
 			OnAmt:     setAmt,
 			OnOwner:   setOwner,
@@ -214,15 +307,24 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		}))
 	}
 
-	// Remainder phrasing: balanced (green), or "$X left"/"$X over" so the user knows
-	// exactly what to adjust. Save is gated on a true balance, so this is the guide.
+	// Remainder phrasing: balanced (green), or "$X left"/"$X over" — "X% left" in
+	// percent mode — so the user knows exactly what to adjust. Save is gated on a
+	// true balance, so this is the guide.
 	remTone, remText := "pos", uistate.T("splitEditor.balanced")
 	switch {
+	case parseErr && inPct:
+		remTone, remText = "neg", uistate.T("splitEditor.badPercent")
 	case parseErr:
 		remTone, remText = "neg", uistate.T("splitEditor.badAmount")
+	case remainder > 0 && inPct:
+		remTone = "neg"
+		remText = uistate.T("splitEditor.pctLeft", money.FormatMinor(remainder, 2))
 	case remainder > 0:
 		remTone = "neg"
 		remText = uistate.T("splitEditor.left", money.FormatMinor(remainder, dec))
+	case remainder < 0 && inPct:
+		remTone = "neg"
+		remText = uistate.T("splitEditor.pctOver", money.FormatMinor(-remainder, 2))
 	case remainder < 0:
 		remTone = "neg"
 		remText = uistate.T("splitEditor.over", money.FormatMinor(-remainder, dec))
@@ -232,6 +334,19 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// line, plus any validation error. Both layouts render these.
 	hint := P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}),
 		uistate.T("splitEditor.hint", fmtMoney(money.New(txnAbs, props.Txn.Amount.Currency))))
+	// Amounts / Percentages entry-mode toggle (aria-pressed segmented pair).
+	modeBtn := func(testid, key string, active bool, on ui.Handler) ui.Node {
+		cls := "btn btn-sm"
+		if active {
+			cls += " btn-primary"
+		}
+		return Button(ClassStr(cls), Type("button"), Attr("data-testid", testid),
+			Attr("aria-pressed", ariaBool(active)), OnClick(on), uistate.T(key))
+	}
+	modeToggle := Div(Style(map[string]string{"display": "flex", "gap": "0.35rem", "margin-bottom": "0.5rem"}),
+		modeBtn("split-mode-amount", "splitEditor.modeAmounts", !inPct, toAmounts),
+		modeBtn("split-mode-percent", "splitEditor.modePercents", inPct, toPercents),
+	)
 	rowsNode := Div(css.Class("split-rows"), rows)
 	addRow2 := Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
 		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
@@ -247,6 +362,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		return Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
 			Attr("data-testid", "split-editor"), OnSubmit(save),
 			hint,
+			modeToggle,
 			rowsNode,
 			addRow2,
 			errNode,
@@ -264,6 +380,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
 		hint,
+		modeToggle,
 		rowsNode,
 		addRow2,
 		errNode,
@@ -283,10 +400,12 @@ type splitRowProps struct {
 	OwnerOpts []uiw.SelectOption
 	ShowOwner bool
 	Dec       int
-	OnCat     func(int, string)
-	OnAmt     func(int, string)
-	OnOwner   func(int, string)
-	OnRemove  func(int)
+	// Percent renders the value input as a percentage entry (percent mode).
+	Percent  bool
+	OnCat    func(int, string)
+	OnAmt    func(int, string)
+	OnOwner  func(int, string)
+	OnRemove func(int)
 }
 
 // splitRow is one editable split line (category + amount + remove). It is its own
@@ -325,12 +444,22 @@ func splitRow(props splitRowProps) ui.Node {
 				OnChange:  onOwner,
 			}))),
 		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"max-width": "8rem"}),
-			Attr("aria-label", uistate.T("splitEditor.amount")), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
-			Placeholder(uistate.T("splitEditor.amount")), Value(props.Amt), OnInput(onAmt), OnBlur(onAmtBlur)),
+			Attr("aria-label", uistate.T(splitAmtKey(props.Percent))), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
+			Placeholder(uistate.T(splitAmtKey(props.Percent))), Value(props.Amt), OnInput(onAmt), OnBlur(onAmtBlur)),
+		If(props.Percent, Span(css.Class("muted"), Attr("aria-hidden", "true"), "%")),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("splitEditor.remove")),
 			Title(uistate.T("splitEditor.remove")), Attr("data-testid", "split-remove-"+strconv.Itoa(props.Index)),
 			OnClick(onRemove), "✕"),
 	)
+}
+
+// splitAmtKey picks the value input's label: percent-mode rows read "Percent",
+// amounts-mode rows read "Amount".
+func splitAmtKey(percent bool) string {
+	if percent {
+		return "splitEditor.percent"
+	}
+	return "splitEditor.amount"
 }
 
 // splitToggleKey picks the toggle-button label: open vs closed, and "Edit" vs
