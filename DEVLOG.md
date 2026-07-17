@@ -1,3 +1,30 @@
+## 2026-07-17 — QA remediation: the "stuck" review inbox and the stale member roster
+
+CF-02 ("review inbox cannot advance") resisted the obvious theories. Live-driving the deployed
+build: categorize advances, skip advances, the queue logic is sound. The reproducing mechanism
+turned out to be layered UI misdirection: the disarmed "Categorize & next" button carried
+`pointer-events:none`, so when the auditor's category selection never registered (a programmatic
+select-set without a change event arms nothing), their click on the primary action was swallowed
+by CSS — no handler, no validation, no counter change. To a black-box tester that IS a frozen
+inbox. Fix: the disarmed button stays clickable and answers "Choose a category first, then
+confirm." (role=alert), and the write path stops swallowing PutTransaction errors (a read-only
+Viewer identity now posts a visible notice instead of freezing silently). Lesson logged: a
+pointer-inert primary action is indistinguishable from a broken one — prefer explain-on-click.
+Also learned the hard way that Playwright refuses to click aria-disabled buttons, so the disarmed
+state carries only the visual class.
+
+M1 was the classic missing-bump: memberAddForm saved via PutMember and closed without
+BumpDataRevision, so the Household roster kept the pre-save list (Settings looked correct only
+because navigation re-mounted it). Same disease in the topbar MemberSwitcher, which read
+app.Members() without subscribing to the revision — a new member never joined the "View as" lens
+until an unrelated re-render. Both subscribe/bump now, plus an "Added X to the household" notice.
+
+All four shipped fixes are locked by a real e2e suite (e2e/qa_remediation_verify.mjs, 15
+assertions against the deployed build): H1 creates a positive-stored loan through the actual add
+form and asserts ($450.00) after a $50 transfer; H2 uploads a real file through the picker twice
+and proves the primary Import commits the staged bytes; M1 asserts roster + lens + notice; CF-02
+asserts unarmed-click validation and both advance paths. 15/15 green, zero page errors.
+
 ## 2026-07-17 — Visual/UX audit remediation begins: the shell sheds its promo card
 
 The nine-menu visual audit's core diagnosis is "lack of ruthless prioritization" — too many

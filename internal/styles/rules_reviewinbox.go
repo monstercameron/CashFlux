@@ -202,10 +202,11 @@ func registerReviewInboxSurface() {
 	rule(".rvw-commit",
 		flex("1 1 auto"),
 	)
-	// Disarmed until a category is chosen — dimmed and click-inert.
+	// Disarmed until a category is chosen — dimmed, but still clickable: an
+	// unarmed click surfaces "choose a category first" (QA CF-02 saw a silently
+	// inert primary action and read the whole inbox as stuck).
 	rule(".rvw-commit.is-disabled",
 		opacity("0.5"),
-		pointerEvents("none"),
 	)
 
 	// All-caught-up state.

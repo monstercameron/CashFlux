@@ -88,13 +88,17 @@ func removeReviewTag(tags []string) []string {
 }
 
 // assignReviewCategory sets one transaction's category (clearing the review flag,
-// since categorizing resolves it) and persists.
+// since categorizing resolves it) and persists. A failed write (e.g. a read-only
+// Viewer identity) is surfaced as a notice — swallowing it left the inbox frozen
+// on the same item with zero feedback (QA CF-02).
 func assignReviewCategory(app *appstate.App, txnID, catID string) {
 	for _, t := range app.Transactions() {
 		if t.ID == txnID {
 			t.CategoryID = catID
 			t.Tags = removeReviewTag(t.Tags)
-			_ = app.PutTransaction(t)
+			if err := app.PutTransaction(t); err != nil {
+				uistate.PostNotice(err.Error(), true)
+			}
 			uistate.BumpDataRevision()
 			return
 		}
@@ -105,6 +109,7 @@ func assignReviewCategory(app *appstate.App, txnID, catID string) {
 // key (the current one included) in one pass, so a repeated charge clears in a
 // single action.
 func assignReviewByMerchant(app *appstate.App, key, catID string) {
+	var writeErr error
 	app.BulkMutate(func() {
 		for _, t := range app.Transactions() {
 			if !reviewqueue.Needs(t) {
@@ -113,10 +118,15 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) {
 			if strings.EqualFold(strings.TrimSpace(rawPayeeOf(t)), key) {
 				t.CategoryID = catID
 				t.Tags = removeReviewTag(t.Tags)
-				_ = app.PutTransaction(t)
+				if err := app.PutTransaction(t); err != nil && writeErr == nil {
+					writeErr = err
+				}
 			}
 		}
 	})
+	if writeErr != nil {
+		uistate.PostNotice(writeErr.Error(), true)
+	}
 	uistate.BumpDataRevision()
 }
 
@@ -166,6 +176,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 	alsoSimilar := ui.UseState(false)
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
+	commitErr := ui.UseState("")
 
 	// aiCategorize (SMART+): send just the current transaction + the existing
 	// category list to the model, parse the answer against the REAL categories (so
@@ -204,7 +215,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			func(e string) { aiErr.Set(e); aiLoading.Set(false) })
 	})
 
-	onSelect := ui.UseEvent(func(e ui.Event) { selVal.Set(e.GetValue()) })
+	onSelect := ui.UseEvent(func(e ui.Event) { selVal.Set(e.GetValue()); commitErr.Set("") })
 	toggleSimilar := ui.UseEvent(func() { alsoSimilar.Set(!alsoSimilar.Get()) })
 	commit := ui.UseEvent(func() {
 		cur, ok := firstToReview(app.Transactions(), skipped.Get())
@@ -213,8 +224,12 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		}
 		v := selVal.Get()
 		if v == "" {
+			// QA CF-02: an unarmed confirm used to no-op with zero feedback — an
+			// automation tool (or a missed change event) then saw a "stuck" inbox.
+			commitErr.Set(uistate.T("review.chooseFirst"))
 			return
 		}
+		commitErr.Set("")
 		if alsoSimilar.Get() {
 			assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), v)
 		} else {
@@ -278,6 +293,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		selVal.Set(cur.CategoryID)
 		alsoSimilar.Set(false)
 		aiErr.Set("")
+		commitErr.Set("")
 		seededFor.Set(cur.ID)
 	}
 
@@ -397,7 +413,11 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			If(aiErr.Get() != "", P(css.Class("rvw-ai-err"), Attr("role", "alert"), Attr("data-testid", "review-ai-err"), aiErr.Get())),
 			If(similarNode != nil, similarNode),
 		),
-		// Actions: primary confirm, then skip; close lives in the header X.
+		// Actions: primary confirm, then skip; close lives in the header X. The
+		// confirm stays fully clickable while unarmed — no disabled/aria-disabled,
+		// which automation tools refuse to click — so an unarmed click can explain
+		// itself (the alert below) instead of silently doing nothing (QA CF-02).
+		If(commitErr.Get() != "", P(css.Class("rvw-ai-err"), Attr("role", "alert"), Attr("data-testid", "review-commit-err"), commitErr.Get())),
 		Div(css.Class("rvw-actions"),
 			Button(css.Class(commitCls), Type("button"), Attr("data-testid", "review-commit"), OnClick(commit),
 				uistate.T("review.categorizeNext")),

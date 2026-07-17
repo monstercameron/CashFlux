@@ -24,6 +24,7 @@ var reviewInboxKeys = Catalog{
 	"review.alsoApply":     "Also apply to %d others from %s", // batch same-merchant
 
 	"review.categorizeNext": "Categorize & next",
+	"review.chooseFirst":    "Choose a category first, then confirm.",
 	"review.skip":           "Skip for now",
 	"review.done":           "Done",
 
