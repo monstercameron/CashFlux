@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -126,6 +127,11 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	tags := ui.UseState("")
 	billAcct := ui.UseState("")
 	errMsg := ui.UseState("")
+	// Retroactive choice at creation: saving alone applies to FUTURE activity
+	// only; ticking this also backfills the rule onto what it already matches
+	// (precedence-honouring ApplyOneRule).
+	applyExistingS := ui.UseState(false)
+	onApplyExisting := ui.UseEvent(func(e ui.Event) { applyExistingS.Set(e.IsChecked()) })
 
 	// C105: 3 bounded fixed condition slots — each gets stable hook positions.
 	// Slot 1.
@@ -229,6 +235,16 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			errMsg.Set(err.Error())
 			return
 		}
+		// The retroactive half of the choice: backfill this one rule now.
+		if applyExistingS.Get() {
+			if n, aerr := app.ApplyOneRule(r.ID); aerr != nil {
+				uistate.PostNotice(aerr.Error(), true)
+			} else if n > 0 {
+				uistate.BumpDataRevision()
+				uistate.PostUndoable(uistate.T("rules.retroApplied", plural(n, "transaction")))
+			}
+		}
+		applyExistingS.Set(false)
 		// Reset all fields.
 		match.Set("")
 		categoryID.Set("")
@@ -336,6 +352,14 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			liveCount := rules.Rule{Match: liveMatch, Conditions: liveConds}.MatchCountFull(ctxs)
 			return P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))
 		}(),
+		// Retroactive vs future-only: saving alone is future-only; this opt-in
+		// also backfills the new rule onto its existing matches.
+		Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "rule-add-apply-existing"),
+				OnChange(onApplyExisting)}, checkedAttr(applyExistingS.Get())...)...),
+			Div(css.Class("row-main"),
+				Span(uistate.T("rules.applyExistingOpt")),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("rules.applyExistingOptHint")))),
 		errText("rule-err", errMsg.Get()),
 		// The inline quick-add's own primary action (QA M2) — the modal instance
 		// gets its submit from the FlipPanel footer instead.

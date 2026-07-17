@@ -291,6 +291,35 @@ func Rules() ui.Node {
 		}
 	}
 
+	// previewFor builds the on-demand affected-transactions sample for one rule:
+	// evaluated only when the row's count is expanded, so the rules list never
+	// pays a full per-rule scan up front. Newest matches first would need a sort;
+	// ledger order is fine for a spot check.
+	previewFor := func(r rules.Rule) func(limit int) ([]ruleMatchLine, int) {
+		return func(limit int) ([]ruleMatchLine, int) {
+			var lines []ruleMatchLine
+			total := 0
+			for _, t := range app.Transactions() {
+				if t.IsTransfer() {
+					continue
+				}
+				if !r.MatchesTxn(rules.TxnCtx{Payee: t.Payee, Desc: t.Desc,
+					AmountMinor: t.Amount.Amount, AccountID: t.AccountID, Date: rules.NewTxnDate(t.Date)}) {
+					continue
+				}
+				total++
+				if len(lines) < limit {
+					lines = append(lines, ruleMatchLine{
+						Date:   t.Date.Format("Jan 2, 2006"),
+						Desc:   firstNonEmpty(t.Payee, t.Desc),
+						Amount: fmtMoney(t.Amount),
+					})
+				}
+			}
+			return lines, total
+		}
+	}
+
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), AddTarget: "rule"}),
 		hhRowsList(MapKeyed(rs,
@@ -300,10 +329,11 @@ func Rules() ui.Node {
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, CategoryName: catName[r.SetCategoryID], CondLine: condLine(r),
 					Warning: warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
-					OnDelete:    deleteRule,
-					OnMove:      moveRule,
-					OnDragStart: func() { dragSrc.Set(rid) },
-					OnDrop:      func() { reorder(rid) },
+					OnDelete:       deleteRule,
+					OnMove:         moveRule,
+					OnDragStart:    func() { dragSrc.Set(rid) },
+					OnDrop:         func() { reorder(rid) },
+					PreviewMatches: previewFor(r),
 				})
 			},
 		)),
@@ -576,6 +606,14 @@ type ruleRowProps struct {
 	OnMove         func(id string, delta int) // keyboard-reachable precedence nudge (in the row menu)
 	OnDragStart    func()
 	OnDrop         func()
+	// PreviewMatches builds the affected-transactions sample on demand (limit,
+	// then the full match total) — the list behind the row's count.
+	PreviewMatches func(limit int) ([]ruleMatchLine, int)
+}
+
+// ruleMatchLine is one row of a rule's affected-transactions preview.
+type ruleMatchLine struct {
+	Date, Desc, Amount string
 }
 
 // RuleRow is a per-rule weighted ledger row. Edit opens the shell-root flip
@@ -583,6 +621,11 @@ type ruleRowProps struct {
 // rule's precedence Order and structured Conditions on save.
 func RuleRow(props ruleRowProps) ui.Node {
 	r := props.Rule
+	// Affected-transactions disclosure: clicking the count expands the actual
+	// matched rows (sampled) so "catches 41 transactions" is inspectable, not
+	// just a number. Computed lazily on first open.
+	matchesOpen := ui.UseState(false)
+	toggleMatches := ui.UseEvent(Prevent(func() { matchesOpen.Set(!matchesOpen.Get()) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
 	startEdit := ui.UseEvent(Prevent(func() { uistate.SetRuleEdit(r.ID) }))
 	moveUp := ui.UseEvent(Prevent(func() {
@@ -625,13 +668,43 @@ func RuleRow(props ruleRowProps) ui.Node {
 	}
 	var figure ui.Node = Fragment()
 	if props.ShowMatchCount {
-		figure = Div(css.Class("rule-figure"),
+		inner := Fragment(
 			Span(css.Class("rule-figure-n"), plural(props.MatchCount, "transaction")),
 			Span(css.Class("rule-figure-sub"), uistate.T("rules.caughtSub")),
 		)
+		if props.MatchCount > 0 && props.PreviewMatches != nil {
+			figure = Button(css.Class("rule-figure"), Type("button"),
+				Attr("data-testid", "rule-matches-btn-"+r.ID),
+				Attr("aria-expanded", ariaBool(matchesOpen.Get())),
+				Title(uistate.T("rules.matchesTitle")), OnClick(toggleMatches),
+				Style(map[string]string{"cursor": "pointer", "background": "none", "border": "none", "text-align": "inherit"}),
+				inner)
+		} else {
+			figure = Div(css.Class("rule-figure"), inner)
+		}
 	}
 
-	return Div(css.Class("row"), Attr("draggable", "true"),
+	// The expanded affected-transactions sample under the row.
+	var matchesNode ui.Node = Fragment()
+	if matchesOpen.Get() && props.PreviewMatches != nil {
+		const sample = 8
+		lines, total := props.PreviewMatches(sample)
+		kids := []any{css.Class("rule-matches"), Attr("data-testid", "rule-matches-list-"+r.ID),
+			Style(map[string]string{"margin": "0 0 0.5rem 2.25rem", "display": "grid", "gap": "0.2rem"})}
+		for _, l := range lines {
+			kids = append(kids, Div(css.Class("t-caption"),
+				Style(map[string]string{"display": "flex", "gap": "1rem"}),
+				Span(css.Class(tw.TextDim), l.Date),
+				Span(Style(map[string]string{"flex": "1 1 auto", "min-width": "0", "overflow": "hidden", "text-overflow": "ellipsis", "white-space": "nowrap"}), l.Desc),
+				Span(l.Amount)))
+		}
+		if extra := total - len(lines); extra > 0 {
+			kids = append(kids, Div(css.Class("t-caption", tw.TextDim), uistate.T("rules.matchesMore", extra)))
+		}
+		matchesNode = Div(kids...)
+	}
+
+	return Fragment(Div(css.Class("row"), Attr("draggable", "true"),
 		OnDragStart(func() {
 			if props.OnDragStart != nil {
 				props.OnDragStart()
@@ -667,7 +740,7 @@ func RuleRow(props ruleRowProps) ui.Node {
 					Title(uistate.T("rules.deleteTitle")), OnClick(del), uistate.T("rules.deleteTitle")),
 			},
 		}),
-	)
+	), matchesNode)
 }
 
 // ruleCondsEnglish renders structured rule conditions as one plain-English

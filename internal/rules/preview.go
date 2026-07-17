@@ -58,6 +58,11 @@ func (r Rule) matchesFull(c TxnCtx) bool {
 	return matches(c.Payee+" "+c.Desc+" "+payeeclean.Suggest(c.Payee), r.Match)
 }
 
+// MatchesTxn reports whether the rule matches one full transaction context —
+// the exported single-transaction form of MatchCountFull's check, used to build
+// affected-transaction previews (the list behind the count).
+func (r Rule) MatchesTxn(c TxnCtx) bool { return r.matchesFull(c) }
+
 // MatchCountFull returns how many of the transaction contexts the rule would
 // match, evaluating structured conditions when present. It supersedes
 // MatchCount wherever full transaction context is available — a plain-text

@@ -114,6 +114,20 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Rule previews: the list behind the count, and an honest backfill
+
+Two halves. The disclosure half is cheap: the per-rule count already existed (MatchCountFull);
+exporting the single-txn matcher (MatchesTxn) lets the row expand into the actual sampled rows,
+computed only on open so the rules list doesn't pay a full scan per rule up front. The backfill
+half had a precedence trap: "apply this ONE rule retroactively" must not apply the rule to
+transactions an EARLIER rule first-matches — otherwise a one-rule backfill silently violates
+first-match-wins. ApplyOneRule therefore evaluates the WHOLE chain per transaction and applies
+only where the new rule wins; the test seeds an earlier "coffee shop" rule and proves a later
+"shop" backfill can't steal its row. The e2e caught me twice being wrong the same way: first the
+test's phrase collided with an existing rule (correct 0-row backfill), then I asserted a
+transient toast instead of the durable write — the final assert reads the category off the
+ledger row itself.
+
 ## 2026-07-17 — Transaction states: mark the two that were invisible
 
 Audited the report's eight-state list against what rows already show: origin = the Source

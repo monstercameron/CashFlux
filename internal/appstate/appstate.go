@@ -2223,6 +2223,63 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 	return total, perRule, nil
 }
 
+// ApplyOneRule retroactively applies a SINGLE rule to existing transactions —
+// the "also apply to what I already have" choice when a rule is created
+// (saving alone is future-only). Precedence is honoured: the rule is applied
+// only to transactions where it is the FIRST match across the whole chain, so
+// a one-rule backfill can never steal a transaction an earlier rule owns.
+// Action semantics match ApplyRulesWithCounts (category overwrite, additive
+// tags, rename, bill link on unlinked rows).
+func (a *App) ApplyOneRule(ruleID string) (int, error) {
+	rs := a.Rules()
+	var target *rules.Rule
+	for i := range rs {
+		if rs[i].ID == ruleID {
+			target = &rs[i]
+			break
+		}
+	}
+	if target == nil {
+		return 0, fmt.Errorf("apply rule: rule %q not found", ruleID)
+	}
+	total := 0
+	for _, t := range a.Transactions() {
+		if t.IsTransfer() {
+			continue
+		}
+		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
+		if r == nil || r.ID != ruleID {
+			continue
+		}
+		changed := t.CategoryID != r.SetCategoryID
+		t.CategoryID = r.SetCategoryID
+		for _, tag := range r.SetTags {
+			before := len(t.Tags)
+			t.Tags = addTagUnique(t.Tags, tag)
+			if len(t.Tags) != before {
+				changed = true
+			}
+		}
+		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+			t.Desc = r.RenameDesc
+			changed = true
+		}
+		if t.BillAccountID == "" && r.SetBillAccountID != "" {
+			t.BillAccountID = r.SetBillAccountID
+			changed = true
+		}
+		if !changed {
+			continue
+		}
+		if err := a.store.PutTransaction(t); err != nil {
+			return total, err
+		}
+		total++
+	}
+	a.log.Info("applied one rule to existing transactions", "rule", ruleID, "updated", total)
+	return total, nil
+}
+
 // PreviewApplyRules is the dry-run twin of ApplyRulesWithCounts: it reports how
 // many transactions WOULD change (total + per rule ID) without writing anything,
 // so the UI can show the backfill's blast radius before the user commits to an
@@ -2467,6 +2524,7 @@ func (a *App) WithoutTriggers(fn func()) {
 		a.RunTriggered(workflow.TriggerTxnAdded, nil)
 	}
 }
+
 // BulkMutate runs fn with BOTH per-row workflow triggers and per-row txn-mutated
 // observers suppressed, then fires the observers exactly once at the end. This is the
 // primitive for bulk ledger edits (recategorize / clear / assign / delete / group over

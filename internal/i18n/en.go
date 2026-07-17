@@ -1017,9 +1017,15 @@ var english = Catalog{
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",
-	"goals.linkExplain":                  "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
-	"goals.quickFundChip":                "Set aside %s from %s",
-	"goals.quickFundEyebrow":             "Suggested",
+	// Rule preview: affected-transactions disclosure + retroactive choice.
+	"rules.matchesTitle":         "Show the transactions this rule catches",
+	"rules.matchesMore":          "…and %d more",
+	"rules.applyExistingOpt":     "Also apply to what it already matches",
+	"rules.applyExistingOptHint": "Off = the rule applies to new activity only. On = it also updates the existing transactions it catches (undoable).",
+	"rules.retroApplied":         "Rule applied to %s.",
+	"goals.linkExplain":          "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
+	"goals.quickFundChip":        "Set aside %s from %s",
+	"goals.quickFundEyebrow":     "Suggested",
 	// QA CF-15: suggestions across goals draw on ONE free-cash pool, so say so —
 	// applying one shrinks the others' suggestions on the spot.
 	"goals.quickFundTitle":       "Reserve the remaining amount in one click — no money moves. Suggestions share the same free cash: applying one updates the others.",
