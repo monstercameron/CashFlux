@@ -25,6 +25,9 @@ var reviewInboxKeys = Catalog{
 
 	"review.categorizeNext": "Categorize & next",
 	"review.chooseFirst":    "Choose a category first, then confirm.",
+
+	"review.categorizedUndo":      "Categorized as %s.",
+	"review.categorizedBatchUndo": "Categorized %d transactions as %s.",
 	"review.skip":           "Skip for now",
 	"review.done":           "Done",
 

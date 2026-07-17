@@ -1,3 +1,18 @@
+## 2026-07-17 — Review inbox gains one-click undo (commercial-parity scan, defect 1)
+
+The parity scan's bar for the review loop is "persist the decision, advance immediately, and
+expose undo" — the first two were already true after CF-02, but a categorize slip was one-way.
+Every categorize path (confirm, same-merchant batch, suggested chip, AI pick) now posts an
+undoable toast naming the category ("Categorized as Auto loans." / "Categorized 12 transactions
+as X.") via the established CaptureNow + PostUndoable pattern from deleteTxn.
+
+The interesting bug was underneath: the FIRST live probe's Undo click did nothing. Root cause in
+the undo stack itself — captureUndoPoint pushes the diff BEFORE RecordAuditPoint's onlyAudit
+skip runs, so the autosave that follows any captured mutation pushed an auditEntries-only echo
+step. Undo popped the echo (deleting a history row, invisibly) instead of the user's change.
+That class is now filtered at capture like placements. Committed separately; both e2e-verified
+(e2e/review_undo_verify.mjs: 5/5 — advance, named toast, Undo restores the item to the queue).
+
 ## 2026-07-17 — QA remediation: notification read state becomes per-item (CF-04)
 
 The Notification Center's mark-all-read-on-open effect was a deliberate design (calm the bell by
@@ -50,6 +65,17 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 (Cloud promo, sample banner, smart strip), the one-primary-action-per-page pass, the Budgets
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
+
+Fourth slice: Budgets above-the-fold — the audit's clearest per-page indictment (first category
+below the fold behind six summary layers). The trick was noticing the stack was three KINDS of
+thing interleaved: status (to-assign/spending/age), warnings (over-assigned, overspent, fund
+shortfall), and footnotes. Status became a three-column strip (the zbb hero survives intact,
+just column-sized — its testids and the incomebasis e2e contract are untouched); warnings became
+one collapsed amber rail whose header carries "Resolve $X" when over-assigned (the audit's
+requested primary action — expanding reveals the existing Cover-overspending and Review-sinking-
+funds actions, plus a new Review-allocations jump to /allocate for the over-assignment itself);
+footnotes only render when the rail has nothing alarming to say. budgetFundSetAsideNode folded
+into the rail component.
 
 Third slice: the Smart layer's last row of chrome. The strip already collapsed to a peek bar, but
 a peek bar is still a bar — the audit counts rows, and every page paid one. The peek is now a

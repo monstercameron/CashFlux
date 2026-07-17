@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/payeeclean"
@@ -90,26 +91,32 @@ func removeReviewTag(tags []string) []string {
 // assignReviewCategory sets one transaction's category (clearing the review flag,
 // since categorizing resolves it) and persists. A failed write (e.g. a read-only
 // Viewer identity) is surfaced as a notice — swallowing it left the inbox frozen
-// on the same item with zero feedback (QA CF-02).
-func assignReviewCategory(app *appstate.App, txnID, catID string) {
+// on the same item with zero feedback (QA CF-02). Returns whether the write
+// landed, so callers can offer an undo toast only for real changes.
+func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
 	for _, t := range app.Transactions() {
 		if t.ID == txnID {
 			t.CategoryID = catID
 			t.Tags = removeReviewTag(t.Tags)
 			if err := app.PutTransaction(t); err != nil {
 				uistate.PostNotice(err.Error(), true)
+				uistate.BumpDataRevision()
+				return false
 			}
 			uistate.BumpDataRevision()
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // assignReviewByMerchant categorizes every queued transaction sharing the merchant
 // key (the current one included) in one pass, so a repeated charge clears in a
-// single action.
-func assignReviewByMerchant(app *appstate.App, key, catID string) {
+// single action. Returns how many transactions were written (0 when the write
+// failed), so callers can offer an undo toast only for real changes.
+func assignReviewByMerchant(app *appstate.App, key, catID string) int {
 	var writeErr error
+	n := 0
 	app.BulkMutate(func() {
 		for _, t := range app.Transactions() {
 			if !reviewqueue.Needs(t) {
@@ -118,9 +125,13 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) {
 			if strings.EqualFold(strings.TrimSpace(rawPayeeOf(t)), key) {
 				t.CategoryID = catID
 				t.Tags = removeReviewTag(t.Tags)
-				if err := app.PutTransaction(t); err != nil && writeErr == nil {
-					writeErr = err
+				if err := app.PutTransaction(t); err != nil {
+					if writeErr == nil {
+						writeErr = err
+					}
+					continue
 				}
+				n++
 			}
 		}
 	})
@@ -128,6 +139,20 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) {
 		uistate.PostNotice(writeErr.Error(), true)
 	}
 	uistate.BumpDataRevision()
+	return n
+}
+
+// postCategorizedUndo captures an undo point for the categorization that just
+// landed and shows an undoable toast naming the category, so a slip in the
+// review flow is reversible in one click (report item: review loop needs undo).
+func postCategorizedUndo(app *appstate.App, catID string, batch int) {
+	auditview.CaptureNow()
+	name := reviewCatName(app, catID)
+	if batch > 1 {
+		uistate.PostUndoable(uistate.T("review.categorizedBatchUndo", batch, name))
+		return
+	}
+	uistate.PostUndoable(uistate.T("review.categorizedUndo", name))
 }
 
 func reviewCatName(app *appstate.App, id string) string {
@@ -205,7 +230,9 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			func(text string) {
 				parsed := smartai.ParseCategoryAssignments(text, 1, catIDByName)
 				if len(parsed) > 0 && parsed[0].CategoryID != "" {
-					assignReviewCategory(app, curID, parsed[0].CategoryID)
+					if assignReviewCategory(app, curID, parsed[0].CategoryID) {
+						postCategorizedUndo(app, parsed[0].CategoryID, 1)
+					}
 					seededFor.Set("~none~")
 				} else {
 					aiErr.Set(uistate.T("review.aiNoMatch"))
@@ -231,9 +258,11 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		}
 		commitErr.Set("")
 		if alsoSimilar.Get() {
-			assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), v)
-		} else {
-			assignReviewCategory(app, cur.ID, v)
+			if n := assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), v); n > 0 {
+				postCategorizedUndo(app, v, n)
+			}
+		} else if assignReviewCategory(app, cur.ID, v) {
+			postCategorizedUndo(app, v, 1)
 		}
 		alsoSimilar.Set(false)
 		seededFor.Set("~none~")
@@ -241,7 +270,9 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 	applySuggest := ui.UseEvent(func() {
 		if cur, ok := firstToReview(app.Transactions(), skipped.Get()); ok {
 			if sug := app.AutoCategorizeTransaction(cur); sug.CategoryID != "" {
-				assignReviewCategory(app, cur.ID, sug.CategoryID)
+				if assignReviewCategory(app, cur.ID, sug.CategoryID) {
+					postCategorizedUndo(app, sug.CategoryID, 1)
+				}
 				seededFor.Set("~none~")
 			}
 		}
