@@ -393,6 +393,16 @@ if (flagBtns.length >= 2) {
   check("CF-22: flagged activity rows not present this run (aria carries titles by construction)", true, `${flagBtns.length} rows`);
 }
 
+// ──────────── CF-23 + CF-25: report ranking + investment copy honesty ────────────
+await nav("/reports");
+await page.waitForTimeout(2000);
+const seasonal = (await page.locator('[data-testid="rpta-seasonal"]').count()) ? await page.locator('[data-testid="rpta-seasonal"]').innerText() : "";
+const curMonthName = new Date().toLocaleString("en-US", { month: "long" });
+check("CF-23: partial current month not ranked lightest/heaviest", !seasonal.includes(curMonthName), seasonal || "(no seasonal line)");
+const invRows = await page.locator('[data-testid="invperf-row"]').allInnerTexts();
+const badPutIn = invRows.filter((r) => /Put in \(\$/.test(r));
+check("CF-25: no 'Put in ($X)' for negative net contributions", badPutIn.length === 0, badPutIn[0] || `${invRows.length} rows clean`);
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

@@ -254,7 +254,18 @@ func Reports() ui.Node {
 		}
 	}
 	monthsRed := reports.MonthsNegative(monthFlows)
-	hiIdx, loIdx, seasonalOK := reports.SeasonalExtremes(monthFlows)
+	// QA CF-23: the in-progress month (17 days of July) must not rank against
+	// eleven complete months as the year's "lightest" — find the partial month
+	// in the window (the one containing today) and exclude it from the extremes.
+	partialIdx := -1
+	nowSeasonal := time.Now()
+	for k := 0; k+1 < len(bounds); k++ {
+		if !nowSeasonal.Before(bounds[k]) && nowSeasonal.Before(bounds[k+1]) {
+			partialIdx = k
+			break
+		}
+	}
+	hiIdx, loIdx, seasonalOK := reports.SeasonalExtremesSkipping(monthFlows, partialIdx)
 	trims := reports.TrimTargets(catTrends, 2500, 3) // ≥$25/mo recent average
 	// Top-10 to match the money-flow diagram, so the table's "everything else"
 	// and the diagram's are the same number.

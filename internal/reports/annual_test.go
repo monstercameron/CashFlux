@@ -90,3 +90,23 @@ func TestMedianInt64(t *testing.T) {
 		t.Fatalf("even median = %d, want 2 ((2+3)/2)", m)
 	}
 }
+
+// TestSeasonalExtremesSkipping locks the QA CF-23 fix: the in-progress month
+// (a tiny partial expense) is excluded from the lightest/heaviest ranking.
+func TestSeasonalExtremesSkipping(t *testing.T) {
+	flows := []PeriodFlow{
+		{Income: 100, Expense: 500}, // complete
+		{Income: 100, Expense: 900}, // complete, heaviest
+		{Income: 100, Expense: 600}, // complete, lightest among complete? no: idx0 is 500
+		{Income: 50, Expense: 120},  // partial current month — would win "lightest"
+	}
+	hi, lo, ok := SeasonalExtremesSkipping(flows, 3)
+	if !ok || hi != 1 || lo != 0 {
+		t.Errorf("SeasonalExtremesSkipping = hi %d lo %d ok %v, want hi 1 lo 0 ok true", hi, lo, ok)
+	}
+	// Without a skip the partial month wrongly ranks lightest.
+	_, lo2, _ := SeasonalExtremesSkipping(flows, -1)
+	if lo2 != 3 {
+		t.Errorf("baseline lo = %d, want 3 (documents the pre-fix behavior)", lo2)
+	}
+}

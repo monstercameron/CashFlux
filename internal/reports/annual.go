@@ -32,9 +32,21 @@ func MonthsNegative(flows []PeriodFlow) int {
 // when fewer than two periods carry any activity — a single month has no
 // seasonality to report.
 func SeasonalExtremes(flows []PeriodFlow) (hiIdx, loIdx int, ok bool) {
+	return SeasonalExtremesSkipping(flows, -1)
+}
+
+// SeasonalExtremesSkipping is SeasonalExtremes with one period excluded from
+// the ranking — the IN-PROGRESS month. Seventeen days of July always ranks as
+// the year's "lightest month" against eleven complete months (QA CF-23), so
+// the caller passes the partial period's index (or -1 for none) and it never
+// competes.
+func SeasonalExtremesSkipping(flows []PeriodFlow, skipIdx int) (hiIdx, loIdx int, ok bool) {
 	hiIdx, loIdx = -1, -1
 	active := 0
 	for i, f := range flows {
+		if i == skipIdx {
+			continue
+		}
 		if f.Income == 0 && f.Expense == 0 {
 			continue
 		}
