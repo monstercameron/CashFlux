@@ -476,6 +476,11 @@ func settingsDataPane(p settingsRightProps) uic.Node {
 		),
 
 		ui.Divider(),
+		// #55: the pre-operation safety-checkpoint ring — snapshots taken
+		// automatically before imports and bulk actions, restorable in one click.
+		checkpointsSection(),
+
+		ui.Divider(),
 		// AC16: the estate emergency pack — a plain-language document, generated on
 		// this device, for a spouse or executor who needs to step in. Framed with care
 		// and an explicit no-passwords guarantee before the action, and confirmed

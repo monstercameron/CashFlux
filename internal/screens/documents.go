@@ -211,7 +211,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
 	needsKey := ui.UseState(false)
-	draft := ui.UseState([]extract.Row{})
+	// #62: the review-stage rows live in a session ATOM, not component state, so
+	// navigating away mid-review keeps them and the dashboard resume card can
+	// jump back into the wizard. The mount effect below restores the stage.
+	draft := uistate.UseImportDraftRows()
 	importAcct := ui.UseState(defaultAcc)
 	receiptMode := ui.UseState(false)  // import the draft as ONE split transaction
 	receiptTotal := ui.UseState("")    // the receipt's single total (defaults to the line sum)
@@ -229,10 +232,23 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		draft.Set(rows)
 		if len(rows) > 0 {
 			stage.Set("review")
+			// #62: stamp the persisted in-progress marker so an interrupted
+			// review shows up on the dashboard resume card (honestly phrased
+			// after a reload, resumable in-session via the draft atom).
+			uistate.SetImportWIP(len(rows))
 		} else {
 			stage.Set("input")
+			uistate.ClearImportWIP()
 		}
 	}
+	// #62: rows restored from the session atom (a mid-review navigation away and
+	// back) re-enter the review stage instead of stranding on the input hub.
+	ui.UseEffect(func() func() {
+		if len(draft.Get()) > 0 {
+			stage.Set("review")
+		}
+		return nil
+	}, "resume-mount")
 
 	// Statement-PDF source, folded in from the former standalone "Import statement"
 	// modal (StatementImportBody): the attached PDF as a data URL for the AI call, its
@@ -306,6 +322,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// flows after any duplicate warning has been acknowledged. It calls
 	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
 	commitCSVImport := func(data []byte) bool {
+		// #55: checkpoint the dataset before the import writes so a bad file can
+		// be rolled back in one click from Settings → Data.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeCSVImport"))
 		n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
 		csvDupWarn.Set("")
 		pendingCSV.Set(nil)
@@ -874,6 +893,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// modal footer's Save.
 	doImportDraft := func() bool {
 		rows := draft.Get()
+		// #55: checkpoint before the reviewed-rows import commits.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")))
 		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
 		if err != nil {
 			aiErr.Set(uistate.T("documents.chooseAccount"))
@@ -934,6 +955,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			lines = append(lines, extract.ReceiptLine{Description: r.Description, Category: r.Category, Amount: absAmount(r.Amount)})
 		}
 		rec := extract.Receipt{Merchant: strings.TrimSpace(receiptMerchant.Get()), Total: absAmount(receiptTotal.Get()), Lines: lines}
+		// #55: checkpoint before the receipt import commits.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeReceiptImport"))
 		tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
 		if err != nil {
 			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))

@@ -145,9 +145,54 @@ if (await markAllBtn.count()) {
   check("#77: bulk action consumed the stale set", (await markAllBtn.count()) === 0);
   await shot(page, "77-markall-undo-toast");
   await undoBtn.click();
-  await page.waitForTimeout(1500);
-  check("#77: undo restores the stale balances (button returns)", (await markAllBtn.count()) > 0);
+  // A whole-dataset restore + re-render can take a moment; poll up to ~6s.
+  let undone = false;
+  for (let i = 0; i < 12 && !undone; i++) {
+    await page.waitForTimeout(500);
+    undone = (await markAllBtn.count()) > 0;
+  }
+  check("#77: undo restores the stale balances (button returns)", undone);
 }
+
+// ─────────────── #55: pre-operation safety checkpoints ───────────────
+await nav("/transactions");
+await page.waitForTimeout(1500);
+const ledgerRow = page.locator('tr[data-testid^="txn-row-"]').first();
+await ledgerRow.waitFor({ timeout: 20000 });
+const firstRowDesc = (await ledgerRow.locator(".row-desc-text").innerText()).trim();
+const descCountBefore = await page.locator(".row-desc-text", { hasText: firstRowDesc }).count();
+await ledgerRow.locator('input[type="checkbox"]').click();
+await page.waitForTimeout(600);
+check("#55: bulk bar appears on selection", (await page.locator('[data-testid="bulk-delete"]').count()) > 0);
+await page.locator('[data-testid="bulk-delete"]').click();
+await page.waitForTimeout(500);
+await page.locator("#cf-dialog-confirm").click();
+await page.waitForTimeout(1200);
+check("#55: bulk delete applied", /deleted/i.test(await bodyText()));
+// The checkpoint ring in Settings → Data now holds a pre-delete snapshot.
+await nav("/settings");
+await page.waitForTimeout(1200);
+await page.locator('.set-tab-strip button', { hasText: "Data" }).first().click();
+await page.waitForTimeout(900);
+const ckptSection = page.locator('[data-testid="checkpoints-section"]');
+check("#55: checkpoints section on the Data tab", await ckptSection.isVisible());
+const ckptRow = page.locator('[data-testid="checkpoint-row"]').first();
+check("#55: pre-delete checkpoint listed with a plain label",
+  (await ckptRow.count()) > 0 && /Before deleting 1 transaction/.test(await ckptRow.innerText()),
+  (await ckptRow.count()) ? (await ckptRow.innerText()).split("\n")[0] : "(none)");
+await shot(page, "55-checkpoints-list");
+// One-click restore brings the deleted transaction back.
+await ckptRow.locator('[data-testid="checkpoint-restore"]').click();
+await page.waitForTimeout(500);
+check("#55: restore confirms first", await page.locator("#cf-dialog-confirm").isVisible());
+await page.locator("#cf-dialog-confirm").click();
+await page.waitForTimeout(2000);
+check("#55: restore toast", /back to just before that operation/i.test(await bodyText()));
+await nav("/transactions");
+await page.waitForTimeout(1500);
+await page.locator('tr[data-testid^="txn-row-"]').first().waitFor({ timeout: 20000 });
+const descCountAfter = await page.locator(".row-desc-text", { hasText: firstRowDesc }).count();
+check("#55: restored dataset has the deleted transaction back", descCountAfter === descCountBefore, `${descCountBefore} → ${descCountAfter} ("${firstRowDesc}")`);
 
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);

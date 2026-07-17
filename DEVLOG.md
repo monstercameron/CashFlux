@@ -1,3 +1,23 @@
+## 2026-07-17 — #55 checkpoints + the undo-stealing derived writes (lane 4)
+
+Two connected pieces. The feature: a five-slot whole-dataset checkpoint ring saved to IndexedDB
+before every risky bulk write (imports, apply-rules, bulk delete/recat on both ledger surfaces,
+cover-all, allocation apply), restorable in one confirmed click from Settings → Data. Design
+notes worth keeping: blobs use ExportJSONRedacted (the AI key must never reach browser storage —
+same contract as the autosave), and they live OUTSIDE the dataset in browserstore for the
+workspace-registry reason — a dataset containing rollback copies of itself balloons on every
+export. The ring INDEX is a pure package (internal/checkpoint) so cap/drop-oldest is table-tested.
+
+The bug it flushed out: #77's e2e undo leg failed intermittently because moments after ANY
+user mutation, self-healing writes land — the notify feed auto-resolving a cleared alert, the
+smart engine's bookkeeping, the health trend point, even a no-op re-serialization of the
+settings KV — and each became the undo stack's newest entry, so the toast's Undo reverted an
+invisible blob. Diagnosed by logging the capture-time scalar-map diff keys (the audit feed
+showed "Updated settings" stacked over "Updated 8 account records"). Fix: filterCapturedChanges
+absorbs change sets confined to derived KV keys (new pure history.ScalarMapDiffKeys). The
+lesson generalizes: any diff-since-last-capture undo design MUST classify derived state, or
+background bookkeeping randomly steals undo targets app-wide.
+
 ## 2026-07-17 — #72: the second dialog title was hiding on the back of the card (lane 6)
 
 Verification ticket that turned up a real residue. The L3 fix already aria-hidden'd the flip

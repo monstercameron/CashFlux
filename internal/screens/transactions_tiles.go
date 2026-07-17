@@ -934,6 +934,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	bulkRecategorize := ui.UseEvent(Prevent(func() {
 		sel := selAtom.Get()
 		cid := bulkCatAtom.Get()
+		// #55: checkpoint before the bulk recategorize.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")))
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
 			if sel[t.ID] && !t.IsTransfer() {
@@ -1038,6 +1040,9 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			if !ok {
 				return
 			}
+			// #55: whole-dataset checkpoint before the bulk delete (restorable
+			// from Settings → Data even after the session undo stack is gone).
+			uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkDelete", plural(count, "transaction")))
 			var prior []domain.Transaction
 			for _, t := range app.Transactions() {
 				if sel[t.ID] {

@@ -34,6 +34,30 @@ var lane4Keys = Catalog{
 	"accounts.markAllConfirm": "Mark %s as confirmed just now? This updates: %s. You can undo it afterwards.",
 	// %s = the leading names, %d = how many more beyond them.
 	"accounts.markAllMore": "%s and %d more",
+
+	// #55 — pre-operation safety checkpoints (Settings → Data).
+	"ckpt.section":     "Safety checkpoints",
+	"ckpt.sectionHint": "Taken automatically before imports and bulk changes — restore one to roll everything back to just before that operation.",
+	"ckpt.empty":       "No checkpoints yet. One is saved automatically before each import or bulk change.",
+	// %d = blob size in KB.
+	"ckpt.sizeKB":       "%d KB",
+	"ckpt.restoreBtn":   "Restore",
+	"ckpt.restoreTitle": "Replace the current data with this checkpoint",
+	// %s = the checkpoint's label.
+	"ckpt.restoreConfirm": "Restore \"%s\"? Everything changed since that checkpoint will be lost.",
+	"ckpt.restored":       "Restored \"%s\" — your data is back to just before that operation.",
+	"ckpt.restoreErr":     "Couldn't restore that checkpoint.",
+	// %s = the checkpoint's label.
+	"ckpt.deleteAria": "Delete checkpoint %s",
+	// Labels stamped on the checkpoints themselves. %s = a "N things" phrase.
+	"ckpt.beforeApplyRules":    "Before applying rules to %s",
+	"ckpt.beforeBulkDelete":    "Before deleting %s",
+	"ckpt.beforeBulkRecat":     "Before recategorizing %s",
+	"ckpt.beforeCoverAll":      "Before covering overspending across %s",
+	"ckpt.beforeAllocation":    "Before applying %s from the allocation",
+	"ckpt.beforeCSVImport":     "Before a CSV import",
+	"ckpt.beforeDocImport":     "Before importing %s from a document",
+	"ckpt.beforeReceiptImport": "Before importing a receipt",
 }
 
 func init() {

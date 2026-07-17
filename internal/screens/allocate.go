@@ -343,6 +343,9 @@ func Allocate() ui.Node {
 			applyConfirming.Set(false)
 			return
 		}
+		// #55: checkpoint before the allocation writes (goal contributions +
+		// earmarks land across many entities in one go).
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeAllocation", plural(len(actions), "plan")))
 		result, err := app.ApplyAllocation(actions)
 		if err != nil {
 			applyErr.Set(uistate.T("allocate.applyErr", err.Error()))

@@ -208,6 +208,9 @@ func Rules() ui.Node {
 			if !ok {
 				return
 			}
+			// #55: checkpoint the dataset before the bulk overwrite so it can
+			// be rolled back from Settings → Data even after the undo stack.
+			uistate.SaveCheckpoint(uistate.T("ckpt.beforeApplyRules", plural(total, "transaction")))
 			n, _, err := app.ApplyRulesWithCounts()
 			if err != nil {
 				notice.Set(notice.Get().With(err.Error(), true))

@@ -202,6 +202,10 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			}
 		}
 
+		// #55: checkpoint before the multi-budget rewrite so Settings → Data can
+		// roll the whole cover-all back in one click.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeCoverAll", plural(len(overs), "budget")))
+
 		// Accumulate per-period boost deltas per budget so multiple rows drawing on the
 		// same source (or the same over) net correctly, then write each budget once.
 		type pboost struct {

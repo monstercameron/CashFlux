@@ -454,6 +454,9 @@ func transactionsLegacy() ui.Node {
 				if !ok {
 					return
 				}
+				// #55: whole-dataset checkpoint before the bulk delete (Settings → Data
+				// restores it even after the session's undo stack is gone).
+				uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkDelete", plural(count, "transaction")))
 				// Snapshot the transactions about to be deleted before removing them.
 				var prior []domain.Transaction
 				for _, t := range app.Transactions() {
@@ -507,6 +510,8 @@ func transactionsLegacy() ui.Node {
 	bulkRecategorize := ui.UseEvent(Prevent(func() {
 		sel := selected.Get()
 		cid := bulkCat.Get()
+		// #55: checkpoint before the bulk recategorize.
+		uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")))
 		// Snapshot the pre-change state of every transaction that will be mutated.
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
