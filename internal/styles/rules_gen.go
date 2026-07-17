@@ -10722,18 +10722,20 @@ func registerGenerated() {
 		alignItems("center"),
 		lineHeight("1"),
 	)
+	// Sample-data chip (audit P0): a top-bar status chip, not a banner row — so
+	// it must stay on one line and never add vertical chrome above the content.
 	rule(".sample-banner",
 		display("inline-flex"),
-		flexWrap("wrap"),
+		flexWrap("nowrap"),
+		whiteSpace("nowrap"),
 		alignItems("center"),
-		gap(".5rem"),
-		padding(".25rem .5rem .25rem .55rem"),
-		marginBottom("1rem"),
+		gap(".45rem"),
+		padding(".2rem .45rem .2rem .5rem"),
 		maxWidth("100%"),
 		background("rgba(211,146,0,0.10)"),
 		border("1px solid #d39200"),
 		borderRadius("999px"),
-		fontSize(".8rem"),
+		fontSize(".75rem"),
 	)
 	rule("[data-theme=\"light\"] .sample-banner",
 		background("#fff8e1"),
@@ -10780,6 +10782,27 @@ func registerGenerated() {
 		color("#92400e"),
 	)
 	rule("[data-theme=\"light\"] .sample-banner-btn:hover",
+		color("#1c1c1e"),
+	)
+	// The chip's session-dismiss ✕: quiet icon button, same amber family.
+	rule(".sample-banner-x",
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		background("transparent"),
+		border("0"),
+		padding(".1rem"),
+		borderRadius("999px"),
+		color("#cfa14e"),
+		cursor("pointer"),
+	)
+	rule(".sample-banner-x:hover",
+		color("var(--text)"),
+	)
+	rule("[data-theme=\"light\"] .sample-banner-x",
+		color("#92400e"),
+	)
+	rule("[data-theme=\"light\"] .sample-banner-x:hover",
 		color("#1c1c1e"),
 	)
 	rule(".scope-banner",

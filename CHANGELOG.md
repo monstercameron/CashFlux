@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **The sample-data chip moved into the top bar (visual audit P0, 2026-07-17):** the "Sample data · Start fresh · Dismiss" pill sat in its own row above every page's content — one of the persistent chrome layers the audit counted between the user and their work. It now renders inside the top bar's context zone (beside the member switcher/period control) as a true status chip: same amber tone, same "Start fresh" action and testids, with the session Dismiss compacted to a quiet ✕. Every page gets its banner row back.
 - **The Cloud promo is now a one-line rail row (visual audit P0, 2026-07-17):** the sidebar's CashFlux Cloud mention was a multi-line promo card at the rail foot — at short desktop heights (1280×720) it competed with the last navigation items, and on the narrow mobile rail it collapsed into a one-word-per-line slab overlapping content. It's now a single compact row (new cloud glyph + "CashFlux Cloud" + a small ✕): the row itself navigates to /plans (and snoozes), the ✕ snoozes for 30 days, exactly as before — same key, same re-surface semantics. The row hides entirely on the ≤768px icon-only rail (an unlabeled cloud icon is mystery chrome) and at ≤560px viewport heights where the nav needs every row. First slice of the 2026-07-17 nine-menu visual/UX audit remediation.
 
 ### Fixed

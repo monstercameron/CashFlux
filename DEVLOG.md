@@ -7,6 +7,11 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Second slice: the sample-data chip joins the top bar's context zone (it was already chip-shaped
+from R41, but still spent a full row above content on every page — the audit's point was the row,
+not the shape). Dismiss compacts to a ✕; "Start fresh" stays a labeled verb since it's the chip's
+one real action. Testids unchanged; the only active e2e reference just counts the chip.
+
 First slice: the Cloud mention. The rail-foot promo card was the audit's most damning shell
 finding (covers nav at 720px heights; a one-word-per-line slab on the 56px mobile rail). Kept the
 snooze machinery — it's sound — and swapped the card for a one-line row: cloud glyph (new curated

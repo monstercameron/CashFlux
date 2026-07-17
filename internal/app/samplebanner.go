@@ -8,24 +8,26 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
-// SampleDataBanner renders a one-line dismissible info banner when the app is
-// currently showing the seeded sample dataset (L6). The banner sits above the
-// top-bar inside the main pane so it is visible on every screen without
-// intruding on the shell chrome.
+// SampleDataBanner renders a compact dismissible status chip when the app is
+// currently showing the seeded sample dataset (L6). Per the 2026-07-17 visual
+// audit (P0 "reduce persistent vertical chrome") it lives INSIDE the top bar's
+// context zone — "Sample data · Start fresh" — instead of consuming its own
+// banner row above every page's content.
 //
 // Two actions are offered:
 //   - "Start fresh" — wipes the sample and leaves an intentionally empty slate.
-//   - "Dismiss" — hides the banner for this session (clears the localStorage
-//     flag) without touching the data.
+//   - ✕ — hides the chip for this session (clears the localStorage flag)
+//     without touching the data.
 //
 // The component is its own element so its two click hooks occupy stable
-// positions in the hook chain regardless of whether the banner is mounted.
+// positions in the hook chain regardless of whether the chip is mounted.
 func SampleDataBanner() uic.Node {
 	active := uistate.UseSampleActive()
 	uistate.CaptureSampleActive(active)
@@ -76,14 +78,16 @@ func SampleDataBanner() uic.Node {
 				OnClick(onStartFresh),
 				uistate.T("sample.startFresh"),
 			),
+			// Session dismiss is a quiet ✕ (audit: the chip carries one labeled
+			// action; dismiss is secondary chrome, not a second verb to read).
 			Button(
-				css.Class("sample-banner-btn sample-banner-dismiss"),
+				css.Class("sample-banner-x sample-banner-dismiss"),
 				Type("button"),
 				Attr("title", uistate.T("sample.dismissTitle")),
 				Attr("aria-label", uistate.T("sample.dismiss")),
 				Attr("data-testid", "sample-dismiss"),
 				OnClick(onDismiss),
-				uistate.T("sample.dismiss"),
+				ui.Icon(icon.Close, css.Class(tw.W3, tw.H3)),
 			),
 		),
 	)

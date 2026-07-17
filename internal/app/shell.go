@@ -224,7 +224,6 @@ func Shell(props ShellProps) uic.Node {
 		// target), replacing content-change guessing. Harmless in production.
 		Main(css.Class("cf-scroll", tw.Flex1, tw.MinW0, tw.OverflowYAuto), Attr("id", "main"), Attr("data-route", props.ActivePath), Attr("tabindex", "-1"),
 			uic.CreateElement(TopBar, topBarProps{Title: props.Title, ActivePath: props.ActivePath}),
-			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(SubscriptionBanner),
 			// C281: "Viewing as <member>" scope banner — shown whenever the top-bar
 			// member switcher has a member selected. Renders nothing for the default
@@ -931,6 +930,9 @@ func TopBar(props topBarProps) uic.Node {
 		// becomes its own full-width row beneath the title, scrolling horizontally if
 		// the date picker is wider than the viewport (rather than wrapping).
 		Div(css.Class("tb-context", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.MinW0, tw.TextDim, tw.Text13),
+			// Sample-data status chip (audit P0): lives in the bar's context zone —
+			// "Sample data · Start fresh" — instead of a banner row above content.
+			uic.CreateElement(SampleDataBanner),
 			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
