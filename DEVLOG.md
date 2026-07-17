@@ -1,3 +1,18 @@
+## 2026-07-17 — Budgets-page design review, fix 1/7: one card, one period
+
+Kicked off the 7-item budgets-page fix list from the external design analysis (reconciled against
+the code on 2026-07-17; items: overlay period-mixing, sinking-fund shortfall chip, overlay "Left"
+figure, neutral overlay bar tone, card footer diet, banner demotion, compact density mode).
+
+Fix 1 is the bug-class one: in last-month overlay mode the bar swaps to last period's spend, but
+`budgets_row.go` only gated the metrics strip / committed band / pace tick on `!lastMonthMode` —
+the prose captions (paceLine, paceMarkLine, proratedLine, rolloverLine, effectiveCapLine, envLine,
+envDebtLine) and the drivers panel still rendered this-month numbers under the last-month bar.
+Exactly the "card feels internally contradictory" critique. All eight now gate on `!lastMonthMode`.
+Deliberately KEPT in overlay mode: `thisMonthRef` ("This month: $X spent so far") as the one labeled
+cross-period cue, and `budgetTargetLine` (it reads against this month's budget, which the overlay
+intentionally displays as the comparison base). No new strings, no style changes. Wasm builds clean.
+
 ## 2026-07-17 — Connective layer: does this bill fit its budget?
 
 Third connective feature. A bill and a budget are the same money seen from two pages; the chip states

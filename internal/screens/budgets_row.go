@@ -241,8 +241,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	// Envelope methodology: show the carried-forward balance under the period row.
+	// Like every this-month caption below, it hides in last-month mode: the bar then
+	// shows a DIFFERENT period's spend, and a this-month pace/carry/cap line under a
+	// last-month bar reads as an internal contradiction (the L-overlay critique).
 	var envLine ui.Node = Fragment()
-	if props.Envelope != "" {
+	if !lastMonthMode && props.Envelope != "" {
 		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
 		if props.EnvelopeNeg {
 			cls += " " + tw.Fold(tw.TextDown)
@@ -254,7 +257,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// doesn't quietly vanish at the boundary. Caution amber (not danger red): it's a
 	// heads-up about where next period STARTS, not a "you're over now" alarm.
 	var envDebtLine ui.Node = Fragment()
-	if props.EnvelopeDebtStart != "" {
+	if !lastMonthMode && props.EnvelopeDebtStart != "" {
 		envDebtLine = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budget-envdebt-"+s.Budget.ID),
 			Attr("role", "status"), props.EnvelopeDebtStart)
 	}
@@ -262,7 +265,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Pace projection (D2): a gentle heads-up when current spending would blow the
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
-	if props.PaceOver != "" {
+	if !lastMonthMode && props.PaceOver != "" {
 		paceLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.paceOver", props.PaceOver))
 	}
 
@@ -271,7 +274,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// shown while in progress and when the pace overspend warning isn't already owning
 	// the message (paceOver is the stronger signal).
 	var paceMarkLine ui.Node = Fragment()
-	if props.PaceCaption != "" && props.PaceOver == "" {
+	if !lastMonthMode && props.PaceCaption != "" && props.PaceOver == "" {
 		tone := tw.TextFaint
 		if props.PaceHot {
 			tone = tw.TextWarn
@@ -281,7 +284,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	var rolloverLine ui.Node = Fragment()
-	if props.RolloverCarry != "" {
+	if !lastMonthMode && props.RolloverCarry != "" {
 		// A carried-in deficit is historical context about where the period STARTED, not a
 		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
 		// signal (the red status line) rather than several caption lines competing for the eye.
@@ -293,7 +296,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// arithmetic (base limit ± carry-over ± top-up), so the number is explainable at a
 	// glance instead of an opaque figure. Hidden when cap == base limit (no note needed).
 	var effectiveCapLine ui.Node = Fragment()
-	if props.EffectiveCap != "" {
+	if !lastMonthMode && props.EffectiveCap != "" {
 		if props.EffectiveCapMath != "" {
 			effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-capmath-"+s.Budget.ID),
 				uistate.T("budgets.effectiveCapMath", props.EffectiveCap, props.EffectiveCapMath))
@@ -306,7 +309,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// still in the period, so the user knows the sustainable daily-ish pace instead
 	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
 	var proratedLine ui.Node = Fragment()
-	if props.ProratedRest != "" {
+	if !lastMonthMode && props.ProratedRest != "" {
 		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
 			uistate.T("budgets.proratedRest", props.ProratedRest))
 	}
@@ -558,7 +561,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// "What's driving this?" — the analytical link (top charges → their ledger /
 				// subscriptions), offered only when a budget is near or over, where knowing
 				// WHY is what you actually want. Collapsed and lazy, so it never crowds a card.
-				If(s.State == budgeting.StateOver || s.State == budgeting.StateNear,
+				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
 					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget})),
 				metricsStrip,
 				actionsRow,
