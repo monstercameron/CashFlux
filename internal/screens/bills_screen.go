@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -219,6 +220,18 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		notice.Set(notice.Get().With(uistate.T("bills.reminderAdded", b.Name), false))
 	}
 
+	// Local bill-negotiation helper: opens the add-task modal pre-filled with a
+	// talking-points checklist for haggling this bill down — the on-device stand-in
+	// for a bill-negotiation service (which needs a paid integration). No money moves;
+	// it just hands the user the script and tracks the follow-up.
+	negotiate := func(b bills.Bill) {
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title: uistate.T("bills.negotiateTaskTitle", b.Name),
+			Notes: subscriptions.ChecklistNotes("", subscriptions.NegotiationTips(b.Name)),
+		})
+		uistate.SetAddTarget("task")
+	}
+
 	// Compute page-level smart insights once (not per row) so each BillRow can call
 	// smartBadgeFor with its AccountID. Bills use account IDs as the related entity
 	// (PageBills engines set RelatedID = account.ID for each liability account).
@@ -332,7 +345,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		},
 		func(r billRowData) ui.Node {
 			return ui.CreateElement(BillRow, billRowProps{
-				Data: r, OnRemind: remind, OnMarkPaid: markPaid, OnUnmarkPaid: unmarkPaid,
+				Data: r, OnRemind: remind, OnMarkPaid: markPaid, OnUnmarkPaid: unmarkPaid, OnNegotiate: negotiate,
 				SmartSettings: billSmartSettings,
 				SmartByEntity: billByEntity,
 			})
@@ -575,6 +588,7 @@ type billRowProps struct {
 	OnRemind     func(b bills.Bill, shown money.Money, dueLabel string)
 	OnMarkPaid   func(b bills.Bill)
 	OnUnmarkPaid func(b bills.Bill) // C154: removes the paid mark for this occurrence
+	OnNegotiate  func(b bills.Bill) // opens an add-task pre-filled with negotiation tips
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// Bills are liability accounts; the badge key is Bill.AccountID.
 	SmartSettings smart.Settings
@@ -597,6 +611,11 @@ func BillRow(props billRowProps) ui.Node {
 	unmarkPaid := ui.UseEvent(Prevent(func() {
 		if props.OnUnmarkPaid != nil {
 			props.OnUnmarkPaid(d.Bill)
+		}
+	}))
+	negotiate := ui.UseEvent(Prevent(func() {
+		if props.OnNegotiate != nil {
+			props.OnNegotiate(d.Bill)
 		}
 	}))
 	meta := d.DueLabel + " · " + daysUntilLabel(d.Bill.DaysUntil)
@@ -652,6 +671,12 @@ func BillRow(props billRowProps) ui.Node {
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
+			// Local bill-negotiation helper: seeds a to-do with talking points + a
+			// savings prompt (no external service). Shown for non-autopay recurring bills
+			// worth haggling (internet, insurance, phone) — small everyday bills aren't.
+			If(props.OnNegotiate != nil, Button(css.Class("btn btn-sm"), Type("button"),
+				Attr("data-testid", "bill-negotiate-"+d.Bill.AccountID),
+				Title(uistate.T("bills.negotiateTitle")), OnClick(negotiate), uistate.T("bills.negotiate"))),
 		),
 	)...)
 }

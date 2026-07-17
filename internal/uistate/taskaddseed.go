@@ -9,6 +9,7 @@ import "github.com/monstercameron/GoWebComponents/v4/state"
 // entity link. Empty fields simply leave the corresponding form field at its default.
 type TaskAddSeed struct {
 	Title    string
+	Notes    string // pre-filled task notes (e.g. a cancellation / negotiation checklist)
 	LinkType string // domain.RelatedType value ("transaction", …); "" = no link
 	LinkID   string
 }

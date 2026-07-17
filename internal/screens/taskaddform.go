@@ -112,6 +112,9 @@ type TaskAddFormProps struct {
 	PresetTitle    string
 	PresetLinkType string
 	PresetLinkID   string
+	// PresetNotes pre-fills the notes field — used by the "Track cancellation" /
+	// "Negotiation tips" helpers to seed a step-by-step checklist.
+	PresetNotes string
 }
 
 // TaskAddForm is the standalone add-a-task form. It owns all its state and
@@ -140,7 +143,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	title := ui.UseState(props.PresetTitle)
 	priority := ui.UseState(string(domain.PriorityMedium))
 	dueStr := ui.UseState(props.PresetDue)
-	notes := ui.UseState("")
+	notes := ui.UseState(props.PresetNotes)
 	errMsg := ui.UseState("")
 	presetLinkType := props.PresetLinkType
 	if presetLinkType == "" {

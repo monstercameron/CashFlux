@@ -283,10 +283,14 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		if app == nil {
 			return
 		}
+		// Turn the reminder into a GUIDED cancellation: a step-by-step checklist led by
+		// the annual savings — the local stand-in for a "cancel it for you" service, so
+		// it actually gets done and a re-charge gets caught (all on-device).
+		savingsLine := uistate.T("subs.cancelSaveLine", fmtMoney(money.New(s.AnnualAmount(), base)))
 		task := domain.Task{
 			ID:       id.New(),
 			Title:    uistate.T("subs.reminderTitle", s.Name),
-			Notes:    uistate.T("subs.reminderNote", fmtMoney(money.New(s.Amount, base)), subscriptionCadenceLabel(s.Cadence)),
+			Notes:    subscriptions.ChecklistNotes(savingsLine, subscriptions.CancelChecklist(s.Name)),
 			Status:   domain.StatusOpen,
 			Priority: domain.PriorityMedium,
 			Due:      s.NextRenewal,

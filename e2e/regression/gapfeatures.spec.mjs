@@ -27,4 +27,22 @@ test.describe("gap features", () => {
     await expect(figs).toContainText(/projected/i);
     await expect(figs).toContainText(/5% growth/i);
   });
+
+  test("subscription cancel helper: 'remind me' creates a tracked cancellation task", async ({ app }) => {
+    await nav(app, "/subscriptions");
+    await app.getByRole("button", { name: /remind me/i }).first().click();
+    await expect(app.locator("body")).toContainText(/added a reminder to review/i, { timeout: 15_000 });
+    // The created task is a guided cancellation checklist on the To-do list.
+    await nav(app, "/todo");
+    await expect(app.locator("#main")).toContainText(/review subscription/i, { timeout: 15_000 });
+  });
+
+  test("bill negotiation helper: 'negotiate' opens a task pre-filled with talking points", async ({ app }) => {
+    await nav(app, "/bills");
+    await app.locator('[data-testid^="bill-negotiate-"]').first().click();
+    const notes = app.locator("textarea.tc-notes").first();
+    await expect(notes).toBeVisible();
+    await expect(notes).toHaveValue(/competitor/i);
+    await expect(notes).toHaveValue(/retention/i);
+  });
 });
