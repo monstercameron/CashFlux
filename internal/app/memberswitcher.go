@@ -32,6 +32,10 @@ func MemberSwitcher() uic.Node {
 	if app == nil {
 		return Fragment()
 	}
+	// Subscribe to the shared data revision so a just-added member appears in
+	// the lens immediately (QA M1: the topbar otherwise rendered the stale
+	// pre-save roster until an unrelated re-render).
+	_ = uistate.UseDataRevision().Get()
 	members := app.Members()
 	// Only shown when the household has more than one member.
 	if len(members) < 2 {

@@ -81,6 +81,12 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 			errMsg.Set(err.Error())
 			return
 		}
+		// QA M1: without the revision bump the Household roster kept rendering the
+		// pre-save member list (the modal closed, the count stayed stale, and only
+		// a route change revealed the saved member). The notice is the success
+		// feedback the silent close lacked.
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("members.added", n), false)
 		// Reset fields.
 		name.Set("")
 		color.Set("#7c83ff")

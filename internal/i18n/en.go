@@ -2628,6 +2628,7 @@ var english = Catalog{
 	"members.name":               "Name",
 	"members.color":              "Member color",
 	"members.nameRequired":       "Enter a member name.",
+	"members.added":              "Added %s to the household.",
 	"members.listTitle":          "Household members",
 	"members.empty":              "No members yet.",
 	"members.addFirst":           "Add your first member",
