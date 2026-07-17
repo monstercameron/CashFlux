@@ -1,3 +1,20 @@
+## 2026-07-17 — #62: the dashboard learns to hold your place (lane 2)
+
+The card itself is composition — the interesting work was making each row's promise TRUE. The
+review-inbox and over-assignment rows are derived live (reviewqueue.Queue; the month-close
+over-assignment rule read off the memoized computeBudgetView), so they can't go stale by
+construction. The reconcile row rides lane 4's #48 drafts — enumerated by looping accounts over
+LoadReconcileDraft — and Resume deep-links the exact account row. Imports were the honesty
+problem: the wizard's review rows lived in component UseState, so ANY navigation away already
+destroyed them — a "resume" row would have been a lie the moment it worked. The rows moved to a
+session atom (uistate.UseImportDraftRows), documents.go's setDraft choke point stamps/clears a
+persisted row-count marker alongside, and a mount effect re-enters the review stage from restored
+rows. Post-reload, when the marker survives but the rows didn't, the row says exactly that —
+"its rows couldn't be kept — start it again" — rather than promising a resume it can't deliver.
+Deferred off first paint via useAfterSettle like the other data-heavy bands; hooks all sit above
+the early returns; per-row jump handlers live in a per-row component. 9/9 e2e including the #48
+draft round-trip driven through lane 4's own modal selectors.
+
 ## 2026-07-17 — #55 checkpoints + the undo-stealing derived writes (lane 4)
 
 Two connected pieces. The feature: a five-slot whole-dataset checkpoint ring saved to IndexedDB

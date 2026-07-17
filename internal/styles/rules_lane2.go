@@ -85,6 +85,50 @@ func registerLane2Dashboard() {
 		textDecoration("underline"),
 	)
 
+	// --- #62: the "Continue where you left off" resume card — a quiet band
+	// between the hero and the bento, in the catch-up card's vocabulary.
+	rule(".resume-card",
+		border("1px solid var(--border)"),
+		borderRadius("12px"),
+		background("var(--bg-card)"),
+		padding("0.7rem 0.9rem"),
+		margin("0.6rem 0"),
+	)
+	rule(".resume-card-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		marginBottom("0.4rem"),
+		fontSize("0.9rem"),
+	)
+	rule(".resume-dismiss",
+		border("none"),
+		background("transparent"),
+		color("var(--text-faint)"),
+		fontSize("1.1rem"),
+		cursor("pointer"),
+		padding("0 0.25rem"),
+	)
+	rule(".resume-dismiss:hover",
+		color("var(--text)"),
+	)
+	rule(".resume-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+	)
+	rule(".resume-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.75rem"),
+		flexWrap("wrap"),
+	)
+	rule(".resume-row-text",
+		fontSize("0.85rem"),
+		color("var(--text-dim)"),
+	)
+
 	// --- Needs attention: money vs household grouping.
 	rule(".attention-groups",
 		display("flex"),

@@ -25,6 +25,19 @@ var lane2Keys = Catalog{
 	// #76 — Needs attention grouping.
 	"dashboard.attnMoney":     "Money",
 	"dashboard.attnHousehold": "Household",
+
+	// #62 — "Continue where you left off" resume card.
+	"dashboard.resumeTitle":       "Continue where you left off",
+	"dashboard.resumeDismiss":     "Hide for now",
+	"dashboard.resumeReconcile":   "Reconciliation of %s is half-done.",
+	"dashboard.resumeImport":      "An import review is in progress — %d rows are waiting.",
+	"dashboard.resumeImportStale": "An import didn't finish, and its rows couldn't be kept. Start it again from Documents.",
+	"dashboard.resumeReview":      "%d transactions are waiting in the Review inbox.",
+	"dashboard.resumeOverassign":  "Your budgets assign %s more than this period brings in.",
+	"dashboard.resumeContinue":    "Continue",
+	"dashboard.resumeResume":      "Resume",
+	"dashboard.resumeResolve":     "Resolve",
+	"dashboard.resumeOpenDocs":    "Open Documents",
 }
 
 func init() {

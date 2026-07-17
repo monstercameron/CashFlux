@@ -1022,6 +1022,10 @@ func Dashboard() ui.Node {
 		// Dismissed per session (the atom resets on reload). Only shown when
 		// lastSeen > 0 (not the very first open) and newCount > 0.
 		ui.CreateElement(dashCatchUpCard),
+		// #62: "Continue where you left off" — unfinished flows (reconcile drafts,
+		// mid-wizard imports, review queue, over-assignment) with jump-back links.
+		// Renders nothing when there's nothing to resume.
+		ui.CreateElement(dashResumeCard),
 		// C319: the "Customize" entry point now lives in the top bar (DashCustomizeButton),
 		// grouped with the other page actions, instead of a floating bar above the bento.
 		// C8: on a genuinely empty workspace (no accounts and no transactions) the
