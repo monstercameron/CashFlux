@@ -1,3 +1,14 @@
+## 2026-07-17 — Top-bar "Updated X ago" stamp (parity-scan strip, item 8)
+
+The scan's dashboard bar asks for "Everyone · All accounts · Jul 2026 · Updated 4 min ago" — the
+first three legs already lived in the top bar (member lens, period control), so the work was the
+freshness leg. Local-first has no "last synced"; the honest analog is the last change to the
+dataset, which the audit feed already records (newest Feed entry, hydrated from SQLite at boot).
+One catch from live-driving: at 1440px the label collided with the smart-peek pill in tb-actions
+(the probe's click literally hit the sparkle SVG), so below 1720px the stamp collapses to the
+history glyph with the full sentence in title/aria. A 60s ticker keeps the age honest while idle.
+6/6 e2e.
+
 ## 2026-07-17 — Dashboard period contract (parity-scan defect 7)
 
 The probe made the defect crisp: paged to Aug, the hero zeroed income/spending but the recap still

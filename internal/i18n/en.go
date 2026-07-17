@@ -19,6 +19,9 @@ var english = Catalog{
 
 	// Top bar
 	"topbar.menu":          "Collapse menu",
+	"topbar.updated":       "Updated %s ago",
+	"topbar.updatedNow":    "Updated just now",
+	"topbar.updatedTitle":  "Last change: %s — open Activity",
 	"topbar.more":          "More",
 	"topbar.theme":         "Theme",
 	"muzak.turnOn":         "Turn music on",

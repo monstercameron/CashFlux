@@ -939,6 +939,9 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
 			If(periodAware, uic.CreateElement(ResolutionControl)),
+			// Freshness leg of the persistent context strip (parity scan): when
+			// the data last changed, one click from the change itself.
+			uic.CreateElement(UpdatedStamp),
 		),
 		// Actions zone: stays on the title row at every size.
 		Div(css.Class("tb-actions", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),

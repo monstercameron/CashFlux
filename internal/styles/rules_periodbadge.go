@@ -23,4 +23,26 @@ func registerPeriodBadge() {
 		textTransform("uppercase"),
 		whiteSpace("nowrap"),
 	)
+
+	// Top-bar "Updated Xm ago" stamp: a quiet text button in the context zone.
+	rule(".tb-updated",
+		background("none"),
+		border("0"),
+		padding("0.1rem 0.3rem"),
+		borderRadius("6px"),
+		color("var(--text-dim)"),
+		font("inherit"),
+		fontSize("0.78rem"),
+		whiteSpace("nowrap"),
+		cursor("pointer"),
+	)
+	rule(".tb-updated:hover, .tb-updated:focus-visible",
+		color("var(--text)"),
+		background("color-mix(in srgb, var(--text) 8%, transparent)"),
+	)
+	// Crowded top bars (below the fold-into-More breakpoint) keep only the
+	// history glyph; the title/aria-label still carry the full sentence.
+	ruleMedia("(max-width: 1720px)", ".tb-updated .tb-updated-label",
+		display("none"),
+	)
 }
