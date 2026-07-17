@@ -201,6 +201,14 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	})
 	mux.HandleFunc("GET /console/devcreds", devCredsHandler(cfg))
 	mux.Handle("GET /console/", consoleHandler(cfg))
+	// Customer self-service portal SPA (Phase 4): /portal/ serves web/portal assets,
+	// mirroring the operator console. /v1/me is the portal's scoped dashboard read.
+	mux.HandleFunc("GET /portal", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/portal/", http.StatusFound)
+	})
+	mux.Handle("GET /portal/", portalHandler(cfg))
+	mux.HandleFunc("OPTIONS /v1/me", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/me", handleMe(cfg, store))
 	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
 }
 

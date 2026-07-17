@@ -62,6 +62,7 @@ type Config struct {
 	PayPalReturnURL                   string
 	PayPalCancelURL                   string
 	ConsoleDir                        string
+	PortalDir                         string
 	OAuthProviders                    map[string]OAuthProviderConfig
 	OpenAIBaseURL                     string
 	AIProxyDisabled                   bool
@@ -147,6 +148,7 @@ func FromEnv() (Config, error) {
 	cfg.PayPalCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CANCEL_URL"))
 	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
+	cfg.PortalDir = envOr("CASHFLUX_SERVER_PORTAL_DIR", "web/portal")
 	cfg.OAuthProviders = oauthProvidersFromEnv()
 	cfg.OpenAIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_OPENAI_BASE_URL"))
 	cfg.AIProxyDisabled = !envBool("CASHFLUX_SERVER_AI_PROXY_ENABLED", true)

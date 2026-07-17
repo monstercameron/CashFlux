@@ -24764,3 +24764,10 @@ paymentProviders so the client shows only working buttons. Deleted the now-dead 
 stripePriceForInterval (the value-returning twin drives the seam). Server side of payments is now
 complete: two live providers, provider-neutral persistence + entitlement, replay-safe webhooks,
 discovery. Client selector next.
+## 2026-07-17 — Phase 4: customer portal + operator console (commercial self-service)
+
+4a: server enablement. Added portalHandler + CASHFLUX_SERVER_PORTAL_DIR + /portal/ mirroring the
+operator console serving, and a scoped GET /v1/me returning the caller's own subscription
+(status/plan/provider/periods + the entitlement verdict) + today's usage + the billing config
+(enabled + configured providers) in one call, so the portal dashboard renders from a single read.
+Strictly caller-scoped, no admin gate, no other users' data (tested: user2 never sees user1's sub).
