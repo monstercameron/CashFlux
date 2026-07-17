@@ -986,9 +986,18 @@ var english = Catalog{
 	"todo.tmplTaxReceipts":     "Collect receipts for large deductible purchases",
 	"todo.tmplTaxDonations":    "Review charitable donations and their records",
 	"todo.tmplTaxExport":       "Export the deductible-totals report",
-	"goals.linkExplain":        "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
-	"goals.quickFundChip":      "Set aside %s from %s",
-	"goals.quickFundEyebrow":   "Suggested",
+	// Condition-triggered task suggestions (todo suggest strip).
+	"todo.suggestHeading":    "Suggested — from your data",
+	"todo.suggestStale":      "Update the balance on %s",
+	"todo.suggestUnreviewed": "Review %d waiting transactions",
+	"todo.suggestOverspent":  "Bring the %s budget back under its limit",
+	"todo.suggestAdd":        "Add task",
+	"todo.suggestDismiss":    "Dismiss",
+	"todo.suggestAdded":      "Task added: %s",
+	"todo.suggestDismissed":  "Suggestion dismissed for a month.",
+	"goals.linkExplain":      "Linking names where this goal's money lives — it powers ledger-posted contributions, interest projections, and the account drill-down. It doesn't reserve anything; use Set aside for that.",
+	"goals.quickFundChip":    "Set aside %s from %s",
+	"goals.quickFundEyebrow": "Suggested",
 	// QA CF-15: suggestions across goals draw on ONE free-cash pool, so say so —
 	// applying one shrinks the others' suggestions on the spot.
 	"goals.quickFundTitle":       "Reserve the remaining amount in one click — no money moves. Suggestions share the same free cash: applying one updates the others.",

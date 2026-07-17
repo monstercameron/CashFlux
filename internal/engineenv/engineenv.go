@@ -171,6 +171,7 @@ var atomNames = []string{
 	"idle_cash_forgone_annual", // yearly yield left on the table on idle_cash at the benchmark (AC15)
 	"idle_cash_benchmark",      // the user-entered benchmark APR% the forgone figure uses (AC15)
 	"transactions",             // count of transactions
+	"txns_unreviewed",          // count of unreviewed non-transfer transactions (all time)
 	"members",                  // count of members
 	"budgets",                  // count of budgets
 	"goals",                    // count of goals
@@ -431,6 +432,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"idle_cash_forgone_annual": major(idle.ForgoneAnnualMinor),
 		"idle_cash_benchmark":      idle.BenchmarkAPRPercent,
 		"transactions":             float64(len(d.Transactions)),
+		"txns_unreviewed":          float64(unreviewedCount(d.Transactions)),
 		"members":                  float64(len(d.Members)),
 		"budgets":                  float64(len(d.Budgets)),
 		"goals":                    float64(len(d.Goals)),
@@ -1648,4 +1650,16 @@ func SortedNames() []string {
 	out := append([]string(nil), Names...)
 	sort.Strings(out)
 	return out
+}
+
+// unreviewedCount counts unreviewed non-transfer transactions — the review
+// backlog behind the txns_unreviewed atom (used by self-resolving review tasks).
+func unreviewedCount(txns []domain.Transaction) int {
+	n := 0
+	for _, t := range txns {
+		if !t.Reviewed && !t.IsTransfer() {
+			n++
+		}
+	}
+	return n
 }

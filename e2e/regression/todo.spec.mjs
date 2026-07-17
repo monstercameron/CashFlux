@@ -3,6 +3,30 @@
 // and drag-to-reorder in Custom order.
 import { test, expect, nav } from "./fixtures.mjs";
 
+test.describe("todo: condition-triggered suggestions", () => {
+  test("the Suggested strip proposes tasks; Add creates one and the row leaves", async ({ app }) => {
+    await nav(app, "/todo");
+    const strip = app.getByTestId("todo-suggest-strip");
+    await expect(strip).toBeVisible();
+    const rows = strip.locator('[data-testid^="todo-suggest-"][data-testid*=":"], [data-testid^="todo-suggest-stale"], [data-testid^="todo-suggest-overspent"], [data-testid="todo-suggest-unreviewed"]');
+    const before = await rows.count();
+    expect(before).toBeGreaterThan(0);
+    // Add the first proposal: it becomes a real task and its row leaves the strip.
+    const firstAdd = strip.locator('[data-testid^="todo-suggest-add-"]').first();
+    const addId = await firstAdd.getAttribute("data-testid");
+    await firstAdd.click();
+    await expect(app.locator("body")).toContainText(/Task added:/);
+    await expect(strip.locator(`[data-testid="${addId}"]`)).toHaveCount(0);
+    // Dismiss the next one (if any): quiet notice, row leaves.
+    const nextDismiss = strip.locator('[data-testid^="todo-suggest-dismiss-"]').first();
+    if (await nextDismiss.count()) {
+      const dId = await nextDismiss.getAttribute("data-testid");
+      await nextDismiss.click();
+      await expect(app.locator(`[data-testid="${dId}"]`)).toHaveCount(0);
+    }
+  });
+});
+
 test.describe("todo: checklist templates", () => {
   test("Month-end close instantiates a parent task with ordered steps", async ({ app }) => {
     await nav(app, "/todo");

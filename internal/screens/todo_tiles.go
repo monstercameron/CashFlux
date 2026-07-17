@@ -615,6 +615,9 @@ func todoListWidget(props todoListProps) ui.Node {
 		Title: uistate.T("todo.listTitle"),
 		Body: Fragment(
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+			// Condition-triggered proposals (stale balances, review backlog,
+			// overspent budgets) — one-click Add/Dismiss, never silent creation.
+			ui.CreateElement(todoSuggestStrip, app),
 			topPager,
 			listBody,
 			hiddenDoneNote,

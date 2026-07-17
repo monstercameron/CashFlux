@@ -114,6 +114,19 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Suggested tasks: propose, never create
+
+The condition system item. The design constraint came straight from the report ("never create
+tasks without showing the preview"): the strip proposes, the user adds. Three scanners in pure
+`tasksuggest` (stale balances via the freshness package, review backlog ≥5, overspent budgets
+via budgeting.Spent) — each suggestion carries the strongest self-resolve rule the engine
+surface can honestly express: a new `txns_unreviewed` atom for the backlog, the per-budget
+`budget_<slug>_over` var for overspends, and NOTHING for stale accounts (no var says "this
+balance was confirmed" — a fake condition would strand or falsely close tasks). Dismissals are
+30-day snoozes keyed by condition identity, not forever-mutes, so a recurring overspend can
+re-propose next month. Sample data proposes honestly: three stale loans and "Review 2265
+waiting transactions" — the imported ledger really is that unreviewed.
+
 ## 2026-07-17 — Checklists are just parent tasks
 
 The month-end-close/tax-prep item needed no new entity: Task already has ParentID nesting,
