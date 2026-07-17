@@ -3,6 +3,22 @@
 // and drag-to-reorder in Custom order.
 import { test, expect, nav } from "./fixtures.mjs";
 
+test.describe("todo: checklist templates", () => {
+  test("Month-end close instantiates a parent task with ordered steps", async ({ app }) => {
+    await nav(app, "/todo");
+    await app.getByTestId("todo-checklists-btn").click();
+    await app.getByTestId("todo-checklist-monthend").click();
+    // The undoable toast names the checklist and its step count.
+    await expect(app.locator("body")).toContainText(/Month-end close .* added with 5 steps/i);
+    // The parent appears in the list; search narrows to it and its steps.
+    await app.getByTestId("todo-search").fill("Month-end close");
+    await expect(app.locator("#main")).toContainText(/Month-end close — [A-Z][a-z]{2} \d{4}/);
+    // A couple of the steps exist (nested under the parent).
+    await app.getByTestId("todo-search").fill("Reconcile each cash account");
+    await expect(app.locator("#main")).toContainText(/Reconcile each cash account to its statement/);
+  });
+});
+
 test.describe("todo: toolbar", () => {
   test("has a search box, a linked-feature filter, Custom order, and a single-glyph Add", async ({ app }) => {
     await nav(app, "/todo");

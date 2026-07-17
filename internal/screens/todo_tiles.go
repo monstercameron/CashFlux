@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/taskboard"
+	"github.com/monstercameron/CashFlux/internal/taskchecklist"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -128,6 +129,47 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	onLink := ui.UseEvent(func(e ui.Event) { linkFilter.Set(e.GetValue()); linkID.Set(""); page.Set(1) })
 	clearSearch := ui.UseEvent(Prevent(func() { search.Set(""); page.Set(1) }))
 	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
+	// Checklist templates: one click instantiates a parent task + its steps
+	// (taskchecklist.Instantiate) for the recurring rituals — the month-end
+	// financial close and tax preparation. Plain closures; the OverflowMenu
+	// items own their hooks.
+	runChecklist := func(titleKey string, items []taskchecklist.Item, due time.Time) {
+		app := props.App
+		if app == nil {
+			return
+		}
+		title := uistate.T(titleKey, due.Format("Jan 2006"))
+		tasks := taskchecklist.Instantiate(title, items, due, id.New)
+		for _, task := range tasks {
+			if err := app.PutTask(task); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+		}
+		uistate.BumpDataRevision()
+		uistate.PostUndoable(uistate.T("todo.checklistAdded", title, len(tasks)-1))
+	}
+	addMonthEndClose := func() {
+		now := time.Now()
+		monthEnd := dateutil.MonthStart(now).AddDate(0, 1, -1)
+		runChecklist("todo.tmplMonthEnd", []taskchecklist.Item{
+			{Title: uistate.T("todo.tmplMEReconcile"), DueOffsetDays: -2},
+			{Title: uistate.T("todo.tmplMEReview"), DueOffsetDays: -2},
+			{Title: uistate.T("todo.tmplMEBudgets"), DueOffsetDays: -1},
+			{Title: uistate.T("todo.tmplMEGoals"), DueOffsetDays: -1},
+			{Title: uistate.T("todo.tmplMEReports")},
+		}, monthEnd)
+	}
+	addTaxPrep := func() {
+		due := time.Now().AddDate(0, 0, 30)
+		runChecklist("todo.tmplTaxPrep", []taskchecklist.Item{
+			{Title: uistate.T("todo.tmplTaxIncome"), DueOffsetDays: -21},
+			{Title: uistate.T("todo.tmplTaxDeductible"), DueOffsetDays: -14},
+			{Title: uistate.T("todo.tmplTaxReceipts"), DueOffsetDays: -14},
+			{Title: uistate.T("todo.tmplTaxDonations"), DueOffsetDays: -7},
+			{Title: uistate.T("todo.tmplTaxExport")},
+		}, due)
+	}
 	// View switch (list / board / calendar) + the board's group-by. Fixed set of
 	// controls, so their handlers sit at stable hook positions (no loop).
 	setViewList := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewList) }))
@@ -232,6 +274,18 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			),
 			Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
 				Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel)),
+			// Checklist templates: instantiate the month-end close or tax-prep
+			// ritual as a parent task + ordered steps.
+			uiw.OverflowMenu(uiw.OverflowMenuProps{
+				TriggerText:   uistate.T("todo.checklistsMenu"),
+				TriggerLabel:  uistate.T("todo.checklistsMenuTitle"),
+				TriggerTestID: "todo-checklists-btn",
+				TriggerClass:  "btn btn-tool",
+				Items: []uiw.OverflowMenuItem{
+					{Label: uistate.T("todo.checklistMonthEnd"), Icon: icon.Calendar, TestID: "todo-checklist-monthend", OnSelect: addMonthEndClose},
+					{Label: uistate.T("todo.checklistTaxPrep"), Icon: icon.FileText, TestID: "todo-checklist-taxprep", OnSelect: addTaxPrep},
+				},
+			}),
 			Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),

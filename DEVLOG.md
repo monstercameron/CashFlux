@@ -114,6 +114,16 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Checklists are just parent tasks
+
+The month-end-close/tax-prep item needed no new entity: Task already has ParentID nesting,
+Order for manual sequence, and per-task due dates. `taskchecklist.Instantiate` is 30 lines —
+parent + ordered children with relative due offsets — and everything downstream (0/5 progress,
+search, board columns, completion) works because the instantiated checklist IS ordinary tasks.
+The templates live as i18n strings, not config: two rituals with opinionated steps beats a
+template-builder nobody asked for. Due-date shape: month-end steps stagger BEFORE the close
+date (reconcile at -2 days, reports on the day); tax prep ladders across 30 days.
+
 ## 2026-07-17 — Cash forecast tile: sum the per-account curves, don't build a new engine
 
 The report wanted a 30/60/90-day dashboard forecast. Two candidate engines already existed:
