@@ -1,3 +1,13 @@
+## 2026-07-17 — Freshness card gains its repair loop (parity-scan item 9)
+
+The scan wants a "connection-health card with refresh and repair actions". CashFlux has no bank
+feeds to repair — the honest local equivalent is balance-confirmation recency, which the freshness
+card already reported but couldn't act on (chips were inert spans; the only actions were Remind
+and Dismiss). Now each chip is a per-account jump (SetDeepLinkFocus + /accounts, same seam the
+notification deep-links use, selector acct-row-<id>) and "Update balances" is the card's primary
+action. Chips are their own component (UseEvent-in-loop gotcha). Verified live: chip lands on the
+flashed Rewards Credit Card row beside its Update-balance button. 5/5 e2e.
+
 ## 2026-07-17 — Top-bar "Updated X ago" stamp (parity-scan strip, item 8)
 
 The scan's dashboard bar asks for "Everyone · All accounts · Jul 2026 · Updated 4 min ago" — the

@@ -45,4 +45,14 @@ func registerPeriodBadge() {
 	ruleMedia("(max-width: 1720px)", ".tb-updated .tb-updated-label",
 		display("none"),
 	)
+	// Freshness card: stale-account chips are BUTTONS now (jump-to-account
+	// repair affordance) — keep the member-chip look, add press affordances.
+	rule(".fresh-chip",
+		cursor("pointer"),
+		font("inherit"),
+	)
+	rule(".fresh-chip:hover, .fresh-chip:focus-visible",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
 }

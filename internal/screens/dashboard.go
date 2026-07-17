@@ -1114,6 +1114,47 @@ func humanizeStaleDays(days int) string {
 	}
 }
 
+// freshAcctChipProps configures one stale-account chip in the freshness card.
+type freshAcctChipProps struct {
+	AcctID string
+	Name   string
+	Age    string
+}
+
+// freshAcctChip is a per-account REPAIR affordance (parity scan: connection
+// health needs actions, not just information): clicking a stale account jumps
+// to its row on /accounts — flashed via the deep-link seam — where its balance
+// can be confirmed or corrected. Own component so its UseEvent hook is
+// registered outside the chips loop (CLAUDE.md hooks gotcha).
+func freshAcctChip(p freshAcctChipProps) ui.Node {
+	nav := router.UseNavigate()
+	click := ui.UseEvent(func() {
+		uistate.SetDeepLinkFocus(`[data-testid="acct-row-` + p.AcctID + `"]`)
+		nav.Navigate(uistate.RoutePath("/accounts"))
+	})
+	return Button(css.Class("member-chip fresh-chip"), Type("button"),
+		Title(uistate.T("dashboard.freshChipTitle", p.Name)),
+		Attr("data-testid", "fresh-chip-"+p.AcctID),
+		OnClick(click),
+		Span(p.Name),
+		Span(css.Class("fig", tw.TextWarn), "· "+p.Age),
+	)
+}
+
+// freshUpdateButton is the freshness card's primary repair action: open
+// /accounts, where every balance can be confirmed, corrected, or mass-marked
+// updated. Own component for its UseEvent hook.
+func freshUpdateButton(struct{}) ui.Node {
+	nav := router.UseNavigate()
+	click := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/accounts")) })
+	return Button(css.Class("btn", "btn-primary"), Type("button"),
+		Title(uistate.T("dashboard.updateBalancesTitle")),
+		Attr("data-testid", "fresh-update-btn"),
+		OnClick(click),
+		uistate.T("dashboard.updateBalances"),
+	)
+}
+
 func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismissals freshness.Dismissals, onRemind, onDismiss ui.Handler) ui.Node {
 	now := time.Now()
 	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
@@ -1131,10 +1172,11 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 		}
 		chips := make([]ui.Node, 0, len(shown)+1)
 		for _, a := range shown {
-			chips = append(chips, Span(css.Class("member-chip"),
-				Span(a.Name),
-				Span(css.Class("fig", tw.TextWarn), "· "+humanizeStaleDays(freshness.DaysSinceUpdate(a, now))),
-			))
+			chips = append(chips, ui.CreateElement(freshAcctChip, freshAcctChipProps{
+				AcctID: a.ID,
+				Name:   a.Name,
+				Age:    humanizeStaleDays(freshness.DaysSinceUpdate(a, now)),
+			}))
 		}
 		if extra > 0 {
 			chips = append(chips, Span(css.Class("member-chip", tw.TextDim), fmt.Sprintf("+%d more", extra)))
@@ -1143,6 +1185,7 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 			P(css.Class("t-body", tw.TextDim, tw.Mb2), uistate.T("dashboard.staleCount", len(stale))),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), chips),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
+				ui.CreateElement(freshUpdateButton, struct{}{}),
 				Button(css.Class("btn"), Type("button"), Title(uistate.T("dashboard.remindTitle")), OnClick(onRemind), uistate.T("dashboard.remind")),
 				Button(css.Class("btn"), Type("button"), OnClick(onDismiss), uistate.T("action.dismiss")),
 			),
