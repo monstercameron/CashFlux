@@ -73,6 +73,17 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — The 1-5 score inputs were the bug, not the sample data
+
+Follow-up to the landmine the stale-balance e2e stepped on. Chased the scale to its source:
+`Account.LiquidityScore` is documented 0..100, `validate` enforces 0..100, `allocate` divides by
+100, and the sample seeds 40-100 — the add/edit forms' 1-5 min/max (and "(1–5)" labels) were a
+UX-pass artifact that made native validation reject the stored value of any scored account, with
+the error bubble anchored to a field below the fold. Fixed both forms + labels to 0-100 and made
+the e2e the regression proof: save Joint Checking WITHOUT touching the score fields. Lesson
+reinforced: when a form field and its domain type disagree on range, the form is almost always
+the one that's wrong — check the consumers before "fixing" data.
+
 ## 2026-07-17 — Stale-balance opt-outs, and a validation landmine found by the e2e
 
 The freshness system had a per-type window, a per-account cadence override (AC5), and a

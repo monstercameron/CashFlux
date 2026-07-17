@@ -440,9 +440,9 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
 			Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(expReturn.Get()), Step("0.01"), OnInput(onExpReturn)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liquidity.Get()), OnInput(onLiquidity)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
-			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stability.Get()), OnInput(onStability)))),
 		// C74: lock-until is surfaced directly for lockable asset types (savings /
 		// investment / retirement / crypto / other) — no Advanced toggle required.
 		// Liquid everyday accounts (checking / debit / cash) can still reach it via

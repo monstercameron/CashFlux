@@ -155,12 +155,8 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     const snooze = dialog.getByTestId("acct-edit-fresh-snooze");
     await snooze.scrollIntoViewIfNeeded();
     await snooze.fill("2026-08-01");
-    // Known defect (tracked): sample liquidity/stability scores use the legacy
-    // 0-100 scale and trip the 1-5 native validation — clear them so Save runs.
-    for (const ph of [/easy to access/i, /low risk/i]) {
-      const f = dialog.getByPlaceholder(ph);
-      if ((await f.count()) && !["", "1", "2", "3", "4", "5"].includes(await f.inputValue())) await f.fill("");
-    }
+    // Regression: the score inputs enforce the canonical 0-100 scale, so a
+    // seeded account (liquidity 100) saves without touching those fields.
     await dialog.locator('button[type="submit"]').click();
     await app.waitForTimeout(650);
     // Reopen: the date persisted.

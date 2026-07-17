@@ -674,10 +674,13 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
 				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Value(apyS.Get()), Step("0.01"), OnInput(onApy)))),
+			// The canonical score scale is 0..100 (domain, validate, allocate). These
+			// inputs briefly enforced 1-5, which made every sample account with a
+			// seeded score (e.g. liquidity 100) fail native validation on Save.
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "5"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
 			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
 			// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
