@@ -553,6 +553,27 @@ it. Design decision worth keeping: the adjustment path doesn't auto-record — i
 difference and lets the normal Record button appear, so there's exactly one recording path.
 26 e2e assertions on the lane server, 0 page errors, first run green.
 
+## 2026-07-17 — The mobile pass: one grid defect, five spilling pages (#59)
+
+Every core page scrolled sideways at 390px, and it was ONE defect wearing five costumes: the
+phone bento override used `1fr` tracks, and `1fr` means minmax(min-content, 1fr) — so any tile
+containing an unshrinkable row (net-worth strip, budgets status strip, goal loader) widened its
+track past the viewport. `minmax(0,1fr)` + min-width:0 on tiles fixed accounts/budgets/goals/todo
+/transactions in one stroke; the rest was per-page stacking (trio two-up, strip cells stacked,
+loader figs wrapping, toolbar wrapping).
+
+Transactions rows got the real redesign: the ≤1200px "each td is a line" stack made ~7-line cards;
+now payee+amount share line one, date/account/category are a quiet meta strip, source/member fold,
+and the ⋯ floats right-center. Three deep lessons from making its menu a bottom sheet: (1) my own
+`translateY(-50%)` on the actions cell made the CELL the fixed-position containing block —
+centered via inset+flex instead; (2) after that, the sheet pinned to the TILE's bottom, 3000px
+off-screen — the bento tile's `will-change:transform` compositor hint creates a containing block
+for fixed descendants; phones drop the hint (single-column, no drag choreography there). (3) The
+scroll-reset-after-edit report reproduced as close-time focus restore scrolling the focused row
+into view — TxnEditHost now captures the pane offset at open and re-asserts it after close (once
+immediately, once at +120ms to outlast the focus restore). 23/23 e2e at 390 AND 320; the #50 nav
+suite re-run green.
+
 ## 2026-07-17 — The gz landmine gets defused at the serving path (#78)
 
 Chased the "main.wasm.gz 404 on direct loads" report to its actual mechanism: the loader fetches

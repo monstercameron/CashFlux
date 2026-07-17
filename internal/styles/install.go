@@ -65,6 +65,7 @@ func Register() {
 	registerPeriodBadge()
 	registerMobileShell()
 	registerHeaderBalance()
+	registerLane3Mobile()
 	registerTxnUpcoming()
 	registerReviewInboxSurface()
 	registerTxcFieldsSurface()
