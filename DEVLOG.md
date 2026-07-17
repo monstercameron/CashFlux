@@ -92,6 +92,12 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Seventh slice: Goals got a pure density pass, deliberately NOT a structure change. Two reasons:
+the 2026-07-16 goals overhaul already solved the structural stuff (opt-in planner, capped steps,
+clamped notes), and the inline action row the audit might have counted as verbosity is Cam's
+explicit directive ("move the non-delete menu opts outside of the kebab") — a standing contract
+the goals e2e pins. So: padding/loader/figs/gap trims only, ~20% shorter cards, same content.
+
 Sixth slice: the ledger's reading order. The description cell already had the right flex
 anatomy (truncating text, natural-size badges) — what it lacked was column-level priority, so
 auto table layout let account/category eat its width. A width hint on the td plus dim/size-capped

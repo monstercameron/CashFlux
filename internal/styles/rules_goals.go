@@ -51,15 +51,18 @@ func registerGoalsSurface() {
 	rule(".bento-goals .goal-list",
 		display("grid"),
 		gridTemplateColumns("1fr"),
-		gap("0.9rem"),
+		gap("0.7rem"),
 		alignItems("stretch"),
 	)
+	// 2026-07-17 audit: tighter card box — the page listed as "very long"; the
+	// density comes back through padding/loader trims, not removed content (the
+	// inline everyday actions are Cam's 2026-07-16 directive and stay).
 	rule(".bento-goals .goal-card",
 		position("relative"),
 		display("flex"),
 		flexDirection("column"),
 		minHeight("auto"),
-		padding("1.25rem 1.5rem 1.15rem"),
+		padding("0.95rem 1.2rem 0.85rem"),
 		border("1px solid var(--border)"),
 		borderRadius("16px"),
 		background("color-mix(in srgb, var(--bg-elev) 55%, transparent)"),
@@ -91,10 +94,10 @@ func registerGoalsSurface() {
 		letterSpacing("-0.01em"),
 		color("var(--text)"),
 	)
-	// The progress "loader": full-width, a touch taller, with a serif percent.
+	// The progress "loader": full-width, with a serif percent. 38px (audit trim).
 	rule(".bento-goals .goal-card-loader",
-		height("46px"),
-		margin("0.5rem 0 0"),
+		height("38px"),
+		margin("0.35rem 0 0"),
 		borderRadius("12px"),
 	)
 	rule(".bento-goals .goal-card-loader .budget-amount",
@@ -112,9 +115,9 @@ func registerGoalsSurface() {
 	rule(".goal-figs",
 		display("grid"),
 		gridTemplateColumns("repeat(auto-fit, minmax(150px, 1fr))"),
-		gap("0.5rem 1.5rem"),
-		margin("0.9rem 0"),
-		padding("0.9rem 0"),
+		gap("0.4rem 1.5rem"),
+		margin("0.6rem 0"),
+		padding("0.6rem 0"),
 		borderTop(hair),
 		borderBottom(hair),
 	)
@@ -133,7 +136,7 @@ func registerGoalsSurface() {
 	)
 	rule(".goal-fig-v",
 		fontFamily(serif),
-		fontSize("1.3rem"),
+		fontSize("1.2rem"),
 		fontWeight("600"),
 		lineHeight("1.15"),
 		color("var(--text)"),
