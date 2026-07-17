@@ -14,6 +14,14 @@ both conventions on both paths. Full remediation backlog (42 items) tracked in s
 display-side sign inconsistency (Dashboard shows the positive-stored debt un-parenthesized, CF-09)
 is its own follow-up.
 
+H2/CF-03 next: the CSV file picker fed `pendingCSV` for the dup preview, but the primary Import
+button and the modal footer Save both read only the paste textarea — the classic two-sources-of-
+truth split. Both QA reports hit it the same way ("Paste some CSV first" over an already-parsed
+file; Save closing the modal over staged work). Fix: staged pending bytes are now a first-class
+input for both actions when the paste box is empty. Kept "Import anyway" as the explicit dup
+confirmation; didn't merge the buttons — the dual primary/Save layout is a standardized-modal
+pattern flagged separately in the cross-cutting notes.
+
 ## 2026-07-17 — The real basis-persistence bug: locked boots seeded default prefs
 
 Cam, after the gen-guard ship: "still doesn't persist — saved, navved away and back, still there;

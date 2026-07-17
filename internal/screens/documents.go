@@ -386,6 +386,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	importCSV := ui.UseEvent(Prevent(func() {
 		data := strings.TrimSpace(csvText.Get())
 		if data == "" {
+			// QA H2/CF-03: a file picked via "Choose a CSV file" whose duplicate
+			// preview staged its bytes leaves the paste box empty — the primary
+			// Import must commit those staged bytes, not demand a paste.
+			if staged := pendingCSV.Get(); len(staged) > 0 {
+				commitCSVImport(staged)
+				return
+			}
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
@@ -963,6 +970,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		default:
 			if raw := []byte(strings.TrimSpace(csvText.Get())); len(raw) > 0 {
 				ok = commitCSVImport(raw)
+			} else if staged := pendingCSV.Get(); len(staged) > 0 {
+				// QA H2/CF-03: a chosen CSV file awaiting the duplicate confirmation
+				// counts as "something entered" — footer Save commits it rather than
+				// silently closing over the staged import.
+				ok = commitCSVImport(staged)
 			}
 		}
 		if ok {
