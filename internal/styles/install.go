@@ -62,6 +62,7 @@ func Register() {
 	registerMerchantTrendSurface()
 	registerPayeeCleanSurface()
 	registerRecapSurface()
+	registerPeriodBadge()
 	registerReviewInboxSurface()
 	registerTxcFieldsSurface()
 	registerNotifySurface()

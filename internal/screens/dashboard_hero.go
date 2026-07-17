@@ -97,6 +97,13 @@ func dashboardHero() ui.Node {
 	if sparkReady {
 		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates, nw.Net.Currency)
 	}
+	// Paged to another period, the "▲ $X this month" chip would sit beside the
+	// selected month's income/spending as if it belonged to that month — net
+	// worth is position-as-of-today, so the chip says that instead (parity-scan
+	// dashboard period contract).
+	if now := time.Now(); now.Before(start) || !now.Before(end) {
+		delta, deltaTone = uistate.T("dashboard.netWorthAsOfToday"), "text-dim"
+	}
 
 	return ui.CreateElement(heroSummary, heroSummaryProps{
 		NetWorth:     fmtMoney(nw.Net),

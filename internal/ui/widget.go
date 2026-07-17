@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -87,6 +88,33 @@ func widgetIcon(id string) icon.Name {
 	return ""
 }
 
+// todayBadgeWidgets are the dashboard tiles whose figures are CURRENT STATE —
+// positions, queues, and forward-looking lists that don't (and shouldn't)
+// re-window when the dashboard is paged to another month. While the viewed
+// period doesn't contain today, these tiles wear a small "Today" chip so the
+// number is honestly labeled instead of silently reading as the selected
+// month's value (the parity scan's dashboard period-contract defect).
+// Period-windowed tiles (income, spending, budgets, breakdown, cash flow,
+// recap, trend series) are deliberately absent — they follow the period.
+var todayBadgeWidgets = map[string]bool{
+	"kpi-networth":    true,
+	"kpi-assets":      true,
+	"kpi-liabilities": true,
+	"kpi-safetospend": true,
+	"attention":       true,
+	"bills":           true,
+	"recent":          true,
+	"accounts":        true,
+	"todo":            true,
+	"goals":           true,
+	"goal-states":     true,
+	"health":          true,
+	"freshness":       true,
+	"highlight":       true,
+	"smart-digest":    true,
+	"anomaly-hub":     true,
+}
+
 // gridCols is the bento width Pack flows tiles into.
 const gridCols = 4
 
@@ -136,6 +164,10 @@ func widget(props WidgetProps) uic.Node {
 	if props.BodyClass != "" {
 		bodyClass += " " + props.BodyClass
 	}
+
+	// The viewed period drives the "Today" chip on current-state tiles (hook —
+	// called unconditionally to keep the hook chain stable).
+	viewedPeriod := uistate.UsePeriod().Get()
 
 	// By default the gear opens this widget's settings panel; callers may
 	// override with an explicit OnGear.
@@ -433,6 +465,18 @@ func widget(props WidgetProps) uic.Node {
 	if ic := widgetIcon(props.ID); ic.Valid() {
 		titleNode = Span(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.MinW0), Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)), titleNode)
 	}
+	// Current-state tiles wear a "Today" chip while the dashboard is paged to
+	// another period (see todayBadgeWidgets).
+	var todayBadge uic.Node = Fragment()
+	if todayBadgeWidgets[props.ID] && !props.Preview {
+		ws, we := viewedPeriod.Range()
+		if now := time.Now(); now.Before(ws) || !now.Before(we) {
+			label := uistate.T("widget.todayBadge")
+			todayBadge = Span(css.Class("w-today"), Attr("data-testid", "w-today-badge"),
+				Attr("title", uistate.T("widget.todayBadgeTitle")), label)
+		}
+	}
+
 	// The drag grip signals draggability; a non-interactive preview tile drops it.
 	var grip uic.Node = Fragment()
 	if !props.Preview {
@@ -449,6 +493,7 @@ func widget(props WidgetProps) uic.Node {
 			Div(css.Class("wh"),
 				grip,
 				titleNode,
+				todayBadge,
 				gear,
 			),
 			Div(ClassStr(bodyClass), props.Body),

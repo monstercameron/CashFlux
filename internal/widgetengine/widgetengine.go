@@ -51,11 +51,27 @@ type DataCtx struct {
 	Start, End   time.Time
 	Now          time.Time
 
+	// ChartAnchor, when set, is the time trailing series windows (cash flow,
+	// formula/filtered-flow series, chart cutoffs) anchor their last month on —
+	// the surface's VIEWED period rather than the wall clock, so paging the
+	// dashboard to another month moves the charts with it. Zero means "anchor
+	// on Now". Genuinely current-state sources (upcoming bills) always use Now.
+	ChartAnchor time.Time
+
 	// MonthVars, when set, builds the engine variable surface for an arbitrary
 	// month window — what lets a "formula" series evaluate any formula or
 	// molecule once per month. Supplied by the surface host (it owns scope and
 	// the engineenv inputs); hosts that leave it nil can't hydrate formula series.
 	MonthVars func(start, end time.Time) map[string]float64
+}
+
+// chartNow returns the anchor for trailing series windows: the surface's
+// viewed-period anchor when set, else the wall clock.
+func (dc DataCtx) chartNow() time.Time {
+	if !dc.ChartAnchor.IsZero() {
+		return dc.ChartAnchor
+	}
+	return dc.Now
 }
 
 // Scope is the evaluation context a KPI/template hydrates against: the numeric
@@ -267,14 +283,14 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 			if months <= 0 {
 				months = 6
 			}
-			cutoffs := widgetdata.ChartWindow(dc.Now, months)
+			cutoffs := widgetdata.ChartWindow(dc.chartNow(), months)
 			return widgetsource.NetWorthSeries(dc.Accounts, dc.Transactions, dc.Rates, cutoffs), nil
 		case "cashflow":
 			months := s.Series.Months
 			if months <= 0 {
 				months = 4
 			}
-			return widgetsource.CashFlowSeries(dc.Transactions, dc.Rates, dc.Now, months), nil
+			return widgetsource.CashFlowSeries(dc.Transactions, dc.Rates, dc.chartNow(), months), nil
 		case "formula":
 			// A user formula/molecule evaluated once per trailing month —
 			// "income - expense", "savings_rate", a custom molecule: anything
@@ -285,7 +301,7 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 			if dc.MonthVars == nil {
 				return domain.Frame{}, errors.New("formula series: host supplies no variable surface")
 			}
-			return widgetsource.FormulaSeries(dc.Now, s.Series.Months, s.Series.Format, dc.Base, func(start, end time.Time) (float64, bool) {
+			return widgetsource.FormulaSeries(dc.chartNow(), s.Series.Months, s.Series.Format, dc.Base, func(start, end time.Time) (float64, bool) {
 				v, err := widgetspec.EvalKPI(s.Series.Expr, dc.MonthVars(start, end))
 				return v, err == nil
 			}), nil
@@ -296,7 +312,7 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 			if err != nil {
 				return domain.Frame{}, err
 			}
-			return widgetsource.FilteredFlowSeries(dc.Transactions, dc.Rates, dc.Now, s.Series.Months, match, s.Series.Abs), nil
+			return widgetsource.FilteredFlowSeries(dc.Transactions, dc.Rates, dc.chartNow(), s.Series.Months, match, s.Series.Abs), nil
 		default:
 			return domain.Frame{}, fmt.Errorf("unknown series metric %q", s.Series.Metric)
 		}

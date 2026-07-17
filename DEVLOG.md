@@ -1,3 +1,18 @@
+## 2026-07-17 — Dashboard period contract (parity-scan defect 7)
+
+The probe made the defect crisp: paged to Aug, the hero zeroed income/spending but the recap still
+said "July 1-17", cash flow still said "You kept $3,818.75 in Jul", and thirteen current-state
+tiles happily showed today's positions with no label. Two-part contract, matching the scan's
+minimum bar: (1) period-parameterized widgets FOLLOW the selection — recap anchors on the viewed
+month (recap.Compute already took an anchor; a past month lands complete, a future month has no
+data and shows the empty state), and trailing series charts anchor via a new DataCtx.ChartAnchor
+(chartNow() falls back to Now; UpcomingBills deliberately keeps Now). (2) current-state widgets
+get an explicit chip — a central `todayBadgeWidgets` registry in the tile shell renders a
+"TODAY" pill beside the title whenever the viewed period doesn't contain today, and the hero's
+"▲ $X this month" becomes "as of today". Chose an allowlist over badging-everything so
+user-authored formula tiles (whose period behavior depends on their expression) are never
+mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
+
 ## 2026-07-17 — Transfer preview: before/after balances from the post's own math
 
 First slice of the local-first UI-refinement sweep (the "product boundaries" report → 23-item

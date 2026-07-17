@@ -45,8 +45,16 @@ func recapStat(testID string, glyph icon.Name, label, value, sub, tone string) u
 // inline safely.
 func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 	const widgetID = "monthly-recap"
+	// The recap follows the dashboard's SELECTED period, not the wall clock: a
+	// past month recaps as its own completed month, the current month recaps
+	// live up to today (parity-scan defect: paging the period left the recap on
+	// "July 1–17"). A future month has no activity and shows the empty state.
 	now := time.Now()
-	rec, err := recap.Compute(now, c.ScopedTxns, c.ScopedAccounts, c.Rates)
+	anchor := now
+	if now.Before(c.Start) || !now.Before(c.End) {
+		anchor = c.End.Add(-time.Second) // last instant of the viewed period
+	}
+	rec, err := recap.Compute(anchor, c.ScopedTxns, c.ScopedAccounts, c.Rates)
 	if err != nil || !rec.HasData {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: widgetID, Title: uistate.T("dashboard.monthlyRecap"),
@@ -62,9 +70,9 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 
 	// Header: an explicit day range ("July 1–15") — one phrase, no redundant
 	// "as of" stamp. A completed month shows just its name.
-	heading := now.Month().String()
+	heading := anchor.Month().String()
 	if !rec.Complete {
-		heading += " 1–" + strconv.Itoa(now.Day())
+		heading += " 1–" + strconv.Itoa(anchor.Day())
 	}
 
 	// Stat 1 — the lead: spend CHANGE vs the same span last month (the hero shows
