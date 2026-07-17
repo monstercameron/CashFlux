@@ -86,6 +86,20 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Four balances and a provenance sentence
+
+The report's accounts section asked for provenance + a current/cleared/statement/projected
+display; all four numbers already existed in different corners (ledger.Balance,
+ClearedBalance, the new reconciliation history, acctproject's AC13 curve) — the feature was
+putting them in one place with labels. Provenance is the newest transaction's story
+(`ledger.BalanceProvenance`): adjustment → "last set by a manual adjustment", import/scan →
+"last moved by imported transactions", else "derived from recorded transactions", no txns →
+"opening balance". Adjustments are recognized via a caller predicate on the description
+(they're marked at the UI layer, and structurally flagging them would have meant editing
+accounts_tiles.go, which currently carries the concurrent session's uncommitted QA work —
+avoided the entanglement). Verified: Joint Checking shows 30,174.70 / 26,711.50 / — /
+28,666.70 with "last moved by imported transactions (Jul 4, 2026)".
+
 ## 2026-07-17 — Reconciliation grows a memory
 
 The reconcile flow computed a diff and threw it away — "Done" just closed the modal, so

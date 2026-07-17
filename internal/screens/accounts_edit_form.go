@@ -352,6 +352,53 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
+	// The 4-way balance strip + provenance chip shown above the value-update
+	// section: current / cleared / statement (last reconciliation) / 30-day
+	// projected, and how the balance most recently moved. Adjustments are
+	// identified by the update-balance description (they're marked at the UI
+	// layer, not structurally).
+	var balancesNode ui.Node = Fragment()
+	if app != nil {
+		provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), func(t domain.Transaction) bool {
+			return t.Source == domain.TxnSourceManual && t.Desc == uistate.T("accounts.balanceAdjustment")
+		})
+		provKey := map[ledger.ProvenanceKind]string{
+			ledger.ProvenanceOpening:  "accounts.provOpening",
+			ledger.ProvenanceAdjusted: "accounts.provAdjusted",
+			ledger.ProvenanceImported: "accounts.provImported",
+			ledger.ProvenanceDerived:  "accounts.provDerived",
+		}[provKind]
+		provText := uistate.T(provKey)
+		if !provAt.IsZero() {
+			provText += uistate.T("accounts.provAsOf", provAt.Format("Jan 2, 2006"))
+		}
+		stmtStr := uistate.T("accounts.balNone")
+		if n := len(a.Reconciliations); n > 0 {
+			stmtStr = fmtMoney(a.Reconciliations[n-1].StatementBalance)
+		}
+		projStr := uistate.T("accounts.balNone")
+		if a.Class != domain.ClassLiability && !isValuationType(a.Type) {
+			proj := app.ProjectAccount(a.ID, time.Now(), 30)
+			projStr = fmtMoney(money.New(proj.End, a.Currency))
+		}
+		stat := func(key, val, testid string) ui.Node {
+			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),
+				Span(css.Class("t-caption", tw.TextDim), uistate.T(key)),
+				Span(Attr("data-testid", testid), val))
+		}
+		balancesNode = Div(css.Class("acct-bal-strip"), Attr("data-testid", "acct-bal-4way"),
+			Style(map[string]string{"display": "flex", "flex-wrap": "wrap", "gap": "0.4rem 1.25rem",
+				"padding": "0.5rem 0.65rem", "border": "1px solid var(--border)", "border-radius": "8px",
+				"margin-bottom": "0.6rem"}),
+			stat("accounts.balCurrent", fmtMoney(curBal), "acct-bal-current"),
+			stat("accounts.balCleared", fmtMoney(curCleared), "acct-bal-cleared"),
+			stat("accounts.balStatement", stmtStr, "acct-bal-statement"),
+			stat("accounts.balProjected", projStr, "acct-bal-projected"),
+			Div(Style(map[string]string{"flex": "1 1 100%"}),
+				Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-bal-provenance"), provText)),
+		)
+	}
+
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
 		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app)
@@ -376,6 +423,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				revalueDaysS: revalueDaysS, onRevalueDays: onRevalueDays,
 				freshExemptS: freshExemptS, freshSnoozeS: freshSnoozeS,
 				onToggleFreshExempt: onToggleFreshExempt, onFreshSnooze: onFreshSnooze,
+				balancesNode: balancesNode,
 			})
 	}
 }
@@ -580,6 +628,9 @@ type acctEditExtra struct {
 	freshSnoozeS        ui.State[string]
 	onToggleFreshExempt ui.Handler
 	onFreshSnooze       ui.Handler
+	// balancesNode is the pre-built 4-way balance + provenance strip (built by
+	// the parent, which owns the app/cleared/projection inputs).
+	balancesNode ui.Node
 }
 
 func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
@@ -613,152 +664,174 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 		Div(css.Class("modal-scroll"),
 			// Merged "update value / balance" section, up top so the marquee account action
 			// (record a new value) is the fast path; leaving it blank keeps the balance as-is.
+			x.balancesNode,
 			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, onSetBalAmt, categories, focusValue),
-			labeledField(uistate.T("common.name"), Input(nameInput...)),
-			labeledField(uistate.T("accounts.typeLabel"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options:   typeOptions,
-					Selected:  typeS.Get(),
-					OnChange:  func(v string) { typeS.Set(v) },
-					AriaLabel: uistate.T("accounts.typeLabel"),
-					TestID:    "acct-edit-type-select",
-				})),
-			// "Other" is the catch-all type with no natural asset/liability class, so let the
-			// user say whether it's a debt — that's what the net-worth and debt formulas read.
-			If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
-				Div(css.Class("row-main"),
-					Span(uistate.T("accounts.countAsLiability")),
-					Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint"))))),
-			labeledField(uistate.T("common.owner"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
-					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),
-			If(len(members) >= 2, func() ui.Node {
-				shareSum := 0
-				for _, v := range sharesMapS.Get() {
-					shareSum += v
-				}
-				onShareChange := func(memberID string, valStr string) {
-					n, _ := strconv.Atoi(valStr)
-					m := sharesMapS.Get()
-					nm := make(map[string]int, len(m)+1)
-					for k, v := range m {
-						nm[k] = v
+			// QA CF-10: opened from the balance figure ("Update balance"), the account
+			// METADATA folds behind a native details disclosure so the dialog matches
+			// its label — value on top, everything else opt-in. The Edit entry keeps
+			// the full form expanded.
+			foldAccountDetails(focusValue, Fragment(
+				labeledField(uistate.T("common.name"), Input(nameInput...)),
+				labeledField(uistate.T("accounts.typeLabel"),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options:   typeOptions,
+						Selected:  typeS.Get(),
+						OnChange:  func(v string) { typeS.Set(v) },
+						AriaLabel: uistate.T("accounts.typeLabel"),
+						TestID:    "acct-edit-type-select",
+					})),
+				// "Other" is the catch-all type with no natural asset/liability class, so let the
+				// user say whether it's a debt — that's what the net-worth and debt formulas read.
+				If(isOther, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-as-liability"), OnChange(onToggleAsLiab)}, checkedAttr(asLiabS.Get())...)...),
+					Div(css.Class("row-main"),
+						Span(uistate.T("accounts.countAsLiability")),
+						Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.countAsLiabilityHint"))))),
+				labeledField(uistate.T("common.owner"),
+					uiw.SelectInput(uiw.SelectInputProps{Options: ownerSelectOptions(members, ownerS.Get()), Selected: ownerS.Get(),
+						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner")})),
+				If(len(members) >= 2, func() ui.Node {
+					shareSum := 0
+					for _, v := range sharesMapS.Get() {
+						shareSum += v
 					}
-					nm[memberID] = n
-					sharesMapS.Set(nm)
-				}
-				return Div(
-					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(splitOwnS.Get())), OnClick(onToggleSplitOwn),
-						IfElse(splitOwnS.Get(), Text(uistate.T("account.splitOwnership")+" ▴"), Text(uistate.T("account.splitOwnership")+" ▾"))),
-					If(splitOwnS.Get(), Div(
-						P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
-						MapKeyed(members, func(m domain.Member) any { return m.ID }, func(m domain.Member) ui.Node {
-							return ui.CreateElement(OwnerShareRow, ownerShareRowProps{Member: m, Share: sharesMapS.Get()[m.ID], OnChange: onShareChange})
-						}),
-						If(shareSum != 100, P(css.Class("err"), Attr("role", "alert"), uistate.T("account.shareSumError", shareSum))),
-					)),
-				)
-			}()),
-			labeledField(uistate.T("accounts.openingBalance"),
-				Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
-			If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim)))),
-			If(isLiab, labeledField(uistate.T("accounts.apr"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(aprS.Get()), Step("0.01"), OnInput(onApr)))),
-			If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp)))),
-			If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
-			// AC3: statement-close day — the day the billing cycle closes, distinct from the
-			// payment due day above. Powers real due dates in the bill calendar and a tighter
-			// on-time payment window.
-			If(isLiab, labeledField(uistate.T("accountsstmt.statementDay"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), Value(x.stmtDayS.Get()), OnInput(x.onStmtDay)))),
-			If(isLiab, labeledField(uistate.T("accounts.lender"),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
-			// C6: ONE Institution section. The directory picker leads (it colors the row
-			// and powers multi-institution analytics); picking an entry also sets the
-			// free-text label, which only shows as a fallback input while nothing is
-			// picked — so the modal never presents two competing "Institution" fields.
-			labeledField(uistate.T("accounts.institution"),
-				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-					uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: x.instIDS.Get(),
-						OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institution"), TestID: "acct-edit-institution-select"}),
-					Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-edit-manage-institutions"),
-						OnClick(x.openInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
-			If(x.instIDS.Get() == "", labeledField(uistate.T("accounts.institutionFreeLabel"),
-				uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
-					AriaLabel: uistate.T("accounts.institutionFreeLabel"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID}))),
-			// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
-			// go in the encrypted credential vault, never here.
-			labeledField(uistate.T("accounts.notes"),
-				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
-					AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
-			// C7: the mega-form is grouped — identity + money essentials stay visible;
-			// plumbing (variable name), estate planning, and tuning live behind ONE
-			// disclosure, available for every class (a mortgage has a beneficiary too).
-			Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "acct-edit-more"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
-				IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
-			// Optional explicit variable name for formulas/widgets (engine plumbing).
-			If(editAdvOpen.Get(), labeledField(uistate.T("accounts.varNameLabel"),
-				entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName))),
-			// AC16: who inherits this account — a plain beneficiary / transfer-on-death
-			// note surfaced (compassionately, never with a password) in the estate
-			// emergency pack.
-			If(editAdvOpen.Get(), Fragment(
-				labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
-					uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
-						AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
-				// AC11: keep this account visible in its class views but out of net worth.
-				Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
-					Div(css.Class("row-main"),
-						Span(uistate.T("accountsstmt.excludeNetWorth")),
-						Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
-				// Stale-balance reminders: opt out for good, or snooze until a date.
-				Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
-					Div(css.Class("row-main"),
-						Span(uistate.T("accounts.freshExempt")),
-						Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
-				If(!x.freshExemptS.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
-					Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
-						Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")),
-						Value(x.freshSnoozeS.Get()), OnInput(x.onFreshSnooze)))),
-			)),
-			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
-			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
-				Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Value(apyS.Get()), Step("0.01"), OnInput(onApy)))),
-			// The canonical score scale is 0..100 (domain, validate, allocate). These
-			// inputs briefly enforced 1-5, which made every sample account with a
-			// seeded score (e.g. liquidity 100) fail native validation on Save.
-			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
-			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
-			If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
-				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
-			// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
-			// crypto, or an "Other" you're treating as one) — 0/blank keeps the type's
-			// default cadence (internal/revalue). The freshness machinery already reads
-			// Account.RevalueDays; this is only the missing input.
-			If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
-					Placeholder(uistate.T("accounts.revalueDaysPh")), Value(x.revalueDaysS.Get()), OnInput(x.onRevalueDays)))),
-			If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
-			If(len(accDefs) > 0, Fragment(
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
-				MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-					return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
-				}),
+					onShareChange := func(memberID string, valStr string) {
+						n, _ := strconv.Atoi(valStr)
+						m := sharesMapS.Get()
+						nm := make(map[string]int, len(m)+1)
+						for k, v := range m {
+							nm[k] = v
+						}
+						nm[memberID] = n
+						sharesMapS.Set(nm)
+					}
+					return Div(
+						Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(splitOwnS.Get())), OnClick(onToggleSplitOwn),
+							IfElse(splitOwnS.Get(), Text(uistate.T("account.splitOwnership")+" ▴"), Text(uistate.T("account.splitOwnership")+" ▾"))),
+						If(splitOwnS.Get(), Div(
+							P(css.Class("t-caption", tw.TextDim), uistate.T("account.splitOwnershipHint")),
+							MapKeyed(members, func(m domain.Member) any { return m.ID }, func(m domain.Member) ui.Node {
+								return ui.CreateElement(OwnerShareRow, ownerShareRowProps{Member: m, Share: sharesMapS.Get()[m.ID], OnChange: onShareChange})
+							}),
+							If(shareSum != 100, P(css.Class("err"), Attr("role", "alert"), uistate.T("account.shareSumError", shareSum))),
+						)),
+					)
+				}()),
+				labeledField(uistate.T("accounts.openingBalance"),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Value(balS.Get()), Step("0.01"), OnInput(onBal))),
+				If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Value(climS.Get()), Step("0.01"), OnInput(onClim)))),
+				If(isLiab, labeledField(uistate.T("accounts.apr"),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Value(aprS.Get()), Step("0.01"), OnInput(onApr)))),
+				If(isLiab, labeledField(uistate.T("accounts.minPayment"),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Value(minpS.Get()), Step("0.01"), OnInput(onMinp)))),
+				If(isLiab, labeledField(uistate.T("accounts.dueDay"),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), Value(dueS.Get()), OnInput(onDue)))),
+				// AC3: statement-close day — the day the billing cycle closes, distinct from the
+				// payment due day above. Powers real due dates in the bill calendar and a tighter
+				// on-time payment window.
+				If(isLiab, labeledField(uistate.T("accountsstmt.statementDay"),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), Value(x.stmtDayS.Get()), OnInput(x.onStmtDay)))),
+				If(isLiab, labeledField(uistate.T("accounts.lender"),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), Value(lenderS.Get()), OnInput(onLender)))),
+				// C6: ONE Institution section. The directory picker leads (it colors the row
+				// and powers multi-institution analytics); picking an entry also sets the
+				// free-text label, which only shows as a fallback input while nothing is
+				// picked — so the modal never presents two competing "Institution" fields.
+				labeledField(uistate.T("accounts.institution"),
+					Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+						uiw.SelectInput(uiw.SelectInputProps{Options: institutionPickerOptions(appstate.Default), Selected: x.instIDS.Get(),
+							OnChange: x.onInstID, AriaLabel: uistate.T("accounts.institution"), TestID: "acct-edit-institution-select"}),
+						Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "acct-edit-manage-institutions"),
+							OnClick(x.openInstitutions), uistate.T("accounts.manageInstitutionsLink")))),
+				If(x.instIDS.Get() == "", labeledField(uistate.T("accounts.institutionFreeLabel"),
+					uiw.Combobox(uiw.SuggestProps{Value: institutionS.Get(), Placeholder: uistate.T("accounts.institutionHint"),
+						AriaLabel: uistate.T("accounts.institutionFreeLabel"), OnInput: onInstitution, Options: domain.UniqueInstitutions(accounts), ListID: "inst-list-edit-" + a.ID}))),
+				// Free-text notes. Plain text (rides the dataset export/sync) — logins/secrets
+				// go in the encrypted credential vault, never here.
+				labeledField(uistate.T("accounts.notes"),
+					uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("accounts.notesPlaceholder"),
+						AriaLabel: uistate.T("accounts.notes"), OnInput: onNotes})),
+				// C7: the mega-form is grouped — identity + money essentials stay visible;
+				// plumbing (variable name), estate planning, and tuning live behind ONE
+				// disclosure, available for every class (a mortgage has a beneficiary too).
+				Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "acct-edit-more"), Attr("aria-expanded", ariaBool(editAdvOpen.Get())), OnClick(onToggleEditAdv),
+					IfElse(editAdvOpen.Get(), Text(uistate.T("accounts.hideAdvanced")), Text(uistate.T("accounts.showAdvanced")))),
+				// Optional explicit variable name for formulas/widgets (engine plumbing).
+				If(editAdvOpen.Get(), labeledField(uistate.T("accounts.varNameLabel"),
+					entityVarField(accountVarKind, accountVarEntities(accounts), a.ID, "acct-edit-varname-"+a.ID, "account-varname-warn", varNameS.Get(), nameS.Get(), onVarName))),
+				// AC16: who inherits this account — a plain beneficiary / transfer-on-death
+				// note surfaced (compassionately, never with a password) in the estate
+				// emergency pack.
+				If(editAdvOpen.Get(), Fragment(
+					labeledField(uistate.T("accounts.beneficiaryNoteLabel"),
+						uiw.TextAreaInput(uiw.TextFieldProps{Value: x.beneficiaryNoteS.Get(), Placeholder: uistate.T("accounts.beneficiaryNotePh"),
+							AriaLabel: uistate.T("accounts.beneficiaryNoteLabel"), OnInput: x.onBeneficiaryNote})),
+					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.beneficiaryNoteHint")),
+					// AC11: keep this account visible in its class views but out of net worth.
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-exclude-networth"), OnChange(x.onToggleExclNW)}, checkedAttr(x.exclNWS.Get())...)...),
+						Div(css.Class("row-main"),
+							Span(uistate.T("accountsstmt.excludeNetWorth")),
+							Span(css.Class("row-meta", tw.TextDim), uistate.T("accountsstmt.excludeNetWorthHint")))),
+					// Stale-balance reminders: opt out for good, or snooze until a date.
+					Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+						Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "acct-edit-fresh-exempt"), OnChange(x.onToggleFreshExempt)}, checkedAttr(x.freshExemptS.Get())...)...),
+						Div(css.Class("row-main"),
+							Span(uistate.T("accounts.freshExempt")),
+							Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
+					If(!x.freshExemptS.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
+						Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
+							Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")),
+							Value(x.freshSnoozeS.Get()), OnInput(x.onFreshSnooze)))),
+				)),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
+					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Value(retS.Get()), Step("0.01"), OnInput(onRet)))),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
+					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Value(apyS.Get()), Step("0.01"), OnInput(onApy)))),
+				// The canonical score scale is 0..100 (domain, validate, allocate). These
+				// inputs briefly enforced 1-5, which made every sample account with a
+				// seeded score (e.g. liquidity 100) fail native validation on Save.
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), Value(liqS.Get()), OnInput(onLiq)))),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), Value(stabS.Get()), OnInput(onStab)))),
+				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), Value(lockS.Get()), OnInput(onLock)))),
+				// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
+				// crypto, or an "Other" you're treating as one) — 0/blank keeps the type's
+				// default cadence (internal/revalue). The freshness machinery already reads
+				// Account.RevalueDays; this is only the missing input.
+				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
+						Placeholder(uistate.T("accounts.revalueDaysPh")), Value(x.revalueDaysS.Get()), OnInput(x.onRevalueDays)))),
+				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
+				If(len(accDefs) > 0, Fragment(
+					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
+					MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
+					}),
+				)),
 			)),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 		),
+	)
+}
+
+// foldAccountDetails wraps the account-metadata fields. From the balance figure
+// ("Update balance", QA CF-10) they fold behind a native <details> disclosure so
+// the dialog is as narrow as its label; from Edit they render expanded as before.
+// A native disclosure keeps this stateless — no extra hooks, and the field nodes
+// are built identically in both modes so hook order never shifts.
+func foldAccountDetails(fold bool, fields ui.Node) ui.Node {
+	if !fold {
+		return fields
+	}
+	return Details(css.Class("csv-help acct-edit-fold"), Attr("data-testid", "acct-edit-details-fold"),
+		Summary(uistate.T("accounts.editDetailsFold")),
+		fields,
 	)
 }

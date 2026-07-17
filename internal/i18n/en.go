@@ -2128,6 +2128,7 @@ var english = Catalog{
 	"accounts.billLinkTitle":          "View the transactions marked as bill payments for this account",
 	"accounts.balanceTitle":           "Current balance",
 	"accounts.balanceEditTitle":       "Update this balance",
+	"accounts.editDetailsFold":        "Edit account details…", // QA CF-10: metadata folds when opened from the balance figure
 	"accounts.viewTxnsTitle":          "See this account's transactions",
 	"accounts.reconcileWhen":          "Match the account to a bank statement — tick off cleared transactions",
 	"accounts.transferWhen":           "Move money from this account to another (a payment when it's a debt)",
@@ -3062,6 +3063,17 @@ var english = Catalog{
 	"accounts.reconRecordAction":   "Record reconciliation",
 	"accounts.reconRecorded":       "Reconciliation recorded — reconciled through %s.",
 	"accounts.reconHistoryHeading": "Past reconciliations",
+	// 4-way balance strip + balance provenance (the merged editor's header).
+	"accounts.balCurrent":   "Current",
+	"accounts.balCleared":   "Cleared",
+	"accounts.balStatement": "Statement",
+	"accounts.balProjected": "Projected (30d)",
+	"accounts.balNone":      "—",
+	"accounts.provOpening":  "Balance comes from the opening balance — no transactions yet.",
+	"accounts.provAdjusted": "Balance was last set by a manual adjustment",
+	"accounts.provImported": "Balance last moved by imported transactions",
+	"accounts.provDerived":  "Balance is derived from recorded transactions",
+	"accounts.provAsOf":     " (%s).",
 
 	// L-series 6-lane sweep, round 2 (2026-06-23)
 	"nav.mobileTabLabel":          "Mobile navigation",

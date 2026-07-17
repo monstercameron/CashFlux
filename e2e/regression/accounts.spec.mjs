@@ -203,6 +203,26 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await app.keyboard.press("Escape");
   });
 
+  test("the merged editor shows the 4-way balance strip with provenance", async ({ app }) => {
+    await nav(app, "/accounts");
+    const kebab = app.locator('.add-wrap:has([data-testid="edit-account-btn-acct-checking"]) > button');
+    await kebab.scrollIntoViewIfNeeded();
+    await kebab.click();
+    await app.locator('[data-testid="edit-account-btn-acct-checking"]').click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    const strip = dialog.getByTestId("acct-bal-4way");
+    await expect(strip).toBeVisible();
+    // All four figures render; current and cleared are real money.
+    await expect(strip.getByTestId("acct-bal-current")).toContainText(/[\d,]+\.\d{2}/);
+    await expect(strip.getByTestId("acct-bal-cleared")).toContainText(/[\d,]+\.\d{2}/);
+    await expect(strip.getByTestId("acct-bal-statement")).toBeVisible();
+    await expect(strip.getByTestId("acct-bal-projected")).toContainText(/[\d,]+\.\d{2}/);
+    // The provenance line explains how the balance last moved.
+    await expect(strip.getByTestId("acct-bal-provenance")).toContainText(/balance/i);
+    await app.keyboard.press("Escape");
+  });
+
   test("the list-header Smart shortcut beside the class filter is gone", async ({ app }) => {
     await nav(app, "/accounts");
     // The class filter itself remains…
