@@ -93,6 +93,8 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	viewAtom := uistate.UseGoalsView()
 	addGoal := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("goal") }))
 	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
+	compareAtom := uistate.UseGoalCompareOpen()
+	openCompare := ui.UseEvent(Prevent(func() { compareAtom.Set(true) }))
 	showGoals := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewGoals) }))
 	showEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
 	sortVal := sortAtom.Get()
@@ -124,10 +126,16 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 					Option(Value(uistate.GoalSortComplexity), SelectedIf(sortVal == uistate.GoalSortComplexity), uistate.T("goals.sortComplexity")),
 					Option(Value(uistate.GoalSortDeadline), SelectedIf(sortVal == uistate.GoalSortDeadline), uistate.T("goals.sortDeadline")),
 					Option(Value(uistate.GoalSortName), SelectedIf(sortVal == uistate.GoalSortName), uistate.T("goals.sortName")),
+					Option(Value(uistate.GoalSortPriority), SelectedIf(sortVal == uistate.GoalSortPriority), uistate.T("goals.sortPriority")),
 				),
 			)),
 		),
 		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+			// Goal-vs-goal comparison (flip modal): pick two goals, read the figures
+			// side by side.
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "goals-compare-btn"),
+				Title(uistate.T("goalcompare.title")), Attr("aria-haspopup", "dialog"), OnClick(openCompare),
+				uistate.T("goalcompare.button")),
 			// TX11: round-up config lives in the goals toolbar (flip modal, staged Save/Cancel).
 			roundupConfigToolbarButton(),
 			Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),

@@ -195,6 +195,13 @@ func sortGoals(gs []domain.Goal, key string, tasks []domain.Task, now time.Time)
 		})
 	case uistate.GoalSortName:
 		sort.SliceStable(gs, func(i, j int) bool { return gs[i].Name < gs[j].Name })
+	case uistate.GoalSortPriority:
+		sort.SliceStable(gs, func(i, j int) bool {
+			if pi, pj := gs[i].PriorityRank(), gs[j].PriorityRank(); pi != pj {
+				return pi < pj // high (1) first; unprioritized last
+			}
+			return goalsvc.LessForList(gs[i], gs[j])
+		})
 	default: // GoalSortActionable
 		sort.SliceStable(gs, func(i, j int) bool { return goalsvc.LessForList(gs[i], gs[j]) })
 	}

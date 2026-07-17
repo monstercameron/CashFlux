@@ -86,6 +86,19 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Goal priority + compare: reuse the card's own math
+
+Priority is the small half: an int on the Goal (1..3, 0 = unset), a select in the edit form, a
+chip, and a sort case whose comparator lives on the domain type (`PriorityRank`, unset →
+sentinel-last) so it's testable without the wasm layer. The compare modal is the interesting
+half: every figure in the table comes from the SAME services the goal card renders from
+(CoverageMinor, MonthlyAssignment, goaltrajectory.Project) — computeGoalCompareStats is just a
+gathering point, so the modal can never contradict the cards. Both pickers exclude each other's
+selection (the C69 transfer-form pattern). Verified side-by-side on Baby fund vs the car-loan
+payoff: $840 vs $761.91 monthly, Nov 2026 vs Dec 2029 landings. Skipped goal DEPENDENCIES from
+the report item — ordering via priority covers the planning need without a dependency graph UI;
+revisit if the allocate engine ever wants hard constraints.
+
 ## 2026-07-17 — Liquidity classes derive; they don't configure
 
 The report suggested a per-account liquidity override; skipped it deliberately. The class is a

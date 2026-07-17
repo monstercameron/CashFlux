@@ -66,7 +66,12 @@ const (
 	GoalSortComplexity = "complexity" // most linked steps (to-dos) first
 	GoalSortDeadline   = "deadline"   // soonest target date first
 	GoalSortName       = "name"       // alphabetical
+	GoalSortPriority   = "priority"   // explicit priority first (high → low, unprioritized last)
 )
+
+// UseGoalCompareOpen returns the shared atom selecting whether the goal-vs-goal
+// compare modal (GoalCompareHost) is open. Ephemeral, like the sort choice.
+func UseGoalCompareOpen() state.Atom[bool] { return state.UseAtom("goals:compare", false) }
 
 // UseGoalSort returns the shared atom holding the active-goals sort key (default
 // GoalSortActionable). Ephemeral (resets on reload) — a transient view choice, like

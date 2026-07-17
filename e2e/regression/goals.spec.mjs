@@ -69,6 +69,45 @@ test.describe("goals: life-event templates", () => {
   });
 });
 
+test.describe("goals: priority + compare", () => {
+  test("priority set in Edit shows a chip, sorts first, and feeds the compare table", async ({ app }) => {
+    await nav(app, "/goals");
+    // Set High priority on the first financial goal via its Edit modal.
+    const gid = await firstFinancialGoalId(app);
+    expect(gid).toBeTruthy();
+    const editBtn = app.locator(`[data-testid="goal-edit-btn-${gid}"]`);
+    await editBtn.scrollIntoViewIfNeeded();
+    await editBtn.click();
+    await app.waitForTimeout(650);
+    const dialog = app.locator('[role="dialog"]');
+    const prio = dialog.getByTestId("goal-edit-priority");
+    await prio.scrollIntoViewIfNeeded();
+    await prio.selectOption("1");
+    await dialog.locator('button[type="submit"]').click();
+    await app.waitForTimeout(650);
+    // The card now wears the High-priority chip.
+    await expect(app.getByTestId(`goal-priority-${gid}`)).toContainText(/high priority/i);
+    // Priority sort puts it first.
+    await app.getByTestId("goals-sort").selectOption("priority");
+    await app.waitForTimeout(300);
+    const firstCard = app.locator('.goal-list [data-testid^="goal-row-"]').first();
+    await expect(firstCard).toHaveAttribute("data-testid", `goal-row-${gid}`);
+    // Compare: pick two goals, read the side-by-side figures.
+    await app.getByTestId("goals-compare-btn").click();
+    await app.waitForTimeout(650);
+    await expect(app.getByTestId("goal-compare-form")).toBeVisible();
+    await app.getByTestId("goal-compare-a").selectOption({ index: 1 });
+    await app.getByTestId("goal-compare-b").selectOption({ index: 1 }); // first non-A option
+    const table = app.getByTestId("goal-compare-table");
+    await expect(table).toBeVisible();
+    await expect(table).toContainText("Target");
+    await expect(table).toContainText("To go");
+    await expect(table).toContainText("Projected landing");
+    await expect(table).toContainText("Priority");
+    await app.keyboard.press("Escape");
+  });
+});
+
 test.describe("goals: landing-range scenarios", () => {
   test("a paced financial goal shows Best/Expected/Conservative landing dates", async ({ app }) => {
     await nav(app, "/goals");

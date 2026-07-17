@@ -850,6 +850,11 @@ type Goal struct {
 	// Archived marks a completed goal as moved to the "Achieved" section.
 	// JSON round-trips automatically; no store schema change is needed.
 	Archived bool `json:"archived,omitempty"`
+	// Priority orders goals for planning: 1 = high, 2 = medium, 3 = low; 0 (the
+	// default) = no explicit priority. Lower number = more important. Drives the
+	// priority sort and the compare view. Omitted from JSON when zero so
+	// existing rows round-trip with no migration needed.
+	Priority int `json:"priority,omitempty"`
 	// IsSinkingFund marks the goal as a sinking fund — a bucket you save
 	// into regularly for an irregular future expense (car repairs, holidays,
 	// annual subscriptions, etc.). Sinking funds are displayed in a dedicated
@@ -942,6 +947,16 @@ type Goal struct {
 // scolding and its contributions aren't expected (GL7).
 func (g Goal) IsPaused(now time.Time) bool {
 	return !g.PausedUntil.IsZero() && g.PausedUntil.After(now)
+}
+
+// PriorityRank returns the goal's sortable priority: its Priority when set
+// (1 = high sorts first), and a sentinel far past any real priority when unset
+// — unprioritized goals sort after every prioritized one.
+func (g Goal) PriorityRank() int {
+	if g.Priority <= 0 {
+		return 1 << 30
+	}
+	return g.Priority
 }
 
 // GoalAllocation is one virtual earmark: Amount of AccountID's balance reserved for a

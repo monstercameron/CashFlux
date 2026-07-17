@@ -110,6 +110,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	// several accounts gets a picker; defaults to the primary).
 	ledgerAcctS := ui.UseState(g.AccountID)
 	notesS := ui.UseState(g.Notes)
+	priorityS := ui.UseState(strconv.Itoa(g.Priority))
 	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
 	errS := ui.UseState("")
 	kindS := ui.UseState(kindInit)
@@ -155,6 +156,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			}
 			gg.OwnerID = ownerS.Get()
 			gg.Notes = strings.TrimSpace(notesS.Get())
+			gg.Priority, _ = strconv.Atoi(priorityS.Get())
 			if ownerS.Get() == domain.GroupOwnerID {
 				gg.Scope = domain.ScopeShared
 			} else {
@@ -457,6 +459,19 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 					OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("goals.owner"),
+				})),
+			// Priority (planning order): none / high / medium / low. Drives the
+			// toolbar's priority sort and shows as a chip on the card.
+			labeledField(uistate.T("goals.priorityLabel"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: []uiw.SelectOption{
+						{Value: "0", Label: uistate.T("goals.priorityNone")},
+						{Value: "1", Label: uistate.T("goals.priorityHigh")},
+						{Value: "2", Label: uistate.T("goals.priorityMedium")},
+						{Value: "3", Label: uistate.T("goals.priorityLow")},
+					},
+					Selected: priorityS.Get(), TestID: "goal-edit-priority",
+					OnChange: func(v string) { priorityS.Set(v) }, AriaLabel: uistate.T("goals.priorityLabel"),
 				})),
 			// A free-text note (why this goal exists, the plan) — shown on the goal card.
 			labeledField(uistate.T("goals.notesLabel"),

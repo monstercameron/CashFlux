@@ -651,6 +651,9 @@ func GoalRow(props goalRowProps) ui.Node {
 		// Header: the goal name on its own line, with kind-appropriate chips.
 		Div(css.Class("goal-card-head"),
 			Span(css.Class("goal-card-title"), g.Name),
+			// Explicit planning priority, when set (edit form → Priority).
+			If(g.Priority > 0, Span(css.Class("goal-chip"), Attr("data-testid", "goal-priority-"+g.ID),
+				Title(uistate.T("goals.priorityChipTitle")), uistate.T(goalPriorityKey(g.Priority)))),
 			paceBadgeNode,
 			pausedChip,
 			fundChip,
@@ -965,5 +968,17 @@ func goalCardStateClass(p goalsvc.Pace, complete bool) string {
 		return "is-soon"
 	default:
 		return "is-ontrack"
+	}
+}
+
+// goalPriorityKey maps a stored goal priority (1..3) to its chip label key.
+func goalPriorityKey(p int) string {
+	switch p {
+	case 1:
+		return "goals.priorityChipHigh"
+	case 2:
+		return "goals.priorityChipMedium"
+	default:
+		return "goals.priorityChipLow"
 	}
 }
