@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Assistant chat layout at real-world sizes (visual audit, 2026-07-17):** three fit-and-finish defects — (1) user message pills clipped long unbroken strings (URLs, pasted ids); they now break anywhere inside the bubble; (2) the chat console's 34rem minimum height pushed the docked composer below the fold at 720px-class viewports; the floor drops to 20rem so the console fits the screen; (3) the model/thinking/privacy control cell gains shrink/clip guards so it can never push the page sideways.
+
 ### Changed
 - **/notifications: alerts outrank celebration; read ≠ resolved (visual audit, 2026-07-17):** the "Recent wins" tile rendered above the prioritized feed, putting confetti before critical alerts — it now sits below the list. And the read-state dim softened from opacity 0.6 to 0.78, with critical alerts held at 0.95 even when read: seeing an alert doesn't resolve it, so urgency stays legible until it's dismissed or the condition clears.
 - **/goals cards tightened (visual audit, 2026-07-17):** the audit scored Goals 7.5/10 but flagged the page as very long. A density pass — card padding 1.25→0.95rem, the progress loader 46→38px, the figures band's margins/padding trimmed a third, stat figures 1.3→1.2rem, list gap 0.9→0.7rem — shortens every card without removing content (the inline everyday actions are Cam's 2026-07-16 directive and stay; the payday waterfall card already IS the audit's one-sentence/one-primary-action ideal).

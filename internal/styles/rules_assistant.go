@@ -114,6 +114,10 @@ func registerAssistantSurface() {
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
 		prop("border-radius", "14px 14px 4px 14px"),
 		prop("padding", "0.55rem 0.9rem"),
+		// 2026-07-17 audit: long unbroken strings (URLs, pasted ids) overflowed the
+		// pill and read as clipped — break anywhere inside the bubble instead.
+		prop("overflow-wrap", "anywhere"),
+		prop("min-width", "0"),
 	)
 	// The composer: the elevated centerpiece.
 	rule(".asst-composer",
@@ -252,7 +256,10 @@ func registerAssistantSurface() {
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 		prop("height", "calc(100vh - 12.5rem)"),
-		prop("min-height", "34rem"),
+		// 2026-07-17 audit: the old 34rem floor pushed the docked composer below
+		// the fold at short desktop heights (720px). 20rem keeps a usable canvas
+		// while letting the console actually fit the viewport.
+		prop("min-height", "20rem"),
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "var(--radius)"),
@@ -505,6 +512,16 @@ func registerAssistantSurface() {
 		prop("flex-direction", "column"),
 		prop("gap", "0.3rem"),
 		prop("min-width", "0"),
+	)
+	// 2026-07-17 audit: the control cell must never push the page sideways — every
+	// child is allowed to shrink/wrap, and anything still wider clips at the cell.
+	rule(".ask-controls",
+		prop("max-width", "100%"),
+		prop("overflow-x", "clip"),
+	)
+	rule(".ask-controls > *",
+		prop("min-width", "0"),
+		prop("max-width", "100%"),
 	)
 	rule(".ask-ctrl-lbl",
 		prop("font-size", "0.62rem"),

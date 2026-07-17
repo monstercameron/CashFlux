@@ -92,6 +92,11 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Ninth slice: Assistant — three CSS-only fixes (bubble overflow-wrap, console min-height 34→20rem
+so the docked composer fits a 720px viewport, shrink/clip guards on the control cell). The
+console's internal-scroll + docked-composer architecture was already right; only the floor was
+sized for tall monitors.
+
 Eighth slice: Notifications — two one-line fixes with outsized reads. Wins below the feed (the
 widget-spec order was literally the bug), and a severity-aware read-dim: the flat 0.6 opacity
 encoded "seen == handled", which is false precisely for the rows that matter most.
