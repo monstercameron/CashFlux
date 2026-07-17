@@ -272,7 +272,9 @@ type notifyRowProps struct {
 	TimeStr   string
 	OnRead    func()
 	OnDismiss func()
-	OnSnooze  func()
+	// OnSnoozeFor snoozes the notification for the given number of days (the
+	// row offers 1 / 7 / 30 — "until tomorrow / next week / next month").
+	OnSnoozeFor func(days int)
 }
 
 // notifyRow renders one notification as a card: a severity medallion (icon) on the left,
@@ -355,11 +357,26 @@ func notifyRow(props notifyRowProps) ui.Node {
 			props.OnDismiss()
 		}
 	})
-	onSnooze := ui.UseEvent(func() {
-		if props.OnSnooze != nil {
-			props.OnSnooze()
+	snoozeFor := func(days int) {
+		if props.OnSnoozeFor != nil {
+			props.OnSnoozeFor(days)
 		}
-	})
+	}
+	// The snooze horizon popover (1 day / 1 week / 1 month) — the row keeps its
+	// compact clock icon; the choice opens the standard add-menu popover.
+	snoozeOpen := ui.UseState(false)
+	snoozeID := ui.UseId()
+	toggleSnooze := ui.UseEvent(Prevent(func() { snoozeOpen.Set(!snoozeOpen.Get()) }))
+	closeSnooze := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false) }))
+	uiw.DismissPopover(snoozeOpen.Get(), snoozeID, func() { snoozeOpen.Set(false) })
+	uiw.AnchorPopover(snoozeOpen.Get(), snoozeID)
+	snooze1 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(1) }))
+	snooze7 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(7) }))
+	snooze30 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(30) }))
+	snoozeHidden := ""
+	if !snoozeOpen.Get() {
+		snoozeHidden = " hidden-menu"
+	}
 
 	cardCls := "notif " + notifySeverityClass(sev)
 	if it.Read {
@@ -411,8 +428,23 @@ func notifyRow(props notifyRowProps) ui.Node {
 		Div(css.Class("notif-actions"),
 			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
 				Attr("aria-label", readLabel), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4))),
-			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
-				Attr("aria-label", uistate.T("notifications.snooze")), Title(uistate.T("notifications.snooze")), OnClick(onSnooze), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
+			// Snooze picks its horizon (was a fixed 1 day): until tomorrow, next
+			// week, or next month.
+			Div(css.Class("add-wrap"), Attr("id", snoozeID),
+				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
+					Attr("aria-label", uistate.T("notifications.snooze")), Title(uistate.T("notifications.snooze")),
+					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(snoozeOpen.Get())),
+					OnClick(toggleSnooze), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+snoozeHidden), OnClick(closeSnooze)),
+				Div(ClassStr("add-menu"+snoozeHidden), Attr("role", "menu"),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1d-"+it.ID), OnClick(snooze1), uistate.T("notifications.snooze1d")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1w-"+it.ID), OnClick(snooze7), uistate.T("notifications.snooze1w")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1m-"+it.ID), OnClick(snooze30), uistate.T("notifications.snooze1m")),
+				),
+			),
 			Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"), Attr("data-testid", "notif-dismiss-"+it.ID),
 				Attr("aria-label", uistate.T("notifications.dismiss")), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),

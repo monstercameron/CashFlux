@@ -11,6 +11,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -290,11 +291,14 @@ func notifListWidget(props notifProps) ui.Node {
 			timeStr = pr.FormatDate(time.Unix(it.At, 0))
 		}
 		return ui.CreateElement(notifyRow, notifyRowProps{
-			Item:      it,
-			TimeStr:   timeStr,
-			OnRead:    func() { uistate.MarkFeedItemRead(id, !isRead) },
-			OnDismiss: func() { uistate.DismissFeedItem(id) },
-			OnSnooze:  func() { uistate.SnoozeFeedItem(id, time.Now().Unix()+86400) },
+			Item:    it,
+			TimeStr: timeStr,
+			OnRead:  func() { uistate.MarkFeedItemRead(id, !isRead) },
+			OnDismiss: func() {
+				uistate.DismissFeedItem(id)
+				uistate.PostNotice(uistate.T("notifications.dismissedNotice"), false)
+			},
+			OnSnoozeFor: func(days int) { uistate.SnoozeFeedItem(id, time.Now().Unix()+int64(days)*86400) },
 		})
 	}
 
@@ -345,7 +349,34 @@ func notifListWidget(props notifProps) ui.Node {
 	for _, r := range rows {
 		listArgs = append(listArgs, r)
 	}
-	return notifListTile(Div(listArgs...))
+	return notifListTile(Fragment(
+		ui.CreateElement(notifUndoBar, struct{}{}),
+		Div(listArgs...),
+	))
+}
+
+// notifUndoBar offers the one-level undo for the most recently dismissed
+// notification — dismissal was the only feed action with no way back. Renders
+// nothing when there's nothing to restore. Own component so its click hook
+// sits at a stable position (registered before the conditional render).
+func notifUndoBar(props struct{}) ui.Node {
+	// Subscribe to the FEED atom: dismiss/undo mutate the feed (not the data
+	// revision), and this component must re-render the moment either happens.
+	_ = uistate.UseNotifyFeed().Get()
+	undo := ui.UseEvent(Prevent(func() {
+		if uistate.UndoLastFeedDismiss() {
+			uistate.PostNotice(uistate.T("notifications.undoRestored"), false)
+		}
+	}))
+	if !uistate.HasUndoableFeedDismiss() {
+		return Fragment()
+	}
+	return Div(css.Class("t-caption"), Attr("data-testid", "notif-undo-bar"),
+		Style(map[string]string{"display": "flex", "gap": "0.6rem", "align-items": "center", "margin-bottom": "0.5rem"}),
+		Span(css.Class(tw.TextDim), uistate.T("notifications.undoPrompt")),
+		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "notif-undo-dismiss"),
+			OnClick(undo), uistate.T("notifications.undoAction")),
+	)
 }
 
 // notifListTile wraps the list body in the standard surface-host widget shell. The

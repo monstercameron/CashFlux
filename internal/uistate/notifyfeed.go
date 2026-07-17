@@ -147,6 +147,7 @@ func DismissFeedItem(id string) {
 	for _, it := range cur {
 		if it.ID == id {
 			found = true
+			lastDismissedFeedItem = &it
 			continue
 		}
 		out = append(out, it)
@@ -156,6 +157,35 @@ func DismissFeedItem(id string) {
 	}
 	PersistNotifyFeed(out)
 	setNotifyFeed(out)
+}
+
+// lastDismissedFeedItem remembers the most recently dismissed notification for
+// the one-level undo — session-scoped, which matches the promise the affordance
+// makes ("undo what I just did"), not a dismissal history.
+var lastDismissedFeedItem *FeedItem
+
+// HasUndoableFeedDismiss reports whether an undo-dismiss is available.
+func HasUndoableFeedDismiss() bool { return lastDismissedFeedItem != nil }
+
+// UndoLastFeedDismiss restores the most recently dismissed notification into
+// the feed (persisting + pushing the live atom) and clears the undo slot.
+// Returns whether anything was restored.
+func UndoLastFeedDismiss() bool {
+	if lastDismissedFeedItem == nil {
+		return false
+	}
+	restored := *lastDismissedFeedItem
+	lastDismissedFeedItem = nil
+	cur := loadNotifyFeed()
+	for _, it := range cur {
+		if it.ID == restored.ID {
+			return false // already back (e.g. the condition re-fired)
+		}
+	}
+	out := append([]FeedItem{restored}, cur...)
+	PersistNotifyFeed(out)
+	setNotifyFeed(out)
+	return true
 }
 
 // RemoveFeedItems drops every item for which drop() reports true, then persists

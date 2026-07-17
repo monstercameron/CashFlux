@@ -131,6 +131,18 @@ get an explicit chip — a central `todayBadgeWidgets` registry in the tile shel
 user-authored formula tiles (whose period behavior depends on their expression) are never
 mislabeled. 8/8 e2e; verified visually on Jun (past) and Aug (future).
 
+## 2026-07-17 — Notification snooze horizons + a one-level undo
+
+SnoozeFeedItem always took an arbitrary `until`; the UI just hard-coded +86400. Three-choice
+horizon menu (1d/7d/30d) — a per-row date PICKER would be ceremony for "shut up about this for
+a while." Undo-dismiss is deliberately one-level and session-scoped (a `lastDismissedFeedItem`
+slot): that's the promise the affordance makes — "undo what I just did" — not a dismissal
+history (which the notifications History tab already is). One framework lesson re-learned the
+hard way: the undo bar subscribed to UseDataRevision but dismissal mutates the FEED atom, so
+the bar never appeared until it subscribed to UseNotifyFeed — subscribe to the atom your
+condition actually reads. Auto-resolve was already real (boot reconcile RemoveFeedItems); left
+in place rather than duplicated per-render.
+
 ## 2026-07-17 — Release = a negative top-up
 
 The budgets item bundled three asks. "Release unused funds" shipped as the exact mirror of the

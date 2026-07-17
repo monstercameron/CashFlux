@@ -1035,6 +1035,14 @@ var english = Catalog{
 	"budgets.releaseTitle":   "Lower this period's cap to what's spent, returning the leftover to your plan. Future periods keep the normal limit.",
 	"budgets.releaseConfirm": "Release %s from \"%s\" for this period? The cap drops to what's spent; next period is unchanged.",
 	"budgets.releasedToast":  "Released %s from %s.",
+	// Notification snooze horizons + undo-dismiss.
+	"notifications.snooze1d":        "Snooze until tomorrow",
+	"notifications.snooze1w":        "Snooze for a week",
+	"notifications.snooze1m":        "Snooze for a month",
+	"notifications.dismissedNotice": "Notification dismissed.",
+	"notifications.undoPrompt":      "Dismissed a notification by mistake?",
+	"notifications.undoAction":      "Undo dismiss",
+	"notifications.undoRestored":    "Notification restored.",
 	// Explicit transaction state markers.
 	"transactions.clearedBadgeTitle":     "Cleared — confirmed against your bank.",
 	"transactions.needsReviewBadgeTitle": "Awaiting review — confirm it in the Review inbox.",
