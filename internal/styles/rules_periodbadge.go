@@ -77,4 +77,41 @@ func registerPeriodBadge() {
 	rule(".dash-drill-row:hover td, .dash-drill-row:focus-visible td",
 		color("var(--accent)"),
 	)
+	// Annual Review partial-period honesty + month drills (parity scan).
+	rule(".rpta-partial-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		marginTop("0.35rem"),
+		padding("0.15rem 0.6rem"),
+		borderRadius("999px"),
+		border("1px dashed var(--border)"),
+		color("var(--text-dim)"),
+		fontSize("0.78rem"),
+	)
+	rule(".rpta-month-drill",
+		background("none"),
+		border("0"),
+		padding("0"),
+		margin("0"),
+		font("inherit"),
+		color("inherit"),
+		cursor("pointer"),
+	)
+	rule(".rpta-month-drill:hover, .rpta-month-drill:focus-visible",
+		color("var(--accent)"),
+		textDecoration("underline"),
+		textUnderlineOffset("3px"),
+	)
+	rule(".rpta-inprogress",
+		marginLeft("0.45rem"),
+		padding("0.05rem 0.4rem"),
+		borderRadius("999px"),
+		border("1px dashed var(--border)"),
+		color("var(--text-dim)"),
+		fontSize("0.62rem"),
+		fontWeight("600"),
+		letterSpacing("0.06em"),
+		textTransform("uppercase"),
+		whiteSpace("nowrap"),
+	)
 }

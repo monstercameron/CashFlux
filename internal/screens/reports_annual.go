@@ -407,9 +407,20 @@ func Reports() ui.Node {
 				Span(css.Class("rpta-fig-spark-cap"), uistate.T("rpta.nwSparkCap"), " · ", rptaSrcLink("nav.netWorth", "/networth")))),
 		))
 	}
+	// Partial-period honesty (parity scan): when the window's newest month is
+	// still in progress, the masthead says so — a 17-day July beside eleven
+	// complete months must never read as a spending collapse.
+	var partialChip ui.Node = Fragment()
+	if nowM := time.Now(); !ae.After(dateutil.AddMonths(dateutil.MonthStart(nowM), 1)) && ae.After(nowM) {
+		daysIn := nowM.Day()
+		daysTotal := dateutil.AddMonths(dateutil.MonthStart(nowM), 1).AddDate(0, 0, -1).Day()
+		partialChip = Span(css.Class("rpta-partial-chip"), Attr("data-testid", "rpta-partial-chip"),
+			uistate.T("rpta.partialMonth", nowM.Format("January"), daysIn, daysTotal))
+	}
 	masthead := Div(css.Class("rpta-masthead"), Attr("data-testid", "rpt-hero"), Attr("id", "rpta-top"),
 		P(css.Class("rpta-eyebrow"), uistate.T("rpta.eyebrow")),
 		H1(css.Class("rpta-title", tw.FontDisplay), windowLine),
+		partialChip,
 		Div(ClassStr("rpta-verdict rpta-tone-"+verdictTone), Attr("data-testid", "rpta-verdict"),
 			Span(css.Class("rpta-verdict-score", tw.FontDisplay), rptaScoreText(health)),
 			Span(css.Class("rpta-verdict-line"), verdict),
@@ -597,8 +608,17 @@ func Reports() ui.Node {
 			keptMeter = Div(css.Class("rpta-kept-meter"), Attr("aria-hidden", "true"),
 				Div(ClassStr("rpta-kept-fill"+If2(f.Net() < 0, " rpta-kept-red", "")), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
 		}
+		// The in-progress month says so — a half-elapsed month sitting beside
+		// eleven complete ones otherwise reads as a spending collapse (parity
+		// scan: label partial periods).
+		nameCell := ui.CreateElement(rptaMonthDrill, rptaMonthDrillProps{
+			Label:      bounds[i].Format("January 2006"),
+			From:       bounds[i].Format(dateutil.Layout),
+			To:         bounds[i+1].AddDate(0, 0, -1).Format(dateutil.Layout),
+			InProgress: !bounds[i+1].Before(time.Now()) && bounds[i].Before(time.Now()),
+		})
 		monthRows = append(monthRows, Tr(ClassStr(rowCls),
-			Td(css.Class("rpta-td-name"), bounds[i].Format("January 2006")),
+			Td(css.Class("rpta-td-name"), nameCell),
 			Td(css.Class("rpta-td-num"), fmtMinor(f.Income)),
 			Td(css.Class("rpta-td-num"), fmtMinor(f.Expense)),
 			Td(ClassStr("rpta-td-num rpta-td-strong"+If2(f.Net() < 0, " rpta-tone-down", "")), fmtMinor(f.Net())),
@@ -1893,6 +1913,36 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 			exportMenu,
 		),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),
+	)
+}
+
+// rptaMonthDrillProps drives one month-name drill in the year-in-motion table.
+type rptaMonthDrillProps struct {
+	Label      string
+	From, To   string // inclusive ledger-filter dates for the month
+	InProgress bool   // the month contains today — label it, don't let it read as a collapse
+}
+
+// rptaMonthDrill renders a month name as a drill into the ledger filtered to
+// exactly that month's transactions (parity scan: every chart/table element
+// routes to its contributing transactions), with an "in progress" tag on the
+// current month. Own component so the hooks sit at a stable call-site.
+func rptaMonthDrill(props rptaMonthDrillProps) ui.Node {
+	nav := router.UseNavigate()
+	filterAtom := uistate.UseTxFilter()
+	drill := ui.UseEvent(Prevent(func() {
+		f := uistate.TxFilter{From: props.From, To: props.To}.Normalize()
+		filterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}))
+	return Fragment(
+		Button(css.Class("rpta-month-drill"), Type("button"),
+			Attr("title", uistate.T("rpta.monthDrillTitle", props.Label)),
+			OnClick(drill),
+			props.Label),
+		If(props.InProgress, Span(css.Class("rpta-inprogress"), Attr("data-testid", "rpta-inprogress"),
+			uistate.T("rpta.inProgress"))),
 	)
 }
 

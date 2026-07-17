@@ -1,3 +1,14 @@
+## 2026-07-17 — Reports parity batch: drills, partial labels, saved views (items 19-22)
+
+Scoped deliberately: the review's 12-month length stays fixed (the document IS an annual review —
+20 hardcoded 12s across 2,000 lines made length parameterization a poor risk mid-flight with a
+concurrent session editing the same file), while the END month is already arbitrary via the period
+control and single-month analysis now has a direct path: month rows drill to the ledger's From/To
+filter. Partial-period honesty is two surfaces — a masthead chip with the day count and a per-row
+"in progress" tag. Saved views needed no code (Save-current-as / apply / delete existed) — the e2e
+locks the round-trip, including that Clear ("View all") resets and re-applying restores the chips.
+9/9 e2e.
+
 ## 2026-07-17 — Pending-vs-posted ghost rows (parity-scan item 16)
 
 The scan says don't fake pending without a feed — so the ledger's new strip is the schedule's
