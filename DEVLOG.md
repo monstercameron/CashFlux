@@ -124,6 +124,14 @@ toolbars) before the actual work. Remediation is running as a 14-task list: thre
 above-the-fold rebuild, six per-page fixes, typography + contrast systems, then a full e2e +
 screenshot verification sweep.
 
+Eleventh slice: the type system. A full serif census (137 FontDisplay sites) showed most uses
+already conform — hero figures, page/section titles on the tools pages, the Annual Review's
+editorial headings. The genuine violations were goal-card TITLES (cards read sans per the
+audit rule) and the /budgets caption lines wearing the display face in the densest part of the
+app. Fixed those; stat-value joins tabular-nums. Deliberately did NOT chase the audit's px
+scale for heroes — ours sit at 2.6rem (~42px), inside tolerance, and "some numbers dramatically
+larger than their decision value" found no 3rem+ offenders in the sheet.
+
 Tenth slice: Reports. The masthead is the audit's favorite thing on the page — untouched. The
 space thief was the STICKY index: 11 labeled chips wrap to 2-3 rows under 1280px and, being
 sticky, tax every scroll position. Labels collapse to dot+number (tooltip keeps the name) on one

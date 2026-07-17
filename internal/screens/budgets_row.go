@@ -252,7 +252,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// last-month bar reads as an internal contradiction (the L-overlay critique).
 	var envLine ui.Node = Fragment()
 	if !lastMonthMode && props.Envelope != "" {
-		cls := "budget-sub " + tw.Fold(tw.FontDisplay)
+		cls := "budget-sub"
 		if props.EnvelopeNeg {
 			cls += " " + tw.Fold(tw.TextDown)
 		}
@@ -294,7 +294,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// A carried-in deficit is historical context about where the period STARTED, not a
 		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
 		// signal (the red status line) rather than several caption lines competing for the eye.
-		cls := "budget-sub " + tw.Fold(tw.FontDisplay, tw.TextDim)
+		cls := "budget-sub " + tw.Fold(tw.TextDim)
 		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
 	}
 

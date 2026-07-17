@@ -82,15 +82,16 @@ func registerGoalsSurface() {
 		gap("0.5rem"),
 		marginBottom("0.35rem"),
 	)
+	// Audit type system: serif is reserved for page titles, hero numbers, and
+	// major report-section titles — a card title reads in the sans family.
 	rule(".bento-goals .goal-card-title",
 		flex("1 1 auto"),
 		minWidth("0"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
-		fontFamily(serif),
 		fontWeight("600"),
-		fontSize("1.3rem"),
+		fontSize("1.15rem"),
 		letterSpacing("-0.01em"),
 		color("var(--text)"),
 	)

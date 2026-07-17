@@ -350,13 +350,13 @@ func budgetAssignBanner(v budgetView) ui.Node {
 				uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-unbudgeted, v.Base)))))
 		}
-		return P(css.Class("budget-sub", tw.FontDisplay),
+		return P(css.Class("budget-sub"),
 			uistate.T("budgets.simpleIncome", fmtMoney(money.New(v.BannerIncome, v.Base))), " · ",
 			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(v.TotalLimit, v.Base))), " · ", diff)
 	case budgeting.MethodZeroBased:
 		return zeroBasedHero(v, Fragment())
 	case budgeting.MethodEnvelope:
-		return P(css.Class("budget-sub", tw.FontDisplay), uistate.T("budgets.envelopeNote"))
+		return P(css.Class("budget-sub"), uistate.T("budgets.envelopeNote"))
 	}
 	return Fragment()
 }
@@ -1134,7 +1134,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	if count == 0 {
 		// Healthy: at most the quiet set-aside footnote and/or a near-limit pill.
 		return Div(
-			If(v.TotalFundSetAside > 0, P(css.Class("budget-sub", tw.FontDisplay), Attr("data-testid", "budgets-fund-setaside"),
+			If(v.TotalFundSetAside > 0, P(css.Class("budget-sub"), Attr("data-testid", "budgets-fund-setaside"),
 				uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))),
 			If(v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Span(css.Class("pill is-warn"), uistate.T("budgets.nearBadge", v.NearCount)))),

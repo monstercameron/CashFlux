@@ -2004,6 +2004,8 @@ func registerGenerated() {
 		marginTop("0.3rem"),
 		whiteSpace("nowrap"),
 		letterSpacing("-0.015em"),
+		// Audit type system: every aligned financial value sets tabular numerals.
+		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".stat-value.is-hero",
 		fontSize("2.1rem"),
