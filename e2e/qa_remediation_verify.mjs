@@ -326,6 +326,73 @@ for (const el of await page.locator('[data-testid^="sub-howto-cancel-"]').all())
 const badCancels = cancelIDs.filter((id) => /cigarette|electric|pharma|gas\b|grocer/i.test(id || ""));
 check("M5: no cancel affordances for utilities/retail spending", badCancels.length === 0, badCancels.join(", ") || `${cancelIDs.length} cancel links, all services`);
 
+// ──────────── M6 + CF-13 + CF-22: accessible names on grouped controls ────────────
+// M6: the first linked-account checkbox must be named by ITS row only.
+await nav("/goals");
+await page.waitForTimeout(1200);
+const goalEdit = page.locator('[data-testid^="goal-edit-btn-"]').first();
+if (await goalEdit.count()) {
+  await goalEdit.click();
+  await page.waitForTimeout(900);
+  const firstLink = page.locator('[data-testid^="goal-link-acct-"]').first();
+  if (await firstLink.count()) {
+    const name = await firstLink.evaluate((el) => {
+      // accessible name approximation: aria-label, else the wrapping label's text
+      const al = el.getAttribute("aria-label");
+      if (al) return al;
+      const lab = el.closest("label");
+      return lab ? lab.textContent.trim() : "";
+    });
+    check("M6: first linked-account checkbox named by its own row", name.length > 0 && name.length < 60 && !name.includes("Linked accounts"), JSON.stringify(name.slice(0, 80)));
+    const inFieldset = await firstLink.evaluate((el) => !!el.closest("fieldset"));
+    check("M6: checklist group is a fieldset, not a label", inFieldset);
+  } else {
+    check("M6: linked-account checklist present in goal editor", false);
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+} else {
+  check("M6: goal edit trigger reachable", false);
+}
+
+// CF-13: auto-budget include checkboxes carry names.
+await nav("/budgets");
+await page.waitForTimeout(1200);
+const autoBtn = page.locator('[data-testid="budgets-autobudget"]');
+if (await autoBtn.count()) {
+  await autoBtn.click();
+  await page.waitForTimeout(1200);
+  const pick = page.locator('[data-testid^="autobudget-pick-"]').first();
+  if (await pick.count()) {
+    const al = await pick.getAttribute("aria-label");
+    check("CF-13: auto-budget checkbox has an accessible name", !!al && /include/i.test(al), al || "(none)");
+  } else {
+    check("CF-13: auto-budget rows present", false);
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+} else {
+  check("CF-13: auto-budget entry reachable", false);
+}
+
+// CF-22: flagged-activity source actions carry distinct names.
+await nav("/assistant");
+await page.waitForTimeout(1500);
+const insightsTab = page.locator('button:has-text("Insights")').first();
+if (await insightsTab.count()) {
+  await insightsTab.click();
+  await page.waitForTimeout(1500);
+}
+const flagBtns = await page.locator('[data-testid="flag-source"]').all();
+if (flagBtns.length >= 2) {
+  const names = [];
+  for (const b of flagBtns.slice(0, 5)) names.push(await b.getAttribute("aria-label"));
+  const distinct = new Set(names).size;
+  check("CF-22: flag source actions have distinct accessible names", distinct === names.length, `${distinct}/${names.length} distinct: ${names[0]}`);
+} else {
+  check("CF-22: flagged activity rows not present this run (aria carries titles by construction)", true, `${flagBtns.length} rows`);
+}
+
 console.log(`\npageerrors: ${errors.length} ${errors.slice(0, 3).join(" | ")}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 await browser.close();

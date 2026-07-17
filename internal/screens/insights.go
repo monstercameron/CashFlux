@@ -2161,9 +2161,12 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
 			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
 			Div(css.Class("insight-row-actions"),
+				// QA CF-22: every row's actions shared one accessible name ("Go to the
+				// source of this flag" ×15) — the name now carries the finding's title
+				// so AT users can tell the targets apart.
 				Button(css.Class("insight-row-btn"), Type("button"),
-					Attr("data-testid", "flag-source"), Attr("aria-label", uistate.T("assistant.flagSourceAria")),
-					Title(uistate.T("assistant.flagSourceAria")), OnClick(navigate),
+					Attr("data-testid", "flag-source"), Attr("aria-label", uistate.T("assistant.flagSourceAriaFor", p.Insight.Title)),
+					Title(uistate.T("assistant.flagSourceAriaFor", p.Insight.Title)), OnClick(navigate),
 					uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 					Span(uistate.T("assistant.flagSource")),
 				),
@@ -2171,8 +2174,8 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 				// tab); the Insights data panel reuses this row without a chat, so it
 				// passes no OnDiscuss and the button is omitted.
 				If(p.OnDiscuss != nil, Button(css.Class("insight-row-btn"), Type("button"),
-					Attr("data-testid", "flag-discuss"), Attr("aria-label", uistate.T("assistant.flagDiscussAria")),
-					Title(uistate.T("assistant.flagDiscussAria")), OnClick(discuss),
+					Attr("data-testid", "flag-discuss"), Attr("aria-label", uistate.T("assistant.flagDiscussAriaFor", p.Insight.Title)),
+					Title(uistate.T("assistant.flagDiscussAriaFor", p.Insight.Title)), OnClick(discuss),
 					uiw.Icon(icon.MessageCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 					Span(uistate.T("assistant.flagDiscuss")),
 				)),

@@ -487,7 +487,10 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			// LIQUID cash accounts are offered (same eligibility as the earmark picker —
 			// a goal's money doesn't live in a 401(k) or a mortgage). An ineligible account
 			// that's ALREADY linked stays listed so it can be unchecked, never silently lost.
-			If(financial, labeledField(uistate.T("goals.linkedAccounts"),
+			// groupedField (fieldset+legend), NOT labeledField: a <label> wrapping the
+			// checklist handed the first checkbox the entire group text as its
+			// accessible name (QA M6).
+			If(financial, groupedField(uistate.T("goals.linkedAccounts"),
 				Div(css.Class("goal-link-list"), Attr("data-testid", "goal-link-accts"),
 					If(len(app.Accounts()) == 0, P(css.Class("budget-sub"), uistate.T("goals.noAccountsToLink"))),
 					MapKeyed(goalLinkableAccounts(app.Accounts(), acctSetS.Get()), func(a domain.Account) any { return a.ID }, func(a domain.Account) ui.Node {
@@ -499,7 +502,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 					Span(css.Class("budget-sub"), uistate.T("goals.linkedAccountsHint")),
 				))),
 			// Linked budgets (0..N) — the budget lines that feed this goal.
-			If(financial, labeledField(uistate.T("goals.linkedBudgets"),
+			If(financial, groupedField(uistate.T("goals.linkedBudgets"),
 				Div(css.Class("goal-link-list"), Attr("data-testid", "goal-link-budgets"),
 					If(len(app.Budgets()) == 0, P(css.Class("budget-sub"), uistate.T("goals.noBudgetsToLink"))),
 					MapKeyed(app.Budgets(), func(b domain.Budget) any { return b.ID }, func(b domain.Budget) ui.Node {

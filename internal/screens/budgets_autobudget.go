@@ -252,8 +252,12 @@ func autoBudgetRow(props autoBudgetRowProps) ui.Node {
 		readoutCls += " is-tuned"
 	}
 	return Div(ClassStr(rowCls), Attr("data-testid", "autobudget-row-"+props.CategoryID),
+		// The pick label holds only the input, so without an explicit name the
+		// accessibility tree exposed a wall of anonymous checkboxes (QA CF-13).
 		Label(css.Class("autobudget-pick"),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "autobudget-pick-"+props.CategoryID), OnChange(onToggle)}, checkedAttr(props.Picked)...)...)),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "autobudget-pick-"+props.CategoryID),
+				Attr("aria-label", uistate.T("budgets.autoPickAria", props.CategoryName, fmtMoney(money.New(props.SuggestedMinor, props.Base)))),
+				OnChange(onToggle)}, checkedAttr(props.Picked)...)...)),
 		Div(css.Class("autobudget-main"),
 			Div(css.Class("autobudget-head"),
 				Span(css.Class("autobudget-name"), props.CategoryName),

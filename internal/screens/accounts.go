@@ -41,6 +41,22 @@ func labeledField(label string, control ui.Node) ui.Node {
 	)
 }
 
+// groupedField mirrors labeledField for a GROUP of controls (a checklist).
+// It must be a fieldset+legend, never a <label> wrapper: wrapping a group in
+// <label> makes the FIRST checkbox inside the label's implicit control, so its
+// accessible name becomes the entire group's text ("Linked accounts QA Asset
+// Account Priya's Business Checking …" — QA M6).
+func groupedField(label string, control ui.Node) ui.Node {
+	return Fieldset(css.Class("labeled-field"),
+		Style(map[string]string{
+			"display": "flex", "flex-direction": "column", "gap": "0.25rem",
+			"border": "0", "margin": "0", "padding": "0", "min-width": "0",
+		}),
+		Legend(css.Class("t-caption", tw.TextDim), Style(map[string]string{"padding": "0"}), label),
+		control,
+	)
+}
+
 // ariaBool renders a Go bool as the "true"/"false" string an ARIA state attribute
 // (e.g. aria-expanded) expects, keeping disclosure toggles screen-reader-correct.
 func ariaBool(b bool) string {

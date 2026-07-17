@@ -21,11 +21,13 @@ var assistantSurfaceKeys = Catalog{
 	"assistant.railHint":       "Chats are saved on this device.",
 
 	// Per-flag actions on a flagged-activity row: jump to the source, or attach it to
-	// the composer as a context bubble to talk it through.
-	"assistant.flagSource":      "Source",
-	"assistant.flagSourceAria":  "Go to the source of this flag",
-	"assistant.flagDiscuss":     "Discuss",
-	"assistant.flagDiscussAria": "Attach this flag to the chat as context",
+	// the composer as a context bubble to talk it through. The aria names carry the
+	// finding's title (QA CF-22: fifteen identical "Go to the source of this flag"
+	// names were indistinguishable to assistive technology).
+	"assistant.flagSource":         "Source",
+	"assistant.flagSourceAriaFor":  "Go to the source: %s",
+	"assistant.flagDiscuss":        "Discuss",
+	"assistant.flagDiscussAriaFor": "Discuss in chat: %s",
 
 	// Attached-context bubbles on the composer (the "Discuss" action). contextLabel
 	// prefixes the bubble row; contextPreamble + contextDefaultAsk build the sent
