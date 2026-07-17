@@ -2381,6 +2381,7 @@ var english = Catalog{
 	"reports.invPerfTitle":             "Investment performance",
 	"reports.invPerfHint":              "What you put into each investment vs. what it's worth now — from your own history, no market data needed.",
 	"reports.invPerfBasis":             "Put in %s → now %s",
+	"reports.invPerfBasisOut":          "Took out %s net → now %s", // negative net contributions (QA CF-25)
 	"reports.invPerfTotal":             "Across all investments: %s now, %s gain (%s).",
 	"reports.invPerfDownloadTitle":     "Download investment performance as CSV",
 	"reports.deductibleDownloadTitle":  "Download deductible totals as a CSV file",

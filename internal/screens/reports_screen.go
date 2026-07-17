@@ -294,10 +294,16 @@ func investmentPerformanceSection(
 		if p.Invested > 0 {
 			gainCell += " · " + fmt.Sprintf("%+.1f%%", float64(p.ReturnBips)/100)
 		}
+		// QA CF-25: negative net contributions read "Put in ($1,900.00)" —
+		// nonsense. Say "Took out" with the magnitude when more came out than in.
+		basisLine := uistate.T("reports.invPerfBasis", fmtMinor(p.Invested), fmtMinor(p.Current))
+		if p.Invested < 0 {
+			basisLine = uistate.T("reports.invPerfBasisOut", fmtMinor(-p.Invested), fmtMinor(p.Current))
+		}
 		rowNodes = append(rowNodes, Div(css.Class("row"), Attr("data-testid", "invperf-row"),
 			Div(css.Class("row-main"),
 				Span(css.Class("row-desc"), p.Name),
-				Span(css.Class("row-meta", tw.TextDim), uistate.T("reports.invPerfBasis", fmtMinor(p.Invested), fmtMinor(p.Current))),
+				Span(css.Class("row-meta", tw.TextDim), basisLine),
 			),
 			Span(ClassStr("budget-amount "+tw.ColorClass(tone)), gainCell),
 		))
