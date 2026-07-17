@@ -1484,7 +1484,9 @@ var english = Catalog{
 	"allocate.applyButton":            "Apply allocation",
 	"allocate.applyConfirmTitle":      "Confirm allocation",
 	"allocate.applyConfirmDesc":       "Review what will happen, then confirm.",
-	"allocate.applyConfirmGoal":       "Goal · %s → add %s",
+	// %s already arrives as "Goal · <name>" (allocate.goalPrefix), so this template
+	// must not repeat the kind — it read "Goal · Goal · Vacation" (QA L4).
+	"allocate.applyConfirmGoal":       "%s → add %s",
 	"allocate.applyConfirmEarmark":    "Earmark · %s → %s",
 	"allocate.applyConfirmDebt":       "Debt paydown · %s → %s",
 	"allocate.applyConfirm":           "Confirm",
