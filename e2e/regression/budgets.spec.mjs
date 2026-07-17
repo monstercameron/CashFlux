@@ -1,30 +1,44 @@
-// budgets.spec.mjs — regressions for the budgets redesign: the full-width row with every
-// action surfaced INLINE (no ⋯ overflow) — Transactions/Edit/Categories/Notes/Formulas and
-// a right-aligned danger group (Remove recurring, Delete); the enhanced top-up (this-month
-// vs permanent + fund-from-budgets); the notes modal; the copyable formulas modal; the sort
-// picker; and the 50/30/20 template living inside the Add-budget modal.
+// budgets.spec.mjs — regressions for the budgets card footer: only the everyday money
+// moves are inline (Cover/Top-up, Transactions) and everything configurational lives in
+// the ⋯ overflow (Edit budget / Edit tracking / Notes / Formulas, with the danger group —
+// Remove recurring, Delete — at its bottom); the enhanced top-up (this-month vs permanent
+// + fund-from-budgets); the notes modal; the copyable formulas modal; the sort picker; and
+// the 50/30/20 template living inside the Add-budget modal.
 import { test, expect, nav } from "./fixtures.mjs";
 
-// firstBudgetId returns the id of the first budget row (derived from its inline Edit button).
+// firstBudgetId returns the id of the first budget row (derived from its kebab button —
+// the one per-card action that is always visible).
 async function firstBudgetId(app) {
-  const edit = app.locator('[data-testid^="edit-budget-btn-"]').first();
-  await edit.scrollIntoViewIfNeeded();
-  return (await edit.getAttribute("data-testid")).replace("edit-budget-btn-", "");
+  const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
+  await kebab.scrollIntoViewIfNeeded();
+  return (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
 }
 
-test.describe("budgets: inline row actions + destructive kebab", () => {
-  test("everyday actions are inline; Delete lives ONLY in the ⋯ menu", async ({ app }) => {
+// openBudgetMenu opens a card's ⋯ overflow so a menu item can be clicked.
+async function openBudgetMenu(app, bid) {
+  await app.locator(`[data-testid="budget-kebab-${bid}"]`).scrollIntoViewIfNeeded();
+  await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
+  await expect(app.locator(`.add-menu [data-testid="edit-budget-btn-${bid}"]`)).toBeVisible();
+}
+
+test.describe("budgets: slim footer + kebab", () => {
+  test("only money moves are inline; config + Delete live in the ⋯ menu", async ({ app }) => {
     await nav(app, "/budgets");
     const bid = await firstBudgetId(app);
-    // The everyday actions are direct, visible footer buttons.
-    for (const t of ["budget-view-txns", "edit-budget-btn", "edit-budget-cats-btn", "budget-notes-btn", "budget-formulas-btn"]) {
-      await expect(app.locator(`.budget-actions [data-testid="${t}-${bid}"]`)).toBeVisible();
+    // Inline: the Transactions drill and the kebab (plus Cover/Top-up, which depend on
+    // the budget's over/under state, so they aren't asserted per-card here).
+    await expect(app.locator(`.budget-actions [data-testid="budget-view-txns-${bid}"]`)).toBeVisible();
+    await expect(app.locator(`.budget-actions [data-testid="budget-kebab-${bid}"]`)).toBeVisible();
+    // The configurational actions are NOT visible footer buttons anymore…
+    for (const t of ["edit-budget-btn", "edit-budget-cats-btn", "budget-notes-btn", "budget-formulas-btn", "delete-budget-btn"]) {
+      await expect(app.locator(`[data-testid="${t}-${bid}"]`)).not.toBeVisible();
     }
-    // Delete is NOT an always-visible row button (standing directive: delete stays in
-    // the kebab) — it only appears after opening the ⋯ menu.
-    await expect(app.locator(`[data-testid="delete-budget-btn-${bid}"]`)).not.toBeVisible();
+    // …they appear in the ⋯ menu, with the destructive Delete at its bottom
+    // (standing directive: delete stays in the kebab).
     await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
-    await expect(app.locator(`.add-menu [data-testid="delete-budget-btn-${bid}"]`)).toBeVisible();
+    for (const t of ["edit-budget-btn", "edit-budget-cats-btn", "budget-notes-btn", "budget-formulas-btn", "delete-budget-btn"]) {
+      await expect(app.locator(`.add-menu [data-testid="${t}-${bid}"]`)).toBeVisible();
+    }
   });
 });
 
@@ -50,7 +64,8 @@ test.describe("budgets: notes modal", () => {
   test("adding a note via the kebab modal shows a readable notes line on the card", async ({ app }) => {
     await nav(app, "/budgets");
     const bid = await firstBudgetId(app);
-    await app.locator(`[data-testid="budget-notes-btn-${bid}"]`).click();
+    await openBudgetMenu(app, bid);
+    await app.locator(`.add-menu [data-testid="budget-notes-btn-${bid}"]`).click();
     await app.waitForTimeout(650);
     const note = "Trim this once the baby-gear splurge settles — revisit in Q4.";
     await app.locator('[role="dialog"] textarea').first().fill(note);
@@ -69,7 +84,8 @@ test.describe("budgets: formulas modal", () => {
   test("shows the budget's variables with copy buttons", async ({ app }) => {
     await nav(app, "/budgets");
     const bid = await firstBudgetId(app);
-    await app.locator(`[data-testid="budget-formulas-btn-${bid}"]`).click();
+    await openBudgetMenu(app, bid);
+    await app.locator(`.add-menu [data-testid="budget-formulas-btn-${bid}"]`).click();
     await app.waitForTimeout(650);
     await expect(app.getByTestId("budget-formulas")).toBeVisible();
     // The five per-budget variables, each with a copy button.

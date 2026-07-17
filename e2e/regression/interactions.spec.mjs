@@ -309,12 +309,14 @@ test.describe("bill auto-link rule", () => {
 });
 
 test.describe("multi-category budgets", () => {
-  test("edit a budget's tracked categories via the inline row button", async ({ app }) => {
+  test("edit a budget's tracked categories via the card's ⋯ menu", async ({ app }) => {
     await nav(app, "/budgets");
-    const catsBtn = app.locator('[data-testid^="edit-budget-cats-btn-"]').first();
-    await catsBtn.scrollIntoViewIfNeeded();
-    const bid = (await catsBtn.getAttribute("data-testid")).replace("edit-budget-cats-btn-", "");
-    await catsBtn.click();
+    // "Edit tracking" lives in the card's ⋯ overflow (footer diet) — open it first.
+    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
+    await kebab.scrollIntoViewIfNeeded();
+    const bid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
+    await kebab.click();
+    await app.locator(`.add-menu [data-testid="edit-budget-cats-btn-${bid}"]`).click();
     await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
     await app.waitForTimeout(650); // FlipPanel flip
 
@@ -336,10 +338,12 @@ test.describe("multi-category budgets", () => {
 test.describe("budget category picker", () => {
   test("search filters the list; add form embeds the picker", async ({ app }) => {
     await nav(app, "/budgets");
-    // Tracked-categories modal (opened from the inline row button): search narrows the checklist.
-    const catsBtn = app.locator('[data-testid^="edit-budget-cats-btn-"]').first();
-    await catsBtn.scrollIntoViewIfNeeded();
-    await catsBtn.click();
+    // Tracked-categories modal (opened from the card's ⋯ menu): search narrows the checklist.
+    const kebab = app.locator('[data-testid^="budget-kebab-"]').first();
+    await kebab.scrollIntoViewIfNeeded();
+    const kbid = (await kebab.getAttribute("data-testid")).replace("budget-kebab-", "");
+    await kebab.click();
+    await app.locator(`.add-menu [data-testid="edit-budget-cats-btn-${kbid}"]`).click();
     await expect(app.getByTestId("budgetcats-rows")).toBeVisible();
     await app.waitForTimeout(650);
     const before = await app.locator('[data-testid^="budgetcat-pick-"]').count();

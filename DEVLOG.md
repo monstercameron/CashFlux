@@ -1,3 +1,18 @@
+## 2026-07-17 — Budgets fix 5/7: the card footer goes on a diet
+
+Footer now = Cover|Top-up + Transactions + ⋯. Edit budget / Edit tracking / Notes / Formulas moved
+into the kebab as plain `add-item` menu entries (matching the /accounts kebab vocabulary — no new
+divider primitive), danger group (`Remove recurring`, `Delete`) stays at the menu bottom per the
+standing directive (which only ever required DESTRUCTIVE actions to live there — folding config
+items in is compatible). The four open-modal handlers now also `menuOpen.Set(false)` so the menu
+doesn't linger under the flip modal. Testids unchanged, so the modals' own specs needed only the
+"open the kebab first" step: budgets.spec.mjs (header comment rewritten — it documented the old
+all-inline contract — `firstBudgetId` now derives from the always-visible kebab, new
+`openBudgetMenu` helper, footer test asserts the inverse: config buttons NOT visible until the menu
+opens) and interactions.spec.mjs (both tracked-categories tests go through the kebab). Note the
+goals page moved the opposite direction earlier today (actions out of its kebab) — deliberate:
+goals cards have 2-3 actions total, budget cards had seven.
+
 ## 2026-07-17 — Budgets fix 4/7: history wears gray
 
 Color discipline from the critique: green = healthy live progress, amber = live warning, red =

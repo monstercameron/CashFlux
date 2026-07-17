@@ -113,9 +113,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// the lower-frequency action, so it lives in the ⋯ menu (and closes it); Top up is a
 	// visible card button.
 	openEdit := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
 	openCategories := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetCategoriesEdit(s.Budget.ID)
 	}))
 	openTopup := ui.UseEvent(Prevent(func() {
@@ -128,10 +130,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
 	}))
 	// Notes + Formulas open their own modes of the same shell-root editor modal.
+	// (They also close the kebab, which is where they now live.)
 	openNotes := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
 	}))
 	openFormulas := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
 	}))
 	// Transactions drill navigates to the filtered ledger.
@@ -342,9 +347,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
-	// card reads top-to-bottom: title → amount → bar → status → actions. The everyday
-	// actions are labelled inline tool buttons; the destructive ones (Remove recurring,
-	// Delete) stay in the ⋯ overflow at the end — delete never sits exposed on the row.
+	// card reads top-to-bottom: title → amount → bar → status → actions. The footer keeps
+	// only the EVERYDAY money moves inline — Cover/Top-up and the Transactions drill —
+	// and everything configurational (Edit budget, Edit tracking, Notes, Formulas) folds
+	// into the ⋯ overflow with the destructive actions at its bottom (standing directive:
+	// delete never sits exposed on the row). Seven visible buttons made every card a
+	// toolbar; three keep it a card (design critique #8).
 	menuHidden := ""
 	if !menuOpen.Get() {
 		menuHidden = " hidden-menu"
@@ -354,20 +362,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		topupBtn,
 		If(canDrill, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu),
 			uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit),
-			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.editAction"))),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories),
-			uiw.Icon(icon.Tag, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.catsAction"))),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes),
-			uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.notesAction"))),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas),
-			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.formulasAction"))),
-		// Destructive actions live in the ⋯ overflow at the end (standing directive:
-		// delete always stays in the kebab).
 		Div(css.Class("add-wrap"), Attr("id", menuID),
 			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 			Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 			Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
 				If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 				Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 			),
