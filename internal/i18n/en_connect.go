@@ -18,8 +18,8 @@ var connectKeys = Catalog{
 
 	// Bill → budget-fit chip: does this upcoming charge still fit the budget that
 	// tracks its category, for the period it's due?
-	"bills.budgetFits":    "Fits %s · %s left",
-	"bills.budgetOver":    "%s over %s",
+	"bills.budgetFits":    "Fits %s · %s left this period",
+	"bills.budgetOver":    "%s over %s this period",
 	"bills.budgetFitAria": "Open the %s budget",
 
 	// Milestone celebrations: the positive counterweight to the warning feed.
