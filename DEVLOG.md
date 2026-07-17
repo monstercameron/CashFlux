@@ -1,3 +1,16 @@
+## 2026-07-17 — Pending-vs-posted ghost rows (parity-scan item 16)
+
+The scan says don't fake pending without a feed — so the ledger's new strip is the schedule's
+truth: bills + recurring due in the REST of this month that no posted transaction settles.
+bills.PendingInWindow reuses the billmatch engine (same tolerance/date-window/identity rules that
+auto-settle recurring items) so a charge paid early never shows twice. The live screenshot caught
+the interesting case: "Priya's Car Loan" stayed upcoming beside its posted "Car payment (Priya)"
+— fuzzy identity can't bridge those names. Fix: explicit links beat fuzz (BillAccountID, or a
+transfer INTO the liability, settles by account id). The sample's car payment is genuinely
+unlinked, so the ghost stays — and that's coherent: the bill-due notification says the same thing,
+and marking the payment as a bill payment clears both. Ghost rows carry no checkbox, no totals
+impact, and click through to /recurring. Tests + 6/6 e2e.
+
 ## 2026-07-17 — Original vs cleaned merchant, rules target either (parity-scan item 13)
 
 Most of this contract already existed structurally — aliases never mutate the stored payee, and

@@ -64,6 +64,7 @@ func Register() {
 	registerRecapSurface()
 	registerPeriodBadge()
 	registerMobileShell()
+	registerTxnUpcoming()
 	registerReviewInboxSurface()
 	registerTxcFieldsSurface()
 	registerNotifySurface()
