@@ -103,6 +103,18 @@ func AccountBalances(accounts []domain.Account, txns []domain.Transaction, clear
 		if err != nil {
 			continue
 		}
+		// A liability presents as the owed magnitude, negative — accounting parens
+		// + down tone — regardless of its at-rest sign convention (the sample data
+		// stores debts negative; the "amount you owe" add form stores them
+		// positive). A positive-stored $550 loan used to render as a healthy
+		// "$550.00" here while /accounts showed "($550.00)" (QA CF-09).
+		if a.Class == domain.ClassLiability {
+			m := bal.Amount
+			if m < 0 {
+				m = -m
+			}
+			bal = money.New(-m, bal.Currency)
+		}
 		tone := ""
 		if bal.IsNegative() {
 			tone = "down"

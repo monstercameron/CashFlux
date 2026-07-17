@@ -141,6 +141,31 @@ func TestAccountBalancesFrame(t *testing.T) {
 	}
 }
 
+// TestAccountBalancesLiabilityPresentation locks the QA CF-09 fix: a liability
+// presents as its owed magnitude NEGATIVE (accounting parens + down tone) under
+// both at-rest sign conventions — positive-stored (the "amount you owe" add
+// form) and negative-stored (the sample data).
+func TestAccountBalancesLiabilityPresentation(t *testing.T) {
+	accounts := []domain.Account{
+		{ID: "l1", Name: "Loan+", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(55000)},
+		{ID: "l2", Name: "Loan-", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(-55000)},
+	}
+	fr := AccountBalances(accounts, nil, false, 0)
+	if fr.Rows != 2 {
+		t.Fatalf("rows = %d, want 2", fr.Rows)
+	}
+	balCol, _ := fr.Column("balance")
+	toneCol, _ := fr.Column("tone")
+	for i := range 2 {
+		if got := balCol.Int64(i); got != -55000 {
+			t.Errorf("row%d balance = %d, want -55000 (owed magnitude, negative)", i, got)
+		}
+		if got := toneCol.Str(i); got != "down" {
+			t.Errorf("row%d tone = %q, want down", i, got)
+		}
+	}
+}
+
 // TestRecentTransactionsFrame verifies the recent resolver returns every txn,
 // newest first, with the txn's own signed amount + currency.
 func TestRecentTransactionsFrame(t *testing.T) {
