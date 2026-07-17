@@ -2370,6 +2370,11 @@ var english = Catalog{
 	"reports.customFieldDownloadTitle": "Download this custom-field spending breakdown as a CSV file",
 	"reports.deductibleTitle":          "Deductible totals",
 	"reports.deductibleHint":           "Expenses in categories you've marked as tax-deductible this period.",
+	"reports.invPerfTitle":             "Investment performance",
+	"reports.invPerfHint":              "What you put into each investment vs. what it's worth now — from your own history, no market data needed.",
+	"reports.invPerfBasis":             "Put in %s → now %s",
+	"reports.invPerfTotal":             "Across all investments: %s now, %s gain (%s).",
+	"reports.invPerfDownloadTitle":     "Download investment performance as CSV",
 	"reports.deductibleDownloadTitle":  "Download deductible totals as a CSV file",
 	"reports.deductibleTotal":          "Total deductible: %s",
 	"reports.new":                      "new", // C238: shown on delta badge when prior period is zero and current > 0

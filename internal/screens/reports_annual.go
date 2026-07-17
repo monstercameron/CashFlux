@@ -1330,6 +1330,9 @@ func Reports() ui.Node {
 	if deductible != nil {
 		appendixBits = append(appendixBits, deductible)
 	}
+	if invperf := investmentPerformanceSection(accounts, scopedTxns, rates, base, fmtMinor, winForExports); invperf != nil {
+		appendixBits = append(appendixBits, invperf)
+	}
 	if len(cfDefs) > 0 {
 		appendixBits = append(appendixBits, customFieldSpendSection(scopedTxns, cfDefs, selectedCFKey.Get(), onCFKeyChange, as, ae, rates, base, fmtMinor, winForExports))
 	}

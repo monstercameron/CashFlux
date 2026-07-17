@@ -53,4 +53,15 @@ test.describe("gap features", () => {
     await expect(perDay).toContainText(/\/day until your next income/i);
     await expect(perDay).toContainText(/\(in \d+ days\)/i);
   });
+
+  test("investment performance: the reports appendix shows per-account return", async ({ app }) => {
+    await nav(app, "/reports");
+    const sec = app.getByTestId("investperf-section");
+    await sec.scrollIntoViewIfNeeded();
+    await expect(sec).toBeVisible();
+    // The three seeded investment accounts (401k, brokerage, Roth) each get a row.
+    await expect(app.getByTestId("invperf-row")).toHaveCount(3);
+    await expect(app.getByTestId("invperf-total")).toContainText(/across all investments/i);
+    await expect(app.getByTestId("invperf-total")).toContainText(/gain/i);
+  });
 });

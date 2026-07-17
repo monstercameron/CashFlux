@@ -259,6 +259,76 @@ func rollupLabelKey(on bool) string {
 	return "reports.rollupOff"
 }
 
+// investmentPerformanceSection renders the "Investment performance" section: for each
+// investment / retirement / crypto account, what was put in (cost basis) vs its
+// current value, the gain, and the return % — all from the account's own history, no
+// live prices. Returns nil when there are no investment accounts. Includes a CSV export.
+func investmentPerformanceSection(
+	accounts []domain.Account,
+	txns []domain.Transaction,
+	rates currency.Rates,
+	base string,
+	fmtMinor func(int64) string,
+	win period.Window,
+) ui.Node {
+	perf, err := reports.InvestmentPerformance(accounts, txns, rates)
+	if err != nil || len(perf) == 0 {
+		return nil
+	}
+	var totalInvested, totalCurrent, totalGain int64
+	rowNodes := make([]ui.Node, 0, len(perf))
+	for _, p := range perf {
+		totalInvested += p.Invested
+		totalCurrent += p.Current
+		totalGain += p.Gain
+		tone := "text-up"
+		if p.Gain < 0 {
+			tone = "text-down"
+		}
+		// A % return is only meaningful against a positive cost basis. When net
+		// contributions are zero or negative (e.g. more was withdrawn than put in),
+		// show just the gain — a "%" there would be nonsense.
+		gainCell := fmtMinor(p.Gain)
+		if p.Invested > 0 {
+			gainCell += " · " + fmt.Sprintf("%+.1f%%", float64(p.ReturnBips)/100)
+		}
+		rowNodes = append(rowNodes, Div(css.Class("row"), Attr("data-testid", "invperf-row"),
+			Div(css.Class("row-main"),
+				Span(css.Class("row-desc"), p.Name),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("reports.invPerfBasis", fmtMinor(p.Invested), fmtMinor(p.Current))),
+			),
+			Span(ClassStr("budget-amount "+tw.ColorClass(tone)), gainCell),
+		))
+	}
+	totalTone := "text-up"
+	if totalGain < 0 {
+		totalTone = "text-down"
+	}
+	totalRet := 0.0
+	if totalInvested > 0 {
+		totalRet = float64(totalGain) / float64(totalInvested) * 100
+	}
+	return Div(Attr("data-testid", "investperf-section"),
+		rptSection("sec-investperf", uistate.T("reports.invPerfTitle"), nil, Fragment(
+			P(css.Class("muted"), uistate.T("reports.invPerfHint")),
+			Div(css.Class("rows"), rowNodes),
+			P(ClassStr("muted "+tw.ColorClass(totalTone)), Attr("data-testid", "invperf-total"),
+				uistate.T("reports.invPerfTotal", fmtMinor(totalCurrent), fmtMinor(totalGain), fmt.Sprintf("%+.1f%%", totalRet))),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				Button(css.Class("btn"), Type("button"),
+					Attr("data-testid", "invperf-download-csv"),
+					Title(uistate.T("reports.invPerfDownloadTitle")),
+					Attr("aria-label", uistate.T("reports.invPerfDownloadTitle")),
+					OnClick(func() {
+						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+						downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
+					}),
+					uistate.T("reports.downloadCsv"),
+				),
+			),
+		)))
+}
+
 // deductibleSection renders the "Deductible totals" section body (L16/L58): a
 // ranked list of deductible-flagged categories with their expense totals for
 // the period, a headline total, and a CSV export. Returns nil when no
