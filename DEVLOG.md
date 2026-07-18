@@ -25054,3 +25054,13 @@ tiebreak; amount compared by magnitude so a big shortfall ranks with a big savin
 tests. "New since last visit" was considered and deferred — it needs a persisted seen-set
 per finding key; the four shipped controls cover the assessment's urgent/high-dollar/
 page-specific asks.
+
+## 2026-07-18 — Model picker curation
+
+CF-20's recommended/rest split wasn't enough — "recommended" still meant every undated chat
+model. Now: family-ranked (newest first), capped at 6, tail behind a real toggle instead of an
+inert separator (progressive disclosure, not a 60-option scroll). Guard rails: the ACTIVE model
+is always pulled into the visible list even if it's a dated snapshot the cap or filters would
+hide — a select whose current value isn't among its options silently misrenders. Cost guidance
+lives in the toggle tooltip. Checked the "about $0.00" cost item too: FormatCostUSD already
+renders sub-cent costs at 4 decimals, so that assessment item was fixed by an earlier pass.

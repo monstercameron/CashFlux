@@ -24,7 +24,10 @@ var assistantSurfaceKeys = Catalog{
 	// the composer as a context bubble to talk it through. The aria names carry the
 	// finding's title (QA CF-22: fifteen identical "Go to the source of this flag"
 	// names were indistinguishable to assistive technology).
-	"assistant.allModels": "all models", // QA CF-20: separator over the catalog's long tail
+	"assistant.allModels":     "all models", // QA CF-20: separator over the catalog's long tail
+	"assistant.moreModels":    "All models…",
+	"assistant.fewerModels":   "Recommended only",
+	"assistant.allModelsHint": "Show every catalog model, including dated snapshots and legacy or research families. The short list covers current chat models; smaller \"mini\" variants cost less.",
 	// QA CF-18: keyless starter questions — each phrased to match the on-device
 	// localqa intents (net worth / upcoming bills / goal progress / health score),
 	// so every offered chip answers instantly without a key.

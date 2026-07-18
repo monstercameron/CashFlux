@@ -1928,11 +1928,37 @@ func assistantRecommendedModel(m string) bool {
 	return !assistantDatedModel.MatchString(lm)
 }
 
+// assistantModelFamilyRank orders recommended models newest-family-first so the
+// short list leads with the sensible defaults (mini variants right after their
+// full-size family — the cost-conscious pick stays visible).
+func assistantModelFamilyRank(m string) int {
+	lm := strings.ToLower(m)
+	switch {
+	case strings.HasPrefix(lm, "gpt-5"):
+		return 0
+	case strings.HasPrefix(lm, "o4"):
+		return 1
+	case strings.HasPrefix(lm, "o3"):
+		return 2
+	case strings.HasPrefix(lm, "gpt-4.1"):
+		return 3
+	case strings.HasPrefix(lm, "gpt-4o"):
+		return 4
+	default:
+		return 5
+	}
+}
+
+// assistantRecommendedCap is the most models the short list shows; the tail is
+// reachable behind the picker's "Show all models" toggle.
+const assistantRecommendedCap = 6
+
 // assistantModelSplit partitions the /models catalog for the picker (QA CF-20:
 // after key setup the raw list buried three sensible choices under dozens of
-// dated, legacy, and research ids): a short recommended set of current chat
-// models first, everything else behind an "all models" separator. The current
-// selection always stays visible.
+// dated, legacy, and research ids): a short, family-ranked recommended set of
+// current chat models (capped — 2026-07-18 assessment: even the undated set
+// was "too broad for normal users"), everything else behind the Advanced
+// toggle. The current selection always stays visible.
 func assistantModelSplit(models []string, cur string) (rec, rest []string) {
 	ids := models
 	if len(ids) == 0 {
@@ -1950,8 +1976,25 @@ func assistantModelSplit(models []string, cur string) (rec, rest []string) {
 			rest = append(rest, m)
 		}
 	}
+	sort.SliceStable(rec, func(i, j int) bool {
+		return assistantModelFamilyRank(rec[i]) < assistantModelFamilyRank(rec[j])
+	})
+	if len(rec) > assistantRecommendedCap {
+		rest = append(rec[assistantRecommendedCap:], rest...)
+		rec = rec[:assistantRecommendedCap]
+	}
 	if cur != "" && !seenCur {
 		rec = append([]string{cur}, rec...)
+	}
+	// The active model always sits in the visible list, wherever it came from.
+	if cur != "" {
+		for i, m := range rest {
+			if m == cur {
+				rest = append(rest[:i:i], rest[i+1:]...)
+				rec = append([]string{cur}, rec...)
+				break
+			}
+		}
 	}
 	if len(rec) == 0 {
 		rec, rest = rest, nil
@@ -1975,26 +2018,38 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 			p.OnPick(e.GetValue())
 		}
 	})
+	// Progressive disclosure (2026-07-18 assessment: even the split list was
+	// "too broad for normal users"): the select holds ONLY the short ranked
+	// recommended set until "All models" is switched on, which appends the
+	// long tail (dated snapshots, legacy/research families) behind a separator.
+	showAll := ui.UseState(false)
+	onToggleAll := ui.UseEvent(func() { showAll.Set(!showAll.Get()) })
 	// The shared control-pill (.todo-ctrl + .todo-select) used on To-do/Goals/Budgets/
 	// Accounts/Transactions: an uppercase label + a borderless in-pill select, so the
 	// model switcher reads identically to every other page's controls.
 	rec, rest := assistantModelSplit(p.Models, p.Current)
-	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.modelPick")),
-		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.modelLabel")),
-		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
-			MapKeyed(rec,
-				func(m string) any { return m },
-				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
+	showRest := showAll.Get() && len(rest) > 0
+	return Fragment(
+		Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.modelPick")),
+			Span(css.Class("todo-ctrl-label"), uistate.T("assistant.modelLabel")),
+			Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.modelPick")), Attr("data-testid", "assistant-model"), OnChange(onChange),
+				MapKeyed(rec,
+					func(m string) any { return m },
+					func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
+				),
+				If(showRest, Option(Value(""), Attr("disabled", "disabled"), "── "+uistate.T("assistant.allModels")+" ──")),
+				If(showRest, Fragment(MapKeyed(rest,
+					func(m string) any { return "rest:" + m },
+					func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
+				))),
 			),
-			// QA CF-20: the long tail (dated snapshots, legacy/research families)
-			// stays reachable but sits behind an inert separator, under the short
-			// recommended list.
-			If(len(rest) > 0, Option(Value(""), Attr("disabled", "disabled"), "── "+uistate.T("assistant.allModels")+" ──")),
-			If(len(rest) > 0, Fragment(MapKeyed(rest,
-				func(m string) any { return "rest:" + m },
-				func(m string) ui.Node { return Option(Value(m), SelectedIf(m == p.Current), m) },
-			))),
 		),
+		If(len(rest) > 0, Button(css.Class("btn-link"), Type("button"),
+			Attr("data-testid", "assistant-model-showall"),
+			Attr("aria-pressed", ariaBool(showAll.Get())),
+			Attr("title", uistate.T("assistant.allModelsHint")),
+			OnClick(onToggleAll),
+			IfElse(showAll.Get(), Text(uistate.T("assistant.fewerModels")), Text(uistate.T("assistant.moreModels"))))),
 	)
 }
 

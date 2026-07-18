@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Assistant model picker: a truly short list with an Advanced expansion (2026-07-18):** even after the QA CF-20 split, the picker showed every undated chat model plus the whole catalog tail under an inert divider — "too broad for normal users" (assessment). The recommended set is now family-ranked (gpt-5 → o4 → o3 → gpt-4.1 → gpt-4o) and capped at six, and the long tail (dated snapshots, legacy/research families) only renders after an explicit "All models…" toggle whose tooltip carries the cost guidance (mini variants cost less). The active model always stays visible wherever it came from.
 - **Smart findings feed: triage controls (2026-07-18):** "108 findings worth a look" paginated ten at a time offered no way to isolate what matters (assessment: "the count itself becomes workload"). The findings card gains a search box (title + detail), an urgency floor (nudges/warnings/alerts & up), a page filter, and a sort mode — most urgent (default), biggest amounts first, or by page. Filtering runs over the full set before the per-rule cap and pagination, so a search can surface findings the uncontrolled feed capped away. Pure `smart.FilterInsights`/`SortInsightsBy` helpers, table-tested.
 
 ### Fixed
