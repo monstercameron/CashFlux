@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -80,6 +81,11 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 				Div(css.Class("budget-loader-value is-hero"), fmt.Sprintf("%d%%", v.OverallPct)),
 			),
 		),
+		// The headline counts active + missed goals only; when sinking funds
+		// exist, say so — their card targets otherwise look like a $-mismatch
+		// against "Total target" (2026-07-18 assessment: users had to
+		// reverse-engineer which cards contribute).
+		fundScopeNote(app, v),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -379,4 +385,17 @@ func goalListWidget(props goalListProps) ui.Node {
 		ID: "goal-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// fundScopeNote is the one-line scope statement under the goals headline: which
+// cards the totals count, and the sinking funds' own target when any exist.
+func fundScopeNote(app *appstate.App, v goalView) ui.Node {
+	if len(v.Fund) == 0 {
+		return Fragment()
+	}
+	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
+	_, fundTarget := goalsvc.Totals(v.Fund, rates, v.Base, false)
+	return P(css.Class("budget-sub"), Attr("data-testid", "goal-headline-scope"),
+		Style(map[string]string{"margin": "0.35rem 0 0"}),
+		uistate.T("goals.headlineScope", fmtMoney(fundTarget)))
 }

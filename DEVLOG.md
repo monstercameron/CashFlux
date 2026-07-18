@@ -25035,3 +25035,10 @@ signing + previews — duplicating that inline would fork the tested workflow fo
 discoverability problem. The quick-add Type segment gets "Transfer…" (ellipsis = takes you
 somewhere), which closes the panel and opens the shell-root transfer modal; ditto a "Transfer
 money" item in the global + Add menu. Zero new transfer logic.
+
+## 2026-07-18 — Goals headline scope note
+
+The headline totals deliberately count active+missed goals only (a sinking fund isn't a goal
+you finish). Kept that policy, labelled it: "Total target (goals)" + a data-testid'd scope note
+naming the sinking funds' combined target when any exist. Considered a second fund total in the
+loader figs and rejected — three figures is the tile's grammar; the note carries the exception.
