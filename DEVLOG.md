@@ -24928,3 +24928,12 @@ leak while auditing data sources: strengths/problems runway used LiquidBalance o
 accounts with scoped txns — mixed-scope math nobody could defend; now scopedAccounts. Vitals
 liquidAll stays household on purpose (balance sheet). Pulled while committing: the other lane
 released 1.2.1, so the changelog entry moved to a fresh Unreleased block.
+
+## 2026-07-18 — Assistant hero: month-scoped top merchant
+
+Third High: the Insights hero (a month-to-date story) borrowed merchants[0] from the
+trailing-90-day TopPayeesTrailing ranking — the exact same $1,702.80 the tester then found in
+the explicitly-90-day Top merchants tile. One-line class of bug, worth naming: a shared
+derivation reused across surfaces with different implied windows. The chip now computes its own
+reports.TopPayees over [MonthStart, MonthStart+1mo); the 90-day list still feeds the tile that
+declares that window.

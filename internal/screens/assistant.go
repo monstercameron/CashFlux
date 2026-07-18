@@ -236,9 +236,14 @@ func assistantInsightsDataPanel() ui.Node {
 	chips := []ui.Node{
 		rptChip(uistate.T("assistant.chipLastMonth"), fmtMoney(money.New(prev, base)), ""),
 	}
-	if len(merchants) > 0 {
-		chips = append(chips, rptChip(uistate.T("assistant.chipTopMerchant", merchants[0].Name),
-			fmtMoney(money.New(merchants[0].Amount, base)), ""))
+	// The hero is a month-to-date story, so its top-merchant chip must be
+	// month-scoped — the trailing-90-day `merchants` ranking feeds the Top
+	// merchants tile below, not this chip (2026-07-18 assessment, High: the
+	// "This month" summary presented a 90-day aggregate as current-month spend).
+	monthStart := dateutil.MonthStart(now)
+	if monthMerchants, _ := reports.TopPayees(scopedTxns, monthStart, dateutil.AddMonths(monthStart, 1), rates, 1); len(monthMerchants) > 0 {
+		chips = append(chips, rptChip(uistate.T("assistant.chipTopMerchant", monthMerchants[0].Name),
+			fmtMoney(money.New(monthMerchants[0].Amount, base)), ""))
 	}
 	flaggedTone := ""
 	if len(flaggedIns) > 0 {
