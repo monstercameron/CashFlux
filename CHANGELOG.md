@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-07-18
+
 ### Fixed
 - **Annual report: the two savings percentages now say what they measure (2026-07-18):** the report masthead said "Kept … 47% of income" while section 01 showed the health factor "Savings rate 38%" with nothing explaining that they are different windows — the masthead is net ÷ income over the report's full period, the health factor is a trailing ~3-month average. A financial-trust blocker from the 2026-07-18 nine-page black-box assessment. The masthead sub now reads "…% of income kept this period", the savings factor row carries a "· last 3 months" window tag, and a one-line basis note under the strong-factors list states that health factors are trailing measures that can differ from the report's full-period totals.
 
