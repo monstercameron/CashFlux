@@ -271,6 +271,12 @@ func registerReportsAnnual() {
 		fontWeight("600"),
 		color("var(--text)"),
 	)
+	rule(".rpta-fact-win",
+		fontWeight("400"),
+		fontSize("0.85em"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
 	rule(".rpta-fact-val",
 		fontVariantNumeric("tabular-nums"),
 		fontWeight("600"),

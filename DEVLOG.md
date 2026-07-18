@@ -24899,3 +24899,17 @@ operator console serving, and a scoped GET /v1/me returning the caller's own sub
 (status/plan/provider/periods + the entitlement verdict) + today's usage + the billing config
 (enabled + configured providers) in one call, so the portal dashboard renders from a single read.
 Strictly caller-scoped, no admin gate, no other users' data (tested: user2 never sees user1's sub).
+
+## 2026-07-18 — Nine-page assessment polish pass begins: savings-rate disambiguation
+
+Kicking off the pass against the 2026-07-18 black-box nine-page assessment (goal: every page
+>= 9/10). First fix is the Reports financial-trust blocker: the annual report showed "Kept …
+47% of income" in the masthead and "Savings rate 38%" in section 01 with no reconciliation.
+Root cause: two real, different definitions — masthead = net/income over the report window
+(reports.CashFlow.SavingsRate), section 01 = the healthscore savings factor, a trailing
+~3-month average (healthscore.Inputs.SavingsRatePct). Fix keeps both definitions but makes
+each number carry its window: masthead sub now "% of income kept this period", the savings
+factor row gets a "· last 3 months" tag (only that factor collides by name), and a muted
+basis note under the strong-factors list says health factors are trailing measures. Decided
+against unifying on one definition — the health factor deliberately reflects *current*
+behavior, the report reflects the *period*; both are right, they just needed labels.

@@ -564,6 +564,7 @@ func Reports() ui.Node {
 	strengths := rptaSection("rpta-01", "01", uistate.T("rpta.secStrong"), "up", uistate.T("rpta.secStrongSub"), askStrong, Fragment(
 		If(len(strongFacts) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.noStrong"))),
 		Div(css.Class("rpta-facts"), strongFacts),
+		If(len(strongFacts) > 0, P(css.Class("rpta-muted"), uistate.T("rpta.factorBasisNote"))),
 		If(len(wins) > 0, Div(css.Class("rpta-wins"), Attr("data-testid", "rpta-wins"), wins)),
 		Div(css.Class("rpta-srcrow"), rptaSrcLink("nav.health", "/health")),
 	))
@@ -1760,8 +1761,15 @@ func rptaFactorRow(f healthscore.Factor) ui.Node {
 	} else if f.Score < 70 {
 		tone = "warn"
 	}
+	// The savings factor is a trailing 3-month average — the one factor whose
+	// name collides with the report's full-period kept rate, so its window
+	// travels with the label.
+	var window ui.Node = Fragment()
+	if f.Key == "savings" {
+		window = Span(css.Class("rpta-fact-win"), " · "+uistate.T("rpta.factWindow3mo"))
+	}
 	return Div(css.Class("rpta-fact"), Attr("data-testid", "rpta-fact-"+f.Key),
-		Span(css.Class("rpta-fact-name"), f.Label),
+		Span(css.Class("rpta-fact-name"), f.Label, window),
 		Span(css.Class("rpta-fact-val", tw.FontDisplay), f.Value),
 		Div(css.Class("rpta-fact-bar"),
 			Div(ClassStr("rpta-fact-fill rpta-fill-"+tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", f.Score)}))),
