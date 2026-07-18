@@ -24952,3 +24952,16 @@ folding it into the out leg and rejected it as dishonest accounting). PreviewTra
 carries both so the before/after preview can't drift from the post. Bottom-up per the SDLC:
 params+legs+tests native-green first, then the form fields (received only shown cross-
 currency; fee once a source is picked).
+
+## 2026-07-18 — Notification Center: aging due-dates, Mark all read, titled actions
+
+The "Due in 0 days" defect is a stored-body staleness class: notification bodies are rendered
+prose persisted at emit time, but a due date keeps aging. Rather than re-writing feed bodies in
+place (mutating history) the fix stores the machine fact (FeedItem.DueAt, parsed from the
+bill-due dedupe key's trailing date) and derives the display line at render: past-due items say
+"Overdue by N days." — pure OverdueDays helper, UTC-day arithmetic, table-tested. Also: Mark all
+read (safe bulk action; deliberately NOT confirm-gated, unlike destructive Clear all), a desktop
+Alert settings shortcut, per-action aria labels carrying the notification title, and the snooze
+button label fixed to "Snooze…" (the 3-choice horizon menu shipped earlier but the label still
+promised a fixed 1 day). Assessment items remaining for this page: none blocking 9/10 that I can
+see — "new since last visit" already renders as a catch-up strip distinct from unread.

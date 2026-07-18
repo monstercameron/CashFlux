@@ -115,6 +115,22 @@ func notifSummaryWidget(props notifProps) ui.Node {
 		}))
 	}
 
+	// Mark all read is the safe bulk action (Clear all deletes — materially
+	// different, so both exist; 2026-07-18 assessment): flips every visible
+	// item to read without touching the log.
+	markAllRead := ui.UseEvent(Prevent(func() {
+		items := feedAtom.Get()
+		next := make([]uistate.FeedItem, len(items))
+		copy(next, items)
+		for i := range next {
+			next[i].Read = true
+		}
+		feedAtom.Set(next)
+		uistate.PersistNotifyFeed(next)
+	}))
+	// A visible path to the alert rules — the mobile row menu had one, the
+	// desktop page didn't.
+	openAlertSettings := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("alerts") }))
 	// Clear all is destructive and sits beside the (non-destructive) filter chips,
 	// so it confirms first (#75) — one accidental tap shouldn't wipe the triage log.
 	clearAll := ui.UseEvent(Prevent(func() {
@@ -161,9 +177,22 @@ func notifSummaryWidget(props notifProps) ui.Node {
 				Count: crit, Active: f == "critical", OnPick: pick("critical"),
 			})),
 			Div(filtersArgs...),
+			If(func() bool {
+				for _, it := range visible {
+					if !it.Read {
+						return true
+					}
+				}
+				return false
+			}(), Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-mark-all-read"),
+				Attr("aria-label", uistate.T("notifications.markAllReadAria")), OnClick(markAllRead),
+				Text(uistate.T("notifications.markAllRead")))),
 			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-clear-all"),
 				Attr("aria-label", uistate.T("notifications.clearAllAria")), OnClick(clearAll),
 				Text(uistate.T("notifications.clearAll"))),
+			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-alert-settings"),
+				Attr("aria-label", uistate.T("notifications.alertSettings")), OnClick(openAlertSettings),
+				Text(uistate.T("notifications.alertSettings"))),
 		),
 		catchUp,
 	)

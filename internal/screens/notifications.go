@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -310,6 +311,21 @@ func notifyRow(props notifyRowProps) ui.Node {
 	if it.Read {
 		readLabel = uistate.T("notifications.markUnread")
 	}
+	// Every action's accessible name carries the notification it acts on — a
+	// keyboard/screen-reader pass otherwise hears an indistinguishable list of
+	// "Mark as read" ×N (2026-07-18 assessment).
+	withTitle := func(action string) string { return action + " — " + it.Title }
+	// A due-date alert's body is written once, but the obligation keeps aging:
+	// re-render a past-due "due in N days" line as overdue wording instead of
+	// letting yesterday's bill claim it's still "due in 0 days".
+	body := it.Body
+	if od := uistate.OverdueDays(it.DueAt, time.Now().Unix()); od > 0 {
+		if od == 1 {
+			body = uistate.T("notifications.overdueOneDay")
+		} else {
+			body = uistate.T("notifications.overdueDays", od)
+		}
+	}
 
 	route := routeForNotify(it)
 	nav := router.UseNavigate()
@@ -443,7 +459,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 				Span(css.Class("notif-title"), it.Title),
 				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4)))),
 			),
-			If(it.Body != "", P(css.Class("notif-text"), it.Body)),
+			If(body != "", P(css.Class("notif-text"), body)),
 			Div(css.Class("notif-foot"),
 				Span(ClassStr("notif-sev-tag "+notifySeverityClass(sev)), notifySeverityLabel(sev)),
 				Span(css.Class("notif-sep"), "·"),
@@ -458,12 +474,12 @@ func notifyRow(props notifyRowProps) ui.Node {
 		// a per-notification menu is an extra click for actions you take constantly.
 		Div(css.Class("notif-actions"),
 			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
-				Attr("aria-label", readLabel), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4))),
+				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4))),
 			// Snooze picks its horizon (was a fixed 1 day): until tomorrow, next
 			// week, or next month.
 			Div(css.Class("add-wrap"), Attr("id", snoozeID),
 				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
-					Attr("aria-label", uistate.T("notifications.snooze")), Title(uistate.T("notifications.snooze")),
+					Attr("aria-label", withTitle(uistate.T("notifications.snooze"))), Title(uistate.T("notifications.snooze")),
 					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(snoozeOpen.Get())),
 					OnClick(toggleSnooze), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
 				Div(ClassStr("add-backdrop"+snoozeHidden), OnClick(closeSnooze)),
@@ -477,7 +493,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 				),
 			),
 			Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"), Attr("data-testid", "notif-dismiss-"+it.ID),
-				Attr("aria-label", uistate.T("notifications.dismiss")), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+				Attr("aria-label", withTitle(uistate.T("notifications.dismiss"))), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		// Mobile-only actions (#75): a labeled primary + a labeled overflow menu.
 		Div(css.Class("notif-actions-m"),
@@ -485,7 +501,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 				OnClick(onReadM), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(readLabel)),
 			Div(css.Class("add-wrap"), Attr("id", moreID),
 				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-more-"+it.ID),
-					Attr("aria-label", uistate.T("notifications.moreActions")), Title(uistate.T("notifications.moreActions")),
+					Attr("aria-label", withTitle(uistate.T("notifications.moreActions"))), Title(uistate.T("notifications.moreActions")),
 					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(moreOpen.Get())),
 					OnClick(toggleMore), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 				Div(ClassStr("add-backdrop"+moreHidden), OnClick(closeMore)),

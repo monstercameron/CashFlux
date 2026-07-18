@@ -20,6 +20,27 @@ type FeedItem struct {
 	Read         bool   `json:"read,omitempty"`
 	Severity     string `json:"severity,omitempty"`     // "info" | "warning" | "critical"; empty = info
 	SnoozedUntil int64  `json:"snoozedUntil,omitempty"` // unix seconds; zero = not snoozed (C268)
+	// DueAt is the unix-second due date carried by due-date alerts (bill-due),
+	// so the center can re-render a stale "due in N days" body as "overdue by
+	// N days" once the date passes — a notification body is written once, but
+	// the obligation keeps aging. Zero for notifications with no due date.
+	DueAt int64 `json:"dueAt,omitempty"`
+}
+
+// OverdueDays returns how many whole calendar days past its due date a
+// due-date alert is at now (both unix seconds): 0 when dueAt is zero, unset,
+// today, or still ahead. Day boundaries are evaluated in UTC to stay
+// deterministic; a bill due yesterday reports 1.
+func OverdueDays(dueAt, now int64) int {
+	if dueAt <= 0 {
+		return 0
+	}
+	day := func(ts int64) int64 { return ts / 86400 }
+	d := int(day(now) - day(dueAt))
+	if d < 0 {
+		return 0
+	}
+	return d
 }
 
 // NewSinceLastSeen returns the subset of items whose At timestamp is strictly

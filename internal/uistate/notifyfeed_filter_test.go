@@ -147,3 +147,28 @@ func ids(items []uistate.FeedItem) []string {
 	}
 	return out
 }
+
+func TestOverdueDays(t *testing.T) {
+	const day = int64(86400)
+	due := int64(1_700_000_000) - (int64(1_700_000_000) % day) // a UTC midnight
+	tests := []struct {
+		name  string
+		dueAt int64
+		now   int64
+		want  int
+	}{
+		{"no due date", 0, due, 0},
+		{"due today", due, due + day/2, 0},
+		{"due tomorrow", due + day, due, 0},
+		{"one day overdue", due, due + day + 3600, 1},
+		{"ten days overdue", due, due + 10*day, 10},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := uistate.OverdueDays(tc.dueAt, tc.now); got != tc.want {
+				t.Errorf("OverdueDays(%d, %d) = %d, want %d", tc.dueAt, tc.now, got, tc.want)
+			}
+		})
+	}
+}

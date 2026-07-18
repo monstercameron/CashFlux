@@ -125,6 +125,7 @@ func runNotifyCatchUp() {
 			Body:     n.Body,
 			At:       n.At.Unix(),
 			Severity: severityString(n.Severity),
+			DueAt:    dueDateFromDedupe(n),
 		}
 	}
 	uistate.PrependNotifyFeed(feed)
@@ -513,4 +514,24 @@ func saveDeliveredLog(log notify.DeliveredLog) {
 		return
 	}
 	uistate.KVSet(notifyDeliveredKey, string(data))
+}
+
+// dueDateFromDedupe extracts the due date a bill-due notification covers from
+// its dedupe key (…"@YYYY-MM-DD", written by BillDueCandidates), as UTC-midnight
+// unix seconds. Zero for other events or unparseable keys — the feed simply
+// won't age those into "overdue" wording.
+func dueDateFromDedupe(n notify.Notification) int64 {
+	if n.Event != notify.EventBillDue {
+		return 0
+	}
+	k := n.DedupeKey
+	i := strings.LastIndexByte(k, '@')
+	if i < 0 || i+1 >= len(k) {
+		return 0
+	}
+	d, err := time.ParseInLocation("2006-01-02", k[i+1:], time.UTC)
+	if err != nil {
+		return 0
+	}
+	return d.Unix()
 }
