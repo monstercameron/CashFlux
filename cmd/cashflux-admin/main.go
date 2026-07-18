@@ -64,6 +64,17 @@ type adminUsersResp struct {
 // usersPageSize is the operator-console page size for the users table.
 const usersPageSize = 25
 
+// auditEvent mirrors server.AuditEvent — one row of the append-only security log.
+type auditEvent struct {
+	ID         int64  `json:"id"`
+	Timestamp  string `json:"timestamp"`
+	ActorID    string `json:"actorId"`
+	Action     string `json:"action"`
+	TargetType string `json:"targetType"`
+	TargetID   string `json:"targetId"`
+	IP         string `json:"ip,omitempty"`
+}
+
 // devCredsResp mirrors server.devCredsResponse.
 type devCredsResp struct {
 	AdminToken string `json:"adminToken"`
@@ -84,6 +95,7 @@ const (
 	screenNetErr                // network / other error
 	screenReady                 // data loaded, console visible
 	screenManage                // managing a single user (detail + actions)
+	screenAudit                 // the global security audit log
 )
 
 // ---------------------------------------------------------------------------
@@ -205,6 +217,47 @@ func fetchUsers(token, query string, offset int) (users []adminUserRow, hasMore 
 		return nil, false, false, e
 	}
 	return ur.Users, ur.HasMore, false, nil
+}
+
+// fetchAudit loads the global security audit log (admin-scoped server-side). The
+// endpoint streams newline-delimited JSON (one AuditEvent per line), newest last;
+// this parses each line and returns them newest-first for display.
+func fetchAudit(token string, limit int) (events []auditEvent, authErr bool, err error) {
+	req, e := http.NewRequest("GET", fmt.Sprintf("/v1/audit?limit=%d", limit), nil)
+	if e != nil {
+		return nil, false, e
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, e := http.DefaultClient.Do(req)
+	if e != nil {
+		return nil, false, e
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, true, nil
+	}
+	if resp.StatusCode != 200 {
+		return nil, false, fmt.Errorf("audit: HTTP %d", resp.StatusCode)
+	}
+	body, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, false, e
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var ev auditEvent
+		if json.Unmarshal([]byte(line), &ev) == nil {
+			events = append(events, ev)
+		}
+	}
+	// Reverse to newest-first.
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events, false, nil
 }
 
 // fetchDevCreds calls GET /console/devcreds. It returns ("", false) when the
@@ -601,6 +654,7 @@ type readyViewControls struct {
 	onSignOut     ui.Handler
 	onRefresh     ui.Handler
 	onOpenUser    func(string)
+	onOpenAudit   ui.Handler
 	onSearchInput ui.Handler
 	onSearchGo    ui.Handler
 	onPrev        ui.Handler
@@ -620,6 +674,13 @@ func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.
 			),
 			Div(
 				css.Class("header-actions"),
+				Button(
+					Type("button"),
+					css.Class("btn btn-secondary"),
+					Attr("aria-label", "View the security audit log"),
+					OnClick(c.onOpenAudit),
+					Text("Audit log"),
+				),
 				Button(
 					Type("button"),
 					css.Class("btn btn-secondary"),
@@ -675,6 +736,73 @@ func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.
 	)
 }
 
+// auditView renders the global security audit log (newest first) as a read-only
+// table. Server-side the endpoint is admin-scoped, so a non-admin never reaches
+// the "Audit log" button's data.
+func auditView(events []auditEvent, onClose ui.Handler) ui.Node {
+	var body ui.Node
+	if len(events) == 0 {
+		body = Div(css.Class("usage-empty"), Text("No audit events recorded yet."))
+	} else {
+		body = Div(css.Class("table-wrap"),
+			Table(css.Class("users-table"),
+				Thead(Tr(
+					Th(Text("When")),
+					Th(Text("Actor")),
+					Th(Text("Action")),
+					Th(Text("Target")),
+					Th(Text("IP")),
+				)),
+				Tbody(Map(events, func(e auditEvent) ui.Node {
+					target := e.TargetType
+					if e.TargetID != "" {
+						target += " · " + e.TargetID
+					}
+					return Tr(
+						Td(Text(trimDateTime(e.Timestamp))),
+						Td(Text(shortActor(e.ActorID))),
+						Td(Text(e.Action)),
+						Td(Text(target)),
+						Td(Text(e.IP)),
+					)
+				})),
+			),
+		)
+	}
+	return Div(css.Class("console-page"),
+		Div(css.Class("console-header"),
+			H1(css.Class("console-title"),
+				Div(css.Class("brand-mark"), Text("C")),
+				Text("Audit log"),
+			),
+			Div(css.Class("header-actions"),
+				Button(Type("button"), css.Class("btn btn-secondary"), Attr("aria-label", "Back to console"), OnClick(onClose), Text("← Back")),
+			),
+		),
+		Div(css.Class("table-section"),
+			Div(css.Class("table-hint"), Text("Every security-relevant backend event, newest first. Append-only and hash-chained.")),
+			body,
+		),
+	)
+}
+
+// trimDateTime shortens an RFC3339 timestamp to "YYYY-MM-DD HH:MM" for display.
+func trimDateTime(s string) string {
+	if len(s) >= 16 {
+		return strings.Replace(s[:16], "T", " ", 1)
+	}
+	return s
+}
+
+// shortActor trims a synthetic token actor id for readability, leaving real user
+// ids intact.
+func shortActor(id string) string {
+	if len(id) > 20 {
+		return id[:20] + "…"
+	}
+	return id
+}
+
 // pageLabel renders the current 1-based row range for the users pager.
 func pageLabel(offset, count int) string {
 	if count == 0 {
@@ -701,6 +829,7 @@ func App() ui.Node {
 	userSearch := ui.UseState("")   // live email-search box value
 	userOffset := ui.UseState(0)    // current users-table page offset
 	usersHasMore := ui.UseState(false)
+	auditEvents := ui.UseState[[]auditEvent](nil) // global audit log (screenAudit)
 
 	// reloadUsers refetches just the users table for the current search + offset,
 	// leaving the overview stats untouched. Used by search/prev/next.
@@ -926,6 +1055,31 @@ func App() ui.Node {
 	})
 	onUsersNext := ui.UseEvent(func() { reloadUsers(userSearch.Get(), userOffset.Get()+usersPageSize) })
 
+	// Audit-log open/close.
+	handleOpenAudit := ui.UseEvent(func() {
+		tok := lsGet()
+		if tok == "" {
+			view.Set(screenHome)
+			return
+		}
+		view.Set(screenLoading)
+		go func() {
+			evs, authErr, err := fetchAudit(tok, 200)
+			if authErr {
+				view.Set(screenAuthErr)
+				return
+			}
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			auditEvents.Set(evs)
+			view.Set(screenAudit)
+		}()
+	})
+	handleCloseAudit := ui.UseEvent(func() { view.Set(screenReady) })
+
 	// Render based on current navigation state.
 	switch view.Get() {
 	case screenLoading:
@@ -936,6 +1090,8 @@ func App() ui.Node {
 		return netErrView(netErrMsg.Get(), handleSignOut)
 	case screenManage:
 		return ui.CreateElement(manageView, manageProps{token: lsGet(), userID: manageUserID.Get(), onClose: handleCloseUser})
+	case screenAudit:
+		return auditView(auditEvents.Get(), handleCloseAudit)
 	case screenReady:
 		ov := overview.Get()
 		us := users.Get()
@@ -949,6 +1105,7 @@ func App() ui.Node {
 			onSignOut:     handleSignOut,
 			onRefresh:     handleRefresh,
 			onOpenUser:    handleOpenUser,
+			onOpenAudit:   handleOpenAudit,
 			onSearchInput: onUserSearchInput,
 			onSearchGo:    onUserSearchSubmit,
 			onPrev:        onUsersPrev,

@@ -1,3 +1,14 @@
+## 2026-07-18 — Cloud Phase 4c: audit-log view
+
+The audit trail was fully built server-side (hash-chained, admin-scoped since Phase 0's cross-tenant
+fix) but had no console surface. Added an "Audit log" screen: a header button fetches `/v1/audit`
+(which streams NDJSON, not a JSON array — parse line-by-line, reverse to newest-first) and renders a
+read-only table of when/actor/action/target/IP. No new authz needed — the endpoint already returns a
+non-admin only their own events, so the global log is gated by the same bearer that gates everything
+else. Browser-verified against the running server: 36 real events including my own
+admin.users.read/overview.read and the dev.seed, correctly ordered. Small display helpers
+(trimDateTime to "YYYY-MM-DD HH:MM", shortActor to trim synthetic token ids).
+
 ## 2026-07-18 — Cloud Phase 4c: users search + pagination
 
 The console fetched 100 users flat — fine for a demo, useless past a real tenant count. Added a `q=`
