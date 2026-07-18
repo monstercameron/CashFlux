@@ -354,7 +354,10 @@ func smartPeekTrigger(props smartPeekProps) ui.Node {
 			sev = insights[0].Severity
 		}
 		badge = Span(ClassStr("smart-peek-badge "+tw.ColorClass(severityTone(sev))), badgeText)
-		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), alerts)
+		// The accessible name mirrors the capped badge ("9+"), not the raw count —
+		// a header reading "249 smart insights" turns a glanceable surface into a
+		// backlog (2026-07-18 assessment); the full set stays on the Smart hub.
+		aria = fmt.Sprintf(uistate.T("smart.peekAlertsAria"), badgeText)
 	} else {
 		title = uistate.T("smart.peekTools")
 	}

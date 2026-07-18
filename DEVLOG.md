@@ -24965,3 +24965,13 @@ Alert settings shortcut, per-action aria labels carrying the notification title,
 button label fixed to "Snooze…" (the 3-choice horizon menu shipped earlier but the label still
 promised a fixed 1 day). Assessment items remaining for this page: none blocking 9/10 that I can
 see — "new since last visit" already renders as a catch-up strip distinct from unread.
+
+## 2026-07-18 — Dashboard nudge state honesty + Smart trigger count demotion
+
+Two small trust fixes. Keep Everything called MarkDashDailyNudgeAnswered but never recorded a
+preset, so the Focus select kept its placeholder — a control lying about the state it controls
+(the same class as QA #44, which fixed the APPLY side but not the KEEP side). Fix persists
+"default" WITHOUT applying the preset layout — on "keep", nothing may move. And the smart-peek
+trigger's aria/title leaked the raw insight count (249) past its own 9+-capped badge; the aria
+now mirrors the badge. Deliberately did NOT rebuild Focus as a segmented control (assessment
+"consider") — the placeholder-as-real-state defect is gone, which was the actual complaint.

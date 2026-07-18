@@ -97,6 +97,11 @@ func dashDailyNudge(_ struct{}) ui.Node {
 	})
 	onKeep := ui.UseEvent(func() {
 		uistate.MarkDashDailyNudgeAnswered()
+		// Record the choice as the "default" (Everything) view WITHOUT applying
+		// the preset layout — the user said keep, so nothing may move. The Focus
+		// select then shows "Everything (default)" instead of lying with its
+		// "Choose a view…" placeholder (2026-07-18 assessment).
+		uistate.PersistDashPreset("default")
 		uistate.RequestPersist()
 		tick.Set(tick.Get() + 1)
 	})

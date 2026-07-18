@@ -19,7 +19,7 @@ var smartKeys = Catalog{
 	"smart.collapse":       "Collapse",
 	"smart.peekInsights":   "Smart insights",
 	"smart.peekTools":      "Smart tools",
-	"smart.peekAlertsAria": "%d smart insights for this page — click to show",
+	"smart.peekAlertsAria": "%s smart insights for this page — click to show",
 	"smart.peekToolsAria":  "Smart tools for this page — click to show",
 
 	// Empty-state helper (AffordanceEmptyState).
