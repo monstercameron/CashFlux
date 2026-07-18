@@ -62,6 +62,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 	linkIDS := ui.UseState(t.RelatedID)
 	recurS := ui.UseState(string(t.Recurrence))
 	remindS := ui.UseState(strconv.Itoa(t.ReminderLeadDays))
+	memberS := ui.UseState(t.MemberID)
 	errS := ui.UseState("")
 
 	onTitle := ui.UseEvent(func(v string) { titleS.Set(v) })
@@ -94,6 +95,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 				tt.Due = time.Time{}
 			}
 			tt.Notes = strings.TrimSpace(notesS.Get())
+			tt.MemberID = memberS.Get()
 			rt := domain.RelatedType(linkTypeS.Get())
 			if rt == domain.RelatedNone || rt == "" {
 				tt.RelatedType = domain.RelatedNone
@@ -184,6 +186,11 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 		// Remind me sits directly under Due date (it's anchored to it), then Repeat.
 		remindField,
 		repeatField,
+		If(len(app.Members()) >= 2, labeledField(uistate.T("todo.assignTo"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: taskAssigneeOptions(app.Members(), memberS.Get()), Selected: memberS.Get(),
+				OnChange: func(v string) { memberS.Set(v) }, AriaLabel: uistate.T("todo.assignTo"), TestID: "task-edit-assignee-" + t.ID,
+			}))),
 		labeledField(uistate.T("todo.notesEdit"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), Value(notesS.Get()), OnInput(onNotes))),
 		labeledField(uistate.T("todo.linkTo"),

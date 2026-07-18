@@ -153,6 +153,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	addLinkID := ui.UseState(props.PresetLinkID)
 	addRecur := ui.UseState("")
 	addRemind := ui.UseState("0") // ReminderLeadDays as a string; only meaningful when recurring
+	addMember := ui.UseState("")  // assignee (Task.MemberID); "" = anyone
 
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onDue := ui.UseEvent(func(v string) { dueStr.Set(v) })
@@ -192,6 +193,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			ParentID: props.ParentID,
 			Status:   domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 			RelatedType: rt, RelatedID: rid,
+			MemberID:    addMember.Get(),
 		}
 		// Repeat + reminder are anchored to a due date, so they only take effect when one
 		// is set (the UI hides both controls otherwise). A reminder applies to any dated
@@ -327,6 +329,15 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 				// Remind me sits directly under Due date (it's anchored to it), then Repeat.
 				remindRow,
 				repeatRow,
+				// Assignee — only when the household actually has people to pick
+				// between (a solo user never sees a one-option select).
+				If(len(app.Members()) >= 2, Div(css.Class("tc-rail-row"),
+					Span(css.Class("tc-rail-label"), uistate.T("todo.assignTo")),
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: taskAssigneeOptions(app.Members(), addMember.Get()), Selected: addMember.Get(),
+						OnChange: func(v string) { addMember.Set(v) }, AriaLabel: uistate.T("todo.assignTo"), TestID: "task-add-assignee",
+					}),
+				)),
 				Div(css.Class("tc-rail-row"),
 					Span(css.Class("tc-rail-label"), uistate.T("todo.linkTo")),
 					uiw.SelectInput(uiw.SelectInputProps{
@@ -347,4 +358,21 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			),
 		),
 	)
+}
+
+// taskAssigneeOptions builds the assignee select: "Anyone" first, then every
+// household member. cur is kept selectable even if its member was deleted.
+func taskAssigneeOptions(members []domain.Member, cur string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("todo.assignAnyone")}}
+	seen := false
+	for _, m := range members {
+		if m.ID == cur {
+			seen = true
+		}
+		opts = append(opts, uiw.SelectOption{Value: m.ID, Label: m.Name})
+	}
+	if cur != "" && !seen {
+		opts = append(opts, uiw.SelectOption{Value: cur, Label: uistate.T("todo.assignUnknown")})
+	}
+	return opts
 }

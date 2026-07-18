@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -160,6 +161,18 @@ func TaskRow(props taskRowProps) ui.Node {
 	if t.ReminderLeadDays > 0 {
 		metaParts = append(metaParts, Span(css.Class("todo-meta-item", "is-reminder"), Attr("data-testid", "remind-badge-"+t.ID),
 			uiw.Icon(icon.Bell, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(taskReminderLabel(t.ReminderLeadDays))))
+	}
+	// Assignee chip — a task claimed by one member says whose it is.
+	if t.MemberID != "" {
+		if app := appstate.Default; app != nil {
+			for _, m := range app.Members() {
+				if m.ID == t.MemberID {
+					metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "assignee-badge-"+t.ID),
+						uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(m.Name)))
+					break
+				}
+			}
+		}
 	}
 	if linkPresent {
 		metaParts = append(metaParts, linkNode)

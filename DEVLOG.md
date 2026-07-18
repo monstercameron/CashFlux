@@ -25064,3 +25064,13 @@ is always pulled into the visible list even if it's a dated snapshot the cap or 
 hide — a select whose current value isn't among its options silently misrenders. Cost guidance
 lives in the toggle tooltip. Checked the "about $0.00" cost item too: FormatCostUSD already
 renders sub-cent costs at 4 decimals, so that assessment item was fixed by an earlier pass.
+
+## 2026-07-18 — Task assignee
+
+Checked the To-do depth asks against reality first: recurrence (Task.Recurrence + spawn-on-
+complete) and reminders (ReminderLeadDays) already exist in both forms — only assignee was
+missing, and the field (MemberID) was already on the model, so this is UI-only. Assign-to
+select in add (rail row) + edit (labeled field), gated on >= 2 members (a solo household never
+sees a one-option select), "Anyone" default, orphaned member ids surfaced as "(former member)"
+instead of being coerced. Row shows an assignee chip. That closes the last item of the
+assessment's task-8 bundle.
