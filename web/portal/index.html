@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/portal/" />
+    <title>CashFlux Cloud — Account</title>
+    <meta name="description" content="Manage your CashFlux Cloud account — subscription, billing, signed-in devices, and your data." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg:            #07090a;
+        --bg-elev:       #0d1012;
+        --surface:       rgba(255, 255, 255, 0.025);
+        --surface-2:     rgba(255, 255, 255, 0.045);
+        --border:        rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.16);
+        --text:          #f3f6f5;
+        --text-dim:      #9aa6a1;
+        --text-faint:    #69736e;
+        --accent:        #3ee08f;
+        --accent-2:      #28c7c0;
+        --danger:        #f0726f;
+        --warn:          #e6b860;
+        --grad:          linear-gradient(135deg, #3ee08f 0%, #28c7c0 100%);
+        --grad-text:     linear-gradient(120deg, #eafff4 0%, #6ff0bd 38%, #46d6cf 72%, #8ad9ff 100%);
+        --radius:        14px;
+        --radius-lg:     22px;
+        --ring:          0 0 0 3px rgba(62, 224, 143, 0.28);
+        --shadow-glow:   0 18px 50px -18px rgba(40, 199, 192, 0.45);
+        --maxw:          760px;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { scroll-behavior: smooth; }
+      body {
+        font-family: "Inter", -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+        font-size: 16px; line-height: 1.55; color: var(--text); background: var(--bg);
+        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden;
+      }
+      #app { min-height: 100vh; position: relative; z-index: 1; }
+      ::selection { background: rgba(62, 224, 143, 0.28); color: #fff; }
+
+      body::before, body::after {
+        content: ""; position: fixed; z-index: 0; pointer-events: none;
+        border-radius: 50%; filter: blur(80px); opacity: 0.5;
+      }
+      body::before {
+        top: -260px; left: -160px; width: 620px; height: 620px;
+        background: radial-gradient(circle at center, rgba(62, 224, 143, 0.5), transparent 70%);
+        animation: drift1 22s ease-in-out infinite alternate;
+      }
+      body::after {
+        bottom: -300px; right: -180px; width: 680px; height: 680px;
+        background: radial-gradient(circle at center, rgba(40, 199, 192, 0.4), transparent 70%);
+        animation: drift2 26s ease-in-out infinite alternate;
+      }
+      .bg-grid {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 56px 56px;
+        mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 78%);
+        -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 78%);
+      }
+      @keyframes drift1 { to { transform: translate(80px, 60px) scale(1.1); } }
+      @keyframes drift2 { to { transform: translate(-70px, -50px) scale(1.08); } }
+
+      /* --- Layout --------------------------------------------------------- */
+      .portal-wrap {
+        width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 48px 24px 72px;
+        display: flex; flex-direction: column; align-items: center; gap: 20px; min-height: 100vh;
+      }
+      .portal-shell { width: 100%; display: flex; flex-direction: column; gap: 20px; }
+      .portal-topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+
+      .portal-brand {
+        font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+        background: var(--grad-text); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      .portal-lede { color: var(--text-dim); font-size: 16px; text-align: center; max-width: 42ch; }
+
+      /* --- Cards ---------------------------------------------------------- */
+      .portal-card {
+        width: 100%; background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius-lg); padding: 26px 28px;
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        display: flex; flex-direction: column; gap: 12px;
+        box-shadow: 0 24px 50px -30px rgba(0,0,0,.75);
+      }
+      .portal-wrap > .portal-card { max-width: 440px; align-items: center; text-align: center; gap: 16px; margin-top: 6vh; }
+      .portal-h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+      .muted { color: var(--text-dim); font-size: 14px; }
+      .portal-fineprint { color: var(--text-faint); font-size: 13px; }
+      .portal-error {
+        width: 100%; color: var(--danger); font-size: 14px; font-weight: 500;
+        background: rgba(240,114,111,0.1); border: 1px solid rgba(240,114,111,0.34);
+        border-radius: 11px; padding: 11px 15px;
+      }
+
+      /* --- Buttons -------------------------------------------------------- */
+      .portal-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .portal-wrap > .portal-card .portal-actions { flex-direction: column; width: 100%; }
+      .portal-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+        padding: 11px 20px; border-radius: 11px; border: 1px solid var(--border-strong);
+        background: var(--surface-2); color: var(--text); cursor: pointer; white-space: nowrap;
+        transition: transform .16s cubic-bezier(.2,.7,.3,1), box-shadow .2s, background .2s, border-color .2s;
+      }
+      .portal-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+      .portal-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+      .portal-btn:active { transform: translateY(1px); }
+      .portal-btn-primary { background: var(--grad); color: #04140c; border-color: transparent; box-shadow: 0 10px 30px -10px rgba(62,224,143,0.6); }
+      .portal-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 40px -12px rgba(62,224,143,0.7); }
+      .portal-btn-ghost { background: transparent; color: var(--text-dim); border-color: transparent; }
+      .portal-btn-ghost:hover { color: var(--text); background: var(--surface); }
+      .portal-btn-danger { background: rgba(240,114,111,0.14); color: var(--danger); border-color: rgba(240,114,111,0.4); }
+      .portal-btn-danger:hover { background: rgba(240,114,111,0.22); }
+
+      /* --- Subscription status -------------------------------------------- */
+      .portal-status {
+        align-self: flex-start; display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+        background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text-dim);
+      }
+      .portal-status.status-active { color: var(--accent); border-color: rgba(62,224,143,0.4); background: rgba(62,224,143,0.12); }
+      .portal-status.status-trialing { color: var(--accent-2); border-color: rgba(40,199,192,0.4); background: rgba(40,199,192,0.12); }
+      .portal-status.status-past_due { color: var(--warn); border-color: rgba(230,184,96,0.4); background: rgba(230,184,96,0.12); }
+      .portal-status.status-canceled, .portal-status.status-none { color: var(--text-faint); }
+      .portal-usage { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+      /* --- Subscribe controls --------------------------------------------- */
+      .portal-subscribe { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+      .portal-pills { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+      .portal-pill {
+        font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 999px; cursor: pointer;
+        background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text-dim);
+        transition: background .18s, border-color .18s, color .18s;
+      }
+      .portal-pill:hover { color: var(--text); }
+      .portal-pill.on { background: rgba(62,224,143,0.14); border-color: rgba(62,224,143,0.5); color: var(--accent); }
+
+      /* --- Sessions ------------------------------------------------------- */
+      .portal-sessions { display: flex; flex-direction: column; gap: 8px; }
+      .portal-session {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 11px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); font-size: 14px;
+      }
+
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+      .portal-card { animation: fadeUp .5s cubic-bezier(.2,.7,.3,1) both; }
+      @media (prefers-reduced-motion: reduce) {
+        .portal-card { animation: none; }
+        body::before, body::after { animation: none; }
+      }
+      @media (max-width: 560px) {
+        .portal-wrap { padding: 28px 16px 56px; }
+        .portal-card { padding: 22px 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <div id="app"></div>
+    <script src="./wasm_exec.js"></script>
+    <script>
+      const go = new Go();
+      WebAssembly.instantiateStreaming(fetch("./portal.wasm"), go.importObject)
+        .then(result => go.run(result.instance))
+        .catch(err => {
+          document.getElementById("app").textContent = "Failed to load the account portal: " + err;
+        });
+    </script>
+  </body>
+</html>

@@ -1,3 +1,35 @@
+## 2026-07-18 — Cloud Phase 4b: the customer self-service portal
+
+With the server side landed in Phase 4a (`/portal/` serving + the scoped `GET /v1/me`), 4b is the
+customer-facing wasm SPA. I built it as a fresh standalone `main` (`cmd/cashflux-portal`) with zero
+`internal/*` deps, mirroring `cmd/cashflux-admin` exactly — same GoWebComponents-v4 imports, same
+`net/http` same-origin calls, same `localStorage`-token shape — so there's one console pattern to
+maintain, not two. It talks only to the public API.
+
+Auth was the load-bearing decision. The operator console uses a bare admin token; a customer must
+not. The portal instead reuses the existing OAuth flow: it opens `/v1/auth/{provider}` in a popup,
+listens for the `cashflux.oauth` `postMessage` the callback already posts (origin-checked against
+`location.origin`), and captures the session access token. That token is what `authUserForToken`
+accepts in oauth mode, so every scoped endpoint (`/v1/me`, `/v1/auth/sessions`, `/v1/billing/*`,
+`/v1/account/*`) just works with it as a bearer. The one UX hole that mattered: the access token is
+~15 min, so I added a silent refresh — on any 401, POST the same-origin HttpOnly refresh cookie to
+`/v1/auth/refresh`, store the new access token + rotated CSRF, retry once — so a customer isn't
+bounced to the sign-in screen every quarter hour. Because the portal is served from the same origin
+as the API, requests carry the cookie with no CORS/credentials fuss, and same-origin requests send
+no `Origin` header so `writeCORS` waves them through.
+
+The whole dashboard renders from a single `/v1/me` read (subscription + usage + billing config),
+which keeps the client dumb: no client-side entitlement logic, it just displays the server's
+`active` verdict and the configured provider list. Subscribe/manage are provider-neutral — the
+provider picker only appears when >1 is live, and non-Stripe providers append `?provider=`. Session
+rows are each their own component (the framework forbids `On*` inside a `Map` loop) so each can own
+its revoke handler. Verified end to end against a locally-run `cashflux-server`: `/portal/` serves
+the SPA (200), the wasm boots with zero console errors, the landing and the signed-in dashboard both
+render (Playwright screenshots, token seeded via the static-token path), `/v1/me` is 401 without a
+bearer and correctly caller-scoped with one. `portal.wasm` is git-ignored like `admin.wasm`; wiring
+both into CI/deploy is Phase 4c. Next: the operator-console upgrades (4c), then zero-knowledge sync
+(Phase 2).
+
 ## 2026-07-17 — #53: the dataset audits itself (lane 4)
 
 Data health closes the lane's trust arc: after checkpoints (#55), import preflights (#57), and

@@ -3,6 +3,7 @@
 /web/bin/
 /web/wasm_exec.js
 /web/admin/admin.wasm
+/web/portal/portal.wasm
 **/static/bin/
 /static/wasm_exec.js
 /bin/
