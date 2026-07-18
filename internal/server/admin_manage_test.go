@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -167,6 +168,52 @@ func TestAdminUserSetPlanRejectsBadStatus(t *testing.T) {
 	sub, ok, _ := store.GetSubscription("ua")
 	if !ok || sub.Status != "active" {
 		t.Errorf("status = %q, want unchanged active", sub.Status)
+	}
+}
+
+// TestAdminUserSuspend proves suspend blocks the cloud entitlement and reinstate
+// restores it, and that an admin cannot suspend their own account.
+func TestAdminUserSuspend(t *testing.T) {
+	adminToken := "admin-secret"
+	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
+	seedAdminFixture(t, store) // ua active
+	ctx := context.Background()
+	cfg := Config{Billing: true}
+
+	// Baseline: active → entitled.
+	if active, _ := IsCloudActive(ctx, cfg, store, AuthUser{ID: "ua"}); !active {
+		t.Fatal("ua should be entitled before suspension")
+	}
+
+	// Suspend.
+	w := adminReq(t, mux, http.MethodPost, "/v1/admin/users/ua/suspend", adminToken, `{"suspended":true}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("suspend status = %d; body: %s", w.Code, w.Body.String())
+	}
+	if suspended, _ := store.IsUserSuspended("ua"); !suspended {
+		t.Fatal("ua should be marked suspended")
+	}
+	if active, _ := IsCloudActive(ctx, cfg, store, AuthUser{ID: "ua"}); active {
+		t.Fatal("suspended user must not be cloud-active")
+	}
+
+	// Reinstate.
+	w = adminReq(t, mux, http.MethodPost, "/v1/admin/users/ua/suspend", adminToken, `{"suspended":false}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("reinstate status = %d", w.Code)
+	}
+	if active, _ := IsCloudActive(ctx, cfg, store, AuthUser{ID: "ua"}); !active {
+		t.Fatal("reinstated user should be entitled again")
+	}
+
+	// An admin cannot suspend themselves.
+	adminID := resolvedAdminID(adminToken)
+	if err := store.UpsertUser(User{ID: adminID, Provider: "token", Subject: "admin", Email: "a@e.com", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	w = adminReq(t, mux, http.MethodPost, "/v1/admin/users/"+adminID+"/suspend", adminToken, `{"suspended":true}`)
+	if w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("self-suspend status = %d, want 412", w.Code)
 	}
 }
 

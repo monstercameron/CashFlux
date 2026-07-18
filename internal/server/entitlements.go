@@ -19,6 +19,15 @@ func IsCloudActive(ctx context.Context, cfg Config, store *Store, user AuthUser)
 	if strings.TrimSpace(user.ID) == "" {
 		return false, status.Error(codes.Unauthenticated, "authenticated user is required")
 	}
+	// A suspended account is denied cloud features regardless of billing mode — this
+	// is the operator's moderation lever, so it must apply even on self-host.
+	if store != nil {
+		if suspended, err := store.IsUserSuspended(user.ID); err != nil {
+			return false, err
+		} else if suspended {
+			return false, nil
+		}
+	}
 	if !cfg.Billing {
 		return true, nil
 	}

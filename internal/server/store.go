@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 6
+const CurrentServerSchemaVersion = 7
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -210,6 +210,12 @@ func (s *Store) migrate() error {
 		}
 		version = 6
 	}
+	if version < 7 {
+		if err := s.migrateTo7(); err != nil {
+			return err
+		}
+		version = 7
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -261,6 +267,42 @@ func (s *Store) migrateTo6() error {
 		return fmt.Errorf("server store: migrate v6: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) migrateTo7() error {
+	// ALTER TABLE ADD COLUMN is not idempotent, and a re-run migration (e.g. after a
+	// forced version reset) must not fail on an already-present column. Guard on the
+	// column's existence via table_info.
+	has, err := s.columnExists("users", "suspended_at")
+	if err != nil {
+		return fmt.Errorf("server store: migrate v7: %w", err)
+	}
+	if has {
+		return nil
+	}
+	if _, err := s.db.Exec(serverSchemaV7); err != nil {
+		return fmt.Errorf("server store: migrate v7: %w", err)
+	}
+	return nil
+}
+
+// columnExists reports whether a table has a column of the given name.
+func (s *Store) columnExists(table, column string) (bool, error) {
+	rows, err := s.db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 const serverSchemaV1 = `
@@ -426,4 +468,11 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   PRIMARY KEY(provider, event_id)
 );
 CREATE INDEX IF NOT EXISTS idx_webhook_events_received ON webhook_events(received_at);
+`
+
+// serverSchemaV7 adds an operator suspension marker to users. NULL means active;
+// a timestamp means the account is suspended (as of that time). Suspension blocks
+// new OAuth sessions and denies the cloud entitlement without deleting any data.
+const serverSchemaV7 = `
+ALTER TABLE users ADD COLUMN suspended_at TEXT NOT NULL DEFAULT '';
 `

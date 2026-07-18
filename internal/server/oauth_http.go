@@ -143,6 +143,16 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "user upsert failed")
 			return
 		}
+		// A suspended account cannot obtain a new session — the operator's block holds
+		// even against a fresh OAuth login.
+		if suspended, err := store.IsUserSuspended(user.ID); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
+			return
+		} else if suspended {
+			auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login.suspended", "user", user.ID)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
+			return
+		}
 		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
 		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "")
@@ -207,6 +217,18 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 				auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
 			}
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
+			return
+		}
+		// A suspended account cannot refresh into a fresh access token even with a
+		// still-valid refresh cookie (suspension normally also revokes sessions, but
+		// this closes the window between suspend and revoke).
+		if suspended, err := store.IsUserSuspended(session.UserID); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
+			return
+		} else if suspended {
+			_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
+			auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh.suspended", "user", session.UserID)
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
 			return
 		}
 		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID)

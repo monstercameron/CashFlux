@@ -140,6 +140,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("POST /v1/admin/users/{id}/plan", handleAdminUserSetPlan(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/revoke-sessions", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/admin/users/{id}/revoke-sessions", handleAdminUserRevokeSessions(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/suspend", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/users/{id}/suspend", handleAdminUserSuspend(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/dev/seed", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/admin/dev/seed", handleAdminDevSeed(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/account/export", handleCORSPreflight(cfg))

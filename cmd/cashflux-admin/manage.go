@@ -87,6 +87,7 @@ type adminUserDetail struct {
 	BlobBytes          int64  `json:"blobBytes"`
 	UsageTodayRequests int64  `json:"usageTodayRequests"`
 	UsageTodayTokens   int64  `json:"usageTodayTokens"`
+	Suspended          bool   `json:"suspended"`
 }
 
 type adminUsageRow struct {
@@ -189,6 +190,18 @@ func deleteUser(token, id string) error {
 	}
 	if code != 200 {
 		return fmt.Errorf("delete: HTTP %d", code)
+	}
+	return nil
+}
+
+func postSuspend(token, id string, suspended bool) error {
+	body, _ := json.Marshal(map[string]bool{"suspended": suspended})
+	code, _, err := adminDo(token, "POST", "/v1/admin/users/"+id+"/suspend", string(body))
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("suspend: HTTP %d", code)
 	}
 	return nil
 }
@@ -344,6 +357,30 @@ func manageView(p manageProps) ui.Node {
 			status.Set("All sessions revoked — the user must sign in again.")
 		}()
 	})
+	toggleSuspend := ui.UseEvent(func() {
+		d := detail.Get()
+		if d == nil {
+			return
+		}
+		want := !d.Suspended
+		if want {
+			status.Set("Suspending account…")
+		} else {
+			status.Set("Reinstating account…")
+		}
+		go func() {
+			if err := postSuspend(token, id, want); err != nil {
+				status.Set("Suspend failed: " + err.Error())
+				return
+			}
+			if want {
+				status.Set("Account suspended — logged out everywhere and blocked from signing back in.")
+			} else {
+				status.Set("Account reinstated.")
+			}
+			reload.Set(reload.Get() + 1)
+		}()
+	})
 	askDelete := ui.UseEvent(func() { confirmDelete.Set(true) })
 	cancelDelete := ui.UseEvent(func() { confirmDelete.Set(false) })
 	doDelete := ui.UseEvent(func() {
@@ -411,6 +448,17 @@ func manageView(p manageProps) ui.Node {
 	}
 	statusOptions := []string{"active", "trialing", "past_due", "canceled", "none"}
 
+	// Suspend/reinstate affordance reflects the account's current state.
+	isSuspended := d != nil && d.Suspended
+	suspendBtnLabel := "Suspend account"
+	suspendBtnClass := "btn btn-danger"
+	suspendCardDesc := "Block this account: log it out everywhere and stop it signing back in. Reversible; deletes no data."
+	if isSuspended {
+		suspendBtnLabel = "Reinstate account"
+		suspendBtnClass = "btn btn-secondary"
+		suspendCardDesc = "This account is suspended — blocked from signing in and denied cloud features. Reinstate to restore access."
+	}
+
 	deleteBlock := Button(Type("button"), css.Class("btn btn-danger"), Attr("aria-label", "Delete this account"), OnClick(askDelete), Text("Delete account"))
 	if confirmDelete.Get() {
 		deleteBlock = Div(css.Class("confirm-delete"),
@@ -455,6 +503,10 @@ func manageView(p manageProps) ui.Node {
 				Div(css.Class("action-card"),
 					Div(css.Class("action-desc"), Text("Force the user to sign in again on every device.")),
 					Button(Type("button"), css.Class("btn btn-secondary"), OnClick(revoke), Text("Revoke sessions")),
+				),
+				Div(css.Class("action-card"),
+					Div(css.Class("action-desc"), Text(suspendCardDesc)),
+					Button(Type("button"), css.Class(suspendBtnClass), OnClick(toggleSuspend), Text(suspendBtnLabel)),
 				),
 				Div(css.Class("action-card action-danger"),
 					Div(css.Class("action-desc"), Text("Irreversibly remove this account and all server-side data.")),

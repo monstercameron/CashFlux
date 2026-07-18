@@ -1747,6 +1747,50 @@ LIMIT ? OFFSET ?`, pattern, limit, offset)
 	return out, nil
 }
 
+// SetUserSuspended marks a user suspended (as of now) or reinstates them. Suspension
+// is a soft, reversible marker: it blocks new OAuth sessions and denies the cloud
+// entitlement, but deletes no data. Returns an error if the user does not exist.
+func (s *Store) SetUserSuspended(userID string, suspended bool, now time.Time) error {
+	if strings.TrimSpace(userID) == "" {
+		return fmt.Errorf("server store: suspend requires a user id")
+	}
+	defer s.observeDB("SetUserSuspended", time.Now())
+	val := ""
+	if suspended {
+		val = formatTime(now)
+	}
+	res, err := s.db.Exec(`UPDATE users SET suspended_at = ? WHERE id = ?`, val, strings.TrimSpace(userID))
+	if err != nil {
+		return fmt.Errorf("server store: set user suspended: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("server store: set user suspended rows: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("server store: user %q not found", userID)
+	}
+	return nil
+}
+
+// IsUserSuspended reports whether the user is currently suspended. A missing user
+// reads as not suspended (the caller handles existence separately).
+func (s *Store) IsUserSuspended(userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return false, nil
+	}
+	defer s.observeDB("IsUserSuspended", time.Now())
+	var suspendedAt string
+	err := s.db.QueryRow(`SELECT suspended_at FROM users WHERE id = ?`, strings.TrimSpace(userID)).Scan(&suspendedAt)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("server store: is user suspended: %w", err)
+	}
+	return strings.TrimSpace(suspendedAt) != "", nil
+}
+
 // AdminOverviewStats holds cross-tenant aggregate counts for the admin overview endpoint.
 type AdminOverviewStats struct {
 	TotalUsers        int64 `json:"totalUsers"`

@@ -1,3 +1,19 @@
+## 2026-07-18 — Cloud Phase 4c: account suspension
+
+Suspend was the one 4c item needing a data-model change (no user-status field existed). Schema v7
+adds a nullable `suspended_at` marker — made the `ALTER TABLE ADD COLUMN` idempotent (guarded by a
+`pragma_table_info` check) after the v5→v6 re-migration test caught a duplicate-column failure on
+re-run. The interesting design question was the enforcement chokepoint: `authUserForToken` is
+cfg-only (no store), so refactoring it to check suspension would ripple through every interceptor.
+Instead I layered enforcement where the store is already in hand: (1) the entitlement seam denies a
+suspended user before the billing short-circuit, so it holds even on self-host; (2) the OAuth
+callback refuses to mint a session for a suspended account; (3) refresh is blocked and the family
+revoked; and suspending revokes all sessions up front. Net effect: logged out, kept out, and denied
+the paid surface even in the suspend→revoke window — without touching the hot auth path. Self-suspend
+is guarded (412). Console manage view gets a Suspend/Reinstate card whose label/description/danger
+styling follow the detail's new `suspended` flag. Table tests: entitlement flips off→on across
+suspend/reinstate, self-suspend 412, migration idempotency. Browser-verified the toggle + banner.
+
 ## 2026-07-18 — Cloud Phase 4c: audit-log view
 
 The audit trail was fully built server-side (hash-chained, admin-scoped since Phase 0's cross-tenant

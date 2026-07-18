@@ -34,6 +34,7 @@ type AdminUserDetailResponse struct {
 	BlobBytes          int64  `json:"blobBytes"`
 	UsageTodayRequests int64  `json:"usageTodayRequests"`
 	UsageTodayTokens   int64  `json:"usageTodayTokens"`
+	Suspended          bool   `json:"suspended"`
 }
 
 // AdminUsageHistoryResponse is the JSON body for GET /v1/admin/users/{id}/usage: a
@@ -208,6 +209,9 @@ func handleAdminUserDetail(cfg Config, store *Store) http.HandlerFunc {
 			ID: u.ID, Provider: u.Provider, Email: u.Email,
 			CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339),
 		}
+		if suspended, err := store.IsUserSuspended(target); err == nil {
+			resp.Suspended = suspended
+		}
 		if sub, ok, err := store.GetSubscription(target); err == nil && ok {
 			resp.SubscriptionPlan = sub.Plan
 			resp.SubscriptionStatus = sub.Status
@@ -335,6 +339,50 @@ func handleAdminUserRevokeSessions(cfg Config, store *Store) http.HandlerFunc {
 		}
 		auditFromRequest(r, store, admin, "admin.user.revokeSessions", "user", target)
 		writeJSON(w, AdminActionResponse{OK: true, Action: "revokeSessions", UserID: target})
+	}
+}
+
+// AdminSuspendRequest toggles a user's suspension. suspended=true blocks the
+// account; suspended=false reinstates it.
+type AdminSuspendRequest struct {
+	Suspended bool `json:"suspended"`
+}
+
+// handleAdminUserSuspend serves POST /v1/admin/users/{id}/suspend — a reversible
+// account block. Suspending also revokes every session (immediate logout); the
+// suspension marker then blocks new logins and denies the cloud entitlement. An
+// admin cannot suspend their own account (guards against accidental self-lockout).
+func handleAdminUserSuspend(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, target, ok := adminGuard(cfg, store, w, r, "admin.user.suspend", "user")
+		if !ok {
+			return
+		}
+		var req AdminSuspendRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid request body")
+			return
+		}
+		if req.Suspended && target == admin.ID {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "an admin cannot suspend their own account")
+			return
+		}
+		now := time.Now().UTC()
+		if err := store.SetUserSuspended(target, req.Suspended, now); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "suspend update failed")
+			return
+		}
+		action := "reinstate"
+		if req.Suspended {
+			action = "suspend"
+			// Log the account out everywhere the moment it is blocked.
+			if err := store.RevokeRefreshSessionsForUser(target, now); err != nil {
+				writeErrorJSON(w, ErrorReasonInternal, "session revoke failed")
+				return
+			}
+		}
+		auditFromRequest(r, store, admin, "admin.user."+action, "user", target)
+		writeJSON(w, AdminActionResponse{OK: true, Action: action, UserID: target})
 	}
 }
 
