@@ -1694,6 +1694,7 @@ var english = Catalog{
 	"settings.panelTitle":         "Settings",
 	"settings.noWidgetSettings":   "This widget doesn't have any settings yet.",
 	"widget.settings":             "Widget settings",
+	"widget.settingsFor":          "Widget settings — %s",
 	"widget.open":                 "Open this screen",
 	"widget.openNamed":            "Open %s",
 	"widget.todayBadge":           "Today",

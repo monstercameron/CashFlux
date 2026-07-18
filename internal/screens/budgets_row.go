@@ -395,7 +395,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// the money moves (Cover/Top-up, Transactions) join the top of the menu; the
 	// destructive group stays pinned at the bottom either way.
 	kebabNode := Div(css.Class("add-wrap"), Attr("id", menuID),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")+" — "+title), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))),
@@ -453,7 +453,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 		return Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
 			crowTitle,
-			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")),
+			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
 				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 			Span(css.Class("budget-crow-amt fig"), barSpent+" / "+fmtMoney(limit)),
 			crowLeft,
@@ -601,7 +601,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// The card's "loader": a taller progress bar with the spent/limit amount (left) and
 		// the percent-used (right) rendered inside it, over the fill. In last-month mode the
 		// figures are last period's spend against this month's budget.
-		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")),
+		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
 			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
 			// XC4: the committed band sits just past the spent fill (hidden in last-month
 			// mode, where the bar shows a different period's spend).
@@ -638,7 +638,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					Span(css.Class("budget-amount"),
 						Span(css.Class("budget-spent"), barSpent), Span(" / "),
 						Button(css.Class("budget-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
-							Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")),
+							Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
 							OnClick(startLimitEdit), fmtMoney(limit)),
 					)),
 				// Percent-used, capped for display (e.g. "112%" when over).

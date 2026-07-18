@@ -470,9 +470,13 @@ func AccountRow(props accountRowProps) ui.Node {
 			// buttons. The balance figure itself is already click-to-edit for updates.
 			Div(css.Class("acct-row-actions"),
 				If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID), Title(uistate.T("accounts.viewTxnsTitle")), OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID),
+					// 18 accounts render 18 "Transactions" buttons — the accessible
+					// name carries the account so they're distinguishable.
+					Title(uistate.T("accounts.viewTxnsTitle")), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name),
+					OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 				Div(css.Class("add-wrap"), Attr("id", menuID),
-					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")+" — "+a.Name), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 						// Edit leads the menu — the most common of the demoted actions. (The

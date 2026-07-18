@@ -1839,7 +1839,10 @@ func rptaAskBtn(p rptaAskProps) ui.Node {
 		router.Navigate(uistate.RoutePath("/assistant"))
 	}))
 	return Button(css.Class("rpta-ask"), Type("button"), Attr("data-testid", "rpta-ask"),
-		Title(uistate.T("rpta.askTitle", p.Title)), OnClick(click),
+		// Every section renders one of these; the accessible name carries the
+		// section so "Ask AI" ×11 reads as eleven distinct actions.
+		Title(uistate.T("rpta.askTitle", p.Title)), Attr("aria-label", uistate.T("rpta.askTitle", p.Title)),
+		OnClick(click),
 		Span(Attr("aria-hidden", "true"), "✦ "), uistate.T("rpta.ask"))
 }
 

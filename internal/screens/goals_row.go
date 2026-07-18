@@ -524,13 +524,13 @@ func GoalRow(props goalRowProps) ui.Node {
 				// quiet secondary for over-funding.
 				primaryAction = Fragment(
 					Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive"))),
-					Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
+					Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
 				)
 			} else {
 				// Earmark-first: "Set aside" (reserve real balances, no money moves) is the
 				// primary planning gesture; logging money already saved is the quiet secondary.
 				primaryAction = Fragment(
-					Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
+					Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside"))),
 					Button(css.Class("btn goal-action-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-contribute-"+g.ID), Attr("aria-label", uistate.T("goals.logSavedTitle")), Title(uistate.T("goals.logSavedTitle")), OnClick(openContribute), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.logSaved"))),
 				)
 			}
@@ -713,7 +713,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				if complete {
 					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive")))
 				} else {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
 				}
 			case domain.GoalKindMilestone:
 				if complete {
@@ -744,7 +744,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				compactPrimary,
 				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
 					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
-					Attr("aria-label", uistate.T("goals.expandTitle")), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
+					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
 					Span(uistate.T("goals.expand")),
 					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
 			),
@@ -815,7 +815,7 @@ func GoalRow(props goalRowProps) ui.Node {
 				uiw.Icon(icon.ChevronUp, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "goal-menu-" + g.ID,
-				AriaLabel:    uistate.T("goals.moreActions"),
+				AriaLabel:    uistate.T("goals.moreActions") + " — " + g.Name,
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),

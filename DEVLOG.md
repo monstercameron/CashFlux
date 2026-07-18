@@ -1,3 +1,44 @@
+## 2026-07-18 — Backend security hardening (rate-limit spoofing/DoS, webhook integrity, wildcard CORS)
+
+A security pass over the optional backend (`internal/server`) surfaced three real hardening gaps —
+all now fixed with regression tests; the strong parts (per-user tenant scoping on every sync/blob/AI
+path, AES-GCM AI keys bound to `userID|provider` as AAD, refresh-token family reuse detection,
+signed+deduped webhooks) held up and were left alone.
+
+(1) **Rate limiter.** `clientIP` took the first `X-Forwarded-For` value with no notion of a trusted
+proxy, and the fixed-window bucket map was never evicted. Together that's a spoof-to-bypass (each
+forged IP = a fresh bucket, so the default-on auth limiter is defeated) AND an unbounded-map
+memory-exhaustion DoS. Fix: a new `CASHFLUX_SERVER_TRUSTED_PROXIES` (CIDRs/IPs) gates whether
+forwarding headers are believed — trusted only when the *direct socket peer* is in that set, else the
+peer address is used and the headers ignored; when trusted, the client is the rightmost non-trusted
+XFF hop. Added an amortized `sweepLocked` (runs ≤ once/window, under the lock `allow` already holds)
+so the map is bounded to keys seen in the last minute. Kept `clientIP` as a separate best-effort
+resolver for audit-log IP (paired with the unspoofable authenticated actor id), so I didn't have to
+thread `cfg` through 25 audit call sites — the security-critical path is `rateLimitClientIP`.
+
+(2) **Webhook billing integrity.** The handlers recorded the dedupe key *before* apply, so any
+transient/out-of-order apply failure (DB busy, an `invoice.payment_failed` arriving before the
+subscription exists) marked the event seen — and the provider's retry then got a 204 no-op, silently
+dropping a real state change. The tension: `TestStripeWebhookDedupesReplay` proves dedupe must happen
+*before* apply (a re-sent stale event can't overwrite newer state), so a naive reorder was wrong.
+Resolution: atomic **check → apply → record** under a shared `webhookMu` — check `HasWebhookEvent`
+(new store read), apply, and record ONLY on success. A replay is deduped; a failed apply is never
+recorded and re-applies on retry. Applies are idempotent upserts, so the crash-window worst case
+(applied, record failed) just re-applies harmlessly. The mutex also makes concurrent duplicate
+deliveries exactly-once (proved by a 24-goroutine test asserting the signup metric lands once).
+
+(3) **Wildcard CORS.** `AppOrigin="*"` reflected the caller origin *with* `Allow-Credentials: true`
+— any site could ride a victim's cookies. Config validation already rejects `*` from the env
+(`validAppOrigin`), so this was latent (only a programmatic config reaches it), but "we can't get
+security wrong": `writeCORS` now emits a literal `*` and withholds credentials in wildcard mode;
+a single named origin still reflects + credentials for the cookie refresh flow. Left the wildcard in
+`allowedOrigin` intact since the gRPC/sync tests lean on it as an allow-all origin check.
+
+Native `go vet` + full `internal/server` suite green (race detector is unavailable on
+windows/arm64, so the concurrency test is run `-count=5` for stability instead). Documented the
+trusted-proxy setup and the plain-HTTP-behind-a-TLS-proxy expectation in `docs/SELF_HOSTING.md` and
+`deploy/cashflux-server.env.example`.
+
 ## 2026-07-18 — Cloud Phase 2: zero-knowledge encrypted sync
 
 The last headline: make the Cloud snapshot ciphertext when the passcode lock is on. The enabling
@@ -24975,3 +25016,14 @@ preset, so the Focus select kept its placeholder — a control lying about the s
 trigger's aria/title leaked the raw insight count (249) past its own 9+-capped badge; the aria
 now mirrors the badge. Deliberately did NOT rebuild Focus as a segmented control (assessment
 "consider") — the placeholder-as-real-state defect is gone, which was the actual complaint.
+
+## 2026-07-18 — Object-specific accessible names across six pages
+
+Mechanical but broad: every repeated per-item action now appends its object's name to the
+accessible name (aria-label/title), leaving visible labels untouched so the visual density
+doesn't change. Sites: ui/widget.go (gear via a new Title prop on gearButtonProps + the four
+resizeHandles), accounts_row.go, budgets_row.go (incl. both progressbar aria-labels — a
+screen reader hearing "Budget usage 62%" twelve times is the same defect), goals_row.go,
+todo.go (checkbox now names the TASK, not its priority — priorityMeta's label lost its only
+consumer and was removed), reports_annual.go Ask AI. Notifications got theirs in the earlier
+commit. Pattern: label + " — " + name, matching the existing accountsRedesign.detailsAria style.

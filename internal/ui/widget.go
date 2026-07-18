@@ -222,7 +222,7 @@ func widget(props WidgetProps) uic.Node {
 	// tile omits it — there's no settings host to present it in an editor.
 	var gear uic.Node = Fragment()
 	if !props.Preview {
-		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear})
+		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear, Title: props.Title})
 	}
 
 	// Grid placement comes straight from packing the persisted sequence. There is NO
@@ -527,6 +527,11 @@ func widget(props WidgetProps) uic.Node {
 			uistate.PersistItems(next)
 		}
 		resizeHandle := func(dir, label string, disabled bool, onClick func()) uic.Node {
+			// ~19 widgets each render these four handles: the accessible name
+			// must say which widget it resizes, not just the direction.
+			if props.Title != "" {
+				label = label + " — " + props.Title
+			}
 			cls := "rz"
 			if disabled {
 				cls += " off"
@@ -605,17 +610,24 @@ func viewTitle(props viewTitleProps) uic.Node {
 
 type gearButtonProps struct {
 	OnClick func()
+	// Title is the owning widget's name; a dashboard renders ~20 of these
+	// buttons, so each accessible name must say WHICH widget it configures.
+	Title string
 }
 
 // gearButton is its own component so its click hook stays stable across the many
 // widgets rendered in a list (the On*-hooks-in-loops rule).
 func gearButton(props gearButtonProps) uic.Node {
 	onClick := props.OnClick
+	label := uistate.T("widget.settings")
+	if props.Title != "" {
+		label = uistate.T("widget.settingsFor", props.Title)
+	}
 	return Button(
 		css.Class("gear-inline"),
 		Type("button"),
-		Attr("title", uistate.T("widget.settings")),
-		Attr("aria-label", uistate.T("widget.settings")), // icon-only button → explicit name (B15)
+		Attr("title", label),
+		Attr("aria-label", label), // icon-only button → explicit name (B15)
 		OnClick(func() {
 			if onClick != nil {
 				onClick()

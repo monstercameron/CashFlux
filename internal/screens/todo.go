@@ -117,7 +117,6 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 
 	done := t.Status == domain.StatusDone
-	plabel, _ := priorityMeta(t.Priority)
 
 	// PRIORITY reads as a small neutral tag on the headline (High / Low; Medium is the
 	// quiet default). It is deliberately NOT colour-coded: the checkbox ring is reserved
@@ -243,7 +242,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	rowArgs = append(rowArgs,
 		Button(ClassStr("todo-check"+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
 			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
-			Attr("aria-label", uistate.T("todo.toggle")+" — "+plabel), Attr("data-testid", "task-check-"+t.ID),
+			Attr("aria-label", uistate.T("todo.toggle")+" — "+t.Title), Attr("data-testid", "task-check-"+t.ID),
 			Title(uistate.T("todo.toggle")), OnClick(toggle), checkGlyph),
 		Div(css.Class("todo-main"),
 			Div(css.Class("todo-headline"),
@@ -261,10 +260,10 @@ func TaskRow(props taskRowProps) ui.Node {
 		// Edit opens the flip modal; the shared ⋯ KebabMenu (viewport-aware) holds Add
 		// sub-task + the destructive Delete.
 		Div(css.Class("todo-actions"),
-			Button(css.Class("todo-icon-btn"), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Attr("aria-label", uistate.T("todo.editTitle")), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+			Button(css.Class("todo-icon-btn"), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Attr("aria-label", uistate.T("todo.editTitle")+" — "+t.Title), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "task-menu-" + t.ID,
-				AriaLabel:    uistate.T("todo.moreActions"),
+				AriaLabel:    uistate.T("todo.moreActions") + " — " + t.Title,
 				ToggleTestID: "task-menu-btn-" + t.ID,
 				ToggleClass:  "todo-icon-btn",
 				Items: []ui.Node{
