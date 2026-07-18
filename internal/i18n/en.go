@@ -35,6 +35,7 @@ var english = Catalog{
 
 	// "+ Add" menu (C23)
 	"addmenu.transaction": "New transaction",
+	"addmenu.transfer":    "Transfer money",
 	"addmenu.more":        "Add something else",
 	"addmenu.account":     "New account",
 	"addmenu.budget":      "New budget",
@@ -51,6 +52,7 @@ var english = Catalog{
 	"quickAdd.kind":              "Type",
 	"quickAdd.expense":           "Expense",
 	"quickAdd.income":            "Income",
+	"quickAdd.transfer":          "Transfer…",
 	"quickAdd.amount":            "Amount",
 	"quickAdd.description":       "Description",
 	"quickAdd.descPlaceholder":   "What was it for?",

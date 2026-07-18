@@ -25027,3 +25027,11 @@ screen reader hearing "Budget usage 62%" twelve times is the same defect), goals
 todo.go (checkbox now names the TASK, not its priority — priorityMeta's label lost its only
 consumer and was removed), reports_annual.go Ask AI. Notifications got theirs in the earlier
 commit. Pattern: label + " — " + name, matching the existing accountsRedesign.detailsAria style.
+
+## 2026-07-18 — Transfer handoff from the ledger add flow
+
+Chose the handoff arm over a third quick-add form mode: a transfer is two legs + FX + liability
+signing + previews — duplicating that inline would fork the tested workflow for a
+discoverability problem. The quick-add Type segment gets "Transfer…" (ellipsis = takes you
+somewhere), which closes the panel and opens the shell-root transfer modal; ditto a "Transfer
+money" item in the global + Add menu. Zero new transfer logic.

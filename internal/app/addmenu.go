@@ -53,6 +53,7 @@ func AddMenu() uic.Node {
 	openLeft := uic.UseState(false)
 	menuID := uic.UseId()
 	quickAdd := uistate.UseQuickAdd()
+	transferOpen := uistate.UseAcctTransferOpen()
 	nav := router.UseNavigate()
 	closeMenu := func() { open.Set(false) }
 	// Toggle the popover; when opening, pick the side with room so the menu never
@@ -123,6 +124,9 @@ func AddMenu() uic.Node {
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden+menuDir), Attr("role", "menu"),
 			item("addmenu.transaction", icon.Transactions, func() { quickAdd.Set(true) }),
+			// The transfer workflow, reachable from the global add path — not only
+			// from Accounts (2026-07-18 assessment: ledger-entry mental model).
+			item("addmenu.transfer", icon.Repeat, func() { transferOpen.Set(true) }),
 			item("addmenu.account", icon.Accounts, func() { uistate.SetAddTarget("account") }),
 			item("addmenu.budget", icon.Budgets, func() { uistate.SetAddTarget("budget") }),
 			item("addmenu.goal", icon.Goals, func() { uistate.SetAddTarget("goal") }),

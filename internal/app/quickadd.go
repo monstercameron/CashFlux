@@ -33,6 +33,7 @@ import (
 // hook order stays stable across opens; the result is reported via the toast.
 func QuickAddHost() uic.Node {
 	open := uistate.UseQuickAdd()
+	transferOpen := uistate.UseAcctTransferOpen()
 	notice := uistate.UseNotice()
 	dataRev := uistate.UseDataRevision()
 	app := appstate.Default
@@ -429,9 +430,21 @@ func QuickAddHost() uic.Node {
 			Options: []ui.SegOption{
 				{Value: "Expense", Label: uistate.T("quickAdd.expense")},
 				{Value: "Income", Label: uistate.T("quickAdd.income")},
+				// Not a third form mode: picking Transfer hands off to the real
+				// transfer workflow (two legs, FX, previews). It lives here because
+				// the ledger's add flow is where users look for it (2026-07-18
+				// assessment: "Transfer exists only on Accounts").
+				{Value: "Transfer", Label: uistate.T("quickAdd.transfer")},
 			},
 			Selected: kind.Get(),
-			OnSelect: func(v string) { kind.Set(v) },
+			OnSelect: func(v string) {
+				if v == "Transfer" {
+					closePanel()
+					transferOpen.Set(true)
+					return
+				}
+				kind.Set(v)
+			},
 		}),
 		ui.FormField(uistate.T("quickAdd.amount"),
 			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), OnInput(onAmount), OnBlur(onAmountBlur))),
