@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Annual report: sections that ignore an account scope now say so (2026-07-18):** with a report scoped to one account, the masthead followed the filter but Where you stand, the health factors, Goals, and Budgets silently stayed household-wide — the scope notice only named two of them (a High trust defect in the 2026-07-18 assessment: "users cannot tell which conclusions apply to the chosen account"). Every deliberately household-wide section now carries a dashed **Household-wide** chip in its heading while a scope is active (budgets' chip explains that limits are household while measured spending follows the scope), the factor basis note states factors ignore the scope, and the masthead notice now points at the chips instead of enumerating. Also fixes a real scope leak: the strengths/problems **runway** figure counted liquid cash from ALL accounts even when the scope excluded them — it now uses the scoped account set (the vitals balance sheet intentionally keeps household liquidity).
+
 ## [1.2.1] - 2026-07-18
 
 ### Fixed

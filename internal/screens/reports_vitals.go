@@ -24,7 +24,9 @@ import (
 // threshold, so distance-to-target reads as structure, not prose. Every row is
 // applicability-gated — a household with no debts sees one quiet sentence, not
 // a column of fake zeros. Pure rendering over the tested internal/vitals core.
-func rptaVitalsSection(vt vitals.Result, monthsAvgd int, fixedMinor, essSpendMinor int64, fmtMinor func(int64) string) ui.Node {
+// hhChip is the "Household-wide" tag shown in the section head while a report
+// scope is active (a balance sheet has no scope); pass Fragment() when not.
+func rptaVitalsSection(vt vitals.Result, monthsAvgd int, fixedMinor, essSpendMinor int64, fmtMinor func(int64) string, hhChip ui.Node) ui.Node {
 	pctStr := func(p int) string { return fmt.Sprintf("%d%%", p) }
 	moStr := func(tenths int64) string {
 		return uistate.T("rpta.standMonthsVal", fmt.Sprintf("%d.%d", tenths/10, tenths%10))
@@ -137,7 +139,7 @@ func rptaVitalsSection(vt vitals.Result, monthsAvgd int, fixedMinor, essSpendMin
 	if vt.HasIncome && monthsAvgd > 0 {
 		basisLine = uistate.T("rpta.standBasis", monthsAvgd)
 	}
-	return rptaSection("rpta-00", "00", uistate.T("rpta.secStand"), "neutral", uistate.T("rpta.secStandSub"), ask, Fragment(
+	return rptaSectionWithAction("rpta-00", "00", uistate.T("rpta.secStand"), "neutral", uistate.T("rpta.secStandSub"), ask, hhChip, Fragment(
 		Div(css.Class("rpta-vitals"), Attr("data-testid", "rpta-vitals"),
 			col("rpta.standColFlow", "rpta-vit-flow", flowRows),
 			col("rpta.standColCushion", "rpta-vit-cushion", cushRows),

@@ -271,6 +271,20 @@ func registerReportsAnnual() {
 		fontWeight("600"),
 		color("var(--text)"),
 	)
+	// "Household-wide" tag on sections that deliberately ignore an active
+	// report scope — same quiet dashed-pill language as the partial chip.
+	rule(".rpta-hh-chip",
+		display("inline-flex"),
+		alignItems("center"),
+		padding("0.1rem 0.55rem"),
+		borderRadius("999px"),
+		border("1px dashed var(--border)"),
+		color("var(--text-dim)"),
+		fontSize("0.72rem"),
+		fontWeight("600"),
+		whiteSpace("nowrap"),
+		cursor("help"),
+	)
 	rule(".rpta-fact-win",
 		fontWeight("400"),
 		fontSize("0.85em"),

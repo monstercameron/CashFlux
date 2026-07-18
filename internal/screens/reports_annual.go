@@ -82,6 +82,20 @@ func Reports() ui.Node {
 	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
 	scopedTxns := scope.ApplyScopeToTxns(txns, scopeIDs)
 
+	// When any scope narrows the report, every section that deliberately stays
+	// household-wide (a balance sheet, health factors, goals, budget limits)
+	// carries a visible chip saying so — a scoped report must never leave the
+	// reader guessing which conclusions followed the filter (2026-07-18
+	// nine-page assessment, High: inconsistent scope inside one report).
+	scopeActive := !sc.IsAll()
+	hhChip := func(titleKey string) ui.Node {
+		if !scopeActive {
+			return Fragment()
+		}
+		return Span(css.Class("rpta-hh-chip"), Attr("data-testid", "rpta-hh-chip"),
+			Attr("title", uistate.T(titleKey)), uistate.T("rpta.hhChip"))
+	}
+
 	// ── The review window: 12 whole months ending with the month the top-bar
 	// period lands in (so stepping the period walks the year; the newest month may
 	// be the in-progress one). Prior year = the same window shifted back 12 months.
@@ -233,8 +247,10 @@ func Reports() ui.Node {
 	// The year's fee + interest charges ("money that bought nothing", §07).
 	costs, _ := reports.CostOfMoney(scopedTxns, cats, as, ae, rates)
 
-	// Runway (liquid ÷ 6-month burn) for the strengths/problems split.
-	liquid, _ := ledger.LiquidBalance(accounts, scopedTxns, rates)
+	// Runway (liquid ÷ 6-month burn) for the strengths/problems split. Scoped
+	// like net worth — an account-scoped report must not count cash the scope
+	// excluded (the vitals section keeps its own household-wide liquidAll).
+	liquid, _ := ledger.LiquidBalance(scopedAccounts, scopedTxns, rates)
 	burn := reports.AverageMonthlyExpense(lastN(monthFlows, 6))
 	runway := reports.EstimateRunway(liquid.Amount, burn)
 
@@ -358,7 +374,7 @@ func Reports() ui.Node {
 		Debts:                 vitDebts,
 		Cards:                 vitCards,
 	})
-	standSec := rptaVitalsSection(vt, reports.ActiveMonths(vitFlows), essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor)
+	standSec := rptaVitalsSection(vt, reports.ActiveMonths(vitFlows), essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor, hhChip("rpta.hhChipTitle"))
 
 	// Uncategorized share of spend (data hygiene).
 	var uncatMinor int64
@@ -564,7 +580,8 @@ func Reports() ui.Node {
 	strengths := rptaSection("rpta-01", "01", uistate.T("rpta.secStrong"), "up", uistate.T("rpta.secStrongSub"), askStrong, Fragment(
 		If(len(strongFacts) == 0, P(css.Class("rpta-muted"), uistate.T("rpta.noStrong"))),
 		Div(css.Class("rpta-facts"), strongFacts),
-		If(len(strongFacts) > 0, P(css.Class("rpta-muted"), uistate.T("rpta.factorBasisNote"))),
+		If(len(strongFacts) > 0, P(css.Class("rpta-muted"),
+			uistate.T("rpta.factorBasisNote")+If2(scopeActive, " "+uistate.T("rpta.factorScopeNote"), ""))),
 		If(len(wins) > 0, Div(css.Class("rpta-wins"), Attr("data-testid", "rpta-wins"), wins)),
 		Div(css.Class("rpta-srcrow"), rptaSrcLink("nav.health", "/health")),
 	))
@@ -1171,7 +1188,7 @@ func Reports() ui.Node {
 	askGoals := uistate.T("rpta.goalsSummary", gc.Completed, gc.Current, gc.Missed)
 	goalsSec := Fragment()
 	if len(goalRows) > 0 || gc.Completed+gc.Missed > 0 {
-		goalsSec = rptaSection("rpta-06", "06", uistate.T("rpta.secGoals"), "neutral", uistate.T("rpta.secGoalsSub"), askGoals, Fragment(
+		goalsSec = rptaSectionWithAction("rpta-06", "06", uistate.T("rpta.secGoals"), "neutral", uistate.T("rpta.secGoalsSub"), askGoals, hhChip("rpta.hhChipTitle"), Fragment(
 			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-goals-summary"), askGoals+If2(archivedReached > 0, " "+uistate.T("rpta.goalsArchived", archivedReached), "")),
 			Div(css.Class("rpta-goal-rows"), goalRows),
 			A(css.Class("rpta-drill"), Href(uistate.RoutePath("/goals")), Attr("data-testid", "rpta-goals-drill"), uistate.T("rpta.openGoals")),
@@ -1289,7 +1306,7 @@ func Reports() ui.Node {
 	askBudgets := uistate.T("rpta.budgetsSummary", budgetsClean, budgetsCounted)
 	budgetsSec := Fragment()
 	if len(budgetRows) > 0 {
-		budgetsSec = rptaSection("rpta-07", "07", uistate.T("rpta.secBudgets"), "neutral", uistate.T("rpta.secBudgetsSub"), askBudgets, Fragment(
+		budgetsSec = rptaSectionWithAction("rpta-07", "07", uistate.T("rpta.secBudgets"), "neutral", uistate.T("rpta.secBudgetsSub"), askBudgets, hhChip("rpta.hhChipBudgetsTitle"), Fragment(
 			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-budgets-summary"), askBudgets),
 			Div(css.Class("rpta-bud-rows"), budHeader, budgetRows),
 			Div(css.Class("rpta-flow-key"),
@@ -1383,7 +1400,8 @@ func Reports() ui.Node {
 	}
 	var problemBits []ui.Node
 	if len(weakFacts) > 0 {
-		problemBits = append(problemBits, rptaSub(uistate.T("rpta.probFactors"), rptaSrcLink("nav.health", "/health")), Div(css.Class("rpta-facts"), weakFacts))
+		problemBits = append(problemBits, rptaSub(uistate.T("rpta.probFactors"),
+			Fragment(hhChip("rpta.hhChipTitle"), rptaSrcLink("nav.health", "/health"))), Div(css.Class("rpta-facts"), weakFacts))
 	}
 	if monthsRed > 0 {
 		problemBits = append(problemBits, P(css.Class("rpta-prob-line"), Attr("data-testid", "rpta-monthsred"),

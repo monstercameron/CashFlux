@@ -24913,3 +24913,18 @@ factor row gets a "· last 3 months" tag (only that factor collides by name), an
 basis note under the strong-factors list says health factors are trailing measures. Decided
 against unifying on one definition — the health factor deliberately reflects *current*
 behavior, the report reflects the *period*; both are right, they just needed labels.
+
+## 2026-07-18 — Annual report scope honesty: Household-wide chips + runway scope leak
+
+Second High from the nine-page assessment: an account-scoped report changed the masthead but
+left Where you stand, health factors, Goals, and Budgets household-wide, with the notice naming
+only two exceptions. Chose the "mark every exception" arm (the assessment allowed either): a
+dashed Household-wide chip renders in each intentionally-unscoped section head whenever
+!sc.IsAll() (00 vitals, 06 goals, 07 budgets, plus the weak-factors block in 09 and a scope
+sentence in 01's basis note). Budgets get their own chip title — limits are household but Spent
+uses scopedTxns, worth saying precisely. The masthead notice now points at the chips instead of
+enumerating (it had already drifted stale once; a pointer can't drift). Found and fixed a real
+leak while auditing data sources: strengths/problems runway used LiquidBalance over ALL
+accounts with scoped txns — mixed-scope math nobody could defend; now scopedAccounts. Vitals
+liquidAll stays household on purpose (balance sheet). Pulled while committing: the other lane
+released 1.2.1, so the changelog entry moved to a fresh Unreleased block.
