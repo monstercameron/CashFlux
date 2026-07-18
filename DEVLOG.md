@@ -1,3 +1,29 @@
+## 2026-07-18 — Cloud Phase 2: zero-knowledge encrypted sync
+
+The last headline: make the Cloud snapshot ciphertext when the passcode lock is on. The enabling
+insight (already true in the codebase) is that the `cryptobox` envelope embeds its own salt, so
+pushing the envelope bytes is self-sufficient — any device with the passcode derives the key from the
+envelope on pull. No salt-sync channel needed. I put encryption at the one push choke point
+(`prepareBackendSyncDataset`, after blob upload so blob refs are inside the ciphertext) and
+decryption at the one pull choke point (`hydrateBackendSyncDataset`, before import) — so every path
+(normal push/pull, conflict keep-local/use-server) inherits it for free. The crypto is
+SubtleCrypto-async; wrapped it in channel-blocking sync helpers safe to call from the sync goroutines
+(never the JS callback stack).
+
+Three things needed care. (1) The locked pull: if an envelope arrives while `activePasscode==""` I
+can't decrypt and must not import ciphertext or drop it — hydrate returns `errSyncDatasetLocked`, the
+pull shows an "Unlock to sync" chip and bails, and `onAppUnlocked` now re-pulls so the deferred
+snapshot lands once the passcode is known. I deliberately did NOT reuse the boot `pendingEnvelopeRaw`
+deferral for this — that path decrypts-and-imports without blob hydration, which a pulled snapshot
+(blob refs, bytes stored separately) needs. Re-pull-on-unlock sidesteps it cleanly. (2) The push
+guard: never let an empty/failed encryption overwrite a good server snapshot — refuse the push so it
+retries. (3) The mode-toggle re-push: enabling encryption changes the FORM but not the plaintext
+hash, so the dedup guard would skip re-pushing; `migrateDatasetAtRest` now clears the active
+workspace's sync-meta hash and forces a push so the server actually swaps plaintext→envelope.
+Verified natively where it's testable: a store-level server-blindness test pushes an envelope and
+asserts it round-trips byte-for-byte and is never stored as plaintext (the actual encrypt/decrypt is
+SubtleCrypto, browser-only). App+server+cryptobox packages green.
+
 ## 2026-07-18 — Cloud Phase 4c: account suspension
 
 Suspend was the one 4c item needing a data-model change (no user-status field existed). Schema v7

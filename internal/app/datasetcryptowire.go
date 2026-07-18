@@ -23,10 +23,55 @@
 package app
 
 import (
+	"errors"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
+
+// errSyncDatasetLocked is returned by the backend hydrate path when a pulled
+// snapshot is an encryption envelope but the session passcode is not known (the
+// app is locked). The caller must NOT apply or drop it — the server keeps the
+// snapshot and a fresh pull runs after the next unlock (see onAppUnlocked).
+var errSyncDatasetLocked = errors.New("encrypted sync: dataset locked (passcode unknown)")
+
+// errSyncEncryptEmpty guards the push path: if encryption yields empty or non-envelope
+// bytes, the push fails (and retries) rather than clobbering the server snapshot.
+var errSyncEncryptEmpty = errors.New("encrypted sync: refusing to push empty/plaintext snapshot")
+
+// encryptDatasetSync is a synchronous wrapper over the async, SubtleCrypto-backed
+// encryptDataset, for use from the sync goroutines. It blocks on the crypto
+// callback, so it must never run on the main JS callback stack — only inside the
+// `go func()` sync workers, which is where it is called.
+func encryptDatasetSync(plaintext []byte, passcode string) ([]byte, error) {
+	type result struct {
+		env []byte
+		err error
+	}
+	ch := make(chan result, 1)
+	encryptDataset(plaintext, passcode, func(env []byte, err error) { ch <- result{env, err} })
+	r := <-ch
+	return r.env, r.err
+}
+
+// decryptEnvelopeSync parses and decrypts a cryptobox envelope synchronously (see
+// encryptDatasetSync's goroutine caveat). The envelope carries its own salt, so any
+// device with the same passcode can derive the key and decrypt — no salt channel.
+func decryptEnvelopeSync(raw []byte, passcode string) ([]byte, error) {
+	env, ok := cryptobox.Parse(raw)
+	if !ok {
+		return nil, errors.New("encrypted sync: envelope unreadable")
+	}
+	type result struct {
+		plain []byte
+		err   error
+	}
+	ch := make(chan result, 1)
+	decryptDataset(env, passcode, func(plain []byte, err error) { ch <- result{plain, err} })
+	r := <-ch
+	return r.plain, r.err
+}
 
 // activePasscode holds the session passcode once the user has unlocked (or just
 // set) the lock, so the autosave can derive the encryption key. It lives only in
@@ -54,6 +99,10 @@ func migrateDatasetAtRest() {
 	if resaveDataset != nil {
 		resaveDataset()
 	}
+	// The encryption mode just changed, so the server's snapshot must be re-pushed in
+	// the new form (plaintext↔envelope). The plaintext content is unchanged, so force
+	// past the push dedup guard.
+	forceBackendResyncActiveWorkspace()
 }
 
 // datasetEncryptionActive reports whether the dataset should be encrypted at rest:
@@ -71,6 +120,12 @@ func onAppUnlocked(passcode string) {
 	activePasscode = passcode
 	if pendingEnvelopeRaw != "" {
 		hydrateFromPasscode(passcode)
+	}
+	// Now that the passcode is known, fetch any encrypted server snapshot a pull
+	// deferred while locked (errSyncDatasetLocked). Harmless no-op if the backend
+	// is off or there is nothing newer to apply.
+	if uistate.LoadPrefs().Normalize().BackendActive() {
+		pullActiveWorkspaceFromBackend(true)
 	}
 }
 

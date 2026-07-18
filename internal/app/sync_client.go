@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -148,6 +149,34 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 func requestBackendSyncNow() {
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
+}
+
+// forceBackendResyncActiveWorkspace re-pushes the active workspace's current
+// dataset even though its plaintext content is unchanged. It exists for the
+// encryption-mode toggle: enabling/disabling the passcode lock changes the FORM the
+// server should store (plaintext↔envelope) but not the plaintext hash, so the normal
+// dedup guard in pushActiveWorkspaceToBackend would skip the push. Clearing the
+// sync-meta hash forces the next push through; prepareBackendSyncDataset then
+// (re)encrypts or (re)plaintexts per the now-current mode.
+func forceBackendResyncActiveWorkspace() {
+	if !uistate.LoadPrefs().Normalize().BackendActive() {
+		return
+	}
+	r := loadRegistry()
+	w, ok := r.Active()
+	if !ok {
+		return
+	}
+	meta := loadSyncMeta(w.ID)
+	meta.Hash = ""
+	saveSyncMeta(w.ID, meta)
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	if redacted, err := app.ExportJSONRedacted(); err == nil {
+		pushActiveWorkspaceToBackend(redacted, time.Now().UTC())
+	}
 }
 
 func flushBackendSyncQueue() {
@@ -416,6 +445,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			return
 		}
 		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, w.ID, resp.Dataset)
+		if errors.Is(err, errSyncDatasetLocked) {
+			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
+			// the server keeps it, and onAppUnlocked re-pulls once the passcode is known.
+			setSyncStatus(syncStatus{State: "locked", Pending: len(loadSyncQueue()), Message: "unlock to sync encrypted data"})
+			return
+		}
 		if err != nil {
 			logSyncError("backend artifact blob download failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "artifact blob download failed"})
@@ -659,6 +694,12 @@ func resolveConflictUseServer() {
 			return
 		}
 		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, wID, resp.Dataset)
+		if errors.Is(err, errSyncDatasetLocked) {
+			// Can't apply the server copy while locked — keep the conflict and tell the
+			// user to unlock first; the choice re-runs once the passcode is known.
+			setSyncStatus(syncStatus{State: "locked", Message: "unlock to resolve with server copy"})
+			return
+		}
 		if err != nil {
 			setSyncStatus(syncStatus{State: "conflict"})
 			logSyncError("conflict resolve-server hydrate failed", err)

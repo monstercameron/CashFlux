@@ -1784,6 +1784,7 @@ var english = Catalog{
 	"sync.syncing":                "Syncing…",
 	"sync.offline":                "Offline",
 	"sync.conflict":               "Newer on server",
+	"sync.locked":                 "Unlock to sync",
 	"sync.error":                  "Sync error",
 	"sync.lastSynced":             "Last synced %s",
 	"settings.syncNow":            "Sync now",

@@ -288,13 +288,46 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		ds.Artifacts[i].Bytes = nil
 		changed = true
 	}
-	if !changed {
-		return data, nil
+	out := data
+	if changed {
+		out, err = store.Export(ds)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return store.Export(ds)
+	// Zero-knowledge push: when at-rest encryption is active, the snapshot the server
+	// stores is the cryptobox envelope, not plaintext JSON. The envelope embeds its
+	// own salt, so any device with the same passcode decrypts it on pull — no salt
+	// channel. Artifact blob bytes were already encrypted at upload time above.
+	if datasetEncryptionActive() {
+		env, err := encryptDatasetSync(out, activePasscode)
+		if err != nil {
+			return nil, err
+		}
+		// Guard: never push an empty or non-envelope result — that would clobber the
+		// server snapshot with unusable bytes. Fail the push so it retries instead.
+		if len(env) == 0 || !cryptobox.IsEnvelope(env) {
+			return nil, errSyncEncryptEmpty
+		}
+		return env, nil
+	}
+	return out, nil
 }
 
 func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
+	// Zero-knowledge pull: a server snapshot may be a cryptobox envelope. Decrypt it
+	// to plaintext JSON before importing. If the passcode is unknown (app locked),
+	// signal the caller to defer — never drop it, and never try to import ciphertext.
+	if cryptobox.IsEnvelope(data) {
+		if activePasscode == "" {
+			return nil, errSyncDatasetLocked
+		}
+		plain, err := decryptEnvelopeSync(data, activePasscode)
+		if err != nil {
+			return nil, err
+		}
+		data = plain
+	}
 	ds, err := store.Import(data)
 	if err != nil {
 		return nil, err

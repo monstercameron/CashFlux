@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 )
 
 func TestRepositorySQLAuditUsesParameterizedQueries(t *testing.T) {
@@ -379,6 +382,46 @@ func TestSnapshotStoreCurrentHistoryAndSizeLimit(t *testing.T) {
 	}
 	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("too-large"), Version: 4, UpdatedAt: now}, 4, 2); err == nil {
 		t.Fatal("oversized snapshot accepted")
+	}
+}
+
+// TestSnapshotStoreIsServerBlind proves the server stores a snapshot as opaque
+// bytes: a zero-knowledge client pushes a cryptobox envelope (ciphertext), and the
+// server persists and returns it VERBATIM — it never parses, requires, or downgrades
+// it to plaintext JSON. This is the server-blindness guarantee behind encrypted sync.
+func TestSnapshotStoreIsServerBlind(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	// A realistic envelope the client would push (marker + JSON{v,alg,salt,iv,cipher}).
+	envelope := cryptobox.Marshal(cryptobox.Envelope{
+		V: cryptobox.CurrentVersion, Alg: cryptobox.AlgAESGCM,
+		Salt: "c2FsdA==", IV: "aXYxMjM0NTY3OA==", Cipher: "Y2lwaGVydGV4dA==",
+	})
+	if !cryptobox.IsEnvelope(envelope) {
+		t.Fatal("test fixture is not an envelope")
+	}
+	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: envelope, Version: 1, UpdatedAt: now}, 0, 2); err != nil {
+		t.Fatalf("PutSnapshot envelope: %v", err)
+	}
+	got, ok, err := s.GetSnapshot("w1")
+	if err != nil || !ok {
+		t.Fatalf("GetSnapshot = %v/%v", ok, err)
+	}
+	// Stored bytes must be the ciphertext envelope, byte-for-byte — never plaintext.
+	if !bytes.Equal(got.Dataset, envelope) {
+		t.Fatalf("stored snapshot was altered:\n got: %q\nwant: %q", got.Dataset, envelope)
+	}
+	if !cryptobox.IsEnvelope(got.Dataset) {
+		t.Fatal("stored snapshot is not a cryptobox envelope — server is not blind")
+	}
+	if bytes.HasPrefix(got.Dataset, []byte("{")) {
+		t.Fatal("stored snapshot looks like plaintext JSON")
 	}
 }
 

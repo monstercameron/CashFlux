@@ -38,6 +38,8 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 		return "sync.offline", "sync-chip sync-off", true
 	case "conflict":
 		return "sync.conflict", "sync-chip sync-warn", true
+	case "locked":
+		return "sync.locked", "sync-chip sync-warn", true
 	case "error":
 		return "sync.error", "sync-chip sync-err", true
 	default:
