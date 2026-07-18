@@ -9,6 +9,8 @@
 /bin/
 # Locally-built Go binaries (e.g. cashflux-server.exe from `go build`); rebuilt fresh, never committed.
 *.exe
+# Playwright run output (reports, traces, screenshots) — regenerated per run, never committed.
+/test-results/
 
 # Dev tooling (built gwc binary lives here; rebuild from the framework checkout)
 /.tools/
