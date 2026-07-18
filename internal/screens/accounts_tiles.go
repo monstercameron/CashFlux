@@ -396,15 +396,16 @@ func acctTransferAmountOK(app *appstate.App, fromID, amountStr string) bool {
 	return err == nil && amtMinor > 0
 }
 
-// acctParseOptionalMinor parses an optional amount field: blank is (0, true);
-// otherwise it must parse as a positive amount in the given currency.
+// acctParseOptionalMinor parses an optional amount field: blank or an explicit
+// zero both mean "none" (0, true) — a typed "0" fee is a statement, not an
+// error; otherwise it must parse as a positive amount in the given currency.
 func acctParseOptionalMinor(s, ccy string) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, true
 	}
 	v, err := money.ParseMinor(s, currency.Decimals(ccy))
-	if err != nil || v <= 0 {
+	if err != nil || v < 0 {
 		return 0, false
 	}
 	return v, true

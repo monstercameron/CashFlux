@@ -25139,3 +25139,9 @@ select in add (rail row) + edit (labeled field), gated on >= 2 members (a solo h
 sees a one-option select), "Anyone" default, orphaned member ids surfaced as "(former member)"
 instead of being coerced. Row shows an assignee chip. That closes the last item of the
 assessment's task-8 bundle.
+
+## 2026-07-18 — Follow-up: zero is not an error
+
+Self-review of the morning's transfer work caught a UX defect I introduced: typing "0" in the
+optional fee/received fields hit the v <= 0 rejection and disabled submit with an error. An
+explicit zero means "none" — now (0, true), same as blank. Only negatives/garbage refuse.
