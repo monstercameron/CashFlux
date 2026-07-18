@@ -43,13 +43,17 @@ func dashPresetPicker(props struct{}) ui.Node {
 		Select(css.Class("fctrl-select"), Attr("data-testid", "dash-preset"),
 			Attr("aria-label", uistate.T("dashboard.presetLabel")), Title(uistate.T("dashboard.presetTitle")),
 			OnChange(onPick),
-			Option(Value(""), SelectedIf(cur == ""), uistate.T("dashboard.presetChoose")),
+			// The full grid is one view named "Everything": both the never-chosen
+			// state (cur=="") and an explicit restore (cur=="default") select it, and
+			// picking it applies the default layout — so it truthfully names the
+			// current state instead of a "Choose a view…" placeholder that lied while
+			// Everything was active (2026-07-18 assessment).
+			Option(Value("default"), SelectedIf(cur == "" || cur == "default"), uistate.T("dashboard.presetChoose")),
 			Option(Value("daily"), SelectedIf(cur == "daily"), uistate.T("dashboard.presetDaily")),
 			Option(Value("payday"), SelectedIf(cur == "payday"), uistate.T("dashboard.presetPayday")),
 			Option(Value("monthend"), SelectedIf(cur == "monthend"), uistate.T("dashboard.presetMonthEnd")),
 			Option(Value("debt"), SelectedIf(cur == "debt"), uistate.T("dashboard.presetDebt")),
 			Option(Value("goals"), SelectedIf(cur == "goals"), uistate.T("dashboard.presetGoals")),
-			Option(Value("default"), SelectedIf(cur == "default"), uistate.T("dashboard.presetDefault")),
 		),
 	)
 }

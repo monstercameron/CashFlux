@@ -1,3 +1,17 @@
+## 2026-07-18 — Dashboard Focus control names its state (UX assessment)
+
+Small copy/state-truthfulness fix from the assessment: the Focus select showed "Choose a view…" on
+the full default dashboard, implying nothing was applied while "Everything" was the active view. A
+prior pass had already tried to stop the placeholder (persisting "default" on the daily-nudge Keep),
+but the never-chosen state (cur=="") still fell through to the placeholder — exactly what the live
+build showed. Root cause was two representations of one view: an empty option ("") and a "default"
+option, plus a placeholder label. Collapsed them into a single "Everything" option (value "default",
+selected for cur==""||"default"), so the closed control truthfully reads the active view and picking
+it applies the default layout — the old empty option was a dead no-op on reselect. Verified the
+closed label and option list via an isolated-webroot screenshot ("Everything" + the five curated
+views, no placeholder, no duplicate). e2e lane2 selects the preset by value "default", which still
+exists, so it's unaffected.
+
 ## 2026-07-18 — Annual report: named section index (UX assessment)
 
 From the nine-page UX assessment: the sticky report section index showed only "00–10" at 1280px, so

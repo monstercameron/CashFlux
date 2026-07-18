@@ -1063,7 +1063,7 @@ var english = Catalog{
 	// Dashboard presentation presets.
 	"dashboard.presetLabel":    "Focus",
 	"dashboard.presetTitle":    "Swap the dashboard's widgets for a moment — you can still drag tiles afterwards; Settings → Reset restores the default.",
-	"dashboard.presetChoose":   "Choose a view…",
+	"dashboard.presetChoose":   "Everything",
 	"dashboard.presetDaily":    "Daily check-in",
 	"dashboard.presetPayday":   "Payday",
 	"dashboard.presetMonthEnd": "Month end",
