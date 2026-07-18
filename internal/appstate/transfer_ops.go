@@ -34,6 +34,17 @@ type TransferParams struct {
 	// Desc is the human-readable description shared by both legs. When empty,
 	// "Transfer" is used.
 	Desc string
+	// ReceivedMinor optionally overrides the in-leg amount, in the DESTINATION
+	// account's minor units — for cross-currency transfers where the user knows
+	// the exact amount that landed (their bank's rate, not the saved table's).
+	// Zero means "convert at the saved rate" (the default). Must not be
+	// negative; magnitude only (liability payment signing still applies).
+	ReceivedMinor int64
+	// FeeMinor optionally records a transfer fee, in the SOURCE account's minor
+	// units. It posts as a third, real expense transaction on the source
+	// account (fees are spending, not part of the moved amount). Zero means no
+	// fee. Must not be negative.
+	FeeMinor int64
 }
 
 // CreateTransferPair records a paired inter-account transfer: a negative "out"
@@ -62,6 +73,12 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	if p.AmountMinor <= 0 {
 		return "", "", fmt.Errorf("transfer: amount must be greater than zero")
 	}
+	if p.ReceivedMinor < 0 {
+		return "", "", fmt.Errorf("transfer: received amount must not be negative")
+	}
+	if p.FeeMinor < 0 {
+		return "", "", fmt.Errorf("transfer: fee must not be negative")
+	}
 
 	fromAcc, toAcc, ferr := a.transferAccounts(p.FromAccountID, p.ToAccountID)
 	if ferr != nil {
@@ -77,7 +94,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 		desc = "Transfer"
 	}
 
-	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor)
+	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor, p.ReceivedMinor)
 
 	outID = id.New()
 	inID = id.New()
@@ -111,6 +128,22 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	}
 	if err := a.PutTransaction(in); err != nil {
 		return "", "", fmt.Errorf("transfer: record in-leg: %w", err)
+	}
+	if p.FeeMinor > 0 {
+		// The fee is real spending, not part of the moved amount, so it posts
+		// as a plain expense (no TransferAccountID — it must count in totals).
+		fee := domain.Transaction{
+			ID: id.New(), AccountID: fromAcc.ID,
+			Amount:   money.New(-p.FeeMinor, fromAcc.Currency),
+			Date:     when,
+			Desc:     desc + " — fee",
+			Payee:    toAcc.Name,
+			Reviewed: true,
+			Source:   domain.TxnSourceManual,
+		}
+		if err := a.PutTransaction(fee); err != nil {
+			return "", "", fmt.Errorf("transfer: record fee: %w", err)
+		}
 	}
 	return outID, inID, nil
 }
@@ -159,21 +192,28 @@ func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Accou
 // amountMinor (source minor units, > 0) between the two accounts: a negative
 // out leg in the source currency, and an in leg FX-converted to the destination
 // currency when the currencies differ (copied as-is when no rate exists).
+// receivedMinor > 0 overrides the cross-currency in-leg magnitude (destination
+// minor units) — the user's actual landed amount beats the saved-rate estimate;
+// it is ignored for same-currency pairs, where the moved amount IS the amount.
 //
 // A transfer into a liability is a payment and must REDUCE the debt. Liability
 // balances carry two at-rest sign conventions (the sample data stores debts
 // negative; the "amount you owe" add form stores them positive), so a blanket
 // positive in-leg grew positive-stored debts instead of paying them down. Pick
 // the sign per account: whichever moves its booked balance toward zero.
-func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor int64) (fromMoney, toMoney money.Money) {
+func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64) (fromMoney, toMoney money.Money) {
 	fromMoney = money.New(-amountMinor, fromAcc.Currency)
 	toMoney = money.New(amountMinor, toAcc.Currency) // fallback: same minor units
 	if fromAcc.Currency != toAcc.Currency {
-		s := a.Settings()
-		rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
-		srcAbs := money.New(amountMinor, fromAcc.Currency)
-		if conv, cerr := rates.Convert(srcAbs, toAcc.Currency); cerr == nil {
-			toMoney = conv
+		if receivedMinor > 0 {
+			toMoney = money.New(receivedMinor, toAcc.Currency)
+		} else {
+			s := a.Settings()
+			rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
+			srcAbs := money.New(amountMinor, fromAcc.Currency)
+			if conv, cerr := rates.Convert(srcAbs, toAcc.Currency); cerr == nil {
+				toMoney = conv
+			}
 		}
 	}
 	if toAcc.Class == domain.ClassLiability {
@@ -207,6 +247,9 @@ func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
 	if p.AmountMinor <= 0 {
 		return TransferPreview{}, fmt.Errorf("transfer preview: amount must be greater than zero")
 	}
+	if p.ReceivedMinor < 0 || p.FeeMinor < 0 {
+		return TransferPreview{}, fmt.Errorf("transfer preview: received amount and fee must not be negative")
+	}
 	fromAcc, toAcc, err := a.transferAccounts(p.FromAccountID, p.ToAccountID)
 	if err != nil {
 		return TransferPreview{}, err
@@ -220,10 +263,10 @@ func (a *App) PreviewTransferPair(p TransferParams) (TransferPreview, error) {
 	if err != nil {
 		return TransferPreview{}, fmt.Errorf("transfer preview: destination balance: %w", err)
 	}
-	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor)
+	fromMoney, toMoney := a.transferLegs(fromAcc, toAcc, p.AmountMinor, p.ReceivedMinor)
 	return TransferPreview{
 		FromBefore: fromBal,
-		FromAfter:  money.New(fromBal.Amount+fromMoney.Amount, fromAcc.Currency),
+		FromAfter:  money.New(fromBal.Amount+fromMoney.Amount-p.FeeMinor, fromAcc.Currency),
 		ToBefore:   toBal,
 		ToAfter:    money.New(toBal.Amount+toMoney.Amount, toAcc.Currency),
 	}, nil

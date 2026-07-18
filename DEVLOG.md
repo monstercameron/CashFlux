@@ -24937,3 +24937,18 @@ the explicitly-90-day Top merchants tile. One-line class of bug, worth naming: a
 derivation reused across surfaces with different implied windows. The chip now computes its own
 reports.TopPayees over [MonthStart, MonthStart+1mo); the 90-day list still feeds the tile that
 declares that window.
+
+## 2026-07-18 — Transfer amount gating + received-amount override + fee
+
+Fourth High: the Transfer button enabled on account picks alone. doAccountTransfer did
+validate (toast on submit), but an enabled button with a blank required field is a broken
+promise — the enable rule now mirrors what would actually post, in BOTH forms (page + row;
+new shared acctTransferAmountOK). While in there, built the two cross-currency refinements
+the assessment called out as missing for 9/10: TransferParams.ReceivedMinor (destination-
+currency landed amount, overrides the saved-rate conversion; ignored same-currency where it
+could only desync legs) and FeeMinor (source-currency, posts a THIRD plain expense txn — 
+deliberately no TransferAccountID so it counts as spending and can't orphan-pair; considered
+folding it into the out leg and rejected it as dishonest accounting). PreviewTransferPair
+carries both so the before/after preview can't drift from the post. Bottom-up per the SDLC:
+params+legs+tests native-green first, then the form fields (received only shown cross-
+currency; fee once a source is picked).

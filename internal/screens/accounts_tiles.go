@@ -237,7 +237,7 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))))
 		},
 		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {
-			doAccountTransfer(app, fromID, toID, amountStr, dateStr, desc)
+			doAccountTransfer(app, fromID, toID, amountStr, "", "", dateStr, desc)
 		},
 	}
 }
@@ -320,23 +320,23 @@ func acctTransferFXNote(app *appstate.App, fromID, toID, amountStr string) ui.No
 // via appstate.PreviewTransferPair, which shares the exact leg math (FX
 // conversion + liability payment sign) with the real post. Renders nothing
 // until both accounts are picked and a valid positive amount is typed.
-func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr string) ui.Node {
+// receivedStr/feeStr are the optional landed-amount override (destination
+// currency) and fee (source currency); pass "" for none — invalid text is
+// treated as absent here (the form gates submit on it separately).
+func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr, receivedStr, feeStr string) ui.Node {
 	if app == nil || fromID == "" || toID == "" || fromID == toID {
 		return Fragment()
 	}
-	dec := currency.Decimals("")
-	for _, ac := range app.Accounts() {
-		if ac.ID == fromID {
-			dec = currency.Decimals(ac.Currency)
-			break
-		}
-	}
-	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), dec)
+	fromCcy := acctCurrencyOf(app, fromID)
+	amtMinor, perr := money.ParseMinor(strings.TrimSpace(amountStr), currency.Decimals(fromCcy))
 	if perr != nil || amtMinor <= 0 {
 		return Fragment()
 	}
+	recvMinor, _ := acctParseOptionalMinor(receivedStr, acctCurrencyOf(app, toID))
+	feeMinor, _ := acctParseOptionalMinor(feeStr, fromCcy)
 	pv, err := app.PreviewTransferPair(appstate.TransferParams{
 		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor,
+		ReceivedMinor: recvMinor, FeeMinor: feeMinor,
 	})
 	if err != nil {
 		return Fragment()
@@ -353,7 +353,7 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr strin
 	// #63: state the transfer's SEMANTICS in one plain sentence — what each side
 	// does and that neither leg is spending. A liability destination reads as
 	// paying down what's owed, not as an increase.
-	amtStr := money.FormatMinor(amtMinor, dec)
+	amtStr := money.FormatMinor(amtMinor, currency.Decimals(fromCcy))
 	semantics := uistate.T("accounts.xferSemanticsAsset", fromName, amtStr, toName)
 	for _, ac := range app.Accounts() {
 		if ac.ID == toID && ac.Class == domain.ClassLiability {
@@ -372,19 +372,60 @@ func acctTransferBalancePreview(app *appstate.App, fromID, toID, amountStr strin
 	)
 }
 
-// doAccountTransfer creates a transfer pair from the page/row transfer forms. Pure
-// (no hooks): validates the amount, defaults the date/desc, and bumps the revision.
-func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, dateStr, desc string) {
-	dec := currency.Decimals("")
+// acctCurrencyOf returns the currency code of the given account ("" when the
+// id isn't picked yet or unknown).
+func acctCurrencyOf(app *appstate.App, accountID string) string {
+	if app == nil || accountID == "" {
+		return ""
+	}
 	for _, ac := range app.Accounts() {
-		if ac.ID == fromID {
-			dec = currency.Decimals(ac.Currency)
-			break
+		if ac.ID == accountID {
+			return ac.Currency
 		}
 	}
+	return ""
+}
+
+// acctTransferAmountOK reports whether amountStr parses as a positive amount in
+// the source account's minor units — the shared submit-enable rule for both
+// transfer forms (the button used to enable with a blank amount; 2026-07-18
+// assessment, High: validation defect).
+func acctTransferAmountOK(app *appstate.App, fromID, amountStr string) bool {
+	dec := currency.Decimals(acctCurrencyOf(app, fromID))
+	amtMinor, err := money.ParseMinor(strings.TrimSpace(amountStr), dec)
+	return err == nil && amtMinor > 0
+}
+
+// acctParseOptionalMinor parses an optional amount field: blank is (0, true);
+// otherwise it must parse as a positive amount in the given currency.
+func acctParseOptionalMinor(s, ccy string) (int64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, true
+	}
+	v, err := money.ParseMinor(s, currency.Decimals(ccy))
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	return v, true
+}
+
+// doAccountTransfer creates a transfer pair from the page/row transfer forms. Pure
+// (no hooks): validates the amounts, defaults the date/desc, and bumps the revision.
+// receivedStr/feeStr are the optional cross-currency landed amount (destination
+// currency) and transfer fee (source currency); blank means none.
+func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, receivedStr, feeStr, dateStr, desc string) {
+	fromCcy := acctCurrencyOf(app, fromID)
+	dec := currency.Decimals(fromCcy)
 	amtMinor, err := money.ParseMinor(strings.TrimSpace(amountStr), dec)
 	if err != nil || amtMinor <= 0 {
 		uistate.PostNotice(uistate.T("accounts.transferInvalidAmount"), true)
+		return
+	}
+	recvMinor, recvOK := acctParseOptionalMinor(receivedStr, acctCurrencyOf(app, toID))
+	feeMinor, feeOK := acctParseOptionalMinor(feeStr, fromCcy)
+	if !recvOK || !feeOK {
+		uistate.PostNotice(uistate.T("accounts.transferInvalidExtra"), true)
 		return
 	}
 	var when time.Time
@@ -396,7 +437,8 @@ func doAccountTransfer(app *appstate.App, fromID, toID, amountStr, dateStr, desc
 		d = uistate.T("accounts.transferDefaultDesc")
 	}
 	if _, _, err := app.CreateTransferPair(appstate.TransferParams{
-		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor, Date: when, Desc: d,
+		FromAccountID: fromID, ToAccountID: toID, AmountMinor: amtMinor,
+		ReceivedMinor: recvMinor, FeeMinor: feeMinor, Date: when, Desc: d,
 	}); err != nil {
 		uistate.PostNotice(err.Error(), true)
 		return
@@ -869,9 +911,13 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	fromS := ui.UseState("")
 	toS := ui.UseState("")
 	amtS := ui.UseState("")
+	recvS := ui.UseState("")
+	feeS := ui.UseState("")
 	dateS := ui.UseState(time.Now().Format("2006-01-02"))
 	descS := ui.UseState("")
 	onAmt := ui.UseEvent(func(v string) { amtS.Set(v) })
+	onRecv := ui.UseEvent(func(v string) { recvS.Set(v) })
+	onFee := ui.UseEvent(func(v string) { feeS.Set(v) })
 	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	cancel := ui.UseEvent(Prevent(func() { done() }))
@@ -880,7 +926,7 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 		if from == "" || to == "" || from == to {
 			return
 		}
-		doAccountTransfer(app, from, to, amtS.Get(), dateS.Get(), descS.Get())
+		doAccountTransfer(app, from, to, amtS.Get(), recvS.Get(), feeS.Get(), dateS.Get(), descS.Get())
 		done()
 	}))
 
@@ -889,7 +935,14 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 	// property/vehicle destinations; liabilities labelled as payments).
 	fromOpts, toOpts := acctTransferOptions(app.Accounts(), pfrom, pto)
 	sameAcct := pfrom != "" && pto != "" && pfrom == pto
-	submitDisabled := sameAcct || pfrom == "" || pto == ""
+	fromCcy, toCcy := acctCurrencyOf(app, pfrom), acctCurrencyOf(app, pto)
+	crossCcy := fromCcy != "" && toCcy != "" && fromCcy != toCcy
+	_, recvOK := acctParseOptionalMinor(recvS.Get(), toCcy)
+	_, feeOK := acctParseOptionalMinor(feeS.Get(), fromCcy)
+	// The button stays disabled until the form would actually post: both
+	// accounts, a valid positive amount, and clean optional fields.
+	submitDisabled := sameAcct || pfrom == "" || pto == "" ||
+		!acctTransferAmountOK(app, pfrom, amtS.Get()) || !recvOK || !feeOK
 
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "page-transfer-form"),
 		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(submit),
@@ -908,9 +961,26 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// G7: cross-currency semantics said out loud — denomination + live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
 			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
+			// Cross-currency only: the actual landed amount, overriding the saved
+			// rate; hidden for same-currency pairs where it can't apply.
+			If(crossCcy, Fragment(
+				labeledField(uistate.T("accounts.transferReceivedLabel", toCcy),
+					Input(css.Class("field"), Attr("data-testid", "page-xfer-received"),
+						Type("number"), Value(recvS.Get()), Step("0.01"), Attr("min", "0.01"),
+						Attr("title", uistate.T("accounts.transferReceivedHint")), OnInput(onRecv))),
+				If(!recvOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
+			)),
+			If(fromCcy != "", Fragment(
+				labeledField(uistate.T("accounts.transferFeeLabel", fromCcy),
+					Input(css.Class("field"), Attr("data-testid", "page-xfer-fee"),
+						Type("number"), Value(feeS.Get()), Step("0.01"), Attr("min", "0.01"),
+						Attr("title", uistate.T("accounts.transferFeeHint")), OnInput(onFee))),
+				If(!feeOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
+			)),
 			// Before/after balances for both sides, straight from the same leg
-			// math the post will use (PreviewTransferPair).
-			acctTransferBalancePreview(app, pfrom, pto, amtS.Get()),
+			// math the post will use (PreviewTransferPair) — including the typed
+			// received override and fee.
+			acctTransferBalancePreview(app, pfrom, pto, amtS.Get(), recvS.Get(), feeS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(dateS.Get()), OnInput(onDate))),

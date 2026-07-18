@@ -727,7 +727,8 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 	fromID, toID := xferFromS.Get(), xferToS.Get()
 	fromOpts, toOpts := acctTransferOptions(accounts, fromID, toID)
 	sameAcct := fromID != "" && toID != "" && fromID == toID
-	submitDisabled := sameAcct || fromID == "" || toID == ""
+	// Same enable rule as the page form: no posting without a valid positive amount.
+	submitDisabled := sameAcct || fromID == "" || toID == "" || !acctTransferAmountOK(app, fromID, xferAmtS.Get())
 	return Form(css.Class("acct-edit-form"), Attr("id", "acct-transfer-form-"+a.ID),
 		Attr("aria-label", uistate.T("accounts.transferFormLabel")), OnSubmit(doTransfer),
 		Div(css.Class("modal-scroll"),
@@ -745,7 +746,7 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 			// G7: cross-currency semantics — denomination + converted preview / no-rate warning.
 			acctTransferFXNote(app, fromID, toID, xferAmtS.Get()),
 			// Before/after balances for both sides (shared with the page form).
-			acctTransferBalancePreview(app, fromID, toID, xferAmtS.Get()),
+			acctTransferBalancePreview(app, fromID, toID, xferAmtS.Get(), "", ""),
 			labeledField(uistate.T("accounts.transferDateLabel"),
 				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
 					Value(xferDateS.Get()), OnInput(onXferDate))),
