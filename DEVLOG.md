@@ -25160,3 +25160,15 @@ and expand-the-card-first (goals, new expandGoal helper; also re-expand before a
 priority chip since a modal save can re-render the card compact). Confirmed the earmark
 legend and goal-bar testids render expanded-only by reading goals_row.go rather than
 guessing. accounts+goals now 30/30 in 2.7m.
+
+## 2026-07-18 — Coverage manifest catch-up + widget-chrome testids
+
+The manifest diff is the audit trail the coverage spec promises, so I read it before
+committing: removals are the compact-hidden goal/budget controls (consistent with UX-06 and
+the budgets density pass — corroborates the stale-spec story), additions are two days of
+shipped features. One number refused to pass review: "/" untestided 29 → 194. Root cause is
+the per-tile widget chrome (gear + 4 resize handles, ~19 tiles) counting as anonymous
+buttons. Rather than ratchet-launder that, the chrome got testids (widget-gear-<id>,
+widget-rz-<dir>-<id> — the normalizer collapses ids to *) and the manifest was regenerated
+against that build: dashboard now 98. /widget-manager's 183 (the builder canvas) and the
+rest of the dashboard's 98 are noted as debt, not fixed here.

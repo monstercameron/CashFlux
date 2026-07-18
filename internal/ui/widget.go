@@ -222,7 +222,7 @@ func widget(props WidgetProps) uic.Node {
 	// tile omits it — there's no settings host to present it in an editor.
 	var gear uic.Node = Fragment()
 	if !props.Preview {
-		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear, Title: props.Title})
+		gear = uic.CreateElement(gearButton, gearButtonProps{OnClick: onGear, Title: props.Title, ID: props.ID})
 	}
 
 	// Grid placement comes straight from packing the persisted sequence. There is NO
@@ -539,6 +539,7 @@ func widget(props WidgetProps) uic.Node {
 			return Button(
 				ClassStr(cls),
 				Type("button"),
+				Attr("data-testid", "widget-rz-"+dir+"-"+id),
 				Attr("data-dir", dir),
 				Attr("title", label),
 				Attr("aria-label", label),
@@ -613,6 +614,8 @@ type gearButtonProps struct {
 	// Title is the owning widget's name; a dashboard renders ~20 of these
 	// buttons, so each accessible name must say WHICH widget it configures.
 	Title string
+	// ID is the owning widget's stable id, for the button's data-testid.
+	ID string
 }
 
 // gearButton is its own component so its click hook stays stable across the many
@@ -626,6 +629,7 @@ func gearButton(props gearButtonProps) uic.Node {
 	return Button(
 		css.Class("gear-inline"),
 		Type("button"),
+		Attr("data-testid", "widget-gear-"+props.ID),
 		Attr("title", label),
 		Attr("aria-label", label), // icon-only button → explicit name (B15)
 		OnClick(func() {

@@ -3,23 +3,97 @@
     "testids": [
       "add-menu-caret",
       "add-transaction-btn",
+      "bills-view-all",
       "dash-*",
+      "dash-daily-nudge-keep",
+      "dash-daily-nudge-use",
+      "dash-edit-layout",
+      "dash-preset",
+      "explain-chip",
+      "fresh-chip-acct-*",
+      "fresh-chip-acct-carloan-marcus",
+      "fresh-chip-acct-carloan-priya",
+      "fresh-update-btn",
+      "goal-states-*",
+      "goal-states-current",
+      "goal-states-missed",
       "help-button",
-      "hero-add-account",
       "hero-add-txn",
       "hero-quote-enable",
       "member-*",
       "period-pill",
       "profile-switch-btn",
+      "resume-dismiss",
       "sample-dismiss",
       "sample-start-fresh",
       "smart-peek-all",
       "theme-toggle",
       "topbar-*",
       "topbar-more",
-      "topbar-updated"
+      "topbar-updated",
+      "widget-gear-*",
+      "widget-gear-bills",
+      "widget-gear-budgets",
+      "widget-gear-goal-states",
+      "widget-gear-goals",
+      "widget-gear-health",
+      "widget-gear-hero",
+      "widget-gear-kpi-*",
+      "widget-gear-kpi-assets",
+      "widget-gear-monthly-recap",
+      "widget-gear-recent",
+      "widget-gear-todo",
+      "widget-gear-trend",
+      "widget-rz-b-*",
+      "widget-rz-b-bills",
+      "widget-rz-b-budgets",
+      "widget-rz-b-goal-states",
+      "widget-rz-b-goals",
+      "widget-rz-b-health",
+      "widget-rz-b-kpi-*",
+      "widget-rz-b-kpi-assets",
+      "widget-rz-b-monthly-recap",
+      "widget-rz-b-recent",
+      "widget-rz-b-todo",
+      "widget-rz-b-trend",
+      "widget-rz-l-*",
+      "widget-rz-l-bills",
+      "widget-rz-l-budgets",
+      "widget-rz-l-goal-states",
+      "widget-rz-l-goals",
+      "widget-rz-l-health",
+      "widget-rz-l-kpi-*",
+      "widget-rz-l-kpi-assets",
+      "widget-rz-l-monthly-recap",
+      "widget-rz-l-recent",
+      "widget-rz-l-todo",
+      "widget-rz-l-trend",
+      "widget-rz-r-*",
+      "widget-rz-r-bills",
+      "widget-rz-r-budgets",
+      "widget-rz-r-goal-states",
+      "widget-rz-r-goals",
+      "widget-rz-r-health",
+      "widget-rz-r-kpi-*",
+      "widget-rz-r-kpi-assets",
+      "widget-rz-r-monthly-recap",
+      "widget-rz-r-recent",
+      "widget-rz-r-todo",
+      "widget-rz-r-trend",
+      "widget-rz-t-*",
+      "widget-rz-t-bills",
+      "widget-rz-t-budgets",
+      "widget-rz-t-goal-states",
+      "widget-rz-t-goals",
+      "widget-rz-t-health",
+      "widget-rz-t-kpi-*",
+      "widget-rz-t-kpi-assets",
+      "widget-rz-t-monthly-recap",
+      "widget-rz-t-recent",
+      "widget-rz-t-todo",
+      "widget-rz-t-trend"
     ],
-    "untestided": 29
+    "untestided": 98
   },
   "/transactions": {
     "testids": [
@@ -48,6 +122,7 @@
       "txn-followup-chip-tx-2026-07-*",
       "txn-followup-chip-tx-dup-doordash-2026-06-a",
       "txn-followup-task",
+      "txn-history-open",
       "txn-import-btn",
       "txn-kebab-tx-2026-06-*",
       "txn-kebab-tx-2026-06-biz-exp",
@@ -90,7 +165,7 @@
       "txn-upcoming-strip",
       "txn-views-btn"
     ],
-    "untestided": 68
+    "untestided": 69
   },
   "/accounts": {
     "testids": [
@@ -190,7 +265,7 @@
       "update-value-btn-acct-home",
       "update-value-btn-acct-roth"
     ],
-    "untestided": 61
+    "untestided": 62
   },
   "/budgets": {
     "testids": [
@@ -198,7 +273,6 @@
       "add-transaction-btn",
       "budget-annualgrid-toggle",
       "budget-cover-btn-bud-*",
-      "budget-drivers-toggle-bud-*",
       "budget-formulas-btn-bud-*",
       "budget-formulas-btn-bud-baby",
       "budget-formulas-btn-bud-dining",
@@ -213,13 +287,6 @@
       "budget-kebab-bud-subs",
       "budget-kebab-bud-travel",
       "budget-kebab-bud-vices",
-      "budget-limit-btn-bud-*",
-      "budget-limit-btn-bud-baby",
-      "budget-limit-btn-bud-dining",
-      "budget-limit-btn-bud-fun",
-      "budget-limit-btn-bud-subs",
-      "budget-limit-btn-bud-travel",
-      "budget-limit-btn-bud-vices",
       "budget-notes-btn-bud-*",
       "budget-notes-btn-bud-baby",
       "budget-notes-btn-bud-dining",
@@ -227,9 +294,14 @@
       "budget-notes-btn-bud-subs",
       "budget-notes-btn-bud-travel",
       "budget-notes-btn-bud-vices",
-      "budget-notes-bud-*",
+      "budget-release-btn-bud-*",
+      "budget-release-btn-bud-baby",
+      "budget-release-btn-bud-dining",
+      "budget-release-btn-bud-fun",
+      "budget-release-btn-bud-subs",
+      "budget-release-btn-bud-travel",
+      "budget-release-btn-bud-vices",
       "budget-this-cat-hoa",
-      "budget-todos-more-bud-*",
       "budget-topup-btn-bud-*",
       "budget-topup-btn-bud-baby",
       "budget-topup-btn-bud-dining",
@@ -252,6 +324,7 @@
       "budgets-issues-rail",
       "budgets-last-month",
       "budgets-method",
+      "budgets-month-close",
       "budgets-search",
       "budgets-sort",
       "budgets-sweep-config",
@@ -287,59 +360,18 @@
       "theme-toggle",
       "topbar-*",
       "topbar-more",
-      "topbar-updated",
-      "txnfu-open-task-dining-budget",
-      "txnfu-open-task-groceries-*",
-      "txnfu-open-task-groceries-bulk",
-      "txnfu-open-task-groceries-cap",
-      "txnfu-open-task-groceries-mealkit",
-      "txnfu-open-task-splurge-*",
-      "txnfu-open-task-splurge-review",
-      "txnfu-open-task-transport-*",
-      "txnfu-open-task-transport-done"
+      "topbar-updated"
     ],
-    "untestided": 48
+    "untestided": 39
   },
   "/goals": {
     "testids": [
       "add-menu-caret",
       "add-transaction-btn",
-      "goal-contribute-goal-*",
-      "goal-contribute-goal-baby",
-      "goal-contribute-goal-car",
-      "goal-contribute-goal-house",
-      "goal-delete-btn-goal-*",
-      "goal-delete-btn-goal-baby",
-      "goal-delete-btn-goal-car",
-      "goal-delete-btn-goal-house",
-      "goal-edit-btn-goal-*",
-      "goal-edit-btn-goal-baby",
-      "goal-edit-btn-goal-car",
-      "goal-edit-btn-goal-house",
-      "goal-essential-3-goal-*",
-      "goal-essential-6-goal-*",
-      "goal-menu-btn-goal-*",
-      "goal-menu-btn-goal-baby",
-      "goal-menu-btn-goal-car",
-      "goal-menu-btn-goal-house",
-      "goal-notes-goal-*",
-      "goal-notes-goal-house",
-      "goal-pause-btn-goal-*",
-      "goal-pause-btn-goal-baby",
-      "goal-pause-btn-goal-car",
-      "goal-pause-btn-goal-house",
-      "goal-plan-toggle-goal-*",
-      "goal-plan-toggle-goal-baby",
-      "goal-plan-toggle-goal-car",
-      "goal-plan-toggle-goal-house",
-      "goal-quickfund-goal-*",
-      "goal-quickfund-goal-baby",
-      "goal-quickfund-goal-car",
-      "goal-quickfund-goal-house",
-      "goal-reset-goal-*",
-      "goal-reset-goal-baby",
-      "goal-reset-goal-car",
-      "goal-reset-goal-house",
+      "goal-expand-goal-*",
+      "goal-expand-goal-baby",
+      "goal-expand-goal-car",
+      "goal-expand-goal-house",
       "goal-setaside-goal-*",
       "goal-setaside-goal-baby",
       "goal-setaside-goal-car",
@@ -348,11 +380,9 @@
       "goal-target-btn-goal-baby",
       "goal-target-btn-goal-car",
       "goal-target-btn-goal-house",
-      "goal-todo-check-task-*",
-      "goal-todo-check-task-baby-budget",
-      "goal-todo-check-task-h-*",
-      "goal-todo-check-task-h-crib",
       "goals-add",
+      "goals-compare-btn",
+      "goals-funding-order-toggle",
       "goals-roundup-config",
       "goals-sort",
       "goals-tab-*",
@@ -370,7 +400,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 19
+    "untestided": 17
   },
   "/todo": {
     "testids": [
@@ -472,6 +502,9 @@
       "task-menu-btn-task-transport-*",
       "theme-toggle",
       "todo-add",
+      "todo-checklist-*",
+      "todo-checklist-taxprep",
+      "todo-checklists-btn",
       "todo-filter-link",
       "todo-filter-prio",
       "todo-hide-done",
@@ -480,6 +513,14 @@
       "todo-prev",
       "todo-search",
       "todo-sort",
+      "todo-suggest-add-*",
+      "todo-suggest-add-stale:acct-*",
+      "todo-suggest-add-stale:acct-carloan-marcus",
+      "todo-suggest-add-stale:acct-carloan-priya",
+      "todo-suggest-dismiss-*",
+      "todo-suggest-dismiss-stale:acct-*",
+      "todo-suggest-dismiss-stale:acct-carloan-marcus",
+      "todo-suggest-dismiss-stale:acct-carloan-priya",
       "todo-view-*",
       "todo-view-board",
       "todo-view-list",
@@ -487,7 +528,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 25
+    "untestided": 26
   },
   "/notifications": {
     "testids": [
@@ -495,6 +536,7 @@
       "add-transaction-btn",
       "help-button",
       "member-*",
+      "notif-alert-*",
       "notif-clear-all",
       "notif-dismiss-default-backup@backup@2026-*",
       "notif-dismiss-default-bill-due@acct-carloan-marcus@2026-07-*",
@@ -515,6 +557,98 @@
       "notif-filter-sev-warning",
       "notif-group-dismiss-default-stale",
       "notif-group-toggle-default-stale",
+      "notif-mark-all-read",
+      "notif-mdismiss-default-backup@backup@2026-*",
+      "notif-mdismiss-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-mdismiss-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-mdismiss-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-mdismiss-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-mdismiss-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-mdismiss-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-mdismiss-default-digest@digest@2026-*",
+      "notif-mdismiss-default-large@txn:tx-2026-06-getaway",
+      "notif-mdismiss-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-mdismiss-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-mdismiss-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-mdismiss-digest:2026-07-*",
+      "notif-more-default-backup@backup@2026-*",
+      "notif-more-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-more-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-more-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-more-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-more-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-more-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-more-default-digest@digest@2026-*",
+      "notif-more-default-large@txn:tx-2026-06-getaway",
+      "notif-more-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-more-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-more-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-more-digest:2026-07-*",
+      "notif-mread-default-backup@backup@2026-*",
+      "notif-mread-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-mread-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-mread-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-mread-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-mread-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-mread-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-mread-default-digest@digest@2026-*",
+      "notif-mread-default-large@txn:tx-2026-06-getaway",
+      "notif-mread-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-mread-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-mread-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-mread-digest:2026-07-*",
+      "notif-msettings-default-backup@backup@2026-*",
+      "notif-msettings-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-msettings-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-msettings-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-msettings-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-msettings-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-msettings-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-msettings-default-digest@digest@2026-*",
+      "notif-msettings-default-large@txn:tx-2026-06-getaway",
+      "notif-msettings-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-msettings-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-msettings-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-msettings-digest:2026-07-*",
+      "notif-msnooze1d-default-backup@backup@2026-*",
+      "notif-msnooze1d-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-msnooze1d-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-msnooze1d-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-msnooze1d-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-msnooze1d-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-msnooze1d-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-msnooze1d-default-digest@digest@2026-*",
+      "notif-msnooze1d-default-large@txn:tx-2026-06-getaway",
+      "notif-msnooze1d-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-msnooze1d-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-msnooze1d-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-msnooze1d-digest:2026-07-*",
+      "notif-msnooze1m-default-backup@backup@2026-*",
+      "notif-msnooze1m-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-msnooze1m-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-msnooze1m-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-msnooze1m-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-msnooze1m-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-msnooze1m-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-msnooze1m-default-digest@digest@2026-*",
+      "notif-msnooze1m-default-large@txn:tx-2026-06-getaway",
+      "notif-msnooze1m-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-msnooze1m-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-msnooze1m-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-msnooze1m-digest:2026-07-*",
+      "notif-msnooze1w-default-backup@backup@2026-*",
+      "notif-msnooze1w-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-msnooze1w-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-msnooze1w-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-msnooze1w-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-msnooze1w-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-msnooze1w-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-msnooze1w-default-digest@digest@2026-*",
+      "notif-msnooze1w-default-large@txn:tx-2026-06-getaway",
+      "notif-msnooze1w-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-msnooze1w-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-msnooze1w-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-msnooze1w-digest:2026-07-*",
       "notif-open-default-bill-due@acct-carloan-marcus@2026-07-*",
       "notif-open-default-bill-due@acct-mortgage@2026-07-*",
       "notif-open-default-bill-due@acct-studentloan@2026-07-*",
@@ -553,6 +687,45 @@
       "notif-snooze-default-paycheck@paycheck:tx-2026-07-salary",
       "notif-snooze-default-unusual@unusual:tx-coffee-anomaly-2026-*",
       "notif-snooze-digest:2026-07-*",
+      "notif-snooze1d-default-backup@backup@2026-*",
+      "notif-snooze1d-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-snooze1d-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-snooze1d-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-snooze1d-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-snooze1d-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-snooze1d-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-snooze1d-default-digest@digest@2026-*",
+      "notif-snooze1d-default-large@txn:tx-2026-06-getaway",
+      "notif-snooze1d-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-snooze1d-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-snooze1d-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-snooze1d-digest:2026-07-*",
+      "notif-snooze1m-default-backup@backup@2026-*",
+      "notif-snooze1m-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-snooze1m-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-snooze1m-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-snooze1m-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-snooze1m-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-snooze1m-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-snooze1m-default-digest@digest@2026-*",
+      "notif-snooze1m-default-large@txn:tx-2026-06-getaway",
+      "notif-snooze1m-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-snooze1m-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-snooze1m-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-snooze1m-digest:2026-07-*",
+      "notif-snooze1w-default-backup@backup@2026-*",
+      "notif-snooze1w-default-bill-due@acct-carloan-marcus@2026-07-*",
+      "notif-snooze1w-default-bill-due@acct-mortgage@2026-07-*",
+      "notif-snooze1w-default-bill-due@acct-studentloan@2026-07-*",
+      "notif-snooze1w-default-bill-due@recurring:rec-bizsoft@2026-07-*",
+      "notif-snooze1w-default-bill-due@recurring:rec-gym@2026-07-*",
+      "notif-snooze1w-default-bill-due@recurring:rec-subs@2026-07-*",
+      "notif-snooze1w-default-digest@digest@2026-*",
+      "notif-snooze1w-default-large@txn:tx-2026-06-getaway",
+      "notif-snooze1w-default-paycheck@paycheck:tx-2026-07-*",
+      "notif-snooze1w-default-paycheck@paycheck:tx-2026-07-salary",
+      "notif-snooze1w-default-unusual@unusual:tx-coffee-anomaly-2026-*",
+      "notif-snooze1w-digest:2026-07-*",
       "notif-view-history",
       "notif-view-live",
       "profile-switch-btn",
@@ -563,7 +736,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/debt": {
     "testids": [
@@ -604,7 +777,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 30
+    "untestided": 31
   },
   "/investments": {
     "testids": [
@@ -642,7 +815,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 16
+    "untestided": 17
   },
   "/allocate": {
     "testids": [
@@ -701,7 +874,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 17
+    "untestided": 18
   },
   "/planning": {
     "testids": [
@@ -729,7 +902,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 35
+    "untestided": 36
   },
   "/recurring": {
     "testids": [
@@ -807,7 +980,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/reports": {
     "testids": [
@@ -825,6 +998,11 @@
       "payees-drill",
       "period-pill",
       "profile-switch-btn",
+      "reports-action-budgets",
+      "reports-action-goal",
+      "reports-action-review",
+      "reports-action-task",
+      "reports-actions-btn",
       "reports-cat-drill",
       "reports-export-*",
       "reports-export-income",
@@ -834,13 +1012,19 @@
       "reports-export-pdf",
       "reports-export-tax",
       "reports-export-toggle",
+      "reports-hero-networth-btn",
       "reports-rollup-toggle",
+      "reports-saved-open",
       "reports-scope-toggle",
+      "reports-snap-take",
       "reports-toggle-*",
       "rpta-ask",
       "rpta-budgets-drill",
       "rpta-goals-drill",
       "rpta-idx-item",
+      "rpta-prov-income-btn",
+      "rpta-prov-kept-btn",
+      "rpta-prov-spending-btn",
       "rpta-src",
       "sample-dismiss",
       "sample-start-fresh",
@@ -850,7 +1034,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 45
+    "untestided": 57
   },
   "/networth": {
     "testids": [
@@ -871,7 +1055,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 18
+    "untestided": 19
   },
   "/health": {
     "testids": [
@@ -894,21 +1078,21 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/assistant": {
     "testids": [
       "add-menu-caret",
       "add-transaction-btn",
-      "assistant-edit-prompt",
-      "assistant-model",
+      "assistant-aside-close",
+      "assistant-aside-toggle",
       "assistant-new-chat",
       "assistant-note-convs",
       "assistant-note-flagged",
       "assistant-note-pins",
-      "assistant-privacy-chip",
+      "assistant-privacy-badge",
       "assistant-send",
-      "assistant-think",
+      "assistant-settings-toggle",
       "asst-voice-btn",
       "help-button",
       "member-*",
@@ -920,7 +1104,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 25
+    "untestided": 26
   },
   "/studio": {
     "testids": [
@@ -936,7 +1120,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 48
+    "untestided": 49
   },
   "/household": {
     "testids": [
@@ -946,6 +1130,7 @@
       "member-*",
       "member-delete-m-marcus",
       "member-delete-m-priya",
+      "member-leave-select",
       "member-make-default-m-priya",
       "member-menu-btn-m-marcus",
       "member-menu-btn-m-priya",
@@ -953,6 +1138,7 @@
       "member-set-pin-m-priya",
       "member-view-m-marcus",
       "member-view-m-priya",
+      "members-roles-explain-toggle",
       "profile-switch-btn",
       "sample-dismiss",
       "sample-start-fresh",
@@ -961,7 +1147,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 21
+    "untestided": 22
   },
   "/categories": {
     "testids": [
@@ -1037,7 +1223,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 77
+    "untestided": 78
   },
   "/rules": {
     "testids": [
@@ -1047,12 +1233,17 @@
       "member-*",
       "payeealias-add",
       "profile-switch-btn",
+      "rule-add-apply-*",
       "rule-add-billacct-select",
       "rule-add-submit",
       "rule-delete-rule-*",
       "rule-delete-rule-amazon",
       "rule-delete-rule-coffee",
       "rule-delete-rule-shell",
+      "rule-matches-btn-rule-*",
+      "rule-matches-btn-rule-amazon",
+      "rule-matches-btn-rule-coffee",
+      "rule-matches-btn-rule-shell",
       "rule-menu-btn-rule-*",
       "rule-menu-btn-rule-amazon",
       "rule-menu-btn-rule-coffee",
@@ -1073,7 +1264,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 38
+    "untestided": 39
   },
   "/artifacts": {
     "testids": [
@@ -1100,7 +1291,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 20
+    "untestided": 21
   },
   "/activity": {
     "testids": [
@@ -1117,7 +1308,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 16
+    "untestided": 17
   },
   "/settings": {
     "testids": [
@@ -1133,7 +1324,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 49
+    "untestided": 50
   },
   "/help": {
     "testids": [
@@ -1150,7 +1341,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 20
+    "untestided": 21
   },
   "/about": {
     "testids": [
@@ -1166,7 +1357,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 19
+    "untestided": 20
   },
   "/customize": {
     "testids": [
@@ -1200,7 +1391,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 33
+    "untestided": 34
   },
   "/fields": {
     "testids": [
@@ -1222,7 +1413,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 27
+    "untestided": 28
   },
   "/workflows": {
     "testids": [
@@ -1248,7 +1439,7 @@
       "wf-menu-btn-wf-review",
       "wf-var-insert"
     ],
-    "untestided": 53
+    "untestided": 54
   },
   "/appearance": {
     "testids": [
@@ -1264,7 +1455,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 55
+    "untestided": 58
   },
   "/setup": {
     "testids": [
@@ -1281,7 +1472,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 16
+    "untestided": 17
   },
   "/credit": {
     "testids": [
@@ -1300,7 +1491,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/loans": {
     "testids": [
@@ -1316,7 +1507,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 23
+    "untestided": 24
   },
   "/bills": {
     "testids": [
@@ -1349,7 +1540,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 40
+    "untestided": 41
   },
   "/subscriptions": {
     "testids": [
@@ -1367,6 +1558,11 @@
       "sub-cancel-select-movies-&-fun",
       "sub-cancel-select-shop-*",
       "sub-cancel-select-youtube-premium",
+      "sub-cancel-web-*",
+      "sub-cancel-web-household-&-*",
+      "sub-cancel-web-movies-&-fun",
+      "sub-cancel-web-shop-*",
+      "sub-cancel-web-youtube-premium",
       "sub-howto-cancel-*",
       "sub-howto-cancel-household-&-*",
       "sub-howto-cancel-movies-&-fun",
@@ -1378,6 +1574,12 @@
       "sub-ignore-shop-*",
       "sub-ignore-youtube-premium",
       "subs-detect-prefs-toggle",
+      "subs-review-confirm-household-&-*",
+      "subs-review-confirm-movies-&-fun",
+      "subs-review-confirm-shop-*",
+      "subs-review-reject-household-&-*",
+      "subs-review-reject-movies-&-fun",
+      "subs-review-reject-shop-*",
       "subs-see-insights-link",
       "subs-select-all-btn",
       "theme-toggle",
@@ -1385,20 +1587,20 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 32
+    "untestided": 33
   },
   "/insights": {
     "testids": [
       "add-menu-caret",
       "add-transaction-btn",
-      "assistant-edit-prompt",
-      "assistant-model",
+      "assistant-aside-close",
+      "assistant-aside-toggle",
       "assistant-new-chat",
       "assistant-note-convs",
       "assistant-note-pins",
-      "assistant-privacy-chip",
+      "assistant-privacy-badge",
       "assistant-send",
-      "assistant-think",
+      "assistant-settings-toggle",
       "asst-voice-btn",
       "help-button",
       "member-*",
@@ -1411,7 +1613,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 34
+    "untestided": 35
   },
   "/smart": {
     "testids": [
@@ -1424,12 +1626,16 @@
       "sample-start-fresh",
       "smart-action-SMART-*",
       "smart-dismiss",
+      "smart-triage-page",
+      "smart-triage-search",
+      "smart-triage-sev",
+      "smart-triage-sort",
       "theme-toggle",
       "topbar-*",
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/members": {
     "testids": [
@@ -1439,6 +1645,7 @@
       "member-*",
       "member-delete-m-marcus",
       "member-delete-m-priya",
+      "member-leave-select",
       "member-make-default-m-priya",
       "member-menu-btn-m-marcus",
       "member-menu-btn-m-priya",
@@ -1446,6 +1653,7 @@
       "member-set-pin-m-priya",
       "member-view-m-marcus",
       "member-view-m-priya",
+      "members-roles-explain-toggle",
       "profile-switch-btn",
       "sample-dismiss",
       "sample-start-fresh",
@@ -1454,7 +1662,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 18
+    "untestided": 19
   },
   "/split": {
     "testids": [
@@ -1470,7 +1678,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 24
+    "untestided": 25
   },
   "/widget-builder": {
     "testids": [
@@ -1490,7 +1698,7 @@
       "vb-save",
       "vb-undo"
     ],
-    "untestided": 53
+    "untestided": 54
   },
   "/widget-manager": {
     "testids": [
@@ -1506,7 +1714,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 174
+    "untestided": 183
   },
   "/documents": {
     "testids": [
@@ -1527,7 +1735,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/duplicates": {
     "testids": [
@@ -1545,7 +1753,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 15
+    "untestided": 16
   },
   "/plans": {
     "testids": [
@@ -1561,7 +1769,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 16
+    "untestided": 17
   },
   "/p/side-hustle": {
     "testids": [
@@ -1583,7 +1791,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 22
+    "untestided": 23
   },
   "/p/priya-business": {
     "testids": [
@@ -1605,7 +1813,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 22
+    "untestided": 23
   },
   "/p/marcus-hobbies": {
     "testids": [
@@ -1627,6 +1835,6 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 22
+    "untestided": 23
   }
 }
