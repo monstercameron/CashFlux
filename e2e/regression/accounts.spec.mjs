@@ -3,6 +3,19 @@
 // merged update-value/edit modal, and the readable notes line.
 import { test, expect, nav } from "./fixtures.mjs";
 
+// openFirstEditModal opens the first row's merged edit modal via its ⋯ menu
+// (the 07-16 declutter demoted Edit off the row face) and returns the account id.
+async function openFirstEditModal(app) {
+  const row = app.locator(".bento-accounts .row").first();
+  await row.scrollIntoViewIfNeeded();
+  await row.locator(".add-wrap > button").click();
+  const editBtn = app.locator('.add-menu:not(.hidden-menu) [data-testid^="edit-account-btn-"]').first();
+  const acctId = (await editBtn.getAttribute("data-testid")).replace("edit-account-btn-", "");
+  await editBtn.click();
+  await app.waitForTimeout(650); // flip
+  return acctId;
+}
+
 test.describe("accounts: transfer flip modal", () => {
   test("Transfer money opens a centered flip modal (not an inline tile)", async ({ app }) => {
     await nav(app, "/accounts");
@@ -61,10 +74,14 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await nav(app, "/accounts");
     const row = app.locator(".bento-accounts .row").first();
     await row.scrollIntoViewIfNeeded();
-    // Transactions (high-frequency navigation) is a visible row button, beside Edit.
+    // Transactions (high-frequency navigation) is a visible row button; Edit was
+    // demoted into the row's ⋯ menu by the 07-16 declutter (ONE inline primary).
     const drill = row.locator('[data-testid^="acct-view-txns-"]');
     await expect(drill).toBeVisible();
-    await expect(row.locator('[data-testid^="edit-account-btn-"]')).toBeVisible();
+    await row.locator(".add-wrap > button").click();
+    await expect(row.locator('.add-menu:not(.hidden-menu) [data-testid^="edit-account-btn-"]')).toBeVisible();
+    await app.keyboard.press("Escape");
+    await app.waitForTimeout(200);
     // G2/C4: the balance figure itself is the one consistent update affordance.
     const balBtn = row.locator('[data-testid^="acct-balance-btn-"]');
     await expect(balBtn).toBeVisible();
@@ -81,13 +98,14 @@ test.describe("accounts: row actions + type-aware kebab", () => {
   test("a property row offers no Reconcile/Transfer; a cash row offers both", async ({ app }) => {
     await nav(app, "/accounts");
     // The Condo (property): reconciling a valuation to a statement is nonsense.
-    await app.locator('[data-testid="edit-account-btn-acct-home"] ~ .add-wrap > button').click();
+    // Anchor on the inline Transactions drill (Edit moved into the menu 07-16).
+    await app.locator('[data-testid="acct-view-txns-acct-home"] ~ .add-wrap > button').click();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-home"]')).toHaveCount(0);
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-home"]')).toHaveCount(0);
     await app.keyboard.press("Escape");
     await app.waitForTimeout(200);
     // Joint Checking (cash): both rituals available, plus quick institution assignment.
-    await app.locator('[data-testid="edit-account-btn-acct-checking"] ~ .add-wrap > button').click();
+    await app.locator('[data-testid="acct-view-txns-acct-checking"] ~ .add-wrap > button').click();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-checking"]')).toBeVisible();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-checking"]')).toBeVisible();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="set-institution-acct-checking"]')).toBeVisible();
@@ -247,11 +265,7 @@ test.describe("accounts: row actions + type-aware kebab", () => {
 test.describe("accounts: merged edit + readable notes", () => {
   test("one modal edits details and updates the value; notes become a readable, expandable line", async ({ app }) => {
     await nav(app, "/accounts");
-    const editBtn = app.locator('[data-testid^="edit-account-btn-"]').first();
-    await editBtn.scrollIntoViewIfNeeded();
-    const acctId = (await editBtn.getAttribute("data-testid")).replace("edit-account-btn-", "");
-    await editBtn.click();
-    await app.waitForTimeout(650); // flip
+    const acctId = await openFirstEditModal(app);
     const dialog = app.locator('[role="dialog"]');
     // The merged editor carries BOTH the value-update section and the detail fields.
     await expect(app.getByTestId("acct-value-section")).toBeVisible();
@@ -278,8 +292,7 @@ test.describe("accounts: merged edit + readable notes", () => {
 
   test("the Cancel/Save bar stays pinned while the edit form scrolls", async ({ app }) => {
     await nav(app, "/accounts");
-    await app.locator('[data-testid^="edit-account-btn-"]').first().click();
-    await app.waitForTimeout(650);
+    await openFirstEditModal(app);
     const dialog = app.locator('[role="dialog"]');
     const foot = dialog.locator(".modal-foot");
     await expect(foot).toBeVisible();
@@ -300,10 +313,7 @@ test.describe("accounts: merged edit + readable notes", () => {
 
   test("entering a new value in the merged modal records a balance adjustment", async ({ app }) => {
     await nav(app, "/accounts");
-    const editBtn = app.locator('[data-testid^="edit-account-btn-"]').first();
-    await editBtn.scrollIntoViewIfNeeded();
-    await editBtn.click();
-    await app.waitForTimeout(650);
+    await openFirstEditModal(app);
     const dialog = app.locator('[role="dialog"]');
     // Type a new current value; the delta preview appears, proving the setbal path is live.
     await dialog.getByTestId("acct-setbal-input").fill("999999");

@@ -19,6 +19,18 @@ async function firstFinancialGoalId(app) {
   return (await card.getAttribute("data-testid")).replace("goal-row-", "");
 }
 
+// expandGoal reveals a card's full body (UX-06 #71: cards default COMPACT — the
+// trajectory line, Edit, and the secondary actions live behind the Details
+// control). No-op when the card is already expanded.
+async function expandGoal(app, gid) {
+  const btn = app.locator(`[data-testid="goal-expand-${gid}"]`);
+  if (await btn.count()) {
+    await btn.scrollIntoViewIfNeeded();
+    await btn.click();
+    await app.waitForTimeout(400);
+  }
+}
+
 test.describe("goals: decluttered toolbar", () => {
   test("has a Sort picker, no smart/metrics controls, and a single-glyph Add button", async ({ app }) => {
     await nav(app, "/goals");
@@ -75,6 +87,7 @@ test.describe("goals: priority + compare", () => {
     // Set High priority on the first financial goal via its Edit modal.
     const gid = await firstFinancialGoalId(app);
     expect(gid).toBeTruthy();
+    await expandGoal(app, gid); // compact default: Edit lives in the expanded body
     const editBtn = app.locator(`[data-testid="goal-edit-btn-${gid}"]`);
     await editBtn.scrollIntoViewIfNeeded();
     await editBtn.click();
@@ -85,7 +98,9 @@ test.describe("goals: priority + compare", () => {
     await prio.selectOption("1");
     await dialog.locator('button[type="submit"]').click();
     await app.waitForTimeout(650);
-    // The card now wears the High-priority chip.
+    // The card now wears the High-priority chip (in the expanded head; re-expand
+    // in case the save re-rendered the card back to compact).
+    await expandGoal(app, gid);
     await expect(app.getByTestId(`goal-priority-${gid}`)).toContainText(/high priority/i);
     // Priority sort puts it first.
     await app.getByTestId("goals-sort").selectOption("priority");
@@ -111,6 +126,10 @@ test.describe("goals: priority + compare", () => {
 test.describe("goals: landing-range scenarios", () => {
   test("a paced financial goal shows Best/Expected/Conservative landing dates", async ({ app }) => {
     await nav(app, "/goals");
+    // The trajectory line lives in the expanded card body (UX-06 compact default).
+    const fid = await firstFinancialGoalId(app);
+    test.skip(!fid, "no financial goal in the seed");
+    await expandGoal(app, fid);
     const line = app.locator('[data-testid^="goal-scenarios-"]').first();
     await line.scrollIntoViewIfNeeded();
     await expect(line).toBeVisible();
@@ -130,10 +149,15 @@ test.describe("goals: everyday actions inline, kebab keeps only Delete", () => {
   // tool buttons on the card; the ⋯ menu holds only the destructive Delete.
   test("Edit is inline on the card; the kebab holds Delete and nothing else duplicates Set aside", async ({ app }) => {
     await nav(app, "/goals");
+    // UX-06 layered on the 07-16 contract: the COMPACT face shows one primary +
+    // Details; EXPANDING reveals the everyday actions inline (Edit among them)
+    // while the kebab still holds only the destructive Delete.
     const gid = await firstGoalId(app);
+    await expandGoal(app, gid);
     await expect(app.locator(`.goal-card-actions [data-testid="goal-edit-btn-${gid}"]`)).toBeVisible();
     const fid = await firstFinancialGoalId(app);
     const target = fid || gid;
+    await expandGoal(app, target);
     await app.getByTestId(`goal-menu-btn-${target}`).click();
     // Kebab: Delete present, Edit no longer duplicated there.
     await expect(app.locator(`.add-menu [data-testid="goal-delete-btn-${target}"]`)).toBeVisible();
@@ -163,7 +187,8 @@ test.describe("goals: edit form — review cadence + multi-link", () => {
     await nav(app, "/goals");
     const fid = await firstFinancialGoalId(app);
     test.skip(!fid, "no financial goal in the seed");
-    // Edit is an inline card action since the 2026-07-16 kebab de-clutter.
+    // Edit is an inline card action in the EXPANDED state (UX-06 compact default).
+    await expandGoal(app, fid);
     await app.locator(`.goal-card-actions [data-testid="goal-edit-btn-${fid}"]`).click();
     await app.waitForTimeout(650); // flip
     const dialog = app.locator('[role="dialog"]');
@@ -183,6 +208,9 @@ test.describe("goals: virtual allocation", () => {
 
     // The card's primary "Set aside" action IS the entry — no kebab hop, and inside
     // there is no master toggle re-asking for intent: the picker is simply the modal.
+    // Expand first: the saved/set-aside legend asserted below renders only in the
+    // expanded body (UX-06 compact default), and the expanded state survives the modal.
+    await expandGoal(app, fid);
     await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
     await app.waitForTimeout(650);
     const dialog = app.locator('[role="dialog"]');
@@ -305,6 +333,8 @@ test.describe("goals: virtual allocation", () => {
 // earmarkGoal opens a financial goal's allocate modal, reserves `total` split evenly
 // across the liquid accounts, and saves. Used by the earmark-first UI tests below.
 async function earmarkGoal(app, fid, total) {
+  // Works from either card state: the compact face's primary IS Set aside for an
+  // active financial goal, and the expanded footer carries it too.
   await app.locator(`[data-testid="goal-setaside-${fid}"]`).click();
   await app.waitForTimeout(650);
   const d = app.locator('[role="dialog"]');
@@ -322,7 +352,9 @@ test.describe("goals: earmark-first reframe", () => {
     test.skip(!fid, "no financial goal in the seed");
 
     // "Set aside" (earmark) is the card's primary action; "Log saved" is the secondary
-    // — and the primary comes first in the footer (earmark-first ordering).
+    // — and the primary comes first in the footer (earmark-first ordering). The
+    // secondary only shows on the expanded card (UX-06 compact default).
+    await expandGoal(app, fid);
     await expect(app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"]`)).toBeVisible();
     await expect(app.locator(`.goal-card-actions [data-testid="goal-contribute-${fid}"]`)).toBeVisible();
     const primaryFirst = await app.locator(`.goal-card-actions [data-testid="goal-setaside-${fid}"], .goal-card-actions [data-testid="goal-contribute-${fid}"]`).first().getAttribute("data-testid");

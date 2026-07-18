@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Regression suite realigned with the shipped accounts/goals UX (2026-07-18):** 11 tests (5 accounts, 6 goals) had been failing since the 07-16 account-row declutter and the 07-17 compact goal cards — they still asserted inline Edit buttons and always-visible card bodies (the declutter commit even shipped a spec asserting the very layout it removed). Verified none of the failures came from today's assessment work (all 30 tests over the changed surfaces passed; the failing locators are testid-based and predate it). The accounts tests now open Edit via the row's ⋯ menu (shared `openFirstEditModal` helper) and anchor the per-account menu on the inline Transactions drill; the goals tests expand the compact card first (`expandGoal`, mirroring the QA suite's UX-06 pattern) before asserting Edit, the trajectory line, the secondary actions, and the earmark legend — which only render in the expanded body. Both specs green again, 30/30 in 2.7m.
 - **Transfer form: a typed "0" fee/received amount reads as "none", not an error (2026-07-18):** the optional-amount rule shipped earlier today rejected an explicit 0 with "must be valid amounts (or left blank)" and disabled Transfer — but a zero fee is a statement, not a mistake. Zero now parses as absent, same as blank; only negatives and non-numbers are refused.
 
 ### Fixed

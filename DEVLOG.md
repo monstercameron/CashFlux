@@ -25145,3 +25145,18 @@ assessment's task-8 bundle.
 Self-review of the morning's transfer work caught a UX defect I introduced: typing "0" in the
 optional fee/received fields hit the v <= 0 rejection and disabled submit with an error. An
 explicit zero means "none" — now (0, true), same as blank. Only negatives/garbage refuse.
+
+## 2026-07-18 — Regression triage: 11 stale accounts/goals tests realigned
+
+Post-pass verification run: 41 tests over the five touched pages → 11 failed, all
+pre-existing spec-vs-UX drift, none from today's commits (verified by diff: my accounts/goals
+changes are aria-only, and the failing locators are all data-testids that predate them). Two
+drift sources: the 07-16 declutter demoted account-row Edit into the ⋯ menu but the SAME
+commit's spec asserted it inline (self-contradictory from birth — it can never have passed);
+and the 07-17 UX-06 compact goal cards moved Edit/trajectory/legend behind Details three
+hours after goals.spec's last update. Fix pattern cribbed from the already-green
+qa_remediation_verify suite: open-the-kebab-first (accounts, new openFirstEditModal helper)
+and expand-the-card-first (goals, new expandGoal helper; also re-expand before asserting the
+priority chip since a modal save can re-render the card compact). Confirmed the earmark
+legend and goal-bar testids render expanded-only by reading goals_row.go rather than
+guessing. accounts+goals now 30/30 in 2.7m.
