@@ -305,7 +305,14 @@ func manageView(p manageProps) ui.Node {
 			}
 			detail.Set(d)
 			planInput.Set(d.SubscriptionPlan)
-			statusInput.Set(d.SubscriptionStatus)
+			// Default the status picker to a real option so it reflects what will be
+			// sent — an empty status (no subscription yet) would otherwise show the
+			// first <option> while the state held "".
+			if strings.TrimSpace(d.SubscriptionStatus) == "" {
+				statusInput.Set("active")
+			} else {
+				statusInput.Set(d.SubscriptionStatus)
+			}
 			if u, err := fetchUserUsage(token, id, 14); err == nil {
 				usage.Set(u)
 			}
@@ -392,6 +399,18 @@ func manageView(p manageProps) ui.Node {
 		usageList = Div(css.Class("usage-empty"), Text("No usage recorded in the last 14 days."))
 	}
 
+	// A user with no subscription row shows the create/comp affordance; the same
+	// endpoint updates an existing one. Status is a closed set the entitlement seam
+	// understands (matches the server's validSubscriptionStatus) — never free text.
+	hasSub := d != nil && strings.TrimSpace(d.SubscriptionStatus) != ""
+	planBtnLabel := "Save plan"
+	planCardDesc := "Change the user's plan or subscription status."
+	if !hasSub {
+		planBtnLabel = "Create subscription"
+		planCardDesc = "This user has no subscription — set a plan and status to comp or create one."
+	}
+	statusOptions := []string{"active", "trialing", "past_due", "canceled", "none"}
+
 	deleteBlock := Button(Type("button"), css.Class("btn btn-danger"), Attr("aria-label", "Delete this account"), OnClick(askDelete), Text("Delete account"))
 	if confirmDelete.Get() {
 		deleteBlock = Div(css.Class("confirm-delete"),
@@ -418,15 +437,20 @@ func manageView(p manageProps) ui.Node {
 				summary,
 				H2(css.Class("section-title"), Text("Actions")),
 				Div(css.Class("action-card"),
+					Div(css.Class("action-desc"), Text(planCardDesc)),
 					Div(css.Class("field-row"),
 						Label(Attr("for", "plan-input"), Text("Plan")),
-						Input(Attr("id", "plan-input"), Type("text"), Value(planInput.Get()), Attr("placeholder", "monthly / annual"), OnInput(onPlanInput)),
+						Input(Attr("id", "plan-input"), Type("text"), Value(planInput.Get()), Attr("placeholder", "monthly / annual / comp"), OnInput(onPlanInput)),
 					),
 					Div(css.Class("field-row"),
 						Label(Attr("for", "status-input"), Text("Status")),
-						Input(Attr("id", "status-input"), Type("text"), Value(statusInput.Get()), Attr("placeholder", "active / trialing / past_due / canceled"), OnInput(onStatusInput)),
+						Select(Attr("id", "status-input"), OnChange(onStatusInput),
+							Map(statusOptions, func(s string) ui.Node {
+								return Option(Value(s), Selected(statusInput.Get() == s), Text(s))
+							}),
+						),
 					),
-					Button(Type("button"), css.Class("btn btn-primary"), OnClick(savePlan), Text("Save plan")),
+					Button(Type("button"), css.Class("btn btn-primary"), OnClick(savePlan), Text(planBtnLabel)),
 				),
 				Div(css.Class("action-card"),
 					Div(css.Class("action-desc"), Text("Force the user to sign in again on every device.")),

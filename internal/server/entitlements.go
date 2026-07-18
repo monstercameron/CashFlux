@@ -40,6 +40,19 @@ func IsCloudActive(ctx context.Context, cfg Config, store *Store, user AuthUser)
 	return subscriptionCloudActive(sub, time.Now().UTC()), nil
 }
 
+// validSubscriptionStatus reports whether s is a status an operator may set on a
+// subscription. It is the closed set the entitlement seam understands — the active
+// verdict in subscriptionCloudActive keys off exactly these — so an admin cannot
+// write a free-text status that silently reads as inactive everywhere.
+func validSubscriptionStatus(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "active", "trialing", "past_due", "canceled", "none":
+		return true
+	default:
+		return false
+	}
+}
+
 func subscriptionCloudActive(sub Subscription, now time.Time) bool {
 	status := strings.ToLower(strings.TrimSpace(sub.Status))
 	switch status {

@@ -280,28 +280,44 @@ func handleAdminUserSetPlan(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "plan or status is required")
 			return
 		}
+		if req.Status != "" && !validSubscriptionStatus(req.Status) {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "status must be one of: active, trialing, past_due, canceled, none")
+			return
+		}
 		sub, found, err := store.GetSubscription(target)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
 			return
 		}
+		action := "setPlan"
 		if !found {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "user has no subscription to update")
-			return
+			// No subscription yet: an operator setting a plan/status creates one — the
+			// comp/manual path. Synthesize a provider-neutral "manual" record with
+			// unique customer/subscription ids so the UNIQUE constraints hold, and sane
+			// defaults (perpetual active with no period end) when only one field is given.
+			sub = Subscription{
+				UserID:               target,
+				Provider:             "manual",
+				ProviderCustomer:     "manual:" + target,
+				ProviderSubscription: "manual:" + target,
+				Status:               "active",
+				Plan:                 "comp",
+			}
+			action = "createPlan"
 		}
 		if req.Plan != "" {
 			sub.Plan = req.Plan
 		}
 		if req.Status != "" {
-			sub.Status = req.Status
+			sub.Status = strings.ToLower(req.Status)
 		}
 		sub.UpdatedAt = time.Now().UTC()
 		if err := store.PutSubscription(sub); err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "subscription update failed")
 			return
 		}
-		auditFromRequest(r, store, admin, "admin.user.setPlan", "user", target)
-		writeJSON(w, AdminActionResponse{OK: true, Action: "setPlan", UserID: target, Detail: sub.Plan + "/" + sub.Status})
+		auditFromRequest(r, store, admin, "admin.user."+action, "user", target)
+		writeJSON(w, AdminActionResponse{OK: true, Action: action, UserID: target, Detail: sub.Plan + "/" + sub.Status})
 	}
 }
 

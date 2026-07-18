@@ -1,3 +1,19 @@
+## 2026-07-18 — Cloud Phase 4c: comp/create subscriptions + status enum
+
+First of the operator-console upgrades. Two related defects in the set-plan path: it 412'd when the
+target had no subscription row (so comping a friend or fixing a failed-webhook account meant a manual
+DB poke), and status was free text (an operator could type "vip" and the entitlement seam — which
+only keys off active/trialing/past_due — would read it as inactive, a silent footgun). Fixed both in
+one change: set-plan now creates a `manual` provider row on miss (unique `manual:<id>` ids so the v6
+UNIQUE constraints hold, perpetual-active/comp defaults), and validates status against a shared
+`validSubscriptionStatus` closed set — the same set `subscriptionCloudActive` switches on, so the
+UI, the validator, and the entitlement verdict can't drift apart. The console mirrors it: status is
+now a `<select>` of exactly those options, and the button reads "Create subscription" when the user
+has none. Kept the create-vs-update distinction in the audit trail (createPlan vs setPlan) so the
+#54-style history stays honest about what happened. The old TestAdminUserSetPlanNoSubscription
+asserted the 412 — flipped it to assert creation + entitlement-active, and added a bad-status
+rejection test that also checks the existing row is left untouched. Server package green (3.2s).
+
 ## 2026-07-18 — Cloud Phase 4b: the customer self-service portal
 
 With the server side landed in Phase 4a (`/portal/` serving + the scoped `GET /v1/me`), 4b is the

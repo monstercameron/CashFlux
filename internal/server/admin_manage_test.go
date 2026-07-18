@@ -128,15 +128,45 @@ func TestAdminUserSetPlan(t *testing.T) {
 	}
 }
 
-func TestAdminUserSetPlanNoSubscription(t *testing.T) {
+// TestAdminUserSetPlanCreatesWhenMissing proves an operator can comp/create a
+// subscription for a user who never subscribed: the set-plan call now creates a
+// provider-neutral "manual" record instead of returning 412.
+func TestAdminUserSetPlanCreatesWhenMissing(t *testing.T) {
 	adminToken := "admin-secret"
 	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
 	if err := store.UpsertUser(User{ID: "uns", Provider: "github", Subject: "n", Email: "n@e.com", CreatedAt: time.Now().UTC()}); err != nil {
 		t.Fatal(err)
 	}
-	w := adminReq(t, mux, http.MethodPost, "/v1/admin/users/uns/plan", adminToken, `{"plan":"annual"}`)
-	if w.Code != http.StatusPreconditionFailed {
-		t.Fatalf("status = %d, want 412", w.Code)
+	w := adminReq(t, mux, http.MethodPost, "/v1/admin/users/uns/plan", adminToken, `{"plan":"annual","status":"active"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	sub, ok, err := store.GetSubscription("uns")
+	if err != nil || !ok {
+		t.Fatalf("GetSubscription: ok=%v err=%v", ok, err)
+	}
+	if sub.Plan != "annual" || sub.Status != "active" || sub.Provider != "manual" {
+		t.Errorf("created subscription = %q/%q/%q, want annual/active/manual", sub.Plan, sub.Status, sub.Provider)
+	}
+	if !subscriptionCloudActive(sub, time.Now().UTC()) {
+		t.Error("comped subscription should be entitlement-active")
+	}
+}
+
+// TestAdminUserSetPlanRejectsBadStatus proves a free-text status that the
+// entitlement seam wouldn't understand is refused rather than silently stored.
+func TestAdminUserSetPlanRejectsBadStatus(t *testing.T) {
+	adminToken := "admin-secret"
+	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
+	seedAdminFixture(t, store) // ua: monthly/active
+	w := adminReq(t, mux, http.MethodPost, "/v1/admin/users/ua/plan", adminToken, `{"status":"vip"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+	// The original status must be untouched.
+	sub, ok, _ := store.GetSubscription("ua")
+	if !ok || sub.Status != "active" {
+		t.Errorf("status = %q, want unchanged active", sub.Status)
 	}
 }
 
