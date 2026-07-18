@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-18
+
 ### Changed
 - **Merge-verification test-infra realigned to the shipped UX (2026-07-17):** after integrating the six-lane QA/UX batch, the whole-app regression suite (`e2e/qa_remediation_verify.mjs`) was re-pointed at the flows the lanes intentionally changed — the budgets bulk tools now open from the **Automate** popover (CF-13), a >6-budget list starts compact so the pacing strip needs comfortable density (CF-05), goal edit lives behind the compact card's Details control (M6), and CSV import stages a **preflight** with a why-matched duplicate disclosure and a confirm-to-commit button (H2); the suite is green again at 64/64 with 0 page errors against the merged build. The `screenlint` list-container ratchet moved 40→41 for one legitimately-new list body inside a primitive card (the hard no-bespoke-card invariant stays at zero). Adds `e2e/goal_shots.mjs`, the nine-page desktop+mobile before/after capture harness used to confirm the batch only improved the UI.
 
