@@ -171,16 +171,19 @@ func registerReportsAnnual() {
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
 	)
-	// 2026-07-17 audit: the sticky index must stay ONE compact row. Under 1280px
-	// the 11 labeled chips wrapped to two or three sticky rows that followed the
-	// reader down the whole report — below that width the labels yield to dot +
-	// number (each item keeps its section name in the title tooltip).
-	ruleMedia("(max-width: 1280px)", ".rpta-idx-label",
-		display("none"),
-	)
+	// 2026-07-18: a section index that shows only "00–10" makes the reader memorize
+	// which number is which section — bare numbers are not navigation. Under 1280px
+	// the index becomes ONE non-wrapping row that scrolls horizontally, and the
+	// section NAMES stay visible in it (a named, scrollable table of contents) rather
+	// than yielding to dot+number. Only true mobile (<=640px), where a row of long
+	// names would scroll a long way, falls back to the compact dot+number with the
+	// name preserved in each item's title tooltip.
 	ruleMedia("(max-width: 1280px)", ".rpta-index",
 		flexWrap("nowrap"),
 		overflowX("auto"),
+	)
+	ruleMedia("(max-width: 640px)", ".rpta-idx-label",
+		display("none"),
 	)
 
 	// ── Sections: the verdict spine ──────────────────────────────────────────

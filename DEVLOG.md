@@ -1,3 +1,54 @@
+## 2026-07-18 — Annual report: named section index (UX assessment)
+
+From the nine-page UX assessment: the sticky report section index showed only "00–10" at 1280px, so
+navigating eleven sections meant memorizing the numbering. Root cause was a `max-width:1280px` rule
+that hid `.rpta-idx-label` — a prior audit had done that to stop 11 labeled chips wrapping into a
+multi-row sticky bar that followed the reader down the page. But that same breakpoint already switched
+the index to `flex-wrap:nowrap` + `overflow-x:auto` (a single scrolling row), so hiding the labels was
+redundant belt-and-suspenders that cost all navigability. Fix: drop the label-hide at ≤1280 (keep the
+nowrap+scroll), so the index becomes a named, horizontally-scrollable table of contents. Kept a
+numbers-only fallback only at ≤640px, where a row of long section names would scroll a long way on a
+phone (each item keeps its name in the title tooltip there). The numbering itself stays — the report
+IS a numbered sequence read in order, so the markers encode something true; they just needed their
+names back. Pure CSS-rules change in internal/styles; verified at 1280 (names shown) and 390 (numbers)
+via isolated-webroot screenshots. Styles package green.
+
+## 2026-07-18 — Backend security hardening, pass 2 (erasure, AI-cap race, CSRF timing, OAuth timeout, snapshot scoping)
+
+A second scan found five more concerns; fixed all with tests. The headline one:
+**`DeleteAccount` was a cascade-only delete** — it removed the subscription + user rows and trusted
+SQLite `ON DELETE CASCADE` for everything else. But `foreign_keys` is a *per-connection* pragma
+(unlike WAL, which is file-level), set once via `db.Exec` at open. `SetMaxOpenConns(1)` keeps it
+working today, but if that connection is ever replaced (an `ErrBadConn`) the replacement defaults
+`foreign_keys` OFF and erasure silently orphans encrypted AI keys, snapshots, and — sharpest —
+refresh tokens. And the refresh path never re-checks that the user still exists (`IsUserSuspended`
+returns false for a missing row), so a surviving token would mint a fresh access token and
+`ensureUser` would re-create the deleted account. I didn't want right-to-erasure hinging on a
+connection setting, and I didn't want to risk a Windows file-URI DSN just to force the pragma, so I
+made `DeleteAccount` delete every child table **explicitly** in the transaction (children before
+parents). The regression test flips `foreign_keys=OFF` before deleting and asserts every child table
+is empty — proving the purge is self-contained. Audit events stay (append-only, no FK).
+
+**AI daily-cap race:** `checkUsageLimit` read the count, then `AddUsage` incremented after the
+upstream call — a classic check-then-act window where N concurrent requests all read "under limit"
+and proceed. Replaced with an atomic `ReserveAIRequest` (read + increment in one tx; the single DB
+connection serializes it) that reserves a slot up front and returns which limit blocked it;
+`ReleaseAIRequest` gives the slot back if the request fails upstream / non-2xx / unparseable, so the
+"only completed requests count" semantics are preserved. Reordered `complete()` so the circuit check
+and key fetch happen before the reservation (no reserve-then-release for those), and captured
+`previous` usage before reserving so the usage-alert threshold crossing still compares pre vs post.
+`AddUsage` on success now adds only tokens (the request is already reserved). A 25-goroutine test
+against a cap of 5 lands exactly 5; a failed-request test proves release.
+
+Three smaller ones: `validCSRF` now uses `subtle.ConstantTimeCompare`; outbound OAuth calls moved off
+the timeout-less `http.DefaultClient` to a bounded client (a hung provider on the unauthenticated
+callback shouldn't pin a worker); and the sync snapshot read is tenant-scoped in SQL
+(`GetSnapshotForUser` joins ownership) instead of trusting the caller's prior check — with a
+cross-tenant isolation test. Left two things deliberately unchanged and said so in the summary:
+trial-per-identity farming (product/policy, not a code bug) and default-unlimited per-user rate
+limits (operator-tunable by design). Native vet + full `internal/server` suite green across five
+consecutive runs; concurrency/webhook/soak tests hammered 20×.
+
 ## 2026-07-18 — Backend security hardening (rate-limit spoofing/DoS, webhook integrity, wildcard CORS)
 
 A security pass over the optional backend (`internal/server`) surfaced three real hardening gaps —
