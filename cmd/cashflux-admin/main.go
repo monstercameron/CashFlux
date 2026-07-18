@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"syscall/js"
 
@@ -55,8 +56,13 @@ type adminUserRow struct {
 
 // adminUsersResp mirrors server.AdminUsersResponse.
 type adminUsersResp struct {
-	Users []adminUserRow `json:"users"`
+	Users   []adminUserRow `json:"users"`
+	HasMore bool           `json:"hasMore"`
+	Query   string         `json:"query,omitempty"`
 }
+
+// usersPageSize is the operator-console page size for the users table.
+const usersPageSize = 25
 
 // devCredsResp mirrors server.devCredsResponse.
 type devCredsResp struct {
@@ -131,56 +137,74 @@ func formatBytes(b int64) string {
 // fetchAdminData fetches GET /v1/admin/overview and GET /v1/admin/users?limit=100
 // using a bearer token. Same-origin relative URLs are used so the SPA works
 // regardless of hostname.
-func fetchAdminData(token string) (ov *adminOverview, users []adminUserRow, authErr bool, err error) {
+func fetchAdminData(token string) (ov *adminOverview, users []adminUserRow, hasMore bool, authErr bool, err error) {
 	// overview
 	req, e := http.NewRequest("GET", "/v1/admin/overview", nil)
 	if e != nil {
-		return nil, nil, false, e
+		return nil, nil, false, false, e
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, e := http.DefaultClient.Do(req)
 	if e != nil {
-		return nil, nil, false, e
+		return nil, nil, false, false, e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, nil, true, nil
+		return nil, nil, false, true, nil
 	}
 	if resp.StatusCode != 200 {
-		return nil, nil, false, fmt.Errorf("overview: HTTP %d", resp.StatusCode)
+		return nil, nil, false, false, fmt.Errorf("overview: HTTP %d", resp.StatusCode)
 	}
 	body, e := io.ReadAll(resp.Body)
 	if e != nil {
-		return nil, nil, false, e
+		return nil, nil, false, false, e
 	}
 	var o adminOverview
 	if e := json.Unmarshal(body, &o); e != nil {
-		return nil, nil, false, e
+		return nil, nil, false, false, e
 	}
 
-	// users
-	req2, e := http.NewRequest("GET", "/v1/admin/users?limit=100", nil)
+	// first page of users
+	us, more, _, e := fetchUsers(token, "", 0)
 	if e != nil {
-		return &o, nil, false, e
+		return &o, nil, false, false, e
 	}
-	req2.Header.Set("Authorization", "Bearer "+token)
-	resp2, e := http.DefaultClient.Do(req2)
+	return &o, us, more, false, nil
+}
+
+// fetchUsers loads one page of the users table, optionally filtered by an email
+// substring. authErr is true on 401/403. Returns the page rows and whether a
+// further page exists (from the server's has-more probe).
+func fetchUsers(token, query string, offset int) (users []adminUserRow, hasMore bool, authErr bool, err error) {
+	u := fmt.Sprintf("/v1/admin/users?limit=%d&offset=%d", usersPageSize, offset)
+	if q := strings.TrimSpace(query); q != "" {
+		u += "&q=" + url.QueryEscape(q)
+	}
+	req, e := http.NewRequest("GET", u, nil)
 	if e != nil {
-		return &o, nil, false, e
+		return nil, false, false, e
 	}
-	defer resp2.Body.Close()
-	if resp2.StatusCode != 200 {
-		return &o, nil, false, fmt.Errorf("users: HTTP %d", resp2.StatusCode)
-	}
-	body2, e := io.ReadAll(resp2.Body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, e := http.DefaultClient.Do(req)
 	if e != nil {
-		return &o, nil, false, e
+		return nil, false, false, e
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return nil, false, true, nil
+	}
+	if resp.StatusCode != 200 {
+		return nil, false, false, fmt.Errorf("users: HTTP %d", resp.StatusCode)
+	}
+	body, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, false, false, e
 	}
 	var ur adminUsersResp
-	if e := json.Unmarshal(body2, &ur); e != nil {
-		return &o, nil, false, e
+	if e := json.Unmarshal(body, &ur); e != nil {
+		return nil, false, false, e
 	}
-	return &o, ur.Users, false, nil
+	return ur.Users, ur.HasMore, false, nil
 }
 
 // fetchDevCreds calls GET /console/devcreds. It returns ("", false) when the
@@ -568,7 +592,22 @@ func statCard(label, value string) ui.Node {
 	)
 }
 
-func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.Handler, onOpenUser func(string)) ui.Node {
+// readyViewControls bundles the console dashboard's callbacks and users-table
+// search/pagination state so the signature stays readable.
+type readyViewControls struct {
+	search        string
+	offset        int
+	hasMore       bool
+	onSignOut     ui.Handler
+	onRefresh     ui.Handler
+	onOpenUser    func(string)
+	onSearchInput ui.Handler
+	onSearchGo    ui.Handler
+	onPrev        ui.Handler
+	onNext        ui.Handler
+}
+
+func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.Node {
 	return Div(
 		css.Class("console-page"),
 		// Header bar
@@ -585,14 +624,14 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 					Type("button"),
 					css.Class("btn btn-secondary"),
 					Attr("aria-label", "Refresh console data"),
-					OnClick(onRefresh),
+					OnClick(c.onRefresh),
 					Text("Refresh"),
 				),
 				Button(
 					Type("button"),
 					css.Class("btn btn-danger"),
 					Attr("aria-label", "Sign out and return to home"),
-					OnClick(onSignOut),
+					OnClick(c.onSignOut),
 					Text("Sign out"),
 				),
 			),
@@ -610,10 +649,38 @@ func readyView(ov *adminOverview, users []adminUserRow, onSignOut, onRefresh ui.
 			statCard("Today's requests", fmt.Sprintf("%d", ov.TodayRequests)),
 			statCard("Today's tokens", fmt.Sprintf("%d", ov.TodayTokens)),
 		),
-		// Clickable users table → opens the per-user management view (usersTable lives
-		// in manage.go; rows are their own components so each can own an OnClick hook).
-		usersTable(users, onOpenUser),
+		// Users toolbar: email search + page controls, then the clickable table
+		// (usersTable lives in manage.go; rows are their own components so each can
+		// own an OnClick hook).
+		Div(css.Class("users-toolbar"),
+			Input(
+				Type("search"),
+				css.Class("users-search"),
+				Attr("placeholder", "Search by email…"),
+				Attr("aria-label", "Search users by email"),
+				Value(c.search),
+				OnInput(c.onSearchInput),
+				OnChange(c.onSearchInput),
+			),
+			Button(Type("button"), css.Class("btn btn-secondary"), OnClick(c.onSearchGo), Text("Search")),
+			Div(css.Class("users-pager"),
+				Button(Type("button"), css.Class("btn btn-secondary"), Attr("aria-label", "Previous page"),
+					Disabled(c.offset <= 0), OnClick(c.onPrev), Text("← Prev")),
+				Span(css.Class("users-page-label"), Text(pageLabel(c.offset, len(users)))),
+				Button(Type("button"), css.Class("btn btn-secondary"), Attr("aria-label", "Next page"),
+					Disabled(!c.hasMore), OnClick(c.onNext), Text("Next →")),
+			),
+		),
+		usersTable(users, c.onOpenUser),
 	)
+}
+
+// pageLabel renders the current 1-based row range for the users pager.
+func pageLabel(offset, count int) string {
+	if count == 0 {
+		return "No users"
+	}
+	return fmt.Sprintf("%d–%d", offset+1, offset+count)
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +698,28 @@ func App() ui.Node {
 	users := ui.UseState[[]adminUserRow](nil)
 	netErrMsg := ui.UseState("")
 	manageUserID := ui.UseState("") // target of the user-management view
+	userSearch := ui.UseState("")   // live email-search box value
+	userOffset := ui.UseState(0)    // current users-table page offset
+	usersHasMore := ui.UseState(false)
+
+	// reloadUsers refetches just the users table for the current search + offset,
+	// leaving the overview stats untouched. Used by search/prev/next.
+	reloadUsers := func(query string, offset int) {
+		tok := lsGet()
+		if tok == "" {
+			return
+		}
+		go func() {
+			us, more, authErr, err := fetchUsers(tok, query, offset)
+			if authErr || err != nil {
+				return // keep the current page; a full refresh surfaces auth errors
+			}
+			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(offset)
+			userSearch.Set(query)
+		}()
+	}
 
 	// handleTokenInput captures the typed value from the password input.
 	handleTokenInput := ui.UseEvent(func(v string) {
@@ -645,7 +734,7 @@ func App() ui.Node {
 		}
 		view.Set(screenLoading)
 		go func() {
-			ov, us, isAuthErr, err := fetchAdminData(tok)
+			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				view.Set(screenAuthErr)
 				return
@@ -658,6 +747,9 @@ func App() ui.Node {
 			lsSet(tok)
 			overview.Set(ov)
 			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
 			view.Set(screenReady)
 		}()
 	})
@@ -681,7 +773,7 @@ func App() ui.Node {
 		}
 		view.Set(screenLoading)
 		go func() {
-			ov, us, isAuthErr, err := fetchAdminData(tok)
+			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				view.Set(screenAuthErr)
 				return
@@ -693,6 +785,9 @@ func App() ui.Node {
 			}
 			overview.Set(ov)
 			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
 			view.Set(screenReady)
 		}()
 	})
@@ -730,7 +825,7 @@ func App() ui.Node {
 		tokenInput.Set(tok)
 		view.Set(screenLoading)
 		go func() {
-			ov, us, isAuthErr, err := fetchAdminData(tok)
+			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				view.Set(screenAuthErr)
 				return
@@ -742,6 +837,9 @@ func App() ui.Node {
 			}
 			overview.Set(ov)
 			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
 			view.Set(screenReady)
 		}()
 	})
@@ -762,7 +860,7 @@ func App() ui.Node {
 		}
 		view.Set(screenLoading)
 		go func() {
-			ov, us, isAuthErr, err := fetchAdminData(tok)
+			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				view.Set(screenAuthErr)
 				return
@@ -774,6 +872,9 @@ func App() ui.Node {
 			}
 			overview.Set(ov)
 			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
 			view.Set(screenReady)
 		}()
 	}
@@ -790,7 +891,7 @@ func App() ui.Node {
 		tokenInput.Set(tok)
 		view.Set(screenLoading)
 		go func() {
-			ov, us, isAuthErr, err := fetchAdminData(tok)
+			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				// Token is stored but no longer valid; return to home.
 				lsRemove()
@@ -805,10 +906,25 @@ func App() ui.Node {
 			}
 			overview.Set(ov)
 			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
 			view.Set(screenReady)
 		}()
 		return nil
 	}, "admin-autoload")
+
+	// Users-table search + pagination handlers.
+	onUserSearchInput := ui.UseEvent(func(v string) { userSearch.Set(v) })
+	onUserSearchSubmit := ui.UseEvent(func() { reloadUsers(strings.TrimSpace(userSearch.Get()), 0) })
+	onUsersPrev := ui.UseEvent(func() {
+		off := userOffset.Get() - usersPageSize
+		if off < 0 {
+			off = 0
+		}
+		reloadUsers(userSearch.Get(), off)
+	})
+	onUsersNext := ui.UseEvent(func() { reloadUsers(userSearch.Get(), userOffset.Get()+usersPageSize) })
 
 	// Render based on current navigation state.
 	switch view.Get() {
@@ -826,7 +942,18 @@ func App() ui.Node {
 		if ov == nil {
 			return loadingView()
 		}
-		return readyView(ov, us, handleSignOut, handleRefresh, handleOpenUser)
+		return readyView(ov, us, readyViewControls{
+			search:        userSearch.Get(),
+			offset:        userOffset.Get(),
+			hasMore:       usersHasMore.Get(),
+			onSignOut:     handleSignOut,
+			onRefresh:     handleRefresh,
+			onOpenUser:    handleOpenUser,
+			onSearchInput: onUserSearchInput,
+			onSearchGo:    onUserSearchSubmit,
+			onPrev:        onUsersPrev,
+			onNext:        onUsersNext,
+		})
 	case screenLogin:
 		return loginView(tokenInput.Get(), devToken.Get(), handleTokenInput, handleSignIn, handleBack, handlePrefill)
 	default: // screenHome

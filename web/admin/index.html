@@ -328,6 +328,19 @@
       .users-table tbody tr { transition: background .15s; }
       .users-table tbody tr:hover td { background: var(--surface); }
 
+      /* --- Users toolbar: search + pagination ----------------------------- */
+      .users-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
+      .users-search {
+        flex: 1 1 240px; min-width: 180px; padding: 10px 14px;
+        background: var(--bg); border: 1px solid var(--border-strong); border-radius: 11px;
+        color: var(--text); font: inherit; font-size: 14px; outline: none; transition: border-color .15s, box-shadow .15s;
+      }
+      .users-search::placeholder { color: var(--text-faint); }
+      .users-search:focus { border-color: var(--accent); box-shadow: var(--ring); }
+      .users-pager { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+      .users-page-label { font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; }
+      .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
       @media (max-width: 640px) {
         .hero { padding-top: 64px; }
         .nav-brand-tag, .brand-tag { display: none; }

@@ -1679,23 +1679,50 @@ type AdminUserRow struct {
 // ListUsers returns a page of user rows joined with their current subscription
 // status and plan. No secrets, AI ciphertext, or blob bytes are included.
 func (s *Store) ListUsers(limit, offset int) ([]AdminUserRow, error) {
+	return s.ListUsersFiltered(limit, offset, "")
+}
+
+// ListUsersFiltered is ListUsers with an optional case-insensitive email substring
+// filter. An empty search returns every user (the ListUsers behavior). The search
+// term's LIKE wildcards are escaped so an operator typing % or _ matches literally.
+func (s *Store) ListUsersFiltered(limit, offset int, search string) ([]AdminUserRow, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	if limit > 200 {
-		limit = 200
+	// Absolute safety ceiling for a direct caller. The HTTP handler enforces a
+	// tighter public page cap (200) and fetches page+1 as a has-more probe, so this
+	// ceiling only needs headroom above that probe.
+	if limit > 500 {
+		limit = 500
 	}
 	if offset < 0 {
 		offset = 0
 	}
 	defer s.observeDB("ListUsers", time.Now())
-	rows, err := s.db.Query(`
+	search = strings.TrimSpace(search)
+	var rows *sql.Rows
+	var err error
+	if search == "" {
+		rows, err = s.db.Query(`
 SELECT u.id, u.provider, u.email, u.created_at,
        COALESCE(sub.plan, ''), COALESCE(sub.status, '')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
 ORDER BY u.created_at DESC, u.id
 LIMIT ? OFFSET ?`, limit, offset)
+	} else {
+		// Escape LIKE metacharacters so operator input matches literally.
+		esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
+		pattern := "%" + esc + "%"
+		rows, err = s.db.Query(`
+SELECT u.id, u.provider, u.email, u.created_at,
+       COALESCE(sub.plan, ''), COALESCE(sub.status, '')
+FROM users u
+LEFT JOIN subscriptions sub ON sub.user_id = u.id
+WHERE u.email LIKE ? ESCAPE '\'
+ORDER BY u.created_at DESC, u.id
+LIMIT ? OFFSET ?`, pattern, limit, offset)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("server store: list users: %w", err)
 	}

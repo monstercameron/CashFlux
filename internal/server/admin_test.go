@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -213,6 +214,84 @@ func TestListUsers(t *testing.T) {
 	}
 	if len(capped) != 4 { // only 4 users in fixture
 		t.Fatalf("capped ListUsers len = %d, want 4", len(capped))
+	}
+}
+
+func TestListUsersFilteredByEmail(t *testing.T) {
+	store := openTestStore(t)
+	seedAdminFixture(t, store) // alice/bob/carol/dave @example.com
+
+	// Case-insensitive substring match on email.
+	rows, err := store.ListUsersFiltered(50, 0, "ALICE")
+	if err != nil {
+		t.Fatalf("ListUsersFiltered: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Email != "alice@example.com" {
+		t.Fatalf("search alice = %+v, want just alice", rows)
+	}
+	// A shared substring matches every seeded user.
+	rows, err = store.ListUsersFiltered(50, 0, "example.com")
+	if err != nil {
+		t.Fatalf("ListUsersFiltered: %v", err)
+	}
+	if len(rows) != 4 {
+		t.Fatalf("search example.com len = %d, want 4", len(rows))
+	}
+	// LIKE wildcards in the term are treated literally (no user contains a literal
+	// '%', so this must return nothing rather than matching everyone).
+	rows, err = store.ListUsersFiltered(50, 0, "%")
+	if err != nil {
+		t.Fatalf("ListUsersFiltered wildcard: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("literal %% search len = %d, want 0", len(rows))
+	}
+}
+
+// TestAdminUsersPaginationHasMore proves the /v1/admin/users endpoint reports
+// hasMore correctly using its page+1 probe: a full first page signals more, the
+// final partial page does not.
+func TestAdminUsersPaginationHasMore(t *testing.T) {
+	adminToken := "admin-secret"
+	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
+	base := time.Date(2026, 6, 24, 10, 0, 0, 0, time.UTC)
+	for i := 0; i < 30; i++ {
+		id := fmt.Sprintf("u%02d", i)
+		if err := store.UpsertUser(User{
+			ID: id, Provider: "github", Subject: id,
+			Email: fmt.Sprintf("user%02d@example.com", i), CreatedAt: base.Add(time.Duration(i) * time.Minute),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decode := func(body string) AdminUsersResponse {
+		var r AdminUsersResponse
+		if err := json.Unmarshal([]byte(body), &r); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return r
+	}
+
+	// Page 1: 25 rows, more to come.
+	w := adminReq(t, mux, http.MethodGet, "/v1/admin/users?limit=25&offset=0", adminToken, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("page1 status = %d", w.Code)
+	}
+	p1 := decode(w.Body.String())
+	if len(p1.Users) != 25 || !p1.HasMore {
+		t.Fatalf("page1: len=%d hasMore=%v, want 25/true", len(p1.Users), p1.HasMore)
+	}
+	// Page 2: remaining 5 rows, no more.
+	w = adminReq(t, mux, http.MethodGet, "/v1/admin/users?limit=25&offset=25", adminToken, "")
+	p2 := decode(w.Body.String())
+	if len(p2.Users) != 5 || p2.HasMore {
+		t.Fatalf("page2: len=%d hasMore=%v, want 5/false", len(p2.Users), p2.HasMore)
+	}
+	// Search narrows and disables paging.
+	w = adminReq(t, mux, http.MethodGet, "/v1/admin/users?limit=25&offset=0&q=user07", adminToken, "")
+	ps := decode(w.Body.String())
+	if len(ps.Users) != 1 || ps.HasMore || ps.Users[0].Email != "user07@example.com" {
+		t.Fatalf("search: len=%d hasMore=%v rows=%+v", len(ps.Users), ps.HasMore, ps.Users)
 	}
 }
 

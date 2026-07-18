@@ -25,9 +25,11 @@ type AdminOverviewResponse struct {
 
 // AdminUsersResponse is the JSON body returned by GET /v1/admin/users.
 type AdminUsersResponse struct {
-	Users  []AdminUserRow `json:"users"`
-	Limit  int            `json:"limit"`
-	Offset int            `json:"offset"`
+	Users   []AdminUserRow `json:"users"`
+	Limit   int            `json:"limit"`
+	Offset  int            `json:"offset"`
+	Query   string         `json:"query,omitempty"`
+	HasMore bool           `json:"hasMore"`
 }
 
 // handleAdminOverview serves GET /v1/admin/overview — admin-gated, audited.
@@ -114,16 +116,24 @@ func handleAdminUsers(cfg Config, store *Store) http.HandlerFunc {
 		if limit <= 0 {
 			limit = 50
 		}
-		users, err := store.ListUsers(limit, offset)
+		query := strings.TrimSpace(r.URL.Query().Get("q"))
+		// Fetch one extra row to know whether a next page exists, without a COUNT.
+		users, err := store.ListUsersFiltered(limit+1, offset, query)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "users lookup failed")
 			return
 		}
+		hasMore := len(users) > limit
+		if hasMore {
+			users = users[:limit]
+		}
 		auditFromRequest(r, store, user, "admin.users.read", "admin", "users")
 		writeJSON(w, AdminUsersResponse{
-			Users:  users,
-			Limit:  limit,
-			Offset: offset,
+			Users:   users,
+			Limit:   limit,
+			Offset:  offset,
+			Query:   query,
+			HasMore: hasMore,
 		})
 	}
 }

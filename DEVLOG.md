@@ -1,3 +1,17 @@
+## 2026-07-18 — Cloud Phase 4c: users search + pagination
+
+The console fetched 100 users flat — fine for a demo, useless past a real tenant count. Added a `q=`
+email filter to the users endpoint (LIKE with the operator's wildcards escaped so a typed `%` matches
+literally, not everything — the store test pins that) and a `hasMore` flag from a page+1 probe rather
+than a COUNT (raised the store's absolute ceiling to 500 so the +1 fits above the public 200 cap).
+Console side: a search box + Prev/Next with an `N–M` label, page size 25, buttons disabled at the
+ends. The fiddly bit was the console's five identical fetch call sites — threaded `hasMore` through
+`fetchAdminData` and split out a `fetchUsers(token, q, offset)` that search/prev/next reuse via a
+`reloadUsers` closure so paging refetches only the table, not the overview stats. Bundled the view's
+growing callback set into a `readyViewControls` struct to keep the signature sane. Handler test walks
+30 users: page1 = 25 rows/hasMore, page2 = 5 rows/no-more, `q=user07` = 1 row. Browser-verified the
+whole thing (8→1 on a search, pager disabled correctly).
+
 ## 2026-07-18 — Cloud Phase 4c: consoles in CI + the release bundle
 
 The two consoles are git-ignored wasm (13MB each — not committing those), which left two holes: CI
