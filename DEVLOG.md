@@ -1,3 +1,16 @@
+## 2026-07-18 — Cloud Phase 4c: consoles in CI + the release bundle
+
+The two consoles are git-ignored wasm (13MB each — not committing those), which left two holes: CI
+never compiled them (a refactor could break `cmd/cashflux-admin` and green stays green), and the
+release helper only built the server binary, so a fresh deploy served an empty `/console/` and
+`/portal/`. Closed both: a "Build console SPAs" CI step compiles admin+portal for js/wasm to
+/dev/null (verify-only), and `release-server.example.sh` grows a `build_console` helper that emits
+`admin.wasm`/`portal.wasm` into web/admin,web/portal with release flags and drops the toolchain's
+`wasm_exec.js` beside each (resolving lib/wasm first, misc/wasm fallback for older Go). Verified the
+script parses (`sh -n`), the glue path resolves on this toolchain (1.26.4), and both binaries build
+with the `-s -w -buildid=` release flags. This is the enabling infra for the rest of 4c — now any
+console change is CI-guarded.
+
 ## 2026-07-18 — Cloud Phase 4c: comp/create subscriptions + status enum
 
 First of the operator-console upgrades. Two related defects in the set-plan path: it 412'd when the

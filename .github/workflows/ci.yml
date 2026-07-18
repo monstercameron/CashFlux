@@ -52,6 +52,17 @@ jobs:
           GOARCH: wasm
         run: go build -o /dev/null .
 
+      - name: Build console SPAs (operator console + customer portal)
+        # These are served by cashflux-server from web/admin and web/portal. Their
+        # .wasm is git-ignored and built at release time (deploy/release-server.sh),
+        # so verify both compile here or a broken console ships silently.
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: |
+          go build -o /dev/null ./cmd/cashflux-admin
+          go build -o /dev/null ./cmd/cashflux-portal
+
   e2e:
     name: E2E regression (Playwright)
     # Runs on Windows so the committed coverage/a11y/-win32 visual baselines match
