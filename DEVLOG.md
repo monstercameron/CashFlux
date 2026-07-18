@@ -25042,3 +25042,15 @@ The headline totals deliberately count active+missed goals only (a sinking fund 
 you finish). Kept that policy, labelled it: "Total target (goals)" + a data-testid'd scope note
 naming the sinking funds' combined target when any exist. Considered a second fund total in the
 loader figs and rejected — three figures is the tile's grammar; the note carries the exception.
+
+## 2026-07-18 — Smart findings triage
+
+The hub's findings feed now has the four controls the 108-finding scale needs: search,
+urgency floor, page filter, sort (urgent / biggest-amount / by-page). Deliberate ordering
+decision: filter over the FULL insight set, then CapPerRule, then paginate — filtering after
+the cap would make search unable to find anything the cap dropped, which defeats triage.
+Pure smart.FilterInsights / SortInsightsBy (SortByAmount keeps severity as the stable
+tiebreak; amount compared by magnitude so a big shortfall ranks with a big saving), table
+tests. "New since last visit" was considered and deferred — it needs a persisted seen-set
+per finding key; the four shipped controls cover the assessment's urgent/high-dollar/
+page-specific asks.

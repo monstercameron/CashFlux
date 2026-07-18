@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Smart findings feed: triage controls (2026-07-18):** "108 findings worth a look" paginated ten at a time offered no way to isolate what matters (assessment: "the count itself becomes workload"). The findings card gains a search box (title + detail), an urgency floor (nudges/warnings/alerts & up), a page filter, and a sort mode — most urgent (default), biggest amounts first, or by page. Filtering runs over the full set before the per-rule cap and pagination, so a search can surface findings the uncontrolled feed capped away. Pure `smart.FilterInsights`/`SortInsightsBy` helpers, table-tested.
+
 ### Fixed
 - **Goals headline says which cards it counts (2026-07-18):** "Total target $179,000" silently excluded the two sinking funds while their cards ($3,000 of targets) sat on the same page — users had to reverse-engineer the mismatch (assessment, Medium). The label is now "Total target (goals)" and, whenever sinking funds exist, a one-line scope note under the bar states that the headline counts active + missed goals and names the funds' own combined target.
 - **Transfers are reachable from the ledger's add flow (2026-07-18):** creating financial records from Transactions offered only Expense/Income, and the global "+ Add" menu had everything except a transfer — the capability existed solely on Accounts, violating the ledger-entry mental model (assessment, Medium). The quick-add Type control gains a **Transfer…** segment that hands off to the real transfer workflow (two legs, FX, previews — deliberately not a third inline form mode), and the + Add menu gains a **Transfer money** item; both open the shell-root transfer modal from any page.

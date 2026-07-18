@@ -39,6 +39,74 @@ type insightsPagerProps struct {
 // insightsPageSize is the number of insights shown per page in the Insights tab.
 const insightsPageSize = 10
 
+// smartInsightsTriage wraps the findings feed with the triage controls the
+// 100-plus-finding scale demands (2026-07-18 assessment): a text search over
+// title/detail, an urgency floor, a page filter, and a sort mode (urgency /
+// biggest amounts / by page). Filtering runs over the FULL set, then the
+// per-rule cap and pagination apply — so a search can surface a finding the
+// uncontrolled feed would have capped away.
+func smartInsightsTriage(props insightsPagerProps) ui.Node {
+	query := ui.UseState("")
+	minSev := ui.UseState("")   // "" = all, else "nudge" | "warn" | "alert"
+	pageF := ui.UseState("")    // "" = all pages
+	sortMode := ui.UseState("") // "" = severity default
+	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
+	onSev := ui.UseEvent(func(e ui.Event) { minSev.Set(e.GetValue()) })
+	onPage := ui.UseEvent(func(e ui.Event) { pageF.Set(e.GetValue()) })
+	onSort := ui.UseEvent(func(e ui.Event) { sortMode.Set(e.GetValue()) })
+
+	sevOf := map[string]smart.Severity{"nudge": smart.SeverityNudge, "warn": smart.SeverityWarn, "alert": smart.SeverityAlert}
+	filtered := smart.FilterInsights(props.Insights, query.Get(), sevOf[minSev.Get()], smart.Page(pageF.Get()))
+	smart.SortInsightsBy(filtered, smart.SortMode(sortMode.Get()))
+	capped := smart.CapPerRule(filtered, 3)
+
+	pageOpts := []ui.Node{Option(Value(""), SelectedIf(pageF.Get() == ""), uistate.T("smart.triageAllPages"))}
+	for _, p := range smart.Pages() {
+		p := p
+		pageOpts = append(pageOpts, Option(Value(string(p)), SelectedIf(pageF.Get() == string(p)), p.Label()))
+	}
+
+	controls := Div(css.Class("filter-strip-controls", tw.FlexWrap), Attr("data-testid", "smart-triage"),
+		Input(css.Class("field"), Type("search"), Attr("data-testid", "smart-triage-search"),
+			Attr("aria-label", uistate.T("smart.triageSearch")), Placeholder(uistate.T("smart.triageSearch")),
+			Value(query.Get()), OnInput(onQuery)),
+		Select(css.Class("fctrl-select"), Attr("data-testid", "smart-triage-sev"),
+			Attr("aria-label", uistate.T("smart.triageSevLabel")), Title(uistate.T("smart.triageSevLabel")), OnChange(onSev),
+			Option(Value(""), SelectedIf(minSev.Get() == ""), uistate.T("smart.triageSevAll")),
+			Option(Value("nudge"), SelectedIf(minSev.Get() == "nudge"), uistate.T("smart.triageSevNudge")),
+			Option(Value("warn"), SelectedIf(minSev.Get() == "warn"), uistate.T("smart.triageSevWarn")),
+			Option(Value("alert"), SelectedIf(minSev.Get() == "alert"), uistate.T("smart.triageSevAlert")),
+		),
+		Select(append([]any{css.Class("fctrl-select"), Attr("data-testid", "smart-triage-page"),
+			Attr("aria-label", uistate.T("smart.triagePageLabel")), Title(uistate.T("smart.triagePageLabel")), OnChange(onPage)},
+			nodesToAny(pageOpts)...)...),
+		Select(css.Class("fctrl-select"), Attr("data-testid", "smart-triage-sort"),
+			Attr("aria-label", uistate.T("smart.triageSortLabel")), Title(uistate.T("smart.triageSortLabel")), OnChange(onSort),
+			Option(Value(""), SelectedIf(sortMode.Get() == ""), uistate.T("smart.triageSortSeverity")),
+			Option(Value(string(smart.SortByAmount)), SelectedIf(sortMode.Get() == string(smart.SortByAmount)), uistate.T("smart.triageSortAmount")),
+			Option(Value(string(smart.SortByPage)), SelectedIf(sortMode.Get() == string(smart.SortByPage)), uistate.T("smart.triageSortPage")),
+		),
+	)
+
+	var list ui.Node
+	if len(capped) == 0 {
+		list = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), Attr("data-testid", "smart-triage-empty"),
+			uistate.T("smart.triageNoMatch"))
+	} else {
+		list = ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped})
+	}
+	return Fragment(controls, list)
+}
+
+// nodesToAny widens a node slice for variadic element constructors.
+func nodesToAny(in []ui.Node) []any {
+	out := make([]any, len(in))
+	for i, n := range in {
+		out[i] = n
+	}
+	return out
+}
+
 // smartInsightsPager renders the paginated insight list. It is its own component
 // so the pagination On* hooks sit at stable positions (no hooks in loops rule).
 func smartInsightsPager(props insightsPagerProps) ui.Node {
@@ -134,13 +202,11 @@ func smartInsightsSection(insights []smart.Insight, freeEnabled int, anyEnabled 
 	case len(insights) == 0:
 		body = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), uistate.T("smart.allClear"))
 	default:
-		smart.SortInsights(insights)
-		capped := smart.CapPerRule(insights, 3)
 		// Wrapped in a plain Div: a bare component as the card's direct child
 		// mounts AFTER its header sibling in the DOM (GWC component-sibling
 		// ordering quirk), which rendered the "Your insights" title at the
 		// card's bottom.
-		body = Div(ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped}))
+		body = Div(ui.CreateElement(smartInsightsTriage, insightsPagerProps{Insights: insights}))
 	}
 	return uiw.Card(uiw.CardProps{
 		// "Findings" — deliberately NOT "insights" (review: the AI-narrative
