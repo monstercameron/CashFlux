@@ -49,12 +49,13 @@ test.describe("accounts: labeled toolbar buttons", () => {
     await expect(add).toBeVisible();
     await expect(add).toHaveClass(/btn-primary/);
     // 2026-07-17 audit: the management surfaces (Groups, Institutions, Sweep
-    // rules, Exchange rates) live under ONE labeled "Manage" menu — the toolbar
-    // stops presenting seven equally weighted verbs before the account list.
+    // rules, Exchange rates) live under ONE labeled menu — the toolbar stops
+    // presenting seven equally weighted verbs before the account list. (Label
+    // renamed "Manage" → "Account settings" in the 07-19 control-chrome pass.)
     const manage = app.getByTestId("acct-manage-btn");
     await expect(manage).toBeVisible();
     await expect(manage).toHaveClass(/btn-tool/);
-    await expect(manage).toContainText("Manage");
+    await expect(manage).toContainText("Account settings");
     await manage.click();
     await expect(app.getByTestId("acct-groups-btn")).toBeVisible();
     await expect(app.getByTestId("acct-institutions-btn")).toBeVisible();
@@ -74,10 +75,12 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await nav(app, "/accounts");
     const row = app.locator(".bento-accounts .row").first();
     await row.scrollIntoViewIfNeeded();
-    // Transactions (high-frequency navigation) is a visible row button; Edit was
-    // demoted into the row's ⋯ menu by the 07-16 declutter (ONE inline primary).
+    // 07-16 declutter: ONE inline primary per row. On maintained rows that's the
+    // Transactions drill; on STALE/valuation rows Update-balance claims the
+    // inline slot and Transactions demotes into the ⋯ menu. The sample dataset
+    // boots all-stale, so assert the drill exists exactly once wherever it lives.
     const drill = row.locator('[data-testid^="acct-view-txns-"]');
-    await expect(drill).toBeVisible();
+    await expect(drill).toHaveCount(1);
     await row.locator(".add-wrap > button").click();
     await expect(row.locator('.add-menu:not(.hidden-menu) [data-testid^="edit-account-btn-"]')).toBeVisible();
     await app.keyboard.press("Escape");
@@ -90,7 +93,11 @@ test.describe("accounts: row actions + type-aware kebab", () => {
     await expect(app.locator('[role="dialog"]')).toBeVisible();
     await app.keyboard.press("Escape");
     await app.waitForTimeout(300);
-    // Navigation still works from the inline button.
+    // Navigation still works from wherever the drill lives (reopen the menu if
+    // the stale-row layout demoted it there).
+    if (!(await drill.isVisible())) {
+      await row.locator(".add-wrap > button").first().click();
+    }
     await drill.click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
   });
@@ -98,14 +105,15 @@ test.describe("accounts: row actions + type-aware kebab", () => {
   test("a property row offers no Reconcile/Transfer; a cash row offers both", async ({ app }) => {
     await nav(app, "/accounts");
     // The Condo (property): reconciling a valuation to a statement is nonsense.
-    // Anchor on the inline Transactions drill (Edit moved into the menu 07-16).
-    await app.locator('[data-testid="acct-view-txns-acct-home"] ~ .add-wrap > button').click();
+    // Anchor on the ROW (the Transactions drill sits inside the kebab on stale
+    // rows, so it can't anchor a sibling selector).
+    await app.locator('[data-testid="acct-row-acct-home"] .add-wrap > button').first().click();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-home"]')).toHaveCount(0);
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-home"]')).toHaveCount(0);
     await app.keyboard.press("Escape");
     await app.waitForTimeout(200);
     // Joint Checking (cash): both rituals available, plus quick institution assignment.
-    await app.locator('[data-testid="acct-view-txns-acct-checking"] ~ .add-wrap > button').click();
+    await app.locator('[data-testid="acct-row-acct-checking"] .add-wrap > button').first().click();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="reconcile-start-btn-acct-checking"]')).toBeVisible();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="transfer-start-btn-acct-checking"]')).toBeVisible();
     await expect(app.locator('.add-menu:not(.hidden-menu) [data-testid="set-institution-acct-checking"]')).toBeVisible();

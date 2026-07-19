@@ -105,8 +105,9 @@ test.describe("todo: sub-task modal", () => {
 test.describe("todo: standard pager", () => {
   test("mirrors top+bottom with rows-per-page and jump-to-page", async ({ app }) => {
     await nav(app, "/todo");
-    // Two pagers (top + bottom) when the list spans multiple pages.
-    await expect(app.locator(".std-pager")).toHaveCount(2);
+    // ONE pager, below the list: the 2026-07-19 command-bar realign deliberately
+    // retired the top mirror (the command bar anchors the top of the workspace).
+    await expect(app.locator(".std-pager")).toHaveCount(1);
     const topPager = app.locator(".std-pager").first();
     // Rows-per-page: switch to 10 → the range + page count update.
     await topPager.locator(".pager-size", { hasText: /^10$/ }).click();
@@ -122,14 +123,14 @@ test.describe("todo: standard pager", () => {
 
   test("the rows-per-page picker stays put when a bigger size collapses to one page", async ({ app }) => {
     await nav(app, "/todo");
-    const top = app.locator(".std-pager-top");
-    await expect(top).toBeVisible();
-    // Pick "All" (one page) — the top pager (and its size buttons) must NOT disappear under
+    const pager = app.locator(".std-pager");
+    await expect(pager).toBeVisible();
+    // Pick "All" (one page) — the pager (and its size buttons) must NOT disappear under
     // the cursor. Regression: it used to be guarded on page-count, so it vanished on click.
-    await top.locator(".pager-size", { hasText: /^All$/ }).click();
+    await pager.locator(".pager-size", { hasText: /^All$/ }).click();
     await app.waitForTimeout(300);
-    await expect(app.locator(".std-pager-top")).toHaveCount(1);
-    await expect(app.locator('.std-pager-top .pager-size', { hasText: /^All$/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator(".std-pager")).toHaveCount(1);
+    await expect(app.locator('.std-pager .pager-size', { hasText: /^All$/ })).toHaveAttribute("aria-pressed", "true");
   });
 });
 
