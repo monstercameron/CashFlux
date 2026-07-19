@@ -26280,3 +26280,22 @@ was the kebab's menu item nesting inside the actions row.
 Follow-ups queued: e2e updates for the two specs that click now-kebabbed buttons
 (gapfeatures bill-negotiate, lane6 subscription links), recurring date tiles, txn-row kebab
 polish, spending-highlight empty state, and the budgets View-spending period-scope question.
+
+## 2026-07-19 — lane B closing tranche: scoped drills, sort honesty, verification green
+
+Closed out the remediation lane: budget→ledger drills now travel with the budget's own
+period window (computeBudgetView exposes PeriodFrom/To; both the attention strip and the
+row drill pass them as ordinary clearable filter chips — verified live: July Groceries
+lands on exactly its two July rows). The goals name-sort failure from goals.spec turned
+out to be a real UX gap the morning's Watch-first partition introduced — explicit sorts
+were silently ignored inside "Needs a plan"; severity ordering is now the presentation of
+the DEFAULT sort only. Recurring same-day ghost tiles went from invisible to faint (0.28),
+the transaction kebab picked up icons + ellipsis discipline, and the calm spending
+highlight earns its tile with an Insights link.
+
+Verification: 16-assertion Playwright sweep green with zero page errors; regression suites
+run this session: goals 15✓, accounts 14✓, todo/notifications/rules/gapfeatures batch 23✓,
+responsive+a11y+motion 23✓ (stale specs realigned where earlier deliberate UX changes had
+outrun them — single todo pager, "Account settings" label, stale-row drill demotion,
+kebab-first subscription/bill actions). Overflow probe: zero clipped elements on dashboard/
+budgets/board at 1024/1920/2560.

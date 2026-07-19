@@ -6,6 +6,24 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **UI/UX remediation lane B, closing tranche (2026-07-19):**
+  - **Budgets → ledger drills land period-scoped:** "View spending" and the row Transactions
+    drill now carry the budget's own evaluation window as clearable From/To filter chips
+    (July Groceries → that month's rows, not the category's multi-year history), mirroring
+    the annual grid's windowed drill.
+  - **Explicit goal sorts apply inside "Needs a plan":** the Watch-first section kept its
+    severity order only for the default Most-actionable sort; Sort-by-name (etc.) now
+    re-orders it too (caught by goals.spec's A→Z check).
+  - **Recurring same-day rows keep a faint date medallion** instead of a fully hidden one
+    that read as a rendering glitch.
+  - **Transaction kebab polish:** every entry carries a leading icon, and "…" consistently
+    marks entries that open further input (split-editor opener included).
+  - **Spending-highlight tile:** the calm-month state adds the Insights cross-link instead
+    of sitting as one dim line in an empty tile.
+  - **Test realignments:** todo pager (single below-list pager), accounts toolbar label and
+    stale-row drill placement, and kebab-first flows for demoted subscription/bill actions.
+
 ### Changed
 - **/budgets opens on one answer (B1 hero):** the summary tile now leads with the left-to-spend
   figure as a single live-toned Fraunces number (red "Over budget" when the month goes negative;
