@@ -2357,8 +2357,12 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 	return Div(css.Class("insight-row insight-row-flagged"),
 		Span(ClassStr("insight-dot text-down"), uiw.Icon(iconName, css.Class(tw.W4, tw.H4))),
 		Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0, tw.WFull),
-			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), p.Insight.Title),
-			Span(css.Class("muted", tw.Text13, tw.Truncate), p.Insight.Detail),
+			// Full text rides the title attribute: the CSS ellipsis can land right
+			// after an amount's period ("about $20.…" reads as four dots) and there
+			// is no room to widen the rail — hover/long-press reveals the whole
+			// finding instead (UI/UX tasks #37/#38).
+			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), Title(p.Insight.Title), p.Insight.Title),
+			Span(css.Class("muted", tw.Text13, tw.Truncate), Title(p.Insight.Detail), p.Insight.Detail),
 			Div(css.Class("insight-row-actions"),
 				// QA CF-22: every row's actions shared one accessible name ("Go to the
 				// source of this flag" ×15) — the name now carries the finding's title

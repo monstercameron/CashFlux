@@ -32,8 +32,10 @@ func recapStat(testID string, glyph icon.Name, label, value, sub, tone string) u
 			uiw.Icon(glyph, css.Class(tw.W35, tw.H35, tw.ShrinkO)),
 			Span(label),
 		),
-		Span(css.Class(valCls), value),
-		If(sub != "", Span(css.Class("cf-recap-sub"), sub)),
+		// Title mirrors the value: long payees ("Car payment (Marcus)") ellipsize
+		// in the tile and had no way to read the rest (UI/UX task #37).
+		Span(css.Class(valCls), Title(value), value),
+		If(sub != "", Span(css.Class("cf-recap-sub"), Title(sub), sub)),
 	)
 }
 
