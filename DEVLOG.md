@@ -1,3 +1,208 @@
+## 2026-07-19 — Budgets refinement pass (8.0 → 9+)
+
+Four tightly-scoped fixes on `/budgets`, no logic rewrites — the shared `computeBudgetView` /
+`TopProblems` evaluation is read, never touched.
+
+1. *One review queue.* The page showed budget problems TWICE: the recently-added top
+   "Needs attention" strip (`budget-attention`) AND the summary card's collapsible issues rail
+   (`budgetIssuesRail`), which counted the same over/near budgets under "N items to review from this
+   period" + an "N finished near the limit" pill. Made the top strip THE queue and **demoted** the
+   rail: dropped `v.OverCount`/`v.NearCount` from its count, header pill, healthy-state pill, and its
+   over-banner + near detail rows — leaving only the plan-level items the strip can't show
+   (over-assignment "Resolve $X", sinking-fund shortfall, closed-month follow-ups). Removed the now-dead
+   `att`/`filterOver`/`filterNear` hooks from the rail. The SMART-B14 cover-all button (was on the
+   removed over-banner) moved to the strip head (`.bgattn-head-action`, gated on `v.OverCount>0` +
+   feature enabled), so nothing is lost.
+2. *Copy names the work.* The strip subtitle now reads "N budgets over or near their limit"
+   (`budgetrefine.queueNamed`/`queueNamedOne`) instead of `bgpolish.attnCount`'s vaguer phrasing.
+3. *One control bar.* Rebuilt `budgetToolbarWidget` from a two-row toolbar (method+sort pickers /
+   density+Automate+Add) into a single action row: one **"Budget settings"** popover
+   (`budgets-settings`, `icon.Settings`) + the primary "+ Add budget". Inside the popover, a View
+   section (method / sort `<select>`s + the density toggle) sits OUTSIDE the auto-close wrapper so a
+   picker keeps the menu open; a Bulk-tools section wraps the modal-openers with `OnClick(closeSettings)`
+   so they close it (same ancestor-propagation pattern the old menu used). Renamed the popover
+   state/handlers (`settingsOpen`/`toggleSettings`/`closeSettings`, wrap id `budgets-settings-wrap`).
+   Every inner control kept its data-testid (`budgets-method`, `budgets-sort`, `budgets-density`,
+   `budgets-last-month`, `budgets-autobudget`, `budgets-month-close`, `budgets-sweep-config`,
+   `budgets-adjust-all`), and they stay in the DOM (hiddenIf) when the menu is closed.
+4. *Slimmer cards.* CSS-only (`rules_budgetrefine.go`, registered last): `.bento-budgets .budget`
+   padding 0.7→0.45rem + min-height 100px→0, `.budget-card-loader` 42→34px, `.budget-lower` gap
+   1.5→1rem, `.budget-sub` margin-top 0.15→0.1rem. Combined with the removed second toolbar row and the
+   demoted rail, the first two budgets clear the fold.
+
+New files: `internal/i18n/en_budgetrefine.go`, `internal/styles/rules_budgetrefine.go` (+ one-line
+append to `install.go`). Verify: `go vet ./internal/...` clean (native), wasm-tagged
+`go vet ./internal/screens/... ./internal/styles/... ./internal/i18n/...` clean, i18n tests green, and
+the `.` wasm app build exits 0.
+
+## 2026-07-19 — Notifications + Assistant/Smart refinement pass (8.5 / 8.7 → 9+)
+
+Five tightly-scoped fixes on the two pages I own, no logic rewrites — regroup, relabel, relocate.
+
+**Notifications (`internal/screens/notifications.go`, `notifications_tiles.go`).**
+1. *Primary-action model.* Each alert row carried a trio of equal-weight icon buttons (mark read,
+   snooze-popover, dismiss). Collapsed to ONE labeled primary pill (`.notif-primary`, mark
+   read/unread) + a single `•••` overflow (`notif-ovf-<id>`) whose menu holds the snooze horizons
+   (`notif-snooze1d/1w/1m-`), Alert settings (`notif-settings-`), and Dismiss (`notif-dismiss-`,
+   `.add-item-danger`). Reused the existing snooze/dismiss handlers; the old desktop snooze popover
+   hooks were repurposed into the overflow (no new component; hook order stays stable). The separate
+   mobile cluster (`.notif-actions-m`) is left intact, so lane6's mobile checks still pass.
+2. *Split global actions.* The summary bar grouped Mark all read + Clear all + Alert settings as
+   adjacent `.notif-clear` chips. Now the safe pair (Mark all read + Alert settings) sits in a
+   `.notif-summary-safe` group, then a `.notif-summary-divider` hairline, then Clear all
+   (`.notif-clear-danger`) at the trailing edge in the danger tone at rest — a destructive wipe is no
+   longer adjacent to a harmless action.
+3. *Temporal copy.* The row's due-date rewrite only handled overdue, so a bill due today showed
+   "Due in 0 days". Added a pure `uistate.DueToday(dueAt, now)` (UTC-day, table-tested, proven
+   mutually exclusive with `OverdueDays>0`); the row now renders `notifications.dueToday` ("Due
+   today.") for the zero-day-not-past case.
+
+**Assistant/Smart (`internal/screens/smart_surface.go`).**
+4. *Findings first.* Shrank the tall masthead to a compact header (`.smt-masthead-compact`: big
+   count inline with its kicker/label + the voice line) and moved the posture telemetry
+   (watching/AI/density metrics + the on-device fine print) OUT of the hero into a new
+   `smartPostureStrip` rendered at the top of the deferred manage block (`smartCatalogDeferred`), so
+   nothing config/telemetry-shaped sits above the findings feed. Kept `#sec-smart-hero` and the
+   `smt-hero-*` testids.
+5. *Copy grammar.* SMART-BL3 (`internal/smartengine/bills.go`) built `"The " + a.Name + " payment
+   was due …"` → "The Marcus's Car Loan payment". Dropped the leading "The".
+
+New files: `internal/i18n/en_notifasst.go` (self-registering, `notifications.dueToday`),
+`internal/styles/rules_notifasst.go` (`registerNotifAsst`, appended last in `install.go` so its
+overrides win; theme tokens only, light+dark). Updated `e2e/regression/notifications_actions.spec.mjs`
+to drive the new overflow (open `notif-ovf-` → snooze/dismiss). Verified: native vet clean, `uistate`
++ `smartengine` + `screenlint` tests green, wasm app build exit 0.
+
+## 2026-07-19 — Accounts & Transactions: risk-first list, quieter rows, two-row ledger toolbar, glyph legend
+
+July 19 review scored Accounts 8.7 and Transactions 8.4 (target 9+). Six scoped refinements on the
+two pages, reusing existing components and touching only their files.
+
+**Accounts.**
+1. *Risk-first sorting.* The default `acctListWidget` sort was pure signed-balance high-to-low, so a
+   stale account with a small balance sank below big healthy holdings — the ones needing action were
+   the hardest to find. Pulled the comparison into a new pure package `internal/acctsort`
+   (`RiskFirstLess(staleI, staleJ, balI, balJ)`: stale leads healthy, then signed balance within a
+   tier) so it's native-tested off-wasm, and rewired the tile's `sort.SliceStable` to it. Moved the
+   `windows`/`now` freshness computation above the sort (removing the later duplicate decls) to build
+   the `staleOf` predicate. Grouped view is unchanged (user-curated group order); the default
+   no-groups path is what "by default" means here.
+2. *Quieter rows.* `AccountRow` used to render up to two inline buttons (conditional Update + always
+   Transactions) before the `•••`. Changed to `IfElse(showValueInline, UpdateBtn, TransactionsBtn)` —
+   exactly one contextual primary — and demoted the non-primary Transactions nav into the `•••` menu
+   (first item, keeping the `acct-view-txns-<id>` testid so it appears exactly once per row).
+3. *Explain freshness + rename.* Added a `title` param to `acctToolbarGlyph` and passed the new
+   `acctxn.markAllMeaning` copy as the Mark-all tooltip; also appended it to the confirm dialog. Renamed
+   the toolbar `accounts.manageMenu`/Title ("Manage") to the new `acctxn.acctSettingsMenu`
+   ("Account settings").
+
+**Transactions.**
+4. *Two-row toolbar.* Relocated the quick-filter preset block (`presetsRow`) from a standalone
+   always-on strip in the tile body into the Filters panel (`filtersBody`), so the resting layout is
+   FilterToolbar (search+actions) + the active-filter chips only. Compressed the Upcoming strip: rows
+   cap 5 → 3 in `txn_upcoming_strip.go` plus tighter padding via CSS.
+5. *Glyph legend.* Added `txnStatusLegend()` — a compact keyed line (✓✓ Reconciled · ✓ Cleared · •
+   Needs review) rendered above the ledger, each item carrying the same full-sentence tooltip the row
+   badge uses, so status isn't shape/color-only. Shown only when there are rows.
+6. *Column widths.* New `rules_acctxn.go` overrides: Description header 34% → 40% and cell floor
+   14rem → 16rem; Account column cap 11rem → 15rem (the shared secondary-column rule stays 11rem for
+   category/user). Registered last in `install.go` so equal-specificity overrides win.
+
+New copy lives in `internal/i18n/en_acctxn.go` (self-registering, own map). Verify: `go vet` clean on
+the native packages, `acctsort`/`i18n`/`styles`/`freshness` tests green, wasm app build exit 0.
+
+## 2026-07-19 — Reports Summary: two-column dashboard + labelled scores
+
+The July 19 review had the Annual Review at 8.7 (target 9+). Two Summary-only refinements, layout
+and labels only — no recomputation.
+
+1. **Rebalance the Summary grid.** The Summary opened as three equal columns (Strengths | Risks |
+   Recommended actions). Recommended actions is much taller, so the two left columns ended early into
+   a big dead zone and the Core-trends strip was pushed below the fold. Restructured the render
+   (`reports_annual.go` `summaryView`) into a two-column grid: a left `.rpta-sum-main` flex column
+   stacking Strengths, Risks, then the trends-wrap, with the Recommended-actions `sumCol` as the
+   right grid child. So the trends now fill the space beneath the (shorter) left stack and rise into
+   the first viewport beside the tall actions column — no large empty region. CSS moved from
+   `.rpta-sum-cols` (3-col) to `.rpta-sum-grid` (`minmax(0,1.5fr) minmax(0,1fr)`, `align-items:start`)
+   in `rules_reportssummary.go`; the trends grid became `repeat(auto-fit,minmax(140px,1fr))` so it
+   reflows inside the narrower left column, and the 860px media query now just collapses the grid to
+   one column.
+
+2. **Label every bare score.** The health-factor row (`rptaFactorRow`, reused by the Summary's Risks
+   column and the full report's §01/§09) ended in a bare `%d` score like `29`. It now shows the
+   0-100 scale visibly (`29` + a small muted `/100` via `.rpta-fact-scale`) and carries an
+   `aria-label`/`title` = "<factor> score: N out of 100" for AT (`rptaref.factScoreAria`). To fit the
+   suffix I widened the factor-row's last grid track from `2.5rem` to `minmax(3rem,auto)` via an
+   override in the Summary CSS file (which registers after the annual file, so it wins) — this keeps
+   the change inside Reports files without editing `rules_reportsannual.go`. The masthead verdict
+   score (`rptaScoreText`) now reads `82/100 · Good` instead of `82 · Good`. New keys
+   (`rptaref.scaleOutOf100`, `rptaref.factScoreAria`) live in a self-registering `en_reportsrefine.go`.
+
+Verify: `go vet ./internal/...` clean; `GOOS=js GOARCH=wasm go build .` exit 0.
+
+## 2026-07-19 — Dashboard & To-do polish: shorter hero, widget priority tone, completion count, expandable notes
+
+Targeted refinement on the two pages I own (Dashboard 8.5, To-do 8.8 → target 9+), building on the
+prior hero shrink / suggested-tasks reorg without undoing them. All new code lives in its own files so
+it never collides with the four concurrent lanes: `internal/i18n/en_dashtodo.go`,
+`internal/styles/rules_dashtodo.go` (one-line append to `install.go`), plus small edits to the two
+screens I own (`internal/screens/todo.go`, `internal/screens/todo_tiles.go`).
+
+**Hero shrink (~25-30% more).** The hero is a widget rendered above the bento; two earlier passes
+already tightened it (`registerDashHeroSurface`, then `registerDtxPolish`). Rather than edit those,
+`registerDashTodo` is registered LAST in `install.go`, so its equal-specificity overrides win the
+cascade: padding `1.15/1.05 → 0.85/0.8rem`, `.home-hero-nw-fig 2.5 → 2.05rem`, `.home-hero-spark svg
+54 → 40px`, greeting via the compound `.home-hero .home-hero-greeting` (0.2/0.1 specificity beats the
+`tw.Text28` utility folded onto the H2), and stats/actions margins pulled up. No Go change — pure CSS
+height reclaim.
+
+**Widget priority tone.** The `.w` shell emits a stable `data-widget="<id>"`, so I keyed tone off it
+with no engine change. ACTION cards (attention/freshness/todo/forecast/smart-digest/anomaly-hub) get a
+faint accent surface via a two-layer inset box-shadow — `inset 0 2px 0 0 accent@55%` (the top bar,
+listed first so it paints over) plus `inset 0 0 0 100px accent@5%` (the fill). RECAP cards
+(recent/trend/breakdown/cashflow/bills/monthly-recap/highlight) get their `.wh h2` heading dimmed to
+`--text-dim`, weight 500, so they recede. All via `--accent`/`--text-dim` tokens → correct in both
+themes. `.w` base uses hardcoded hex, but the accent wash reads over any fill, so I left the shell alone.
+
+**To-do completion count.** `todoSummaryWidget` already computed `c.Done`/`c.Total`; added a
+`todo-done-count` sub-line under the hero percent rendering `todo.doneCount` ("%d of %d done"), styled
+small/dim/tabular.
+
+**Expandable notes.** The note was hard-truncated at 100 runes with a title tooltip and a CSS
+single-line ellipsis. Raised the DOM cap to 280 runes, and when a note is long enough to clamp (>46
+runes) it gets `.is-expandable` + `tabindex=0` + an aria-label: CSS adds a resting dotted underline and,
+on `:hover`/`:focus-visible`, drops the clamp (`white-space:normal`, `max-width:40rem`) and brightens
+to `--text`. No new hook — TaskRow is already its own component and the class/attr are plain args, so
+the On*-in-loops rule is unaffected.
+
+**Verify.** `go vet ./internal/i18n/... ./internal/styles/...` clean; wasm app build (`.`) exit 0.
+`go test ./internal/i18n/...` fails only on 4 keys owned by other lanes (accounts_tiles.go,
+notifications.go) — my two keys resolve; not my files, left untouched.
+
+## 2026-07-19 — Goals: "Needs a plan" leads the first viewport (Watch-first ordering)
+
+The July 19 review scored Goals 8.6 and pinned the first-viewport ordering: under "Most actionable"
+the page led with two On-track sinking funds while the Watch / At-risk goals sat below, because the
+sinking-funds section rendered before the main goals list. Fixed by floating a compact **"Needs a
+plan"** section above the healthy sections. It's a pure reorder, so I was careful to touch none of
+the just-shipped pace/health logic (`goals.AssessHealth`, `computeGoalHealth`, `goalPaceBadge`,
+`goalPaceReason`, `rules_goalhealth.go`): the new section READS `goalView.Health[id].Health` only.
+
+Mechanism (all in `goals_tiles.go` + two small helpers in `goals.go`): build a `planEntries` list
+from `v.Missed` (all of them) plus the Watch / At-risk goals pulled out of BOTH `v.Active` and
+`v.Fund`, sort most-severe first via `needsPlanRank` (missed 0 → At risk 1 → Watch 2) with
+`goals.LessForList` as the tie-break, and render it first with the same `GoalRow` cards. The healthy
+remainders (`healthyActive`, `healthyFund`) are the goals whose verdict is NOT Watch/At-risk, so the
+existing funds and goals sections render exactly as before minus the pulled cards — nothing shows
+twice. The separate missed-deadline card folds into "Needs a plan" (missed goals were never in the
+active list, so `activeSorted` only sheds its Watch/At-risk cards). When every active goal gets pulled
+up, the main "Goals" list section is omitted rather than showing an empty heading; the first-run empty
+state still keys off the unfiltered `v.Active`/`v.Fund`/`v.Missed` so it's unaffected. Fund cards
+pulled into the section keep their set-aside/category via a small `rowForPlan` that checks
+`IsSinkingFund`. New i18n (`en_goalorder.go`) + warn-tone header CSS (`rules_goalorder.go`) in their
+own files; `registerGoalOrder()` appended to `install.go`. Verified: `go vet ./internal/...` clean,
+`go test ./internal/goals/...` green (pace/health untouched), wasm `go build .` exit 0.
+
 ## 2026-07-19 — One affordability answer + diagnostic goal status (post-v1.2.3 recheck)
 
 The July 19 aggressive recheck (run against the STALE served build — the real cause: `web/bin/

@@ -47,6 +47,7 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 	showLastMonth := uistate.UseBudgetsLastMonth().Get()
 
 	v := computeBudgetView(app, activeMemberID, vw, pr, showLastMonth)
+	smartSettings := uistate.LoadSmartSettings()
 
 	// A pace-flagged budget is trending over though not yet at the limit — surface it
 	// alongside the over/near budgets so the strip catches problems before they land.
@@ -75,9 +76,12 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
-	sub := uistate.T("bgpolish.attnCountOne")
+	// This strip is now the ONE authoritative review queue for the page (the summary's
+	// duplicate over/near disclosure was demoted), so the subtitle NAMES what the
+	// flagged budgets are rather than the vaguer "N need a look" (July-19 review #4).
+	sub := uistate.T("budgetrefine.queueNamedOne")
 	if len(problems) != 1 {
-		sub = uistate.T("bgpolish.attnCount", len(problems))
+		sub = uistate.T("budgetrefine.queueNamed", len(problems))
 	}
 	rows := MapKeyed(problems,
 		func(p budgeting.Problem) any { return p.Status.Budget.ID },
@@ -94,6 +98,12 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 			uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("bgattn-title"), uistate.T("bgpolish.attnTitle")),
 			Span(css.Class("bgattn-sub"), sub),
+			// SMART-B14: cover every overage in one pass. It used to ride the summary's
+			// (now-demoted) over-banner; it lives on the queue head so the capability
+			// survives the consolidation and stays beside the budgets it acts on.
+			If(v.OverCount > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
+				Div(css.Class("bgattn-head-action"),
+					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{}))),
 		),
 		rows,
 	)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/accountflow"
+	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -653,7 +654,7 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 // hover-to-decode step of the old icon-only treatment. variant tints it ("" neutral,
 // "primary" accent, "stale" amber); open keeps a modal opener highlighted while its
 // modal is showing.
-func acctToolbarGlyph(testID string, ic icon.Name, label, kind, variant string, open bool, onClick ui.Handler) ui.Node {
+func acctToolbarGlyph(testID string, ic icon.Name, label, title, kind, variant string, open bool, onClick ui.Handler) ui.Node {
 	cls := "btn btn-tool"
 	switch variant {
 	case "primary":
@@ -664,11 +665,17 @@ func acctToolbarGlyph(testID string, ic icon.Name, label, kind, variant string, 
 	if open {
 		cls += " is-open"
 	}
+	// The hover tooltip explains what the action MEANS when the label alone is
+	// ambiguous (e.g. "Mark all updated" is a powerful global trust action); an empty
+	// title falls back to the label so the tooltip is never blank.
+	if title == "" {
+		title = label
+	}
 	// A single leading glyph + the text label — no trailing kind badge (the button's
 	// behaviour is conveyed by aria + the label, not a second glyph on the right).
 	args := []any{
 		css.Class(cls), Type("button"), Attr("data-testid", testID),
-		Attr("aria-label", label), OnClick(onClick),
+		Attr("aria-label", label), Attr("title", title), OnClick(onClick),
 		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(label),
 	}
@@ -751,7 +758,7 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 		if len(staleAccts) > 3 {
 			list = uistate.T("accounts.markAllMore", list, len(staleAccts)-3)
 		}
-		uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list),
+		uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list)+" "+uistate.T("acctxn.markAllMeaning"),
 			uistate.T("accounts.markAll"), false, func(ok bool) {
 				if !ok {
 					return
@@ -857,13 +864,14 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 			// 2026-07-17 audit: the everyday actions stay labeled buttons — Mark-all
 			// (contextual, amber), Transfer money, and the primary "+ Add account" —
 			// while the setup/management surfaces (Groups, Institutions, Sweep rules,
-			// Exchange rates) fold into ONE labeled "Manage" menu, so the row before
-			// the account list stops presenting seven equally weighted verbs.
+			// Exchange rates) fold into ONE labeled "Account settings" menu (renamed
+			// from the vague "Manage"), so the row before the account list stops
+			// presenting seven equally weighted verbs.
 			If(staleCount > 0, acctToolbarGlyph("acct-markall-btn", icon.Refresh,
-				uistate.T("accounts.markAll"), "action", "stale", false, markAll)),
+				uistate.T("accounts.markAll"), uistate.T("acctxn.markAllMeaning"), "action", "stale", false, markAll)),
 			If(len(accounts) >= 1, uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerText:   uistate.T("accounts.manageMenu"),
-				TriggerLabel:  uistate.T("accounts.manageMenuTitle"),
+				TriggerText:   uistate.T("acctxn.acctSettingsMenu"),
+				TriggerLabel:  uistate.T("acctxn.acctSettingsMenuTitle"),
 				TriggerTestID: "acct-manage-btn",
 				TriggerClass:  "btn btn-tool",
 				Items: []uiw.OverflowMenuItem{
@@ -882,11 +890,11 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 				},
 			})),
 			If(len(accounts) >= 2, acctToolbarGlyph("page-transfer-btn", icon.Repeat,
-				uistate.T("accounts.transferMoney"), "modal", "", transferAtom.Get(), openTransfer)),
+				uistate.T("accounts.transferMoney"), "", "modal", "", transferAtom.Get(), openTransfer)),
 			// G1 + primary-last convention: "+ Add account" anchors the right end, exactly
 			// like the budgets and goals toolbars.
 			acctToolbarGlyph("accounts-add", icon.Plus,
-				uistate.T("accounts.addTitle"), "modal", "primary", false, openAdd),
+				uistate.T("accounts.addTitle"), "", "modal", "primary", false, openAdd),
 		},
 	})
 	return uiw.Widget(uiw.WidgetProps{
@@ -1080,9 +1088,18 @@ func acctListWidget(props acctListProps) ui.Node {
 			shown = append(shown, ac)
 		}
 	}
-	// Signed high to low across every view: the biggest holdings lead and the
-	// heaviest debts (most negative) trail.
-	sort.SliceStable(shown, func(i, j int) bool { return convBal(shown[i]) > convBal(shown[j]) })
+	// Risk-first ordering (AC-refresh): accounts that need attention — stale ones,
+	// past their freshness window — lead the list so the rows worth acting on sit on
+	// top, instead of being buried under big healthy balances. Within each freshness
+	// tier the familiar "signed high to low" order holds (biggest holdings lead, the
+	// heaviest debts trail). The comparison itself is the pure acctsort.RiskFirstLess
+	// (native-tested); here we only supply the stale flag + the signed balance.
+	windows := app.FreshnessWindows()
+	now := time.Now()
+	staleOf := func(ac domain.Account) bool { return freshness.IsStale(ac, windows, now) }
+	sort.SliceStable(shown, func(i, j int) bool {
+		return acctsort.RiskFirstLess(staleOf(shown[i]), staleOf(shown[j]), convBal(shown[i]), convBal(shown[j]))
+	})
 
 	smartSettings := uistate.LoadSmartSettings()
 	pr := uistate.UsePrefs().Get()
@@ -1090,8 +1107,6 @@ func acctListWidget(props acctListProps) ui.Node {
 	accountInsights := smartengine.RunPage(smartIn, smartSettings, smart.PageAccounts)
 	accountByEntity := insightsByEntity(accountInsights)
 
-	windows := app.FreshnessWindows()
-	now := time.Now()
 	categories := app.Categories()
 	members := app.Members()
 	accDefs := app.CustomFieldDefsFor("account")

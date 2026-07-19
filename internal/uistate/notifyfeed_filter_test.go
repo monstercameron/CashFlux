@@ -219,3 +219,34 @@ func TestOverdueDays(t *testing.T) {
 		})
 	}
 }
+
+func TestDueToday(t *testing.T) {
+	const day = int64(86400)
+	due := int64(1_700_000_000) - (int64(1_700_000_000) % day) // a UTC midnight
+	tests := []struct {
+		name  string
+		dueAt int64
+		now   int64
+		want  bool
+	}{
+		{"no due date", 0, due, false},
+		{"due today at midnight", due, due, true},
+		{"due today midday", due, due + day/2, true},
+		{"due today last second", due, due + day - 1, true},
+		{"due tomorrow", due + day, due + day/2, false},
+		{"due yesterday (overdue)", due, due + day, false},
+		{"due next week", due + 7*day, due, false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if got := uistate.DueToday(tc.dueAt, tc.now); got != tc.want {
+				t.Errorf("DueToday(%d, %d) = %v, want %v", tc.dueAt, tc.now, got, tc.want)
+			}
+			// Invariant: DueToday and OverdueDays>0 are mutually exclusive.
+			if got := uistate.DueToday(tc.dueAt, tc.now); got && uistate.OverdueDays(tc.dueAt, tc.now) > 0 {
+				t.Errorf("DueToday and OverdueDays>0 both true for (%d, %d)", tc.dueAt, tc.now)
+			}
+		})
+	}
+}

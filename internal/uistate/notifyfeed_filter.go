@@ -43,6 +43,21 @@ func OverdueDays(dueAt, now int64) int {
 	return d
 }
 
+// DueToday reports whether a due-date alert falls on the current calendar day
+// (both unix seconds): true only when dueAt is set and shares now's day and is
+// not already past. It is the "due in 0 days, not yet overdue" case a bill-due
+// row shows as "Due today" instead of the awkward "Due in 0 days". Day
+// boundaries are evaluated in UTC to match OverdueDays, so exactly one of
+// DueToday / OverdueDays>0 is ever true for a given alert. Zero/unset dueAt is
+// never due today.
+func DueToday(dueAt, now int64) bool {
+	if dueAt <= 0 {
+		return false
+	}
+	day := func(ts int64) int64 { return ts / 86400 }
+	return day(dueAt) == day(now)
+}
+
 // NeedsAttention reports whether a feed item belongs in the "Needs you" triage
 // bucket: critical or warning severity — an action to take or a decision to
 // make. Everything else (info notes, reminders, changed-item digests) is calm

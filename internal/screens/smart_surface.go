@@ -94,38 +94,29 @@ func SmartSurface() ui.Node {
 		}
 	}
 
-	// ── Bespoke masthead (built from scratch — NO bento tile, NO astSection): a
-	// serif kicker, the big FINDINGS count leading (nobody opens a findings feed to
-	// admire how many rules run), the agent's voice line, quiet inline posture
-	// metrics, and the on-device promise as fine print. Keeps #sec-smart-hero and
-	// the smt-hero-* testids so the count/voice/metrics stay addressable. ─────────
+	// ── Compact masthead (built from scratch — NO bento tile, NO astSection): just
+	// the big FINDINGS count with its kicker/label and the agent's voice line, so the
+	// findings feed sits high on the page. The posture metrics (watching/AI/density)
+	// and the on-device promise are configuration/telemetry, not findings — they moved
+	// down into the manage block (smartCatalogDeferred) so nothing config-shaped sits
+	// above the feed. Keeps #sec-smart-hero and the smt-hero-* testids. ────────────
 	heroTone := ""
 	if findings > 0 {
 		heroTone = " " + tw.ColorClass("text-warn")
 	}
-	// Label BEFORE value so the metric reads "Watching 66" in the DOM.
-	metric := func(label, value string) ui.Node {
-		return Div(css.Class("smt-metric"),
-			Span(css.Class("smt-metric-label"), label),
-			Span(css.Class("smt-metric-value", tw.FontDisplay), value),
-		)
-	}
-	masthead := Div(css.Class("smt-masthead"), Attr("id", "sec-smart-hero"),
-		Span(css.Class("smt-kicker"), uistate.T("smart.heroTitle")),
+	masthead := Div(css.Class("smt-masthead smt-masthead-compact"), Attr("id", "sec-smart-hero"),
 		Div(css.Class("smt-headline"),
 			Div(ClassStr("smt-count "+tw.Fold(tw.FontDisplay)+heroTone), Attr("data-testid", "smt-hero-count"),
 				fmt.Sprintf("%d", findings)),
-			Div(css.Class("smt-count-label", tw.TextDim), uistate.T("smart.heroLabel")),
+			Div(css.Class("smt-headline-text"),
+				Span(css.Class("smt-kicker"), uistate.T("smart.heroTitle")),
+				Div(css.Class("smt-count-label", tw.TextDim), uistate.T("smart.heroLabel")),
+			),
 		),
 		P(ClassStr("smt-voice "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "smt-hero-voice"),
 			smartHeroVoice(counts, findings)),
-		Div(css.Class("smt-metrics"),
-			metric(uistate.T("smart.chipWatching"), fmt.Sprintf("%d", counts.FreeOn+counts.AIOn)),
-			metric(uistate.T("smart.chipAI"), fmt.Sprintf("%d", counts.AIOn)),
-			metric(uistate.T("smart.chipDensity"), uistate.T("smart.density."+string(density))),
-		),
-		P(css.Class("smt-fine", tw.TextDim), uistate.T("smart.heroEyebrow")),
 	)
+	_ = density // posture metrics (incl. density) now render in the deferred manage block
 
 	// ── The proven sections, stacked as bespoke blocks on one editorial surface.
 	// They still return their EntityListSection/Card internals (toggles, pager,
@@ -170,11 +161,36 @@ type smartCatalogDeferredProps struct {
 	HasProvider bool
 }
 
-// smartCatalogDeferred renders the opt-in catalog + digest config as an isolated
-// child component, so mounting it a beat after the page's first paint keeps its
-// heavy DOM off the mount critical path without touching the parent's hook order.
+// smartPostureStrip renders the quiet posture telemetry (how many features are
+// watching, how many are AI, the density dial) as overline-label/serif-value
+// metrics. It moved off the masthead so nothing configuration/telemetry-shaped
+// sits above the findings feed; here it introduces the manage block it describes.
+func smartPostureStrip() ui.Node {
+	counts := liveSmartCounts()
+	density := uistate.LoadSmartSettings().DensityOrDefault()
+	metric := func(label, value string) ui.Node {
+		return Div(css.Class("smt-metric"),
+			Span(css.Class("smt-metric-label"), label),
+			Span(css.Class("smt-metric-value", tw.FontDisplay), value),
+		)
+	}
+	return Div(css.Class("smt-posture"), Attr("data-testid", "smart-posture"),
+		Div(css.Class("smt-metrics"),
+			metric(uistate.T("smart.chipWatching"), fmt.Sprintf("%d", counts.FreeOn+counts.AIOn)),
+			metric(uistate.T("smart.chipAI"), fmt.Sprintf("%d", counts.AIOn)),
+			metric(uistate.T("smart.chipDensity"), uistate.T("smart.density."+string(density))),
+		),
+		P(css.Class("smt-fine", tw.TextDim), uistate.T("smart.heroEyebrow")),
+	)
+}
+
+// smartCatalogDeferred renders the posture telemetry + opt-in catalog + digest
+// config as an isolated child component, so mounting it a beat after the page's
+// first paint keeps its heavy DOM off the mount critical path without touching
+// the parent's hook order.
 func smartCatalogDeferred(props smartCatalogDeferredProps) ui.Node {
 	return Fragment(
+		smartPostureStrip(),
 		smartManageSection(props.Settings, props.HasProvider),
 		SmartDigestSection(props.Settings),
 	)

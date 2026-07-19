@@ -621,10 +621,81 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	onToggleFilter := func(field txnfilter.FilterField, value string) {
 		setFilter(func(x *uistate.TxFilter) { *x = x.ToggleValue(field, value) })
 	}
-	// Redesigned filter panel: each categorical dimension is a group of toggle pills
-	// (multi-select), followed by the date/amount ranges, the cleared status, and any
-	// custom-field filter.
+
+	// TXC-3: quick-filter preset chips — one-tap common filters that write the
+	// persisted criteria (each shows "on" when its filter is engaged, toggles off).
+	// They live INSIDE the Filters panel (2026-07-19 two-row-toolbar pass) rather than
+	// as a separate always-on strip, so the resting page is just the toolbar row + the
+	// active-filter chips before the first ledger row.
+	monthStart := dateutil.MonthStart(time.Now())
+	monthFrom := dateutil.FormatDate(monthStart)
+	monthEndEx := dateutil.AddMonths(monthStart, 1)
+	monthTo := dateutil.FormatDate(monthEndEx.AddDate(0, 0, -1))
+	// Preset match counts (one pass) — like the toolbar's "Review N", so each chip
+	// shows its payoff before the click.
+	var uncatN, reviewN2, largeN, monthN int
+	for _, t := range txns {
+		if !t.IsTransfer() && t.CategoryID == "" {
+			uncatN++
+		}
+		for _, tag := range t.Tags {
+			if tag == reviewqueue.ReviewTag {
+				reviewN2++
+				break
+			}
+		}
+		if txnfilter.AbsAmount(t) >= currency.MinorFromMajor(100, t.Amount.Currency) {
+			largeN++
+		}
+		if dateutil.InRange(t.Date, monthStart, monthEndEx) {
+			monthN++
+		}
+	}
+	presetsRow := Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
+		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetUncategorized"), TestID: "txn-preset-uncat", Active: f.Uncategorized, Count: uncatN,
+			OnToggle: func() { setFilter(func(x *uistate.TxFilter) { x.Uncategorized = !x.Uncategorized }) }}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetNeedsReview"), TestID: "txn-preset-review", Active: f.Tag == reviewqueue.ReviewTag, Count: reviewN2,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.Tag == reviewqueue.ReviewTag {
+						x.Tag = ""
+					} else {
+						x.Tag = reviewqueue.ReviewTag
+					}
+				})
+			}}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetLarge"), TestID: "txn-preset-large", Active: f.AmountMin == txnLargeThreshold, Count: largeN,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.AmountMin == txnLargeThreshold {
+						x.AmountMin = ""
+					} else {
+						x.AmountMin = txnLargeThreshold
+					}
+				})
+			}}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetThisMonth"), TestID: "txn-preset-month", Active: f.From == monthFrom && f.To == monthTo, Count: monthN,
+			OnToggle: func() {
+				setFilter(func(x *uistate.TxFilter) {
+					if x.From == monthFrom && x.To == monthTo {
+						x.From, x.To = "", ""
+					} else {
+						x.From, x.To = monthFrom, monthTo
+					}
+				})
+			}}),
+	)
+
+	// Redesigned filter panel: quick-filter presets on top, then each categorical
+	// dimension as a group of toggle pills (multi-select), followed by the date/amount
+	// ranges, the cleared status, and any custom-field filter.
 	filtersBody := Div(css.Class("filter-panel"),
+		presetsRow,
 		Div(css.Class("filter-groups"),
 			filterMultiGroup(uistate.T("transactions.filterAccount"), txnfilter.FieldAccount, f.SelectedValues(txnfilter.FieldAccount), accOpts, onToggleFilter),
 			filterMultiGroup(uistate.T("transactions.filterCategory"), txnfilter.FieldCategory, f.SelectedValues(txnfilter.FieldCategory), catOpts, onToggleFilter),
@@ -752,76 +823,39 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}
 	statusLine := P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus))
 
-	// TXC-3: quick-filter preset chips — one-tap common filters that write the
-	// persisted criteria (each shows "on" when its filter is engaged, toggles off).
-	monthStart := dateutil.MonthStart(time.Now())
-	monthFrom := dateutil.FormatDate(monthStart)
-	monthEndEx := dateutil.AddMonths(monthStart, 1)
-	monthTo := dateutil.FormatDate(monthEndEx.AddDate(0, 0, -1))
-	// Preset match counts (one pass) — like the toolbar's "Review N", so each chip
-	// shows its payoff before the click.
-	var uncatN, reviewN2, largeN, monthN int
-	for _, t := range txns {
-		if !t.IsTransfer() && t.CategoryID == "" {
-			uncatN++
-		}
-		for _, tag := range t.Tags {
-			if tag == reviewqueue.ReviewTag {
-				reviewN2++
-				break
-			}
-		}
-		if txnfilter.AbsAmount(t) >= currency.MinorFromMajor(100, t.Amount.Currency) {
-			largeN++
-		}
-		if dateutil.InRange(t.Date, monthStart, monthEndEx) {
-			monthN++
-		}
+	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
+	// cleared / needs review) are otherwise undecoded shape+color, so a small key
+	// spells each one out — labelled, not color-or-shape alone (a11y). Shown only when
+	// there are rows to carry the markers.
+	var legend ui.Node = Fragment()
+	if len(props.Shown) > 0 {
+		legend = txnStatusLegend()
 	}
-	presetsRow := Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
-		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetUncategorized"), TestID: "txn-preset-uncat", Active: f.Uncategorized, Count: uncatN,
-			OnToggle: func() { setFilter(func(x *uistate.TxFilter) { x.Uncategorized = !x.Uncategorized }) }}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetNeedsReview"), TestID: "txn-preset-review", Active: f.Tag == reviewqueue.ReviewTag, Count: reviewN2,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.Tag == reviewqueue.ReviewTag {
-						x.Tag = ""
-					} else {
-						x.Tag = reviewqueue.ReviewTag
-					}
-				})
-			}}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetLarge"), TestID: "txn-preset-large", Active: f.AmountMin == txnLargeThreshold, Count: largeN,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.AmountMin == txnLargeThreshold {
-						x.AmountMin = ""
-					} else {
-						x.AmountMin = txnLargeThreshold
-					}
-				})
-			}}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetThisMonth"), TestID: "txn-preset-month", Active: f.From == monthFrom && f.To == monthTo, Count: monthN,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.From == monthFrom && x.To == monthTo {
-						x.From, x.To = "", ""
-					} else {
-						x.From, x.To = monthFrom, monthTo
-					}
-				})
-			}}),
-	)
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(toolbar, presetsRow, interpretRow, statusLine),
+		Body: Div(toolbar, interpretRow, legend, statusLine),
 	})
+}
+
+// txnStatusLegend is the compact key for the ledger's row status glyphs. Each item
+// pairs the exact glyph a row renders (✓✓ reconciled, ✓ cleared, • needs review)
+// with a plain-English label and the same full-sentence tooltip the row badge uses,
+// so the markers never rely on shape or color alone. It's a single quiet line, kept
+// out of the resting toolbar rows so the ledger stays close to the top.
+func txnStatusLegend() ui.Node {
+	item := func(glyph, label, title, testID string) ui.Node {
+		return Span(css.Class("txn-legend-item"), Attr("data-testid", testID), Attr("title", title),
+			Span(css.Class("txn-legend-glyph"), Attr("aria-hidden", "true"), glyph),
+			Span(css.Class("txn-legend-text"), label))
+	}
+	return Div(css.Class("txn-legend"), Attr("data-testid", "txn-status-legend"),
+		Attr("role", "note"), Attr("aria-label", uistate.T("acctxn.legendAria")),
+		Span(css.Class("txn-legend-label"), uistate.T("acctxn.legendLabel")),
+		item("✓✓", uistate.T("acctxn.legendReconciled"), uistate.T("transactions.reconciledBadgeTitle"), "txn-legend-reconciled"),
+		item("✓", uistate.T("acctxn.legendCleared"), uistate.T("transactions.clearedBadgeTitle"), "txn-legend-cleared"),
+		item("•", uistate.T("acctxn.legendNeedsReview"), uistate.T("transactions.needsReviewBadgeTitle"), "txn-legend-review"),
+	)
 }
 
 // TxnColumnsBody is the body of the "show / hide columns" flip modal: a checkbox

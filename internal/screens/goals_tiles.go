@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -283,10 +284,89 @@ func goalListWidget(props goalListProps) ui.Node {
 	now := time.Now()
 	smartSettings := uistate.LoadSmartSettings()
 
-	// Sinking funds card (above the regular goals when any exist).
+	// "Needs a plan" partitioning (2026-07-19 Watch-first ordering): the goals that
+	// need a decision now — missed deadlines, plus the Watch / At-risk pace verdicts
+	// pulled up out of the active and sinking-fund lists — lead the page so the
+	// actionable items are in the first viewport instead of sitting below healthy
+	// funds. This ONLY reorders: each card is the same GoalRow with the same pace
+	// badge and reason; the verdicts come straight from v.Health (computeGoalHealth),
+	// never recomputed. Pulled goals are filtered OUT of the healthy sections below so
+	// nothing renders twice.
+	type planEntry struct {
+		g      domain.Goal
+		missed bool
+	}
+	var planEntries []planEntry
+	for _, g := range v.Missed {
+		planEntries = append(planEntries, planEntry{g: g, missed: true})
+	}
+	for _, g := range v.Active {
+		if healthNeedsPlan(v.Health[g.ID].Health) {
+			planEntries = append(planEntries, planEntry{g: g})
+		}
+	}
+	for _, g := range v.Fund {
+		if healthNeedsPlan(v.Health[g.ID].Health) {
+			planEntries = append(planEntries, planEntry{g: g})
+		}
+	}
+	// Most-severe first (missed → at risk → watch); ties keep the existing
+	// most-actionable order.
+	sort.SliceStable(planEntries, func(i, j int) bool {
+		ri := needsPlanRank(planEntries[i].missed, v.Health[planEntries[i].g.ID].Health)
+		rj := needsPlanRank(planEntries[j].missed, v.Health[planEntries[j].g.ID].Health)
+		if ri != rj {
+			return ri < rj
+		}
+		return goalsvc.LessForList(planEntries[i].g, planEntries[j].g)
+	})
+
+	// Healthy remainders for the sections below: the goals NOT pulled up (on-track /
+	// no-verdict). Missed goals were never in v.Active, so activeSorted only sheds its
+	// Watch / At-risk cards here.
+	var healthyActive []domain.Goal
+	for _, g := range activeSorted {
+		if !healthNeedsPlan(v.Health[g.ID].Health) {
+			healthyActive = append(healthyActive, g)
+		}
+	}
+	var healthyFund []domain.Goal
+	for _, g := range v.Fund {
+		if !healthNeedsPlan(v.Health[g.ID].Health) {
+			healthyFund = append(healthyFund, g)
+		}
+	}
+
+	rowForPlan := func(g domain.Goal) ui.Node {
+		if g.IsSinkingFund {
+			return rowFor(g, goalsvc.FundSetAsideMinor(g, now), categoryNameByID(v.Categories, g.CategoryID))
+		}
+		return rowFor(g, 0, "")
+	}
+
+	// The "Needs a plan" lead card.
+	var needsPlanSection ui.Node = Fragment()
+	if len(planEntries) > 0 {
+		planRows := MapKeyed(planEntries, func(e planEntry) any { return e.g.ID }, func(e planEntry) ui.Node {
+			return rowForPlan(e.g)
+		})
+		needsPlanSection = uiw.Card(uiw.CardProps{
+			Attrs: []any{Attr("aria-label", uistate.T("goals.needsPlanSection")), Attr("data-testid", "goals-needsplan-section")},
+			Header: H2(css.Class("card-title", "goals-needsplan-title"),
+				uistate.T("goals.needsPlanSection"),
+				Span(css.Class("goal-count-inline"), Attr("data-testid", "goals-needsplan-count"), fmt.Sprintf(" · %d", len(planEntries))),
+			),
+			Body: Fragment(
+				P(css.Class("budget-sub"), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("goals.needsPlanHint")),
+				Div(css.Class("goal-list"), planRows),
+			),
+		})
+	}
+
+	// Sinking funds card (healthy funds only — the rest lead in "Needs a plan").
 	var fundsSection ui.Node = Fragment()
-	if len(v.Fund) > 0 {
-		fundRows := MapKeyed(v.Fund, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+	if len(healthyFund) > 0 {
+		fundRows := MapKeyed(healthyFund, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 			return rowFor(g, goalsvc.FundSetAsideMinor(g, now), categoryNameByID(v.Categories, g.CategoryID))
 		})
 		fundsSection = uiw.Card(uiw.CardProps{
@@ -296,48 +376,35 @@ func goalListWidget(props goalListProps) ui.Node {
 			// heading (UX-06 formatting bug).
 			Header: H2(css.Class("card-title"),
 				uistate.T("goals.fundsSection"),
-				Span(css.Class("goal-count-inline"), Attr("data-testid", "goals-funds-count"), fmt.Sprintf(" · %d", len(v.Fund))),
+				Span(css.Class("goal-count-inline"), Attr("data-testid", "goals-funds-count"), fmt.Sprintf(" · %d", len(healthyFund))),
 			),
 			Body: Div(css.Class("goal-list"), fundRows),
 		})
 	}
 
-	// Active goals list, or the first-run empty state.
-	var listBody ui.Node
+	// Active goals list (healthy actives), or the first-run empty state. When every
+	// active goal has been pulled up into "Needs a plan", the main list section is
+	// omitted rather than showing an empty "Goals" heading.
+	var listSection ui.Node = Fragment()
 	if len(v.Active) == 0 && len(v.Fund) == 0 && len(v.Missed) == 0 {
 		pr := uistate.UsePrefs().Get()
 		in := buildSmartInput(app, pr.WeekStartWeekday())
-		listBody = Fragment(
-			ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals}),
-			smartEmptyStateFor(smartSettings, smart.PageGoals, in),
-		)
-	} else {
+		listSection = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("nav.goals"),
+			Body: Fragment(
+				ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("goals.empty"), CTALabel: uistate.T("goals.addFirst"), AddTarget: "goal", Icon: icon.Goals}),
+				smartEmptyStateFor(smartSettings, smart.PageGoals, in),
+			),
+		})
+	} else if len(healthyActive) > 0 {
 		// Each active goal card now renders its savings-pace rail INSIDE its own metadata
 		// block (see goals_row.go), so the list is just the cards — no trajectory wrapper.
-		rows := MapKeyed(activeSorted, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+		rows := MapKeyed(healthyActive, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 			return rowFor(g, 0, "")
 		})
-		listBody = Div(css.Class("goal-list"), rows)
-	}
-
-	// Missed-deadline card (G4): the goals the dashboard widget counts as "Missed" get
-	// their own named section here — longest-missed first, warn-tinted header — so the
-	// widget's count always has a place the page can show.
-	var missedSection ui.Node = Fragment()
-	if len(v.Missed) > 0 {
-		missedRows := MapKeyed(v.Missed, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
-			return rowFor(g, 0, "")
-		})
-		missedSection = uiw.Card(uiw.CardProps{
-			Attrs: []any{Attr("aria-label", uistate.T("goals.missedSection")), Attr("data-testid", "goals-missed-section")},
-			Header: H2(css.Class("card-title", "goals-missed-title"),
-				uistate.T("goals.missedSection"),
-				Span(css.Class("goal-count-inline"), fmt.Sprintf(" · %d", len(v.Missed))),
-			),
-			Body: Fragment(
-				P(css.Class("budget-sub"), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("goals.missedHint")),
-				Div(css.Class("goal-list"), missedRows),
-			),
+		listSection = uiw.EntityListSection(uiw.EntityListSectionProps{
+			Title: uistate.T("nav.goals"),
+			Body:  Div(css.Class("goal-list"), rows),
 		})
 	}
 
@@ -368,14 +435,12 @@ func goalListWidget(props goalListProps) ui.Node {
 		ui.CreateElement(goalConflictStrip, struct{}{}),
 		ui.CreateElement(goalsPaycheckPreviewCard, struct{}{}),
 		ui.CreateElement(goalsFundingOrderCard, struct{}{}),
-		// Missed deadlines lead — they're the section that needs a decision (re-date,
-		// re-fund, or archive), so they never hide below the healthy list.
-		missedSection,
+		// "Needs a plan" leads — missed deadlines plus the Watch / At-risk goals pulled
+		// up from the active and fund lists, most-severe first — so the goals needing a
+		// decision (re-date, re-fund, or archive) never hide below the healthy list.
+		needsPlanSection,
 		fundsSection,
-		uiw.EntityListSection(uiw.EntityListSectionProps{
-			Title: uistate.T("nav.goals"),
-			Body:  listBody,
-		}),
+		listSection,
 		If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
 		achievedSection,
 	)

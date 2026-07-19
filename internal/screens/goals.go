@@ -162,6 +162,34 @@ func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates 
 	return out
 }
 
+// healthNeedsPlan reports whether a goal's shared pace verdict lands it in the
+// "Needs a plan" lead section: Watch (a stretch — needs more than a fair share
+// of free cash) or At risk (unreachable even with all free cash). On-track and
+// no-verdict goals stay in their healthy sections. This ONLY drives sectioning
+// — it reads the verdict computeGoalHealth already produced and never recomputes
+// it, so the pace/health model is untouched.
+func healthNeedsPlan(h goalsvc.Health) bool {
+	return h == goalsvc.HealthWatch || h == goalsvc.HealthAtRisk
+}
+
+// needsPlanRank orders the "Needs a plan" section, most severe first (lower =
+// earlier): a missed deadline leads — it's already past due, so the decision is
+// overdue — then At risk (going to miss), then Watch (a stretch). Ties within a
+// rank fall back to the existing most-actionable order (LessForList) at the call
+// site. Purely an ordering read of the shared verdict; no pace math here.
+func needsPlanRank(missed bool, h goalsvc.Health) int {
+	switch {
+	case missed:
+		return 0
+	case h == goalsvc.HealthAtRisk:
+		return 1
+	case h == goalsvc.HealthWatch:
+		return 2
+	default:
+		return 3
+	}
+}
+
 // overbookedGoals returns the set of goal IDs whose virtual earmarks no longer fit the
 // live account balances backing them — i.e. an account they reserve from has been spent
 // down so the total earmarked against it now exceeds its current balance. Computed once

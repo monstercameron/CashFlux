@@ -92,6 +92,9 @@ func todoSummaryWidget(props todoSummaryProps) ui.Node {
 			Div(css.Class("budget-loader-fig", "is-right"),
 				Div(css.Class("budget-loader-label"), uistate.T("todo.doneLabel")),
 				Div(css.Class("budget-loader-value is-hero"), fmt.Sprintf("%d%%", c.DonePct)),
+				// The raw numerator/denominator beneath the percent so "72%" reads
+				// concretely as "33 of 46 done" at a glance.
+				Div(css.Class("todo-done-count"), uistate.T("todo.doneCount", c.Done, c.Total)),
 			),
 		),
 	)

@@ -349,12 +349,17 @@ func notifyRow(props notifyRowProps) ui.Node {
 	// re-render a past-due "due in N days" line as overdue wording instead of
 	// letting yesterday's bill claim it's still "due in 0 days".
 	body := it.Body
-	if od := uistate.OverdueDays(it.DueAt, time.Now().Unix()); od > 0 {
+	nowUnix := time.Now().Unix()
+	if od := uistate.OverdueDays(it.DueAt, nowUnix); od > 0 {
 		if od == 1 {
 			body = uistate.T("notifications.overdueOneDay")
 		} else {
 			body = uistate.T("notifications.overdueDays", od)
 		}
+	} else if uistate.DueToday(it.DueAt, nowUnix) {
+		// Zero days remaining but not yet past — "Due in 0 days" reads wrong; the
+		// obligation is simply due today.
+		body = uistate.T("notifications.dueToday")
 	}
 
 	route := routeForNotify(it)
@@ -398,30 +403,36 @@ func notifyRow(props notifyRowProps) ui.Node {
 			props.OnRead()
 		}
 	})
-	onDismiss := ui.UseEvent(func() {
-		if props.OnDismiss != nil {
-			props.OnDismiss()
-		}
-	})
 	snoozeFor := func(days int) {
 		if props.OnSnoozeFor != nil {
 			props.OnSnoozeFor(days)
 		}
 	}
-	// The snooze horizon popover (1 day / 1 week / 1 month) — the row keeps its
-	// compact clock icon; the choice opens the standard add-menu popover.
-	snoozeOpen := ui.UseState(false)
-	snoozeID := ui.UseId()
-	toggleSnooze := ui.UseEvent(Prevent(func() { snoozeOpen.Set(!snoozeOpen.Get()) }))
-	closeSnooze := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false) }))
-	uiw.DismissPopover(snoozeOpen.Get(), snoozeID, func() { snoozeOpen.Set(false) })
-	uiw.AnchorPopover(snoozeOpen.Get(), snoozeID)
-	snooze1 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(1) }))
-	snooze7 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(7) }))
-	snooze30 := ui.UseEvent(Prevent(func() { snoozeOpen.Set(false); snoozeFor(30) }))
-	snoozeHidden := ""
-	if !snoozeOpen.Get() {
-		snoozeHidden = " hidden-menu"
+	// One primary action per row (mark read/unread) plus a single ••• overflow that
+	// holds the everyday-but-secondary actions — snooze horizons (tomorrow / a week /
+	// a month), alert settings, and the destructive dismiss. A row of four repeated
+	// icon-only buttons made every alert look equally urgent and read as clutter;
+	// promoting one and folding the rest keeps the triage log calm (2026-07-18
+	// assessment). The overflow reuses the standard add-menu popover.
+	ovfOpen := ui.UseState(false)
+	ovfID := ui.UseId()
+	toggleOvf := ui.UseEvent(Prevent(func() { ovfOpen.Set(!ovfOpen.Get()) }))
+	closeOvf := ui.UseEvent(Prevent(func() { ovfOpen.Set(false) }))
+	uiw.DismissPopover(ovfOpen.Get(), ovfID, func() { ovfOpen.Set(false) })
+	uiw.AnchorPopover(ovfOpen.Get(), ovfID)
+	snooze1 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(1) }))
+	snooze7 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(7) }))
+	snooze30 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(30) }))
+	ovfSettings := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); uistate.OpenGlobalSettingsAt("alerts") }))
+	ovfDismiss := ui.UseEvent(Prevent(func() {
+		ovfOpen.Set(false)
+		if props.OnDismiss != nil {
+			props.OnDismiss()
+		}
+	}))
+	ovfHidden := ""
+	if !ovfOpen.Get() {
+		ovfHidden = " hidden-menu"
 	}
 	// Mobile cluster (#75): three icon-only glyphs per row are recognition-
 	// dependent on a phone, so under 640px the trio collapses to ONE labeled
@@ -500,30 +511,32 @@ func notifyRow(props notifyRowProps) ui.Node {
 
 	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-"+it.ID),
 		Div(mainArgs...),
-		// Inline, one-click actions (revealed on hover; always shown on touch). No ⋯ menu —
-		// a per-notification menu is an extra click for actions you take constantly.
+		// ONE primary action (mark read/unread) + a single ••• overflow holding the
+		// secondary actions (snooze horizons, alert settings, dismiss). Revealed on
+		// hover; always shown on touch.
 		Div(css.Class("notif-actions"),
-			Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
-				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead), uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4))),
-			// Snooze picks its horizon (was a fixed 1 day): until tomorrow, next
-			// week, or next month.
-			Div(css.Class("add-wrap"), Attr("id", snoozeID),
-				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
-					Attr("aria-label", withTitle(uistate.T("notifications.snooze"))), Title(uistate.T("notifications.snooze")),
-					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(snoozeOpen.Get())),
-					OnClick(toggleSnooze), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
-				Div(ClassStr("add-backdrop"+snoozeHidden), OnClick(closeSnooze)),
-				Div(ClassStr("add-menu"+snoozeHidden), Attr("role", "menu"),
+			Button(css.Class("notif-primary"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
+				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead),
+				uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(css.Class("notif-primary-label"), readLabel)),
+			Div(css.Class("add-wrap"), Attr("id", ovfID),
+				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-ovf-"+it.ID),
+					Attr("aria-label", withTitle(uistate.T("notifications.moreActions"))), Title(uistate.T("notifications.moreActions")),
+					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(ovfOpen.Get())),
+					OnClick(toggleOvf), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+ovfHidden), OnClick(closeOvf)),
+				Div(ClassStr("add-menu"+ovfHidden), Attr("role", "menu"),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "notif-snooze1d-"+it.ID), OnClick(snooze1), uistate.T("notifications.snooze1d")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "notif-snooze1w-"+it.ID), OnClick(snooze7), uistate.T("notifications.snooze1w")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "notif-snooze1m-"+it.ID), OnClick(snooze30), uistate.T("notifications.snooze1m")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-settings-"+it.ID), OnClick(ovfSettings), uistate.T("notifications.alertSettings")),
+					Button(css.Class("add-item add-item-danger"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-dismiss-"+it.ID), OnClick(ovfDismiss), uistate.T("notifications.dismiss")),
 				),
 			),
-			Button(css.Class("notif-icon-btn notif-dismiss"), Type("button"), Attr("data-testid", "notif-dismiss-"+it.ID),
-				Attr("aria-label", withTitle(uistate.T("notifications.dismiss"))), Title(uistate.T("notifications.dismiss")), OnClick(onDismiss), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		// Mobile-only actions (#75): a labeled primary + a labeled overflow menu.
 		Div(css.Class("notif-actions-m"),

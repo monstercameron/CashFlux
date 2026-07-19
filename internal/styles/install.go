@@ -43,6 +43,7 @@ func Register() {
 	registerAnnualGridSurface()
 	registerGoalStatesWidget()
 	registerGoalHealthTones()
+	registerGoalOrder()
 	registerReportsAnnual()
 	registerReportsSummary()
 	registerReportsVitals()
@@ -81,6 +82,10 @@ func Register() {
 	registerBgPolish()
 	registerDtxPolish()
 	registerNotifTriage()
+	registerDashTodo()
+	registerNotifAsst()
+	registerAcctxn()
+	registerBudgetRefine()
 	inject(Build())
 }
 

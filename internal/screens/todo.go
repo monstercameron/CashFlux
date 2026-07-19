@@ -178,12 +178,29 @@ func TaskRow(props taskRowProps) ui.Node {
 		metaParts = append(metaParts, linkNode)
 	}
 	if t.Notes != "" {
-		const maxNoteRune = 100
+		// The note is single-line clamped in the row (CSS). Keep a generous DOM cap so an
+		// expanded note reveals meaningful text; only a truly huge note gets an ellipsis.
+		const maxNoteRune = 280
+		runes := []rune(t.Notes)
 		noteDisplay := t.Notes
-		if len([]rune(noteDisplay)) > maxNoteRune {
-			noteDisplay = string([]rune(noteDisplay)[:maxNoteRune]) + "…"
+		if len(runes) > maxNoteRune {
+			noteDisplay = string(runes[:maxNoteRune]) + "…"
 		}
-		metaParts = append(metaParts, Span(css.Class("todo-meta-note"), Title(t.Notes), noteDisplay))
+		// A note long enough to be clamped by the row's single-line width earns the
+		// expand affordance: a resting dotted underline + hover/keyboard-focus reveal
+		// (CSS .todo-meta-note.is-expandable). Short notes that already fit stay plain,
+		// so the cue only appears where there's actually more to read.
+		noteCls := "todo-meta-note"
+		// The full note is always the tooltip; a clamped note also becomes keyboard-
+		// focusable so the hover/focus expand works from the keyboard too.
+		noteArgs := []any{Title(t.Notes)}
+		if len(runes) > 46 {
+			noteCls += " is-expandable"
+			noteArgs = append(noteArgs, Attr("tabindex", "0"), Attr("aria-label", uistate.T("todo.noteExpandHint")))
+		}
+		noteArgs = append([]any{css.Class(noteCls)}, noteArgs...)
+		noteArgs = append(noteArgs, noteDisplay)
+		metaParts = append(metaParts, Span(noteArgs...))
 	}
 	// Sub-task summary chip (parents only): "N/M" done, leading the meta line — and, when
 	// collapsed, the only hint that hidden work lives under this row.

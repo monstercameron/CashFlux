@@ -1674,14 +1674,19 @@ func Reports() ui.Node {
 		)
 	}
 	summaryView := Div(css.Class("rpta-summary"), Attr("data-testid", "rpta-summary"),
-		Div(css.Class("rpta-sum-cols"),
-			sumCol(uistate.T("rpta.sumStrengths"), "up", sumWins, "rpta.sumNoWins"),
-			sumCol(uistate.T("rpta.sumRisks"), "down", sumRisks, "rpta.sumNoRisks"),
+		Div(css.Class("rpta-sum-grid"),
+			// Left column: Strengths + Risks stacked, with the core-trends strip
+			// filling the space beneath them so it rises into the first viewport.
+			Div(css.Class("rpta-sum-main"),
+				sumCol(uistate.T("rpta.sumStrengths"), "up", sumWins, "rpta.sumNoWins"),
+				sumCol(uistate.T("rpta.sumRisks"), "down", sumRisks, "rpta.sumNoRisks"),
+				Div(css.Class("rpta-sum-trends-wrap"),
+					H3(ClassStr("rpta-sum-trends-title "+tw.Fold(tw.FontDisplay)), uistate.T("rpta.sumTrends")),
+					sumTrends,
+				),
+			),
+			// Right column: the taller Recommended-actions list.
 			sumCol(uistate.T("rpta.sumActions"), "plan", sumActions, "rpta.sumNoActions"),
-		),
-		Div(css.Class("rpta-sum-trends-wrap"),
-			H3(ClassStr("rpta-sum-trends-title "+tw.Fold(tw.FontDisplay)), uistate.T("rpta.sumTrends")),
-			sumTrends,
 		),
 		Button(css.Class("rpta-drill", "rpta-sum-fulllink"), Type("button"), Attr("data-testid", "rpta-sum-fulllink"),
 			OnClick(onModeFull), uistate.T("rpta.sumFullLink")),
@@ -1810,12 +1815,14 @@ func rptaVerdict(h healthscore.Result) (string, string) {
 	}
 }
 
-// rptaScoreText renders "82 · Good" (or just the band when no score applies).
+// rptaScoreText renders "82/100 · Good" (or just the band when no score
+// applies). The 0-100 scale travels with the number so the health score never
+// reads as a bare, unlabelled figure.
 func rptaScoreText(h healthscore.Result) string {
 	if h.Band == healthscore.BandNoData {
 		return string(h.Band)
 	}
-	return fmt.Sprintf("%d · %s", h.Score, h.Band)
+	return fmt.Sprintf("%d%s · %s", h.Score, uistate.T("rptaref.scaleOutOf100"), h.Band)
 }
 
 // planRouteFor maps a health-step key to the screen where the user acts on it.
@@ -1923,7 +1930,13 @@ func rptaFactorRow(f healthscore.Factor) ui.Node {
 		Span(css.Class("rpta-fact-val", tw.FontDisplay), f.Value),
 		Div(css.Class("rpta-fact-bar"),
 			Div(ClassStr("rpta-fact-fill rpta-fill-"+tone), Style(map[string]string{"width": fmt.Sprintf("%d%%", f.Score)}))),
-		Span(ClassStr("rpta-fact-score rpta-tone-"+tone), fmt.Sprintf("%d", f.Score)),
+		// The score carries its 0-100 scale visibly and names its factor for
+		// assistive tech, so no bare number ever reads without its label.
+		Span(ClassStr("rpta-fact-score rpta-tone-"+tone),
+			Attr("aria-label", uistate.T("rptaref.factScoreAria", f.Label, f.Score)),
+			Title(uistate.T("rptaref.factScoreAria", f.Label, f.Score)),
+			fmt.Sprintf("%d", f.Score),
+			Span(css.Class("rpta-fact-scale"), Attr("aria-hidden", "true"), uistate.T("rptaref.scaleOutOf100"))),
 	)
 }
 

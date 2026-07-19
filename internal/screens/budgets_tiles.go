@@ -1203,23 +1203,20 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	nav := router.UseNavigate()
 	goAllocate := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/allocate")) }))
-	// UX-05: every count on the rail is clickable — it narrows the budget list to
-	// exactly the budgets behind that number, so nothing on the page is unexplainable.
-	att := uistate.UseBudgetAttention()
-	filterOver := ui.UseEvent(Prevent(func() { att.Set(uistate.BudgetAttentionOver) }))
-	filterNear := ui.UseEvent(Prevent(func() { att.Set(uistate.BudgetAttentionNear) }))
 	goTodos := ui.UseEvent(Prevent(func() {
 		uistate.SetTodoFilterLink(uistate.TodoLinkBudget)
 		uistate.SetTodoFilterLinkID("")
 		nav.Navigate(uistate.RoutePath("/todo"))
 	}))
 
+	// July-19 review #1: over/near BUDGETS are owned by the single top review queue
+	// (budget-attention) now, so this rail no longer double-reports them. It carries only
+	// the PLAN-level concerns the queue can't show — over-assignment, a sinking-fund
+	// shortfall, and (on a closed month) open follow-ups — so the page has one decision
+	// path for budget health and a separate, quiet note for planning issues.
 	fundShort := v.TotalFundSetAside > 0 && props.FundHasPool && v.TotalFundSetAside > props.FundFree
 	count := 0
 	if props.OverAssigned > 0 {
-		count++
-	}
-	if v.OverCount > 0 {
 		count++
 	}
 	if fundShort {
@@ -1231,15 +1228,11 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	}
 
 	if count == 0 {
-		// Healthy: at most the quiet set-aside footnote and/or a near-limit pill —
-		// the pill filters the list to those budgets on click.
+		// No plan-level issue: at most the quiet sinking-fund set-aside footnote. Over/near
+		// budgets are reported by the top review queue, never a second time here.
 		return Div(
 			If(v.TotalFundSetAside > 0, P(css.Class("budget-sub"), Attr("data-testid", "budgets-fund-setaside"),
 				uistate.T("budgets.fundSetAside", fmtMoney(money.New(v.TotalFundSetAside, v.Base))))),
-			If(v.NearCount > 0, P(css.Class("budget-sub", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Button(css.Class("pill is-warn"), Type("button"), Attr("data-testid", "budgets-near-filter"),
-					Title(uistate.T("budgets.filterNearTitle")), OnClick(filterNear),
-					nearBadgeText(v.NearCount, props.Hist)))),
 		)
 	}
 
@@ -1271,7 +1264,6 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
 		Span(css.Class("budget-issues-title"), title),
 		resolve,
-		If(v.NearCount > 0, Span(css.Class("pill is-warn"), nearBadgeText(v.NearCount, props.Hist))),
 		uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
 	)
 
@@ -1289,27 +1281,6 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-resolve-alloc"),
 				Title(uistate.T("budgets.issueReviewAllocTitle")), OnClick(goAllocate),
 				uistate.T("budgets.issueReviewAlloc")),
-		))
-	}
-	if v.OverCount > 0 {
-		rows = append(rows, Div(css.Class("card-alert", "budget-over-banner", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Attr("role", "status"), Attr("data-testid", "budgets-over-banner"),
-			Span(css.Class("budget-over-icon"), Attr("aria-hidden", "true"), "⚠"),
-			Span(css.Class("budget-over-text"), overBannerText(v.OverCount, fmtMoney(money.New(v.TotalOver, v.Base)), props.Hist)),
-			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-filter-over"),
-				Title(uistate.T("budgets.filterOverTitle")), OnClick(filterOver), uistate.T("budgets.filterShow")),
-			// SMART-B14: one-tap entry to cover every overage at once (Free, opt-out).
-			If(props.SmartSettings.IsEnabled(coverAllFeatureCode),
-				ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
-		))
-	}
-	if v.NearCount > 0 {
-		rows = append(rows, Div(css.Class("budget-issue-row"), Attr("data-testid", "budgets-issue-near"),
-			Div(css.Class("budget-issue-main"),
-				Span(css.Class("budget-issue-title"), nearBadgeText(v.NearCount, props.Hist)),
-			),
-			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-filter-near"),
-				Title(uistate.T("budgets.filterNearTitle")), OnClick(filterNear), uistate.T("budgets.filterShow")),
 		))
 	}
 	if props.FollowUps > 0 {
@@ -1472,19 +1443,20 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		densityAtom.Set(next)
 		uistate.PersistBudgetDensity(next)
 	}))
-	// UX-05: the four equal-weight bulk tools (Last month's spend, Auto budget, Sweep
-	// leftovers, Adjust all) fold into ONE "Automate" menu, so the action row carries
-	// three clear choices — density, Automate, Add — instead of six ghost buttons.
+	// July-19 review #2: ONE "Budget settings" popover now holds every view/tool control
+	// — the method picker, sort order, the compact-list toggle, and the bulk tools —
+	// so the page opens on the budgets themselves instead of a tall control stack. Only
+	// "+ Add budget" stays out as the primary action.
 	sweepAtom := uistate.UseSweepConfigOpen()
 	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
-	// #64: the guided month-close flow, reachable any time from the Automate menu.
+	// #64: the guided month-close flow, reachable any time from the settings menu.
 	mcAtom := uistate.UseMonthCloseOpen()
 	openMonthClose := ui.UseEvent(Prevent(func() { mcAtom.Set(true) }))
-	autoMenuOpen := ui.UseState(false)
-	toggleAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(!autoMenuOpen.Get()) }))
-	closeAutoMenu := ui.UseEvent(Prevent(func() { autoMenuOpen.Set(false) }))
-	uiw.DismissPopover(autoMenuOpen.Get(), "budgets-automate-wrap", func() { autoMenuOpen.Set(false) })
-	uiw.AnchorPopover(autoMenuOpen.Get(), "budgets-automate-wrap")
+	settingsOpen := ui.UseState(false)
+	toggleSettings := ui.UseEvent(Prevent(func() { settingsOpen.Set(!settingsOpen.Get()) }))
+	closeSettings := ui.UseEvent(Prevent(func() { settingsOpen.Set(false) }))
+	uiw.DismissPopover(settingsOpen.Get(), "budgets-settings-wrap", func() { settingsOpen.Set(false) })
+	uiw.AnchorPopover(settingsOpen.Get(), "budgets-settings-wrap")
 	// C112: switch the budgeting methodology right from /budgets.
 	onMethod := ui.UseEvent(func(e ui.Event) {
 		s := app.Settings()
@@ -1494,83 +1466,89 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 		uistate.PostNotice(uistate.T("settings.methodSaved"), false) // QA L2
 	})
 	sortVal := sortAtom.Get()
-	// Standard two-row toolbar (matches the transactions/accounts toolbar): budgets has
-	// no free-text search, so row 1 (the primary line) holds the two view-shaping pickers
-	// — budgeting method + sort — each growing to fill the width, and row 2 holds the
-	// action buttons with "+ Add budget" anchoring the end.
-	toolbar := Div(css.Class("filter-toolbar budgets-tb"),
-		Div(css.Class("filter-toolbar-primary"),
-			Label(css.Class("fctrl"),
-				uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(css.Class("fctrl-label"), uistate.T("settings.budgetMethod")),
-				Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-method"),
-					Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
-					Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
-					Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
-					Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
-					Option(Value(string(budgeting.MethodFlex)), SelectedIf(method == budgeting.MethodFlex), uistate.T("settings.budgetMethodFlex")),
-				),
-			),
-			Label(css.Class("fctrl"),
-				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(css.Class("fctrl-label"), uistate.T("budgets.sortLabel")),
-				Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-sort"),
-					Attr("aria-label", uistate.T("budgets.sortLabel")), Title(uistate.T("budgets.sortLabel")), OnChange(onSort),
-					Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortHealth")),
-					Option(Value(uistate.BudgetSortOverage), SelectedIf(sortVal == uistate.BudgetSortOverage), uistate.T("budgets.sortOverage")),
-					Option(Value(uistate.BudgetSortNearOverage), SelectedIf(sortVal == uistate.BudgetSortNearOverage), uistate.T("budgets.sortNear")),
-					Option(Value(uistate.BudgetSortUnderutilized), SelectedIf(sortVal == uistate.BudgetSortUnderutilized), uistate.T("budgets.sortUnderused")),
-					Option(Value(uistate.BudgetSortAmount), SelectedIf(sortVal == uistate.BudgetSortAmount), uistate.T("budgets.sortAmount")),
-					Option(Value(uistate.BudgetSortName), SelectedIf(sortVal == uistate.BudgetSortName), uistate.T("budgets.sortName")),
-				),
+	// July-19 review #2: a SINGLE control row. Everything that shapes the view (method,
+	// sort, compact layout) and every bulk tool lives inside one "Budget settings"
+	// popover, so the main flow is just: settings on the left, "+ Add budget" on the
+	// right — never a long stack of pickers and ghost buttons above the budgets.
+	//
+	// The View section (method / sort / compact) is kept OUTSIDE the auto-close wrapper
+	// so a picker click keeps the menu open; the Bulk-tools section sits inside a wrapper
+	// that closes the menu on click (each tool opens its own modal). Every control keeps
+	// its original data-testid so existing flows still resolve it.
+	viewSection := Div(css.Class("bud-set-sec"),
+		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionView")),
+		Label(css.Class("bud-set-field"),
+			Span(css.Class("bud-set-lbl"), uistate.T("settings.budgetMethod")),
+			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-method"),
+				Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+				Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
+				Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
+				Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
+				Option(Value(string(budgeting.MethodFlex)), SelectedIf(method == budgeting.MethodFlex), uistate.T("settings.budgetMethodFlex")),
 			),
 		),
-		// Row 2: the actions on their own tidy line, with the primary "+ Add budget"
-		// last so it clearly outranks the ghost controls.
+		Label(css.Class("bud-set-field"),
+			Span(css.Class("bud-set-lbl"), uistate.T("budgets.sortLabel")),
+			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-sort"),
+				Attr("aria-label", uistate.T("budgets.sortLabel")), Title(uistate.T("budgets.sortLabel")), OnChange(onSort),
+				Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortHealth")),
+				Option(Value(uistate.BudgetSortOverage), SelectedIf(sortVal == uistate.BudgetSortOverage), uistate.T("budgets.sortOverage")),
+				Option(Value(uistate.BudgetSortNearOverage), SelectedIf(sortVal == uistate.BudgetSortNearOverage), uistate.T("budgets.sortNear")),
+				Option(Value(uistate.BudgetSortUnderutilized), SelectedIf(sortVal == uistate.BudgetSortUnderutilized), uistate.T("budgets.sortUnderused")),
+				Option(Value(uistate.BudgetSortAmount), SelectedIf(sortVal == uistate.BudgetSortAmount), uistate.T("budgets.sortAmount")),
+				Option(Value(uistate.BudgetSortName), SelectedIf(sortVal == uistate.BudgetSortName), uistate.T("budgets.sortName")),
+			),
+		),
+		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
+			Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
+			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T(budgetDensityLabelKey(densityAtom.Get())))),
+	)
+	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeSettings),
+		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionTools")),
+		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
+			Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
+			uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+			Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
+		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-autobudget"),
+			Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
+			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
+		// #64: the guided month-close checklist.
+		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-month-close"),
+			Title(uistate.T("monthclose.offerTitle")), OnClick(openMonthClose),
+			uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("monthclose.offer"))),
+		// XC6: the leftover-sweep config modal.
+		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-sweep-config"),
+			Title(uistate.T("sweep.openConfig")), OnClick(openSweep),
+			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("sweep.openConfig"))),
+		// G2: percent-based bulk limit adjustment across every visible budget.
+		If(hasBudgets, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "budgets-adjust-all"),
+			Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
+			uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
+	)
+	toolbar := Div(css.Class("filter-toolbar budgets-tb"),
 		Div(css.Class("filter-toolbar-actions"),
-			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
-				Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
-				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T(budgetDensityLabelKey(densityAtom.Get())))),
-			// UX-05: ONE "Automate" menu holds the bulk tools (the four ghost buttons
-			// carried equal visual weight but none is an everyday action). Items keep
-			// their original data-testids. Same .add-wrap/.add-menu chrome as the row
+			// The one "Budget settings" popover. Same .add-wrap/.add-menu chrome as the row
 			// kebabs — viewport-aware via AnchorPopover, dismissed via DismissPopover.
-			Div(ClassStr("add-wrap"), Attr("id", "budgets-automate-wrap"),
+			Div(ClassStr("add-wrap"), Attr("id", "budgets-settings-wrap"),
 				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-					Attr("data-testid", "budgets-automate"), Attr("aria-haspopup", "menu"),
-					Attr("aria-expanded", ariaBool(autoMenuOpen.Get())),
-					Title(uistate.T("budgets.automateTitle")), OnClick(toggleAutoMenu),
-					uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("budgets.automate")),
+					Attr("data-testid", "budgets-settings"), Attr("aria-haspopup", "menu"),
+					Attr("aria-expanded", ariaBool(settingsOpen.Get())),
+					Title(uistate.T("budgetrefine.settingsTitle")), OnClick(toggleSettings),
+					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					Span(uistate.T("budgetrefine.settings")),
 					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
-				Div(ClassStr("add-backdrop"+hiddenIf(!autoMenuOpen.Get())), OnClick(closeAutoMenu)),
-				Div(ClassStr("add-menu"+hiddenIf(!autoMenuOpen.Get())), Attr("role", "menu"), OnClick(closeAutoMenu),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
-						Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
-						uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-						Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "budgets-autobudget"),
-						Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
-						uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
-					// #64: the guided month-close checklist.
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "budgets-month-close"),
-						Title(uistate.T("monthclose.offerTitle")), OnClick(openMonthClose),
-						uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("monthclose.offer"))),
-					// XC6: the leftover-sweep config modal.
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "budgets-sweep-config"),
-						Title(uistate.T("sweep.openConfig")), OnClick(openSweep),
-						uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("sweep.openConfig"))),
-					// G2: percent-based bulk limit adjustment across every visible budget.
-					If(hasBudgets, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "budgets-adjust-all"),
-						Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
-						uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
+				Div(ClassStr("add-backdrop"+hiddenIf(!settingsOpen.Get())), OnClick(closeSettings)),
+				Div(ClassStr("add-menu bud-set-menu"+hiddenIf(!settingsOpen.Get())), Attr("role", "menu"),
+					viewSection,
+					Div(css.Class("bud-set-sep")),
+					toolsSection,
 				),
 			),
 			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),

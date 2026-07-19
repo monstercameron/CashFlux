@@ -77,7 +77,10 @@ func txnUpcomingStrip(struct{}) ui.Node {
 		return Fragment()
 	}
 
-	const maxRows = 5
+	// Compressed strip (2026-07-19 two-row-toolbar pass): cap the ghost rows low so the
+	// pending preview stays a thin band above the ledger — the overflow rolls into the
+	// "+N more" line that clicks through to /recurring for the full schedule.
+	const maxRows = 3
 	shown := pending
 	extra := 0
 	if len(shown) > maxRows {

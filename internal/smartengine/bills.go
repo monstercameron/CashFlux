@@ -537,7 +537,7 @@ func bl3MissedBill(in Input) []smart.Insight {
 			Page:    smart.PageBills,
 			Key:     "SMART-BL3:" + a.ID + ":" + prevDue.Format("2006-01"),
 			Title:   a.Name + " may have been missed",
-			Detail: "The " + a.Name + " payment was due " + prevDue.Format("Jan 2") +
+			Detail: a.Name + " payment was due " + prevDue.Format("Jan 2") +
 				" but no payment is recorded since. Check whether it was paid.",
 			Severity: smart.SeverityAlert,
 		}.WithAmount(a.MinPayment.Abs()).

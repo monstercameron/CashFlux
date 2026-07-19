@@ -180,22 +180,30 @@ func notifSummaryWidget(props notifProps) ui.Node {
 				Count: crit, Active: f == "critical", OnPick: pick("critical"),
 			})),
 			Div(filtersArgs...),
-			If(func() bool {
-				for _, it := range visible {
-					if !it.Read {
-						return true
+			// Safe, non-destructive bulk actions grouped together (Mark all read +
+			// Alert settings). The destructive Clear all is deliberately split out of
+			// this group — see below — so a wipe isn't one slip away from "Mark all read".
+			Div(css.Class("notif-summary-safe"),
+				If(func() bool {
+					for _, it := range visible {
+						if !it.Read {
+							return true
+						}
 					}
-				}
-				return false
-			}(), Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-mark-all-read"),
-				Attr("aria-label", uistate.T("notifications.markAllReadAria")), OnClick(markAllRead),
-				Text(uistate.T("notifications.markAllRead")))),
-			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-clear-all"),
+					return false
+				}(), Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-mark-all-read"),
+					Attr("aria-label", uistate.T("notifications.markAllReadAria")), OnClick(markAllRead),
+					Text(uistate.T("notifications.markAllRead")))),
+				Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-alert-settings"),
+					Attr("aria-label", uistate.T("notifications.alertSettings")), OnClick(openAlertSettings),
+					Text(uistate.T("notifications.alertSettings"))),
+			),
+			// Destructive: pushed to the trailing edge, set off by a hairline, and
+			// styled as a danger action so it never reads as just another chip.
+			Span(css.Class("notif-summary-divider"), Attr("aria-hidden", "true")),
+			Button(css.Class("notif-clear notif-clear-danger"), Type("button"), Attr("data-testid", "notif-clear-all"),
 				Attr("aria-label", uistate.T("notifications.clearAllAria")), OnClick(clearAll),
 				Text(uistate.T("notifications.clearAll"))),
-			Button(css.Class("notif-clear"), Type("button"), Attr("data-testid", "notif-alert-settings"),
-				Attr("aria-label", uistate.T("notifications.alertSettings")), OnClick(openAlertSettings),
-				Text(uistate.T("notifications.alertSettings"))),
 		),
 		catchUp,
 	)

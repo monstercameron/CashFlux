@@ -462,23 +462,30 @@ func AccountRow(props accountRowProps) ui.Node {
 					Title(uistate.T("accounts.balanceTitle")),
 					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 					fmtMoney(dispBal))),
-			// Quick actions inline: ONE primary — Transactions (the highest-frequency
-			// navigation) — plus the conditional "Update value/balance" for accounts you
-			// actively maintain (stale/valuation, emphasized when stale). Everything else,
-			// Edit included, is demoted into the ⋯ menu so the resting row is a clean
-			// name → balance → [Transactions] [⋯] line instead of a wall of equal-weight
-			// buttons. The balance figure itself is already click-to-edit for updates.
+			// Quieter rows: exactly ONE contextual primary action, plus the ⋯ overflow.
+			// An account you actively maintain (stale or a valuation asset) leads with
+			// "Update value/balance" (emphasized amber when stale) — the thing that row
+			// most needs; every other row leads with the everyday "Transactions" nav.
+			// Whichever of the two is NOT the primary is demoted into the ⋯ menu, so the
+			// resting row is a clean name → balance → [primary] [⋯] line instead of a
+			// wall of equal-weight buttons. The balance figure itself is already
+			// click-to-edit for updates.
 			Div(css.Class("acct-row-actions"),
-				If(showValueInline, Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type))))),
-				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID),
+				IfElse(showValueInline,
+					Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type)))),
 					// 18 accounts render 18 "Transactions" buttons — the accessible
 					// name carries the account so they're distinguishable.
-					Title(uistate.T("accounts.viewTxnsTitle")), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name),
-					OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
+					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID),
+						Title(uistate.T("accounts.viewTxnsTitle")), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name),
+						OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
 				Div(css.Class("add-wrap"), Attr("id", menuID),
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")+" — "+a.Name), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+						// When "Update value/balance" is the row's inline primary (stale /
+						// valuation rows), the everyday Transactions nav is demoted here so it
+						// stays one click away without competing with the primary on the row.
+						If(showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name), Title(uistate.T("accounts.viewTxnsTitle")), OnClick(view), uistate.T("nav.transactions"))),
 						// Edit leads the menu — the most common of the demoted actions. (The
 						// everyday balance update stays inline / on the figure; Edit covers the
 						// rarer name/type/attribute changes.) Available on archived rows too,
