@@ -26186,3 +26186,24 @@ screenshots). Fix generalizes the `.goal-add` precedent: block-level rows get `.
 its browser-default chrome, and `.cond-slot-body` lays field/op/value in one wrapping
 minmax row. Verified by fresh-profile Playwright screenshot at 1440×900 against the live
 dev server: helper block now measures 1156px wide (was 157px), slot editors row correctly.
+
+## 2026-07-19 — UI/UX remediation lane B: twelve per-screen fixes + verification harness
+
+The 39-item review remediation ran two-laned today (lane A: responsive breakpoints, flip
+sizing, i18n sweep; this lane: per-screen fixes), with four short-lived subagents fanned out
+over disjoint file partitions — copy, transactions, goals/health, row-actions — then verified,
+wired, and committed centrally. Partition discipline held: the only shared files (install.go,
+the i18n catalog) were wired by the coordinator, and CHANGELOG/DEVLOG entries were batched to
+this catch-up because lane A held those files mid-commit.
+
+Verification is a Playwright sweep against the live dev build (fresh profile each run):
+16 DOM assertions + 19 screenshots across every touched surface — all passing, zero page
+errors. Notables from the pass: the "detached" account kebab from the review reproduced as
+AnchorPopover's open-up flip working exactly as designed (closed as not-a-bug, menu-length
+polish tracked separately); PostNotice is a NO-OP before the toast host mounts, so the muzak
+first-run notice needed a 2.5s post-mount deferral; and the goals "inline reset" false-alarm
+was the kebab's menu item nesting inside the actions row.
+
+Follow-ups queued: e2e updates for the two specs that click now-kebabbed buttons
+(gapfeatures bill-negotiate, lane6 subscription links), recurring date tiles, txn-row kebab
+polish, spending-highlight empty state, and the budgets View-spending period-scope question.

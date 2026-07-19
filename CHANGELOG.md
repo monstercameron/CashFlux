@@ -6,6 +6,42 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **UI/UX review remediation, lane B (2026-07-19)** — the per-screen half of the 39-item review,
+  landed as twelve path-scoped commits (`0f36cab8…85a228cd`; changelog entries consolidated here
+  because the file was under concurrent edit at commit time):
+  - **Accounts:** the Details disclosure reads as a designed sub-section (captioned 90-day
+    sparkline figure, top rule, real Set-institution link); the stale badge spells out
+    "47 days".
+  - **Subscriptions / Bills:** rows keep ONE inline action (Remind me / Mark paid); everything
+    else folds into the shared ⋯ kebab with testids preserved.
+  - **Goals:** collapsed cards carry the saved/set-aside legend, legend swatches sample the
+    bar's real status tint, the dashboard goal widget headlines the same combined coverage %
+    as /goals, and Reset-to-zero/Pause live in the kebab (danger-styled reset). Figure labels
+    read "Needed / month" / "Your plan / month".
+  - **Financial health:** factor meters encode the VALUE with a target tick, colored by
+    status — no more full-bar-because-on-target ambiguity.
+  - **Transactions:** bulk selection clears when the filter scope changes (no more armed
+    Delete on invisible rows); the cleared-status filter rests on "— Any —"; the saved-views
+    empty state loses its unsized giant plus; category/account cells carry full-text tooltips.
+  - **Review inbox:** cross-links the ready-made rule suggestions that could file most of the
+    queue.
+  - **Recurring:** "Post due now (0)" beside "Overdue 3" now explains itself — the button
+    posts auto-post flows only; overdue manual items say they're entered by hand.
+  - **To-do board:** lanes share the full pane width and the per-card Done pill reveals on
+    hover/focus (always visible on touch).
+  - **Notifications:** "Clear history" wears the same destructive styling as "Clear all".
+  - **Settings → Alerts:** threshold inputs sit beside their labels, indented under their
+    toggles.
+  - **Assistant:** flagged-activity rail lines carry full-text tooltips (kills the
+    "about $20...." four-dot artifact); the recap widget tooltips its clamped values.
+  - **Music:** a once-per-device notice announces that background music defaults on and where
+    the ♪ mute lives (the default itself is unchanged and deliberate).
+  - Earlier in the day, same lane: the /rules quick-add form-grid collapse fix and the
+    accounts Details panel structure (see their own commits), plus verified-not-a-bug findings
+    for the account-kebab "detached menu" (viewport-aware flip working correctly) recorded on
+    the task list.
+
 ### Changed
 - **i18n sweep, third tranche — the screens layer reaches ZERO hardcoded copy (2026-07-19):**
   every remaining user-facing English literal in `internal/screens` now flows through
