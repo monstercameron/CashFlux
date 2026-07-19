@@ -1032,6 +1032,9 @@ func acctListWidget(props acctListProps) ui.Node {
 	// page load — which otherwise re-booted the app and, with app-lock on, dropped
 	// the user onto the lock screen.
 	goToDebt := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/debt")) }))
+	// C365: the investment-section header's "Open investments" link. Declared
+	// unconditionally (stable hook position) alongside goToDebt.
+	goToInvestments := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/investments")) }))
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
@@ -1276,10 +1279,65 @@ func acctListWidget(props acctListProps) ui.Node {
 		),
 	)
 
+	// C365: an investment-section header linking Accounts to the holdings experience.
+	// Shown above the list whenever the household has investment accounts and the
+	// liabilities-only view isn't active (investments are assets). Its chips mirror the
+	// /investments summary hero (value / gain / return%), so the two pages agree.
+	var investBanner ui.Node = Fragment()
+	if classView != string(domain.ClassLiability) {
+		investBanner = acctInvestmentsBanner(app, goToInvestments)
+	}
+
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(section, debtLink),
+		Body: Div(investBanner, section, debtLink),
 	})
+}
+
+// acctInvestmentsBanner renders the Accounts investment-section header (C365): a
+// labelled strip with the portfolio value / gain / return% chips (from the shared
+// invest view, matching the /investments hero) and an "Open investments" link, so
+// the holdings experience is one click away. Renders nothing when the household has
+// no investment accounts. onOpen navigates to /investments (a stable hook from the
+// caller). Styled inline (theme tokens) so it needs no stylesheet rule.
+func acctInvestmentsBanner(app *appstate.App, onOpen ui.Handler) ui.Node {
+	v := computeInvestView(app)
+	if !v.HasAny {
+		return Fragment()
+	}
+	gainTone := tw.ColorClass(gainToneClass(v.SecSummary.TotalGainMinor))
+	chip := func(testid, label, value, toneFold string) ui.Node {
+		return Div(css.Class("acct-invest-chip"),
+			Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.1rem"}),
+			Span(css.Class("t-caption", tw.TextDim), label),
+			Span(ClassStr("acct-invest-chip-val "+tw.Fold(tw.FontDisplay)+toneFold), Attr("data-testid", testid), value),
+		)
+	}
+	toneCls := ""
+	if gainTone != "" {
+		toneCls = " " + gainTone
+	}
+	return Div(css.Class("acct-invest-banner"), Attr("data-testid", "acct-invest-banner"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("accountsInvest.bannerAria")),
+		Style(map[string]string{
+			"display": "flex", "flex-wrap": "wrap", "align-items": "center", "gap": "0.75rem 1.5rem",
+			"padding": "0.75rem 1rem", "margin": "0 0 0.75rem", "border": "1px solid var(--border)",
+			"border-radius": "0.5rem", "background": "var(--bg-card)",
+		}),
+		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+			Style(map[string]string{"margin-right": "auto"}),
+			uiw.Icon(icon.Reports, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextDim)),
+			Span(css.Class(tw.FontMedium), uistate.T("accountsInvest.sectionTitle")),
+		),
+		chip("acct-invest-value", uistate.T("accountsInvest.value"), fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec), ""),
+		chip("acct-invest-gain", uistate.T("accountsInvest.gain"), fmtSignedMoney(v.SecSummary.TotalGainMinor, v.Sym, v.Dec), toneCls),
+		chip("acct-invest-return", uistate.T("accountsInvest.returnPct"), strconv.FormatFloat(v.SecSummary.ReturnPct, 'f', 2, 64)+"%", toneCls),
+		Button(css.Class("btn-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "acct-open-investments"),
+			Title(uistate.T("accountsInvest.openTitle")), OnClick(onOpen),
+			Span(uistate.T("accountsInvest.open")),
+			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+	)
 }
 
 // --- acct-archived --------------------------------------------------------------

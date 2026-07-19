@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/valuation"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -191,6 +192,19 @@ func AccountRow(props accountRowProps) ui.Node {
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnView(a.ID) }))
+	// C365: investment/retirement/crypto rows deep-link to their holdings + growth
+	// card on /investments. The row navigates itself (like budgets_row) and sets the
+	// deep-link focus so the destination card scrolls into view and flashes once the
+	// page settles. The hook is always registered; the link renders only for
+	// investment accounts (isInvestmentAccount), so the AC "Accounts → holdings in
+	// one click" holds without a per-row prop.
+	nav := router.UseNavigate()
+	isInvest := isInvestmentAccount(a.Type) && !a.Archived
+	openHoldings := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		uistate.SetDeepLinkFocus(`[data-testid="invest-acct-` + a.ID + `"]`)
+		nav.Navigate(uistate.RoutePath("/investments"))
+	}))
 	// Notes are shown inline as a readable, clamped line that expands on click (a
 	// disclosure), so a note is actually legible in the row rather than hidden in a
 	// hover tooltip on a tiny glyph.
@@ -456,6 +470,17 @@ func AccountRow(props accountRowProps) ui.Node {
 						Attr("aria-expanded", ariaBool(detailsOpen.Get())),
 						Attr("aria-label", uistate.T("accountsRedesign.detailsAria", a.Name)),
 						OnClick(toggleDetails), detailsLabel),
+					// C365: investment accounts deep-link to their holdings + growth on
+					// /investments — a quiet link (not an everyday-action button), so the
+					// row still leads with exactly one inline action.
+					If(isInvest,
+						Button(css.Class("btn-link acct-holdings-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+							Attr("data-testid", "acct-holdings-link-"+a.ID),
+							Attr("aria-label", uistate.T("accountsInvest.viewHoldingsTitle")),
+							Title(uistate.T("accountsInvest.viewHoldingsTitle")),
+							OnClick(openHoldings),
+							uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+							Span(uistate.T("accountsInvest.viewHoldings")))),
 				),
 			),
 			// L100-T1: the headline balance carries an explicit accessible name to
