@@ -33,7 +33,10 @@ let body = await bodyText();
 const priceSection = body.includes("Recent price changes") ? body.slice(body.indexOf("Recent price changes")) : body;
 const badPrice = ["Cigarettes", "Gas (", "Pharmacy", "Electricity", "Takeout", "Holiday gifts"].filter((w) => priceSection.slice(0, 1500).includes(w));
 check("#49: price changes exclude essentials", badPrice.length === 0, badPrice.join(", ") || "clean");
-// local-first cancel: primary button files a checklist; web search is secondary
+// local-first cancel: primary button files a checklist; web search is secondary.
+// These actions live in the per-row ⋯ kebab now (UI/UX task #20) — open it first.
+const subKebab = page.locator('[data-testid^="sub-menu-btn-"]').first();
+if (await subKebab.count()) { await subKebab.click(); await page.waitForTimeout(400); }
 const cancelBtn = page.locator('[data-testid^="sub-howto-cancel-"]').first();
 if (await cancelBtn.count()) {
   const tag = await cancelBtn.evaluate((el) => el.tagName);

@@ -82,7 +82,9 @@ test.describe("gap features", () => {
 
   test("bill negotiation helper: 'negotiate' opens a task pre-filled with talking points", async ({ app }) => {
     await nav(app, "/bills");
-    await app.locator('[data-testid^="bill-negotiate-"]').first().click();
+    // Negotiate moved into the per-row ⋯ kebab (UI/UX task #21) — open it first.
+    await app.locator('[data-testid^="bill-menu-btn-"]').first().click();
+    await app.locator('.add-menu:not(.hidden-menu) [data-testid^="bill-negotiate-"]').first().click();
     const notes = app.locator("textarea.tc-notes").first();
     await expect(notes).toBeVisible();
     await expect(notes).toHaveValue(/competitor/i);
