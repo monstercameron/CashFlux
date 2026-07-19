@@ -130,10 +130,34 @@ func notifGroupRow(props notifGroupRowProps) ui.Node {
 // The last-seen stamp moved to uistate (UseNotifyLastSeen and friends) so the
 // shell's bell badge can share it — see QA CF-04.
 
-// UseNotifyView is the shared Live/History view selector for the Notifications
-// surface ("live" = the current feed, the default; "history" = the persisted
-// archive). Read by notifSurfaceShell.
+// UseNotifyView is the shared triage-view selector for the Notifications
+// surface. It has three values:
+//
+//   - "live"     — the "Needs you" queue (default): critical + warning items
+//     that ask for a decision or an action.
+//   - "watching" — the calm remainder (info notes, reminders, digests).
+//   - "history"  — the persisted archive.
+//
+// The default is "live" (Needs you) so opening the center shows a short list of
+// what actually wants the user, not a punishing wall of every alert ever fired.
+// Read by notifSurfaceShell and by the summary/list widgets (to partition the
+// feed). The "live" value is kept (rather than renamed to "needs") so the
+// long-standing notif-view-live testid keeps addressing the default tab.
 func UseNotifyView() state.Atom[string] { return state.UseAtom("notify:view", "live") }
+
+// triageVisibleFeed is the shared pipeline both notification widgets run to turn
+// the raw feed into the rows for the current triage view: hide snoozed items,
+// collapse exact-duplicate digests, then keep only the bucket the view selects
+// ("watching" → the calm remainder; anything else → the Needs-you queue). The
+// History view never calls this — the shell swaps in the archive instead.
+func triageVisibleFeed(view string, feed []uistate.FeedItem, now int64) []uistate.FeedItem {
+	visible := uistate.DedupeFeed(uistate.VisibleFeed(feed, now))
+	needs, watching := uistate.PartitionTriage(visible)
+	if view == "watching" {
+		return watching
+	}
+	return needs
+}
 
 // notifSurfaceShellProps carries the app handle plus the already-built live
 // surface node so the shell can swap it for the archive view without rebuilding.
@@ -159,13 +183,19 @@ func notifSurfaceShell(props notifSurfaceShellProps) ui.Node {
 		return nil
 	}, "notif-archive-sync")
 
-	setLive := ui.UseEvent(Prevent(func() { view.Set("live") }))
+	setNeeds := ui.UseEvent(Prevent(func() { view.Set("live") }))
+	setWatching := ui.UseEvent(Prevent(func() { view.Set("watching") }))
 	setHistory := ui.UseEvent(Prevent(func() { view.Set("history") }))
 
-	toggle := Div(css.Class("nhx-toggle"), Attr("role", "tablist"), Attr("aria-label", uistate.T("nav.notifications")),
+	// Three triage tabs: Needs you (default) / Watching / History. The default
+	// tab keeps the notif-view-live testid so existing coverage still resolves it.
+	toggle := Div(css.Class("nhx-toggle"), Attr("role", "tablist"), Attr("aria-label", uistate.T("notifications.triageViewLabel")),
 		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
-			Attr("data-testid", "notif-view-live"), Attr("aria-selected", ariaBool(cur != "history")),
-			OnClick(setLive), Text(uistate.T("notifHistory.live"))),
+			Attr("data-testid", "notif-view-live"), Attr("aria-selected", ariaBool(cur != "history" && cur != "watching")),
+			OnClick(setNeeds), Text(uistate.T("notifications.triageNeedsYou"))),
+		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
+			Attr("data-testid", "notif-view-watching"), Attr("aria-selected", ariaBool(cur == "watching")),
+			OnClick(setWatching), Text(uistate.T("notifications.triageWatching"))),
 		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
 			Attr("data-testid", "notif-view-history"), Attr("aria-selected", ariaBool(cur == "history")),
 			OnClick(setHistory), Text(uistate.T("notifHistory.history"))),

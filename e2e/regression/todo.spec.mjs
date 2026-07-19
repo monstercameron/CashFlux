@@ -8,6 +8,8 @@ test.describe("todo: condition-triggered suggestions", () => {
     await nav(app, "/todo");
     const strip = app.getByTestId("todo-suggest-strip");
     await expect(strip).toBeVisible();
+    // The section now sits below the committed list and starts collapsed — expand it.
+    await app.getByTestId("todo-suggest-toggle").click();
     const rows = strip.locator('[data-testid^="todo-suggest-"][data-testid*=":"], [data-testid^="todo-suggest-stale"], [data-testid^="todo-suggest-overspent"], [data-testid="todo-suggest-unreviewed"]');
     const before = await rows.count();
     expect(before).toBeGreaterThan(0);

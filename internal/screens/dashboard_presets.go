@@ -5,9 +5,6 @@
 package screens
 
 import (
-	"time"
-
-	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -83,62 +80,12 @@ func applyDashPreset(layoutAtom state.Atom[[]dashlayout.Item], modeAtom state.At
 	return true
 }
 
-// dashDailyNudge is the one-time Daily check-in recommendation (#76): once the
-// household is past its first week of activity and still lives on the full
-// "Everything" grid, a quiet strip suggests the calmer curated view. Accept
-// applies the daily preset through the shared path; decline keeps Everything.
-// Either answer is remembered forever, and choosing any Focus view manually
-// suppresses it too — this is a suggestion, not a nag.
-func dashDailyNudge(_ struct{}) ui.Node {
-	layoutAtom := uistate.UseLayoutItems()
-	modeAtom := uistate.UseLayoutMode()
-	tick := ui.UseState(0)
-	_ = tick.Get()
-	onUse := ui.UseEvent(func() {
-		uistate.MarkDashDailyNudgeAnswered()
-		applyDashPreset(layoutAtom, modeAtom, "daily")
-		tick.Set(tick.Get() + 1)
-	})
-	onKeep := ui.UseEvent(func() {
-		uistate.MarkDashDailyNudgeAnswered()
-		// Record the choice as the "default" (Everything) view WITHOUT applying
-		// the preset layout — the user said keep, so nothing may move. The Focus
-		// select then shows "Everything (default)" instead of lying with its
-		// "Choose a view…" placeholder (2026-07-18 assessment).
-		uistate.PersistDashPreset("default")
-		uistate.RequestPersist()
-		tick.Set(tick.Get() + 1)
-	})
-
-	app := appstate.Default
-	if app == nil || uistate.DashDailyNudgeAnswered() || uistate.LoadDashPreset() != "" {
-		return Fragment()
-	}
-	// "First week of use" proxy: the ledger has activity older than seven days.
-	// A brand-new household setting things up never sees this strip.
-	weekAgo := time.Now().AddDate(0, 0, -7)
-	pastFirstWeek := false
-	for _, t := range app.Transactions() {
-		if t.Date.Before(weekAgo) {
-			pastFirstWeek = true
-			break
-		}
-	}
-	if !pastFirstWeek {
-		return Fragment()
-	}
-	return Div(css.Class("dash-daily-nudge"), Attr("data-testid", "dash-daily-nudge"),
-		Span(css.Class("dash-daily-nudge-text"), uistate.T("dashboard.dailyNudgeText")),
-		Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-			Attr("data-testid", "dash-daily-nudge-use"),
-			Attr("title", uistate.T("dashboard.dailyNudgeUseTitle")),
-			OnClick(onUse), uistate.T("dashboard.dailyNudgeUse")),
-		Button(css.Class("btn btn-sm"), Type("button"),
-			Attr("data-testid", "dash-daily-nudge-keep"),
-			Attr("title", uistate.T("dashboard.dailyNudgeKeepTitle")),
-			OnClick(onKeep), uistate.T("dashboard.dailyNudgeKeep")),
-	)
-}
+// The one-time Daily check-in recommendation (dashDailyNudge) was removed in the
+// July 2026 UX pass: the review flagged it as noise on the dashboard's first
+// viewport, since it only ever appeared for households already past their first
+// week of use — the very people who don't need onboarding prompts. The Focus view
+// picker (dashPresetPicker) remains the discoverable, opt-in way to switch to a
+// calmer curated layout.
 
 // layoutEditToggle flips the dashboard's edit-layout mode (#76): outside it the
 // tiles hide their drag grips and resize handles and pointer drag is off, so

@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -77,6 +79,10 @@ func goalsWaterfallCard() ui.Node {
 		uistate.RequestPersist()
 		hidden.Set(true)
 	})
+	// The funding plan opens as a single one-line review banner and expands on demand,
+	// so a landed paycheck no longer drops a large always-open block onto the page.
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 
 	// Priority-ordered funding lines. Name on the left, amount right-aligned in its own
 	// column (tabular figures) so the dollar amounts line up regardless of goal-name
@@ -94,31 +100,62 @@ func goalsWaterfallCard() ui.Node {
 			uistate.T("goals.waterfallRemainder", waterfallAmount(proposal.RemainderMinor, base)))
 	}
 
-	return Div(
-		css.Class("catchup-card"),
-		Attr("role", "status"),
-		Attr("data-testid", "goals-waterfall-card"),
-		Attr("aria-label", uistate.T("goals.waterfallAria")),
-		// ItemsStart: this card lays out as a column, so left-align every row — the shared
-		// .catchup-card-body centers children (for its single-row variant), which would
-		// otherwise center the plan lines + action buttons against the left-aligned intro.
-		Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol, tw.ItemsStart),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Span(css.Class("catchup-card-icon"), "💧"),
-				Div(css.Class("catchup-card-text"),
-					Strong(uistate.T("goals.waterfallTitle")),
-					P(uistate.T("goals.waterfallBody", incomeStr)),
+	chev := icon.ChevronDown
+	if open.Get() {
+		chev = icon.ChevronUp
+	}
+	// One-line review banner — always shown; the plan + actions live behind its toggle.
+	banner := Button(css.Class("wf-review-banner"), Type("button"),
+		Attr("data-testid", "goals-waterfall-toggle"),
+		Attr("aria-expanded", ariaBool(open.Get())),
+		Title(uistate.T("bgpolish.wfBannerExpand")), OnClick(toggle),
+		Span(css.Class("wf-review-icon"), "💧"),
+		Span(css.Class("wf-review-title"), uistate.T("bgpolish.wfBannerTitle")),
+		Span(css.Class("wf-review-ready"), uistate.T("bgpolish.wfBannerReady", fundedStr)),
+		uiw.Icon(chev, css.Class("wf-review-chev", tw.ShrinkO, tw.W35, tw.H35)),
+	)
+
+	outer := func(children ...ui.Node) ui.Node {
+		attrs := []any{
+			css.Class(tw.FlexCol, tw.Gap2),
+			Attr("role", "status"),
+			Attr("data-testid", "goals-waterfall-card"),
+			Attr("aria-label", uistate.T("goals.waterfallAria")),
+			Style(map[string]string{"display": "flex"}),
+		}
+		for _, c := range children {
+			attrs = append(attrs, c)
+		}
+		return Div(attrs...)
+	}
+
+	if !open.Get() {
+		return outer(banner)
+	}
+
+	return outer(banner,
+		Div(css.Class("catchup-card"),
+			// ItemsStart: this card lays out as a column, so left-align every row — the shared
+			// .catchup-card-body centers children (for its single-row variant), which would
+			// otherwise center the plan lines + action buttons against the left-aligned intro.
+			Div(css.Class("catchup-card-body", tw.Flex, tw.FlexCol, tw.ItemsStart),
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+					Span(css.Class("catchup-card-icon"), "💧"),
+					Div(css.Class("catchup-card-text"),
+						Strong(uistate.T("goals.waterfallTitle")),
+						P(uistate.T("goals.waterfallBody", incomeStr)),
+					),
 				),
-			),
-			Ul(css.Class("wf-lines", tw.Mt2, tw.FlexCol, tw.Gap1), Attr("data-testid", "goals-waterfall-lines"), lineNodes),
-			remainderNode,
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
-				Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-					Attr("data-testid", "goals-waterfall-approve"), OnClick(onApprove),
-					uistate.T("goals.waterfallApprove", fundedStr)),
-				Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-					Attr("data-testid", "goals-waterfall-dismiss"), OnClick(onDismiss),
-					uistate.T("goals.waterfallDismiss")),
+				Ul(css.Class("wf-lines", tw.Mt2, tw.FlexCol, tw.Gap1), Attr("data-testid", "goals-waterfall-lines"), lineNodes),
+				remainderNode,
+				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
+					Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+						Attr("data-testid", "goals-waterfall-approve"), OnClick(onApprove),
+						uistate.T("goals.waterfallApprove", fundedStr)),
+					Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
+						Attr("data-testid", "goals-waterfall-dismiss"), OnClick(onDismiss),
+						uistate.T("goals.waterfallDismiss")),
+				),
 			),
 		),
 	)

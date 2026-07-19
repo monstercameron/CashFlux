@@ -305,8 +305,10 @@ func heroSummary(props heroSummaryProps) ui.Node {
 			ui.CreateElement(layoutEditToggle, struct{}{}),
 		),
 
-		// #76: one-time Daily check-in recommendation after the first week.
-		ui.CreateElement(dashDailyNudge, struct{}{}),
+		// The one-time "settle into a calmer view" recommendation was removed: the
+		// July 2026 review flagged it as noise on the most-viewed page (it surfaced
+		// precisely for already-engaged households, past their first week). The Focus
+		// view picker above remains the discoverable, non-nagging entry point.
 
 		// Quote of the day (opt-in AI Smart+ feature) — a calm footer ribbon.
 		ui.CreateElement(heroQuote, struct{}{}),

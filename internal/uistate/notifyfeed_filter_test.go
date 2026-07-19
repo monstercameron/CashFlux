@@ -140,6 +140,53 @@ func TestNewSinceLastSeen(t *testing.T) {
 	}
 }
 
+func TestPartitionTriage(t *testing.T) {
+	items := []uistate.FeedItem{
+		{ID: "crit", Severity: "critical"},
+		{ID: "info1", Severity: "info"},
+		{ID: "warn", Severity: "warning"},
+		{ID: "legacy", Severity: ""}, // empty severity == info
+		{ID: "info2", Severity: "info"},
+	}
+	needs, watching := uistate.PartitionTriage(items)
+	if got := ids(needs); len(got) != 2 || got[0] != "crit" || got[1] != "warn" {
+		t.Errorf("needs bucket = %v, want [crit warn]", got)
+	}
+	if got := ids(watching); len(got) != 3 || got[0] != "info1" || got[1] != "legacy" || got[2] != "info2" {
+		t.Errorf("watching bucket = %v, want [info1 legacy info2]", got)
+	}
+
+	// Empty input yields two empty (non-nil) slices.
+	n, w := uistate.PartitionTriage(nil)
+	if len(n) != 0 || len(w) != 0 {
+		t.Errorf("empty input: got needs=%v watching=%v, want both empty", ids(n), ids(w))
+	}
+}
+
+func TestDedupeFeed(t *testing.T) {
+	items := []uistate.FeedItem{
+		{ID: "a1", Title: "Backup ran", Body: "Your data was backed up."},
+		{ID: "a2", Title: "Backup ran", Body: "Your data was backed up."}, // exact dup of a1
+		{ID: "b", Title: "Bill due", Body: "Rent is due tomorrow."},
+		{ID: "c", Title: "Bill due", Body: "Gym is due tomorrow."}, // same title, different body — kept
+		{ID: "a3", Title: "Backup ran", Body: "Your data was backed up."}, // another dup
+	}
+	got := uistate.DedupeFeed(items)
+	want := []string{"a1", "b", "c"}
+	if g := ids(got); len(g) != len(want) {
+		t.Fatalf("DedupeFeed returned %v, want IDs %v", g, want)
+	}
+	for i, w := range want {
+		if got[i].ID != w {
+			t.Errorf("item[%d]: got %q, want %q", i, got[i].ID, w)
+		}
+	}
+	// Input slice must be untouched.
+	if len(items) != 5 {
+		t.Errorf("DedupeFeed mutated the input slice length: %d", len(items))
+	}
+}
+
 func ids(items []uistate.FeedItem) []string {
 	out := make([]string, len(items))
 	for i, it := range items {

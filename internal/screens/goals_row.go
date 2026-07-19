@@ -230,7 +230,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	case complete:
 		cardState, barClass = "is-done", "done"
 	case financial:
-		cardState, barClass = goalCardStateClass(pace, complete), paceBarClass(pace)
+		cardState, barClass = goalCardState(pace, props.Health, complete)
 	case !g.TargetDate.IsZero() && g.TargetDate.Before(now):
 		cardState, barClass = "is-overdue", "overdue"
 	default:
@@ -290,7 +290,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	// one fact, one place.)
 	var paceBadgeNode, fundChip, streakChip ui.Node = Fragment(), Fragment(), Fragment()
 	if financial {
-		paceBadgeNode = paceBadge(pace)
+		paceBadgeNode = goalPaceBadge(pace, props.Health)
 		if g.IsSinkingFund && props.FundSetAside > 0 {
 			fundAmt := money.New(props.FundSetAside, g.CurrentAmount.Currency)
 			fundChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "fund-setaside-"+g.ID),
@@ -1056,17 +1056,27 @@ func goalFig(label, value string) ui.Node {
 
 // goalCardStateClass tints a goal card by its pace: a green stripe on-track, amber when
 // due soon / in the final stretch, red when overdue, a calm "done" when complete.
-func goalCardStateClass(p goalsvc.Pace, complete bool) string {
-	if complete {
-		return "is-done"
-	}
-	switch p {
-	case goalsvc.PaceOverdue:
-		return "is-overdue"
-	case goalsvc.PaceDueSoon, goalsvc.PaceFinalStretch:
-		return "is-soon"
+// goalCardState returns the card tint and progress-bar fill classes for a financial
+// goal, layering the shared health verdict onto the calendar pace so the card's TONE
+// matches its badge: an At-risk goal reads red (is-atrisk), a Watch/due-soon goal amber
+// (is-soon), and only a verified on-track (or unjudged) goal reads calm. Priority
+// mirrors goalPaceBadge so tint and badge never disagree.
+func goalCardState(p goalsvc.Pace, h goalsvc.Health, complete bool) (cardState, barClass string) {
+	switch {
+	case complete:
+		return "is-done", "done"
+	case p == goalsvc.PaceOverdue:
+		return "is-overdue", "overdue"
+	case p == goalsvc.PaceFinalStretch:
+		return "is-soon", "final"
+	case h == goalsvc.HealthAtRisk:
+		return "is-atrisk", "atrisk"
+	case h == goalsvc.HealthWatch:
+		return "is-soon", "soon"
+	case p == goalsvc.PaceDueSoon:
+		return "is-soon", "soon"
 	default:
-		return "is-ontrack"
+		return "is-ontrack", ""
 	}
 }
 

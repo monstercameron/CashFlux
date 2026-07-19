@@ -93,6 +93,14 @@ type Config struct {
 	HTTPRateLimitPerMinute            int
 	HTTPUserRateLimitPerMinute        int
 	AuthRateLimitPerMinute            int
+	// TrustedProxies is the set of networks whose requests may carry a trustworthy
+	// X-Forwarded-For / X-Real-IP header. IP-based rate limiting honors those
+	// forwarding headers ONLY when the direct peer (RemoteAddr) falls inside one of
+	// these networks; for any other peer the headers are attacker-controlled and are
+	// ignored, so a client cannot spoof X-Forwarded-For to bypass the limiter or
+	// exhaust its bucket map. Empty means "trust no forwarding headers" (use the
+	// socket peer address directly) — the safe default when no reverse proxy is set.
+	TrustedProxies []*net.IPNet
 	AuditRetentionDays                int
 	SnapshotHistoryRetentionDays      int
 	BackupRetentionDays               int
@@ -179,6 +187,11 @@ func FromEnv() (Config, error) {
 	cfg.HTTPRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.HTTPUserRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.AuthRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE", 20))
+	trustedProxies, err := parseTrustedProxies(os.Getenv("CASHFLUX_SERVER_TRUSTED_PROXIES"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.TrustedProxies = trustedProxies
 	cfg.AuditRetentionDays = int(envInt64("CASHFLUX_SERVER_AUDIT_RETENTION_DAYS", 365))
 	cfg.SnapshotHistoryRetentionDays = int(envInt64("CASHFLUX_SERVER_SNAPSHOT_HISTORY_RETENTION_DAYS", 180))
 	cfg.BackupRetentionDays = int(envInt64("CASHFLUX_SERVER_BACKUP_RETENTION_DAYS", 30))
@@ -402,6 +415,39 @@ func envCSV(key string) []string {
 		}
 	}
 	return out
+}
+
+// parseTrustedProxies parses a comma-separated list of trusted-proxy networks from
+// an env value. Each entry is a CIDR ("10.0.0.0/8", "::1/128") or a bare IP
+// ("203.0.113.9", which is treated as a /32 or /128). An unparsable entry is a
+// hard config error rather than a silent skip — a typo here must not quietly widen
+// or narrow who the server trusts to set forwarding headers.
+func parseTrustedProxies(raw string) ([]*net.IPNet, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var nets []*net.IPNet
+	for _, part := range strings.Split(raw, ",") {
+		entry := strings.TrimSpace(part)
+		if entry == "" {
+			continue
+		}
+		if _, network, err := net.ParseCIDR(entry); err == nil {
+			nets = append(nets, network)
+			continue
+		}
+		ip := net.ParseIP(entry)
+		if ip == nil {
+			return nil, fmt.Errorf("server: trusted proxy %q is not a valid IP or CIDR", entry)
+		}
+		bits := 32
+		if ip.To4() == nil {
+			bits = 128
+		}
+		nets = append(nets, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+	}
+	return nets, nil
 }
 
 func oauthProvidersFromEnv() map[string]OAuthProviderConfig {

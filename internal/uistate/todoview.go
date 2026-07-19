@@ -23,6 +23,19 @@ func UseTodoView() state.Atom[string] { return state.UseAtom("todo:view", TodoVi
 // UseTodoBoardGroup returns the board's group-by mode ("status" or "priority").
 func UseTodoBoardGroup() state.Atom[string] { return state.UseAtom("todo:boardGroup", "status") }
 
+// UseTodoQuickView returns the shared quick-view lens for the To-do workspace: "all"
+// (default), "today" (open tasks due today), or "overdue" (open tasks past due) — a
+// tasksort.QuickView string. The command bar renders it as a segmented control; the
+// list tile narrows the visible set through tasksort.FilterQuickView. In-session only.
+func UseTodoQuickView() state.Atom[string] { return state.UseAtom("todo:quickView", "all") }
+
+// UseTodoSuggestOpen returns the expand/collapse state for the To-do workspace's
+// "Suggested for you" section — the deterministic condition nudges, now shown in a
+// clearly-labeled section BELOW the user's committed tasks (not above them). Default
+// false = collapsed, so suggestions never crowd the user's own list; the labeled
+// header expands them on demand. In-session only.
+func UseTodoSuggestOpen() state.Atom[bool] { return state.UseAtom("todo:suggestOpen", false) }
+
 // UseTodoCalOffset returns the calendar view's month offset from the current month
 // (0 = this month, -1 = last month, +1 = next). The prev/next chevrons step it; it
 // resets naturally each session.

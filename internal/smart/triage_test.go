@@ -55,6 +55,43 @@ func TestFilterInsights(t *testing.T) {
 	}
 }
 
+func TestNeedsAttention(t *testing.T) {
+	cases := map[Severity]bool{
+		SeverityInfo:  false,
+		SeverityNudge: false,
+		SeverityWarn:  true,
+		SeverityAlert: true,
+	}
+	for sev, want := range cases {
+		if got := NeedsAttention(Insight{Severity: sev}); got != want {
+			t.Errorf("NeedsAttention(%v) = %v, want %v", sev, got, want)
+		}
+	}
+}
+
+func TestDedupeInsights(t *testing.T) {
+	in := []Insight{
+		{Key: "a", Title: "Low balance before payday", Detail: "Checking dips to -$40"},
+		{Key: "b", Title: "Low balance before payday", Detail: "Checking dips to -$40"}, // dup of a
+		{Key: "c", Title: "Low balance before payday", Detail: "Savings dips to -$5"},   // same title, diff detail
+		{Key: "d", Title: "Idle cash", Detail: "consider moving"},
+		{Key: "e", Title: "Low balance before payday", Detail: "Checking dips to -$40"}, // dup of a
+	}
+	got := DedupeInsights(in)
+	want := []string{"a", "c", "d"}
+	if len(got) != len(want) {
+		t.Fatalf("DedupeInsights returned %d, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i].Key != w {
+			t.Errorf("got[%d] = %q, want %q", i, got[i].Key, w)
+		}
+	}
+	if len(in) != 5 {
+		t.Error("input must not be mutated")
+	}
+}
+
 func TestSortInsightsBy(t *testing.T) {
 	byKeys := func(in []Insight) []string {
 		out := make([]string, len(in))

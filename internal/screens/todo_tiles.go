@@ -117,6 +117,7 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	page := uistate.UseTodoPage()
 	view := uistate.UseTodoView()
 	boardGroup := uistate.UseTodoBoardGroup()
+	quickView := uistate.UseTodoQuickView()
 
 	// Changing any filter/search/sort resets to the first page so the view can't land on a
 	// now-empty page.
@@ -176,6 +177,11 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	setViewBoard := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewBoard) }))
 	setViewCal := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewCalendar) }))
 	onBoardGroup := ui.UseEvent(func(e ui.Event) { boardGroup.Set(e.GetValue()) })
+	// Quick-view lens (All / Today / Overdue): three fixed buttons, so their handlers sit
+	// at stable hook positions (not a loop). Switching resets to page 1.
+	setQuickAll := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickAll)); page.Set(1) }))
+	setQuickToday := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickToday)); page.Set(1) }))
+	setQuickOverdue := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickOverdue)); page.Set(1) }))
 	curView := view.Get()
 	tvwCls := func(on bool) string {
 		if on {
@@ -205,6 +211,26 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 		)
 	}
 
+	// Quick-view segmented control (All / Today / Overdue), badged with how many open
+	// tasks are due today / past due. Shares the .todo-viewswitch chrome with the
+	// display-view switch so the two read as one system.
+	qc := tasksort.CountQuickViews(props.App.Tasks(), dateutil.FormatDate(time.Now()))
+	cq := tasksort.ParseQuickView(quickView.Get())
+	quickBadge := func(n int) ui.Node {
+		if n <= 0 {
+			return Fragment()
+		}
+		return Span(css.Class("tvw-count"), fmt.Sprintf("%d", n))
+	}
+	quickSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.lensLabel")),
+		Button(ClassStr(tvwCls(cq == tasksort.QuickAll)), Type("button"), Attr("data-testid", "todo-quick-all"),
+			Attr("aria-pressed", ariaBool(cq == tasksort.QuickAll)), OnClick(setQuickAll), uistate.T("todo.lensAll")),
+		Button(ClassStr(tvwCls(cq == tasksort.QuickToday)), Type("button"), Attr("data-testid", "todo-quick-today"),
+			Attr("aria-pressed", ariaBool(cq == tasksort.QuickToday)), OnClick(setQuickToday), uistate.T("todo.lensToday"), quickBadge(qc.Today)),
+		Button(ClassStr(tvwCls(cq == tasksort.QuickOverdue)+" is-overdue"), Type("button"), Attr("data-testid", "todo-quick-overdue"),
+			Attr("aria-pressed", ariaBool(cq == tasksort.QuickOverdue)), OnClick(setQuickOverdue), uistate.T("todo.lensOverdue"), quickBadge(qc.Overdue)),
+	)
+
 	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
 		hideLabel = uistate.T("todo.showAll")
@@ -220,76 +246,85 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	if search.Get() != "" {
 		searchCls += " is-active"
 	}
-	// A cohesive filter strip: a search box leads, then sort + priority + "linked to" pill
-	// selects and a hide-done toggle, with the primary Add task pushed to the right. The
-	// strip layout is shared with /goals (.filter-strip).
-	toolbar := Div(css.Class("filter-toolbar"),
-		// Row 1: the search fills the line (standard two-row toolbar, matching
-		// transactions/accounts/budgets). Row 2 holds the sort/priority/linked selects,
-		// the hide-done toggle, and the primary Add task.
-		Div(css.Class("filter-toolbar-primary"),
-			viewSwitch,
-			Label(ClassStr(searchCls),
-				uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
-					Attr("aria-label", uistate.T("todo.searchLabel")), Placeholder(uistate.T("todo.searchPlaceholder")),
-					Value(search.Get()), OnInput(onSearch)),
-				If(search.Get() != "", Button(css.Class("todo-search-clear"), Type("button"), Attr("data-testid", "todo-search-clear"),
-					Attr("aria-label", uistate.T("todo.searchClear")), OnClick(clearSearch), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
-			),
+	// One standardized command bar (not a scattered tool collection): LEFT = search +
+	// the active display view; MIDDLE = the quick-view lens, sort, and the task filters;
+	// RIGHT = a single primary action (Add task) and one "More" menu for uncommon tools
+	// (the checklist templates). Zones are laid out by .todo-cmdbar (registerTodoPolish).
+	searchCtrl := Label(ClassStr(searchCls),
+		uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+		Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
+			Attr("aria-label", uistate.T("todo.searchLabel")), Placeholder(uistate.T("todo.searchPlaceholder")),
+			Value(search.Get()), OnInput(onSearch)),
+		If(search.Get() != "", Button(css.Class("todo-search-clear"), Type("button"), Attr("data-testid", "todo-search-clear"),
+			Attr("aria-label", uistate.T("todo.searchClear")), OnClick(clearSearch), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+	)
+	sortCtrl := Label(css.Class("todo-ctrl"),
+		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+		Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
+		Select(css.Class("todo-select"), Attr("data-testid", "todo-sort"), Attr("aria-label", uistate.T("todo.sortLabel")), OnChange(onSort),
+			Option(Value("smart"), SelectedIf(sm == "smart"), uistate.T("todo.sortSmart")),
+			Option(Value("priority"), SelectedIf(sm == "priority"), uistate.T("todo.sortPriority")),
+			Option(Value("due"), SelectedIf(sm == "due"), uistate.T("todo.sortDue")),
+			Option(Value("az"), SelectedIf(sm == "az"), uistate.T("todo.sortAZ")),
+			Option(Value("manual"), SelectedIf(sm == "manual"), uistate.T("todo.sortManual")),
 		),
-		Div(css.Class("filter-toolbar-actions"),
+	)
+	prioCtrl := Label(css.Class("todo-ctrl"),
+		Span(css.Class("todo-ctrl-label"), uistate.T("todo.showShort")),
+		Select(css.Class("todo-select"), Attr("data-testid", "todo-filter-prio"), Attr("aria-label", uistate.T("todo.filterPrioLabel")), OnChange(onFilterPrio),
+			Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
+			Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
+			Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
+			Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
+		),
+	)
+	linkCtrl := Label(css.Class("todo-ctrl"),
+		uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+		Span(css.Class("todo-ctrl-label"), uistate.T("todo.linkFilterShort")),
+		Select(css.Class("todo-select"), Attr("data-testid", "todo-filter-link"), Attr("aria-label", uistate.T("todo.linkFilterLabel")), OnChange(onLink),
+			Option(Value(uistate.TodoLinkAll), SelectedIf(lf == uistate.TodoLinkAll), uistate.T("todo.linkFilterAll")),
+			Option(Value(uistate.TodoLinkGoal), SelectedIf(lf == uistate.TodoLinkGoal), uistate.T("todo.linkGoalPl")),
+			Option(Value(uistate.TodoLinkBudget), SelectedIf(lf == uistate.TodoLinkBudget), uistate.T("todo.linkBudgetPl")),
+			Option(Value(uistate.TodoLinkAccount), SelectedIf(lf == uistate.TodoLinkAccount), uistate.T("todo.linkAccountPl")),
+			Option(Value(uistate.TodoLinkTransaction), SelectedIf(lf == uistate.TodoLinkTransaction), uistate.T("todo.linkTransactionPl")),
+			Option(Value(uistate.TodoLinkNone), SelectedIf(lf == uistate.TodoLinkNone), uistate.T("todo.linkFilterNone")),
+		),
+	)
+	hideToggle := Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
+		Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel))
+	// One "More" menu for the uncommon tools — the checklist templates (month-end close
+	// / tax-prep) that instantiate a parent task + ordered steps.
+	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerText:   uistate.T("todo.moreTools"),
+		TriggerLabel:  uistate.T("todo.moreTools"),
+		TriggerTestID: "todo-checklists-btn",
+		TriggerClass:  "btn btn-tool",
+		Items: []uiw.OverflowMenuItem{
+			{Label: uistate.T("todo.checklistMonthEnd"), Icon: icon.Calendar, TestID: "todo-checklist-monthend", OnSelect: addMonthEndClose},
+			{Label: uistate.T("todo.checklistTaxPrep"), Icon: icon.FileText, TestID: "todo-checklist-taxprep", OnSelect: addTaxPrep},
+		},
+	})
+	addBtn := Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
+		uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(uistate.T("todo.addTask")))
+
+	toolbar := Div(css.Class("todo-cmdbar"),
+		Div(css.Class("cmdbar-group cmdbar-left"),
+			searchCtrl,
+			viewSwitch,
+		),
+		Div(css.Class("cmdbar-group cmdbar-mid"),
+			quickSwitch,
 			boardGroupCtrl,
-			Label(css.Class("todo-ctrl"),
-				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
-				Select(css.Class("todo-select"), Attr("data-testid", "todo-sort"), Attr("aria-label", uistate.T("todo.sortLabel")), OnChange(onSort),
-					Option(Value("smart"), SelectedIf(sm == "smart"), uistate.T("todo.sortSmart")),
-					Option(Value("priority"), SelectedIf(sm == "priority"), uistate.T("todo.sortPriority")),
-					Option(Value("due"), SelectedIf(sm == "due"), uistate.T("todo.sortDue")),
-					Option(Value("az"), SelectedIf(sm == "az"), uistate.T("todo.sortAZ")),
-					Option(Value("manual"), SelectedIf(sm == "manual"), uistate.T("todo.sortManual")),
-				),
-			),
-			Label(css.Class("todo-ctrl"),
-				Span(css.Class("todo-ctrl-label"), uistate.T("todo.showShort")),
-				Select(css.Class("todo-select"), Attr("data-testid", "todo-filter-prio"), Attr("aria-label", uistate.T("todo.filterPrioLabel")), OnChange(onFilterPrio),
-					Option(Value(""), SelectedIf(filterPrio.Get() == ""), uistate.T("todo.filterPrioAll")),
-					Option(Value(string(domain.PriorityHigh)), SelectedIf(filterPrio.Get() == string(domain.PriorityHigh)), uistate.T("priority.high")),
-					Option(Value(string(domain.PriorityMedium)), SelectedIf(filterPrio.Get() == string(domain.PriorityMedium)), uistate.T("priority.medium")),
-					Option(Value(string(domain.PriorityLow)), SelectedIf(filterPrio.Get() == string(domain.PriorityLow)), uistate.T("priority.low")),
-				),
-			),
-			Label(css.Class("todo-ctrl"),
-				uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(css.Class("todo-ctrl-label"), uistate.T("todo.linkFilterShort")),
-				Select(css.Class("todo-select"), Attr("data-testid", "todo-filter-link"), Attr("aria-label", uistate.T("todo.linkFilterLabel")), OnChange(onLink),
-					Option(Value(uistate.TodoLinkAll), SelectedIf(lf == uistate.TodoLinkAll), uistate.T("todo.linkFilterAll")),
-					Option(Value(uistate.TodoLinkGoal), SelectedIf(lf == uistate.TodoLinkGoal), uistate.T("todo.linkGoalPl")),
-					Option(Value(uistate.TodoLinkBudget), SelectedIf(lf == uistate.TodoLinkBudget), uistate.T("todo.linkBudgetPl")),
-					Option(Value(uistate.TodoLinkAccount), SelectedIf(lf == uistate.TodoLinkAccount), uistate.T("todo.linkAccountPl")),
-					Option(Value(uistate.TodoLinkTransaction), SelectedIf(lf == uistate.TodoLinkTransaction), uistate.T("todo.linkTransactionPl")),
-					Option(Value(uistate.TodoLinkNone), SelectedIf(lf == uistate.TodoLinkNone), uistate.T("todo.linkFilterNone")),
-				),
-			),
-			Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
-				Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel)),
-			// Checklist templates: instantiate the month-end close or tax-prep
-			// ritual as a parent task + ordered steps.
-			uiw.OverflowMenu(uiw.OverflowMenuProps{
-				TriggerText:   uistate.T("todo.checklistsMenu"),
-				TriggerLabel:  uistate.T("todo.checklistsMenuTitle"),
-				TriggerTestID: "todo-checklists-btn",
-				TriggerClass:  "btn btn-tool",
-				Items: []uiw.OverflowMenuItem{
-					{Label: uistate.T("todo.checklistMonthEnd"), Icon: icon.Calendar, TestID: "todo-checklist-monthend", OnSelect: addMonthEndClose},
-					{Label: uistate.T("todo.checklistTaxPrep"), Icon: icon.FileText, TestID: "todo-checklist-taxprep", OnSelect: addTaxPrep},
-				},
-			}),
-			Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-				Attr("data-testid", "todo-add"), Title(uistate.T("todo.addFirst")), OnClick(addTask),
-				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(uistate.T("todo.addTask"))),
+			sortCtrl,
+			prioCtrl,
+			linkCtrl,
+			hideToggle,
+		),
+		Div(css.Class("cmdbar-group cmdbar-right"),
+			addBtn,
+			moreMenu,
 		),
 	)
 	return uiw.Widget(uiw.WidgetProps{
@@ -316,6 +351,7 @@ func todoListWidget(props todoListProps) ui.Node {
 	pageSizeAtom := uistate.UseTodoPageSize()
 	collapsed := uistate.UseTodoCollapsed()
 	viewAtom := uistate.UseTodoView()
+	quickViewAtom := uistate.UseTodoQuickView()
 	boardGroupAtom := uistate.UseTodoBoardGroup()
 	calOffsetAtom := uistate.UseTodoCalOffset()
 	prefsAtom := uistate.UsePrefs()
@@ -447,6 +483,10 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 		filtered = kept
 	}
+	// Quick-view lens (All / Today / Overdue): a coarse date narrowing to open tasks due
+	// today or past due, applied like the other filters before tree nesting (so a matching
+	// child surfaces as a root) and to every view projection below.
+	filtered = tasksort.FilterQuickView(filtered, tasksort.ParseQuickView(quickViewAtom.Get()), dateutil.FormatDate(time.Now()))
 
 	// Board / calendar views are alternate projections of the SAME filtered set (search +
 	// priority + link + hide-done all still apply). They don't paginate or nest, so they
@@ -588,40 +628,32 @@ func todoListWidget(props todoListProps) ui.Node {
 		}
 	}
 
-	// The app-standard Pager (range + rows-per-page + prev/next + jump-to-page), mirrored
-	// top + bottom so a long list never needs a scroll to page. setPageSize resets to page 1.
+	// The app-standard Pager (range + rows-per-page + prev/next + jump-to-page). A SINGLE
+	// block below the list (the command bar already anchors the top of the workspace, so a
+	// second, top pager was redundant clutter). setPageSize resets to page 1.
 	setPage := func(n int) { pageAtom.Set(n) }
 	setPageSize := func(s int) { pageSizeAtom.Set(s); pageAtom.Set(1) }
-	pagerProps := func(top bool) uiw.PagerProps {
-		return uiw.PagerProps{
-			Page: curPage, Total: totalRoots, PageSize: todoPageSize,
-			PageSizes: []int{10, 20, 50, 100}, OnPage: setPage, OnPageSize: setPageSize,
-			Top: top, IDPrefix: "todo",
-		}
-	}
-	// Show the top pager whenever there are more tasks than the smallest page size (10) —
-	// guarding on the total, not the current page count, so picking a bigger rows-per-page
-	// (fewer pages) never makes the top pager disappear under the cursor.
-	var topPager ui.Node = Fragment()
-	if len(nodes) > 0 && totalRoots > 10 {
-		topPager = uiw.Pager(pagerProps(true))
-	}
 	var bottomPager ui.Node = Fragment()
 	if len(nodes) > 0 {
-		bottomPager = uiw.Pager(pagerProps(false))
+		bottomPager = uiw.Pager(uiw.PagerProps{
+			Page: curPage, Total: totalRoots, PageSize: todoPageSize,
+			PageSizes: []int{10, 20, 50, 100}, OnPage: setPage, OnPageSize: setPageSize,
+			Top: false, IDPrefix: "todo",
+		})
 	}
 
 	body := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("todo.listTitle"),
 		Body: Fragment(
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
-			// Condition-triggered proposals (stale balances, review backlog,
-			// overspent budgets) — one-click Add/Dismiss, never silent creation.
-			ui.CreateElement(todoSuggestStrip, app),
-			topPager,
+			// Committed/manual tasks lead. The pager belongs to this list.
 			listBody,
 			hiddenDoneNote,
 			bottomPager,
+			// Condition-triggered proposals (stale balances, review backlog, overspent
+			// budgets) now sit BELOW the user's own tasks, in a clearly-labeled section
+			// that starts collapsed — one-click Add/Dismiss, never silent creation.
+			ui.CreateElement(todoSuggestStrip, app),
 		),
 	})
 	return uiw.Widget(uiw.WidgetProps{

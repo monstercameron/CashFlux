@@ -128,6 +128,17 @@ func traceIDFromMetadata(ctx context.Context) string {
 
 func sanitizeRequestID(id string) string {
 	id = strings.TrimSpace(id)
+	// Drop control characters (newlines, carriage returns, escapes, DEL) from the
+	// client-supplied request id so it can never smuggle a forged line into logs or an
+	// injected byte into the X-Request-ID response header — even if some future sink
+	// forgets to escape it. Every current consumer already neutralizes it; this makes
+	// the value clean at the source rather than depending on that.
+	id = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, id)
 	if len(id) > 128 {
 		id = id[:128]
 	}

@@ -775,9 +775,18 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		tableBody = uiw.DataTable(dtp)
 	}
 
+	// When the whole filtered set fits within the smallest page size, no rows-per-page
+	// choice could ever create a second page — so the pager (range + size buttons +
+	// disabled prev/next + "Page 1 of 1") is pure noise. Wrap the table in a marker
+	// class that hides it (July 2026 review: hide unnecessary pagination). Above that
+	// threshold the pager stays, so a user on "All" can always page back down.
+	body := tableBody
+	if total > 0 && total <= txnfilter.PageSizes[0] {
+		body = Div(css.Class("txn-onepage"), tableBody)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: tableBody,
+		Body: body,
 	})
 }
 

@@ -64,6 +64,9 @@ func Budgets() ui.Node {
 	// itself (renders nothing) when there are no budgets. The formula tile appears only
 	// when the toolbar's Formulas toggle is on.
 	specs := []domain.WidgetSpec{
+		// "Needs attention" opens the page on real work: the three most over/at-risk
+		// budgets, above settings and methodology (self-gates to nothing when healthy).
+		budgetNativeSpec("budget-attention"),
 		budgetNativeSpec("budget-summary"),
 		budgetNativeSpec("budget-toolbar"),
 		budgetNativeSpec("budget-list"),

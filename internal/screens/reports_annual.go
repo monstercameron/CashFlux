@@ -123,6 +123,13 @@ func Reports() ui.Node {
 		uistate.SetReportScope(scope.ReportScope{})
 		scopeOpen.Set(false)
 	}))
+	// Summary vs. Full mode (progressive disclosure). Summary is the default
+	// executive review; Full reveals the long-form document. Local UI state — the
+	// report opens on the short summary each visit; the reader steps into the full
+	// evidence only when they want it.
+	summaryMode := ui.UseState(true)
+	onModeSummary := ui.UseEvent(Prevent(func() { summaryMode.Set(true) }))
+	onModeFull := ui.UseEvent(Prevent(func() { summaryMode.Set(false) }))
 	showFormulas := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
 	exportOpen := ui.UseState(false)
@@ -1570,25 +1577,150 @@ func Reports() ui.Node {
 	})
 	var appendix ui.Node = Fragment()
 	if len(appendixBits) > 0 {
-		appendix = rptaSection("rpta-11", "11", uistate.T("rpta.secAppendix"), "dim", uistate.T("rpta.secAppendixSub"), "", Fragment(anyify(appendixBits)...))
+		// Collapsed by default within Full: the appendix is reference material
+		// (tax totals, custom-field roll-ups, live variables), so it stays folded
+		// until the reader asks for it rather than adding a fourth screen of tables.
+		appendix = rptaSection("rpta-11", "11", uistate.T("rpta.secAppendix"), "dim", uistate.T("rpta.secAppendixSub"), "",
+			Details(css.Class("rpta-appendix-fold"), Attr("data-testid", "rpta-appendix-fold"),
+				Summary(uistate.T("rpta.appendixFold")),
+				Div(css.Class("rpta-appendix-body"), Fragment(anyify(appendixBits)...))))
 	}
+
+	// ── Summary (executive) view ──────────────────────────────────────────────
+	// The default. Everything here REUSES what the full report already computed —
+	// no new analysis. Top 3 wins, top 3 risks, top 3 actions, and the core
+	// trends, so the reader gets the verdict in one glance and steps into the full
+	// document (the evidence) only when they want it.
+	sumWins := wins
+	if len(sumWins) > 3 {
+		sumWins = sumWins[:3]
+	}
+	sumActions := planItems
+	if len(sumActions) > 3 {
+		sumActions = sumActions[:3]
+	}
+	// Top risks = the weakest health factors by the existing severity ranking
+	// (lowest score first), rendered with the same factor-row component §01/§09 use.
+	var weakSorted []healthscore.Factor
+	for _, f := range health.Factors {
+		if f.Weight > 0 && f.Score < 70 {
+			weakSorted = append(weakSorted, f)
+		}
+	}
+	sort.SliceStable(weakSorted, func(i, j int) bool { return weakSorted[i].Score < weakSorted[j].Score })
+	var sumRisks []ui.Node
+	for i, f := range weakSorted {
+		if i >= 3 {
+			break
+		}
+		sumRisks = append(sumRisks, rptaFactorRow(f))
+	}
+
+	// Core trends (compact): the five headline series the year turns on. The
+	// monthly series are lifted straight from the per-month flows / net-worth
+	// series the full report already built.
+	sumIncSeries := make([]int64, 0, 12)
+	sumExpSeries := make([]int64, 0, 12)
+	sumNetSeries := make([]int64, 0, 12)
+	for i := 0; i < 12 && i < len(monthFlows); i++ {
+		sumIncSeries = append(sumIncSeries, monthFlows[i].Income)
+		sumExpSeries = append(sumExpSeries, monthFlows[i].Expense)
+		sumNetSeries = append(sumNetSeries, monthFlows[i].Net())
+	}
+	sumNWSeries := make([]int64, 0, len(nwSeries))
+	for _, m := range nwSeries {
+		sumNWSeries = append(sumNWSeries, m.Amount)
+	}
+	var totalDebtMinor int64
+	for _, d := range vitDebts {
+		totalDebtMinor += d.BalanceMinor
+	}
+	trendItem := func(label, value, sub, tone string, series []int64) ui.Node {
+		valCls := "rpta-sum-trend-val " + tw.Fold(tw.FontDisplay)
+		if tone != "" {
+			valCls += " rpta-tone-" + tone
+		}
+		return Div(css.Class("rpta-sum-trend"),
+			Span(css.Class("rpta-sum-trend-k"), label),
+			Span(ClassStr(valCls), value),
+			If(sub != "", Span(css.Class("rpta-sum-trend-sub", "rpta-muted"), sub)),
+			If(len(series) >= 2, Div(css.Class("rpta-sum-trend-spark"), sparklineSVG(series, label))),
+		)
+	}
+	nwSub, nwTone := "", ""
+	if nwChange != 0 {
+		arrow := "▲"
+		nwTone = "up"
+		if nwChange < 0 {
+			arrow, nwTone = "▼", "down"
+		}
+		nwSub = arrow + " " + fmtMinor(absMinor(nwChange))
+	}
+	sumTrends := Div(css.Class("rpta-sum-trends"), Attr("data-testid", "rpta-sum-trends"),
+		trendItem(uistate.T("dashboard.income"), fmtMinor(flow.Income), "", "", sumIncSeries),
+		trendItem(uistate.T("dashboard.spending"), fmtMinor(flow.Expense), "", "", sumExpSeries),
+		trendItem(uistate.T("rpta.kept"), fmtMinor(flow.Net()), uistate.T("rpta.keptRate", flow.SavingsRate()), rptaToneFor(flow.Net()), sumNetSeries),
+		trendItem(uistate.T("rpta.sumDebt"), fmtMinor(totalDebtMinor), "", "", nil),
+		trendItem(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), nwSub, nwTone, sumNWSeries),
+	)
+	sumCol := func(title, tone string, items []ui.Node, emptyKey string) ui.Node {
+		var body ui.Node = Div(css.Class("rpta-sum-list"), items)
+		if len(items) == 0 {
+			body = P(css.Class("rpta-muted"), uistate.T(emptyKey))
+		}
+		return Div(ClassStr("rpta-sum-col rpta-z-"+tone),
+			H3(ClassStr("rpta-sum-col-title rpta-tone-"+tone+" "+tw.Fold(tw.FontDisplay)), title),
+			body,
+		)
+	}
+	summaryView := Div(css.Class("rpta-summary"), Attr("data-testid", "rpta-summary"),
+		Div(css.Class("rpta-sum-cols"),
+			sumCol(uistate.T("rpta.sumStrengths"), "up", sumWins, "rpta.sumNoWins"),
+			sumCol(uistate.T("rpta.sumRisks"), "down", sumRisks, "rpta.sumNoRisks"),
+			sumCol(uistate.T("rpta.sumActions"), "plan", sumActions, "rpta.sumNoActions"),
+		),
+		Div(css.Class("rpta-sum-trends-wrap"),
+			H3(ClassStr("rpta-sum-trends-title "+tw.Fold(tw.FontDisplay)), uistate.T("rpta.sumTrends")),
+			sumTrends,
+		),
+		Button(css.Class("rpta-drill", "rpta-sum-fulllink"), Type("button"), Attr("data-testid", "rpta-sum-fulllink"),
+			OnClick(onModeFull), uistate.T("rpta.sumFullLink")),
+	)
+
+	// ── The mode toggle (progressive disclosure): Summary is the default; Full
+	// reveals the long-form document as the supporting evidence.
+	modeToggle := Div(css.Class("rpta-modes"), Attr("data-testid", "rpta-modes"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("rpta.eyebrow")),
+		Button(ClassStr("rpta-mode"+If2(summaryMode.Get(), " is-on", "")), Type("button"),
+			Attr("data-testid", "rpta-mode-summary"), Attr("aria-pressed", boolStr(summaryMode.Get())),
+			Title(uistate.T("rpta.modeSummaryTitle")), OnClick(onModeSummary),
+			uistate.T("rpta.modeSummary")),
+		Button(ClassStr("rpta-mode"+If2(!summaryMode.Get(), " is-on", "")), Type("button"),
+			Attr("data-testid", "rpta-mode-full"), Attr("aria-pressed", boolStr(!summaryMode.Get())),
+			Title(uistate.T("rpta.modeFullTitle")), OnClick(onModeFull),
+			uistate.T("rpta.modeFull")),
+	)
 
 	return Div(css.Class("rpta"),
 		masthead,
-		toolbar,
-		index,
-		standSec,
-		strengths,
-		flowSec,
-		motion,
-		categories,
-		whereGoes,
-		goalsSec,
-		budgetsSec,
-		watch,
-		problems,
-		plan,
-		appendix,
+		modeToggle,
+		If(summaryMode.Get(), summaryView),
+		If(!summaryMode.Get(), Fragment(
+			toolbar,
+			index,
+			standSec,
+			strengths,
+			flowSec,
+			motion,
+			categories,
+			whereGoes,
+			goalsSec,
+			budgetsSec,
+			watch,
+			problems,
+			plan,
+			appendix,
+		)),
 		If(showFormulas.Get(), metricsModal),
 	)
 }

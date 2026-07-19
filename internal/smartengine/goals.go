@@ -5,7 +5,7 @@ package smartengine
 import (
 	"strings"
 
-	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -682,26 +682,12 @@ func emergencyGoal(gs []domain.Goal) (domain.Goal, bool) {
 }
 
 // trailingMonthly returns average monthly income and expense magnitude (base
-// minor units) over the prior `trailingMonths` whole months.
+// minor units) over the prior `trailingMonths` whole months. It delegates to the
+// shared cashflow definition so the assistant's "available monthly money" is the
+// exact same figure the Goals pace verdict and other surfaces use — no surface
+// computes its own surplus and disagrees.
 func (in Input) trailingMonthly() (income, expense int64) {
-	curStart := dateutil.MonthStart(in.Now)
-	var inc, exp int64
-	for k := 1; k <= trailingMonths; k++ {
-		s := dateutil.AddMonths(curStart, -k)
-		e := dateutil.AddMonths(curStart, -k+1)
-		for _, t := range in.Transactions {
-			if t.IsTransfer() || t.Date.Before(s) || !t.Date.Before(e) {
-				continue
-			}
-			base := in.toBaseMinor(t.Amount.Amount, t.Amount.Currency)
-			if t.Amount.IsPositive() {
-				inc += base
-			} else {
-				exp += -base
-			}
-		}
-	}
-	return inc / trailingMonths, exp / trailingMonths
+	return cashflow.TrailingMonthly(in.Transactions, in.Rates, in.Base, in.Now, trailingMonths)
 }
 
 // monthlySurplusBase is average monthly income minus expense over the baseline.

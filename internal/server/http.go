@@ -62,7 +62,10 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		store.SetMetrics(cfg.Metrics)
 	}
 	mux := http.NewServeMux()
-	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute)
+	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute, cfg)
+	// webhookMu serializes the check-apply-record critical section of every provider
+	// webhook so a replay is deduped and a failed apply is never marked "seen".
+	webhookMu := &sync.Mutex{}
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			http.Redirect(w, r, "/console/", http.StatusFound)
@@ -154,8 +157,8 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("POST /v1/billing/portal", handleBillingPortal(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/billing/status", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/billing/status", handleBillingStatus(cfg, store))
-	mux.HandleFunc("POST /v1/billing/stripe/webhook", handleStripeWebhook(cfg, store))
-	mux.HandleFunc("POST /v1/billing/paypal/webhook", handleProviderWebhook(cfg, store, "paypal"))
+	mux.HandleFunc("POST /v1/billing/stripe/webhook", handleStripeWebhook(cfg, store, webhookMu))
+	mux.HandleFunc("POST /v1/billing/paypal/webhook", handleProviderWebhook(cfg, store, "paypal", webhookMu))
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
@@ -211,7 +214,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.Handle("GET /portal/", portalHandler(cfg))
 	mux.HandleFunc("OPTIONS /v1/me", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/me", handleMe(cfg, store))
-	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, mux))))))
+	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, cfg, mux))))))
 }
 
 func handleLegalDocument(doc LegalResponse) http.HandlerFunc {
@@ -324,9 +327,10 @@ type rateLimitBucket struct {
 }
 
 type fixedWindowLimiter struct {
-	limit   int
-	mu      sync.Mutex
-	buckets map[string]rateLimitBucket
+	limit     int
+	mu        sync.Mutex
+	buckets   map[string]rateLimitBucket
+	lastSweep time.Time
 }
 
 func newFixedWindowLimiter(limit int) *fixedWindowLimiter {
@@ -336,6 +340,7 @@ func newFixedWindowLimiter(limit int) *fixedWindowLimiter {
 func (l *fixedWindowLimiter) allow(key string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.sweepLocked(now)
 	bucket := l.buckets[key]
 	if bucket.windowStart.IsZero() || now.Sub(bucket.windowStart) >= time.Minute {
 		bucket = rateLimitBucket{windowStart: now}
@@ -345,13 +350,35 @@ func (l *fixedWindowLimiter) allow(key string, now time.Time) bool {
 	return bucket.count <= l.limit
 }
 
-func rateLimitMiddleware(limit int, next http.Handler) http.Handler {
+// sweepLocked reclaims buckets whose fixed window has fully elapsed. Without it the
+// bucket map only ever grows, so a flood of distinct keys (e.g. many source IPs)
+// would pin memory for the process lifetime — a slow denial-of-service. The sweep
+// runs at most once per window (amortized), under the lock already held by allow,
+// so per-request cost stays O(1) and the map size is bounded to the keys actually
+// seen within the last minute rather than every key ever seen.
+func (l *fixedWindowLimiter) sweepLocked(now time.Time) {
+	if l.lastSweep.IsZero() {
+		l.lastSweep = now
+		return
+	}
+	if now.Sub(l.lastSweep) < time.Minute {
+		return
+	}
+	l.lastSweep = now
+	for key, bucket := range l.buckets {
+		if now.Sub(bucket.windowStart) >= time.Minute {
+			delete(l.buckets, key)
+		}
+	}
+}
+
+func rateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Handler {
 	if limit <= 0 {
 		return next
 	}
 	limiter := newFixedWindowLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !limiter.allow(clientIP(r), time.Now()) {
+		if !limiter.allow(rateLimitClientIP(r, cfg), time.Now()) {
 			w.Header().Set("Retry-After", "60")
 			writeErrorJSON(w, ErrorReasonRateLimited, "rate limit exceeded")
 			return
@@ -376,14 +403,14 @@ func userRateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Hand
 	})
 }
 
-func authRateLimitMiddleware(limit int) func(http.Handler) http.Handler {
+func authRateLimitMiddleware(limit int, cfg Config) func(http.Handler) http.Handler {
 	limiter := newFixedWindowLimiter(limit)
 	return func(next http.Handler) http.Handler {
 		if limit <= 0 {
 			return next
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !limiter.allow(clientIP(r), time.Now()) {
+			if !limiter.allow(rateLimitClientIP(r, cfg), time.Now()) {
 				w.Header().Set("Retry-After", "60")
 				writeErrorJSON(w, ErrorReasonRateLimited, "auth rate limit exceeded")
 				return
@@ -393,6 +420,11 @@ func authRateLimitMiddleware(limit int) func(http.Handler) http.Handler {
 	}
 }
 
+// clientIP returns a best-effort source address for informational audit logging. It
+// prefers forwarding headers when present. It is intentionally NOT used for any
+// security decision — see rateLimitClientIP for the trusted-proxy-aware resolver
+// that gates rate limiting. Audit rows also carry the authenticated actor id, which
+// (unlike this header-derived IP) cannot be spoofed.
 func clientIP(r *http.Request) string {
 	for _, part := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {
 		if ip := strings.TrimSpace(part); ip != "" {
@@ -402,14 +434,62 @@ func clientIP(r *http.Request) string {
 	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
 		return ip
 	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
+	return remoteHost(r.RemoteAddr)
+}
+
+// remoteHost extracts the host portion of a RemoteAddr ("ip:port" → "ip"), falling
+// back to the raw value, then to "unknown".
+func remoteHost(remoteAddr string) string {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil && host != "" {
 		return host
 	}
-	if remote := strings.TrimSpace(r.RemoteAddr); remote != "" {
-		return remote
+	if remoteAddr != "" {
+		return remoteAddr
 	}
 	return "unknown"
+}
+
+// ipInNets reports whether ip parses and falls inside any of the given networks.
+func ipInNets(ip string, nets []*net.IPNet) bool {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return false
+	}
+	for _, network := range nets {
+		if network != nil && network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// rateLimitClientIP resolves the client key used for IP-based rate limiting. It
+// trusts X-Forwarded-For / X-Real-IP ONLY when the direct socket peer (RemoteAddr)
+// is a configured trusted proxy; for any other peer those headers are
+// attacker-controlled, so they are ignored and the socket peer address is used. This
+// closes two attacks at once: a client can no longer rotate spoofed X-Forwarded-For
+// values to (a) mint unlimited fresh rate-limit buckets and bypass the limiter, or
+// (b) flood the bucket map with distinct keys to exhaust memory. When the peer IS a
+// trusted proxy, the real client is the rightmost forwarded address that is not
+// itself a trusted proxy (i.e. the closest hop our own edge actually saw).
+func rateLimitClientIP(r *http.Request, cfg Config) string {
+	direct := remoteHost(r.RemoteAddr)
+	if len(cfg.TrustedProxies) == 0 || !ipInNets(direct, cfg.TrustedProxies) {
+		return direct
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		ip := strings.TrimSpace(parts[i])
+		if ip == "" || net.ParseIP(ip) == nil || ipInNets(ip, cfg.TrustedProxies) {
+			continue
+		}
+		return ip
+	}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); net.ParseIP(xrip) != nil && !ipInNets(xrip, cfg.TrustedProxies) {
+		return xrip
+	}
+	return direct
 }
 
 func newAIService(store *Store, cfg Config) *AIService {
@@ -469,13 +549,25 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	if !allowedOrigin(origin, cfg.AppOrigin) {
 		return false
 	}
-	w.Header().Set("Access-Control-Allow-Origin", origin)
-	w.Header().Set("Vary", "Origin")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CashFlux-CSRF")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, ETag, X-CashFlux-CSRF")
 	w.Header().Set("Access-Control-Max-Age", "600")
+	// All-origins mode (AppOrigin="*"): NEVER reflect an arbitrary caller origin
+	// together with Allow-Credentials — that combination lets any website drive
+	// credentialed (cookie-bearing) requests as the victim. Emit a literal wildcard
+	// and withhold credentials; token-authenticated (non-credentialed) requests still
+	// work. Credential-bearing flows (the cookie refresh) require a specific origin.
+	if strings.TrimSpace(cfg.AppOrigin) == "*" {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Vary", "Origin")
+		return true
+	}
+	// A single configured origin is reflected WITH credentials so the one trusted app
+	// origin can use the cookie-based session/refresh flow.
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Vary", "Origin")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	return true
 }
 

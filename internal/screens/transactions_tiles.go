@@ -297,14 +297,18 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	viewAtom := uistate.UseTxnViewMode()
 	registerAtom := uistate.UseTxnRegisterMode()
 	calActive := viewAtom.Get() == uistate.TxnViewCalendar
-	toggleCalendar := ui.UseEvent(Prevent(func() {
+	// Calendar + Register are view switches that moved into the "⋯ More" menu (July
+	// 2026 command-bar consolidation — the resting bar keeps only search, filters, the
+	// primary Add, and More). Their handlers are plain closures invoked from
+	// OverflowMenuItem.OnSelect, never On* hooks registered inside a loop.
+	onCalendar := func() {
 		if viewAtom.Get() == uistate.TxnViewCalendar {
 			viewAtom.Set(uistate.TxnViewTable)
 		} else {
 			viewAtom.Set(uistate.TxnViewCalendar)
 		}
-	}))
-	toggleRegister := ui.UseEvent(Prevent(func() { registerAtom.Set(!registerAtom.Get()) }))
+	}
+	onRegister := func() { registerAtom.Set(!registerAtom.Get()) }
 
 	f := filterAtom.Get()
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
@@ -654,11 +658,26 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// so the resting row stays a short line of high-frequency actions with the primary
 	// Add at its right end. Each item keeps its original testid so e2e selectors still
 	// resolve it (the menu items live in the DOM, revealed on open).
+	// View switches fold into "More" too (July 2026 command-bar consolidation): the
+	// resting bar is search + filters + primary Add + More, not a row of loose toggles.
+	// A ✓ prefix marks the active view; Register is offered only when the ledger is
+	// scoped to one account and the calendar isn't showing (same gate as before).
+	_, singleAcct := f.SingleAccount()
+	calLabel := uistate.T("transactions.calendarView")
+	if calActive {
+		calLabel = "✓ " + calLabel
+	}
+	regLabel := uistate.T("transactions.registerView")
+	if registerAtom.Get() {
+		regLabel = "✓ " + regLabel
+	}
 	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
 		TriggerText:   uistate.T("transactions.moreActions"),
 		TriggerTestID: "txn-more-btn",
 		TriggerClass:  "btn btn-tool",
 		Items: []uiw.OverflowMenuItem{
+			{Label: calLabel, Icon: icon.Calendar, TestID: "txn-calendar-btn", OnSelect: onCalendar},
+			{Label: regLabel, Icon: icon.List, TestID: "txn-register-btn", OnSelect: onRegister, Hidden: !(singleAcct && !calActive)},
 			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
 			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
 			{Label: uistate.T("smartcat.button"), Icon: icon.Sparkles, TestID: "txn-smartcat-btn", OnSelect: func() { smartCatAtom.Set(true) }},
@@ -700,17 +719,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// something needs review, with a live count so the backlog is visible.
 			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
-			// Select-all moved into the "⋯ More" overflow (2026-07-17 audit): the
-			// resting row keeps only the everyday verbs.
-			// View mode: Calendar toggles the month grid (TX8); Register (shown only when
-			// scoped to one account) toggles the running-balance column (TX12).
-			toolbarIconBtnOpen("txn-calendar-btn", icon.Calendar, uistate.T("transactions.calendarView"), toggleCalendar, "", calActive),
-			func() ui.Node {
-				if _, ok := f.SingleAccount(); ok && !calActive {
-					return toolbarIconBtnOpen("txn-register-btn", icon.List, uistate.T("transactions.registerView"), toggleRegister, "", registerAtom.Get())
-				}
-				return Fragment()
-			}(),
+			// Select-all, Calendar, and Register moved into the "⋯ More" overflow (2026-07
+			// command-bar consolidation): the resting row keeps only the everyday verbs plus
+			// the primary Add, so the page reads as a focused workspace, not a tool pile.
 			// Saved views / watchlists (TX3): list saved filter sets with their live
 			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
 			// amount alerts. Own component so its popover + list hooks stay stable.

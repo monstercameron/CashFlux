@@ -74,13 +74,25 @@ func SmartSurface() ui.Node {
 
 	settings := uistate.LoadSmartSettings()
 	insights := runSmart(app, weekStart, settings)
+	// Reconcile overlapping findings: two engines can reach the same conclusion,
+	// and showing it twice reads as noise. Dedupe once, up front, so both the hero
+	// count and every downstream section work off the same reconciled set.
+	insights = smart.DedupeInsights(insights)
 	counts := liveSmartCounts()
 	density := settings.DensityOrDefault()
 
-	// The hero counts what the FEED actually shows (per-rule capped, same as
-	// smartInsightsSection) so the voice line and the list can't disagree.
+	// The hero leads with what NEEDS the user (Warn + Alert), not the full catalog
+	// tally — a "108 findings" headline reads as homework, not help. The count is
+	// taken from the per-rule-capped, deduped set so it agrees with the default
+	// "Needs you" feed the sections render below.
 	smart.SortInsights(insights)
-	findings := len(smart.CapPerRule(insights, 3))
+	capped := smart.CapPerRule(insights, 3)
+	findings := 0
+	for _, ins := range capped {
+		if smart.NeedsAttention(ins) {
+			findings++
+		}
+	}
 
 	// ── Bespoke masthead (built from scratch — NO bento tile, NO astSection): a
 	// serif kicker, the big FINDINGS count leading (nobody opens a findings feed to

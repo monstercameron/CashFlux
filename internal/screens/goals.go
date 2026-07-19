@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
@@ -38,6 +39,11 @@ type goalView struct {
 	SavedTotal  money.Money   // Σ saved across active goals (base currency)
 	TargetTotal money.Money   // Σ target across active goals (base currency)
 	OverallPct  int           // combined saved/target percent across active goals
+	// Health is the shared pace verdict per goal id (On track / Watch / At risk),
+	// computed from required-contribution vs. available monthly cash — the SAME model
+	// the Smart assistant uses, so the card badge and Smart never contradict. Only
+	// deadlined, fundable goals appear; absent = goalsvc.HealthNone (no badge).
+	Health map[string]goalsvc.Health
 }
 
 // goalViewCache memoizes computeGoalView by store revision + active member (the only
@@ -93,7 +99,50 @@ func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 	inFlight := append(append([]domain.Goal(nil), v.Active...), v.Missed...)
 	v.SavedTotal, v.TargetTotal = goalsvc.Totals(inFlight, rates, base, false)
 	v.OverallPct, _ = goalsvc.OverallProgress(inFlight, false)
+	v.Health = computeGoalHealth(app, v.All, base, rates, now)
 	return v
+}
+
+// computeGoalHealth derives the shared pace verdict (On track / Watch / At risk) for
+// every deadlined, fundable goal, using the SAME inputs the Smart assistant uses: the
+// household's free monthly cash (one shared cashflow figure) split as a fair share
+// across the deadlined goals, against each goal's required monthly contribution. A
+// goal within its fair share is On track; one needing more than its share is a stretch
+// (Watch); one that can't be met even with all the free cash is At risk. Goals with no
+// deadline / already covered are absent (no pace claim — the card shows no badge).
+func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates currency.Rates, now time.Time) map[string]goalsvc.Health {
+	toBase := func(m money.Money) int64 {
+		if m.Currency == base || m.Currency == "" {
+			return m.Amount
+		}
+		if v, err := currency.ConvertBetween(m.Amount, m.Currency, base, rates); err == nil {
+			return v
+		}
+		return 0
+	}
+	surplus := cashflow.TrailingMonthlySurplus(app.Transactions(), rates, base, now, cashflow.DefaultTrailingMonths)
+	type need struct {
+		id  string
+		req int64
+	}
+	var needs []need
+	for _, g := range all {
+		if g.Archived {
+			continue
+		}
+		req, ok, err := goalsvc.MonthlyNeeded(g, now)
+		if err != nil || !ok {
+			continue
+		}
+		needs = append(needs, need{id: g.ID, req: toBase(req)})
+	}
+	out := make(map[string]goalsvc.Health, len(needs))
+	for _, n := range needs {
+		if h := goalsvc.AssessHealth(n.req, surplus, len(needs)); h != goalsvc.HealthNone {
+			out[n.id] = h
+		}
+	}
+	return out
 }
 
 // overbookedGoals returns the set of goal IDs whose virtual earmarks no longer fit the
@@ -227,6 +276,10 @@ type goalRowProps struct {
 	// balance no longer covers the total earmarked against it (e.g. the account was spent
 	// down after the earmark) — the card flags the stale reservation instead of trusting it.
 	EarmarkOverbooked bool
+	// Health is the shared pace verdict (On track / Watch / At risk) computed from
+	// required-contribution vs. available cash — the same model the Smart assistant
+	// uses. HealthNone means no verdict (the card shows no pace badge).
+	Health goalsvc.Health
 }
 
 // goalKindOptions builds the goal-type SelectOptions (savings / checklist /
@@ -323,43 +376,36 @@ func csvImportSummary(accounts []domain.Account, acctID string, n int) string {
 }
 
 // barFillStyle is the inline width for a goal's progress bar. The fill *tone* is
-// driven by a CSS state class (see paceBarClass) so a near-complete, behind, or
+// driven by a CSS state class (see goalCardState) so a near-complete, at-risk, or
 // on-track goal reads differently at a glance instead of one flat accent (G5/C51).
 func barFillStyle(pct int) string {
 	return fmt.Sprintf("width:%d%%", pct)
 }
 
-// paceBarClass maps a goal's pace to a progress-bar fill modifier class. The
-// classes (final/overdue/soon) are defined in the shared stylesheet; an empty
-// modifier keeps the default accent for on-track / undated goals.
-func paceBarClass(p goalsvc.Pace) string {
-	switch p {
-	case goalsvc.PaceComplete:
-		return "done"
-	case goalsvc.PaceFinalStretch:
-		return "final"
-	case goalsvc.PaceOverdue:
-		return "overdue"
-	case goalsvc.PaceDueSoon:
-		return "soon"
-	default:
-		return ""
-	}
-}
-
-// paceBadge renders a compact colored badge for a goal's pace, or an empty
-// fragment when there's nothing to flag (undated, comfortably on track without a
-// near-term signal). It answers Aaliyah's "am I on pace?" at a glance (G5).
-func paceBadge(p goalsvc.Pace) ui.Node {
+// goalPaceBadge renders a goal's pace badge, layering the SHARED health verdict
+// (On track / Watch / At risk — the same one the Smart assistant computes from
+// required-contribution vs. available cash) on top of the calendar signals so the
+// badge is honest. A goal reads "On track" ONLY when its funding actually keeps pace;
+// one the assistant would flag as tight reads "Watch" or "At risk" here instead of the
+// old false "On track"; and a goal with no fundable verdict shows no badge rather than
+// an unearned reassurance. Priority is most-actionable first: overdue and near-done
+// calendar states win, then the money verdict, then due-soon, then on-track.
+func goalPaceBadge(p goalsvc.Pace, h goalsvc.Health) ui.Node {
 	var label, mod string
-	switch p {
-	case goalsvc.PaceFinalStretch:
-		label, mod = uistate.T("goals.paceFinal"), "final"
-	case goalsvc.PaceOverdue:
+	switch {
+	case p == goalsvc.PaceComplete:
+		return Fragment()
+	case p == goalsvc.PaceOverdue:
 		label, mod = uistate.T("goals.paceOverdue"), "overdue"
-	case goalsvc.PaceDueSoon:
+	case p == goalsvc.PaceFinalStretch:
+		label, mod = uistate.T("goals.paceFinal"), "final"
+	case h == goalsvc.HealthAtRisk:
+		label, mod = uistate.T("goals.paceAtRisk"), "atrisk"
+	case h == goalsvc.HealthWatch:
+		label, mod = uistate.T("goals.paceWatch"), "watch"
+	case p == goalsvc.PaceDueSoon:
 		label, mod = uistate.T("goals.paceDueSoon"), "soon"
-	case goalsvc.PaceOnTrack:
+	case h == goalsvc.HealthOnTrack:
 		label, mod = uistate.T("goals.paceOnTrack"), "ontrack"
 	default:
 		return Fragment()

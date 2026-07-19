@@ -189,6 +189,17 @@ func (s *Store) ExportAccount(userID string, exportedAt time.Time) (AccountExpor
 }
 
 // DeleteAccount purges the user's relational server data. Blob files are removed by a follow-up GC sweep.
+//
+// Every child table is deleted EXPLICITLY (children before parents), rather than
+// relying on SQLite ON DELETE CASCADE. Cascade only fires when PRAGMA foreign_keys
+// is ON, which is a per-connection setting; if the pooled connection were ever
+// replaced without it, a cascade-only delete would silently orphan the user's
+// encrypted AI keys, sync snapshots, and — worst — their refresh tokens (a deleted
+// account could then be resurrected via a surviving token). Right-to-erasure must not
+// depend on a connection pragma, so the purge is spelled out and self-contained.
+// audit_events are intentionally retained (append-only, tamper-evident log, no FK);
+// content-addressed blob rows are shared across users and reclaimed by the unreferenced
+// -blob GC sweep the caller runs afterward.
 func (s *Store) DeleteAccount(userID string) (bool, error) {
 	if strings.TrimSpace(userID) == "" {
 		return false, fmt.Errorf("server store: user id is required")
@@ -199,8 +210,23 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 		return false, fmt.Errorf("server store: begin delete account: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM subscriptions WHERE user_id = ?`, userID); err != nil {
-		return false, fmt.Errorf("server store: unlink subscription for account delete: %w", err)
+	// Children of the user's workspaces first, then the workspaces, then the remaining
+	// user-owned rows, then the user itself.
+	childDeletes := []string{
+		`DELETE FROM snapshot_history WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
+		`DELETE FROM snapshots WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
+		`DELETE FROM workspace_blobs WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
+		`DELETE FROM workspaces WHERE user_id = ?`,
+		`DELETE FROM ai_keys WHERE user_id = ?`,
+		`DELETE FROM usage WHERE user_id = ?`,
+		`DELETE FROM refresh_tokens WHERE user_id = ?`,
+		`DELETE FROM idempotency_keys WHERE user_id = ?`,
+		`DELETE FROM subscriptions WHERE user_id = ?`,
+	}
+	for _, stmt := range childDeletes {
+		if _, err := tx.Exec(stmt, userID); err != nil {
+			return false, fmt.Errorf("server store: delete account child rows: %w", err)
+		}
 	}
 	result, err := tx.Exec(`DELETE FROM users WHERE id = ?`, userID)
 	if err != nil {
@@ -796,6 +822,29 @@ ON CONFLICT(workspace_id) DO UPDATE SET
 	return tx.Commit()
 }
 
+// GetSnapshotForUser returns the current dataset snapshot for a workspace ONLY when
+// that workspace belongs to userID. It is the tenant-scoped read used on the sync
+// path: even though every caller already checks workspace ownership first, joining the
+// ownership into the query itself means a snapshot can never be returned cross-tenant
+// through a future caller that forgets the check. A snapshot for someone else's
+// workspace reads as "not found".
+func (s *Store) GetSnapshotForUser(userID, workspaceID string) (Snapshot, bool, error) {
+	defer s.observeDB("GetSnapshotForUser", time.Now())
+	row := s.db.QueryRow(`
+SELECT sn.workspace_id, sn.dataset_json, sn.version, sn.updated_at
+FROM snapshots sn
+JOIN workspaces w ON w.id = sn.workspace_id
+WHERE sn.workspace_id = ? AND w.user_id = ?`, workspaceID, userID)
+	snapshot, err := scanSnapshot(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Snapshot{}, false, nil
+	}
+	if err != nil {
+		return Snapshot{}, false, err
+	}
+	return snapshot, true, nil
+}
+
 // GetSnapshot returns the current dataset snapshot for a workspace.
 func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
 	defer s.observeDB("GetSnapshot", time.Now())
@@ -1260,6 +1309,65 @@ ON CONFLICT(user_id, day) DO UPDATE SET
 	return usage, nil
 }
 
+// ReserveAIRequest atomically checks the caller against their daily AI limits and, if
+// under both, reserves one request by incrementing the day's request counter. It
+// returns allowed=false WITHOUT incrementing when a limit is already reached, plus
+// which limit ("requests" or "tokens") blocked it. Doing the read and the increment in
+// one transaction closes the check-then-increment race where several concurrent
+// requests each read an under-limit count and all proceed, pushing usage past the cap.
+// A reservation whose request then fails upstream is undone with ReleaseAIRequest, so
+// only requests that complete keep their slot. maxRequests/maxTokens <= 0 mean "no
+// limit" for that dimension.
+func (s *Store) ReserveAIRequest(userID string, day time.Time, maxRequests, maxTokens int64) (bool, string, error) {
+	if strings.TrimSpace(userID) == "" {
+		return false, "", fmt.Errorf("server store: user id is required")
+	}
+	key := usageDay(day)
+	defer s.observeDB("ReserveAIRequest", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, "", fmt.Errorf("server store: begin reserve ai request: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var requests, tokens int64
+	err = tx.QueryRow(`SELECT requests, tokens FROM usage WHERE user_id = ? AND day = ?`, userID, key).Scan(&requests, &tokens)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, "", fmt.Errorf("server store: read usage for reserve: %w", err)
+	}
+	if maxRequests > 0 && requests >= maxRequests {
+		return false, "requests", nil
+	}
+	if maxTokens > 0 && tokens >= maxTokens {
+		return false, "tokens", nil
+	}
+	if _, err := tx.Exec(`
+INSERT INTO usage(user_id, day, requests, tokens)
+VALUES(?, ?, 1, 0)
+ON CONFLICT(user_id, day) DO UPDATE SET requests = requests + 1`, userID, key); err != nil {
+		return false, "", fmt.Errorf("server store: reserve ai request: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, "", fmt.Errorf("server store: commit reserve ai request: %w", err)
+	}
+	return true, "", nil
+}
+
+// ReleaseAIRequest undoes a ReserveAIRequest slot when the request did not complete
+// (upstream error / non-2xx / unparseable), decrementing the day's request counter
+// without dropping below zero. Best-effort: a release failure is never fatal to the
+// caller — at worst the cap is momentarily conservative, never breached.
+func (s *Store) ReleaseAIRequest(userID string, day time.Time) error {
+	if strings.TrimSpace(userID) == "" {
+		return fmt.Errorf("server store: user id is required")
+	}
+	key := usageDay(day)
+	defer s.observeDB("ReleaseAIRequest", time.Now())
+	if _, err := s.db.Exec(`UPDATE usage SET requests = requests - 1 WHERE user_id = ? AND day = ? AND requests > 0`, userID, key); err != nil {
+		return fmt.Errorf("server store: release ai request: %w", err)
+	}
+	return nil
+}
+
 // GetUsage returns a user's usage for the UTC day.
 func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
 	defer s.observeDB("GetUsage", time.Now())
@@ -1394,6 +1502,31 @@ func (s *Store) RecordWebhookEventOnce(provider, eventID string, now time.Time) 
 		return false, fmt.Errorf("server store: webhook event rows: %w", err)
 	}
 	return n > 0, nil
+}
+
+// HasWebhookEvent reports whether a provider webhook event id has already been
+// recorded (and therefore already applied). It is the read half of the atomic
+// check-apply-record webhook flow: the handler checks this under a lock, applies the
+// event, and only then calls RecordWebhookEventOnce — so a failed apply is NOT marked
+// seen and the provider's retry re-applies it instead of the change being silently
+// deduped away. An empty provider/event id is never "seen" (such events can't be
+// deduped and always apply, matching RecordWebhookEventOnce).
+func (s *Store) HasWebhookEvent(provider, eventID string) (bool, error) {
+	provider = strings.TrimSpace(provider)
+	eventID = strings.TrimSpace(eventID)
+	if provider == "" || eventID == "" {
+		return false, nil
+	}
+	defer s.observeDB("HasWebhookEvent", time.Now())
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM webhook_events WHERE provider = ? AND event_id = ?`, provider, eventID).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("server store: has webhook event: %w", err)
+	}
+	return true, nil
 }
 
 // UsageWithinLimit reports whether the user has not exceeded the supplied daily limits.

@@ -158,6 +158,14 @@ long-lived `/grpc` websocket streams, and delays stream close during reloads so 
 survive normal proxy restarts. If you use another reverse proxy, preserve websocket upgrades, avoid short idle
 timeouts on `/grpc`, and forward `Host`, `X-Forwarded-Host`, and `X-Forwarded-Proto`.
 
+When running behind a reverse proxy, set `CASHFLUX_SERVER_TRUSTED_PROXIES` to the proxy's address(es)
+(comma-separated CIDRs or bare IPs). IP-based rate limiting trusts `X-Forwarded-For` / `X-Real-IP` **only**
+when the direct connection comes from a trusted proxy; otherwise those headers are attacker-controlled and are
+ignored in favor of the socket peer address. Without this, a proxied deployment would rate-limit every client
+under the proxy's single IP; a directly internet-facing deployment must leave it empty so clients cannot spoof
+`X-Forwarded-For` to bypass the limiter. The server speaks plain HTTP and expects the proxy to terminate TLS —
+never expose it directly without one.
+
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
 
 Set `CASHFLUX_SERVER_MASTER_KEY` from a secret manager, KMS-backed secret, or password manager entry that is

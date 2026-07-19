@@ -81,6 +81,33 @@ func SortInsightsBy(in []Insight, mode SortMode) {
 	}
 }
 
+// NeedsAttention reports whether an insight belongs in the "Needs you" bucket:
+// Warn or Alert severity — a decision or an action, not a calm observation.
+// Nudge and Info findings are "Watching" material. The hub defaults to showing
+// only Needs-you findings so a hundred-strong catalog doesn't greet the user as
+// a wall of homework.
+func NeedsAttention(i Insight) bool { return i.Severity >= SeverityWarn }
+
+// DedupeInsights removes findings that repeat the same conclusion — an identical
+// Title and Detail — keeping the FIRST occurrence and preserving order. Multiple
+// engines can independently reach the same read (e.g. two rules both flagging a
+// low balance before payday); surfacing it twice is noise. Callers that sort by
+// severity first keep the strongest-toned copy. The input is not mutated; the
+// result is freshly allocated.
+func DedupeInsights(in []Insight) []Insight {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]Insight, 0, len(in))
+	for _, ins := range in {
+		sig := ins.Title + "\x00" + ins.Detail
+		if _, dup := seen[sig]; dup {
+			continue
+		}
+		seen[sig] = struct{}{}
+		out = append(out, ins)
+	}
+	return out
+}
+
 func abs64(v int64) int64 {
 	if v < 0 {
 		return -v

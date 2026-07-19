@@ -234,9 +234,6 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, status.Error(codes.ResourceExhausted, "ai request is too large")
 	}
 	day := s.now()
-	if err := s.checkUsageLimit(user.ID, day); err != nil {
-		return AICompletion{}, err
-	}
 	if err := s.checkAIUpstreamCircuit(day); err != nil {
 		return AICompletion{}, err
 	}
@@ -247,6 +244,27 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	if !ok {
 		return AICompletion{}, status.Error(codes.FailedPrecondition, "openai key is not configured")
 	}
+	// Capture usage BEFORE reserving so the alert-threshold crossing below compares
+	// pre-request against post-request counts.
+	previous, _, err := s.store.GetUsage(user.ID, day)
+	if err != nil {
+		return AICompletion{}, fmt.Errorf("server ai: get usage before reserve: %w", err)
+	}
+	// Atomically reserve one request against the daily cap. This replaces a
+	// read-then-later-increment that let concurrent requests slip past the limit.
+	allowed, limit, err := s.store.ReserveAIRequest(user.ID, day, s.requestsPerDay, s.tokensPerDay)
+	if err != nil {
+		return AICompletion{}, fmt.Errorf("server ai: reserve request: %w", err)
+	}
+	if !allowed {
+		if limit == "tokens" {
+			return AICompletion{}, status.Error(codes.ResourceExhausted, "daily ai token limit reached")
+		}
+		return AICompletion{}, status.Error(codes.ResourceExhausted, "daily ai request limit reached")
+	}
+	// The slot is reserved; release it if the request never completes, so only
+	// requests that actually run keep counting against the cap.
+	release := func() { _ = s.store.ReleaseAIRequest(user.ID, day) }
 	upstreamCtx := ctx
 	cancel := func() {}
 	if s.upstreamTimeout > 0 {
@@ -255,6 +273,7 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	defer cancel()
 	resp, err := s.doUpstream(upstreamCtx, body, key)
 	if err != nil {
+		release()
 		if ctx.Err() != nil {
 			return AICompletion{}, status.Error(codes.Canceled, "ai request canceled")
 		}
@@ -268,9 +287,11 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
+		release()
 		return AICompletion{}, status.Errorf(codes.Unavailable, "read openai response: %v", err)
 	}
 	if resp.StatusCode >= 400 {
+		release()
 		if resp.StatusCode >= 500 {
 			s.recordAIUpstreamFailure(day)
 		} else {
@@ -281,14 +302,12 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 	s.recordAIUpstreamSuccess()
 	content, err := ai.ParseResponse(data)
 	if err != nil {
+		release()
 		return AICompletion{}, status.Errorf(codes.Internal, "parse openai response: %v", err)
 	}
 	usage := ai.ParseUsage(data)
-	previous, _, err := s.store.GetUsage(user.ID, day)
-	if err != nil {
-		return AICompletion{}, fmt.Errorf("server ai: get usage before alert: %w", err)
-	}
-	next, err := s.store.AddUsage(user.ID, day, 1, int64(usage.TotalTokens))
+	// The request slot is already reserved; record only the tokens now.
+	next, err := s.store.AddUsage(user.ID, day, 0, int64(usage.TotalTokens))
 	if err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
@@ -501,26 +520,6 @@ func validateAIVisionRequest(req AIVisionRequest) error {
 func validateAITemperature(temperature float64) error {
 	if math.IsNaN(temperature) || math.IsInf(temperature, 0) || temperature < 0 || temperature > 2 {
 		return status.Error(codes.InvalidArgument, "temperature is invalid")
-	}
-	return nil
-}
-
-func (s *AIService) checkUsageLimit(userID string, day time.Time) error {
-	if s.requestsPerDay <= 0 && s.tokensPerDay <= 0 {
-		return nil
-	}
-	usage, ok, err := s.store.GetUsage(userID, day)
-	if err != nil {
-		return fmt.Errorf("server ai: get usage: %w", err)
-	}
-	if !ok {
-		return nil
-	}
-	if s.requestsPerDay > 0 && usage.Requests >= s.requestsPerDay {
-		return status.Error(codes.ResourceExhausted, "daily ai request limit reached")
-	}
-	if s.tokensPerDay > 0 && usage.Tokens >= s.tokensPerDay {
-		return status.Error(codes.ResourceExhausted, "daily ai token limit reached")
 	}
 	return nil
 }

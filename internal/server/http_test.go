@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -960,7 +961,7 @@ func TestMaxInFlightMiddlewareRejectsWhenBusy(t *testing.T) {
 
 func TestRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 	var hits int
-	h := rateLimitMiddleware(2, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := rateLimitMiddleware(2, Config{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hits++
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -997,24 +998,85 @@ func TestRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 	}
 }
 
-func TestRateLimitMiddlewareHonorsForwardedClient(t *testing.T) {
-	h := rateLimitMiddleware(1, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// TestRateLimitMiddlewareIgnoresUntrustedForwardedClient locks in the fix for the
+// X-Forwarded-For spoofing bypass: when no trusted proxy is configured (the default),
+// the limiter MUST key on the real socket peer (RemoteAddr) and ignore the
+// attacker-supplied X-Forwarded-For header. Otherwise a client could rotate spoofed
+// forwarded values to mint unlimited fresh buckets and never get limited.
+func TestRateLimitMiddlewareIgnoresUntrustedForwardedClient(t *testing.T) {
+	var hits int
+	h := rateLimitMiddleware(1, Config{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
 		w.WriteHeader(http.StatusNoContent)
 	}))
+	// Same real peer, but a different spoofed X-Forwarded-For each time. The spoof must
+	// NOT create separate buckets, so the second request is limited on the peer IP.
 	first := httptest.NewRequest(http.MethodGet, "/limited", nil)
 	first.RemoteAddr = "198.51.100.1:1234"
-	first.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.10")
-	h.ServeHTTP(httptest.NewRecorder(), first)
-
+	first.Header.Set("X-Forwarded-For", "203.0.113.7")
+	if rr := httptest.NewRecorder(); func() int { h.ServeHTTP(rr, first); return rr.Code }() != http.StatusNoContent {
+		t.Fatalf("first request was not allowed")
+	}
 	second := httptest.NewRequest(http.MethodGet, "/limited", nil)
-	second.RemoteAddr = "198.51.100.2:1234"
-	second.Header.Set("X-Forwarded-For", "203.0.113.7")
+	second.RemoteAddr = "198.51.100.1:9999" // same host, different source port
+	second.Header.Set("X-Forwarded-For", "203.0.113.8, 10.0.0.1")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, second)
 	if rr.Code != http.StatusTooManyRequests {
-		t.Fatalf("forwarded client status = %d, want 429", rr.Code)
+		t.Fatalf("spoofed-XFF second request status = %d, want 429 (peer-keyed, spoof ignored)", rr.Code)
 	}
 	assertHTTPErrorReason(t, rr, ErrorReasonRateLimited)
+
+	// A genuinely different peer is a different bucket and is allowed.
+	third := httptest.NewRequest(http.MethodGet, "/limited", nil)
+	third.RemoteAddr = "198.51.100.2:1234"
+	third.Header.Set("X-Forwarded-For", "203.0.113.7") // same spoof as the first request
+	if rr := httptest.NewRecorder(); func() int { h.ServeHTTP(rr, third); return rr.Code }() != http.StatusNoContent {
+		t.Fatalf("distinct peer was limited despite sharing a spoofed XFF")
+	}
+	if hits != 2 {
+		t.Fatalf("handler hits = %d, want 2", hits)
+	}
+}
+
+// TestRateLimitMiddlewareHonorsTrustedProxyForwardedClient verifies the intended
+// reverse-proxy deployment: when the direct peer IS a configured trusted proxy, the
+// limiter keys on the forwarded client address so two different real clients arriving
+// through the same proxy get independent buckets, and one client's flood does not
+// limit the other.
+func TestRateLimitMiddlewareHonorsTrustedProxyForwardedClient(t *testing.T) {
+	_, proxyNet, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("parse cidr: %v", err)
+	}
+	cfg := Config{TrustedProxies: []*net.IPNet{proxyNet}}
+	var hits int
+	h := rateLimitMiddleware(1, cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	// Client A through the trusted proxy: allowed once, limited on the second.
+	send := func(xff string) int {
+		req := httptest.NewRequest(http.MethodGet, "/limited", nil)
+		req.RemoteAddr = "10.1.2.3:4567" // trusted proxy peer
+		req.Header.Set("X-Forwarded-For", xff)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr.Code
+	}
+	if code := send("203.0.113.7"); code != http.StatusNoContent {
+		t.Fatalf("client A first status = %d, want 204", code)
+	}
+	if code := send("203.0.113.7, 10.1.2.3"); code != http.StatusTooManyRequests {
+		t.Fatalf("client A second status = %d, want 429 (trusted XFF honored)", code)
+	}
+	// A different real client through the same proxy is a separate bucket → allowed.
+	if code := send("203.0.113.8"); code != http.StatusNoContent {
+		t.Fatalf("client B status = %d, want 204 (independent bucket)", code)
+	}
+	if hits != 2 {
+		t.Fatalf("handler hits = %d, want 2", hits)
+	}
 }
 
 func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
@@ -1070,7 +1132,7 @@ func TestUserRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
 }
 
 func TestAuthRateLimitMiddlewareRejectsAfterLimit(t *testing.T) {
-	h := authRateLimitMiddleware(1)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	h := authRateLimitMiddleware(1, Config{})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/github", nil)

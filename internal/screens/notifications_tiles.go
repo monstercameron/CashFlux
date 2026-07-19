@@ -46,7 +46,10 @@ func notifSummaryWidget(props notifProps) ui.Node {
 	feedAtom := uistate.UseNotifyFeed()
 	feed := feedAtom.Get()
 	now := time.Now().Unix()
-	visible := uistate.VisibleFeed(feed, now)
+	// The summary reflects the active triage bucket (Needs you / Watching), after
+	// dedupe — so its hero count is "what needs you", not every alert ever fired.
+	view := UseNotifyView().Get()
+	visible := triageVisibleFeed(view, feed, now)
 
 	// Session-stable baseline: captured once on first mount so the catch-up count doesn't
 	// vanish when the open-effect stamps last-seen = now.
@@ -267,7 +270,10 @@ func notifListWidget(props notifProps) ui.Node {
 	filter := uistate.UseNotifyFilter()
 	feed := feedAtom.Get()
 	now := time.Now().Unix()
-	visible := uistate.VisibleFeed(feed, now)
+	// Apply the triage view (Needs you / Watching) + dedupe before the severity
+	// filter, so the feed shows only the active bucket's deduplicated rows.
+	view := UseNotifyView().Get()
+	visible := triageVisibleFeed(view, feed, now)
 
 	// Severity filter (empty severity is treated as "info").
 	if f := filter.Get(); f != "" {
@@ -293,7 +299,18 @@ func notifListWidget(props notifProps) ui.Node {
 		return notifListTile(P(css.Class("empty"), uistate.T("notifications.empty")))
 	}
 	if len(visible) == 0 {
-		return notifListTile(P(css.Class("empty"), uistate.T("notifications.noneMatch")))
+		// A severity filter that matches nothing keeps its own "none match" copy;
+		// an empty bucket with no filter gets a calm, bucket-specific line (an
+		// empty "Needs you" is a win, not a dead end).
+		msg := uistate.T("notifications.noneMatch")
+		if filter.Get() == "" {
+			if view == "watching" {
+				msg = uistate.T("notifications.watchingEmpty")
+			} else {
+				msg = uistate.T("notifications.needsClear")
+			}
+		}
+		return notifListTile(P(css.Class("empty"), msg))
 	}
 
 	pr := uistate.UsePrefs().Get()

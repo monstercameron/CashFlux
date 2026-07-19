@@ -5,6 +5,7 @@ package server
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,12 @@ import (
 
 const oauthStateCookie = "cashflux_oauth_state"
 const oauthIDTokenClockSkew = 5 * time.Minute
+
+// oauthHTTPClient bounds every outbound OAuth provider call (token exchange, userinfo)
+// with an explicit timeout. http.DefaultClient has no timeout, so a slow or hung
+// provider could pin the request goroutine for as long as the transport allowed; the
+// callback flow is unauthenticated, so that is a cheap way to tie up server workers.
+var oauthHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 type oauthStateData struct {
 	State    string
@@ -551,7 +558,7 @@ func exchangeOAuthCode(r *http.Request, providerName string, provider OAuthProvi
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return oauthToken{}, fmt.Errorf("oauth token exchange failed: %w", err)
 	}
@@ -662,7 +669,7 @@ func fetchOAuthUser(r *http.Request, providerName string, provider OAuthProvider
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := oauthHTTPClient.Do(req)
 	if err != nil {
 		return User{}, fmt.Errorf("oauth user fetch failed: %w", err)
 	}
@@ -816,7 +823,13 @@ func validCSRF(r *http.Request) bool {
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return false
 	}
-	return strings.TrimSpace(r.Header.Get(sessionCSRFHeader)) == cookie.Value
+	header := strings.TrimSpace(r.Header.Get(sessionCSRFHeader))
+	if header == "" {
+		return false
+	}
+	// Constant-time compare so a timing side-channel can't be used to recover the
+	// double-submit token byte-by-byte.
+	return subtle.ConstantTimeCompare([]byte(header), []byte(cookie.Value)) == 1
 }
 
 func clearOAuthStateCookie(w http.ResponseWriter, providerName string, secure bool) {

@@ -65,6 +65,9 @@ func suggestTitle(s tasksuggest.Suggestion) string {
 // exists); Dismiss snoozes the proposal for a month.
 func todoSuggestStrip(app *appstate.App) ui.Node {
 	_ = uistate.UseDataRevision().Get()
+	// Collapse state declared before any early return so the hook slot is stable.
+	sectionOpen := uistate.UseTodoSuggestOpen()
+	toggle := ui.UseEvent(Prevent(func() { sectionOpen.Set(!sectionOpen.Get()) }))
 	if app == nil {
 		return Fragment()
 	}
@@ -101,13 +104,23 @@ func todoSuggestStrip(app *appstate.App) ui.Node {
 	for _, sg := range kept {
 		rows = append(rows, ui.CreateElement(todoSuggestRow, todoSuggestRowProps{S: sg, App: app}))
 	}
-	return Div(css.Class("todo-suggest"), Attr("data-testid", "todo-suggest-strip"),
-		Style(map[string]string{"margin-bottom": "0.75rem", "padding": "0.6rem 0.75rem",
-			"border": "1px solid var(--border)", "border-radius": "8px"}),
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.4rem"}),
-			uistate.T("todo.suggestHeading")),
-		Div(Style(map[string]string{"display": "grid", "gap": "0.35rem"}), rows),
+	// A clearly-labeled, collapsible section that sits BELOW the committed list. The header
+	// counts what's waiting ("Suggested for you (N)"); the proposals render only when the
+	// user expands it, so nudges never crowd their own tasks.
+	header := Button(css.Class("todo-suggest-head"), Type("button"),
+		Attr("data-testid", "todo-suggest-toggle"),
+		Attr("aria-expanded", ariaBool(sectionOpen.Get())),
+		Attr("aria-controls", "todo-suggest-body"),
+		OnClick(toggle),
+		uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(uistate.T("todo.suggestForYou", len(kept))),
+		uiw.Icon(icon.ChevronRight, css.Class("todo-suggest-caret", tw.W4, tw.H4)),
 	)
+	var body ui.Node = Fragment()
+	if sectionOpen.Get() {
+		body = Div(css.Class("todo-suggest-body"), Attr("id", "todo-suggest-body"), rows)
+	}
+	return Div(css.Class("todo-suggest"), Attr("data-testid", "todo-suggest-strip"), header, body)
 }
 
 type todoSuggestRowProps struct {

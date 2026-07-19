@@ -46,19 +46,46 @@ const insightsPageSize = 10
 // per-rule cap and pagination apply — so a search can surface a finding the
 // uncontrolled feed would have capped away.
 func smartInsightsTriage(props insightsPagerProps) ui.Node {
+	// triage is the coarse bucket the feed defaults to: "needs" (Warn + Alert —
+	// a decision or an action) or "watching" (the calm Nudge/Info remainder). It
+	// leads the controls so the surface opens on a short "Needs you" list, not the
+	// full catalog. The finer search / severity-floor / page / sort controls still
+	// refine within the chosen bucket.
+	triage := ui.UseState("needs")
 	query := ui.UseState("")
 	minSev := ui.UseState("")   // "" = all, else "nudge" | "warn" | "alert"
 	pageF := ui.UseState("")    // "" = all pages
 	sortMode := ui.UseState("") // "" = severity default
+	onNeeds := ui.UseEvent(Prevent(func() { triage.Set("needs") }))
+	onWatching := ui.UseEvent(Prevent(func() { triage.Set("watching") }))
 	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
 	onSev := ui.UseEvent(func(e ui.Event) { minSev.Set(e.GetValue()) })
 	onPage := ui.UseEvent(func(e ui.Event) { pageF.Set(e.GetValue()) })
 	onSort := ui.UseEvent(func(e ui.Event) { sortMode.Set(e.GetValue()) })
 
+	// Partition to the active bucket first, then apply the finer filters within it.
+	wantNeeds := triage.Get() != "watching"
+	bucket := make([]smart.Insight, 0, len(props.Insights))
+	for _, ins := range props.Insights {
+		if smart.NeedsAttention(ins) == wantNeeds {
+			bucket = append(bucket, ins)
+		}
+	}
+
 	sevOf := map[string]smart.Severity{"nudge": smart.SeverityNudge, "warn": smart.SeverityWarn, "alert": smart.SeverityAlert}
-	filtered := smart.FilterInsights(props.Insights, query.Get(), sevOf[minSev.Get()], smart.Page(pageF.Get()))
+	filtered := smart.FilterInsights(bucket, query.Get(), sevOf[minSev.Get()], smart.Page(pageF.Get()))
 	smart.SortInsightsBy(filtered, smart.SortMode(sortMode.Get()))
 	capped := smart.CapPerRule(filtered, 3)
+
+	triageSeg := Div(css.Class("nhx-toggle"), Attr("role", "tablist"),
+		Attr("aria-label", uistate.T("smart.triageViewLabel")), Attr("data-testid", "smart-triage-view"),
+		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
+			Attr("data-testid", "smart-triage-needs"), Attr("aria-selected", ariaBool(wantNeeds)),
+			OnClick(onNeeds), Text(uistate.T("smart.triageNeedsYou"))),
+		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
+			Attr("data-testid", "smart-triage-watching"), Attr("aria-selected", ariaBool(!wantNeeds)),
+			OnClick(onWatching), Text(uistate.T("smart.triageWatching"))),
+	)
 
 	pageOpts := []ui.Node{Option(Value(""), SelectedIf(pageF.Get() == ""), uistate.T("smart.triageAllPages"))}
 	for _, p := range smart.Pages() {
@@ -90,12 +117,22 @@ func smartInsightsTriage(props insightsPagerProps) ui.Node {
 
 	var list ui.Node
 	if len(capped) == 0 {
-		list = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), Attr("data-testid", "smart-triage-empty"),
-			uistate.T("smart.triageNoMatch"))
+		// With no finer filter active, an empty bucket gets a calm, bucket-specific
+		// line (an empty "Needs you" is a win); a filter that matches nothing keeps
+		// the "no match" copy.
+		msg := uistate.T("smart.triageNoMatch")
+		if query.Get() == "" && minSev.Get() == "" && pageF.Get() == "" {
+			if wantNeeds {
+				msg = uistate.T("smart.needsClear")
+			} else {
+				msg = uistate.T("smart.watchingEmpty")
+			}
+		}
+		list = P(ClassStr(tw.Fold(tw.Text14, tw.TextDim)), Attr("data-testid", "smart-triage-empty"), msg)
 	} else {
 		list = ui.CreateElement(smartInsightsPager, insightsPagerProps{Insights: capped})
 	}
-	return Fragment(controls, list)
+	return Fragment(triageSeg, controls, list)
 }
 
 // nodesToAny widens a node slice for variadic element constructors.

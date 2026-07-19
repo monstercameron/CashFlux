@@ -73,3 +73,67 @@ func TestVisible(t *testing.T) {
 		t.Errorf("Visible(hideDone=true) = %v, want only open", got)
 	}
 }
+
+func TestFilterQuickView(t *testing.T) {
+	today := d(2026, time.July, 19)
+	todayISO := "2026-07-19"
+	tasks := []domain.Task{
+		{ID: "overdue", Status: domain.StatusOpen, Due: d(2026, time.July, 10)},
+		{ID: "today", Status: domain.StatusOpen, Due: today},
+		{ID: "future", Status: domain.StatusOpen, Due: d(2026, time.July, 25)},
+		{ID: "undated", Status: domain.StatusOpen},
+		{ID: "doneToday", Status: domain.StatusDone, Due: today},
+		{ID: "doneOverdue", Status: domain.StatusDone, Due: d(2026, time.July, 1)},
+	}
+	// All is a passthrough (identity, including done/undated).
+	if got := ids(FilterQuickView(tasks, QuickAll, todayISO)); !eq(got, ids(tasks)) {
+		t.Errorf("QuickAll = %v, want unchanged", got)
+	}
+	// Today keeps only the open task due exactly today (not the done one).
+	if got := ids(FilterQuickView(tasks, QuickToday, todayISO)); !eq(got, []string{"today"}) {
+		t.Errorf("QuickToday = %v, want [today]", got)
+	}
+	// Overdue keeps only the open, past-due task.
+	if got := ids(FilterQuickView(tasks, QuickOverdue, todayISO)); !eq(got, []string{"overdue"}) {
+		t.Errorf("QuickOverdue = %v, want [overdue]", got)
+	}
+	// Empty todayISO is a passthrough guard.
+	if got := ids(FilterQuickView(tasks, QuickToday, "")); !eq(got, ids(tasks)) {
+		t.Errorf("QuickToday with empty todayISO = %v, want unchanged", got)
+	}
+	// The input slice is never mutated.
+	if tasks[0].ID != "overdue" {
+		t.Errorf("input slice was reordered/mutated")
+	}
+}
+
+func TestCountQuickViews(t *testing.T) {
+	todayISO := "2026-07-19"
+	tasks := []domain.Task{
+		{ID: "o1", Status: domain.StatusOpen, Due: d(2026, time.July, 10)},
+		{ID: "o2", Status: domain.StatusOpen, Due: d(2026, time.July, 18)},
+		{ID: "t1", Status: domain.StatusOpen, Due: d(2026, time.July, 19)},
+		{ID: "f1", Status: domain.StatusOpen, Due: d(2026, time.July, 20)},
+		{ID: "u1", Status: domain.StatusOpen},
+		{ID: "d1", Status: domain.StatusDone, Due: d(2026, time.July, 1)},
+	}
+	c := CountQuickViews(tasks, todayISO)
+	if c.Today != 1 || c.Overdue != 2 {
+		t.Errorf("CountQuickViews = %+v, want {Today:1 Overdue:2}", c)
+	}
+	if empty := CountQuickViews(tasks, ""); empty.Today != 0 || empty.Overdue != 0 {
+		t.Errorf("CountQuickViews empty todayISO = %+v, want zero", empty)
+	}
+}
+
+func TestParseQuickView(t *testing.T) {
+	cases := map[string]QuickView{
+		"today": QuickToday, "overdue": QuickOverdue,
+		"all": QuickAll, "": QuickAll, "bogus": QuickAll,
+	}
+	for in, want := range cases {
+		if got := ParseQuickView(in); got != want {
+			t.Errorf("ParseQuickView(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

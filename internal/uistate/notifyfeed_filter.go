@@ -43,6 +43,58 @@ func OverdueDays(dueAt, now int64) int {
 	return d
 }
 
+// NeedsAttention reports whether a feed item belongs in the "Needs you" triage
+// bucket: critical or warning severity — an action to take or a decision to
+// make. Everything else (info notes, reminders, changed-item digests) is calm
+// "Watching" material. This is the split that turns a punishing wall of counts
+// into a short list of what actually wants the user right now.
+func NeedsAttention(it FeedItem) bool {
+	switch it.Severity {
+	case "critical", "warning":
+		return true
+	default:
+		return false
+	}
+}
+
+// PartitionTriage splits items into the "Needs you" bucket (NeedsAttention true)
+// and the "Watching" bucket (everything else), preserving the input order within
+// each bucket. Neither slice shares element storage that callers may mutate
+// through; both are freshly allocated. A nil/empty input yields two empty slices.
+func PartitionTriage(items []FeedItem) (needs, watching []FeedItem) {
+	needs = make([]FeedItem, 0, len(items))
+	watching = make([]FeedItem, 0, len(items))
+	for _, it := range items {
+		if NeedsAttention(it) {
+			needs = append(needs, it)
+		} else {
+			watching = append(watching, it)
+		}
+	}
+	return needs, watching
+}
+
+// DedupeFeed removes entries that repeat the same underlying event — an
+// identical Title and Body — keeping the FIRST occurrence and preserving order.
+// Digest emitters can surface one event more than once (e.g. a rolled-up bill
+// that also fires its own bill-due card); showing it twice reads as noise, so
+// the feed collapses exact repeats. Items are matched on their stored Body, not
+// any render-time overdue rewrite, so the signature is stable. The returned
+// slice is freshly allocated; the input is not mutated.
+func DedupeFeed(items []FeedItem) []FeedItem {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]FeedItem, 0, len(items))
+	for _, it := range items {
+		sig := it.Title + "\x00" + it.Body
+		if _, dup := seen[sig]; dup {
+			continue
+		}
+		seen[sig] = struct{}{}
+		out = append(out, it)
+	}
+	return out
+}
+
 // NewSinceLastSeen returns the subset of items whose At timestamp is strictly
 // greater than lastSeen (C271). Items with At == lastSeen are excluded: the
 // boundary semantics treat lastSeen as the instant the center was last viewed,

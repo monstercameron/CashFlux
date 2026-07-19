@@ -275,6 +275,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			OnUndoContribution: undoContribution, OnResetGoal: resetGoal,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
 			EarmarkOverbooked: overbooked[g.ID],
+			Health:            v.Health[g.ID],
 		})
 	}
 

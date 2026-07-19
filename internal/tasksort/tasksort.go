@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -177,6 +178,76 @@ func Reorder(tasks []domain.Task, srcID, targetID string) ([]domain.Task, bool) 
 		}
 	}
 	return changed, true
+}
+
+// QuickView is a coarse "what needs attention now" lens over the task list,
+// surfaced as the To-do workspace's quick-view segmented control (All / Today /
+// Overdue). It is applied to the flat task list before tree-nesting, alongside the
+// other filters, so a matching child surfaces as a root.
+type QuickView string
+
+const (
+	QuickAll     QuickView = "all"     // every task (no date narrowing)
+	QuickToday   QuickView = "today"   // open, dated tasks due today
+	QuickOverdue QuickView = "overdue" // open, dated tasks past due
+)
+
+// ParseQuickView returns a valid QuickView, defaulting to QuickAll for unknown input.
+func ParseQuickView(s string) QuickView {
+	switch QuickView(s) {
+	case QuickToday, QuickOverdue:
+		return QuickView(s)
+	default:
+		return QuickAll
+	}
+}
+
+// FilterQuickView narrows tasks to the given quick view. todayISO is today's date
+// formatted as yyyy-mm-dd (dateutil.FormatDate). QuickAll (or an empty todayISO)
+// returns the input unchanged. Today keeps open, dated tasks due exactly today;
+// Overdue keeps open, dated tasks whose due date is before today. Done and undated
+// tasks never match Today/Overdue — those are action lenses. The input slice is
+// never modified (Today/Overdue allocate a fresh slice).
+func FilterQuickView(tasks []domain.Task, view QuickView, todayISO string) []domain.Task {
+	if view == QuickAll || todayISO == "" {
+		return tasks
+	}
+	out := make([]domain.Task, 0, len(tasks))
+	for _, t := range tasks {
+		if t.Status == domain.StatusDone || t.Due.IsZero() {
+			continue
+		}
+		due := dateutil.FormatDate(t.Due)
+		if (view == QuickToday && due == todayISO) || (view == QuickOverdue && due < todayISO) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// QuickCounts tallies how many open, dated tasks fall into each date-based quick
+// view — used to badge the quick-view segmented control ("Today (2)").
+type QuickCounts struct{ Today, Overdue int }
+
+// CountQuickViews counts open, dated tasks due today and past due. todayISO is
+// today's date as yyyy-mm-dd (dateutil.FormatDate). Pure; the input is not modified.
+func CountQuickViews(tasks []domain.Task, todayISO string) QuickCounts {
+	var c QuickCounts
+	if todayISO == "" {
+		return c
+	}
+	for _, t := range tasks {
+		if t.Status == domain.StatusDone || t.Due.IsZero() {
+			continue
+		}
+		switch due := dateutil.FormatDate(t.Due); {
+		case due == todayISO:
+			c.Today++
+		case due < todayISO:
+			c.Overdue++
+		}
+	}
+	return c
 }
 
 // Visible returns tasks with done ones removed when hideDone is set; otherwise

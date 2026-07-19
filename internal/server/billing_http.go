@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -426,7 +427,7 @@ type stripeInvoiceObject struct {
 	Subscription string `json:"subscription"`
 }
 
-func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
+func handleStripeWebhook(cfg Config, store *Store, mu *sync.Mutex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if store == nil {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
@@ -451,7 +452,8 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "webhook body is invalid")
 			return
 		}
-		if !validStripeSignature(r.Header.Get(stripeSignatureHeader), body, secret, time.Now().UTC()) {
+		now := time.Now().UTC()
+		if !validStripeSignature(r.Header.Get(stripeSignatureHeader), body, secret, now) {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "stripe signature is invalid")
 			return
 		}
@@ -460,18 +462,28 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "stripe event is invalid")
 			return
 		}
-		// Replay dedupe: Stripe retries webhooks until it gets a 2xx (and re-sends on
-		// its own schedule), so applying the same event twice must be a no-op. Record
-		// the event id first; if it was already seen, ack without re-applying.
-		if isNew, err := store.RecordWebhookEventOnce("stripe", event.ID, time.Now().UTC()); err != nil {
+		// Replay dedupe MUST be atomic with apply: Stripe retries until it gets a 2xx.
+		// The check-apply-record sequence runs under a lock and records the event id
+		// ONLY after apply succeeds — so (a) a re-sent event is deduped and can't
+		// overwrite newer state, and (b) a failed apply is never marked "seen", so
+		// Stripe's retry re-applies it instead of the change being silently lost.
+		mu.Lock()
+		defer mu.Unlock()
+		seen, err := store.HasWebhookEvent("stripe", event.ID)
+		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "webhook dedupe failed")
 			return
-		} else if !isNew {
+		}
+		if seen {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if err := applyStripeEvent(store, event, time.Now().UTC(), cfg.Metrics); err != nil {
+		if err := applyStripeEvent(store, event, now, cfg.Metrics); err != nil {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
+			return
+		}
+		if _, err := store.RecordWebhookEventOnce("stripe", event.ID, now); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "webhook record failed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -482,7 +494,7 @@ func handleStripeWebhook(cfg Config, store *Store) http.HandlerFunc {
 // Stripe keeps its dedicated handler). It authenticates via the provider's own
 // scheme, dedupes replays by event id, and applies the mapped subscription
 // mutation. A verify failure is 403; a mapping/apply failure is 400.
-func handleProviderWebhook(cfg Config, store *Store, providerName string) http.HandlerFunc {
+func handleProviderWebhook(cfg Config, store *Store, providerName string, mu *sync.Mutex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if store == nil {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
@@ -513,15 +525,26 @@ func handleProviderWebhook(cfg Config, store *Store, providerName string) http.H
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "webhook signature is invalid")
 			return
 		}
-		if isNew, err := store.RecordWebhookEventOnce(provider.Name(), ev.ID, now); err != nil {
+		// Atomic check-apply-record under the shared webhook lock: dedupe a replay,
+		// apply, and only then mark the event seen — so a failed apply is retried by
+		// the provider rather than silently swallowed. See handleStripeWebhook.
+		mu.Lock()
+		defer mu.Unlock()
+		seen, err := store.HasWebhookEvent(provider.Name(), ev.ID)
+		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "webhook dedupe failed")
 			return
-		} else if !isNew {
+		}
+		if seen {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if err := provider.ApplyWebhook(store, ev, now, cfg.Metrics); err != nil {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, err.Error())
+			return
+		}
+		if _, err := store.RecordWebhookEventOnce(provider.Name(), ev.ID, now); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "webhook record failed")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

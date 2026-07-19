@@ -76,7 +76,8 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 		return resp, nil
 	}
 	if found {
-		snapshot, ok, err := s.store.GetSnapshot(workspace.ID)
+		user, _ := AuthUserFromContext(ctx)
+		snapshot, ok, err := s.store.GetSnapshotForUser(user.ID, workspace.ID)
 		if err != nil {
 			return backendrpc.GetWorkspaceResponse{}, err
 		}
@@ -113,7 +114,8 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 		}
 		dataset = req.Dataset
 	} else if !result.Accepted {
-		snapshot, ok, err := s.store.GetSnapshot(result.Workspace.ID)
+		user, _ := AuthUserFromContext(ctx)
+		snapshot, ok, err := s.store.GetSnapshotForUser(user.ID, result.Workspace.ID)
 		if err != nil {
 			return backendrpc.PutWorkspaceResponse{}, err
 		}
