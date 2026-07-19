@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"strconv"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
@@ -24,7 +25,36 @@ const (
 	muzakEnabledKey = "cashflux:muzak"
 	muzakVolKey     = "cashflux:muzak-volume"
 	muzakPosKey     = "cashflux:muzak-pos"
+	// One-time flag: the first-run "music is on" notice has been shown on this
+	// device (see noticeMusicDefaultOnce).
+	muzakNoticedKey = "cashflux:muzak-noticed"
 )
+
+// noticeMusicDefaultOnce tells a brand-new user, once per device, that
+// background music is on by default and where to turn it off. Music-on is a
+// deliberate product default (the ♪ toggle sits inline in the top bar for
+// one-click mute), but starting audio unannounced surprised first-time users
+// (UI/UX review task #26) — this keeps the default while removing the
+// surprise. Shown only when music will actually be on (no persisted mute).
+func noticeMusicDefaultOnce() {
+	if _, ok := muzakLSGet(muzakNoticedKey); ok {
+		return
+	}
+	if v, ok := muzakLSGet(muzakEnabledKey); ok && v == "0" {
+		// Already muted (imported state or an earlier visit) — nothing to announce.
+		muzakLSPut(muzakNoticedKey, "1")
+		return
+	}
+	// Deferred past mount: PostNotice is a no-op until the toast host captures
+	// the notice atom during the first render, and this runs from the pre-mount
+	// boot path. 2.5s is comfortably after first paint and still "on arrival".
+	// The seen-flag is set inside the callback so a boot that never reaches
+	// mount doesn't burn the one showing.
+	time.AfterFunc(2500*time.Millisecond, func() {
+		muzakLSPut(muzakNoticedKey, "1")
+		uistate.PostNotice(uistate.T("muzak.firstRunNotice"), false)
+	})
+}
 
 func muzakLSGet(k string) (string, bool) { return browserstore.Get(k) }
 

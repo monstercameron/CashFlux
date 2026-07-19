@@ -93,6 +93,8 @@ func Run() {
 	// Seed this device's music resume point from the dataset (e.g. a just-imported
 	// workspace) BEFORE mounting, so the player reads the restored point on init.
 	seedMusicFromDataset()
+	// First-visit-only heads-up that background music defaults on (task #26).
+	noticeMusicDefaultOnce()
 	hydrateAIKey()
 	// Fold any legacy standalone language selection into the loaded dataset (the single
 	// source of truth). Only safe when the dataset is actually loaded — for an encrypted
