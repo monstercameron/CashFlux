@@ -1150,9 +1150,17 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 				return s.Group.ID
 			}, func(s acctGroupSection) ui.Node {
-				return Div(css.Class("acct-group"),
-					ui.CreateElement(acctGroupHeader, acctGroupHeaderProps{Section: s}),
-					Div(css.Class("rows"), MapKeyed(s.Accounts, keyOf, renderRow)),
+				// C412: each section collapses to just its header (name + subtotal); the
+				// collapsed state is read fresh here and persisted per group. Collapsed is
+				// threaded into the header prop so the memoized header re-renders on change.
+				collapsed := isAcctGroupCollapsed(s.Group.ID)
+				groupCls := "acct-group"
+				if collapsed {
+					groupCls += " is-collapsed"
+				}
+				return Div(ClassStr(groupCls),
+					ui.CreateElement(acctGroupHeader, acctGroupHeaderProps{Section: s, Collapsed: collapsed}),
+					If(!collapsed, Div(css.Class("rows"), MapKeyed(s.Accounts, keyOf, renderRow))),
 				)
 			}),
 		)

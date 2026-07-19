@@ -348,15 +348,12 @@ func AccountRow(props accountRowProps) ui.Node {
 		)
 	}
 
-	// Inline quick actions (everything else lives in the ⋯ menu). "Edit" is always
-	// inline; "Update value/balance" is inline for the accounts you actively maintain —
-	// stale ones (emphasized) and valuation-type assets you revalue by hand — and lives
-	// in the menu for the rest so it's never duplicated.
-	showValueInline := (props.Stale || isValuationType(a.Type)) && !a.Archived
-	updBtnCls := "btn"
-	if props.Stale {
-		updBtnCls = "btn btn-stale"
-	}
+	// C412: the row leads with exactly ONE inline everyday action — "Transactions" —
+	// for every account. The balance figure stays click-to-edit (the primary update
+	// affordance), and the explicit "Update value/balance" action is demoted into the
+	// ⋯ menu for the accounts you actively maintain (stale ones and valuation-type
+	// assets you revalue by hand), so no row carries a second prominent button.
+	showValueInMenu := (props.Stale || isValuationType(a.Type)) && !a.Archived
 
 	// AC2: a 90-day balance sparkline (inline SVG); AC9: this-period in/out/net figures.
 	sparkNode := accountSparkline(a, props.Sparkline)
@@ -463,30 +460,25 @@ func AccountRow(props accountRowProps) ui.Node {
 					Title(uistate.T("accounts.balanceTitle")),
 					Attr("aria-label", uistate.T("accounts.balanceAria", fmtMoney(dispBal))),
 					fmtMoney(dispBal))),
-			// Quieter rows: exactly ONE contextual primary action, plus the ⋯ overflow.
-			// An account you actively maintain (stale or a valuation asset) leads with
-			// "Update value/balance" (emphasized amber when stale) — the thing that row
-			// most needs; every other row leads with the everyday "Transactions" nav.
-			// Whichever of the two is NOT the primary is demoted into the ⋯ menu, so the
-			// resting row is a clean name → balance → [primary] [⋯] line instead of a
-			// wall of equal-weight buttons. The balance figure itself is already
-			// click-to-edit for updates.
+			// Quieter rows: exactly ONE inline everyday action ("Transactions"), plus the
+			// ⋯ overflow. The balance figure itself is already click-to-edit for updates,
+			// and the explicit "Update value/balance" action lives in the menu (C412), so
+			// the resting row is a clean name → balance → [Transactions] [⋯] line instead
+			// of a wall of equal-weight buttons.
 			Div(css.Class("acct-row-actions"),
-				IfElse(showValueInline,
-					Button(css.Class(updBtnCls, tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T(updateActionKey(a.Type)))),
-					// 18 accounts render 18 "Transactions" buttons — the accessible
-					// name carries the account so they're distinguishable.
-					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID),
-						Title(uistate.T("accounts.viewTxnsTitle")), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name),
-						OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
+				// 18 accounts render 18 "Transactions" buttons — the accessible name
+				// carries the account so they're distinguishable.
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "acct-view-txns-"+a.ID),
+					Title(uistate.T("accounts.viewTxnsTitle")), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name),
+					OnClick(view), uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions"))),
 				Div(css.Class("add-wrap"), Attr("id", menuID),
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")+" — "+a.Name), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-						// When "Update value/balance" is the row's inline primary (stale /
-						// valuation rows), the everyday Transactions nav is demoted here so it
-						// stays one click away without competing with the primary on the row.
-						If(showValueInline, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-view-txns-"+a.ID), Attr("aria-label", uistate.T("nav.transactions")+" — "+a.Name), Title(uistate.T("accounts.viewTxnsTitle")), OnClick(view), uistate.T("nav.transactions"))),
+						// C412: the demoted "Update value/balance" action leads the menu for
+						// the rows that actively need it (stale / valuation assets); it stamps
+						// the same set-balance editor the balance figure opens.
+						If(showValueInMenu, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "update-value-btn-"+a.ID), Title(uistate.T("accounts.updateBalanceTitle")), OnClick(setBal), uistate.T(updateActionKey(a.Type)))),
 						// Edit leads the menu — the most common of the demoted actions. (The
 						// everyday balance update stays inline / on the figure; Edit covers the
 						// rarer name/type/attribute changes.) Available on archived rows too,

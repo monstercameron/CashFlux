@@ -97,11 +97,50 @@ func groupSections(shown []domain.Account, groups []domain.AccountGroup, txns []
 	return out
 }
 
-// acctGroupHeader renders a group's header row: its name, a net subtotal, and — for
-// a real group (non-empty ID) — an edit affordance that opens the group flip modal.
-// Its own component so the edit-click hook is stable across a variable list of groups.
+// --- collapsible group sections (C412) -------------------------------------------
+
+// ungroupedCollapseID is the stable sentinel key for the "Ungrouped" catch-all,
+// whose group ID is the empty string; used so its collapsed state persists too.
+const ungroupedCollapseID = "_ungrouped"
+
+// acctGroupCollapseKey is the preserved-settings KV key holding whether the group
+// with the given ID is collapsed on the accounts list. Persisted per group so a
+// household's chosen shape survives reloads (durable via RequestPersist).
+func acctGroupCollapseKey(groupID string) string {
+	if groupID == "" {
+		groupID = ungroupedCollapseID
+	}
+	return "cashflux:acct-grp-collapsed:" + groupID
+}
+
+// isAcctGroupCollapsed reports whether the group section is collapsed. Read fresh
+// on every list render (the toggle bumps the shared data revision to re-render).
+func isAcctGroupCollapsed(groupID string) bool {
+	return uistate.SettingKVGet(acctGroupCollapseKey(groupID)) == "1"
+}
+
+// toggleAcctGroupCollapsed flips and persists a group section's collapsed state,
+// then bumps the data revision so the list tile (and this header) re-render with
+// the new shape. A plain func — the header component owns the click hook.
+func toggleAcctGroupCollapsed(groupID string) {
+	if isAcctGroupCollapsed(groupID) {
+		uistate.SettingKVDelete(acctGroupCollapseKey(groupID))
+	} else {
+		uistate.SettingKVSet(acctGroupCollapseKey(groupID), "1")
+	}
+	uistate.RequestPersist()
+	uistate.BumpDataRevision()
+}
+
+// acctGroupHeader renders a group's header row: a collapse/expand toggle (C412)
+// wrapping its name + member count, a net subtotal, and — for a real group
+// (non-empty ID) — an edit affordance that opens the group flip modal. Its own
+// component so the toggle/edit click hooks are stable across a variable list of
+// groups; the Collapsed prop is threaded so the memoized header re-renders when
+// the section's collapsed state changes.
 type acctGroupHeaderProps struct {
-	Section acctGroupSection
+	Section   acctGroupSection
+	Collapsed bool
 }
 
 func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
@@ -113,6 +152,7 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	}
 	edit := uistate.UseAccountGroupEdit()
 	openEdit := ui.UseEvent(Prevent(func() { edit.Set(g.ID) }))
+	toggle := ui.UseEvent(Prevent(func() { toggleAcctGroupCollapsed(g.ID) }))
 
 	var editBtn ui.Node = Fragment()
 	if isReal {
@@ -122,10 +162,37 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 			Title(uistate.T("accounts.editGroupTitle")), OnClick(openEdit),
 			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)))
 	}
+
+	chevron := icon.ChevronDown
+	toggleTitle := uistate.T("accountsGroup.collapse")
+	if props.Collapsed {
+		chevron = icon.ChevronRight
+		toggleTitle = uistate.T("accountsGroup.expand")
+	}
+	toggleTestID := "acct-group-toggle-" + g.ID
+	if !isReal {
+		toggleTestID = "acct-group-toggle-" + ungroupedCollapseID
+	}
 	return Div(css.Class("acct-group-header", tw.Flex, tw.ItemsCenter, tw.Gap2),
 		Attr("role", "heading"), Attr("aria-level", "3"),
 		Attr("aria-label", uistate.T("accounts.groupRowAria", name)),
-		Span(css.Class("acct-group-name", tw.FontMedium), name),
+		// The name is the collapse toggle: a wide, keyboard-reachable target that
+		// discloses/hides the section's rows. aria-expanded reflects the open state.
+		// Styled inline as bare text-with-a-chevron (no stylesheet dependency) so it
+		// reads as a section header rather than a default UA button.
+		Button(css.Class("acct-group-toggle", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Style(map[string]string{
+				"background": "none", "border": "0", "padding": "0", "margin": "0",
+				"cursor": "pointer", "color": "var(--text)", "font": "inherit", "text-align": "left",
+			}),
+			Attr("data-testid", toggleTestID), Title(toggleTitle),
+			Attr("aria-expanded", ariaBool(!props.Collapsed)),
+			Attr("aria-label", uistate.T("accountsGroup.toggleAria", name)),
+			OnClick(toggle),
+			uiw.Icon(chevron, css.Class("acct-group-chevron", tw.ShrinkO, tw.W4, tw.H4)),
+			Span(css.Class("acct-group-name", tw.FontMedium), name),
+			Span(css.Class("acct-group-count", tw.TextDim), plural(len(props.Section.Accounts), "account")),
+		),
 		Span(css.Class("acct-group-subtotal", tw.TextDim, tw.MlAuto),
 			Attr("aria-label", uistate.T("accounts.groupSubtotalAria", fmtMoney(props.Section.Subtotal))),
 			uistate.T("accounts.groupSubtotal", fmtMoney(props.Section.Subtotal))),
