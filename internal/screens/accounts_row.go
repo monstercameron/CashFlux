@@ -75,6 +75,13 @@ type accountRowProps struct {
 	// flat run is itself the "nothing has posted since your last update" signal. Fewer
 	// than two points renders nothing.
 	Sparkline []int64
+	// Sparkline12m / SparklineAll are the wider balance windows for the account-detail
+	// chart's range picker (C413): the trailing 12 months and the account's full
+	// history. Populated only when HasRange is set (the account has more than 90 days
+	// of history); otherwise the detail chart shows just the plain 90-day sparkline.
+	Sparkline12m []int64
+	SparklineAll []int64
+	HasRange     bool
 	// Flow is this account's money-in / money-out / net for the current period (AC9),
 	// with transfers counted separately (never as income or spend). Rendered as compact
 	// row figures when ShowFlow is set.
@@ -199,6 +206,11 @@ func AccountRow(props accountRowProps) ui.Node {
 	// list reads as name → balance and nothing competes; one click reveals the rest.
 	detailsOpen := ui.UseState(false)
 	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
+	// C413: the account-detail chart's range picker (90d / 12m / all) keeps its
+	// selection in the row's own state (stable hook position; AccountRow is the
+	// per-row component). The choice is view-only, so it isn't persisted.
+	chartRange := ui.UseState("90d")
+	onChartRange := func(v string) { chartRange.Set(v) }
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -355,8 +367,8 @@ func AccountRow(props accountRowProps) ui.Node {
 	// assets you revalue by hand), so no row carries a second prominent button.
 	showValueInMenu := (props.Stale || isValuationType(a.Type)) && !a.Archived
 
-	// AC2: a 90-day balance sparkline (inline SVG); AC9: this-period in/out/net figures.
-	sparkNode := accountSparkline(a, props.Sparkline)
+	// AC9: this-period in/out/net figures. (The AC2 balance chart is built inside the
+	// details block below so its range picker only mounts while the panel is open.)
 	flowNode := accountFlowFigures(a, props.Flow, props.ShowFlow)
 
 	// AC10: color the row's left edge by its institution when the account
@@ -383,7 +395,9 @@ func AccountRow(props accountRowProps) ui.Node {
 			projNode,
 			billNode,
 			flowNode,
-			sparkNode,
+			// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
+			// when the account has more than 90 days of history.
+			accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange),
 			// XC7: warn when goals have earmarked more against this account than it
 			// holds (goal money has been spent). Own component; healthy → Fragment().
 			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),

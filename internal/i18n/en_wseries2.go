@@ -15,6 +15,18 @@ var wSeries2Keys = Catalog{
 	"accountsGroup.collapse":   "Collapse group",
 	"accountsGroup.expand":     "Expand group",
 	"accountsGroup.toggleAria": "%s section",
+
+	// C413 — account-detail balance chart range picker.
+	"accountsRange.label":      "Balance history range",
+	"accountsRange.d90":        "90d",
+	"accountsRange.m12":        "12m",
+	"accountsRange.all":        "All",
+	"accountsRange.caption12m": "Balance, last 12 months",
+	"accountsRange.captionAll": "Balance, full history",
+	"accountsRange.aria12m":    "%s balance over the last 12 months",
+	"accountsRange.ariaAll":    "%s balance over its full history",
+	"accountsRange.flat12m":    "%s balance has not moved in the last 12 months",
+	"accountsRange.flatAll":    "%s balance has not moved on record",
 }
 
 func init() {

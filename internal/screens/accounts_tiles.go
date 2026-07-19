@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/accountflow"
+	"github.com/monstercameron/CashFlux/internal/acctseries"
 	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
@@ -1119,9 +1120,32 @@ func acctListWidget(props acctListProps) ui.Node {
 
 	// AC2/AC9: the 90-day sparkline window and this-month flow window, computed once.
 	monthStart, monthEnd := dateutil.MonthRange(now)
+
+	// C413: the earliest transaction date per account, folded once, so each row can
+	// size its "all" balance-history window without re-scanning the ledger per row.
+	earliestByAcct := map[string]time.Time{}
+	for _, t := range txns {
+		if e, ok := earliestByAcct[t.AccountID]; !ok || t.Date.Before(e) {
+			earliestByAcct[t.AccountID] = t.Date
+		}
+	}
+	// C413: cap the "all" window at ~20 years of daily points so a stray far-past
+	// date can't blow up the fold.
+	const allWindowCapDays = 366 * 20
+
 	renderRow := func(ac domain.Account) ui.Node {
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
+		// C413: size the range picker's windows. Only compute the wider series when
+		// the account actually has more than 90 days of history (HasRange), so the
+		// picker stays hidden — and the extra folds skipped — for young accounts.
+		allDays := acctseries.AllDays(now, acctseries.Days90, allWindowCapDays, earliestByAcct[ac.ID])
+		hasRange := acctseries.HasRange(allDays)
+		var s12m, sall []int64
+		if hasRange {
+			s12m = accountflow.BalanceSeries(ac, txns, now, acctseries.Days12m)
+			sall = accountflow.BalanceSeries(ac, txns, now, allDays)
+		}
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
 			Members: members, Accounts: accounts, Categories: categories,
@@ -1130,7 +1154,8 @@ func acctListWidget(props acctListProps) ui.Node {
 			SmartSettings: smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
 			AccountDefs: accDefs, InstByID: instByID,
 			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
-			Sparkline:  accountflow.BalanceSeries(ac, txns, now, 90),
+			Sparkline:    accountflow.BalanceSeries(ac, txns, now, acctseries.Days90),
+			Sparkline12m: s12m, SparklineAll: sall, HasRange: hasRange,
 			Flow:       accountflow.PeriodFlow(ac, txns, monthStart, monthEnd),
 			ShowFlow:   true,
 			Projection: app.ProjectAccount(ac.ID, now, 30),

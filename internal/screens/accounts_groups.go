@@ -205,11 +205,22 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 // sparklineW / sparklineH are the fixed inline-SVG geometry for a row sparkline.
 const sparklineW, sparklineH = 120.0, 24.0
 
-// accountSparkline renders the account's 90-day balance series as an inline SVG
-// polyline (AC2) — no chart library. A flat series draws a centered baseline and
-// says so in its accessible label, making "nothing has posted since your last
-// update" a visible signal. Fewer than two points renders nothing.
-func accountSparkline(a domain.Account, series []int64) ui.Node {
+// seriesFlat reports whether every point in the series equals the first — a flat
+// run is itself the "nothing has posted since your last update" signal.
+func seriesFlat(series []int64) bool {
+	for _, v := range series {
+		if v != series[0] {
+			return false
+		}
+	}
+	return true
+}
+
+// sparklineFigure renders a balance series as a captioned inline-SVG polyline
+// (AC2) — no chart library. ariaLabel names the series for screen readers and
+// caption names the line beneath it, so the 120×24 polyline reads as a designed
+// figure rather than a rendering glitch. Fewer than two points renders nothing.
+func sparklineFigure(a domain.Account, series []int64, ariaLabel, caption string) ui.Node {
 	if len(series) < 2 {
 		return Fragment()
 	}
@@ -217,29 +228,66 @@ func accountSparkline(a domain.Account, series []int64) ui.Node {
 	if points == "" {
 		return Fragment()
 	}
-	flat := true
-	for _, v := range series {
-		if v != series[0] {
-			flat = false
-			break
-		}
-	}
-	label := uistate.T("accounts.sparklineAria", a.Name)
-	if flat {
-		label = uistate.T("accounts.sparklineFlat", a.Name)
-	}
-	// Captioned figure, not a bare floating squiggle: in the details panel an
-	// unlabeled 120×24 polyline read as a rendering glitch (UI/UX task #7). The
-	// caption names what the line is; the svg keeps the aria description.
 	return Div(css.Class("acct-spark-fig"), Attr("data-testid", "acct-spark-fig-"+a.ID),
 		Svg(css.Class("acct-spark"), Attr("data-testid", "acct-spark-"+a.ID),
 			Attr("viewBox", "0 0 120 24"), Attr("width", "120"), Attr("height", "24"),
-			Attr("role", "img"), Attr("aria-label", label), Attr("preserveAspectRatio", "none"),
+			Attr("role", "img"), Attr("aria-label", ariaLabel), Attr("preserveAspectRatio", "none"),
 			Polyline(Attr("points", points), Attr("fill", "none"),
 				Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5"),
 				Attr("stroke-linejoin", "round"), Attr("stroke-linecap", "round")),
 		),
-		Span(css.Class("row-meta", tw.TextDim), Attr("aria-hidden", "true"), uistate.T("accounts.sparklineCaption")),
+		Span(css.Class("row-meta", tw.TextDim), Attr("aria-hidden", "true"), caption),
+	)
+}
+
+// accountSparkline renders the account's 90-day balance series as a captioned
+// inline-SVG polyline (AC2). Kept for the default (no-range) case so its output
+// is byte-identical to before the range picker existed.
+func accountSparkline(a domain.Account, series []int64) ui.Node {
+	label := uistate.T("accounts.sparklineAria", a.Name)
+	if seriesFlat(series) {
+		label = uistate.T("accounts.sparklineFlat", a.Name)
+	}
+	return sparklineFigure(a, series, label, uistate.T("accounts.sparklineCaption"))
+}
+
+// accountBalanceChart is the account-detail balance chart with an optional range
+// picker (C413): 90 days / 12 months / all. When hasRange is false (an account
+// with no history beyond 90 days) it renders exactly the plain 90-day sparkline
+// so nothing regresses. Otherwise a small segmented picker sits above the figure
+// and switches the drawn window; sel is the selected range key ("90d"/"12m"/"all")
+// and onSelect (a plain func, safe here) updates the row's per-row range state.
+func accountBalanceChart(a domain.Account, s90, s12m, sall []int64, hasRange bool, sel string, onSelect func(string)) ui.Node {
+	if !hasRange {
+		return accountSparkline(a, s90)
+	}
+	series, ariaKey, flatKey, captionKey := s90, "accounts.sparklineAria", "accounts.sparklineFlat", "accounts.sparklineCaption"
+	switch sel {
+	case "12m":
+		series, ariaKey, flatKey, captionKey = s12m, "accountsRange.aria12m", "accountsRange.flat12m", "accountsRange.caption12m"
+	case "all":
+		series, ariaKey, flatKey, captionKey = sall, "accountsRange.ariaAll", "accountsRange.flatAll", "accountsRange.captionAll"
+	}
+	aria := uistate.T(ariaKey, a.Name)
+	if seriesFlat(series) {
+		aria = uistate.T(flatKey, a.Name)
+	}
+	picker := uiw.Segmented(uiw.SegmentedProps{
+		Label:    uistate.T("accountsRange.label"),
+		Selected: sel,
+		OnSelect: onSelect,
+		Options: []uiw.SegOption{
+			{Value: "90d", Label: uistate.T("accountsRange.d90"), TestID: "acct-range-90d-" + a.ID},
+			{Value: "12m", Label: uistate.T("accountsRange.m12"), TestID: "acct-range-12m-" + a.ID},
+			{Value: "all", Label: uistate.T("accountsRange.all"), TestID: "acct-range-all-" + a.ID},
+		},
+	})
+	// TODO(C381): overlay the forward balance projection on this chart (a dashed
+	// continuation past today, using acctproject.Projection). Deliberately out of this
+	// batch — this ranged figure is the clean seam it will hang off of.
+	return Div(css.Class("acct-spark-ranged"), Attr("data-testid", "acct-spark-ranged-"+a.ID),
+		Div(css.Class("acct-spark-range-picker"), picker),
+		sparklineFigure(a, series, aria, uistate.T(captionKey)),
 	)
 }
 
