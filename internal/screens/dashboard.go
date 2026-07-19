@@ -1451,7 +1451,16 @@ func topHighlightWidget(txns []domain.Transaction, categories []domain.Category,
 	anomalies := detectSpendingAnomaliesMemo(appstate.Default.Rev(), "dash-highlight", txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
-		body = P(css.Class("t-body", tw.TextDim), uistate.T("dashboard.noHighlights"))
+		// A calm month left this card as one dim line in an otherwise-empty tile
+		// (UI/UX task #39). The all-clear stays the lead, and the card earns its
+		// space with the Insights cross-link its doc-comment always promised —
+		// a plain anchor, SPA-intercepted (anchorintercept.go), so this stays a
+		// hook-free display widget.
+		body = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+			P(css.Class("t-body", tw.TextDim), uistate.T("dashboard.noHighlights")),
+			A(css.Class("btn-link"), Href(uistate.RoutePath("/insights")), Attr("data-testid", "highlight-insights-link"),
+				uistate.T("dashboard.noHighlightsLink")),
+		)
 	} else {
 		a := anomalies[0]
 		body = Div(css.Class(tw.Flex, tw.ItemsStart, tw.Gap2),

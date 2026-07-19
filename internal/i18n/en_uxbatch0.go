@@ -9,6 +9,11 @@ package i18n
 var uxBatch0Keys = Catalog{
 	// First-run heads-up that background music is on by default (task #26).
 	"muzak.firstRunNotice": "Background music is on — the ♪ button in the top bar turns it off.",
+	// Spending-highlight tile, calm-month state (task #39).
+	"dashboard.noHighlightsLink": "See the full spending picture on Insights",
+	// Ellipsis discipline (task #30): the split editor needs further input, so
+	// its opener carries the "…" like its kebab siblings. Overrides en.go.
+	"splitEditor.toggle": "Split into categories…",
 }
 
 func init() {

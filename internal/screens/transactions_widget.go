@@ -641,19 +641,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
 			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
 			// while /reports showed Jul 1 for the same transaction (C339).
-			Date:                time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
-			Amount:              fmtMoney(amt),
-			AmtTone:             figTone(amt),
-			Desc:                desc,
-			Tags:                txByID[rid].Tags,
-			Account:             accCol.Str(i),
-			Category:            cat,
-			Source:              srcCol.Str(i),
-			Member:              memberName[txByID[rid].MemberID],
-			Cleared: cleared,
+			Date:     time.Unix(int64(dateCol.Num(i)), 0).UTC().Format("Jan 2, 2006"),
+			Amount:   fmtMoney(amt),
+			AmtTone:  figTone(amt),
+			Desc:     desc,
+			Tags:     txByID[rid].Tags,
+			Account:  accCol.Str(i),
+			Category: cat,
+			Source:   srcCol.Str(i),
+			Member:   memberName[txByID[rid].MemberID],
+			Cleared:  cleared,
 			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
-			Reviewed: txByID[rid].Reviewed,
+			Reviewed:            txByID[rid].Reviewed,
 			Selected:            sel[rid],
 			Receipts:            nAtt,
 			Attachment:          firstAtt,
@@ -837,7 +837,7 @@ type txnFrameRowProps struct {
 	// stronger chip than plain cleared.
 	Reconciled bool
 	Reviewed   bool
-	Selected      bool
+	Selected   bool
 	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
 	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
 	// this transaction, pre-set to the chosen mode (uistate.TxnLinkMode*).
@@ -1103,14 +1103,18 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		if props.SubscriptionName != "" {
 			subLabel = "✓ " + subLabel
 		}
+		// Every item carries a leading icon (UI/UX task #30): the add-menu and
+		// accounts kebab set the icon-bearing convention, and a 10-item text-only
+		// list scanned poorly. Ellipsis discipline: "…" marks items that open
+		// further UI needing input; immediate actions (exclude, unpair) don't.
 		items = append(items,
 			uiw.OverflowMenuItem{
-				Label:    billLabel,
+				Label: billLabel, Icon: icon.Bills,
 				TestID:   "txn-markbill-open",
 				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) },
 			},
 			uiw.OverflowMenuItem{
-				Label:    subLabel,
+				Label: subLabel, Icon: icon.Subscriptions,
 				TestID:   "txn-marksub-open",
 				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) },
 			})
@@ -1122,7 +1126,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			splitLabel = "✓ " + splitLabel
 		}
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    splitLabel,
+			Label: splitLabel, Icon: icon.Split,
 			TestID:   "txn-split-open",
 			OnSelect: func() { props.OnOpenSplit(props.ID) },
 		})
@@ -1130,7 +1134,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	// #63: every recorded change to THIS transaction (edits, rule applications,
 	// imports) — the audit trail scoped to one row. Opens the history flip modal.
 	items = append(items, uiw.OverflowMenuItem{
-		Label:    uistate.T("txnhistory.menuAction"),
+		Label: uistate.T("txnhistory.menuAction"), Icon: icon.History,
 		TestID:   "txn-history-open",
 		OnSelect: func() { uistate.SetTxnHistory(props.ID) },
 	})
@@ -1138,7 +1142,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	// mapping that also lives on /rules. Opens the payee-cleanup flip modal.
 	if !props.IsTransfer {
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("payeeClean.menuAction"),
+			Label: uistate.T("payeeClean.menuAction"), Icon: icon.Pencil,
 			TestID:   "txn-cleanname-open",
 			OnSelect: func() { uistate.SetPayeeClean(props.ID) },
 		})
@@ -1150,8 +1154,12 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		if props.ExcludedFromReports {
 			excLabel = uistate.T("transactions.kebabInclude")
 		}
+		excIcon := icon.Ban
+		if props.ExcludedFromReports {
+			excIcon = icon.Check
+		}
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    excLabel,
+			Label: excLabel, Icon: excIcon,
 			TestID:   "txn-toggle-exclude",
 			OnSelect: func() { props.OnToggleExclude(props.ID) },
 		})
@@ -1166,7 +1174,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		}
 		txnID := props.ID
 		items = append(items, uiw.OverflowMenuItem{
-			Label:  uistate.T("transactions.followUpTask"),
+			Label: uistate.T("transactions.followUpTask"), Icon: icon.Todo,
 			TestID: "txn-followup-task",
 			OnSelect: func() {
 				uistate.SetTaskAddSeed(uistate.TaskAddSeed{
@@ -1182,7 +1190,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	// gating as the manual split — a transfer leg has no category to split.
 	if props.OnReceiptSplit != nil && !props.IsTransfer {
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("receiptsplit.menuAction"),
+			Label: uistate.T("receiptsplit.menuAction"), Icon: icon.Receipt,
 			TestID:   "txn-receipt-split-open",
 			OnSelect: func() { props.OnReceiptSplit(props.ID) },
 		})
@@ -1191,14 +1199,14 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	// remove an existing pairing (offered on either side of the pair).
 	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("txnlinks.pairAction"),
+			Label: uistate.T("txnlinks.pairAction"), Icon: icon.Repeat,
 			TestID:   "txn-pair-refund",
 			OnSelect: func() { props.OnPairRefund(props.ID) },
 		})
 	}
 	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("txnlinks.unpairAction"),
+			Label: uistate.T("txnlinks.unpairAction"), Icon: icon.Close,
 			TestID:   "txn-unpair",
 			OnSelect: func() { props.OnUnpair(props.ID) },
 		})
@@ -1206,7 +1214,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	// TX9: release this row's bill-match link (the occurrence reads unpaid again).
 	if props.OnUnlinkBill != nil && props.IsBillMatched {
 		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("billmatch.unlink"),
+			Label: uistate.T("billmatch.unlink"), Icon: icon.Close,
 			TestID:   "txn-unlink-bill",
 			OnSelect: func() { props.OnUnlinkBill(props.ID) },
 		})
