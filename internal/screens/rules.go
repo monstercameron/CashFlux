@@ -216,7 +216,9 @@ func Rules() ui.Node {
 				notice.Set(notice.Get().With(err.Error(), true))
 				return
 			}
-			notice.Set(notice.Get().With(uistate.T("rules.applied", plural(n, "transaction")), false))
+			// C364: a bulk rules-apply is a large overwrite — tell the undo story
+			// (Ctrl+Z / Activity) instead of a silent "applied" confirmation.
+			postUndoStory(uistate.T("rules.applied", plural(n, "transaction")))
 			bump()
 		})
 	}))

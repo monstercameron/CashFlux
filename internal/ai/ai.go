@@ -204,15 +204,20 @@ func EstimateCostUSD(model string, u Usage) (float64, bool) {
 	return float64(u.PromptTokens)/1e6*p.Input + float64(u.CompletionTokens)/1e6*p.Output, true
 }
 
-// FormatCostUSD renders an estimated cost compactly: zero as "$0.00", sub-cent
-// amounts with four decimals (so a fraction of a cent is still visible), and
-// larger amounts with the usual two.
+// FormatCostUSD renders an estimated cost compactly and honestly: a true zero
+// (no tokens) as "$0.00"; a sub-cent amount as three decimals ("$0.004") so a
+// fraction of a cent stays visible; anything below a tenth of a cent — but still
+// nonzero — as "<$0.001" rather than a misleading "$0.00"; and a cent or more
+// with the usual two decimals. The rule guarantees a nonzero spend never reads as
+// free.
 func FormatCostUSD(cost float64) string {
 	switch {
 	case cost <= 0:
 		return "$0.00"
+	case cost < 0.001:
+		return "<$0.001"
 	case cost < 0.01:
-		return fmt.Sprintf("$%.4f", cost)
+		return fmt.Sprintf("$%.3f", cost)
 	default:
 		return fmt.Sprintf("$%.2f", cost)
 	}

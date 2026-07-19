@@ -414,6 +414,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	}
 	openEdit := func(id string) { uistate.SetTxnEdit(id) }
 	openSplit := func(id string) { uistate.SetTxnSplit(id) }
+	// C363: author a rule from a row — prefill the Rules workbench add-form with
+	// this transaction's cleaned merchant (falling back to its description) and
+	// current category, then jump to /rules so it can be confirmed in one click.
+	createRuleFromTxn := func(id string) {
+		for _, t := range props.App.Transactions() {
+			if t.ID == id {
+				phrase := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc))
+				uistate.SetRuleDraft(phrase, t.CategoryID)
+				nav.Navigate(uistate.RoutePath("/rules"))
+				return
+			}
+		}
+	}
 	// TXC-1: flip a transaction's exclude-from-reports flag from the row kebab.
 	toggleExclude := func(id string) {
 		for _, t := range props.App.Transactions() {
@@ -696,6 +709,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnUngroup = ungroupRow
 		r.OnUnlinkBill = unlinkBillRow
 		r.OnOpenFollowUps = openFollowUps
+		r.OnCreateRule = createRuleFromTxn
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -871,6 +885,10 @@ type txnFrameRowProps struct {
 	OnOpen         func(id string)
 	OnToggleSelect func(id string, shift bool)
 	OnViewReceipt  func(domain.AttachmentRef)
+	// OnCreateRule (C363) prefills the Rules workbench add-form from this row's
+	// merchant + category and navigates to /rules, so a rule can be authored from
+	// a transaction in one click. Hidden on transfer legs (no category to file).
+	OnCreateRule func(txnID string)
 	// Transaction links (XC1 order groups / XC2 refund pairs): badge data plus the
 	// ⋯-menu actions. GroupTotal is pre-formatted; IsIncome gates the pair action
 	// (only money-in can be a refund).
@@ -1094,6 +1112,16 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 // (loop-safe: it owns each item's click hook).
 func txnRowMenu(props txnFrameRowProps) ui.Node {
 	var items []uiw.OverflowMenuItem
+	// C363: the row's most strategic action first — turn this one charge into a
+	// standing rule (the /rules workbench opens prefilled). Gated on transfer legs
+	// (a transfer has no merchant/category to generalize into a rule).
+	if props.OnCreateRule != nil && !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("transactions.createRule"), Icon: icon.Workflow,
+			TestID:   "txn-create-rule",
+			OnSelect: func() { props.OnCreateRule(props.ID) },
+		})
+	}
 	if props.OnOpenLink != nil {
 		billLabel := uistate.T("transactions.markBill")
 		if props.BillAccountID != "" {

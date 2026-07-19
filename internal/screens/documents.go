@@ -375,6 +375,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			}
 		}
 		msg.Set(summary)
+		// C364: name the reversal path (Ctrl+Z / Activity) at the moment a CSV
+		// import commits, so a bad file is reversible from the moment of risk.
+		if n > 0 {
+			postUndoStory(uistate.T("documents.importUndo", plural(n, "transaction")))
+		}
 		csvText.Set("") // clear the paste box after a successful import
 		rev.Set(rev.Get() + 1)
 		return true
@@ -990,6 +995,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			summary += uistate.T("documents.skipped", plural(result.Skipped, "duplicate"))
 		}
 		msg.Set(summary)
+		// C364: undo story for a committed image/statement import.
+		if result.Imported > 0 {
+			postUndoStory(uistate.T("documents.importUndo", plural(result.Imported, "transaction")))
+		}
 		rev.Set(rev.Get() + 1)
 		return true
 	}
@@ -1026,6 +1035,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		receiptMode.Set(false)
 		aiErr.Set("")
 		msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
+		// C364: undo story for a committed receipt import.
+		postUndoStory(uistate.T("documents.receiptImportUndo"))
 		rev.Set(rev.Get() + 1)
 		return true
 	}

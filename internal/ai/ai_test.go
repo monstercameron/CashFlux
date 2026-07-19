@@ -55,12 +55,14 @@ func TestEstimateCostUSD(t *testing.T) {
 
 func TestFormatCostUSD(t *testing.T) {
 	cases := map[float64]string{
-		0:      "$0.00",
-		0.0003: "$0.0003",
-		0.009:  "$0.0090",
-		0.01:   "$0.01",
-		1.5:    "$1.50",
-		12.345: "$12.35",
+		0:         "$0.00",   // no tokens → a true zero
+		0.0000005: "<$0.001", // a nonzero spend below a tenth of a cent never reads as $0.00
+		0.0003:    "<$0.001", // still below the $0.001 floor
+		0.004:     "$0.004",  // sub-cent shows three decimals
+		0.009:     "$0.009",  // sub-cent, upper edge
+		0.01:      "$0.01",   // a cent or more → two decimals
+		1.5:       "$1.50",
+		12.345:    "$12.35",
 	}
 	for cost, want := range cases {
 		if got := FormatCostUSD(cost); got != want {

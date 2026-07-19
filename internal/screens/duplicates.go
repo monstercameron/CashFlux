@@ -287,7 +287,8 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 			uistate.PostNotice(err.Error(), false)
 			return
 		}
-		uistate.PostUndoable(uistate.T("duplicates.deleted"))
+		// C364: name the reversal path (Ctrl+Z / Activity) on duplicate resolution.
+		postUndoStory(uistate.T("duplicates.deleted"))
 		uistate.BumpDataRevision() // re-render the panel so the resolved group drops off
 	}
 
@@ -319,7 +320,8 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 				return
 			}
 		}
-		uistate.PostUndoable(uistate.T("duplicates.merged"))
+		// C364: a merge collapses several rows into one — tell the undo story.
+		postUndoStory(uistate.T("duplicates.merged"))
 		uistate.BumpDataRevision() // re-render the panel so the merged group drops off
 	}
 

@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -291,6 +292,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	importPanelAtom := uistate.UseImportPanelOpen()
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
+	// C363: the Rules workbench (/rules) is a full first-class surface, but nothing
+	// on Transactions pointed there. A labeled toolbar entry (with the active-rule
+	// count) makes it reachable in one visible click.
+	nav := router.UseNavigate()
+	openRules := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/rules")) }))
 
 	// View-mode toggles: Calendar swaps the main slot (TX8); Register adds a running-
 	// balance column (TX12) and is only offered when the filter scopes to one account.
@@ -320,6 +326,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	members := app.Members()
 	txns := app.Transactions()
 	reviewN := reviewqueue.Count(txns)
+	ruleCount := len(app.Rules()) // C363: active-rule count for the toolbar Rules entry
 
 	accName := make(map[string]string, len(accounts))
 	for _, a := range accounts {
@@ -793,6 +800,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// Review inbox (CG-S2): the guided triage entry point, shown only when
 			// something needs review, with a live count so the backlog is visible.
 			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
+			// C363: first-class Rules entry — labeled, with the active-rule count, so
+			// the auto-categorization workbench is one visible click from the ledger.
+			toolbarIconBtn("txn-rules-btn", icon.Workflow, uistate.T("transactions.rulesButton", ruleCount), openRules, ""),
 			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
 			// Select-all, Calendar, and Register moved into the "⋯ More" overflow (2026-07
 			// command-bar consolidation): the resting row keeps only the everyday verbs plus
@@ -943,6 +953,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T(opKey, len(prior)), Prior: prior})
 		clearSel()
 		uistate.BumpDataRevision()
+		// C364: tell the undo story at the moment of risk.
+		if len(prior) > 0 {
+			postUndoStory(uistate.T(opKey, len(prior)))
+		}
 	}
 	bulkMarkCleared := ui.UseEvent(Prevent(func() { bulkSetCleared(true) }))
 	bulkMarkUncleared := ui.UseEvent(Prevent(func() { bulkSetCleared(false) }))
@@ -976,6 +990,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T(opKey, len(prior)), Prior: prior})
 		clearSel()
 		uistate.BumpDataRevision()
+		// C364: undo story for bulk exclude/include.
+		if len(prior) > 0 {
+			postUndoStory(uistate.T(opKey, len(prior)))
+		}
 	}
 	bulkExclude := ui.UseEvent(Prevent(func() { bulkSetExclude(true) }))
 	bulkInclude := ui.UseEvent(Prevent(func() { bulkSetExclude(false) }))
@@ -1006,6 +1024,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		clearSel()
 		bulkCatAtom.Set("")
 		uistate.BumpDataRevision()
+		// C364: undo story for bulk recategorize.
+		if len(prior) > 0 {
+			postUndoStory(uistate.T("transactions.bulkOpRecategorized", len(prior)))
+		}
 	}))
 
 	bulkAssignMember := ui.UseEvent(Prevent(func() {
@@ -1032,6 +1054,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		clearSel()
 		bulkMemAtom.Set("")
 		uistate.BumpDataRevision()
+		// C364: undo story for bulk member assignment.
+		if len(prior) > 0 {
+			postUndoStory(uistate.T("transactions.bulkOpAssigned", len(prior)))
+		}
 	}))
 
 	// XC1: group the selected transactions into one logical purchase (an order
@@ -1108,7 +1134,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpDeleted", len(prior)), Prior: prior})
 			clearSel()
 			uistate.BumpDataRevision()
-			uistate.PostUndoable(uistate.T("toast.txnDeleted"))
+			// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
+			postUndoStory(uistate.T("transactions.bulkOpDeleted", len(prior)))
 		})
 	}))
 
@@ -1166,6 +1193,7 @@ type txnUndoBarProps struct {
 func txnUndoBarWidget(props txnUndoBarProps) ui.Node {
 	undoAtom := uistate.UseTxnUndo()
 	snap := undoAtom.Get()
+	nav := router.UseNavigate()
 
 	undoLastBulk := ui.UseEvent(Prevent(func() {
 		s := undoAtom.Get()
@@ -1179,10 +1207,14 @@ func txnUndoBarWidget(props txnUndoBarProps) ui.Node {
 		undoAtom.Set(uistate.BulkSnapshot{})
 		uistate.BumpDataRevision()
 	}))
+	// C364: a working "View in Activity" link right on the undo bar, so the full
+	// change history (with per-change undo) is one click from the bulk op.
+	viewActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
 
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", snap.Label)),
 		Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-undobar-activity"), Attr("aria-label", uistate.T("activity.viewTitle")), Title(uistate.T("activity.viewTitle")), OnClick(viewActivity), uistate.T("activity.viewLink")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-undobar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
