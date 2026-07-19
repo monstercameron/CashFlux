@@ -234,4 +234,9 @@ func registerAnnualGridSurface() {
 		lineHeight("1.1"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
+
+	// The W6 forward-planning layer (future wash, projected figures, income
+	// scenario bar, underfunded highlight, legend) is emitted right after the base
+	// grid so its overlapping rules win. Kept in its own file (rules_annualgridplan.go).
+	registerAnnualGridPlanSurface()
 }
