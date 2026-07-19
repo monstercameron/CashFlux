@@ -26,7 +26,7 @@ import (
 )
 
 // winsSeenKey stores the milestone keys the user has already been shown, so the
-// confetti fires once per newly-reached win rather than on every visit.
+// fresh-win entrance plays once per newly-reached win rather than on every visit.
 const winsSeenKey = "cashflux:wins-seen"
 
 // noSpendScanDays bounds how far back the no-spend streak is counted.
@@ -154,9 +154,10 @@ func loadWinsSeen() map[string]bool {
 // notifWinsWidget is the celebratory counterweight to the warning feed: a warm
 // "Recent wins" card at the top of the Notification Center listing the good news —
 // goals funded, net-worth rungs crossed, budgets kept, no-spend streaks. When a win
-// is newly reached (not seen before) it plays a one-shot confetti burst — the app's
-// single deliberate moment of delight, kept calm everywhere else and gated off under
-// prefers-reduced-motion. Renders nothing when there's nothing to celebrate.
+// is newly reached (not seen before) the card plays its one-shot wins-rise
+// entrance — restrained by design (v1.2.3 motion spec: no confetti or playful
+// physics for financial milestones) and gated off under prefers-reduced-motion.
+// Renders nothing when there's nothing to celebrate.
 func notifWinsWidget(props notifProps) ui.Node {
 	app := props.App
 	if app == nil {
@@ -183,10 +184,10 @@ func notifWinsWidget(props notifProps) ui.Node {
 		}
 	}
 	// Latch the celebration for this mount: recomputing from storage after the
-	// mark-seen effect would otherwise pull the confetti mid-view.
+	// mark-seen effect would otherwise cut the fresh-win entrance mid-view.
 	celebrate := ui.UseState(hasFresh)
 
-	// Remember every currently-present win so the confetti doesn't replay next visit.
+	// Remember every currently-present win so the entrance doesn't replay next visit.
 	keys := make([]string, 0, len(found))
 	for _, m := range found {
 		keys = append(keys, m.Key)
@@ -212,15 +213,14 @@ func notifWinsWidget(props notifProps) ui.Node {
 		rows = append(rows, winsRow(i, m, title, msg, fresh))
 	}
 
+	// v1.2.3 motion spec: no confetti for financial actions. A fresh win gets the
+	// single restrained wins-rise entrance on the card — that is the celebration.
 	cardCls := "wins-card"
-	var confetti ui.Node = Fragment()
 	if celebrate.Get() {
 		cardCls += " wins-card-fresh"
-		confetti = winsConfetti()
 	}
 
 	return Div(ClassStr(cardCls), Attr("data-testid", "wins-card"),
-		confetti,
 		Div(css.Class("wins-head"),
 			uiw.Icon(icon.Sparkles, css.Class("wins-head-icon")),
 			Div(css.Class("wins-head-text"),
@@ -247,33 +247,4 @@ func winsRow(idx int, m milestones.Milestone, title, msg string, fresh bool) ui.
 			Div(css.Class("wins-row-msg"), msg),
 		),
 	)
-}
-
-// winsConfettiHues is a tight, on-brand palette: the accent plus two warm golds —
-// no off-brand pink or near-duplicate green, so the burst reads as this product's
-// celebration rather than stock party confetti.
-var winsConfettiHues = []string{"var(--accent)", "#f59e0b", "#fbbf24"}
-
-// winsConfettiLefts are hand-tuned horizontal positions (percent). They cluster
-// toward the header/left where the burst originates and thin out to the right, so the
-// scatter looks organic instead of the evenly-spaced grid a simple i*k formula gives.
-var winsConfettiLefts = []int{4, 9, 12, 18, 21, 27, 33, 38, 46, 52, 61, 70, 82, 93}
-
-// winsConfetti builds the one-shot confetti layer: a handful of small pieces with
-// deterministic positions, delays, and hues, so the burst is lively but never
-// random-looking. CSS animates them once and prefers-reduced-motion hides the layer.
-func winsConfetti() ui.Node {
-	pieces := make([]ui.Node, 0, len(winsConfettiLefts))
-	for i, left := range winsConfettiLefts {
-		delayMS := (i * 60) % 420 // staggered, not uniform
-		hue := winsConfettiHues[i%len(winsConfettiHues)]
-		style := "left:" + strconv.Itoa(left) + "%;" +
-			"animation-delay:" + strconv.Itoa(delayMS) + "ms;" +
-			"background:" + hue + ";"
-		if i%2 == 0 {
-			style += "border-radius:50%;" // mix dots and squares
-		}
-		pieces = append(pieces, Span(css.Class("wins-confetti-piece"), Attr("style", style)))
-	}
-	return Div(css.Class("wins-confetti"), Attr("aria-hidden", "true"), pieces)
 }

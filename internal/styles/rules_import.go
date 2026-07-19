@@ -102,7 +102,7 @@ func registerImportWizard() {
 
 	// The selected source's form animates in over the grid it replaced.
 	rule(".doc-form",
-		animation("docFormIn 0.24s cubic-bezier(0.2,0.7,0.2,1)"),
+		animation("docFormIn var(--motion-layout) var(--ease-enter)"),
 	)
 	rule(".doc-form-head",
 		display("flex"),

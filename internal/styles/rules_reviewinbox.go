@@ -206,7 +206,8 @@ func registerReviewInboxSurface() {
 	// unarmed click surfaces "choose a category first" (QA CF-02 saw a silently
 	// inert primary action and read the whole inbox as stuck).
 	rule(".rvw-commit.is-disabled",
-		opacity("0.5"),
+		opacity("var(--disabled-opacity)"),
+		cursor("not-allowed"),
 	)
 
 	// All-caught-up state.

@@ -4,7 +4,10 @@
 
 package app
 
-import "syscall/js"
+import (
+	"strconv"
+	"syscall/js"
+)
 
 // triggerPageEnter replays the W-9 page-enter animation on the #cf-page-view
 // element. It removes the .page-enter class so the browser stops any running
@@ -119,6 +122,47 @@ func triggerRailAnim() {
 		return nil
 	})
 	js.Global().Call("setTimeout", cb, 460)
+}
+
+// positionRailIndicator moves the rail's single shared active indicator
+// (#cf-rail-ind) onto the current nav item. This is the v1.2.3 motion spec §4
+// behavior: ONE indicator that slides vertically to the selected item (CSS
+// animates top/height over the standard token) rather than a per-item bar that
+// re-animates from scratch on every selection. Measurement waits one
+// requestAnimationFrame so the rail's layout (collapse state, accordion
+// sections, reorder) is settled before offsetTop is read; offsets are relative
+// to the nav scroll container, which is position:relative, so the bar scrolls
+// with its item. When no rail item is active (a route outside the rail), the
+// indicator fades out instead of pointing at stale geometry. No-op without a
+// document (tests).
+func positionRailIndicator() {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	raf := js.Global().Get("requestAnimationFrame")
+	if raf.IsNull() || raf.IsUndefined() {
+		return
+	}
+	var cb js.Func
+	cb = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		defer cb.Release()
+		ind := doc.Call("getElementById", "cf-rail-ind")
+		if ind.IsNull() || ind.IsUndefined() {
+			return nil
+		}
+		st := ind.Get("style")
+		item := doc.Call("querySelector", "aside.rail nav .nv.active")
+		if item.IsNull() || item.IsUndefined() {
+			st.Set("opacity", "0")
+			return nil
+		}
+		st.Set("top", strconv.Itoa(item.Get("offsetTop").Int())+"px")
+		st.Set("height", strconv.Itoa(item.Get("offsetHeight").Int())+"px")
+		st.Set("opacity", "1")
+		return nil
+	})
+	raf.Invoke(cb)
 }
 
 // triggerScrollReveal calls window.cashfluxWonder.observe() (W-21) to register

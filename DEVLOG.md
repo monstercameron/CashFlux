@@ -1,3 +1,47 @@
+## 2026-07-19 — v1.2.3 motion & interaction spec adherence pass (whole app)
+
+Scope: refine the app's interaction model onto the July 19 motion spec — one duration scale, three
+easing curves, universal interactive states, restrained staggering, and a sliding sidebar
+indicator — then prove it with e2e + visual passes.
+
+The token layer came first: :root now carries the full spec scale (instant 0 / micro 80 / fast 120
+/ standard 180 / layout 240 / overlay 280 / data 320 / narrative 450ms) with the legacy
+--motion-base/medium/slow re-pointed at the new tokens so old rules inherit the scale for free, and
+--ease-enter FIXED (it was cubic-bezier(0,0,0,1), a plain decel — the spec curve is
+0.16,1,0.3,1). The wonder layer was re-tuned rather than removed: its durations now sit exactly on
+the scale (120/180/280), its two easings resolve to the sanctioned curves, lift capped 5px -> 1px,
+press aligned to 0.985.
+
+Biggest behavioral wins, in spec order: (1) the wonder-row-enter cascade — 8 nth-child delays up
+to 210ms replaying on EVERY list re-render/filter — is deleted outright; rows appear with the
+page. (2) Every overshoot easing is gone: toast bounce (midpoint keyframe + 1.56 bezier), switch
+knob, success-pulse 1.15 overshoot, and the .34,1.56 / .22,.61 / .2,.75 / .2,.8 / .2,.7 curve zoo
+all collapse onto the three tokens. (3) Nothing routine exceeds 450ms — app-settle/heroRise/flip
+(550ms -> narrative token, incl. the lane-6 visibility hand-off), wins-rise, boot text, score ring
+(was 900ms). The two deep-link attention flashes (cf-jump-flash 1.6s, deeplink-pulse 1.7s) were
+halved to 0.9s and documented as deliberate attention cues, not routine motion. (4) Confetti is
+gone — the spec explicitly bans it for financial actions; the wins card keeps only its one
+restrained rise. (5) Universal states: disabled unified at 60% (was 0.3–0.5 scattered),
+focus ring instant-in/80ms-fade-out via a transparent resting outline, links grow their underline
+left-to-right at 120ms (btn-link + the dp_links neutral set), checked state snaps with an 80ms
+glyph settle, hover never moves a control (nav translateY, row translateX, checkbox scale(1.1) all
+removed).
+
+The sidebar got the spec's real §4 behavior: one shared #cf-rail-ind bar that SLIDES to the active
+item (top/height at the 180ms standard token) instead of a per-item ::before re-animating from
+scratch. Go side: positionRailIndicator() in pageenter.go measures offsetTop/offsetHeight one rAF
+after render (nav is now position:relative so offsets are container-local and the bar scrolls with
+content); a Sidebar UseEffect keyed on route + collapse + accordion + nav-order re-measures on
+every layout-shifting change. Fades out on routes outside the rail; reduced-motion/wonder-off jump
+instantly.
+
+Decisions/notes: countup.js now reads --motion-data (320ms) instead of --wonder-dur-slow; its
+change-detection (data-countup-last) already satisfied "totals don't reanimate on every render".
+Charts redraw statically (no per-render tween), which is the compliant behavior. gofmt -l noise on
+CRLF files ignored per standing note. Native go test ./internal/... clean; wasm build clean.
+
+Next: e2e motion assertions + full visual sweep (light+dark) across all routed pages.
+
 ## 2026-07-19 — Selected-control visual language standardized by type (consistency audit #1)
 
 Scope: retire the four competing "selected/active" treatments on passive controls (solid-green

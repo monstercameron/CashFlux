@@ -242,13 +242,13 @@ func registerGenerated() {
 		letterSpacing("0.01em"),
 		color("var(--text)"),
 		opacity("0"),
-		animation("boot-fade-up 0.6s ease 0.1s forwards"),
+		animation("boot-fade-up var(--motion-narrative, 450ms) var(--ease-enter, ease) forwards"),
 	)
 	rule(".boot-sub",
 		fontSize("0.82rem"),
 		color("var(--text-faint)"),
 		opacity("0"),
-		animation("boot-fade-up 0.6s ease 0.25s forwards"),
+		animation("boot-fade-up var(--motion-narrative, 450ms) var(--ease-enter, ease) 100ms forwards"),
 	)
 	keyframes("boot-spin",
 		at("to",
@@ -326,7 +326,7 @@ func registerGenerated() {
 		borderRadius("4px"),
 	)
 	rule("#app.app-enter",
-		animation("app-settle 0.55s cubic-bezier(0.22, 1, 0.36, 1) both"),
+		animation("app-settle var(--motion-narrative, 450ms) var(--ease-enter, ease-out) both"),
 	)
 	keyframes("app-settle",
 		at("from",
@@ -421,38 +421,37 @@ func registerGenerated() {
 	rule(".row:not(.txn-table .row)",
 		transition("background var(--motion-fast) var(--ease-standard)"),
 	)
+	// Nav items crossfade background/color at the fast token (spec §4: previous
+	// item's background fades out while the next fades in). No transform.
 	rule(".nv",
-		transition("transform var(--wonder-dur-fast) var(--wonder-ease), background var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease, box-shadow var(--wonder-dur-fast) ease"),
+		transition("background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
-	rule("aside.rail .nv",
+	// Motion spec §4: ONE shared active-page indicator that slides vertically to
+	// the selected item over the standard token (the old per-item ::before bar
+	// re-animated from scratch on every selection). #cf-rail-ind lives inside the
+	// nav scroll container (position:relative, below) and is placed by
+	// positionRailIndicator(); it scrolls with its item. The item backgrounds
+	// crossfade underneath via the .nv background transition.
+	rule("aside.rail nav",
 		position("relative"),
 	)
-	rule("aside.rail .nv.active::before, aside.rail .nv[aria-current=\"page\"]::before",
-		content("\"\""),
+	rule("#cf-rail-ind",
 		position("absolute"),
 		left("0"),
 		top("0"),
-		bottom("0"),
 		width("3px"),
+		height("0"),
 		background("var(--accent)"),
 		borderRadius("0 2px 2px 0"),
-		animation("wonder-nav-bar-in var(--wonder-dur) var(--wonder-ease-out)"),
+		opacity("0"),
+		pointerEvents("none"),
+		transition("top var(--motion-standard) var(--ease-standard), height var(--motion-standard) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard)"),
 	)
-	keyframes("wonder-nav-bar-in",
-		at("from",
-			transform("scaleY(calc(1 - 1 * var(--wonder-on)))"),
-			opacity("calc(1 - 0.6 * var(--wonder-on))"),
-		),
-		at("to",
-			transform("scaleY(1)"),
-			opacity("1"),
-		),
+	rule("[data-wonder=\"off\"] #cf-rail-ind",
+		transition("none"),
 	)
-	rule("[data-wonder=\"off\"] aside.rail .nv.active::before,\n      [data-wonder=\"off\"] aside.rail .nv[aria-current=\"page\"]::before",
-		animation("none"),
-	)
-	ruleMedia("(prefers-reduced-motion: reduce)", "aside.rail .nv.active::before, aside.rail .nv[aria-current=\"page\"]::before",
-		animation("none"),
+	ruleMedia("(prefers-reduced-motion: reduce)", "#cf-rail-ind",
+		transition("none"),
 	)
 	// Nav items respond with surface/color only — no movement on hover (spec §3:
 	// no vertical movement for toolbar-style buttons; §1: controls never shift
@@ -480,8 +479,17 @@ func registerGenerated() {
 	rule(".muzak-btn:hover",
 		transform("scale(calc(1 + 0.08 * var(--wonder-on)))"),
 	)
+	// Focus ring behavior (spec §3): the ring appears INSTANTLY on focus and fades
+	// out over the micro token when focus leaves. The base state keeps a transparent
+	// 2px ring so outline-color can fade on blur; :focus-visible snaps it on with
+	// transition:none.
+	rule("a, button, input, select, textarea, [tabindex], [role=\"button\"],\n      [role=\"switch\"], [role=\"radio\"]",
+		outline("2px solid transparent"),
+		outlineOffset("2px"),
+		transition("outline-color var(--motion-micro) var(--ease-exit)"),
+	)
 	rule("a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,\n      textarea:focus-visible, [tabindex]:focus-visible, [role=\"button\"]:focus-visible,\n      [role=\"switch\"]:focus-visible, [role=\"radio\"]:focus-visible",
-		transition("outline-offset 100ms var(--wonder-ease), box-shadow 100ms var(--wonder-ease)"),
+		transition("none"),
 		outlineOffset("2px"),
 	)
 	keyframes("wonder-page-enter",
@@ -494,8 +502,9 @@ func registerGenerated() {
 			transform("none"),
 		),
 	)
+	// Page-content transitions run at the Layout token (spec §2: 240ms).
 	rule("#cf-page-view.page-enter",
-		animation("wonder-page-enter var(--wonder-dur-slow) var(--wonder-ease-out) both"),
+		animation("wonder-page-enter var(--motion-layout) var(--ease-enter) both"),
 	)
 	rule("[data-wonder=\"off\"] #cf-page-view.page-enter",
 		animation("none"),
@@ -557,14 +566,11 @@ func registerGenerated() {
 		opacity("calc(1 * var(--wonder-on))"),
 		transitionDuration("0ms"),
 	)
+	// Success mark settles exactly once (spec §2: no overshoot).
 	keyframes("wonder-success-pulse",
 		at("0%",
 			transform("scale(.6)"),
 			opacity(".4"),
-		),
-		at("60%",
-			transform("scale(1.15)"),
-			opacity("1"),
 		),
 		at("100%",
 			transform("scale(1)"),
@@ -1754,17 +1760,19 @@ func registerGenerated() {
 			transform("none"),
 		),
 	)
+	// First-reveal hero cascade: narrative duration, 20ms sibling stagger (spec §2
+	// caps: ≤20ms between siblings, ≤100ms total).
 	rule(".home-hero-top, .home-hero-main, .home-hero-stats, .home-hero-actions",
-		animation("heroRise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both"),
+		animation("heroRise var(--motion-narrative) var(--ease-enter) both"),
 	)
 	rule(".home-hero-main",
-		animationDelay("0.06s"),
+		animationDelay("20ms"),
 	)
 	rule(".home-hero-stats",
-		animationDelay("0.12s"),
+		animationDelay("40ms"),
 	)
 	rule(".home-hero-actions",
-		animationDelay("0.18s"),
+		animationDelay("60ms"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".home-hero-top, .home-hero-main, .home-hero-stats, .home-hero-actions",
 		animation("none"),
@@ -2755,17 +2763,22 @@ func registerGenerated() {
 		display("inline-block"),
 		alignSelf("center"),
 	)
+	// Link treatment (spec §3): color strengthens and the underline grows
+	// left-to-right over the fast token. The underline is a bottom-aligned
+	// gradient so its width can animate; the text itself never moves.
 	rule(".btn-link",
-		background("none"),
 		border("none"),
 		padding("0"),
 		font("inherit"),
-		color("var(--accent)"),
-		textDecoration("underline"),
+		color("color-mix(in srgb, var(--accent) 85%, var(--text))"),
+		textDecoration("none"),
 		cursor("pointer"),
+		background("linear-gradient(currentColor, currentColor) no-repeat 0 100% / 0% 1px"),
+		transition("background-size var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
-	rule(".btn-link:hover",
-		opacity("0.8"),
+	rule(".btn-link:hover, .btn-link:focus-visible",
+		color("var(--accent)"),
+		backgroundSize("100% 1px"),
 	)
 	rule(".cat-child-row",
 		background("rgba(255,255,255,0.02)"),
@@ -2822,16 +2835,20 @@ func registerGenerated() {
 		font("inherit"),
 		fontWeight("500"),
 		cursor("pointer"),
-		transition("filter 0.12s"),
+		// Spec §3 hover: surface lifts one step and the border gains ~12% contrast
+		// over the fast token; press transform runs in the micro window. Mixing
+		// toward --text keeps "one step more contrast" true in both themes.
+		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-micro) var(--ease-standard)"),
 		display("inline-flex"),
 		alignItems("center"),
 		justifyContent("center"),
 	)
 	rule(".btn:hover",
-		filter("brightness(1.12)"),
+		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
 	)
 	rule(".btn:disabled, .btn[aria-disabled=\"true\"]",
-		opacity("0.5"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 		filter("none"),
 	)
@@ -3539,7 +3556,7 @@ func registerGenerated() {
 		boxShadow("inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 1px rgba(0,0,0,0.14)"),
 	)
 	ruleMedia("(prefers-reduced-motion: no-preference)", ".bar-fill",
-		transition("width 0.45s cubic-bezier(0.2, 0.75, 0.2, 1)"),
+		transition("width var(--motion-data) var(--ease-standard)"),
 	)
 	rule(".bar-fill.near",
 		background("#f59e0b"),
@@ -4823,7 +4840,7 @@ func registerGenerated() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".btn-icon.is-disabled",
-		opacity(".3"),
+		opacity("var(--disabled-opacity)"),
 		pointerEvents("none"),
 	)
 	rule(".studio-list-link",
@@ -6503,15 +6520,15 @@ func registerGenerated() {
 		at("from", opacity("0"), transform("translateY(9px)")),
 		at("to", opacity("1"), transform("none")),
 	)
+	// Spec §2 stagger caps: 20ms between siblings, 100ms total, ≤6 animated.
 	rule(".debt-list .debt-card",
-		animation("debt-card-in 0.42s var(--wonder-ease-out, cubic-bezier(0.22,1,0.36,1)) both"),
+		animation("debt-card-in 0.42s var(--wonder-ease-out, cubic-bezier(0.16,1,0.3,1)) both"),
 	)
-	rule(".debt-list .debt-card:nth-child(2)", prop("animation-delay", "0.05s"))
-	rule(".debt-list .debt-card:nth-child(3)", prop("animation-delay", "0.1s"))
-	rule(".debt-list .debt-card:nth-child(4)", prop("animation-delay", "0.15s"))
-	rule(".debt-list .debt-card:nth-child(5)", prop("animation-delay", "0.2s"))
-	rule(".debt-list .debt-card:nth-child(6)", prop("animation-delay", "0.25s"))
-	rule(".debt-list .debt-card:nth-child(n+7)", prop("animation-delay", "0.3s"))
+	rule(".debt-list .debt-card:nth-child(2)", prop("animation-delay", "20ms"))
+	rule(".debt-list .debt-card:nth-child(3)", prop("animation-delay", "40ms"))
+	rule(".debt-list .debt-card:nth-child(4)", prop("animation-delay", "60ms"))
+	rule(".debt-list .debt-card:nth-child(5)", prop("animation-delay", "80ms"))
+	rule(".debt-list .debt-card:nth-child(n+6)", prop("animation-delay", "100ms"))
 	// Respect users who prefer less motion: no cascade, no badge pulse.
 	ruleMedia("(prefers-reduced-motion: reduce)", ".debt-list .debt-card",
 		animation("none"),
@@ -7272,10 +7289,12 @@ func registerGenerated() {
 		display("grid"),
 		placeItems("center"),
 		color("#04140c"),
-		transition("border-color 0.15s ease, background 0.15s ease, transform 0.15s ease"),
+		transition("border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard)"),
 	)
+	// Hover strengthens the border only — no scale; a control never moves under
+	// the pointer (spec §1/§3).
 	rule(".todo-check:hover",
-		transform("scale(1.1)"),
+		borderColor("var(--accent)"),
 	)
 	rule(".todo-check.p-high",
 		borderColor("#ef4444"),
@@ -7286,17 +7305,20 @@ func registerGenerated() {
 	rule(".todo-check.p-low",
 		borderColor("var(--border-strong)"),
 	)
+	// Checked state lands in the Instant band (spec §2: 0–50ms): the fill snaps,
+	// and the glyph gets only a micro settle.
 	rule(".todo-check.is-done",
 		background("var(--accent)"),
 		borderColor("var(--accent)"),
+		transition("none"),
 	)
 	rule(".todo-check svg",
-		animation("todo-check-pop 0.2s ease"),
+		animation("todo-check-pop var(--motion-micro) var(--ease-enter)"),
 	)
 	keyframes("todo-check-pop",
 		at("from",
 			opacity("0"),
-			transform("scale(0.3)"),
+			transform("scale(0.8)"),
 		),
 		at("to",
 			opacity("1"),
@@ -7465,8 +7487,8 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 	)
 	rule(".todo-page-btn:disabled",
-		opacity("0.4"),
-		cursor("default"),
+		opacity("var(--disabled-opacity)"),
+		cursor("not-allowed"),
 	)
 	// --- The app-standard Pager (.std-pager): the /todo pager look, extended with a
 	// rows-per-page control + a jump-to-page box, mirrored above and below every paged list. ---
@@ -7561,8 +7583,8 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 	)
 	rule(".std-page-btn:disabled",
-		opacity("0.4"),
-		cursor("default"),
+		opacity("var(--disabled-opacity)"),
+		cursor("not-allowed"),
 	)
 	rule(".std-pager-jump",
 		display("inline-flex"),
@@ -8401,7 +8423,7 @@ func registerGenerated() {
 		flex("none"),
 	)
 	rule(".goal-alloc-input:disabled",
-		opacity("0.4"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
 	// Earmark status badge tones (pace-badge base): none = quiet outline, partial = amber,
@@ -8768,7 +8790,7 @@ func registerGenerated() {
 		width("0"),
 		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent), color-mix(in srgb, var(--accent) 15%, transparent))"),
 		borderRight("2px solid color-mix(in srgb, var(--accent) 70%, transparent)"),
-		transition("width 0.45s cubic-bezier(.2,.75,.2,1)"),
+		transition("width var(--motion-data) var(--ease-standard)"),
 		zIndex("0"),
 	)
 	rule(".budget-loader-fill.is-near",
@@ -9454,7 +9476,7 @@ func registerGenerated() {
 		width("100%"),
 		height("100%"),
 		transformStyle("preserve-3d"),
-		transition("transform .55s cubic-bezier(.2,.75,.2,1)"),
+		transition("transform var(--motion-narrative) var(--ease-standard)"),
 		transform("rotateY(0) scale(.86)"),
 	)
 	rule(".flip-inner.flipped",
@@ -10225,7 +10247,8 @@ func registerGenerated() {
 		flex("0 0 68px"),
 	)
 	rule(".cover-src-weight:disabled",
-		opacity("0.45"),
+		opacity("var(--disabled-opacity)"),
+		cursor("not-allowed"),
 	)
 	// "Use all remaining" toggle.
 	rule(".cover-src-maxlabel",
@@ -10294,7 +10317,7 @@ func registerGenerated() {
 		display("none"),
 	)
 	rule("aside.rail",
-		transition("width .34s cubic-bezier(.22,.61,.36,1)"),
+		transition("width var(--motion-layout) var(--ease-standard)"),
 		willChange("width"),
 	)
 	rule("aside.rail.collapsed",
@@ -10306,10 +10329,10 @@ func registerGenerated() {
 		maxWidth("14rem"),
 		opacity("1"),
 		transform("none"),
-		transition("max-width .34s cubic-bezier(.22,.61,.36,1), opacity .2s ease, transform .3s cubic-bezier(.22,.61,.36,1)"),
+		transition("max-width var(--motion-layout) var(--ease-standard), opacity var(--motion-standard) var(--ease-standard), transform var(--motion-layout) var(--ease-standard)"),
 	)
 	rule("aside.rail .nv",
-		transition("gap .34s cubic-bezier(.22,.61,.36,1), padding .3s cubic-bezier(.22,.61,.36,1)"),
+		transition("gap var(--motion-layout) var(--ease-standard), padding var(--motion-layout) var(--ease-standard)"),
 	)
 	rule("aside.rail.collapsed .nv > span, aside.rail.collapsed .brand-name",
 		maxWidth("0"),
@@ -10396,7 +10419,7 @@ func registerGenerated() {
 		),
 	)
 	rule("html.cf-rail-anim:not([data-wonder=\"off\"]) #cf-page-view",
-		animation("rail-page-settle .4s cubic-bezier(.22,.61,.36,1)"),
+		animation("rail-page-settle var(--motion-layout) var(--ease-standard)"),
 		transformOrigin("left center"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", "html.cf-rail-anim #cf-page-view",
@@ -11028,8 +11051,10 @@ func registerGenerated() {
 			background("transparent"),
 		),
 	)
+	// Attention cue, not routine motion — but still restrained: 0.9s (was 1.6s)
+	// is enough for the eye to land after the jump-scroll.
 	rule(".cf-jump-flash",
-		animation("cf-jump-flash-kf 1.6s ease-out"),
+		animation("cf-jump-flash-kf 0.9s var(--ease-exit)"),
 		borderRadius("8px"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".cf-jump-flash",
@@ -11252,7 +11277,7 @@ func registerGenerated() {
 		borderColor("color-mix(in srgb, var(--accent,#3b82f6) 35%, var(--border))"),
 	)
 	rule(".wm-arrow:disabled",
-		opacity(".3"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
 	rule(".wm-style",

@@ -19,9 +19,17 @@ package styles
 // selector's specificity and wins on source order.
 func registerDpLinks() {
 	// The neutral resting + hover treatment shared by every re-neutralized nav link.
+	// v1.2.3 motion spec §3: on hover the color strengthens and the underline grows
+	// left-to-right over the fast token (a bottom gradient, so width can animate)
+	// instead of popping in; the text never moves.
 	neutralLink := func(sel string) {
-		rule(sel, color("var(--text-dim)"))
-		rule(sel+":hover", color("var(--text)"), textDecoration("underline"))
+		rule(sel,
+			color("var(--text-dim)"),
+			textDecoration("none"),
+			background("linear-gradient(currentColor, currentColor) no-repeat 0 100% / 0% 1px"),
+			transition("background-size var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
+		)
+		rule(sel+":hover", color("var(--text)"), prop("background-size", "100% 1px"))
 	}
 
 	// Report "plan" action link (reports-annual) — plain navigation to a plan/budget.

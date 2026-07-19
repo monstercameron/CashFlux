@@ -6,6 +6,41 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Motion & interaction spec adherence (v1.2.3 motion spec, 2026-07-19):** the whole app now runs
+  on the spec's single duration scale (`--motion-instant/micro/fast/standard/layout/overlay/data/
+  narrative` = 0/80/120/180/240/280/320/450ms; legacy `--motion-base/medium/slow` alias onto it)
+  and its **three sanctioned easing curves only** — standard `cubic-bezier(0.2,0,0,1)`, enter
+  `cubic-bezier(0.16,1,0.3,1)` (fixing the previously wrong `--ease-enter`), exit
+  `cubic-bezier(0.4,0,1,1)`. Every overshoot/elastic curve is gone (toast bounce, switch knob,
+  success-pulse 60% overshoot, rail collapse, app/hero/flip/debt/import/sankey-adjacent curves).
+  **Restraint rules enforced:** list/ledger/task/notification rows no longer stagger-animate on
+  every re-render (the `wonder-row-enter` cascade is removed) and never translate on hover; nav
+  items and checkboxes no longer move/scale under the pointer; card hover lift capped at 1px with
+  a soft shadow; press scale unified at 0.985 in the 80ms micro window with segmented controls and
+  rows excluded; stagger chains capped at 20ms/sibling and 100ms total (hero, debt ladder, boot);
+  nothing routine exceeds 450ms (app-settle, heroRise, flip modal + its visibility hand-off,
+  wins-rise, score ring, boot text all capped; the two deep-link attention flashes halved to 0.9s).
+  **State polish:** disabled states unified at readable 60% emphasis with `cursor:not-allowed`;
+  the focus ring now appears instantly and fades over 80ms on blur; links/`.btn-link` strengthen
+  color and grow their underline left-to-right over 120ms; checked state snaps (Instant band) with
+  a micro glyph settle; progress/meter fills and count-up totals animate at the 320ms Data token
+  (count-up reads `--motion-data`); page-content transitions at the 240ms Layout token; modals/
+  backdrops at the 280ms Overlay token.
+- **Sidebar navigation indicator now slides (motion spec §4):** replaced the per-item accent bar
+  (which re-animated from scratch on every selection) with ONE shared indicator (`#cf-rail-ind`)
+  that slides vertically to the selected item over the 180ms standard token while the item
+  backgrounds crossfade at 120ms. Positioned post-render by `positionRailIndicator()`
+  (`internal/app/pageenter.go`) via rAF measurement inside the (now `position:relative`) nav
+  scroll container; re-measures on route change, rail collapse, accordion toggles, and nav
+  reorder; fades out on routes with no rail item; instant (no slide) under reduced-motion or
+  wonder-off.
+
+### Removed
+- **Wins confetti burst:** the motion spec forbids confetti/playful physics for financial
+  milestones — the Notification Center "Recent wins" card now celebrates with its single
+  restrained `wins-rise` entrance only (`winsConfetti` + its CSS deleted).
+
 ## [1.2.4] - 2026-07-19
 
 ### Changed

@@ -453,7 +453,7 @@ func InitBentoCoordinator() {
 	flipRAFFn = safeFunc("flipRAF", func(js.Value, []js.Value) any {
 		for _, el := range flipMovers {
 			st := el.Get("style")
-			st.Set("transition", "transform .16s cubic-bezier(.2,.8,.2,1)")
+			st.Set("transition", "transform .16s cubic-bezier(0.2, 0, 0, 1)")
 			st.Set("transform", "")
 		}
 		flipMovers = flipMovers[:0]

@@ -134,7 +134,7 @@ func registerR4Surface() {
 		zIndex("2"),
 		borderRadius("12px"),
 		prop("scroll-margin-top", "96px"),
-		animation("deeplink-pulse 1.7s ease-out"),
+		animation("deeplink-pulse 0.9s var(--ease-exit)"),
 	)
 	keyframes("deeplink-pulse",
 		at("0%",
@@ -214,7 +214,7 @@ func registerR4Surface() {
 	)
 	// A fresh win rises the card in gently on mount, once.
 	rule(".wins-card-fresh",
-		animation("wins-rise .5s cubic-bezier(.16,1,.3,1)"),
+		animation("wins-rise var(--motion-narrative) var(--ease-enter)"),
 	)
 	keyframes("wins-rise",
 		at("0%", opacity("0"), transform("translateY(10px) scale(.99)")),
@@ -290,33 +290,10 @@ func registerR4Surface() {
 		padding("0.02rem 0.35rem"),
 	)
 
-	// Confetti burst: a handful of small pieces (positions/delays/hues set inline)
-	// falling once across the card. pointer-events off so it never blocks a click.
-	rule(".wins-confetti",
-		position("absolute"),
-		prop("inset", "0"),
-		prop("pointer-events", "none"),
-		overflow("hidden"),
-	)
-	rule(".wins-confetti-piece",
-		position("absolute"),
-		top("-8px"),
-		width("7px"),
-		height("7px"),
-		opacity("0"),
-		animation("wins-confetti-fall 1.35s ease-in forwards"),
-	)
-	keyframes("wins-confetti-fall",
-		at("0%", opacity("1"), transform("translateY(-8px) rotate(0deg)")),
-		at("100%", opacity("0"), transform("translateY(150px) rotate(360deg)")),
-	)
-	// Reduced motion: no rise, no confetti — the card still leads with the wins,
-	// just without animation.
+	// (Confetti removed — v1.2.3 motion spec §1: no confetti or playful physics
+	// for financial milestones. The wins-rise entrance is the whole celebration.)
 	ruleMedia("(prefers-reduced-motion:reduce)", ".wins-card-fresh",
 		animation("none"),
-	)
-	ruleMedia("(prefers-reduced-motion:reduce)", ".wins-confetti",
-		display("none"),
 	)
 
 	// The "?" smart-tooltip renders through IconButton, which prepends the full `.btn`

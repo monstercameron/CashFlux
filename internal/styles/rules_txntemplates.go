@@ -119,7 +119,7 @@ func registerTxnTemplatesSurface() {
 		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
 	)
 	rule(".txt-save-btn:disabled",
-		opacity("0.5"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
 

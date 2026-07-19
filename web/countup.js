@@ -187,17 +187,18 @@
 
     var enabled = wonderEnabled();
 
-    var durMs = 600; // fallback
+    var durMs = 320; // fallback = the v1.2.3 Data token
     if (enabled) {
-      // Read --wonder-dur-slow from CSS (e.g. "300ms" or "0.3s")
+      // Read --motion-data from CSS (v1.2.3 spec: totals animate at the 320ms
+      // Data token; e.g. "320ms" or "0.32s")
       var durStr = getComputedStyle(document.documentElement)
-        .getPropertyValue('--wonder-dur-slow')
+        .getPropertyValue('--motion-data')
         .trim();
       if (durStr) {
         if (durStr.endsWith('ms')) {
           durMs = parseFloat(durStr) || durMs;
         } else if (durStr.endsWith('s')) {
-          durMs = (parseFloat(durStr) || 0.6) * 1000;
+          durMs = (parseFloat(durStr) || 0.32) * 1000;
         }
       }
     }

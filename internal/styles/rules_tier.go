@@ -75,7 +75,7 @@ func registerTierSystem() {
 		borderColor("#6b72f0"),
 	)
 	rule(".btn.btn-plus:disabled",
-		opacity("0.45"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
 }

@@ -47,7 +47,7 @@ func scoreRingNode(pct float64, ringColor string, size int, ariaLabel string, ce
 			Attr("stroke-dasharray", fmt.Sprintf("%.2f", circ)),
 			Attr("stroke-dashoffset", fmt.Sprintf("%.2f", offset)),
 			Attr("transform", "rotate(-90 60 60)"),
-			Style(map[string]string{"transition": "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .6s ease"})),
+			Style(map[string]string{"transition": "stroke-dashoffset var(--motion-narrative, 450ms) var(--ease-enter, ease-out), stroke var(--motion-data, 320ms) var(--ease-standard, ease)"})),
 	)
 
 	overlay := Div(

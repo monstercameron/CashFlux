@@ -22,7 +22,7 @@ func registerSavedViews() {
 		width("100%"),
 	)
 	rule(".saved-views-save.is-disabled",
-		opacity("0.5"),
+		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
 	rule(".saved-views-empty",

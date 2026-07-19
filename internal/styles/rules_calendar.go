@@ -58,8 +58,8 @@ func registerCalendarSurface() {
 		background(wash),
 	)
 	rule(".uical-nav-btn:disabled",
-		opacity("0.4"),
-		cursor("default"),
+		opacity("var(--disabled-opacity)"),
+		cursor("not-allowed"),
 	)
 	rule(".uical-nav-btn svg",
 		width("1.05rem"),

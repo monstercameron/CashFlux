@@ -613,6 +613,15 @@ func Sidebar(props sidebarProps) uic.Node {
 		}
 		return true
 	}
+	// Keep the shared active-nav indicator glued to the selected item (motion spec
+	// §4: one indicator that SLIDES to the selection). Re-measure whenever the
+	// active route, rail collapse, an accordion section, or the nav order shifts
+	// vertical layout; the DOM write happens post-render inside a rAF.
+	indKey := current + "|" + railAnimKey + "|" + fmt.Sprint(collapsed) + "|" + fmt.Sprint(orderedPaths)
+	uic.UseEffect(func() func() {
+		positionRailIndicator()
+		return nil
+	}, indKey)
 	toolsByGroup := map[string][]railItem{}
 	for _, it := range visibleTools {
 		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
@@ -707,6 +716,11 @@ func Sidebar(props sidebarProps) uic.Node {
 		// Cloud sync is in use; shows synced/syncing/offline/conflict/error + queue.
 		uic.CreateElement(SyncChip),
 		Nav(css.Class(tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
+			// The single shared active-page indicator (motion spec §4). Positioned
+			// absolutely by positionRailIndicator(); CSS slides top/height between
+			// items over the standard token. Decorative — aria-current on the item
+			// itself carries the semantics.
+			Div(Attr("id", "cf-rail-ind"), ClassStr("rail-ind"), Attr("aria-hidden", "true")),
 			MapKeyed(visibleNav,
 				func(it railItem) any { return it.Path },
 				func(it railItem) uic.Node {
