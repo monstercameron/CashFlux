@@ -35,24 +35,54 @@ func dashPresetPicker(props struct{}) ui.Node {
 	// recommendation) instead of clinging to its mount-time value. applyDashPreset
 	// writes the layout atom, which re-renders this component with the fresh key.
 	cur := uistate.LoadDashPreset()
-	return Label(css.Class("fctrl"), Attr("data-testid", "dash-preset-wrap"),
-		Span(css.Class("fctrl-label"), uistate.T("dashboard.presetLabel")),
-		Select(css.Class("fctrl-select"), Attr("data-testid", "dash-preset"),
-			Attr("aria-label", uistate.T("dashboard.presetLabel")), Title(uistate.T("dashboard.presetTitle")),
-			OnChange(onPick),
-			// The full grid is one view named "Everything": both the never-chosen
-			// state (cur=="") and an explicit restore (cur=="default") select it, and
-			// picking it applies the default layout — so it truthfully names the
-			// current state instead of a "Choose a view…" placeholder that lied while
-			// Everything was active (2026-07-18 assessment).
-			Option(Value("default"), SelectedIf(cur == "" || cur == "default"), uistate.T("dashboard.presetChoose")),
-			Option(Value("daily"), SelectedIf(cur == "daily"), uistate.T("dashboard.presetDaily")),
-			Option(Value("payday"), SelectedIf(cur == "payday"), uistate.T("dashboard.presetPayday")),
-			Option(Value("monthend"), SelectedIf(cur == "monthend"), uistate.T("dashboard.presetMonthEnd")),
-			Option(Value("debt"), SelectedIf(cur == "debt"), uistate.T("dashboard.presetDebt")),
-			Option(Value("goals"), SelectedIf(cur == "goals"), uistate.T("dashboard.presetGoals")),
+	// C366: the picker names each view but never said what changes when you pick one
+	// (a reviewer couldn't tell if Focus altered layout, content, or only emphasis).
+	// A standing subtitle spells out that a view swaps the widget set AND compacts the
+	// hero, and a live description line describes the CURRENT selection. Each option
+	// also carries its description as a native tooltip.
+	return Div(css.Class("dash-preset-picker"), Attr("data-testid", "dash-preset-picker"),
+		Label(css.Class("fctrl"), Attr("data-testid", "dash-preset-wrap"),
+			Span(css.Class("fctrl-label"), uistate.T("dashboard.presetLabel")),
+			Select(css.Class("fctrl-select"), Attr("data-testid", "dash-preset"),
+				Attr("aria-label", uistate.T("dashboard.presetLabel")), Title(uistate.T("dashboard.presetTitle")),
+				OnChange(onPick),
+				// The full grid is one view named "Everything": both the never-chosen
+				// state (cur=="") and an explicit restore (cur=="default") select it, and
+				// picking it applies the default layout — so it truthfully names the
+				// current state instead of a "Choose a view…" placeholder that lied while
+				// Everything was active (2026-07-18 assessment).
+				Option(Value("default"), SelectedIf(cur == "" || cur == "default"), Title(uistate.T("dashboard.presetDescDefault")), uistate.T("dashboard.presetChoose")),
+				Option(Value("daily"), SelectedIf(cur == "daily"), Title(uistate.T("dashboard.presetDescDaily")), uistate.T("dashboard.presetDaily")),
+				Option(Value("payday"), SelectedIf(cur == "payday"), Title(uistate.T("dashboard.presetDescPayday")), uistate.T("dashboard.presetPayday")),
+				Option(Value("monthend"), SelectedIf(cur == "monthend"), Title(uistate.T("dashboard.presetDescMonthEnd")), uistate.T("dashboard.presetMonthEnd")),
+				Option(Value("debt"), SelectedIf(cur == "debt"), Title(uistate.T("dashboard.presetDescDebt")), uistate.T("dashboard.presetDebt")),
+				Option(Value("goals"), SelectedIf(cur == "goals"), Title(uistate.T("dashboard.presetDescGoals")), uistate.T("dashboard.presetGoals")),
+			),
 		),
+		// Live one-line description of the active view, then the standing subtitle.
+		Span(css.Class("dash-preset-desc"), Attr("data-testid", "dash-preset-desc"), uistate.T(dashPresetDescKey(cur))),
+		Span(css.Class("dash-preset-sub"), uistate.T("dashboard.presetSubtitle")),
 	)
+}
+
+// dashPresetDescKey maps a preset key to its one-line description i18n key. The
+// never-chosen ("") and explicit-restore ("default") states share the Everything
+// description, since both name the full dashboard.
+func dashPresetDescKey(key string) string {
+	switch key {
+	case "daily":
+		return "dashboard.presetDescDaily"
+	case "payday":
+		return "dashboard.presetDescPayday"
+	case "monthend":
+		return "dashboard.presetDescMonthEnd"
+	case "debt":
+		return "dashboard.presetDescDebt"
+	case "goals":
+		return "dashboard.presetDescGoals"
+	default:
+		return "dashboard.presetDescDefault"
+	}
 }
 
 // applyDashPreset swaps the layout to the named preset (or restores the
