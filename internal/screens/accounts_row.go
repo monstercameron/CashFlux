@@ -400,11 +400,12 @@ func AccountRow(props accountRowProps) ui.Node {
 			// AC8/AC17: the filed-documents drawer (statements, contracts, titles,
 			// payoff letters) with an attach form carrying an optional renewal date.
 			ui.CreateElement(accountDocsDrawer, accountDocsDrawerProps{Account: a}),
-			// MIA-extend (#445-10): nudge to fill missing institution.
+			// MIA-extend (#445-10): nudge to fill missing institution. Styled as a
+			// real link action — the dim caption treatment made it read as stray
+			// plain text in the details panel (UI/UX task #7).
 			If(a.Institution == "" && !a.Archived,
-				Button(css.Class("btn-link t-caption", tw.TextDim), Type("button"),
+				Button(css.Class("btn-link acct-set-institution"), Type("button"),
 					Attr("data-testid", "set-institution-"+a.ID),
-					Style(map[string]string{"align-self": "flex-start", "text-align": "left"}),
 					Title(uistate.T("accounts.setInstitution")),
 					OnClick(startEdit),
 					uistate.T("accounts.setInstitution"),

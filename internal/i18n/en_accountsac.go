@@ -35,6 +35,9 @@ var accountsACKeys = Catalog{
 	// %s = account name. Describes the 90-day trend line for screen readers.
 	"accounts.sparklineAria": "%s balance over the last 90 days",
 	"accounts.sparklineFlat": "%s balance has not moved in 90 days",
+	// Visible caption beside the sparkline in the details panel — without it the
+	// bare polyline read as a rendering glitch (UI/UX task #7).
+	"accounts.sparklineCaption": "Balance, last 90 days",
 	// AC9 — in/out flow columns.
 	"accounts.flowIn":  "In",
 	"accounts.flowOut": "Out",

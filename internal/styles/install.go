@@ -96,6 +96,7 @@ func Register() {
 	registerDpLinks()
 	registerDpRadius()
 	registerDpControls()
+	registerAcctDetails()
 	inject(Build())
 }
 

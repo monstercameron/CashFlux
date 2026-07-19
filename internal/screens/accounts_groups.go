@@ -161,12 +161,18 @@ func accountSparkline(a domain.Account, series []int64) ui.Node {
 	if flat {
 		label = uistate.T("accounts.sparklineFlat", a.Name)
 	}
-	return Svg(css.Class("acct-spark"), Attr("data-testid", "acct-spark-"+a.ID),
-		Attr("viewBox", "0 0 120 24"), Attr("width", "120"), Attr("height", "24"),
-		Attr("role", "img"), Attr("aria-label", label), Attr("preserveAspectRatio", "none"),
-		Polyline(Attr("points", points), Attr("fill", "none"),
-			Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5"),
-			Attr("stroke-linejoin", "round"), Attr("stroke-linecap", "round")),
+	// Captioned figure, not a bare floating squiggle: in the details panel an
+	// unlabeled 120×24 polyline read as a rendering glitch (UI/UX task #7). The
+	// caption names what the line is; the svg keeps the aria description.
+	return Div(css.Class("acct-spark-fig"), Attr("data-testid", "acct-spark-fig-"+a.ID),
+		Svg(css.Class("acct-spark"), Attr("data-testid", "acct-spark-"+a.ID),
+			Attr("viewBox", "0 0 120 24"), Attr("width", "120"), Attr("height", "24"),
+			Attr("role", "img"), Attr("aria-label", label), Attr("preserveAspectRatio", "none"),
+			Polyline(Attr("points", points), Attr("fill", "none"),
+				Attr("stroke", "var(--accent)"), Attr("stroke-width", "1.5"),
+				Attr("stroke-linejoin", "round"), Attr("stroke-linecap", "round")),
+		),
+		Span(css.Class("row-meta", tw.TextDim), Attr("aria-hidden", "true"), uistate.T("accounts.sparklineCaption")),
 	)
 }
 
