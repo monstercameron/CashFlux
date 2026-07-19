@@ -125,7 +125,7 @@ func staleBadgeText(t domain.AccountType, days int) string {
 	if days == 0 {
 		return base
 	}
-	return base + uistate.T("accounts.staleDaysSuffix", days)
+	return base + uistate.T("accounts.staleDaysSuffix", plural(days, "day"))
 }
 
 // staleBadgeTitle is the badge's hover tooltip — a full-sentence version of the

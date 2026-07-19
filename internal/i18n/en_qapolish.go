@@ -13,8 +13,8 @@ var qaPolishKeys = Catalog{
 
 	// L5 — the goal card's calculated pace is labeled as the REQUIRED pace, and a
 	// user-set monthly plan is shown as its own figure so the two never blur.
-	"goals.figMonthlyNeeded": "Needed / mo",
-	"goals.figMonthlyPlan":   "Your plan / mo",
+	"goals.figMonthlyNeeded": "Needed / month",
+	"goals.figMonthlyPlan":   "Your plan / month",
 
 	// CF-30 — honest chart alt text: each sparkline says what IT shows (the
 	// report's net-worth shape used to announce "Recent charges at this merchant").
