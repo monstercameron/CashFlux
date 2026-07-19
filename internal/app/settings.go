@@ -273,7 +273,10 @@ func alertRow(props alertRowProps) uic.Node {
 		return toggle
 	}
 	ariaLabel := props.Label + " threshold (" + props.ThresholdLabel + ")"
-	threshInput := Div(css.Class("toggle-row"),
+	// alert-thresh-row: compact, left-aligned, indented under its toggle so the
+	// input sits right next to its label instead of a screen-width away at the far
+	// right of a full-width toggle-row (review #29). Styled in registerUxbatch4.
+	threshInput := Div(css.Class("toggle-row alert-thresh-row"),
 		Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.alert.threshold", props.ThresholdLabel)),
 		Input(css.Class("rate-in"), Type("number"), Attr("min", "0"), Attr("step", "1"),
 			Attr("aria-label", ariaLabel),

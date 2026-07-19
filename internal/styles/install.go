@@ -97,6 +97,8 @@ func Register() {
 	registerDpRadius()
 	registerDpControls()
 	registerAcctDetails()
+	registerUxbatch3()
+	registerUxbatch4()
 	inject(Build())
 }
 
