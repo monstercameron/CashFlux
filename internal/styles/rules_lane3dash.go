@@ -84,4 +84,40 @@ func registerLane3Dashboard() {
 	rule(".attention-item.is-info",
 		color("var(--text-dim)"),
 	)
+
+	// --- C415: edit-mode calm. -------------------------------------------------
+	// In edit-layout mode every tile showed its drag grip and settings gear at once
+	// — a wall of chrome that made rearranging feel busy. Keep the uniform dashed
+	// tile outline (registered elsewhere) as the single "these move" cue, but hide
+	// the per-tile grip + gear until the user is actually working a tile. Resize
+	// handles already hover/focus-reveal (base .rz is opacity:0); this extends the
+	// same discipline to the grip and gear. Reveal happens on:
+	//   - :hover           — the tile the mouse is over,
+	//   - :focus-within    — the tile a keyboard user has tabbed into (focus-visible
+	//                        on the tile or any handle satisfies this), and
+	//   - [aria-grabbed]   — the tile a keyboard user has grabbed (Space/Enter) to
+	//                        move or resize.
+	// So keyboard users always retain access; only the idle tiles go quiet.
+	rule(`.bento[data-layout-edit="on"] .w .grip`,
+		opacity("0"),
+		pointerEvents("none"),
+	)
+	rule(`.bento[data-layout-edit="on"] .w .gear-inline`,
+		opacity("0"),
+		pointerEvents("none"),
+	)
+	rule(`.bento[data-layout-edit="on"] .w:hover .grip, .bento[data-layout-edit="on"] .w:focus-within .grip, .bento[data-layout-edit="on"] .w[aria-grabbed="true"] .grip`,
+		opacity("1"),
+		pointerEvents("auto"),
+	)
+	rule(`.bento[data-layout-edit="on"] .w:hover .gear-inline, .bento[data-layout-edit="on"] .w:focus-within .gear-inline, .bento[data-layout-edit="on"] .w[aria-grabbed="true"] .gear-inline`,
+		opacity("1"),
+		pointerEvents("auto"),
+	)
+	// The grabbed tile also surfaces its resize handles (base .rz only reveals them
+	// on hover / focus-within / focus-visible — a keyboard grab is none of those).
+	rule(`.bento[data-layout-edit="on"] .w[aria-grabbed="true"] .rz`,
+		opacity(".9"),
+		pointerEvents("auto"),
+	)
 }
