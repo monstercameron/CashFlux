@@ -166,17 +166,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	case fillPct >= 85:
 		fillCls += " is-near"
 	}
-	_ = spentTone       // spent tone now lives in the caption, which stays neutral
-	_ = spendLimitLabel // the labeled fig row is gone; the caption phrases the limit
-	// B1 hero bar: a slim month-ledger — the same fill-tone classes as before
-	// (is-over / is-near / is-hist) on a 10px track. Progress semantics live on the
-	// childless fill as role="img" (axe nested-interactive, #67).
-	heroBar := Div(css.Class("budget-hero-bar"),
-		Div(ClassStr(strings.Replace(fillCls, "budget-loader-fill", "budget-hero-fill", 1)),
-			Attr("role", "img"),
-			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), fillW)),
-			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
-	)
+	loaderCls := "budget-loader"
+	if over {
+		loaderCls += " is-over"
+	}
 
 	// C130: clarify a custom top-bar range only changes the view window — it doesn't
 	// redefine each budget's own period.
@@ -245,11 +238,8 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// A closed month that ended over budget must read "Jun 2026 · Over budget /
 	// $509.58" — never "Unspent · Jun 2026 / $509.58 over", where the label and the
 	// value's baked-in suffix contradict each other (Cam, 2026-07-19).
-	heroLabel := uistate.T("budgets.heroLeftLabel")
+	heroLabel := leftLabel
 	heroVal := fmtMoney(leftM)
-	if v.LastMonthMode || hist {
-		heroLabel = leftLabel // "Unspent" (a historical fact)
-	}
 	if leftM.IsNegative() {
 		heroLabel = uistate.T("budgets.heroOverLabel")
 		heroVal = fmtMoney(leftM.Abs())
@@ -258,12 +248,6 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		heroLabel = vw.Label() + " · " + heroLabel
 	}
 	numTone := accentFor(leftM)
-	if numTone == "" && attnOver+attnNear > 0 && !hist && !v.LastMonthMode {
-		numTone = "is-warn" // healthy total, but envelopes need eyes — the top says so
-	}
-	// Caption: spent-of-budgeted in one quiet, tenseless line (the label already
-	// names the period when it's a closed one); age of money at its right edge.
-	capTxt := uistate.T("budgets.heroCaption", fmtMoney(money.New(barSpent, v.Base)), fmtMoney(money.New(spendLimit, v.Base)))
 	_ = spendCap
 	var ageChip ui.Node = Fragment()
 	if am := v.AgeMoney; am.Ready {
@@ -296,14 +280,38 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
 			uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base))))
 	}
-	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
-		Div(css.Class("budget-hero-top"),
-			Div(css.Class("budget-hero-main"),
-				Span(css.Class("budget-hero-label"),
-					heroLabel,
-					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe")))),
-				Div(ClassStr("budget-hero-num "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
+	// The summary band is the SHARED cross-page component (`.budget-loader` — the
+	// same Spent/Budgeted/Left "loader" the Goals and To-do headline tiles mirror),
+	// so the three money pages open on one visual system (Cam, 2026-07-19). B1's
+	// consolidation survives around it: no plan-prose cell, no age tile, no attention
+	// tile — just the band, then one quiet sub-row (income received · actions · age).
+	band := Div(ClassStr(loaderCls),
+		Div(ClassStr(fillCls),
+			Attr("role", "img"),
+			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), fillW)),
+			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
+		Div(css.Class("budget-loader-figs"),
+			Div(css.Class("budget-loader-fig"),
+				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
+				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(barSpent, v.Base))),
 			),
+			Div(css.Class("budget-loader-fig"),
+				Div(css.Class("budget-loader-label"), spendLimitLabel),
+				Div(css.Class("budget-loader-value"), fmtMoney(money.New(spendLimit, v.Base))),
+			),
+			Div(css.Class("budget-loader-fig", "is-right"),
+				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+					heroLabel,
+					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
+				),
+				Div(ClassStr("budget-loader-value is-hero "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
+			),
+		),
+	)
+	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
+		band,
+		Div(css.Class("budget-hero-cap"),
+			incomeActual,
 			Div(css.Class("budget-hero-side"),
 				If(v.LastMonthMode, lastMonthTag),
 				attnChip,
@@ -313,14 +321,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
 				toAssignChip,
 				basisBtn,
+				ageChip,
 			),
 		),
-		heroBar,
-		Div(css.Class("budget-hero-cap"),
-			Span(Attr("data-testid", "budgets-spend-cap"), capTxt),
-			ageChip,
-		),
-		incomeActual,
 	)
 
 	// Every warning folds into ONE collapsed "N issues need attention" rail with

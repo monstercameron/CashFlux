@@ -7,11 +7,9 @@ package i18n
 // month-ledger bar and a single caption, replacing the three-cell status strip.
 // Merged via init so the shared en.go is never touched by this concurrent lane.
 var budgetsHeroKeys = Catalog{
-	// The hero label states tense + state; the number below is only ever an amount.
-	"budgets.heroLeftLabel": "Left to spend",
+	// The hero fig's label states tense + state; the value is only ever an amount
+	// ("Jun 2026 · Over budget / $509.58" — never "Unspent / $509.58 over").
 	"budgets.heroOverLabel": "Over budget",
-	// Caption under the ledger bar. %s = spent, %s = budgeted (both formatted money).
-	"budgets.heroCaption": "%s spent of %s budgeted",
 	// The attention chip beside the hero number; clicking narrows the list.
 	"budgets.heroAttn":    "%d need attention",
 	"budgets.heroAttnOne": "1 needs attention",

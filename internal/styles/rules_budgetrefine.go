@@ -78,48 +78,21 @@ func registerBudgetRefine() {
 		marginTop("0.1rem"),
 	)
 
-	// --- B1 hero (2026-07-19): one answer at the top of /budgets ---
-	// LEFT-TO-SPEND as the single Fraunces figure, a slim month-ledger bar, one
-	// caption line with the age-of-money chip at its right edge. Everything quiet
-	// except the number; the attention chip is the only warm element.
+	// --- B1 hero (2026-07-19): the budgets top opens on the SHARED summary band ---
+	// (`.budget-loader`, the same component the Goals and To-do headline tiles use)
+	// followed by one quiet sub-row: income-received on the left, the action cluster
+	// (attention chip · Cover all · Budget income · age chip) on the right.
 	rule(".budget-hero",
 		display("flex"),
 		flexDirection("column"),
 		gap("0.4rem"),
 	)
-	rule(".budget-hero-top",
-		display("flex"),
-		alignItems("flex-end"),
-		justifyContent("space-between"),
-		gap("1rem"),
-		flexWrap("wrap"),
-	)
-	rule(".budget-hero-label",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.3rem"),
-		fontSize("0.68rem"),
-		fontWeight("700"),
-		letterSpacing("0.07em"),
-		textTransform("uppercase"),
-		color("var(--text-dim)"),
-	)
-	rule(".budget-hero-num",
-		fontFamily("var(--font-display),'Fraunces',serif"),
-		fontSize("2.1rem"),
-		fontWeight("600"),
-		lineHeight("1.05"),
-		fontVariantNumeric("tabular-nums"),
-		color("var(--text)"),
-	)
-	rule(".budget-hero-num.pos", color("var(--money-positive)"))
-	rule(".budget-hero-num.neg", color("var(--money-negative)"))
-	rule(".budget-hero-num.is-warn", color("var(--warn, #d97706)"))
 	rule(".budget-hero-side",
 		display("flex"),
 		alignItems("center"),
 		gap("0.5rem"),
 		flexWrap("wrap"),
+		marginLeft("auto"),
 	)
 	// The attention chip: the hero row's one warm element; clicking filters the list.
 	rule(".budget-hero-attn",
@@ -146,30 +119,12 @@ func registerBudgetRefine() {
 		fontVariantNumeric("tabular-nums"),
 		whiteSpace("nowrap"),
 	)
-	// The month-ledger bar: a 10px track reusing the loader's tone classes.
-	rule(".budget-hero-bar",
-		position("relative"),
-		height("10px"),
-		border("1px solid var(--border)"),
-		borderRadius("999px"),
-		background("var(--bg-elev)"),
-		overflow("hidden"),
-	)
-	rule(".budget-hero-fill",
-		position("absolute"),
-		top("0"),
-		left("0"),
-		bottom("0"),
-		background("var(--money-positive)"),
-	)
-	rule(".budget-hero-fill.is-near", background("var(--warn, #d97706)"))
-	rule(".budget-hero-fill.is-over", background("var(--money-negative)"))
-	rule(".budget-hero-fill.is-hist", background("color-mix(in srgb, var(--text) 35%, transparent)"))
 	rule(".budget-hero-cap",
 		display("flex"),
-		alignItems("baseline"),
+		alignItems("center"),
 		justifyContent("space-between"),
-		gap("1rem"),
+		gap("0.5rem 1rem"),
+		flexWrap("wrap"),
 		fontSize("0.8rem"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),

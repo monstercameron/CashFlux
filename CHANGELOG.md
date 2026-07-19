@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Budgets hero rides the shared summary band:** the B1 top now opens on the same
+  `.budget-loader` Spent/Budgeted/Left band the Goals and To-do headline tiles use (one visual
+  system across the money pages), instead of a bespoke number+bar treatment. B1's consolidation
+  is unchanged — the band is followed by one quiet sub-row (income received on the left; the
+  attention chip, Cover all, Budget income, and the age-of-money chip on the right) and the
+  issues rail. The Left fig keeps the state-in-the-label rule ("Jun 2026 · Over budget / $509.58").
+
 ### Fixed
 - **UI/UX remediation lane B, closing tranche (2026-07-19):**
   - **Budgets → ledger drills land period-scoped:** "View spending" and the row Transactions

@@ -30,6 +30,15 @@ trim, restore the inset (`.45rem 1rem .5rem 1.15rem`). Lesson for this file's fu
 Concurrency: the parallel lane's transactions_tiles.go WIP briefly broke the shared build
 (unused vars) — waited it out rather than touching their file.
 
+Follow-up (same day): Cam asked the hero to ride the SHARED summary component rather than a
+bespoke number+bar — and the twist is that the shared band (`.budget-loader`) originated on
+budgets, was mirrored by Goals and To-do, and then B1 removed it from its birthplace. Restored:
+the top is the standard Spent/Budgeted/Left band again (Left = is-hero fig, state-in-the-label
+preserved), with B1's consolidation unchanged around it — one sub-row (income received · attention
+chip · Cover all · Budget income · age chip) then the issues rail. The bespoke hero CSS was
+pruned. Lesson: when a page's summary is the family template, redesigning that page means
+re-deriving the family look from it, not departing from it.
+
 ## 2026-07-19 — release v1.2.6: fully internationalized UI layer
 
 Pre-release gate re-run at the current tree: screenlint + keycoverage both green with every UI
