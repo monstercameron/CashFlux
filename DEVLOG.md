@@ -90,7 +90,19 @@ change-detection (data-countup-last) already satisfied "totals don't reanimate o
 Charts redraw statically (no per-render tween), which is the compliant behavior. gofmt -l noise on
 CRLF files ignored per standing note. Native go test ./internal/... clean; wasm build clean.
 
-Next: e2e motion assertions + full visual sweep (light+dark) across all routed pages.
+Verification (same day): the adherence ratchet suite (e2e/regression/motion.spec.mjs, commit
+21655fa8) passes 9/9 — it scans the ENTIRE installed stylesheet via CSSOM for overshoot beziers,
+>450ms routine durations, >100ms delays, confetti rules, and row entrance/transform violations, and
+asserts the sliding indicator's live geometry across route changes. Regression chunk A
+(smoke/invariants/interactions/motion/a11y/coverage) is 45/45 green. The 91-shot light+dark visual
+sweep (e2e/_motion_visual_sweep.mjs against serve.mjs) confirmed the indicator tracking
+Budgets->Goals, the focus ring, background-only row hover, settled debt-ladder stagger, and a
+confetti-free notifications page; the dashboard's "empty tiles" scare was the known below-fold
+deferral (a scroll+settle re-shot renders everything). Caught and fixed post-ratchet: a later
+`html`-prefixed wonder-boost block re-asserting a 3px row translate with !important, plus hover
+lifts/growth on .nav-link, .add-btn, .muzak-btn, and .chat-send. Known issue, deliberately NOT
+touched: the win32 visual.spec baselines date from v1.0.63 and fail on ancient layout drift —
+refreshing them is its own task, not part of this pass.
 
 ## 2026-07-19 — Selected-control visual language standardized by type (consistency audit #1)
 
