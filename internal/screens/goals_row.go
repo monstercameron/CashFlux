@@ -465,23 +465,8 @@ func GoalRow(props goalRowProps) ui.Node {
 		// money never moves. Suppressed on a complete goal (already funded). If the earmark
 		// no longer fits the account balance (spent down since), flag it in a warning tone
 		// rather than claiming false coverage.
-		if am := g.AllocatedMinor(); am > 0 && !complete {
-			earmarkMoney := fmtMoney(money.New(am, g.TargetAmount.Currency))
-			if props.EarmarkOverbooked {
-				earmarkLegend = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
-					uistate.T("goals.earmarkOverbooked", earmarkMoney))
-			} else {
-				savedMoney := fmtMoney(money.New(g.CurrentAmount.Amount, g.TargetAmount.Currency))
-				earmarkLegend = Div(css.Class("goal-legend"), Attr("data-testid", "goal-earmarked-"+g.ID),
-					Span(css.Class("goal-legend-item"),
-						Span(css.Class("goal-legend-swatch is-saved"), Attr("aria-hidden", "true")),
-						uistate.T("goals.legendSaved", savedMoney)),
-					Span(css.Class("goal-legend-item"),
-						Span(css.Class("goal-legend-swatch is-earmark"), Attr("aria-hidden", "true")),
-						uistate.T("goals.legendSetAside", earmarkMoney)),
-					Span(css.Class("goal-legend-note"), uistate.T("goals.legendNote")),
-				)
-			}
+		if !complete {
+			earmarkLegend = goalBarLegend(g, barClass, props.EarmarkOverbooked, false)
 		}
 		subSection = Fragment(
 			figsNode,
@@ -572,13 +557,16 @@ func GoalRow(props goalRowProps) ui.Node {
 	// Pause / Resume (GL7): pause an active, not-yet-complete goal for N months
 	// (opens the cost-preview form), or resume one that's paused. A chosen state,
 	// framed as a choice — hidden on archived and complete goals.
+	// Pause / Resume lives in the ⋯ menu (UX-22): a secondary lifecycle action, not an
+	// everyday one, so it belongs in the overflow beside Reset/Delete rather than the
+	// always-visible action row. Rendered as a menu item (role=menuitem, .add-item).
 	var pauseItem ui.Node = Fragment()
 	if !g.Archived && !complete {
 		if g.IsPaused(now) {
-			pauseItem = Button(css.Class("btn btn-tool"), Type("button"),
+			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "goal-resume-btn-"+g.ID), OnClick(openPause), uistate.T("goals.resumeAction"))
 		} else {
-			pauseItem = Button(css.Class("btn btn-tool"), Type("button"),
+			pauseItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "goal-pause-btn-"+g.ID), OnClick(openPause), uistate.T("goals.pauseAction"))
 		}
 	}
@@ -605,8 +593,10 @@ func GoalRow(props goalRowProps) ui.Node {
 				Attr("data-testid", "goal-undo-contrib-"+g.ID), OnClick(doUndoContribution), uistate.T("goals.undoContribution"))
 		}
 		if g.CurrentAmount.Amount > 0 {
-			resetItem = Button(css.Class("btn btn-tool"), Type("button"),
-				Attr("data-testid", "goal-reset-"+g.ID), OnClick(doResetGoal), uistate.T("goals.resetToZero"))
+			// Destructive: moved into the ⋯ menu as a danger item (UX-22), mirroring
+			// "Delete account" — never an always-visible action-row button.
+			resetItem = Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "goal-reset-"+g.ID), Attr("aria-label", uistate.T("goals.resetToZero")), OnClick(doResetGoal), uistate.T("goals.resetToZero"))
 		}
 	}
 
@@ -744,6 +734,10 @@ func GoalRow(props goalRowProps) ui.Node {
 				pausedChip,
 			),
 			loaderNode,
+			// The bar's saved-vs-set-aside key, decodable without expanding the card. The
+			// "saved" swatch samples the bar's status tint (barClass) so an amber Watch bar
+			// gets an amber swatch, not a hardcoded green one.
+			If(financial && !complete, goalBarLegend(g, barClass, props.EarmarkOverbooked, true)),
 			compactSub,
 			Div(css.Class("goal-card-actions"),
 				compactPrimary,
@@ -812,20 +806,22 @@ func GoalRow(props goalRowProps) ui.Node {
 			primaryAction,
 			editItem,
 			reviewItem,
-			pauseItem,
 			undoItem,
-			resetItem,
 			archiveItem,
 			Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
 				Attr("data-testid", "goal-collapse-"+g.ID), Attr("aria-expanded", "true"),
 				Attr("aria-label", uistate.T("goals.collapseTitle")), Title(uistate.T("goals.collapseTitle")), OnClick(toggleExpand),
 				Span(uistate.T("goals.collapse")),
 				uiw.Icon(icon.ChevronUp, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
+			// The ⋯ menu is the ONLY overflow menu: secondary lifecycle (Pause/Resume) then
+			// the destructive Reset/Delete, mirroring the accounts kebab's danger items.
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "goal-menu-" + g.ID,
 				AriaLabel:    uistate.T("goals.moreActions") + " — " + g.Name,
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
+					pauseItem,
+					resetItem,
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),
 				},
 			}),
@@ -1051,6 +1047,43 @@ func bestQuickEarmark(app *appstate.App, goalID string) (acctID, acctName string
 		amt = bestFree
 	}
 	return best.ID, best.Name, amt
+}
+
+// goalBarLegend renders the saved-vs-set-aside key beneath a goal's progress bar so
+// the solid/hatched split is decodable without a tooltip. The "saved" swatch carries
+// the SAME status tint as the bar's saved segment (barClass), so a Watch-status amber
+// bar gets an amber swatch — the legend never disagrees with the bar. compact drops the
+// "money stays put" note for the collapsed card's tighter line. Returns an empty node
+// when nothing is set aside (am <= 0).
+func goalBarLegend(g domain.Goal, barClass string, overbooked, compact bool) ui.Node {
+	am := g.AllocatedMinor()
+	if am <= 0 {
+		return Fragment()
+	}
+	cur := g.TargetAmount.Currency
+	earmarkMoney := fmtMoney(money.New(am, cur))
+	if overbooked {
+		return Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "goal-earmarked-"+g.ID),
+			uistate.T("goals.earmarkOverbooked", earmarkMoney))
+	}
+	savedMoney := fmtMoney(money.New(g.CurrentAmount.Amount, cur))
+	savedSwatch := "goal-legend-swatch is-saved"
+	if barClass != "" {
+		savedSwatch += " " + barClass
+	}
+	legendCls := "goal-legend"
+	if compact {
+		legendCls += " goal-legend-compact"
+	}
+	return Div(ClassStr(legendCls), Attr("data-testid", "goal-earmarked-"+g.ID),
+		Span(css.Class("goal-legend-item"),
+			Span(ClassStr(savedSwatch), Attr("aria-hidden", "true")),
+			uistate.T("goals.legendSaved", savedMoney)),
+		Span(css.Class("goal-legend-item"),
+			Span(css.Class("goal-legend-swatch is-earmark"), Attr("aria-hidden", "true")),
+			uistate.T("goals.legendSetAside", earmarkMoney)),
+		If(!compact, Span(css.Class("goal-legend-note"), uistate.T("goals.legendNote"))),
+	)
 }
 
 // goalFig renders one stat cell in a goal card's figures grid (redesign): a small
