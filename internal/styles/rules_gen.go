@@ -187,7 +187,7 @@ func registerGenerated() {
 		placeItems("center"),
 		background("var(--bg)"),
 		zIndex("10"),
-		transition("opacity 0.45s ease, transform 0.45s ease"),
+		transition("opacity var(--motion-narrative) var(--ease-exit), transform var(--motion-narrative) var(--ease-exit)"),
 	)
 	rule("#boot.hidden",
 		opacity("0"),
@@ -365,15 +365,18 @@ func registerGenerated() {
 		customProp("--wonder-shadow", "none !important"),
 	)
 	rule(":root",
+		// Re-tuned onto the v1.2.3 motion scale: fast=120, standard=180, overlay=280.
+		// Lift is capped at 1px (standalone cards only), press matches --pressed-scale,
+		// and both easings resolve to the three sanctioned curves.
 		customProp("--wonder-on", "1"),
-		customProp("--wonder-dur-fast", "110ms"),
-		customProp("--wonder-dur", "170ms"),
-		customProp("--wonder-dur-slow", "300ms"),
-		customProp("--wonder-ease", "cubic-bezier(.2,.75,.2,1)"),
-		customProp("--wonder-ease-out", "cubic-bezier(.16,1,.3,1)"),
-		customProp("--wonder-lift", "5px"),
-		customProp("--wonder-press", ".975"),
-		customProp("--wonder-shadow", "0 6px 22px rgba(0,0,0,.16)"),
+		customProp("--wonder-dur-fast", "120ms"),
+		customProp("--wonder-dur", "180ms"),
+		customProp("--wonder-dur-slow", "280ms"),
+		customProp("--wonder-ease", "cubic-bezier(0.2, 0, 0, 1)"),
+		customProp("--wonder-ease-out", "cubic-bezier(0.16, 1, 0.3, 1)"),
+		customProp("--wonder-lift", "1px"),
+		customProp("--wonder-press", ".985"),
+		customProp("--wonder-shadow", "0 3px 12px rgba(0,0,0,.12)"),
 	)
 	rule("[data-wonder=\"off\"]",
 		customProp("--wonder-on", "0"),
@@ -401,7 +404,9 @@ func registerGenerated() {
 	rule(".btn, .data-btn, .seg-btn, .add-item, .menu-btn, .icon-btn",
 		transition("transform var(--wonder-dur-fast) var(--wonder-ease), background-color var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease"),
 	)
-	rule(".btn:active, .data-btn:active, .seg-btn:active, .add-item:active, .menu-btn:active, .icon-btn:active, [role=\"button\"]:active",
+	// Press scale (spec §3): 0.985 for the micro window. Segmented controls and
+	// table/list rows never scale, so .seg-btn is out and role=button is guarded.
+	rule(".btn:active, .data-btn:active, .add-item:active, .menu-btn:active, .icon-btn:active,\n      [role=\"button\"]:not(.seg-btn):not(.row):not(tr):not(.nv):active",
 		transform("scale(var(--wonder-press))"),
 	)
 	rule(".w:not(.drag)",
@@ -411,11 +416,10 @@ func registerGenerated() {
 		transform("translateY(calc(-1 * var(--wonder-lift) * var(--wonder-on)))"),
 		boxShadow("var(--wonder-shadow)"),
 	)
-	rule(".row:not(.txn-table .row):hover",
-		transform("translateX(calc(2px * var(--wonder-on)))"),
-	)
+	// Rows lift one surface step on hover but never translate (spec §3: "Table/list
+	// rows do not translate") — background only, at the fast token.
 	rule(".row:not(.txn-table .row)",
-		transition("background 0.12s ease, transform var(--wonder-dur-fast) var(--wonder-ease)"),
+		transition("background var(--motion-fast) var(--ease-standard)"),
 	)
 	rule(".nv",
 		transition("transform var(--wonder-dur-fast) var(--wonder-ease), background var(--wonder-dur-fast) ease, color var(--wonder-dur-fast) ease, box-shadow var(--wonder-dur-fast) ease"),
@@ -450,9 +454,9 @@ func registerGenerated() {
 	ruleMedia("(prefers-reduced-motion: reduce)", "aside.rail .nv.active::before, aside.rail .nv[aria-current=\"page\"]::before",
 		animation("none"),
 	)
-	rule(".nv:hover",
-		transform("translateY(calc(-1px * var(--wonder-on)))"),
-	)
+	// Nav items respond with surface/color only — no movement on hover (spec §3:
+	// no vertical movement for toolbar-style buttons; §1: controls never shift
+	// away from the pointer).
 	rule(".nav-link",
 		transition("background 0.12s, color 0.12s, transform var(--wonder-dur-fast) var(--wonder-ease)"),
 	)
@@ -576,49 +580,10 @@ func registerGenerated() {
 	ruleMedia("(prefers-reduced-motion: reduce)", ".toast:not(.toast-err)::before",
 		animation("none"),
 	)
-	keyframes("wonder-row-enter",
-		at("from",
-			opacity("0"),
-			transform("translateY(calc(6px * var(--wonder-on)))"),
-		),
-		at("to",
-			opacity("1"),
-			transform("none"),
-		),
-	)
-	rule(".rows .row:not(.txn-table .row),\n      .list-rows .row:not(.txn-table .row)",
-		animation("wonder-row-enter var(--wonder-dur) var(--wonder-ease-out) both"),
-	)
-	rule(".rows .row:nth-child(1):not(.txn-table .row),\n      .list-rows .row:nth-child(1):not(.txn-table .row)",
-		animationDelay("calc(0ms  + 0ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(2):not(.txn-table .row),\n      .list-rows .row:nth-child(2):not(.txn-table .row)",
-		animationDelay("calc(40ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(3):not(.txn-table .row),\n      .list-rows .row:nth-child(3):not(.txn-table .row)",
-		animationDelay("calc(80ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(4):not(.txn-table .row),\n      .list-rows .row:nth-child(4):not(.txn-table .row)",
-		animationDelay("calc(110ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(5):not(.txn-table .row),\n      .list-rows .row:nth-child(5):not(.txn-table .row)",
-		animationDelay("calc(140ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(6):not(.txn-table .row),\n      .list-rows .row:nth-child(6):not(.txn-table .row)",
-		animationDelay("calc(165ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(7):not(.txn-table .row),\n      .list-rows .row:nth-child(7):not(.txn-table .row)",
-		animationDelay("calc(190ms * var(--wonder-on))"),
-	)
-	rule(".rows .row:nth-child(8):not(.txn-table .row),\n      .list-rows .row:nth-child(8):not(.txn-table .row)",
-		animationDelay("calc(210ms * var(--wonder-on))"),
-	)
-	rule("[data-wonder=\"off\"] .rows .row,\n      [data-wonder=\"off\"] .list-rows .row",
-		animation("none"),
-	)
-	ruleMedia("(prefers-reduced-motion: reduce)", ".rows .row, .list-rows .row",
-		animation("none"),
-	)
+	// (v1.2.3 motion spec §2: ledger/account/task/notification rows are never
+	// staggered during ordinary filtering — the old wonder-row-enter entrance
+	// cascade replayed on every list re-render, so it is gone entirely. Rows
+	// appear with the page; the page-level transition is the only entrance.)
 	keyframes("wonder-bento-enter",
 		at("from",
 			opacity("0"),
@@ -655,13 +620,12 @@ func registerGenerated() {
 	rule(".flip-backdrop.show",
 		backdropFilter("blur(calc(3px * var(--wonder-on)))"),
 	)
+	// Toasts rise and settle exactly once (spec §2: no overshoot) — the old
+	// bounce midpoint + elastic bezier are gone; enter curve at the overlay token.
 	keyframes("wonder-toast-in",
 		at("from",
 			opacity("0"),
 			transform("translate(-50%, calc(0.6rem * var(--wonder-on)))"),
-		),
-		at("50%",
-			transform("translate(-50%, calc(-0.15rem * var(--wonder-on)))"),
 		),
 		at("to",
 			opacity("1"),
@@ -673,16 +637,13 @@ func registerGenerated() {
 			opacity("0"),
 			transform("translate(-50%, calc(0.6rem * var(--wonder-on)))"),
 		),
-		at("50%",
-			transform("translate(-50%, calc(-0.15rem * var(--wonder-on)))"),
-		),
 		at("to",
 			opacity("1"),
 			transform("translate(-50%, 0)"),
 		),
 	)
 	rule(".toast",
-		animation("toast-in var(--wonder-dur-slow) cubic-bezier(.34,1.56,.64,1) both"),
+		animation("toast-in var(--motion-overlay) var(--ease-enter) both"),
 	)
 	rule(".toast.hide",
 		animation("none"),
@@ -4393,16 +4354,25 @@ func registerGenerated() {
 		customProp("--focus-ring-offset", "2px"),
 		customProp("--hover-tint", "color-mix(in srgb, var(--interactive) 8%, transparent)"),
 		customProp("--pressed-scale", "0.985"),
-		customProp("--disabled-opacity", "0.48"),
+		customProp("--disabled-opacity", "0.6"),
+		// v1.2.3 motion spec — the only duration scale. Legacy names (base/medium/
+		// slow) alias onto the spec tokens so older rules inherit the scale.
 		customProp("--motion-instant", "0ms"),
-		customProp("--motion-fast", "100ms"),
-		customProp("--motion-base", "160ms"),
-		customProp("--motion-medium", "220ms"),
-		customProp("--motion-slow", "320ms"),
+		customProp("--motion-micro", "80ms"),
+		customProp("--motion-fast", "120ms"),
+		customProp("--motion-standard", "180ms"),
+		customProp("--motion-layout", "240ms"),
+		customProp("--motion-overlay", "280ms"),
+		customProp("--motion-data", "320ms"),
+		customProp("--motion-narrative", "450ms"),
+		customProp("--motion-base", "var(--motion-standard)"),
+		customProp("--motion-medium", "var(--motion-layout)"),
+		customProp("--motion-slow", "var(--motion-data)"),
+		// The only three easing curves: standard movement, enter, exit. No overshoot.
 		customProp("--ease-standard", "cubic-bezier(0.2, 0, 0, 1)"),
-		customProp("--ease-enter", "cubic-bezier(0, 0, 0, 1)"),
+		customProp("--ease-enter", "cubic-bezier(0.16, 1, 0.3, 1)"),
 		customProp("--ease-exit", "cubic-bezier(0.4, 0, 1, 1)"),
-		customProp("--ease-emphasized", "cubic-bezier(0.2, 0, 0, 1)"),
+		customProp("--ease-emphasized", "var(--ease-standard)"),
 	)
 	ruleMedia("(pointer: coarse)", ":root",
 		customProp("--control-h", "44px"),
@@ -9650,7 +9620,7 @@ func registerGenerated() {
 		transition(".2s"),
 	)
 	rule(".switch::after",
-		transition("left var(--wonder-dur) cubic-bezier(.34,1.56,.64,1), background var(--wonder-dur) var(--wonder-ease-out)"),
+		transition("left var(--motion-standard) var(--ease-standard), background var(--motion-standard) var(--ease-standard)"),
 	)
 	rule(".switch.on",
 		background("#3e7f5e"),

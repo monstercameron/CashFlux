@@ -92,6 +92,10 @@ func Register() {
 	registerDpSerif()
 	registerDpBorders()
 	registerDpHeader()
+	registerDpAlign()
+	registerDpLinks()
+	registerDpRadius()
+	registerDpControls()
 	inject(Build())
 }
 

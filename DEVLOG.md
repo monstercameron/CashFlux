@@ -1,3 +1,164 @@
+## 2026-07-19 — Selected-control visual language standardized by type (consistency audit #1)
+
+Scope: retire the four competing "selected/active" treatments on passive controls (solid-green
+fill, green outline, green-tinted fill, neutral gray) so a solid green fill stays reserved for the
+one primary action per screen (`.btn-primary`). Standardized by CONTROL TYPE in one new CSS-only
+file, `internal/styles/rules_dp_controls.go` (`registerDpControls`), appended last in
+`install.go` so its same-specificity selectors win the cascade over the generated defaults and the
+per-surface files — none of which were edited (they belong to other lanes).
+
+Treatments applied:
+- Navigation tab — Goals "Goals · Earmarks" (`.goals-tab.is-active`): dropped the solid/darkened
+  green fill (set in both `rules_gen.go` and `rules_lane6.go`, incl. their light-theme overrides)
+  for a quiet surface + a 2px green `border-bottom` underline. A transparent 2px border-bottom is
+  reserved on the base `.goals-tab` so the active tab adds no vertical shift.
+- Segmented display choice — Reports "Summary · Full report" (`.rpta-mode.is-on`, defined in a
+  rawBlock in `rules_reportssummary.go`): swapped the solid `var(--accent)` fill for a 1px green
+  border + a subtle green tint; a transparent 1px border is reserved on every `.rpta-mode`.
+- Filter chips — notif/smart triage "Needs you · Watching · History"
+  (`.nhx-toggle-btn[aria-selected="true"]`) and to-do "List · Board · Calendar" + quick-lens
+  "All · Today · Overdue" (`.tvw-btn.is-active`): neutral pill, selected member gets a subtle tint
+  + a 2px green marker rail via `box-shadow: inset 2px 0 0 var(--accent)`. The to-do chip's former
+  green outline is neutralized (`border-color: transparent`) so it reads as a chip, not a segment.
+  Both keep `var(--accent-ink, var(--accent))` for text so the lane6 AA-contrast fix survives.
+
+Left alone on purpose: the generic `uiw.Segmented` primitive (`.seg`/`.seg-btn`) — the Assistant
+"Ask · Insights · Smart" bar plus ~15 other surfaces (settings, appearance, quick-add, sync, …).
+It already uses a NEUTRAL gray sliding pill, not a green passive fill, so it doesn't violate the
+reserve-green rule, and it is shared far too widely to retype to a nav-tab underline from this lane
+without collateral changes to other surfaces. Noted rather than touched.
+
+Constraints honored: CSS-only, properties limited to background / border / border-bottom /
+box-shadow / color; theme tokens only (light + dark); all `data-testid` and `aria-selected`
+preserved; `rules_gen.go` not edited; `install.go` re-read immediately before the one-line append.
+Verify: `go test ./internal/styles/...` green; wasm app build (`.`) exits 0.
+
+## 2026-07-19 — Amount sign/semantics audit (consistency audit #5) — no violations
+
+Scope: formalize + apply one amount sign/semantics rule set across the render/format layer.
+Rules: summary magnitudes UNSIGNED (label+color carry direction); ledger/account entries and
+balances keep the accounting-parentheses convention; liability balances shown standalone are an
+unsigned "Owed/Debt" magnitude, parenthesized only when listed beside assets; and — the key
+prohibition — NEVER combine a minus sign AND parentheses AND red on one figure.
+
+Investigated the shared helpers (`internal/money.FormatMinor` = plain minus, no symbol, for editable
+inputs/CSV; `FormatAccounting` = symbol + grouping + `($x)` parens for negatives) and the screen
+helpers (`fmtMoney` → `FormatAccounting`; `signedMoney`/`fmtSignedMoney`/accounts delta = normalize
+to positive then a single explicit sign). Walked every amount render site flagged by the concern:
+
+- Dashboard Spending (`dashboard_hero.go`): `fmtMoney(expense)` where `ledger.PeriodTotals` returns
+  `expense` as `conv.Abs()` (positive) → UNSIGNED, red via `text-down`. Correct — left as-is.
+- Budgets Spent (`budgets_tiles.go` budgetSummaryWidget): `fmtMoney(money.New(barSpent,…))`, barSpent
+  = positive TotalSpent, class `neg` → UNSIGNED + red. Correct.
+- Reports Spending: neutral UNSIGNED magnitude. Correct (color is the color lane's, not mine).
+- Debt page (`debt_tiles.go`): owed = `bal.Abs()`; hero `fmtMoney(v.TotalOwed)` class `neg` →
+  UNSIGNED magnitude, labeled owed/Debt, not parenthesized standalone. Correct.
+
+Triple hunt (minus + parens + red): the only at-risk pattern is `sign + fmtMoney(money.New(-x,…))`.
+Checked every occurrence — merchant "vs your usual" (`merchant_trend.go:143/145`), accounts
+delta-this-month (`accounts.go`), projection drivers (`signedMoney`), dashboard cash-flow sub-line
+(`dashboard.go:694`), budgets cap-math/over-budget/pace/over-allocated lines (`budgets.go:435/440/
+501/893`, `budgets_tiles.go:430`, `budgets_monthclose.go:273`), assistant `trendBelow`. In EVERY
+case the argument is negated to a positive magnitude before `fmtMoney`, so the result carries no
+parentheses; the sole direction cue is the prepended glyph/word. The i18n templates
+(`"− %s carried debt"`, `"%s over this budget"`, `"You spent %s more…"`, `"%s vs your usual"`) inject
+no extra minus around an already-parenthesized value either. No `-($x)` / `(−$x)` triple exists.
+
+Outcome: the app's sign/format conventions already satisfy the target rule set end-to-end. No
+render/format code changed (per the lane rule not to invent changes when a case is already
+satisfied). Verify: `go vet ./internal/...` clean, `go test ./internal/money/...` ok, wasm app build
+(`GOOS=js GOARCH=wasm go build .`) exit 0.
+
+## 2026-07-19 — One card-radius scale (consistency audit #3)
+
+Scope from consistency audit #3: corner radii varied without hierarchy. Cataloged every
+`border-radius`/`borderRadius(...)` in `internal/styles` (~90 occurrences). Findings: `--radius` is
+`0px` so bento widgets (`.w`) are effectively square; `.card` is overridden to 12px and `.stat` to
+10px (rules_gen.go ~L11811); the surface card families each chose their own — home hero + studio
+stage 18px, investment/debt/strategy/studio-type/pool cards and saved-scenario/allocation rows 14px,
+notifications 12px, report summary cards (`.rpta-sum-col`/`.rpta-sum-trend`, raw-block CSS in
+`rules_reportssummary.go`) ~11px. Pills were already uniformly `999px` everywhere.
+
+Normalized to ONE scale via a new CSS-only file `internal/styles/rules_dp_radius.go`
+(`registerDpRadius`), `border-radius` the only property set:
+- Page section (largest wrapper): `.w`, `.home-hero`, `.studio-stage-wrap` → 12px.
+- Summary card / stat tile: `.card` (assert), `.stat`, `.inv-card`, `.inv-pool-card`, `.debt-card`,
+  `.debt-stat`, `.strat-card`, `.studio-type-card`, `.rpta-sum-col`, `.rpta-sum-trend` → 12px.
+- Row card: `.bento-budgets .budget`, `.bento-goals .goal-card`, `.notif`, `.plan-scenario`,
+  `.alloc-dest`, `.attention-item`, `.goal-alloc-row` → 8px.
+- Input / button: `.btn`, `.field` → 8px.
+- Pill / status badge: left at 9999px (already consistent — no rule needed).
+
+The 3px stateful left accent-edge (budget/goal at-risk/over, report-summary zone) is a `border-left`
+on the same box, so it clips to the card's rounded corners automatically — "stays inside the radius"
+needs no extra work, and the file deliberately touches no property but `border-radius`. Selectors
+match the generated/raw-block ones at equal specificity; higher-specificity contextual overrides
+(`[data-density="compact"] .card` at 8px, `.bento-debt .stat` at 12px) are left as intentional
+exceptions. One-line append to `install.go` — re-read right before appending under concurrent edits
+(other agents had just added `registerDpAlign`/`registerDpLinks`); landed `registerDpRadius()` after
+them so it registers LAST and wins the cascade. Radius isn't themed, so the file is theme-agnostic.
+
+Verify: `go test ./internal/styles/... -count=1` green; `GOOS=js GOARCH=wasm go build .` (app wasm)
+exit 0.
+
+## 2026-07-19 — Left-align operational section titles (consistency audit #4)
+
+Scope from consistency audit #4: the Dashboard CENTERED its bento widget/section titles ("Needs
+attention", "Monthly recap", "Assets", "Liabilities", "Safe to spend", "Goals at a glance") while
+the other eight pages left-align their section titles. Centered headings slow vertical scanning and
+make the dashboard read like a presentation instead of a workspace.
+
+Traced the centering to the generated widget-header rule in `rules_gen.go` (~L10717):
+`.wh h2, .wh h3, .wh .wh-title { … text-align: center }` — `.wh` is the shared bento tile header
+(`internal/ui/widget.go`), rendered for every dashboard widget title. That's exactly the section
+titles the audit named; the widget body/figures are not affected by this rule.
+
+Fix: new file `internal/styles/rules_dp_align.go` (`registerDpAlign`), one-line append to
+`install.go` (re-read right before appending under concurrent edits from other agents — landed at
+L95, another agent's `registerDpLinks` sits after it). CSS-only, `text-align: left` on the same
+`.wh h2, .wh h3, .wh .wh-title` selector so it wins at equal specificity by source order. The title
+keeps its `flex:1` growth; only its horizontal alignment moves.
+
+Deliberately left centered: the editorial dashboard greeting hero. On the chrome-hover hero the
+`.wh` header's `h2` is `display:none` (rules_gen.go ~L10926) — the "Good morning." greeting lives in
+the hero body, not a widget title — so the override never touches it and it stays as the single
+centered hero statement. Did not touch `.empty-cta` (centered empty state), `.cal-head`, or any
+figure/control alignment (other agents own those).
+
+Verify: `go test ./internal/styles/... -count=1` green; wasm app build (`GOOS=js GOARCH=wasm go
+build .`) exit 0.
+
+## 2026-07-19 — Green means money: re-neutralize generic navigation links (consistency audit #2)
+
+Scope from consistency audit #2: green was doing too many jobs (positive balance, primary action,
+active tab, link, accent, progress…), so it no longer reliably meant "money". This pass tightens
+ONE of those overloads — plain navigation links that rendered in `var(--accent)` — so green text
+stays trustworthy as a positive-financial-state signal.
+
+New file `internal/styles/rules_dp_links.go` (`registerDpLinks`, one-line append to `install.go`
+after `registerDpAlign`, so it registers last and its overrides win the cascade on source order).
+CSS-only, `color` + `text-decoration` on hover, theme tokens only (light + dark track). Neutral
+treatment = resting `var(--text-dim)`, hover `var(--text)` + underline.
+
+Link classes re-neutralized (each was base `color: var(--accent)`, i.e. green, and is plain
+navigation — not a money action):
+- `.rpta-plan-link` — reports-annual "plan" action link.
+- `.studio-list-link` — widget-studio list "open" link.
+- `.ask-note-link` — assistant note jump link.
+- `.dash-view-all` — dashboard "View all N bills" link.
+- `.bento-budgets .budget-drill:hover` — the budget "Details" drill's base already inherits a
+  neutral color + dotted underline; only its hover turned green, so just the hover is retoned to
+  `var(--text)` (matched the generated 0,3,0 selector so source order wins).
+
+How positive-money green was protected: I targeted only `-link` / nav-named classes and never wrote
+a blanket `a { color }` rule, so money classes (`.money-positive`, balances, `+`-changes, the
+`.zbb-savings-goal.is-ahead/-ontrack` money tones) are untouched and keep their green. Left alone:
+`.debt-jump-link` (base already `var(--text)`, only an accent tint on hover — a pill nav, not base
+green) and `.cloud-mention-link` (already `var(--text-dim)`).
+
+Verify: `go test ./internal/styles/... -count=1` passes; `.` wasm build (`GOOS=js GOARCH=wasm`)
+exits 0.
+
 ## 2026-07-19 — Quieter global top header: ambient controls into the ⋯ More overflow (design pass)
 
 Scope from the frontend-design review, header lane: the global top bar crowded ~10 equally-weighted
