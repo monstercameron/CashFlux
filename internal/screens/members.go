@@ -317,7 +317,7 @@ func memberDateStyleOptions() []uiw.SelectOption {
 		{Value: string(prefs.DateISO), Label: "2006-01-02"},
 		{Value: string(prefs.DateUS), Label: "01/02/2006"},
 		{Value: string(prefs.DateEU), Label: "02/01/2006"},
-		{Value: string(prefs.DateLong), Label: "Jan 2, 2006"},
+		{Value: string(prefs.DateLong), Label: uistate.T("members.dateLongSample")},
 	}
 }
 

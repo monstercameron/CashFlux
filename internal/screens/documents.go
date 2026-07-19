@@ -1149,7 +1149,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		rev.Set(rev.Get() + 1)
 	}
 	receiptToggle := uiw.ToggleRow(uiw.ToggleRowProps{
-		Label: "Import as one receipt (split across categories)",
+		Label: uistate.T("documents.receiptToggle"),
 		On:    receiptMode.Get(),
 		OnChange: func(on bool) {
 			if on && strings.TrimSpace(receiptTotal.Get()) == "" {
@@ -1320,7 +1320,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 										uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("documents.extractAI"))),
 								),
 								Textarea(css.Class("field field-wide"), Attr("rows", "4"),
-									Placeholder("Posting Date,Description,Debit,Credit\n06/01/2026,SALARY ACH,,4200.00\n06/02/2026,WHOLE FOODS,86.40,"),
+									Placeholder(uistate.T("documents.stmtSample")),
 									OnInput(onStmt),
 								),
 							),
@@ -1957,7 +1957,7 @@ func savedProfilesCard(
 		Header: Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 			H2(css.Class("card-title"), uistate.T("documents.profileLoadTitle")),
 			Button(css.Class("btn btn-sm"), Type("button"), OnClick(func() { onToggle() }),
-				IfElse(shown, Text("Hide"), Text("Show"))),
+				IfElse(shown, Text(uistate.T("common.hide")), Text(uistate.T("common.show")))),
 		),
 		Body: If(shown,
 			IfElse(len(profiles) == 0,

@@ -187,9 +187,9 @@ func smartFieldAssistInner(props SmartFieldAssistProps) ui.Node {
 		Button(ClassStr("btn-link "+tw.Fold(tw.Text12, tw.TextDim)),
 			Type("button"),
 			Attr("data-testid", "smart-assist-"+props.ID+"-apply"),
-			Attr("aria-label", "Use suggestion: "+props.Suggestion),
+			Attr("aria-label", uistate.T("smart.useSuggestionAria", props.Suggestion)),
 			OnClick(apply),
-			Text(`Use "`+props.Suggestion+`"`),
+			Text(uistate.T("smart.useSuggestion", props.Suggestion)),
 		),
 	)
 }

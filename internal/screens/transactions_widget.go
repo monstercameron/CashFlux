@@ -706,11 +706,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		// order): Select + Date + Description are always shown; the rest follow the
 		// user's column-visibility choice.
 		cols := []uiw.Column{
-			{Head: Span(css.Class(tw.SrOnly), "Select")},
-			{Label: "Date", SortKey: "date"},
+			{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colSelect"))},
+			{Label: uistate.T("transactions.colDate"), SortKey: "date"},
 		}
 		if colVis.Amount {
-			cols = append(cols, uiw.Column{Label: "Amount", SortKey: "amount", Class: "td-amount"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAmount"), SortKey: "amount", Class: "td-amount"})
 		}
 		// Register mode (TX12): a running-balance column right after Amount. No SortKey —
 		// register mode locks the ledger to chronological order, so the figure only reads
@@ -721,20 +721,20 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		// row-desc-col: the fixed-layout ledger sizes columns from the header row, so
 		// the width-priority rule (2026-07-17 audit — description reads first) must
 		// live on the th, not the td.
-		cols = append(cols, uiw.Column{Label: "Description", SortKey: "payee", Class: "row-desc-col"})
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colDescription"), SortKey: "payee", Class: "row-desc-col"})
 		if colVis.Account {
-			cols = append(cols, uiw.Column{Label: "Account", SortKey: "account"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: "account"})
 		}
 		if colVis.Category {
-			cols = append(cols, uiw.Column{Label: "Category", SortKey: "category"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colCategory"), SortKey: "category"})
 		}
 		if colVis.Source {
-			cols = append(cols, uiw.Column{Label: "Source", SortKey: "source"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colSource"), SortKey: "source"})
 		}
 		if colVis.User {
 			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser")})
 		}
-		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), "Actions"), Class: "td-actions"})
+		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colActions")), Class: "td-actions"})
 		dtp := uiw.DataTableProps{
 			Class:       "txn-table",
 			StickyHead:  true,

@@ -39,8 +39,11 @@ import (
 // css utility soup, glyphs, urls, and all-lowercase identifiers are ignored.
 var i18nBaselines = map[string]int{
 	// UI layer (wasm screens + app chrome). Baselines set 2026-07-03 (C361);
-	// first conversion tranche brought screens 211→126, later sweeps to 115; app 17→0.
-	"../screens": 115,
+	// first conversion tranche brought screens 211→126, later sweeps to 115, and
+	// the 2026-07-19 third tranche (en_i18nsweep3.go: theme editor, widget
+	// builder, studio designer, txn table columns, and the long tail) to 0.
+	// The whole UI layer is now at zero — keep it there.
+	"../screens": 0,
 	"../app":     0,
 	// Shared component library + UI-adjacent packages (second sweep pass —
 	// Cam: "every page AND component"). widgetregistry's 2 are the preset

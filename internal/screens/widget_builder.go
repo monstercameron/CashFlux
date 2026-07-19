@@ -449,12 +449,17 @@ func VisualBuilder() ui.Node {
 	rev := ui.UseState(0)
 	_ = rev.Get()
 	published := ui.UseState("")
+	// publishedOK marks the status line as a successful publish (drives the
+	// "Open dashboard" affordance) — a flag, not a string-prefix sniff, so the
+	// status copy can be translated freely.
+	publishedOK := ui.UseState(false)
 	layoutAtom := uistate.UseLayoutItems()
 	onCardName := ui.UseEvent(func(v string) { cardName.Set(v) })
 	publish := ui.UseEvent(func() {
 		name := strings.TrimSpace(cardName.Get())
 		if name == "" {
-			published.Set("Name the card first, then Publish.")
+			published.Set(uistate.T("vbld.needName"))
+			publishedOK.Set(false)
 			return
 		}
 		lib := vbLoadCards()
@@ -483,7 +488,8 @@ func VisualBuilder() ui.Node {
 		// letting the 4s autosave tick race the unload (the same C2 hatch the
 		// sample loader uses).
 		uistate.RequestPersist()
-		published.Set("Published “" + name + "” to your dashboard.")
+		published.Set(uistate.T("vbld.publishedStatus", name))
+		publishedOK.Set(true)
 	})
 	saveCard := ui.UseEvent(func() {
 		name := strings.TrimSpace(cardName.Get())
@@ -573,34 +579,34 @@ func VisualBuilder() ui.Node {
 		Div(css.Class("vb-toolbar"),
 			Div(css.Class("vb-group"),
 				Span(css.Class("vb-group-label"), uistate.T("vbld.startFrom")),
-				vbSelectRaw("Preset", "", append([][2]string{{"", "Load a preset…"}}, vbPresetOptions()...), loadPreset),
-				vbSelectRaw("My cards", "", append([][2]string{{"", "My cards…"}}, vbCardOptions()...), loadCard),
+				vbSelectRaw(uistate.T("vbld.presetAria"), "", append([][2]string{{"", uistate.T("vbld.loadPreset")}}, vbPresetOptions()...), loadPreset),
+				vbSelectRaw(uistate.T("vbld.myCards"), "", append([][2]string{{"", uistate.T("vbld.myCardsEllipsis")}}, vbCardOptions()...), loadCard),
 			),
 			Div(css.Class("vb-group"),
 				Span(css.Class("vb-group-label"), uistate.T("vbld.thisCard")),
-				Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", "Card name"),
-					Attr("aria-label", "Card name"), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
-				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), "Save"),
-				Button(css.Class("btn btn-primary vb-publish"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), "Publish → dashboard"),
-				Button(css.Class("data-btn vb-danger"), Type("button"), Attr("title", uistate.T("vbld.deleteTitle")), Attr("aria-label", uistate.T("vbld.deleteTitle")), OnClick(deleteCard), "Delete"),
+				Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", uistate.T("vbld.cardName")),
+					Attr("aria-label", uistate.T("vbld.cardName")), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), uistate.T("vbld.save")),
+				Button(css.Class("btn btn-primary vb-publish"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), uistate.T("vbld.publishBtn")),
+				Button(css.Class("data-btn vb-danger"), Type("button"), Attr("title", uistate.T("vbld.deleteTitle")), Attr("aria-label", uistate.T("vbld.deleteTitle")), OnClick(deleteCard), uistate.T("vbld.delete")),
 			),
 			Span(css.Class("vb-sep")),
 			Div(css.Class("vb-group"),
 				Span(css.Class("vb-group-label"), uistate.T("vbld.canvas")),
-				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-undo"), OnClick(undo), "↶ Undo"),
-				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-redo"), OnClick(redo), "↷ Redo"),
-				Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), "New / clear"),
-				wmStepper("W", col.Get(), "Narrower", "Wider", func() { setCol(clampSpan(col.Get()-1, 4)) }, func() { setCol(clampSpan(col.Get()+1, 4)) }),
-				wmStepper("H", row.Get(), "Shorter", "Taller", func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-undo"), OnClick(undo), "↶ "+uistate.T("vbld.undo")),
+				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-redo"), OnClick(redo), "↷ "+uistate.T("vbld.redo")),
+				Button(css.Class("data-btn"), Type("button"), OnClick(clearGraph), uistate.T("vbld.newClear")),
+				wmStepper("W", col.Get(), uistate.T("vbld.narrower"), uistate.T("vbld.wider"), func() { setCol(clampSpan(col.Get()-1, 4)) }, func() { setCol(clampSpan(col.Get()+1, 4)) }),
+				wmStepper("H", row.Get(), uistate.T("vbld.shorter"), uistate.T("vbld.taller"), func() { setRow(clampSpan(row.Get()-1, 3)) }, func() { setRow(clampSpan(row.Get()+1, 3)) }),
 			),
 		),
 		If(published.Get() != "", Div(css.Class("vb-status"), Attr("role", "status"),
 			Span(published.Get()),
 			// On a successful publish, offer a direct jump to the dashboard so the user
 			// can see the new tile land in the custom-cards band at the foot of the grid.
-			If(strings.HasPrefix(published.Get(), "Published"),
+			If(publishedOK.Get(),
 				A(css.Class("btn btn-sm"), Attr("data-testid", "vb-open-dashboard"),
-					Href(uistate.RoutePath("/")), "Open dashboard"),
+					Href(uistate.RoutePath("/")), uistate.T("vbld.openDashboard")),
 			),
 		)),
 		// Workspace: palette | canvas | right dock (inspector over the live
@@ -613,7 +619,7 @@ func VisualBuilder() ui.Node {
 				vbInspector(g, selected.Get(), issues, setProp, setVar, setRoot, deleteNode, wireInput),
 				Div(css.Class("vb-previewpane"),
 					Div(css.Class("vb-preview-head"),
-						Span(css.Class("vb-preview-title"), "Live preview"),
+						Span(css.Class("vb-preview-title"), uistate.T("vbld.livePreview")),
 						Span(css.Class("vb-preview-hint"), uistate.T("vbld.previewHint")),
 					),
 					Div(css.Class("wb-stage"),
@@ -995,33 +1001,36 @@ func vbOutType(kind string) cardgraph.PortType {
 
 type vbCatItem struct{ Kind, Label, Group string }
 
+// vbCatalog resolves node labels through i18n at render time (loop-safe: T is
+// not a hook). Group values stay literal identifiers — vbPalette matches on
+// them and translates only the displayed heading.
 func vbCatalog() []vbCatItem {
 	return []vbCatItem{
-		{cardgraph.KindSourceScalar, "Figure", "Data"},
-		{cardgraph.KindSourceDataset, "Dataset", "Data"},
-		{cardgraph.KindLiteralNumber, "Number", "Data"},
-		{cardgraph.KindLiteralText, "Text", "Data"},
-		{cardgraph.KindLiteralBool, "Yes / No", "Data"},
-		{cardgraph.KindFilter, "Filter", "Transform"},
-		{cardgraph.KindRule, "Rule", "Transform"},
-		{cardgraph.KindGroupBy, "Group by", "Transform"},
-		{cardgraph.KindAggregate, "Aggregate", "Transform"},
-		{cardgraph.KindFormula, "Formula", "Transform"},
-		{cardgraph.KindCompare, "Compare", "Logic"},
-		{cardgraph.KindBranchNumber, "Branch", "Logic"},
-		{cardgraph.KindVizKPI, "KPI", "Display"},
-		{cardgraph.KindVizStat, "Stat + Δ", "Display"},
-		{cardgraph.KindVizChart, "Chart", "Display"},
-		{cardgraph.KindVizList, "List / table", "Display"},
-		{cardgraph.KindVizProgress, "Progress", "Display"},
-		{cardgraph.KindVizBadge, "Badge", "Display"},
-		{cardgraph.KindVizText, "Text", "Display"},
-		{cardgraph.KindLiteralColor, "Color", "Style"},
-		{cardgraph.KindStyleAccent, "Accent color", "Style"},
-		{cardgraph.KindStyleTone, "Tone (▲▼)", "Style"},
-		{cardgraph.KindVizStack, "Stack (compose)", "Layout"},
-		{cardgraph.KindUIButton, "Button", "Interact"},
-		{cardgraph.KindUIToggle, "Toggle", "Interact"},
+		{cardgraph.KindSourceScalar, uistate.T("vbld.kFigure"), "Data"},
+		{cardgraph.KindSourceDataset, uistate.T("vbld.kDataset"), "Data"},
+		{cardgraph.KindLiteralNumber, uistate.T("vbld.kNumber"), "Data"},
+		{cardgraph.KindLiteralText, uistate.T("vbld.kText"), "Data"},
+		{cardgraph.KindLiteralBool, uistate.T("vbld.kYesNo"), "Data"},
+		{cardgraph.KindFilter, uistate.T("vbld.kFilter"), "Transform"},
+		{cardgraph.KindRule, uistate.T("vbld.kRule"), "Transform"},
+		{cardgraph.KindGroupBy, uistate.T("vbld.kGroupBy"), "Transform"},
+		{cardgraph.KindAggregate, uistate.T("vbld.kAggregate"), "Transform"},
+		{cardgraph.KindFormula, uistate.T("vbld.kFormula"), "Transform"},
+		{cardgraph.KindCompare, uistate.T("vbld.kCompare"), "Logic"},
+		{cardgraph.KindBranchNumber, uistate.T("vbld.kBranch"), "Logic"},
+		{cardgraph.KindVizKPI, uistate.T("vbld.kKPI"), "Display"},
+		{cardgraph.KindVizStat, uistate.T("vbld.kStat"), "Display"},
+		{cardgraph.KindVizChart, uistate.T("vbld.kChart"), "Display"},
+		{cardgraph.KindVizList, uistate.T("vbld.kList"), "Display"},
+		{cardgraph.KindVizProgress, uistate.T("vbld.kProgress"), "Display"},
+		{cardgraph.KindVizBadge, uistate.T("vbld.kBadge"), "Display"},
+		{cardgraph.KindVizText, uistate.T("vbld.kText"), "Display"},
+		{cardgraph.KindLiteralColor, uistate.T("vbld.kColor"), "Style"},
+		{cardgraph.KindStyleAccent, uistate.T("vbld.kAccentColor"), "Style"},
+		{cardgraph.KindStyleTone, uistate.T("vbld.kTone"), "Style"},
+		{cardgraph.KindVizStack, uistate.T("vbld.kStack"), "Layout"},
+		{cardgraph.KindUIButton, uistate.T("vbld.kButton"), "Interact"},
+		{cardgraph.KindUIToggle, uistate.T("vbld.kToggle"), "Interact"},
 	}
 }
 
@@ -1462,12 +1471,19 @@ func vbPresetOptions() [][2]string {
 // ---- panes ---------------------------------------------------------------------
 
 func vbPalette(onAdd func(string)) ui.Node {
-	groups := []string{"Data", "Transform", "Logic", "Display", "Style", "Layout", "Interact"}
-	children := []ui.Node{Span(css.Class("vb-pane-title"), "Nodes")}
+	// Group values are identifiers matched against vbCatItem.Group; the heading
+	// shown for each translates through its vbld.grp* key.
+	groups := []struct{ id, labelKey string }{
+		{"Data", "vbld.grpData"}, {"Transform", "vbld.grpTransform"}, {"Logic", "vbld.grpLogic"},
+		{"Display", "vbld.grpDisplay"}, {"Style", "vbld.grpStyle"}, {"Layout", "vbld.grpLayout"},
+		{"Interact", "vbld.grpInteract"},
+	}
+	children := []ui.Node{Span(css.Class("vb-pane-title"), uistate.T("vbld.nodes"))}
 	for _, grp := range groups {
-		children = append(children, Span(css.Class("vb-pal-group"), grp))
+		grp := grp
+		children = append(children, Span(css.Class("vb-pal-group"), uistate.T(grp.labelKey)))
 		for _, c := range vbCatalog() {
-			if c.Group != grp {
+			if c.Group != grp.id {
 				continue
 			}
 			children = append(children, ui.CreateElement(vbPaletteBtn, vbPalBtnProps{Kind: c.Kind, Label: c.Label, OnAdd: onAdd}))
@@ -1847,8 +1863,8 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 
 	if selected == "" {
 		return Div(css.Class("vb-inspector"),
-			Span(css.Class("vb-pane-title"), "Inspector"),
-			P(css.Class("t-caption", tw.TextDim), "Select a node to configure it, or add one from the palette."))
+			Span(css.Class("vb-pane-title"), uistate.T("vbld.inspector")),
+			P(css.Class("t-caption", tw.TextDim), uistate.T("vbld.inspectorEmpty")))
 	}
 	var node cardgraph.Node
 	found := false
@@ -1858,13 +1874,13 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 		}
 	}
 	if !found {
-		return Div(css.Class("vb-inspector"), Span(css.Class("vb-pane-title"), "Inspector"))
+		return Div(css.Class("vb-inspector"), Span(css.Class("vb-pane-title"), uistate.T("vbld.inspector")))
 	}
 
 	children := []ui.Node{
 		Span(css.Class("vb-pane-title"), vbKindLabel(node.Kind)),
 		// Variable name
-		ui.CreateElement(vbTextField, vbTextFieldProps{Label: "Name (variable)", Value: node.Var, Placeholder: "e.g. income",
+		ui.CreateElement(vbTextField, vbTextFieldProps{Label: uistate.T("vbld.varName"), Value: node.Var, Placeholder: uistate.T("vbld.varPH"),
 			OnSet: func(v string) { setVar(node.ID, v) }}),
 	}
 	// Params. Column-referencing props on data-shaping nodes become dropdowns
@@ -1903,10 +1919,10 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 	}
 	// Input wiring: one select per input port, listing compatible upstream nodes.
 	if spec, ok := cardgraph.Lookup(node.Kind); ok && len(spec.Inputs) > 0 {
-		children = append(children, Span(css.Class("vb-insp-section"), "Inputs"))
+		children = append(children, Span(css.Class("vb-insp-section"), uistate.T("vbld.inputs")))
 		for _, port := range spec.Inputs {
 			port := port
-			opts := [][2]string{{"", "— none —"}}
+			opts := [][2]string{{"", uistate.T("vbld.noneOption")}}
 			for _, other := range g.Nodes {
 				if other.ID == node.ID {
 					continue
@@ -1932,8 +1948,8 @@ func vbInspector(g cardgraph.Graph, selected cardgraph.NodeID, issues []cardgrap
 		}
 	}
 	// Output / delete actions
-	rootBtn := Button(css.Class("data-btn", tw.Mt3), Type("button"), OnClick(ui.UseEvent(func() { setRoot(node.ID) })), "Set as output ★")
-	delBtn := Button(css.Class("data-btn"), Type("button"), OnClick(ui.UseEvent(func() { deleteNode(node.ID) })), "Delete node")
+	rootBtn := Button(css.Class("data-btn", tw.Mt3), Type("button"), OnClick(ui.UseEvent(func() { setRoot(node.ID) })), uistate.T("vbld.setOutput"))
+	delBtn := Button(css.Class("data-btn"), Type("button"), OnClick(ui.UseEvent(func() { deleteNode(node.ID) })), uistate.T("vbld.deleteNode"))
 	children = append(children, Div(css.Class("vb-insp-actions"), rootBtn, delBtn))
 
 	// This node's issues (if any)
@@ -2060,7 +2076,7 @@ func vbRenderTile(res cardgraph.Result, g cardgraph.Graph, rows int) ui.Node {
 			}
 		}
 		return Div(
-			Div(css.Class("wh"), Span(css.Class("wtitle"), "Preview")),
+			Div(css.Class("wh"), Span(css.Class("wtitle"), uistate.T("vbld.preview"))),
 			Div(css.Class("wbody"), P(css.Class("t-caption", tw.TextDim), msg)),
 		)
 	}
@@ -2172,7 +2188,7 @@ func vbAccentOr(accent, fallback string) string {
 // theme color) rather than a separate CSS approximation.
 func vbChart(v *cardgraph.VizBlock) ui.Node {
 	if len(v.Series) == 0 {
-		return P(css.Class("t-caption", tw.TextDim), "No data to chart.")
+		return P(css.Class("t-caption", tw.TextDim), uistate.T("vbld.noChartData"))
 	}
 	if v.Chart == "segbar" {
 		return vbSegBar(v)
@@ -2321,7 +2337,7 @@ func vbRunAction(action string) {
 // byte-for-byte the same DOM, not a look-alike.
 func vbList(v *cardgraph.VizBlock, tileRows int) ui.Node {
 	if len(v.Rows) == 0 {
-		return P(css.Class("empty t-body", tw.TextDim), "No rows.")
+		return P(css.Class("empty t-body", tw.TextDim), uistate.T("vbld.noRows"))
 	}
 	// Respect the tile's height: show as many rows as actually fit. The tile is
 	// tileRows grid cells tall (vbCellPx each + gaps); subtract the header band and

@@ -7,6 +7,23 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **i18n sweep, third tranche — the screens layer reaches ZERO hardcoded copy (2026-07-19):**
+  every remaining user-facing English literal in `internal/screens` now flows through
+  `uistate.T` + the catalog (`en_i18nsweep3.go`, ~150 new keys, values byte-identical to the
+  literals they replace). Converted wholesale: the **theme editor** (previously deliberately
+  inline-English — that decoupling is retired; presets/font-family names stay literal as
+  identifiers), the **widget builder** (toolbar, node palette groups + all 26 node-kind labels,
+  inspector, preview fallbacks — plus the publish status line now signals success via a flag
+  instead of an untranslatable `HasPrefix("Published")` sniff), the **studio designer** (hero,
+  block editor, sort/width options), both **transaction tables' column headers**, and the long
+  tail (dashboard/health/reports/documents/categories/recurring/workflows/members/rules/smart
+  suggestion chips/payday task titles/assistant-created transfer descriptions). The screenlint
+  ratchet baseline `../screens` is lowered 115 → **0**, locking the whole UI layer
+  (screens+app+ui+uistate+pages) at zero hardcoded copy. Deliberately literal: formula-language
+  placeholders (`overspend`, `cf_budget_priority`), machine-format CSV samples' lowercase
+  variant, font/preset/theme identifiers. Known remaining debt (unchanged, tracked baselines):
+  `smartengine` (171) and `widgetcatalog` (42) bake copy at generation time in pure-Go packages
+  and need the C362 key+args architecture.
 - **Content-width breakpoint system — layouts respond to the pane, not the viewport:** the
   desktop-responsiveness audit's root defect was that every layout breakpoint was a viewport
   `@media` query while the pane a page actually gets is viewport minus the live rail (240px

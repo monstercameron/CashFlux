@@ -734,19 +734,19 @@ func transactionsLegacy() ui.Node {
 		// the dollar figure is on Nadia's natural scan path Date → Amount → Desc,
 		// instead of buried at column 7 behind Category/Account/Tags.
 		cols := []uiw.Column{
-			{Head: Span(css.Class(tw.SrOnly), "Select")},
-			{Label: "Date", SortKey: "date"},
-			{Label: "Amount", SortKey: "amount", Class: "td-amount"},
-			{Label: "Description", SortKey: "payee"},
-			{Label: "Category", SortKey: "category"},
-			{Label: "Account", SortKey: "account"},
+			{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colSelect"))},
+			{Label: uistate.T("transactions.colDate"), SortKey: "date"},
+			{Label: uistate.T("transactions.colAmount"), SortKey: "amount", Class: "td-amount"},
+			{Label: uistate.T("transactions.colDescription"), SortKey: "payee"},
+			{Label: uistate.T("transactions.colCategory"), SortKey: "category"},
+			{Label: uistate.T("transactions.colAccount"), SortKey: "account"},
 		}
 		if anyTags {
-			cols = append(cols, uiw.Column{Label: "Tags"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colTags")})
 		}
 		cols = append(cols,
 			uiw.Column{Head: Span(Attr("aria-label", uistate.T("transactions.clearedStatus")), "✓"), Class: "td-cleared"},
-			uiw.Column{Label: "Actions", Class: "td-actions"},
+			uiw.Column{Label: uistate.T("transactions.colActions"), Class: "td-actions"},
 		)
 		listBody = uiw.DataTable(uiw.DataTableProps{
 			Class:      "txn-table",

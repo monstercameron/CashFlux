@@ -117,7 +117,7 @@ func paydayPreflightCard() ui.Node {
 
 	markPlanned := func(row preflight.BillRow) {
 		task := domain.Task{
-			ID: id.New(), Title: "Pay " + row.Name, Status: domain.StatusOpen,
+			ID: id.New(), Title: uistate.T("paydayPre.payTask", row.Name), Status: domain.StatusOpen,
 			Priority: domain.PriorityMedium, Source: domain.SourceNudge,
 		}
 		r := preflight.ResolveForBill(row)

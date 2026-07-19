@@ -182,7 +182,7 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 		if node, ok := safeRenderSpec(spec, ctx); ok {
 			preview = node
 		} else {
-			preview = P(css.Class("empty t-body", tw.TextDim), "Nothing to preview yet.")
+			preview = P(css.Class("empty t-body", tw.TextDim), uistate.T("studio.previewEmpty"))
 		}
 	} else {
 		preview = P(css.Class("empty t-body", tw.TextDim), studioFriendlyError(err))
@@ -240,7 +240,7 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 			advanced.Set(next)
 		},
 		addBlock: func() {
-			blocks.Set(append(append([]domain.Block(nil), blocks.Get()...), domain.Block{Kind: domain.BlockText, Text: "New text"}))
+			blocks.Set(append(append([]domain.Block(nil), blocks.Get()...), domain.Block{Kind: domain.BlockText, Text: uistate.T("studio.newTextDefault")}))
 		},
 		changeBlock: func(i int, b domain.Block) {
 			next := append([]domain.Block(nil), blocks.Get()...)
@@ -290,7 +290,7 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 		kids := []ui.Node{Span(status.Get())}
 		if published.Get() {
 			kids = append(kids, ui.CreateElement(studioButton, studioButtonProps{
-				Label: "Open dashboard →", Class: "btn btn-sm", OnClick: func() { nav.Navigate(uistate.RoutePath("/")) },
+				Label: uistate.T("studio.openDashboard"), Class: "btn btn-sm", OnClick: func() { nav.Navigate(uistate.RoutePath("/")) },
 			}))
 		}
 		statusNode = Div(css.Class("studio-status"), kids)
@@ -313,20 +313,20 @@ func studioDesignerPanel(_ studioDesignerPanelProps) ui.Node {
 
 	return Div(css.Class("studio-design"),
 		Div(css.Class("studio-design-head"),
-			Span(css.Class("studio-eyebrow"), "Studio"),
-			H2(css.Class("studio-design-title"), "Design a widget"),
-			P(css.Class("studio-design-sub"), "Start from a preset or build your own — pick what to measure, shape how it looks, then drop it on your dashboard."),
+			Span(css.Class("studio-eyebrow"), uistate.T("studio.eyebrow")),
+			H2(css.Class("studio-design-title"), uistate.T("studio.designTitle")),
+			P(css.Class("studio-design-sub"), uistate.T("studio.designSub")),
 			Div(css.Class("studio-starter-row"), starterChips),
 		),
 		Div(css.Class("studio-design-grid"),
 			Div(css.Class("studio-config"), form),
 			Div(css.Class("studio-stage-wrap"),
 				Div(css.Class("studio-stage-head"),
-					Span(css.Class("studio-eyebrow"), "Live preview"),
-					Span(css.Class("studio-stage-hint"), "Updates as you design"),
+					Span(css.Class("studio-eyebrow"), uistate.T("studio.livePreview")),
+					Span(css.Class("studio-stage-hint"), uistate.T("studio.liveHint")),
 				),
 				stage,
-				ui.CreateElement(studioButton, studioButtonProps{Label: "Publish to dashboard →", Class: "btn btn-primary studio-publish", OnClick: publishFn}),
+				ui.CreateElement(studioButton, studioButtonProps{Label: uistate.T("studio.publish"), Class: "btn btn-primary studio-publish", OnClick: publishFn}),
 				statusNode,
 			),
 		),
@@ -649,18 +649,18 @@ func studioDesignerForm(s studioDesignerFormState) ui.Node {
 		// Scroll/page pull up to a safety cap; say so plainly rather than silently
 		// truncating a large dataset.
 		if s.listDisplay != "cap" {
-			dataFields = append(dataFields, Span(css.Class("studio-hint"), fmt.Sprintf("Up to %d rows are loaded.", listSourceCap)))
+			dataFields = append(dataFields, Span(css.Class("studio-hint"), uistate.T("studio.rowsCap", listSourceCap)))
 		}
 		// Offer a "view all" link only when the source has a full-data screen.
 		if route, lbl := widgetcatalog.CollectionRoute(s.collection); route != "" {
-			dataFields = append(dataFields, seg("Add a link: “"+lbl+"”", boolToYesNo(s.listLink),
-				[]uiw.SegOption{{Value: "yes", Label: "Yes"}, {Value: "no", Label: "No"}}, s.setListLink))
+			dataFields = append(dataFields, seg(uistate.T("studio.addLink", lbl), boolToYesNo(s.listLink),
+				[]uiw.SegOption{{Value: "yes", Label: uistate.T("common.yes")}, {Value: "no", Label: uistate.T("common.no")}}, s.setListLink))
 		}
 		// Sort control — order rows by one of the source's columns. "Default order"
 		// keeps the source's natural order (e.g. newest transactions first). The
 		// direction labels adapt to the column type: High↔Low for numbers, A↔Z for text.
 		if sortFields := widgetcatalog.SortFields(s.collection); len(sortFields) > 0 {
-			sortOpts := []widgetcatalog.Option{{Value: "", Label: "Natural order"}}
+			sortOpts := []widgetcatalog.Option{{Value: "", Label: uistate.T("studio.naturalOrder")}}
 			selNumeric := true
 			for _, sfld := range sortFields {
 				sortOpts = append(sortOpts, widgetcatalog.Option{Value: sfld.Column, Label: sfld.Label})
@@ -698,8 +698,8 @@ func studioDesignerForm(s studioDesignerFormState) ui.Node {
 	}
 
 	return Div(css.Class("studio-form"),
-		ui.CreateElement(studioTextField, studioTextFieldProps{Label: "Name", Value: s.title, Placeholder: "Name your widget", OnChange: s.setTitle, Big: true}),
-		studioSection("Type", []ui.Node{Div(css.Class("studio-type-grid"), typeCards)}),
+		ui.CreateElement(studioTextField, studioTextFieldProps{Label: uistate.T("common.name"), Value: s.title, Placeholder: uistate.T("studio.namePH"), OnChange: s.setTitle, Big: true}),
+		studioSection(uistate.T("studio.typeSection"), []ui.Node{Div(css.Class("studio-type-grid"), typeCards)}),
 		studioSection(dataTitle, dataFields),
 		studioSection("Size on dashboard", sizeSeg),
 	)
@@ -794,14 +794,14 @@ func studioMetricPicker(p studioMetricPickerProps) ui.Node {
 		}
 	}
 	kids := []ui.Node{
-		Span(css.Class("studio-label"), "Metric"),
-		uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: p.Selected, OnChange: p.OnPick, AriaLabel: "Metric"}),
+		Span(css.Class("studio-label"), uistate.T("studio.metric")),
+		uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: p.Selected, OnChange: p.OnPick, AriaLabel: uistate.T("studio.metric")}),
 	}
 	if sel.Doc != "" {
 		kids = append(kids, Span(css.Class("studio-hint"), sel.Doc))
 	}
 	if sel.Molecule && sel.Formula != "" {
-		kids = append(kids, Span(css.Class("studio-formula"), "Built from atoms:  "+prettyFormula(sel.Formula)))
+		kids = append(kids, Span(css.Class("studio-formula"), uistate.T("studio.builtFromAtoms", prettyFormula(sel.Formula))))
 	}
 	return Label(css.Class("field-label"), kids)
 }
@@ -853,13 +853,13 @@ func studioBlocksEditor(s studioDesignerFormState) ui.Node {
 		}))
 	}
 	header := Div(css.Class("studio-block-head"),
-		Span(""), Span("Block"), Span("Shows"), Span("Width"), Span(""),
+		Span(""), Span(uistate.T("studio.blockCol")), Span(uistate.T("studio.showsCol")), Span(uistate.T("studio.widthCol")), Span(""),
 	)
 	return Div(css.Class("studio-blocks"),
-		Span(css.Class("studio-hint"), "Stack blocks top to bottom. Set a width to place figures side by side."),
+		Span(css.Class("studio-hint"), uistate.T("studio.blocksHint")),
 		header,
 		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2), rowNodes),
-		ui.CreateElement(studioButton, studioButtonProps{Label: "+ Add block", Class: "btn btn-sm studio-addblock", OnClick: s.addBlock}),
+		ui.CreateElement(studioButton, studioButtonProps{Label: uistate.T("studio.addBlock"), Class: "btn btn-sm studio-addblock", OnClick: s.addBlock}),
 	)
 }
 
@@ -875,7 +875,7 @@ type studioBlockRowProps struct {
 
 // blockWidthOptions are the per-block width choices (Full or a 1–4 column span).
 func blockWidthOptions() []widgetcatalog.Option {
-	return []widgetcatalog.Option{{Value: "0", Label: "Full"}, {Value: "1", Label: "1"}, {Value: "2", Label: "2"}, {Value: "3", Label: "3"}, {Value: "4", Label: "4"}}
+	return []widgetcatalog.Option{{Value: "0", Label: uistate.T("studio.widthFull")}, {Value: "1", Label: "1"}, {Value: "2", Label: "2"}, {Value: "3", Label: "3"}, {Value: "4", Label: "4"}}
 }
 
 // studioBudgets returns the household's budgets for the metric pickers (so each budget's
@@ -974,12 +974,12 @@ func studioBlockRow(props studioBlockRowProps) ui.Node {
 		// which dropdown is the metric vs the format.
 		shows = []ui.Node{
 			Div(css.Class("studio-microfield"),
-				Span(css.Class("studio-microlabel"), "Metric"),
-				ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: "Metric", Compact: true, Value: metric, Options: metricSelectOptions(props.Defs), OnChange: setMetric}),
+				Span(css.Class("studio-microlabel"), uistate.T("studio.metric")),
+				ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: uistate.T("studio.metric"), Compact: true, Value: metric, Options: metricSelectOptions(props.Defs), OnChange: setMetric}),
 			),
 			Div(css.Class("studio-microfield"),
-				Span(css.Class("studio-microlabel"), "Format"),
-				ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: "Format", Compact: true, Value: verb, Options: widgetcatalog.FigureFormats(), OnChange: setVerb}),
+				Span(css.Class("studio-microlabel"), uistate.T("studio.format")),
+				ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: uistate.T("studio.format"), Compact: true, Value: verb, Options: widgetcatalog.FigureFormats(), OnChange: setVerb}),
 			),
 		}
 		// The same plain-English description (and, for molecules, the atom-built
@@ -1000,10 +1000,10 @@ func studioBlockRow(props studioBlockRowProps) ui.Node {
 		}
 	case domain.BlockText:
 		setText := func(v string) { nb := b; nb.Text = v; props.OnChange(nb) }
-		shows = []ui.Node{ui.CreateElement(studioTextField, studioTextFieldProps{Label: "Caption text", Compact: true, Value: b.Text, Placeholder: "Caption", OnChange: setText})}
+		shows = []ui.Node{ui.CreateElement(studioTextField, studioTextFieldProps{Label: uistate.T("studio.captionText"), Compact: true, Value: b.Text, Placeholder: uistate.T("studio.captionPH"), OnChange: setText})}
 	case domain.BlockIcon:
 		setIcon := func(v string) { nb := b; nb.Bind = v; props.OnChange(nb) }
-		shows = []ui.Node{ui.CreateElement(studioTextField, studioTextFieldProps{Label: "Icon name", Compact: true, Value: b.Bind, Placeholder: "sparkles", OnChange: setIcon})}
+		shows = []ui.Node{ui.CreateElement(studioTextField, studioTextFieldProps{Label: uistate.T("studio.iconName"), Compact: true, Value: b.Bind, Placeholder: "sparkles", OnChange: setIcon})}
 	default:
 		shows = []ui.Node{Span(css.Class("studio-hint"), "—")}
 	}
@@ -1018,9 +1018,9 @@ func studioBlockRow(props studioBlockRowProps) ui.Node {
 
 	return Div(css.Class("studio-block-row"),
 		Span(css.Class("studio-block-num"), fmt.Sprintf("%d", props.Index+1)),
-		ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: "Block type", Compact: true, Value: string(b.Kind), Options: widgetcatalog.BlockKinds(), OnChange: setKind}),
+		ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: uistate.T("studio.blockCol"), Compact: true, Value: string(b.Kind), Options: widgetcatalog.BlockKinds(), OnChange: setKind}),
 		Div(css.Class("studio-block-shows"), shows),
-		ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: "Width", Compact: true, Value: span, Options: blockWidthOptions(), OnChange: setSpan}),
+		ui.CreateElement(studioSelectField, studioSelectFieldProps{Label: uistate.T("studio.widthCol"), Compact: true, Value: span, Options: blockWidthOptions(), OnChange: setSpan}),
 		Div(css.Class("studio-block-actions"),
 			Div(css.Class("studio-block-move-group"), moveCtrls),
 			ui.CreateElement(studioButton, studioButtonProps{Label: "✕", Class: "btn-del studio-block-del", OnClick: props.OnRemove}),

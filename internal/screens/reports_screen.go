@@ -49,7 +49,7 @@ func reportsBarSpec(pairs []struct {
 	return chartspec.Spec{
 		Kind: chartspec.Bar,
 		Series: []chartspec.Series{
-			{Name: "Amount", Color: "#4f8ef7", Points: points},
+			{Name: uistate.T("transactions.colAmount"), Color: "#4f8ef7", Points: points},
 		},
 		// "money" Y ticks → currency-aware compact axis ("$1.5k") matching the
 		// rest of the app instead of bare numbers (the symbol is passed live via

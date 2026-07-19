@@ -1,3 +1,39 @@
+## 2026-07-19 — i18n sweep, third tranche: the screens layer hits ZERO hardcoded copy
+
+Cam's directive: "make sure all the copy on the pages goes through i18n translations." Two
+enforcement systems already existed — keycoverage_test.go (referenced keys must exist in the
+catalog) and the screenlint one-way ratchet (i18n_hardcoded_test.go, AST scan of display
+positions, baseline ../screens: 115 after the C361/C362 tranches). This pass converts the tail
+and ratchets the UI layer to zero.
+
+An independent AST scanner (scratchpad, element children + copy-attrs + display struct fields)
+agreed with screenlint on where the debt lived: three newer surfaces owned 53 of ~82 direct
+findings. Converted: theme_editor.go (had ZERO uistate.T — its header comment declared inline
+English "to stay decoupled from the bundle's update cadence"; that decision is retired, ~45
+themeEd.* keys; preset names, font families, and the stored "Custom" theme name stay literal as
+identifiers), widget_builder.go (toolbar, palette group headings + all 26 node-kind labels — the
+catalog now resolves labels through T() at render time so every consumer stays unchanged;
+inspector; preview fallbacks; the publish status also swapped a HasPrefix("Published") sniff for
+a publishedOK flag since a translated status breaks prefix matching), studio_designer.go, both
+transaction tables' column headers (reusing the existing transactions.col* family + five new),
+and singles across dashboard/health/reports_annual (APR)/documents (Hide/Show, receipt toggle,
+statement sample)/categories/recurring/workflows/members (date-format sample)/ruleaddform
+("— Field —")/smart_affordances (Use-suggestion chip)/payday_preflight (task title)/custompage +
+reports_screen (chart series names)/chat_agent (assistant-created transfer descs — localized at
+creation, matching how user-facing stored descriptions should read).
+
+Ratchet: ../screens 115 → 0, and the comment now says the whole UI layer
+(screens/app/ui/uistate/pages/widgetrender/mermaid/chartspec) sits at zero. Deliberate
+exemptions, documented: formula-language placeholders ("overspend", "cf_budget_priority"),
+machine-format lowercase CSV samples, font/preset identifiers. Remaining known debt is the
+C362 architecture item: smartengine (171) and widgetcatalog (42) bake English at generation
+time in pure-Go packages and need key+args payloads — unchanged baselines.
+
+Concurrency note: transactions_widget.go was entangled with the C13 selection-scope lane mid
+-flight; my two column-header hunks were staged via a filtered `git apply --cached` patch so the
+other lane's WIP stayed out of this commit. go test ./internal/... green; wasm build green;
+keycoverage + screenlint green at the new baseline.
+
 ## 2026-07-19 — content-width breakpoints: the pane is the unit, not the viewport
 
 Cam handed over a desktop-responsiveness audit (v1.2.3, nine pages × 1024–2560px × both rail

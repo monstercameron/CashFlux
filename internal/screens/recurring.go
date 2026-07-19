@@ -296,10 +296,20 @@ func recurScheduledSurface() ui.Node {
 			dueNow++
 		}
 	}
+	// Overdue occurrences (same figure the stats chip shows) include MANUAL flows,
+	// which the Post-due button never posts — only auto-post flows with a linked
+	// account are catch-up posted. The button carries the overdue count so it can
+	// explain why "OVERDUE 3" can sit beside "Post due now (0)".
+	overdue := 0
+	for _, occ := range v.Upcoming {
+		if occ.Overdue {
+			overdue++
+		}
+	}
 
 	tiles := []ui.Node{
 		recurHeroTile(v),
-		recurToolbarTile(postMsg.Get(), dueNow, showFormulas.Get(), postDue, toggleFormulas),
+		recurToolbarTile(postMsg.Get(), dueNow, overdue, showFormulas.Get(), postDue, toggleFormulas),
 		recurUpcomingTile(v),
 		recurFlowsTile(v, recurFlowActions{
 			OnEdit: onEdit, OnDelete: onDelete,
@@ -374,10 +384,17 @@ func recurHeroTile(v recurView) ui.Node {
 // recurToolbarTile holds the actions: Post due (labelled with how many auto-post
 // flows it will act on, and accent-outlined when that's non-zero so the timely
 // action has real affordance), the schedule-metrics toggle, and Add recurring.
-func recurToolbarTile(postedMsg string, dueNow int, showFormulas bool, onPostDue, onToggleFormulas any) ui.Node {
+func recurToolbarTile(postedMsg string, dueNow, overdue int, showFormulas bool, onPostDue, onToggleFormulas any) ui.Node {
 	postCls := "btn"
 	if dueNow > 0 {
 		postCls += " rec-postdue-hot"
+	}
+	// The default title says what posting covers (auto-post items). When nothing
+	// is auto-postable yet items are overdue, the overdue ones are manual — say so
+	// plainly so the count mismatch isn't confusing.
+	postTitle := uistate.T("recurring.postDueTitle")
+	if dueNow == 0 && overdue > 0 {
+		postTitle = uistate.T("recurring.postDueTitleManual", plural(overdue, "overdue item"))
 	}
 	metricsCls := "strip-toggle"
 	metricsLabel := uistate.T("recurring.metricsShow")
@@ -388,7 +405,7 @@ func recurToolbarTile(postedMsg string, dueNow int, showFormulas bool, onPostDue
 	toolbar := Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
 			Button(ClassStr(postCls), Type("button"), Attr("data-testid", "recurring-post-due"),
-				Title(uistate.T("recurring.postDueTitle")), OnClick(onPostDue),
+				Title(postTitle), OnClick(onPostDue),
 				fmt.Sprintf("%s (%d)", uistate.T("recurring.postDue"), dueNow)),
 			Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas)),
 				Attr("data-testid", "recurring-toggle-formulas"), Title(uistate.T("recurring.metricsTitle")),
@@ -498,7 +515,7 @@ func RecurringHub(p RecurringHubProps) ui.Node {
 		ui.CreateElement(priceCreepNotices),
 		Div(css.Class(tw.Mb2),
 			uiw.Segmented(uiw.SegmentedProps{
-				Label:    "Recurring view",
+				Label:    uistate.T("recurring.viewAria"),
 				Selected: tab,
 				OnSelect: func(v string) { activeTab.Set(v) },
 				Options: []uiw.SegOption{

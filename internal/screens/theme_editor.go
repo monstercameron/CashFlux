@@ -26,8 +26,10 @@ import (
 // scale, UI/display fonts, density), see live validation warnings, and reset to
 // the default. Every change applies and persists immediately (live theming), so
 // the surrounding app is itself the preview. Mount with uic.CreateElement(ThemeEditor).
-// English strings are inline here rather than going through the shared i18n bundle,
-// to keep this component decoupled from the i18n bundle's update cadence.
+// All copy flows through the shared i18n bundle under the themeEd.* namespace
+// (2026-07-19 sweep — the earlier inline-English decoupling is retired). Preset
+// names, font family names, and the stored "Custom" theme name are identifiers,
+// not copy, and stay literal.
 func ThemeEditor() uic.Node {
 	cur := uic.UseState(uistate.LoadTheme())
 	importMsg := uic.UseState("")
@@ -189,14 +191,14 @@ func ThemeEditor() uic.Node {
 
 	// Color tokens, each its own field component (keeps the change hook stable).
 	colorTokens := []struct{ label, field, val string }{
-		{"App background", "bgBase", t.BgBase},
-		{"Card surface", "bgCard", t.BgCard},
-		{"Borders", "border", t.Border},
-		{"Text", "text", t.Text},
-		{"Muted text", "textDim", t.TextDim},
-		{"Accent", "accent", t.Accent},
-		{"Positive / inflow", "up", t.Up},
-		{"Negative / outflow", "down", t.Down},
+		{uistate.T("themeEd.colBgBase"), "bgBase", t.BgBase},
+		{uistate.T("themeEd.colBgCard"), "bgCard", t.BgCard},
+		{uistate.T("themeEd.colBorder"), "border", t.Border},
+		{uistate.T("themeEd.colText"), "text", t.Text},
+		{uistate.T("themeEd.colTextDim"), "textDim", t.TextDim},
+		{uistate.T("themeEd.colAccent"), "accent", t.Accent},
+		{uistate.T("themeEd.colUp"), "up", t.Up},
+		{uistate.T("themeEd.colDown"), "down", t.Down},
 	}
 	var colorFields []uic.Node
 	for _, c := range colorTokens {
@@ -213,49 +215,49 @@ func ThemeEditor() uic.Node {
 	var validationNode uic.Node
 	if len(warnings) > 0 {
 		validationNode = Div(css.Class(tw.Mt2),
-			P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), "Some tokens may be hard to read:"),
+			P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), uistate.T("themeEd.warnHead")),
 			Ul(css.Class("muted", tw.TextXs), Style(map[string]string{"margin": "0.25rem 0 0", "padding-left": "1.1rem"}), warnings),
 		)
 	} else {
-		validationNode = P(css.Class("muted", tw.TextXs, tw.Mt2), "Looks good — all text meets the contrast guideline.")
+		validationNode = P(css.Class("muted", tw.TextXs, tw.Mt2), uistate.T("themeEd.allGood"))
 	}
 
 	scalePct := strconv.Itoa(int(t.Scale*100 + 0.5))
 
 	return Div(css.Class("theme-editor"),
-		H4(css.Class("set-label"), "Theme"),
-		P(css.Class("muted", tw.TextXs), "Start from a preset, then fine-tune any color, the corner radius, the text size, and the fonts. Changes apply instantly."),
+		H4(css.Class("set-label"), uistate.T("themeEd.title")),
+		P(css.Class("muted", tw.TextXs), uistate.T("themeEd.lede")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), presetBtns),
 
-		Div(css.Class("set-label", tw.Mt2), "Colors"),
+		Div(css.Class("set-label", tw.Mt2), uistate.T("themeEd.colors")),
 		Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap2), colorFields),
 
-		Div(css.Class("set-label", tw.Mt2), "Shape & type"),
+		Div(css.Class("set-label", tw.Mt2), uistate.T("themeEd.shapeType")),
 		Div(css.Class("toggle-row"),
-			Span("Corner radius"),
-			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "0"), Attr("max", "48"), Attr("step", "1"), Attr("aria-label", "Corner radius in pixels"), Value(strconv.Itoa(t.Radius)), OnChange(onRadius)),
+			Span(uistate.T("themeEd.radius")),
+			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "0"), Attr("max", "48"), Attr("step", "1"), Attr("aria-label", uistate.T("themeEd.radiusAria")), Value(strconv.Itoa(t.Radius)), OnChange(onRadius)),
 		),
 		Div(css.Class("toggle-row"),
-			Span("Text size"),
-			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "70"), Attr("max", "200"), Attr("step", "5"), Attr("aria-label", "Text size percent"), Value(scalePct), OnChange(onScale)),
+			Span(uistate.T("themeEd.textSize")),
+			Input(css.Class("set-input"), Style(map[string]string{"width": "5.5rem"}), Type("number"), Attr("min", "70"), Attr("max", "200"), Attr("step", "5"), Attr("aria-label", uistate.T("themeEd.textSizeAria")), Value(scalePct), OnChange(onScale)),
 		),
 		Div(css.Class("toggle-row"),
-			Span("Interface font"),
-			Select(css.Class("set-input"), Attr("aria-label", "Interface font"), OnChange(onFontUI), themeFontOptions(t.FontUI, fonts.Get())),
+			Span(uistate.T("themeEd.fontUI")),
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("themeEd.fontUI")), OnChange(onFontUI), themeFontOptions(t.FontUI, fonts.Get())),
 		),
 		Div(css.Class("toggle-row"),
-			Span("Heading font"),
-			Select(css.Class("set-input"), Attr("aria-label", "Heading font"), OnChange(onFontDisplay), themeFontOptions(t.FontDisplay, fonts.Get())),
+			Span(uistate.T("themeEd.fontDisplay")),
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("themeEd.fontDisplay")), OnChange(onFontDisplay), themeFontOptions(t.FontDisplay, fonts.Get())),
 		),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
-			themeDataBtn("Upload font…", false, uploadFont),
-			Span(css.Class("muted", tw.TextXs), "WOFF2, WOFF, TTF, or OTF · up to 1 MB"),
+			themeDataBtn(uistate.T("themeEd.uploadFont"), false, uploadFont),
+			Span(css.Class("muted", tw.TextXs), uistate.T("themeEd.fontFormats")),
 		),
 		If(fontMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), fontMsg.Get())),
 		If(len(fontRows) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Py1), fontRows)),
 		ui.Segmented(ui.SegmentedProps{
-			Label:    "Density", // C318: name the radiogroup
-			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: "Comfortable"}, {Value: string(theme.Compact), Label: "Compact"}},
+			Label:    uistate.T("themeEd.density"), // C318: name the radiogroup
+			Options:  []ui.SegOption{{Value: string(theme.Comfortable), Label: uistate.T("themeEd.densityComfortable")}, {Value: string(theme.Compact), Label: uistate.T("themeEd.densityCompact")}},
 			Selected: string(t.Density),
 			OnSelect: func(v string) {
 				nt := t
@@ -264,10 +266,10 @@ func ThemeEditor() uic.Node {
 			},
 		}),
 		Div(css.Class("toggle-row"),
-			Span("Icon weight"),
+			Span(uistate.T("themeEd.iconWeight")),
 			ui.Segmented(ui.SegmentedProps{
-				Label:    "Icon weight", // C318: name the radiogroup
-				Options:  []ui.SegOption{{Value: "1.2", Label: "Thin"}, {Value: "1.6", Label: "Regular"}, {Value: "2.2", Label: "Bold"}},
+				Label:    uistate.T("themeEd.iconWeight"), // C318: name the radiogroup
+				Options:  []ui.SegOption{{Value: "1.2", Label: uistate.T("themeEd.iconThin")}, {Value: "1.6", Label: uistate.T("themeEd.iconRegular")}, {Value: "2.2", Label: uistate.T("themeEd.iconBold")}},
 				Selected: strconv.FormatFloat(t.IconStroke, 'g', -1, 64),
 				OnSelect: func(v string) {
 					if f, err := strconv.ParseFloat(v, 64); err == nil {
@@ -279,40 +281,40 @@ func ThemeEditor() uic.Node {
 			}),
 		),
 
-		Div(css.Class("set-label", tw.Mt2), "Dashboard banner"),
-		P(css.Class("muted", tw.TextXs), "A decorative band atop the dashboard. Choose a gradient or upload your own image."),
+		Div(css.Class("set-label", tw.Mt2), uistate.T("themeEd.banner")),
+		P(css.Class("muted", tw.TextXs), uistate.T("themeEd.bannerLede")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), bannerBtns),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2, tw.Py1),
-			themeDataBtn("Upload image…", false, uploadBanner),
-			themeDataBtn("Remove banner", false, func() {
+			themeDataBtn(uistate.T("themeEd.uploadImage"), false, uploadBanner),
+			themeDataBtn(uistate.T("themeEd.removeBanner"), false, func() {
 				bannerMsg.Set("")
 				setBanner(theme.Banner{})
 			}),
-			Span(css.Class("muted", tw.TextXs), "PNG, JPEG, WebP, or GIF · up to 2 MB"),
+			Span(css.Class("muted", tw.TextXs), uistate.T("themeEd.imageFormats")),
 		),
-		If(!banner.Get().None(), P(css.Class("muted", tw.TextXs), "Showing: "+banner.Get().Name)),
+		If(!banner.Get().None(), P(css.Class("muted", tw.TextXs), uistate.T("themeEd.showing", banner.Get().Name))),
 		If(bannerMsg.Get() != "", P(css.Class(tw.TextXs), Style(map[string]string{"color": "#d8716f"}), bannerMsg.Get())),
 
 		validationNode,
 
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1, tw.Mt2),
-			themeDataBtn("Export theme", false, func() {
+			themeDataBtn(uistate.T("themeEd.export"), false, func() {
 				if b, err := t.ToJSON(); err == nil {
 					browser.DownloadBytes("cashflux-theme.json", "application/json", b)
 				}
 			}),
-			themeDataBtn("Import theme", false, func() {
+			themeDataBtn(uistate.T("themeEd.import"), false, func() {
 				browser.PickFile(".json", func(data []byte) {
 					next, err := theme.FromJSON(data)
 					if err != nil {
-						importMsg.Set("That file isn't a valid theme.")
+						importMsg.Set(uistate.T("themeEd.badImport"))
 						return
 					}
 					importMsg.Set("")
 					apply(next)
 				})
 			}),
-			themeDataBtn("Reset to default", false, func() {
+			themeDataBtn(uistate.T("themeEd.reset"), false, func() {
 				importMsg.Set("")
 				// Clear the pinned theme rather than apply()-persisting a snapshot
 				// of the default: a snapshot stays pinned to THIS moment's mode
@@ -329,12 +331,14 @@ func ThemeEditor() uic.Node {
 }
 
 // curatedFonts are the font families offered for the UI and display fonts.
-var curatedFonts = []struct{ value, label string }{
-	{"Inter", "Inter"},
-	{"Fraunces", "Fraunces"},
-	{"ui-sans-serif, system-ui, sans-serif", "System sans"},
-	{"ui-serif, Georgia, serif", "System serif"},
-	{"ui-monospace, SFMono-Regular, monospace", "Monospace"},
+// Proper family names (Inter, Fraunces) are identifiers; the generic labels
+// carry i18n keys resolved at render time.
+var curatedFonts = []struct{ value, labelKey string }{
+	{"Inter", ""},
+	{"Fraunces", ""},
+	{"ui-sans-serif, system-ui, sans-serif", "themeEd.fontSystemSans"},
+	{"ui-serif, Georgia, serif", "themeEd.fontSystemSerif"},
+	{"ui-monospace, SFMono-Regular, monospace", "themeEd.fontMonospace"},
 }
 
 // themeFontOptions renders the curated font <option>s plus any uploaded custom
@@ -344,14 +348,18 @@ func themeFontOptions(current string, uploaded []theme.FontAsset) []uic.Node {
 	var opts []uic.Node
 	for _, f := range curatedFonts {
 		seen[f.value] = true
-		opts = append(opts, Option(Value(f.value), SelectedIf(f.value == current), f.label))
+		label := f.value
+		if f.labelKey != "" {
+			label = uistate.T(f.labelKey)
+		}
+		opts = append(opts, Option(Value(f.value), SelectedIf(f.value == current), label))
 	}
 	for _, f := range uploaded {
 		if f.Family == "" || seen[f.Family] {
 			continue
 		}
 		seen[f.Family] = true
-		opts = append(opts, Option(Value(f.Family), SelectedIf(f.Family == current), f.Family+" (uploaded)"))
+		opts = append(opts, Option(Value(f.Family), SelectedIf(f.Family == current), uistate.T("themeEd.uploadedSuffix", f.Family)))
 	}
 	return opts
 }
@@ -383,7 +391,7 @@ type themePresetBtnProps struct {
 // click hook is stable even though presets render in a loop.
 func themePresetBtn(props themePresetBtnProps) uic.Node {
 	return Button(css.Class("btn"), Type("button"),
-		Title("Use the "+props.Theme.Name+" preset"),
+		Title(uistate.T("themeEd.usePreset", props.Theme.Name)),
 		OnClick(func() {
 			if props.OnPick != nil {
 				props.OnPick(props.Theme)
@@ -405,15 +413,15 @@ func themeFontRow(props themeFontRowProps) uic.Node {
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.TextXs),
 		Span(css.Class("muted", tw.Truncate), props.Family),
 		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
-			Attr("aria-label", "Remove "+props.Family),
-			Title("Remove "+props.Family),
+			Attr("aria-label", uistate.T("themeEd.removeFamily", props.Family)),
+			Title(uistate.T("themeEd.removeFamily", props.Family)),
 			OnClick(func() {
 				if props.OnRemove != nil {
 					props.OnRemove(props.Family)
 				}
 			}),
 			ui.Icon(icon.Close, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-			Span("Remove"),
+			Span(uistate.T("themeEd.remove")),
 		),
 	)
 }

@@ -1457,7 +1457,7 @@ func Reports() ui.Node {
 		problemBits = append(problemBits,
 			rptaSub(uistate.T("rpta.probDebt", fmtMinor(debtInterestTotal)), rptaSrcLink("nav.debt", "/debt")),
 			Table(css.Class("rpta-table"), Attr("data-testid", "rpta-debt"),
-				Thead(Tr(Th(uistate.T("rpta.colDebt")), Th(uistate.T("rpta.colBalance")), Th("APR"), Th(uistate.T("rpta.colYearInterest")), Th(uistate.T("rpta.colMinimum")))),
+				Thead(Tr(Th(uistate.T("rpta.colDebt")), Th(uistate.T("rpta.colBalance")), Th(uistate.T("rpta.colAPR")), Th(uistate.T("rpta.colYearInterest")), Th(uistate.T("rpta.colMinimum")))),
 				Tbody(debtRowNodes)))
 	}
 	if uncatPct >= 5 {

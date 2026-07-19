@@ -1237,7 +1237,7 @@ func workflowRow(props workflowRowProps) ui.Node {
 			uiw.Mermaid(uiw.MermaidProps{
 				Source: mermaid.FromWorkflow(w),
 				Class:  tw.Fold(tw.Mt2),
-				Label:  "Flowchart of " + w.Name,
+				Label:  uistate.T("workflows.flowchartOf", w.Name),
 			}),
 		),
 	)

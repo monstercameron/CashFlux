@@ -80,6 +80,88 @@ func healthBarTone(score int) string {
 	}
 }
 
+// healthFactorMeter maps a factor to a value-on-scale gauge: the FILL fraction (the
+// current value's position on a sensible 0..1 scale) and the TICK fraction (the target's
+// position on the same scale), so the meter's LENGTH encodes the value and a marker sits
+// at the target — comparable across factors, unlike the old score-length bar where an
+// on-target value drew a full bar. Lower-is-better factors (debt, utilization) place value
+// and target on the same axis, so a longer bar past the tick reads as "deeper into the
+// danger zone". ok=false when the factor has no numeric gauge (inapplicable).
+func healthFactorMeter(key string, in healthscore.Inputs) (fill, tick float64, ok bool) {
+	norm := func(v, min, max float64) float64 {
+		if max <= min {
+			return 0
+		}
+		f := (v - min) / (max - min)
+		if f < 0 {
+			return 0
+		}
+		if f > 1 {
+			return 1
+		}
+		return f
+	}
+	switch key {
+	case "savings":
+		if !in.HasIncome {
+			return 0, 0, false
+		}
+		return norm(float64(in.SavingsRatePct), 0, 40), norm(20, 0, 40), true
+	case "emergency":
+		if !in.HasLiquidData {
+			return 0, 0, false
+		}
+		return norm(in.EmergencyMonths, 0, 6), norm(3, 0, 6), true
+	case "debt":
+		if !in.HasIncome {
+			return 0, 0, false
+		}
+		if !in.HasLiabilities {
+			return 0, norm(36, 0, 50), true // no debt → empty bar, target tick still shown
+		}
+		return norm(float64(in.ObligationRatioPct), 0, 50), norm(36, 0, 50), true
+	case "budget":
+		if !in.HasBudgets {
+			return 0, 0, false
+		}
+		return norm(float64(in.BudgetAdherencePct), 0, 100), norm(100, 0, 100), true
+	case "utilization":
+		if !in.HasCredit {
+			return 0, 0, false
+		}
+		return norm(float64(in.AggUtilizationPct), 0, 100), norm(30, 0, 100), true
+	case "nw-trend":
+		if !in.HasNWTrend {
+			return 0, 0, false
+		}
+		return norm(in.NWTrendPct, -10, 10), norm(5, -10, 10), true
+	}
+	return 0, 0, false
+}
+
+// healthMeterBar renders a factor value meter: a track with a fill whose width is the
+// value (fill 0..1) and a slim tick at the target (tick 0..1). Fill color is the factor's
+// status tone (good/warn/bad by score), so bar LENGTH and COLOR carry complementary facts.
+func healthMeterBar(fill, tick float64, score int, label string) ui.Node {
+	tone := "is-bad"
+	switch {
+	case score >= 60:
+		tone = "is-good"
+	case score >= 40:
+		tone = "is-warn"
+	}
+	return Div(css.Class("hlt-meter"),
+		Attr("role", "meter"), Attr("aria-label", label),
+		Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"),
+		Attr("aria-valuenow", fmt.Sprintf("%d", int(fill*100+0.5))),
+		Div(ClassStr("hlt-meter-fill "+tone), Attr("aria-hidden", "true"),
+			Style(map[string]string{"width": fmt.Sprintf("%.1f%%", fill*100)})),
+		Div(css.Class("hlt-meter-tick"), Attr("aria-hidden", "true"),
+			Title(uistate.T("health.meterTarget")),
+			Style(map[string]string{"left": fmt.Sprintf("%.1f%%", tick*100)})),
+	)
+}
+
 // healthRing renders the circular score gauge as an SVG: a faint full track plus a
 // stroked arc whose length is the score and whose color is the continuous hue. The
 // score figure is overlaid in the display font (and picks up the count-up tween via
@@ -108,7 +190,7 @@ func healthRing(r healthscore.Result, size int) ui.Node {
 	}
 	centerLabel := Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(healthTextTone(r.Band))),
 		Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure)
-	subLabel := Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), "out of 100")
+	subLabel := Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), uistate.T("health.outOf100"))
 	return scoreRingNode(pct, color, size, ringLabel, centerLabel, subLabel)
 }
 
@@ -260,6 +342,13 @@ type healthFactorTileProps struct {
 	Route      string
 	OnOpen     func()
 	MolFormula map[string]string
+	// Value meter (task #17): MeterFill is the current value's position on a per-factor
+	// 0..1 scale (the bar LENGTH), MeterTick the target's position on the same scale (the
+	// marker). HasMeter is false for factors with no numeric gauge, so the tile falls back
+	// to the score meter.
+	MeterFill float64
+	MeterTick float64
+	HasMeter  bool
 }
 
 // healthFactorEq returns a factor's underlying value variable, the right-hand side
@@ -301,11 +390,18 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 		))
 	}
 
-	// A zero score still renders a visible sliver so the meter reads as an
-	// intentional "0", not an unloaded bar.
+	// The factor meter (task #17): its LENGTH encodes the current VALUE on a sensible
+	// per-factor scale with a tick at the target, so an on-target factor no longer draws
+	// a full bar regardless of value. Falls back to the score meter when no numeric gauge
+	// is available. A zero score still renders a visible sliver on the fallback so it reads
+	// as an intentional "0", not an unloaded bar.
 	meterPct := f.Score
 	if meterPct == 0 {
 		meterPct = 2
+	}
+	meterNode := uiw.ProgressBar(uiw.ProgressBarProps{Percent: meterPct, Tone: healthBarTone(f.Score)})
+	if p.HasMeter {
+		meterNode = healthMeterBar(p.MeterFill, p.MeterTick, f.Score, f.Label)
 	}
 	var act ui.Node = Fragment()
 	if p.Route != "" {
@@ -336,7 +432,7 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
 			targetLine,
 		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: meterPct, Tone: healthBarTone(f.Score)}),
+		meterNode,
 		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
 		Details(css.Class("hlt-curve"),
 			Summary(uistate.T("health.curveSummary")),
@@ -444,9 +540,11 @@ func HealthScreen() ui.Node {
 	tiles = append(tiles, hero)
 	for _, f := range r.Factors {
 		route := healthStepRoute(f.Key)
+		fill, tick, hasMeter := healthFactorMeter(f.Key, in)
 		tiles = append(tiles, hltTile("hlt-"+f.Key, "span 2",
 			ui.CreateElement(healthFactorTile, healthFactorTileProps{
 				Factor: f, Route: route, MolFormula: molF,
+				MeterFill: fill, MeterTick: tick, HasMeter: hasMeter,
 				OnOpen: func() {
 					if route != "" {
 						nav.Navigate(uistate.RoutePath(route))

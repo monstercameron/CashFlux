@@ -666,7 +666,7 @@ func chartBody(ctx pageCtx) ui.Node {
 	}
 	spec := chartspec.Spec{
 		Kind:   chartspec.Area,
-		Series: []chartspec.Series{{Name: "Net worth", Points: pts}},
+		Series: []chartspec.Series{{Name: uistate.T("nav.netWorth"), Points: pts}},
 		Y:      chartspec.Axis{Format: yFmt},
 	}
 	return uiw.Chart(uiw.ChartProps{Spec: spec, Height: "140px", Label: uistate.T("dashboard.netWorthTrend")})

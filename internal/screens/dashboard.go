@@ -482,7 +482,7 @@ func renderBlockDataView(spec domain.WidgetSpec, ctx widgetrender.RenderCtx, sty
 	}
 	fr, err := widgetengine.HydrateFrame(spec.Pipeline, frameDataCtx(ctx))
 	if err != nil || fr.Rows == 0 || len(fr.Fields) == 0 {
-		return Div(css.Class("t-caption", tw.TextDim), Style(style), "No data yet.")
+		return Div(css.Class("t-caption", tw.TextDim), Style(style), uistate.T("common.noDataYet"))
 	}
 	labelCol := fr.Fields[0]
 	valCol := fr.Fields[len(fr.Fields)-1]
@@ -1960,18 +1960,32 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 			}
 		}
 	}
-	pct := goals.Percent(g)
-	caption := fmt.Sprintf("%d%%", pct)
+	// Coverage % (saved + set aside) is the SAME figure /goals headlines, so the two
+	// surfaces tell one story instead of the widget showing only cash-in-hand. The
+	// breakdown sub-line keeps the saved-vs-earmarked split honest.
+	cov := goals.CoveragePercent(g)
+	earmark := g.AllocatedMinor()
+	cur := g.TargetAmount.Currency
+	if cur == "" {
+		cur = g.CurrentAmount.Currency
+	}
+	caption := fmt.Sprintf("%d%%", cov)
 	if showDate && !g.TargetDate.IsZero() {
 		caption += " · by " + pr.FormatDate(g.TargetDate)
 	}
+	var metaLine string
+	if earmark > 0 {
+		metaLine = uistate.T("dashboard.goalSavedSetAside", fmtMoney(g.CurrentAmount), fmtMoney(money.New(earmark, cur)), fmtMoney(g.TargetAmount))
+	} else {
+		metaLine = uistate.T("dashboard.goalSavedOf", fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount))
+	}
 	body := Div(
 		Div(css.Class("t-body", tw.Flex, tw.JustifyBetween),
-			Span(css.Class(tw.TextDim), "saved"),
-			Span(css.Class("fig t-body", tw.FontDisplay), fmtMoney(g.CurrentAmount)+" / "+fmtMoney(g.TargetAmount)),
+			Span(css.Class(tw.TextDim), uistate.T("goals.progressLabel")),
+			Span(css.Class("fig t-body", tw.FontDisplay), caption),
 		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: "bg-up", Class: "mt-2"}),
-		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), caption),
+		uiw.ProgressBar(uiw.ProgressBarProps{Percent: cov, Tone: "bg-up", Class: "mt-2"}),
+		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), metaLine),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goals", Title: uistate.T("dashboard.goalPrefix", g.Name), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
@@ -2390,7 +2404,7 @@ func attentionText(it attention.Item, base string) string {
 		return uistate.T("dashboard.attentionStale", it.Label, it.Days)
 	case attention.KindTask:
 		if it.Severity >= attention.SeverityCritical {
-			return uistate.T("dashboard.attentionTaskOverdue", it.Label, it.Days)
+			return uistate.T("dashboard.attentionTaskOverdue", it.Label, plural(it.Days, "day"))
 		}
 		return uistate.T("dashboard.attentionTaskHigh", it.Label)
 	case attention.KindSpending:

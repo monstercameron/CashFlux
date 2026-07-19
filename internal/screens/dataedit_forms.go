@@ -307,19 +307,19 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 		// is insufficient for screen readers and sighted users who clear the field).
 		labeledField(uistate.T("common.name"),
 			Input(css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
-		labeledField("Category type",
+		labeledField(uistate.T("categories.kindAria"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   kindOpts,
 				Selected:  kindS.Get(),
 				OnChange:  func(v string) { kindS.Set(v); parentS.Set("") },
-				AriaLabel: "Category type",
+				AriaLabel: uistate.T("categories.kindAria"),
 			})),
-		labeledField("Parent category",
+		labeledField(uistate.T("categories.parent"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   parentOpts,
 				Selected:  parentS.Get(),
 				OnChange:  func(v string) { parentS.Set(v) },
-				AriaLabel: "Parent category",
+				AriaLabel: uistate.T("categories.parent"),
 			})),
 		labeledField(uistate.T("categories.color"),
 			Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor))),

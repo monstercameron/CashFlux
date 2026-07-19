@@ -52,7 +52,7 @@ type RuleAddFormProps struct {
 // condSlotOpts returns the field dropdown options for a structured condition slot.
 func condSlotFieldOpts() []uiw.SelectOption {
 	return []uiw.SelectOption{
-		{Value: "", Label: "— Field —"},
+		{Value: "", Label: uistate.T("rulecond.fieldPlaceholder")},
 		{Value: string(rules.ConditionFieldPayee), Label: uistate.T("rulecond.field.payee")},
 		{Value: string(rules.ConditionFieldDescription), Label: uistate.T("rulecond.field.description")},
 		{Value: string(rules.ConditionFieldAmount), Label: uistate.T("rulecond.field.amount")},
