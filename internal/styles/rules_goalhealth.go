@@ -29,4 +29,21 @@ func registerGoalHealthTones() {
 		boxShadow("inset 5px 0 0 var(--danger)"),
 		background("color-mix(in srgb, var(--danger) 8%, var(--bg-elev))"),
 	)
+	// The diagnostic reason line under the badge — quiet by default (it's supporting
+	// detail), tinted to match the verdict for the two that warn.
+	rule(".goal-pace-reason",
+		fontSize("0.78rem"),
+		lineHeight("1.35"),
+		color("var(--text-dim)"),
+		margin("0.15rem 0 0.1rem"),
+	)
+	rule(".goal-pace-reason-watch",
+		color("#b45309"),
+	)
+	rule("[data-theme=\"dark\"] .goal-pace-reason-watch",
+		color("#d98c00"),
+	)
+	rule(".goal-pace-reason-atrisk",
+		color("var(--danger)"),
+	)
 }

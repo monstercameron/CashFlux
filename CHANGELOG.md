@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Goals & Smart now give one consistent affordability answer, and goal status explains itself (2026-07-19):** the July 19 recheck's top trust blocker was the app showing incompatible answers about the same goal — Smart's SMART-G1 said "$838/mo fits within your ~$2,857/mo of slack" while SMART-G18's feasibility note said "only ~$408/mo is realistically free" and Goals labeled it On track. The root cause: G1 framed affordability against the WHOLE monthly slack while G18 and the Goals card used each goal's FAIR SHARE of it (total slack ÷ deadlined goals). G1 now uses the same shared fair-share model (`goalDeadlineFairShare` + `goals.AssessHealth`), so it only says a goal "fits" when it's within its share, and otherwise says it "needs more than its ~$X/mo fair share — consider a later date" — matching G18 and the card's Watch/At-risk badge exactly. A regression test locks the two engines to the same verdict. Separately, the goal pace badge is no longer decorative: each card now shows a one-line **diagnostic reason** under the badge — the required monthly contribution and the available-money constraint that produced the verdict ("Needs $838/mo — above its ~$408/mo share of your free cash, so it crowds your other goals") — so On track / Watch / At risk says WHY. New reason copy + tones live in their own files (`en_goalpacereason.go`, extended `rules_goalhealth.go`).
+
 ## [1.2.3] - 2026-07-19
 
 ### Added

@@ -516,10 +516,35 @@ const (
 	emergencyMinMonthly = 50_00
 )
 
+// goalDeadlineFairShare returns the household's monthly surplus (base minor) and the
+// fair-share slice of it per deadlined goal — the SINGLE affordability model every
+// goal insight and the Goals card badge key off, so no two surfaces ever frame
+// "available money" differently (total slack in one place, fair share in another,
+// which read as a contradiction). n is the count of active, incomplete, dated goals
+// sharing the surplus.
+func (in Input) goalDeadlineFairShare() (surplus, fair int64, n int) {
+	surplus = in.monthlySurplusBase()
+	for _, g := range in.Goals {
+		if g.Archived {
+			continue
+		}
+		if _, ok, err := goals.MonthlyNeeded(g, in.Now); err == nil && ok {
+			n++
+		}
+	}
+	if surplus > 0 && n > 0 {
+		fair = surplus / int64(n)
+	}
+	return surplus, fair, n
+}
+
 // SMART-G1 — Suggested contribution amount. For each active goal with a deadline,
-// computes the monthly contribution needed and checks it against monthly surplus.
+// computes the monthly contribution needed and frames it against the goal's FAIR
+// SHARE of the slack — the same model SMART-G18 and the Goals card use — so the app
+// gives one consistent answer instead of "fits within your $X slack" here while the
+// feasibility note says only a fraction is realistically free.
 func g1SuggestedContribution(in Input) []smart.Insight {
-	surplus := in.monthlySurplusBase()
+	surplus, fair, n := in.goalDeadlineFairShare()
 	var out []smart.Insight
 	for _, g := range in.Goals {
 		if g.Archived {
@@ -532,10 +557,13 @@ func g1SuggestedContribution(in Input) []smart.Insight {
 		neededBase := in.toBaseMinor(needed.Amount, needed.Currency)
 		detail := "Saving " + hm(needed) + "/mo reaches " + g.Name + " by " + g.TargetDate.Format("Jan 2006") + "."
 		if surplus > 0 {
-			if neededBase <= surplus {
-				detail += " That fits within your roughly " + in.hmoney(surplus) + "/mo of slack."
-			} else {
-				detail += " That's above your roughly " + in.hmoney(surplus) + "/mo of slack — consider a later date."
+			switch goals.AssessHealth(neededBase, surplus, n) {
+			case goals.HealthOnTrack:
+				detail += " That fits within its roughly " + in.hmoney(fair) + "/mo share of your " + in.hmoney(surplus) + "/mo of slack."
+			case goals.HealthWatch:
+				detail += " That's more than its roughly " + in.hmoney(fair) + "/mo fair share of your " + in.hmoney(surplus) + "/mo slack — it would crowd your other goals, so consider a later date."
+			case goals.HealthAtRisk:
+				detail += " That's above your entire " + in.hmoney(surplus) + "/mo of slack — consider a later date."
 			}
 		}
 		out = append(out, smart.Insight{

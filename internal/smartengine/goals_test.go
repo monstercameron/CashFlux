@@ -3,12 +3,59 @@
 package smartengine
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
+
+// TestG1AffordabilityUsesFairShareNotTotalSlack locks the fix for the July 19 trust
+// defect: SMART-G1 must frame a goal's affordability against its FAIR SHARE of the
+// slack (the model SMART-G18 and the Goals card use), never against the whole slack —
+// otherwise the app says "$838 fits within your $2,857 slack" here while the
+// feasibility note says "only $408 is realistically free", a flat contradiction.
+func TestG1AffordabilityUsesFairShareNotTotalSlack(t *testing.T) {
+	in := baseInput().withBaseline(400000, 300000) // ~$1000/mo surplus
+	due := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	in.Goals = []domain.Goal{
+		goal("a", "Baby fund", 480000, 0, due), // needs ~$800/mo — more than its ~$500 fair share
+		goal("b", "Small", 60000, 0, due),      // needs ~$100/mo — within its fair share
+	}
+	byKey := map[string]smart.Insight{}
+	for _, ins := range g1SuggestedContribution(in) {
+		switch {
+		case strings.HasSuffix(ins.Key, ":a"):
+			byKey["a"] = ins
+		case strings.HasSuffix(ins.Key, ":b"):
+			byKey["b"] = ins
+		}
+	}
+	a, ok := byKey["a"]
+	if !ok {
+		t.Fatalf("no G1 insight for goal a")
+	}
+	if strings.Contains(a.Detail, "fits within") {
+		t.Errorf("G1 tells an over-fair-share goal it 'fits within' the slack (contradicts G18): %q", a.Detail)
+	}
+	if !strings.Contains(a.Detail, "fair share") {
+		t.Errorf("G1 should frame an over-fair-share goal against its fair share: %q", a.Detail)
+	}
+	if b, ok := byKey["b"]; ok && !strings.Contains(b.Detail, "fits within") {
+		t.Errorf("G1 should say a within-share goal fits: %q", b.Detail)
+	}
+	// SMART-G18 must agree that goal a's deadline is tight — same fair-share model.
+	var g18Tight bool
+	for _, ins := range g18Feasibility(in) {
+		if strings.HasSuffix(ins.Key, ":a") {
+			g18Tight = true
+		}
+	}
+	if !g18Tight {
+		t.Errorf("SMART-G18 should flag goal a as tight, agreeing with G1")
+	}
+}
 
 func goal(id, name string, target, current int64, due time.Time) domain.Goal {
 	return domain.Goal{ID: id, Name: name, TargetAmount: usd(target), CurrentAmount: usd(current), TargetDate: due}

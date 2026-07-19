@@ -230,7 +230,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	case complete:
 		cardState, barClass = "is-done", "done"
 	case financial:
-		cardState, barClass = goalCardState(pace, props.Health, complete)
+		cardState, barClass = goalCardState(pace, props.Health.Health, complete)
 	case !g.TargetDate.IsZero() && g.TargetDate.Before(now):
 		cardState, barClass = "is-overdue", "overdue"
 	default:
@@ -288,9 +288,14 @@ func GoalRow(props goalRowProps) ui.Node {
 	// Header chips. Financial: pace badge + sinking-fund set-aside. Habit: a streak
 	// chip. Others: none. (The monthly-needed rate lives ONLY in the figures grid —
 	// one fact, one place.)
-	var paceBadgeNode, fundChip, streakChip ui.Node = Fragment(), Fragment(), Fragment()
+	var paceBadgeNode, fundChip, streakChip, paceReasonNode ui.Node = Fragment(), Fragment(), Fragment(), Fragment()
 	if financial {
-		paceBadgeNode = goalPaceBadge(pace, props.Health)
+		paceBadgeNode = goalPaceBadge(pace, props.Health.Health)
+		// The diagnostic "why" behind the badge (required /mo + available-money
+		// constraint), shown only on the live card (not archived/complete).
+		if !g.Archived && !complete {
+			paceReasonNode = goalPaceReason(props.Health, props.Base, g.ID)
+		}
 		if g.IsSinkingFund && props.FundSetAside > 0 {
 			fundAmt := money.New(props.FundSetAside, g.CurrentAmount.Currency)
 			fundChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "fund-setaside-"+g.ID),
@@ -768,6 +773,9 @@ func GoalRow(props goalRowProps) ui.Node {
 			budgetChip,
 			reviewChip,
 		),
+		// Diagnostic line under the header: WHY the pace badge reads as it does
+		// (required /mo vs. the goal's fair share of free cash).
+		paceReasonNode,
 		loaderNode,
 		// The bar's legend sits directly beneath it: what's saved (solid) vs set
 		// aside (hatched), and the reassurance that reserved money hasn't moved.

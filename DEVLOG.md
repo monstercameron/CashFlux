@@ -1,3 +1,25 @@
+## 2026-07-19 — One affordability answer + diagnostic goal status (post-v1.2.3 recheck)
+
+The July 19 aggressive recheck (run against the STALE served build — the real cause: `web/bin/
+main.wasm.gz` was from 07-18 19:44 and `index.html` loads the .gz first, so hard-refreshes ran old
+code despite a newer `main.wasm`) flagged one bug our v1.2.3 code did NOT fully fix: Smart's findings
+contradict each other for the same goal. SMART-G1 said "$838/mo fits within your ~$2,857/mo slack"
+(total surplus) while SMART-G18 said "only ~$408/mo realistically free" (fair share = surplus ÷
+deadlined goals). I'd unified the surplus BASE figure and the Goals badge in v1.2.3, but G1's copy
+still keyed off total slack. Fixed: extracted `goalDeadlineFairShare` and pointed G1 at
+`goals.AssessHealth`, so G1 only says "fits" within a goal's fair share and otherwise says "more than
+its ~$X/mo fair share — consider a later date", matching G18 and the card badge. Regression test locks
+the two engines to the same verdict.
+
+Also made the goal status diagnostic instead of decorative: `computeGoalHealth` now returns the
+figures behind the verdict (required /mo, fair share, surplus), threaded to the card as `goalPace`,
+and a one-line reason renders under the badge ("Needs $838/mo — above its ~$408/mo share of your free
+cash…"). New copy in `en_goalpacereason.go`, tones in `rules_goalhealth.go`.
+
+Served it for real: removed the stale `.gz` so `index.html` falls back to the dev server's live-
+rebuilt `main.wasm`, and restarted `gwc dev` on :8080. Cam should hard-refresh. smartengine + goals +
+i18n green; wasm app builds clean.
+
 ## 2026-07-19 — Release v1.2.3
 
 Cut v1.2.3 (patch bump from 1.2.2). Bundles this session's work: the July 19 UX pass across the first

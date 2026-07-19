@@ -39,11 +39,11 @@ type goalView struct {
 	SavedTotal  money.Money   // Σ saved across active goals (base currency)
 	TargetTotal money.Money   // Σ target across active goals (base currency)
 	OverallPct  int           // combined saved/target percent across active goals
-	// Health is the shared pace verdict per goal id (On track / Watch / At risk),
-	// computed from required-contribution vs. available monthly cash — the SAME model
-	// the Smart assistant uses, so the card badge and Smart never contradict. Only
-	// deadlined, fundable goals appear; absent = goalsvc.HealthNone (no badge).
-	Health map[string]goalsvc.Health
+	// Health is the shared pace verdict per goal id (On track / Watch / At risk) plus
+	// the figures behind it, computed from required-contribution vs. available monthly
+	// cash — the SAME model the Smart assistant uses, so the card badge and Smart never
+	// contradict. Only deadlined, fundable goals appear; absent = HealthNone (no badge).
+	Health map[string]goalPace
 }
 
 // goalViewCache memoizes computeGoalView by store revision + active member (the only
@@ -103,14 +103,27 @@ func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 	return v
 }
 
+// goalPace is the shared pace verdict PLUS the figures that justify it, so the goal
+// card can show WHY it's Watch/At risk (required monthly, the goal's fair share of the
+// household's free cash), not just a decorative badge. All money is base-currency
+// minor units. RequiredMinor is MonthlyNeeded; FairMinor is the goal's fair share of
+// SurplusMinor across the deadlined goals — the "available-money constraint".
+type goalPace struct {
+	Health        goalsvc.Health
+	RequiredMinor int64
+	FairMinor     int64
+	SurplusMinor  int64
+}
+
 // computeGoalHealth derives the shared pace verdict (On track / Watch / At risk) for
 // every deadlined, fundable goal, using the SAME inputs the Smart assistant uses: the
 // household's free monthly cash (one shared cashflow figure) split as a fair share
 // across the deadlined goals, against each goal's required monthly contribution. A
 // goal within its fair share is On track; one needing more than its share is a stretch
 // (Watch); one that can't be met even with all the free cash is At risk. Goals with no
-// deadline / already covered are absent (no pace claim — the card shows no badge).
-func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates currency.Rates, now time.Time) map[string]goalsvc.Health {
+// deadline / already covered are absent (no pace claim — the card shows no badge). Each
+// entry also carries the figures behind the verdict so the card can explain it.
+func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates currency.Rates, now time.Time) map[string]goalPace {
 	toBase := func(m money.Money) int64 {
 		if m.Currency == base || m.Currency == "" {
 			return m.Amount
@@ -136,10 +149,14 @@ func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates 
 		}
 		needs = append(needs, need{id: g.ID, req: toBase(req)})
 	}
-	out := make(map[string]goalsvc.Health, len(needs))
+	fair := int64(0)
+	if surplus > 0 && len(needs) > 0 {
+		fair = surplus / int64(len(needs))
+	}
+	out := make(map[string]goalPace, len(needs))
 	for _, n := range needs {
 		if h := goalsvc.AssessHealth(n.req, surplus, len(needs)); h != goalsvc.HealthNone {
-			out[n.id] = h
+			out[n.id] = goalPace{Health: h, RequiredMinor: n.req, FairMinor: fair, SurplusMinor: surplus}
 		}
 	}
 	return out
@@ -276,10 +293,13 @@ type goalRowProps struct {
 	// balance no longer covers the total earmarked against it (e.g. the account was spent
 	// down after the earmark) — the card flags the stale reservation instead of trusting it.
 	EarmarkOverbooked bool
-	// Health is the shared pace verdict (On track / Watch / At risk) computed from
-	// required-contribution vs. available cash — the same model the Smart assistant
-	// uses. HealthNone means no verdict (the card shows no pace badge).
-	Health goalsvc.Health
+	// Health is the shared pace verdict (On track / Watch / At risk) plus the figures
+	// behind it (required monthly, fair-share of slack) — the same model the Smart
+	// assistant uses. A zero Health.Health means no verdict (no pace badge / reason).
+	Health goalPace
+	// Base is the household base currency, used to format the Health figures (they are
+	// base-currency minor units).
+	Base string
 }
 
 // goalKindOptions builds the goal-type SelectOptions (savings / checklist /
@@ -411,4 +431,30 @@ func goalPaceBadge(p goalsvc.Pace, h goalsvc.Health) ui.Node {
 		return Fragment()
 	}
 	return Span(ClassStr("pace-badge pace-"+mod), label)
+}
+
+// goalPaceReason renders the one-line justification behind a goal's pace verdict — the
+// monthly contribution the deadline needs and the available-money constraint that
+// produced the verdict (the goal's fair share of the household's free cash, or the
+// whole slack when At risk). This makes the status diagnostic rather than decorative,
+// so "Watch"/"At risk" says WHY. Empty when there's no verdict. base formats the
+// figures (they are base-currency minor units).
+func goalPaceReason(p goalPace, base, goalID string) ui.Node {
+	if base == "" {
+		base = "USD"
+	}
+	req := fmtMoney(money.New(p.RequiredMinor, base))
+	var text string
+	switch p.Health {
+	case goalsvc.HealthAtRisk:
+		text = uistate.T("goals.paceReasonAtRisk", req, fmtMoney(money.New(p.SurplusMinor, base)))
+	case goalsvc.HealthWatch:
+		text = uistate.T("goals.paceReasonWatch", req, fmtMoney(money.New(p.FairMinor, base)))
+	case goalsvc.HealthOnTrack:
+		text = uistate.T("goals.paceReasonOnTrack", req, fmtMoney(money.New(p.FairMinor, base)))
+	default:
+		return Fragment()
+	}
+	return Div(ClassStr("goal-pace-reason goal-pace-reason-"+string(p.Health)),
+		Attr("data-testid", "goal-pace-reason-"+goalID), text)
 }
