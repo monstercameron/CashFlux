@@ -418,14 +418,16 @@ func QuickAddHost() uic.Node {
 	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
 	// Wrap each in ui.FormField so they render a visible caption above the control,
 	// matching the .labeled-field pattern used by all entity add modals.
-	body := Div(css.Class("form-grid"),
+	body := Div(css.Class("form-grid", "qa-grid"),
 		payeeDatalist,
 		// TXT: the templates zone — chips one-click pre-fill the form below, and "Save
 		// as template" (disabled until an amount is present) snapshots the current form.
 		// Kept together at the top so the feature it teaches is visible without scrolling.
 		ui.FormField(uistate.T("quickAdd.account"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), OnChange(onAcct), acctOpts)),
-		ui.Segmented(ui.SegmentedProps{
+		// .qa-pair: opt back into a single grid cell (pairs with Account on one row)
+		// instead of the .qa-grid default full-width span for non-labeled-fields.
+		Div(css.Class("qa-pair"), ui.Segmented(ui.SegmentedProps{
 			Label: uistate.T("quickAdd.kind"),
 			Options: []ui.SegOption{
 				{Value: "Expense", Label: uistate.T("quickAdd.expense")},
@@ -445,7 +447,7 @@ func QuickAddHost() uic.Node {
 				}
 				kind.Set(v)
 			},
-		}),
+		})),
 		ui.FormField(uistate.T("quickAdd.amount"),
 			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), OnInput(onAmount), OnBlur(onAmountBlur))),
 		ui.FormField(uistate.T("quickAdd.payee"),
@@ -463,7 +465,7 @@ func QuickAddHost() uic.Node {
 		// C47: wrap the checkbox in a block container so the helper caption sits
 		// below the label text, not inline with it. The outer Div is not a label
 		// so screen-readers read the Input's associated Label normally.
-		Div(Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.15rem"}),
+		Div(css.Class("qa-pair"), Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.15rem"}),
 			Label(css.Class("quickadd-reviewed"), Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 				Input(reviewedArgs...),
 				uistate.T("quickAdd.reviewedClear")),
@@ -524,10 +526,13 @@ func QuickAddHost() uic.Node {
 	return ui.FlipPanel(ui.FlipPanelProps{
 		Title: uistate.T("quickAdd.title"),
 		Back:  body,
-		// Shorter than the default so the compact add-a-transaction form doesn't
-		// float in a tall, mostly-empty panel (C13). The body scrolls if it ever
-		// overflows.
-		Height:       "420px",
+		// Large standard size (Cam 2026-07-19): the auto-fit .form-grid flows the
+		// fields into multiple columns at this width and the full body — assists,
+		// More-details disclosure, templates zone — fits without scrolling.
+		// (Supersedes C13's compact 420px, which predated the templates zone and
+		// assist rows that made the body scroll.)
+		Width:        ui.FlipLargeW,
+		Height:       ui.FlipLargeH,
 		OnSave:       save,
 		SaveDisabled: !formValid,
 		OnClose:      closePanel,

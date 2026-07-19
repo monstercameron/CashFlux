@@ -2636,6 +2636,25 @@ func registerGenerated() {
 		gap("0.5rem"),
 		marginTop("0.3rem"),
 	)
+	// Quick-add ("Add a transaction") at the large flip size: same discipline as
+	// .txn-edit — the labeled fields pair up in two calm columns; everything else
+	// (kind segmented, assists, budget impact, checkbox block, More-details
+	// disclosure, rapid-entry button, templates zone) spans the full width, so
+	// nothing gets squeezed into a 150px auto-fit cell.
+	rule(".qa-grid",
+		gridTemplateColumns("repeat(2, minmax(0, 1fr))"),
+		alignItems("start"),
+		gap("0.7rem 0.9rem"),
+	)
+	rule(".qa-grid > :not(.labeled-field)",
+		gridColumn("1 / -1"),
+	)
+	// .qa-pair opts a non-labeled-field block back into a single cell so it can
+	// share a row (kind segmented beside Account, reviewed-checkbox beside Date).
+	rule(".qa-grid > .qa-pair",
+		gridColumn("auto"),
+		alignSelf("end"),
+	)
 	// Add-budget modal: a flex-column shell so the fields sit at the top and the action
 	// bar pins to the bottom (breathing room above the CTA, never dead space below it).
 	rule(".budget-add-shell",

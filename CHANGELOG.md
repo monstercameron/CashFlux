@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **"Add a transaction" uses the large standard flip size:** the quick-add panel moved from a
+  bespoke compact 384×420 to the FlipLarge standard (760×720), and its body adopted the
+  edit-transaction discipline via `.qa-grid` — labeled fields pair in two calm columns
+  (Account|Kind, Amount|Payee, Description|Category, Date|Reviewed) while assists, the
+  More-details disclosure, rapid-entry and templates rows span full width — so the segmented
+  kind control no longer overflows a squeezed auto-fit cell and the full form fits without
+  scrolling.
+
 ## [1.2.5] - 2026-07-19
 
 ### Changed
