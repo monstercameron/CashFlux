@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -89,7 +90,11 @@ func changesetReviewCard(props changesetReviewProps) ui.Node {
 		uistate.AddAgentActions(props.ConversationID, rec.Kinds())
 		receipt.Set(&rec)
 		if rec.OK() {
-			uistate.PostNotice(uistate.T("changeset.applied", rec.AppliedCount()), false)
+			// C364: the completion toast tells the reversal story at the moment of
+			// risk — Ctrl+Z reverses the last step, and the persistent receipt below
+			// carries "Undo all" + "View in Activity" (the audit timeline) for the
+			// full picture.
+			uistate.PostNotice(uistate.T("changeset.appliedUndo", rec.AppliedCount()), false)
 		} else {
 			uistate.PostNotice(uistate.T("changeset.failed", rec.Failed.Line, rec.Failed.Err), true)
 		}
@@ -173,6 +178,10 @@ func changesetOpLabel(enabled bool, line string) ui.Node {
 // changesetReceiptView renders the post-apply receipt: what applied, the first
 // failure (if any), and one-tap "Undo all" over the session undo stack.
 func changesetReceiptView(cs *changeset.Changeset, r changeset.Receipt, dismissed ui.State[bool]) ui.Node {
+	nav := router.UseNavigate()
+	// C364: "View in Activity" jumps to the audit timeline where every applied step
+	// is recorded and individually reversible — the durable companion to Ctrl+Z.
+	viewActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
 	onUndoAll := ui.UseEvent(func() {
 		// The apply captured one undo point per applied op (auditview.CaptureNow
 		// inside ApplyChangeset), so undo that many times to reverse them all.
@@ -219,6 +228,12 @@ func changesetReceiptView(cs *changeset.Changeset, r changeset.Receipt, dismisse
 						Attr("data-testid", "changeset-undo-all"),
 						Attr("aria-label", uistate.T("changeset.undoAllAria")),
 						OnClick(onUndoAll), uistate.T("changeset.undoAll")),
+				),
+				If(r.AppliedCount() > 0,
+					Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
+						Attr("data-testid", "changeset-view-activity"),
+						Attr("aria-label", uistate.T("changeset.viewActivity")),
+						OnClick(viewActivity), uistate.T("changeset.viewActivity")),
 				),
 				Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
 					Attr("data-testid", "changeset-receipt-close"),

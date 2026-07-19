@@ -21,6 +21,12 @@ var wseries6Keys = Catalog{
 	"goals.whatIfMore":     "What if I add more?",
 	"goals.whatIfMoreHide": "Hide what-if",
 
+	// ── C364 (carve-out) — tell the undo story on changeset apply ──────────────
+	// The completion toast names both reversal paths; the persistent receipt card
+	// carries the working "Undo all" + "View in Activity" controls.
+	"changeset.appliedUndo":  "Applied %d change(s). Undo (Ctrl+Z) · View in Activity",
+	"changeset.viewActivity": "View in Activity",
+
 	// ── C368 — task repeat/reminder discoverability ────────────────────────────
 	// The Repeat + Remind controls anchor to a due date and stay hidden until one
 	// is set — which is why the reviewer thought recurrence was missing. This hint
