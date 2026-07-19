@@ -1026,12 +1026,11 @@ func TopBar(props topBarProps) uic.Node {
 			// Lock-now button — shown only when an app-lock passcode is set, so the app
 			// can be locked in one click from anywhere.
 			uic.CreateElement(LockToggle),
-			// DP-header refinement (2026-07-19): the two ambient controls that used to
-			// crowd this row — the music/audio toggle and the Smart-insights peek — moved
-			// into the ⋯ More overflow menu (below), so the actions row reads as the two
-			// dominant controls: notifications and the primary + Add. Both stay mounted
-			// there (the music player effect and the Smart engine pass keep running) with
-			// their testids/labels intact.
+			// The music/audio toggle lives INLINE (Cam 2026-07-19: one-click un/mute
+			// beats a two-click trip through ⋯ More — mute is a reflex action). Its
+			// player effect runs from this single mounted instance. The Smart-insights
+			// peek and activity stamp remain in the ⋯ More overflow.
+			uic.CreateElement(MuzakToggle),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
 			// The "⋯ More" overflow menu sits last, against the right edge. It now hosts

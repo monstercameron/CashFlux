@@ -100,16 +100,15 @@ func MoreMenu(props moreMenuProps) uic.Node {
 		Div(ClassStr("add-menu open-left"+hidden), Attr("role", "menu"),
 			// DP-header refinement (2026-07-19): a quiet cluster of the ambient controls
 			// relocated out of the crowded top bar — the activity/history "Updated …"
-			// stamp, the Smart-insights peek, and the music toggle. They render as their
-			// real components (own fibers → stable hook order; each keeps its exact
-			// data-testid + accessible label), and stay mounted whenever this popover is
-			// in the DOM so the music player effect and the Smart engine pass keep
-			// running. Each self-hides when it has nothing to show; the music toggle is
-			// always present, so the cluster never collapses to empty.
+			// stamp and the Smart-insights peek. They render as their real components
+			// (own fibers → stable hook order; each keeps its exact data-testid +
+			// accessible label), and stay mounted whenever this popover is in the DOM so
+			// the Smart engine pass keeps running. Each self-hides when it has nothing
+			// to show. (The music toggle moved BACK inline to tb-actions — un/mute is a
+			// one-click reflex action; see TopBar.)
 			Div(css.Class("tb-more-quick", tw.Flex, tw.ItemsCenter, tw.FlexWrap, tw.Gap25),
 				uic.CreateElement(UpdatedStamp),
 				screens.SmartPeekForPath(props.ActivePath),
-				uic.CreateElement(MuzakToggle),
 			),
 			// Settings leads the menu — the global panel's single entry point now
 			// that the rail's household card no longer opens it.
