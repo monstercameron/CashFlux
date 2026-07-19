@@ -403,8 +403,12 @@ func registerRecurringSurface() {
 
 	// Ghost date medallion: the second+ row of the same day keeps the layout slot
 	// but hides the repeated date.
+	// Second+ row of the same day: the medallion stays visible but FAINT. Fully
+	// hiding it (visibility:hidden) made those rows read as a rendering glitch —
+	// "why does Streaming & apps have no date?" (UI/UX review task #10) — while
+	// a dimmed repeat still reads as "same day as above" without re-stamping it.
 	rule(".rec-up-date.is-ghost",
-		prop("visibility", "hidden"),
+		prop("opacity", "0.28"),
 	)
 
 	// Post-due gains affordance when it will actually act on something.
