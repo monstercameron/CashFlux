@@ -457,10 +457,7 @@ func registerGenerated() {
 	// no vertical movement for toolbar-style buttons; §1: controls never shift
 	// away from the pointer).
 	rule(".nav-link",
-		transition("background 0.12s, color 0.12s, transform var(--wonder-dur-fast) var(--wonder-ease)"),
-	)
-	rule(".nav-link:hover",
-		transform("translateY(calc(-1px * var(--wonder-on)))"),
+		transition("background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
 	rule(".nv:hover svg, .nv:hover .nav-icon",
 		transform("scale(calc(1 + 0.06 * var(--wonder-on)))"),
@@ -470,14 +467,11 @@ func registerGenerated() {
 		transform("rotate(calc(38deg * var(--wonder-on)))"),
 		color("#f4f4f5"),
 	)
-	rule(".add-btn:hover",
-		transform("scale(calc(1 + 0.12 * var(--wonder-on)))"),
-	)
+	// (Hover scale-growth on the +, bell, and muzak buttons removed — spec §3:
+	// button hover is a surface/border response; a control never grows or shifts
+	// under the pointer. The bell keeps its icon-state rotation.)
 	rule(".notify-btn:hover",
 		transform("rotate(calc(18deg * var(--wonder-on)))"),
-	)
-	rule(".muzak-btn:hover",
-		transform("scale(calc(1 + 0.08 * var(--wonder-on)))"),
 	)
 	// Focus ring behavior (spec §3): the ring appears INSTANTLY on focus and fades
 	// out over the micro token when focus leaves. The base state keeps a transparent
@@ -781,11 +775,12 @@ func registerGenerated() {
 		minHeight("3.5rem"),
 	)
 	rule(".topbar",
-		customProp("--tb-h", "2rem"),
+		// --tb-h matches the .btn-tool standard control height (38px) so the
+		// header speaks the same control language as every page toolbar.
+		customProp("--tb-h", "2.375rem"),
 		gap(".85rem"),
 	)
 	rule(".tb-title",
-		marginRight("auto"),
 		minWidth("0"),
 		// Shrink LAST — the page title (e.g. "Reports") was truncating to "Re…"
 		// at ~1100px because the scope/period context yielded no space first.
@@ -803,7 +798,12 @@ func registerGenerated() {
 		flexShrink("4"),
 	)
 	rule(".tb-actions",
-		gap(".15rem"),
+		gap(".4rem"),
+		// The actions cluster owns the row's slack: it pins to the right edge while
+		// the context group (scope/period/status) sits LEFT-ANCHORED beside the
+		// title, so those controls keep one stable position on every page instead
+		// of drifting with the period pill's width/presence.
+		marginLeft("auto"),
 	)
 	rule(".tb-actions::before",
 		content("\"\""),
@@ -830,12 +830,24 @@ func registerGenerated() {
 		flex("none"),
 		whiteSpace("nowrap"),
 	)
-	rule(".topbar .cf-member-switcher-wrap .btn",
+	// The "Switch profile…" companion is a standard bordered icon button (the
+	// .btn/.btn-tool chrome) sized to the shared control height.
+	rule(".topbar .cf-member-switcher-wrap .icon-btn",
+		width("var(--tb-h)"),
 		height("var(--tb-h)"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
 		display("inline-flex"),
 		alignItems("center"),
-		borderRadius("8px"),
-		fontSize(".82rem"),
+		justifyContent("center"),
+		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".topbar .cf-member-switcher-wrap .icon-btn:hover",
+		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
+		color("var(--text)"),
 	)
 	rule(".period-control",
 		position("relative"),
@@ -866,8 +878,12 @@ func registerGenerated() {
 	rule(".period-pill",
 		display("inline-flex"),
 		alignItems("center"),
+		justifyContent("center"),
 		gap(".4rem"),
 		height("100%"),
+		// A floor width so "May 2026" vs "September 2026" doesn't nudge the
+		// neighbouring controls every month step.
+		minWidth("6.5rem"),
 		padding("0 .55rem"),
 		border("0"),
 		borderInline("1px solid var(--border)"),
@@ -948,33 +964,63 @@ func registerGenerated() {
 		minHeight("0"),
 		padding("0 1.5rem 0 .6rem"),
 	)
-	rule(".topbar .cf-member-switcher-wrap .btn",
-		height("var(--tb-h)"),
-		minHeight("0"),
-		padding("0 .7rem"),
-	)
-	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn,\n      .topbar .tb-actions .add-btn",
+	// Standalone action buttons (bell, ⋯ More) wear the standard .btn/.btn-tool
+	// chrome — bordered bg-elev squares at the shared control height — so the
+	// header uses the same control language as every page toolbar.
+	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn",
 		width("var(--tb-h)"),
 		height("var(--tb-h)"),
 		borderRadius("8px"),
+		border("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+		color("var(--text-dim)"),
 		display("inline-flex"),
 		alignItems("center"),
 		justifyContent("center"),
+		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
 	)
-	rule(".topbar .tb-actions .add-caret",
-		width("1.2rem"),
-		height("var(--tb-h)"),
-		borderRadius("8px"),
-	)
-	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn,\n      .topbar .tb-actions .add-btn,\n      .topbar .tb-actions .add-caret",
-		background("transparent !important"),
-		border("0 !important"),
-	)
-	rule(".topbar .tb-actions .icon-btn:hover,\n      .topbar .tb-actions .more-btn:hover,\n      .topbar .tb-actions .notify-btn:hover,\n      .topbar .tb-actions .muzak-btn:hover,\n      .topbar .tb-actions .add-btn:hover,\n      .topbar .tb-actions .add-caret:hover",
-		background("color-mix(in srgb, var(--text) 8%, transparent) !important"),
+	rule(".topbar .tb-actions .icon-btn:hover,\n      .topbar .tb-actions .more-btn:hover,\n      .topbar .tb-actions .notify-btn:hover,\n      .topbar .tb-actions .muzak-btn:hover",
+		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
 		color("var(--text)"),
 	)
+	// The +Add is a true SPLIT BUTTON: one bordered accent-tinted container, the
+	// one-click quick-add on the left and the open-the-menu caret behind an inner
+	// divider. (Scoped :not(.topbar-more) — the ⋯ menu reuses .add-wrap for its
+	// popover positioning but is a standalone icon button.)
+	rule(".topbar .tb-actions .add-wrap:not(.topbar-more)",
+		height("var(--tb-h)"),
+		border("1px solid color-mix(in srgb, var(--accent) 45%, var(--border))"),
+		borderRadius("8px"),
+		background("var(--bg-elev)"),
+	)
 	rule(".topbar .tb-actions .add-btn",
+		width("calc(var(--tb-h) - 2px)"),
+		height("100%"),
+		border("0"),
+		borderRadius("7px 0 0 7px"),
+		background("transparent"),
+		color("var(--accent)"),
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		transition("background-color var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".topbar .tb-actions .add-caret",
+		width("1.4rem"),
+		height("100%"),
+		border("0"),
+		borderLeft("1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
+		borderRadius("0 7px 7px 0"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		display("inline-flex"),
+		alignItems("center"),
+		justifyContent("center"),
+		transition("background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".topbar .tb-actions .add-btn:hover,\n      .topbar .tb-actions .add-caret:hover",
+		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 		color("var(--accent)"),
 	)
 	rule(".topbar-secondary",
@@ -4026,14 +4072,9 @@ func registerGenerated() {
 	rule("html[data-theme=\"light\"] .w:not(.drag)",
 		boxShadow("0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),\n                    inset 0 1px 0 rgba(255,255,255,0.7) !important"),
 	)
-	rule("html .row:not(.txn-table .row):hover",
-		transform("translateX(calc(3px * var(--wonder-on))) !important"),
-	)
+	// (Row hover translate removed — spec §3: table/list rows do not translate.)
 	rule("html .btn,\n      html .data-btn, html .seg-btn, html .add-item, html .menu-btn, html .icon-btn",
 		transition("transform var(--wonder-dur-fast) var(--wonder-ease),\n                    filter 0.12s ease,\n                    background-color var(--wonder-dur-fast) ease,\n                    color var(--wonder-dur-fast) ease"),
-	)
-	rule("[data-wonder=\"off\"] .rows .row,\n      [data-wonder=\"off\"] .list-rows .row,\n      [data-wonder=\"off\"] .rows .row:not(.txn-table .row),\n      [data-wonder=\"off\"] .list-rows .row:not(.txn-table .row)",
-		animation("none !important"),
 	)
 	rule(".sev-pill",
 		fontSize("0.67rem"),
@@ -10748,10 +10789,14 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 		alignItems("center"),
 		gap(".45rem"),
-		padding(".2rem .45rem .2rem .5rem"),
+		height("var(--tb-h, auto)"),
+		padding(".2rem .55rem .2rem .6rem"),
 		maxWidth("100%"),
-		background("rgba(211,146,0,0.10)"),
-		border("1px solid #d39200"),
+		// Status, not a control: one notch calmer than the full amber outline so it
+		// stops out-shouting the persona/period controls it sits beside, while the
+		// "Start fresh" link keeps the warm accent.
+		background("rgba(211,146,0,0.07)"),
+		border("1px solid color-mix(in srgb, #d39200 45%, var(--border))"),
 		borderRadius("999px"),
 		fontSize(".75rem"),
 	)

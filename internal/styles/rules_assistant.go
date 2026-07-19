@@ -359,7 +359,6 @@ func registerAssistantSurface() {
 	)
 	rule(".chat-send:hover",
 		prop("filter", "brightness(1.1)"),
-		prop("transform", "translateY(-1px)"),
 	)
 	// Status dot on the hero eyebrow above the canvas.
 	rule(".chat-status-line",
