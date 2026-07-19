@@ -7,6 +7,7 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -18,6 +19,9 @@ import (
 
 type moreMenuProps struct {
 	OnDashboard bool
+	// ActivePath is the logical route path, threaded so the relocated Smart-insights
+	// peek (which is per-page) knows which route it is rendering for.
+	ActivePath string
 }
 
 // MoreMenu is the top bar's overflow ("⋯") menu. On narrow screens — where the
@@ -82,22 +86,6 @@ func MoreMenu(props moreMenuProps) uic.Node {
 	}
 	themeLabel := uistate.T("topbar.theme") + " · " + uistate.T("settings.theme"+themeWord(p.Theme))
 
-	// UX-04: the music and lock buttons fold out of the bar on sub-1280px widths
-	// (the inline buttons stay mounted, just hidden, so MuzakToggle's player
-	// effect keeps running) — these rows keep both reachable with labels.
-	muzakAtom := uistate.UseMuzakEnabled()
-	muzakLabel := uistate.T("muzak.turnOn")
-	muzakIcon := icon.VolumeMute
-	if muzakAtom.Get() {
-		muzakLabel = uistate.T("muzak.turnOff")
-		muzakIcon = icon.Volume
-	}
-	toggleMuzak := func() {
-		next := !muzakAtom.Get()
-		muzakAtom.Set(next)
-		uistate.PersistMuzakEnabled(next)
-		checkpointMusic()
-	}
 	lockEnabled := loadAppLock().Enabled
 
 	return Div(css.Class("add-wrap topbar-more", tw.Flex, tw.ItemsCenter), Attr("id", menuID),
@@ -110,6 +98,19 @@ func MoreMenu(props moreMenuProps) uic.Node {
 		),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu open-left"+hidden), Attr("role", "menu"),
+			// DP-header refinement (2026-07-19): a quiet cluster of the ambient controls
+			// relocated out of the crowded top bar — the activity/history "Updated …"
+			// stamp, the Smart-insights peek, and the music toggle. They render as their
+			// real components (own fibers → stable hook order; each keeps its exact
+			// data-testid + accessible label), and stay mounted whenever this popover is
+			// in the DOM so the music player effect and the Smart engine pass keep
+			// running. Each self-hides when it has nothing to show; the music toggle is
+			// always present, so the cluster never collapses to empty.
+			Div(css.Class("tb-more-quick", tw.Flex, tw.ItemsCenter, tw.FlexWrap, tw.Gap25),
+				uic.CreateElement(UpdatedStamp),
+				screens.SmartPeekForPath(props.ActivePath),
+				uic.CreateElement(MuzakToggle),
+			),
 			// Settings leads the menu — the global panel's single entry point now
 			// that the rail's household card no longer opens it.
 			Button(css.Class("add-item", tw.Flex, tw.ItemsCenter, tw.Gap25), Type("button"), Attr("role", "menuitem"),
@@ -121,7 +122,6 @@ func MoreMenu(props moreMenuProps) uic.Node {
 			If(props.OnDashboard, item(uistate.T("dashboard.customize"), icon.Customize, func() { nav.Navigate(uistate.RoutePath("/widget-manager")) })),
 			item(themeLabel, icon.Appearance, cycleTheme),
 			item(uistate.T("nav.help"), icon.HelpCircle, func() { nav.Navigate(uistate.RoutePath("/help")) }),
-			item(muzakLabel, muzakIcon, toggleMuzak),
 			If(lockEnabled, item(uistate.T("applock.cmdLock"), icon.Lock, func() { showAppLockGate() })),
 		),
 	)

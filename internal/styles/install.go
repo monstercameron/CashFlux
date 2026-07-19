@@ -87,6 +87,11 @@ func Register() {
 	registerAcctxn()
 	registerBudgetRefine()
 	registerDesignPolish()
+	registerDpType()
+	registerDpColor()
+	registerDpSerif()
+	registerDpBorders()
+	registerDpHeader()
 	inject(Build())
 }
 

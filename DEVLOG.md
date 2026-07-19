@@ -1,3 +1,189 @@
+## 2026-07-19 — Quieter global top header: ambient controls into the ⋯ More overflow (design pass)
+
+Scope from the frontend-design review, header lane: the global top bar crowded ~10 equally-weighted
+controls, so no element read as dominant. Goal — keep the page context (title + "Viewing as" +
+period) leading on the left and the two dominant actions (notifications bell + one primary "+ Add")
+on the right; demote the low-frequency ambient controls into the existing ⋯ More overflow without
+removing any capability.
+
+Touched only the header/shell chrome files:
+
+- `internal/app/shell.go` (TopBar): removed the inline `UpdatedStamp` (context zone) and the inline
+  `MuzakToggle` + `SmartPeekForPath(curPath)` (actions zone) from their prominent slots. Kept
+  `LockToggle` (only renders when a passcode is set), `NotifyBell`, and `AddMenu` (the "+ Add" split
+  button — its add-anything caret is the integral second half of the primary add control, so it
+  stays as ONE grouped primary rather than being orphaned). Threaded `ActivePath: curPath` into
+  `MoreMenu`.
+- `internal/app/moremenu.go`: added `ActivePath` to `moreMenuProps`; rendered the three relocated
+  controls as their **real components** (`UpdatedStamp`, `screens.SmartPeekForPath`, `MuzakToggle`)
+  in a `tb-more-quick` cluster at the top of the always-in-DOM popover, and dropped the now-duplicate
+  labeled "music" row (and its `UseMuzakEnabled`/toggle logic). Rendering the real components — not
+  re-trigger rows — means each keeps its exact `data-testid`/aria-label, and because the popover Div
+  is always mounted (only visibility-toggled), the music player effect and the Smart engine pass keep
+  running. Each control self-hides when it has nothing to show; the music toggle is always present so
+  the cluster never collapses to empty.
+- `internal/styles/rules_dp_header.go` (`registerDpHeader`, one-line appended last in `install.go`,
+  re-read right before appending): styles `.add-menu .tb-more-quick` as a calm strip with a hairline
+  divider, and force-shows `.muzak-btn` inside the cluster (rules_headerbalance hides it in the bar
+  below 1280px). Layout + theme tokens only; light + dark track.
+
+Framework care: the three relocated controls are `CreateElement` siblings at fixed positions (own
+fibers → isolated, stable hook order — no On*-in-loops risk). Removing `UseMuzakEnabled` from
+MoreMenu is a static code change, so MoreMenu's own hook sequence stays consistent across renders.
+
+Verify: `go vet ./internal/...` clean; `GOOS=js GOARCH=wasm go build .` exit 0. Note: the ambient
+controls now live inside the ⋯ More popover, so standalone visibility-based verify scripts that
+asserted the OLD prominent placement (`lane3_verify_69` music-inline-at-1280, `topbar_updated_verify`,
+`lane6_verify` direct caret/updated clicks) are expected to go stale from the design change; the
+testids themselves remain present in the DOM (coverage ratchet unaffected). Did not touch
+`coverage-manifest.json` or any e2e (other lanes / concurrent work).
+
+## 2026-07-19 — Tighter color semantics: neutral admin buttons + hatched over-budget bar (design pass)
+
+Scope from the frontend-design review, color lane: (1) green must not appear merely because a
+control is interactive — reserve it for the one beneficial primary per region; (2) an over-100%
+budget bar should not fill the whole track solid red. Type, borders, serif, and header are other
+agents' lanes, so this pass touched only color / background / border-color.
+
+New file `internal/styles/rules_dp_color.go` (`registerDpColor`, one-line appended last in
+`install.go` so its overrides win at equal specificity). Two changes:
+
+- **Neutralized three administrative buttons** — chosen because each carries `.btn-primary` only by
+  virtue of being the primary control in its region, not because it's a beneficial money move:
+  `subs-prefs-done` (a subscription-detection *preferences* modal), `allocate-strategy-done` (a
+  strategy *config* modal), and `cover-all-close` (a plain "Close" on an empty state). Targeted by
+  `.btn-primary[data-testid="…"]` (specificity 0,2,0, beating bare `.btn-primary` and tying the
+  `.modal-foot/.modal-sticky-foot .btn-primary` rules, which this file breaks by registering last),
+  plus a matching `:hover` override (0,3,0) so the modal-foot green hover doesn't repaint them. The
+  many legitimate green primaries (Add budget/transaction, Save, Contribute, run-Smart, load-sample)
+  were deliberately left alone. I audited ~85 `.btn-primary` call sites and kept the neutralization
+  to the clearest administrative/dismissal cases rather than broadening into ambiguous "Done"s.
+
+- **Capped + hatched the over-budget bar.** The row already caps the fill width at 100% of the
+  track, so over-budget bars were an undifferentiated saturated red block. Rather than a render
+  change (which would have meant touching layout the row/type agents own), a CSS-only treatment on
+  `.bento-budgets .bar-fill.over` (same 0,3,0 specificity as the generated rule, won by source order)
+  replaces the solid danger fill with a diagonal red hazard-hatch (`repeating-linear-gradient` of
+  `var(--danger)` vs a 60%-darkened `var(--danger)`). It covers both the card loader and the compact
+  crow bar (both under `.bento-budgets`), and the in-bar percent ("112%") still states the overage.
+
+- **Watch → amber:** audited and already correct. `goalCardState` maps `HealthWatch` to `is-soon` +
+  the `soon` bar class; `.pace-watch` is `#d98c00`/`#b45309`, `.bar-fill.soon` is `#f59e0b`, and the
+  `.bento-goals …` bar-fill override doesn't set a background, so the amber cascades through. No
+  change needed — green never leaks into a Watch goal.
+
+Verify: `go test ./internal/styles/...` green; `GOOS=js GOARCH=wasm go build .` exit 0. No screen
+render touched, so no `go vet ./internal/...` required.
+
+## 2026-07-19 — Constrain the display serif to heroes/titles (design pass)
+
+Scope from the frontend-design review: Fraunces (`--font-display`) is an asset but it had crept onto
+too many operational readouts, diluting it. The serif should speak ONLY for page titles, ONE hero
+value/statement per page, and major report section titles; every other figure should use the sans
+body stack so the editorial voice stays a deliberate accent.
+
+Lane discipline — this pass touches `font-family` ONLY. Font-size/weight is the type-levels agent's
+lane; color/border/header are others'. I did NOT remove `--font-display` globally (that would also
+kill the kept heroes/titles); instead I OVERRODE the specific operational value classes to sans and
+left the hero/title classes serif.
+
+Approach — a new `internal/styles/rules_dp_serif.go` (`registerDpSerif`, one-line appended in
+`install.go` after the other dp-* passes so its font-family overrides win the cascade over the
+generated base in `rules_gen.go`, which I did not edit). Grepped every serif application
+(`var(--font-display)…`) across `rules_gen.go` + `rules_*.go` and classified each:
+
+- **Demoted to sans** (operational value/amount/figure readouts): `.budget-loader-value`,
+  `.budget-agemoney-num`, `.saved-view-tile-total`, `.debt-rank`, `.bento-debt .stat-value`,
+  `.notif-summary-count`, `.fb-result-val`, `.bento-goals .goal-card-loader .budget-pct`,
+  `.goal-fig-v`, `.ea-acct-earmarked`, `.gtj-eta .gtj-eta-when`. Each override selector matches the
+  original's specificity so the later registration order breaks the tie in my favor.
+- **Kept serif** (heroes/titles/statements): the per-page hero values (`.stat-value.is-hero`,
+  `.inv-hero-value`, `.debt-hero-value`, `.rpt-hero-value`, `.rec-hero-value`, `.bflex-num`), the
+  hero statement (`.hero-quote-text`), the empty-state title (`.bflex-empty-title`), page/section/
+  panel/group/component titles + eyebrows/names, and the report masthead score.
+
+Trap handled — `.budget-loader-value.is-hero` sets only size/weight and inherits its FACE from the
+base `.budget-loader-value` rule, so demoting the base would have sanned the hero too. I re-assert
+serif on the higher-specificity `.is-hero` selector to claw the one hero figure back. (The base
+`.stat-value` was already sans — dashboard income/spending/net stats inherit the body face and never
+used the serif — so nothing to change there.)
+
+Verify: `go test ./internal/styles/...` green; wasm app build (`GOOS=js GOARCH=wasm go build .`)
+exit 0.
+
+## 2026-07-19 — Reduce border dependence + vertical rhythm (design pass)
+
+Scope from the frontend-design review: the hierarchy had become "boxes within boxes" — an elevated
+widget/section, a bordered card inside it, a bordered summary tile inside that — so nesting read
+busy. Refine (not reinvent) on the principle: elevation for the LARGEST section, a border OR a state
+accent-edge for state, and background/dividers for repeated inner content — never all three at once
+on the same object.
+
+New `internal/styles/rules_dp_borders.go` (`registerDpBorders`), one-line appended last in
+`install.go` after the type/color/serif passes, so equal-specificity overrides win over the
+generated base in `rules_gen.go` (which I did not touch). Border/padding/margin/gap/background/
+box-shadow properties only; theme tokens only. Audited the shared container/card/tile rules in
+`rules_gen.go` first (`.w` widget tile = `background:#121214`/light `var(--bg-card)` + border; `.card`
+= bg-card + border + shadow; `.stat` = bg-card + border; budget/goal cards = elevation + accent-edge
++ border) and confirmed the token elevation order holds in BOTH themes — `--bg-elev` sits above
+`--bg-card` (dark #1a1a1d > #121214; light #efede8 inset from #fff) — so a background can safely
+replace a border without the inner object vanishing (the real risk: `.card`/`.stat`/`.w` are all
+white in light theme, so a naive border-removal would merge them invisibly; the bg-elev lift avoids
+that).
+
+Three doubled-box reductions:
+- `.card .stat, .w .stat` — drop the border, lift with `color-mix(var(--bg-elev) 48%, transparent)`
+  (the app's existing inner-card idiom, already used by `.bento-debt .stat`), unify padding to the
+  row band `0.8rem 1rem`. `.bento-debt .stat` had this bg already but kept a border — now it sheds
+  it too, harmonizing every stat tile.
+- `.w .card` — a card inside an elevated widget: drop border + resting shadow, lift with the same
+  background so it reads as one panel.
+- `.bento-budgets .budget, .bento-goals .goal-card` — these had all three (parent `.w` elevation +
+  stateful left accent-edge in green/amber/red + neutral full border). Removed the redundant neutral
+  border; the accent-edge (which carries state) and the card background remain. Also neutralized the
+  budgets surface's re-asserted `.budget:first-child` top border for consistency.
+
+Rhythm: the unified `0.8rem 1rem` (~13/16px) stat padding sets a consistent row band, and removing
+the inner box's border means the container's own whitespace — not a doubled box + its internal
+padding — sets the vertical rhythm. Existing tokens already satisfied the label→value band
+(`.stat-value` margin-top 0.3rem ≈ 5px). State/hover feedback survives border removal on the cards
+(hover still shifts background + translateY). Deliberately did NOT touch `.stat-grid` gaps/margins,
+which each surface tunes per-fold (e.g. budget-refine's fold work), to avoid clobbering concurrent
+lanes. Verified: `go test ./internal/styles/...` green; wasm app build (`.`) exit 0.
+
+## 2026-07-19 — Five fixed type levels + legible metadata (design pass)
+
+Scope from the frontend-design review: enforce a consistent type scale by SIZE/WEIGHT only and,
+crucially, lift secondary metadata out of decorative-texture faintness. Font-family is another
+agent's lane, so this pass never sets it; semantic green/red/amber is the color agent's lane, so the
+only colours touched are neutral metadata grays.
+
+Approach — a new `internal/styles/rules_dp_type.go` (`registerDpType`, one-line appended last in
+`install.go` after `registerDesignPolish`, so equal-specificity rules win over the generated base in
+`rules_gen.go`, which I did not edit). Audited the shared title/label/metadata classes in
+`rules_gen.go` and normalized:
+
+- **Level 1 page title** — `.page-title` was 1.6rem (~25.6px, in the 24-28 band); pinned weight 600
+  + line-height 1.2 so every page header reads at one level.
+- **Level 3 section title** — the bento widget header (`.wh h2/.wh h3/.wh .wh-title`) sat at 1rem
+  (16px), a level too low; raised to 1.125rem (18px, the band floor) semibold. Did NOT touch its
+  `font-family` (serif agent owns it).
+- **Level 4 row/card title** — `.card-title` nudged 1.05rem → 1rem (16px)/600 so cards sit just
+  below section titles.
+- **Level 5 metadata (the key fix)** — the faintest small labels were reading as texture:
+  `.set-label` was a hardcoded `#6c6c72` (~4:1) at 11.2px → `var(--text-dim)` (`#b6b6be`, ~9.1:1) at
+  12px; `.text-faint` utility `#7d7d85` (~4.3:1) → `var(--text-faint)` token (`#9a9aa2`, ~6.3:1),
+  aligning the utility with its own token; `.t-caption` (had size, no colour → inherited faint
+  parents) anchored to `var(--text-dim)`. All lifts resolve through theme tokens, so light tracks too
+  (`--text-dim` #333, `--text-faint` #555). `.muted`/`.row-meta`/`.budget-sub`/`.stat-label` already
+  used `var(--text-dim)` at 12-13px — left alone (surgical, don't restyle every element).
+
+Verify: `go test ./internal/styles/...` green; wasm app build (`GOOS=js GOARCH=wasm go build .`)
+exit 0.
+
+Next: still queued in the sequenced design pass — border reduction, color semantics, serif restraint,
+quieter header.
+
 ## 2026-07-19 — Budgets refinement pass (8.0 → 9+)
 
 Four tightly-scoped fixes on `/budgets`, no logic rewrites — the shared `computeBudgetView` /

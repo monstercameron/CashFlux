@@ -990,9 +990,10 @@ func TopBar(props topBarProps) uic.Node {
 			// QA CF-24: on /reports the compact month pill silently controls a rolling
 			// ANNUAL window — the prop makes the pill say so ("Year ending Jul 2026").
 			If(periodAware, uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: curPath == "/reports"})),
-			// Freshness leg of the persistent context strip (parity scan): when
-			// the data last changed, one click from the change itself.
-			uic.CreateElement(UpdatedStamp),
+			// DP-header refinement (2026-07-19): the freshness/activity stamp is a
+			// low-frequency, ambient control — relocated into the ⋯ More overflow so
+			// the context strip reads as just scope + period. Still mounted (its ticker
+			// runs) and clickable, only demoted; see MoreMenu.
 		),
 		// Actions zone: stays on the title row at every size.
 		Div(css.Class("tb-actions", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
@@ -1004,20 +1005,20 @@ func TopBar(props topBarProps) uic.Node {
 				uic.CreateElement(ThemeToggle),
 				uic.CreateElement(HelpButton),
 			),
-			// Music on/off is a direct, always-visible top-bar action (not folded into
-			// the More menu) so it's one click from anywhere.
-			uic.CreateElement(MuzakToggle),
-			// Lock-now button, beside the music toggle — shown only when an app-lock
-			// passcode is set, so the app can be locked in one click from anywhere.
+			// Lock-now button — shown only when an app-lock passcode is set, so the app
+			// can be locked in one click from anywhere.
 			uic.CreateElement(LockToggle),
-			// Smart-insights trigger (audit P0): the per-page insight strip's
-			// icon+count toggle lives here in the title row, not as a bar above
-			// the page's content. Renders nothing when the page has none.
-			screens.SmartPeekForPath(curPath),
+			// DP-header refinement (2026-07-19): the two ambient controls that used to
+			// crowd this row — the music/audio toggle and the Smart-insights peek — moved
+			// into the ⋯ More overflow menu (below), so the actions row reads as the two
+			// dominant controls: notifications and the primary + Add. Both stay mounted
+			// there (the music player effect and the Smart engine pass keep running) with
+			// their testids/labels intact.
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
-			// The "⋯ More" overflow menu sits last, against the right edge.
-			uic.CreateElement(MoreMenu, moreMenuProps{OnDashboard: onDashboard}),
+			// The "⋯ More" overflow menu sits last, against the right edge. It now hosts
+			// the relocated ambient controls (activity/history, Smart peek, music).
+			uic.CreateElement(MoreMenu, moreMenuProps{OnDashboard: onDashboard, ActivePath: curPath}),
 		),
 	)
 }
