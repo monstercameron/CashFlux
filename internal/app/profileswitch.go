@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/scope"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -116,13 +117,17 @@ func ProfileSwitchHost() uic.Node {
 	// hook 6: PIN text-input handler
 	onPinInput := uic.UseEvent(func(v string) { pinInput.Set(v) })
 
-	// hook 7: close / cancel — resets all ephemeral state
-	doClose := uic.UseEvent(func() {
+	// closeAll resets all ephemeral state; plain func so it can be handed to the
+	// FlipPanel's OnClose (header ✕ / Escape / backdrop) as well as wrapped in the
+	// hook below for the body's own Cancel button.
+	closeAll := func() {
 		open.Set(false)
 		pendingID.Set("")
 		pinInput.Set("")
 		pinErr.Set("")
-	})
+	}
+	// hook 7: close / cancel — resets all ephemeral state
+	doClose := uic.UseEvent(closeAll)
 
 	// hook 8: PIN submit — verify then switch or show error
 	onPinSubmit := uic.UseEvent(func() {
@@ -170,18 +175,19 @@ func ProfileSwitchHost() uic.Node {
 		}
 		prompt := fmt.Sprintf(uistate.T("profileSwitch.pinPrompt"), targetName)
 		return Div(css.Class("cf-ps-root"),
-			Div(css.Class("cf-dialog-backdrop"),
-				Attr("role", "dialog"),
-				Attr("aria-modal", "true"),
-				Attr("aria-label", uistate.T("profileSwitch.title")),
-				Div(css.Class("cf-dialog-scrim"), OnClick(doClose)),
-				Div(css.Class("cf-dialog", "cf-ps-panel"),
-					H3(css.Class("cf-dialog-title"), uistate.T("profileSwitch.title")),
+			uiw.FlipPanel(uiw.FlipPanelProps{
+				Title:    uistate.T("profileSwitch.title"),
+				Width:    uiw.FlipSmallW,
+				Height:   uiw.FlipSmallH,
+				NoFooter: true,
+				OnClose:  closeAll,
+				Back: Fragment(
 					P(css.Class("cf-dialog-msg"), prompt),
 					Input(css.Class("set-input", "cf-dialog-input"),
 						Type("password"),
 						Attr("id", "cf-ps-pin"),
 						Attr("autocomplete", "off"),
+						Attr("autofocus", ""),
 						Attr("aria-label", uistate.T("profileSwitch.pinLabel")),
 						Placeholder(uistate.T("profileSwitch.pinLabel")),
 						Value(pinInput.Get()),
@@ -195,7 +201,7 @@ func ProfileSwitchHost() uic.Node {
 							uistate.T("profileSwitch.pinBtn")),
 					),
 				),
-			),
+			}),
 		)
 	}
 
@@ -258,20 +264,20 @@ func ProfileSwitchHost() uic.Node {
 	}
 
 	return Div(css.Class("cf-ps-root"),
-		Div(css.Class("cf-dialog-backdrop"),
-			Attr("role", "dialog"),
-			Attr("aria-modal", "true"),
-			Attr("aria-label", uistate.T("profileSwitch.title")),
-			Div(css.Class("cf-dialog-scrim"), OnClick(doClose)),
-			Div(css.Class("cf-dialog", "cf-ps-panel"),
-				H3(css.Class("cf-dialog-title"), uistate.T("profileSwitch.title")),
+		uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:    uistate.T("profileSwitch.title"),
+			Width:    uiw.FlipSmallW,
+			Height:   uiw.FlipSmallH,
+			NoFooter: true,
+			OnClose:  closeAll,
+			Back: Fragment(
 				Div(cards...),
 				Div(css.Class("cf-dialog-actions", "cf-ps-actions"),
 					Button(css.Class("btn"), Type("button"), OnClick(doClose),
 						uistate.T("profileSwitch.cancel")),
 				),
 			),
-		),
+		}),
 	)
 }
 
