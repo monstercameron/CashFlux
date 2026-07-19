@@ -101,7 +101,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		if props.OnDrill != nil {
 			// Pass EVERY tracked category so a multi-category budget drills to
 			// transactions in all of them, not just the primary one.
-			props.OnDrill(s.Budget.TrackedCategoryIDs())
+			props.OnDrill(s.Budget.TrackedCategoryIDs(), props.PeriodFrom, props.PeriodTo)
 		}
 	}))
 	// The drill affordances show whenever the budget tracks any category (a
@@ -172,7 +172,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Transactions drill navigates to the filtered ledger.
 	drillMenu := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
-			props.OnDrill(s.Budget.TrackedCategoryIDs())
+			props.OnDrill(s.Budget.TrackedCategoryIDs(), props.PeriodFrom, props.PeriodTo)
 		}
 	}))
 	// Jump to the To-do list PRE-FILTERED to this budget's follow-ups (link=budget +

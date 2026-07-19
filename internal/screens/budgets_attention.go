@@ -60,8 +60,12 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 		return Fragment() // everything healthy → no strip, no clutter
 	}
 
-	// Drill from a problem budget to its spending — the same filter the list rows use.
-	viewTransactions := func(categoryIDs []string) {
+	// Drill from a problem budget to its spending — the same filter the list rows
+	// use, PLUS the budget's own period as a date range: the figures on this
+	// strip describe one period, and landing on the category's full multi-year
+	// history read as a mismatch (UI/UX task #14). The dates arrive as normal,
+	// clearable From/To filter chips, so widening back out is one click.
+	viewTransactions := func(categoryIDs []string, from, to string) {
 		var f uistate.TxFilter
 		switch len(categoryIDs) {
 		case 0:
@@ -70,6 +74,8 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 		default:
 			f.Categories = strings.Join(categoryIDs, ",")
 		}
+		f.From = from
+		f.To = to
 		f = f.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
@@ -88,8 +94,10 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 		func(p budgeting.Problem) ui.Node {
 			return ui.CreateElement(budgetAttentionRow, budgetAttentionRowProps{
 				Status: p.Status, PaceRisk: p.PaceRisk,
-				Category: v.CatName[p.Status.Budget.CategoryID],
-				OnView:   viewTransactions,
+				Category:   v.CatName[p.Status.Budget.CategoryID],
+				PeriodFrom: v.PeriodFrom[p.Status.Budget.ID],
+				PeriodTo:   v.PeriodTo[p.Status.Budget.ID],
+				OnView:     viewTransactions,
 			})
 		})
 
@@ -117,7 +125,12 @@ type budgetAttentionRowProps struct {
 	Status   budgeting.Status
 	PaceRisk bool
 	Category string
-	OnView   func(categoryIDs []string)
+	// PeriodFrom/PeriodTo are the budget's current evaluation window (inclusive
+	// ISO dates) so the View-spending drill scopes the ledger to the period the
+	// strip's figures describe (task #14).
+	PeriodFrom string
+	PeriodTo   string
+	OnView     func(categoryIDs []string, from, to string)
 }
 
 // budgetAttentionRow is one problem budget in the strip: name + spend-of-limit,
@@ -130,7 +143,7 @@ func budgetAttentionRow(props budgetAttentionRowProps) ui.Node {
 		if len(ids) == 0 && s.Budget.CategoryID != "" {
 			ids = []string{s.Budget.CategoryID}
 		}
-		props.OnView(ids)
+		props.OnView(ids, props.PeriodFrom, props.PeriodTo)
 	}))
 
 	var tone, pillTxt string

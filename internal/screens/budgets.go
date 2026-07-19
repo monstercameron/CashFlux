@@ -43,22 +43,28 @@ import (
 // values as plain arguments, so both the summary and list tiles can build it without
 // sharing state.
 type budgetView struct {
-	Base              string
-	Method            budgeting.Methodology
-	Statuses          []budgeting.Status
-	CatName           map[string]string
-	PaceOver          map[string]string                // budgetID → projected overspend (in-progress only)
-	PaceMark          map[string]budgetPaceMark        // budgetID → even-pace tick + caption (BG3, in-progress only)
-	RollCarry         map[string]string                // budgetID → previous-period carry phrase
-	RollNeg           map[string]bool                  // budgetID → carry is negative
-	RollEffCap        map[string]string                // budgetID → effective cap (when it differs from the base limit)
-	RollEffCapMath    map[string]string                // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
-	ProratedRest      map[string]string                // budgetID → even-pace amount left
-	EnvAvail          map[string]string                // budgetID → envelope balance (envelope method)
-	EnvNeg            map[string]bool                  // budgetID → envelope overdrawn
-	EnvDebtStart      map[string]string                // budgetID → BG5 "starts <month> down $X" when overdrawn
-	Covered           map[string]bool                  // budgetID → received cover money this period
-	EffMethod         map[string]budgeting.Methodology // budgetID → resolved method (override or global)
+	Base           string
+	Method         budgeting.Methodology
+	Statuses       []budgeting.Status
+	CatName        map[string]string
+	PaceOver       map[string]string                // budgetID → projected overspend (in-progress only)
+	PaceMark       map[string]budgetPaceMark        // budgetID → even-pace tick + caption (BG3, in-progress only)
+	RollCarry      map[string]string                // budgetID → previous-period carry phrase
+	RollNeg        map[string]bool                  // budgetID → carry is negative
+	RollEffCap     map[string]string                // budgetID → effective cap (when it differs from the base limit)
+	RollEffCapMath map[string]string                // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
+	ProratedRest   map[string]string                // budgetID → even-pace amount left
+	EnvAvail       map[string]string                // budgetID → envelope balance (envelope method)
+	EnvNeg         map[string]bool                  // budgetID → envelope overdrawn
+	EnvDebtStart   map[string]string                // budgetID → BG5 "starts <month> down $X" when overdrawn
+	Covered        map[string]bool                  // budgetID → received cover money this period
+	EffMethod      map[string]budgeting.Methodology // budgetID → resolved method (override or global)
+	// PeriodFrom / PeriodTo map each budget to its CURRENT evaluation window as
+	// inclusive ISO dates, so drill-throughs (e.g. the attention strip's "View
+	// spending") can scope the ledger to the same period the figures describe
+	// instead of dumping the category's full history (UI/UX task #14).
+	PeriodFrom        map[string]string
+	PeriodTo          map[string]string
 	OverCount         int
 	NearCount         int
 	TotalSpent        int64
@@ -372,6 +378,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
 	committedMap := map[string]budgetCommitted{}
+	periodFrom := map[string]string{}
+	periodTo := map[string]string{}
 	recurrings := app.Recurring()
 	// lastMonth (populated only when the "Last month's spend" overlay is on): each
 	// budget's ACTUAL spend last period plus how it compares to this month's budget, so
@@ -385,6 +393,10 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	var pooledRollover int64
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
+		// Inclusive window for drill-throughs: be is the exclusive next-period
+		// start, and the ledger's To bound is inclusive (task #14).
+		periodFrom[b.ID] = dateutil.FormatDate(bs)
+		periodTo[b.ID] = dateutil.FormatDate(be.AddDate(0, 0, -1))
 		// Flag budgets that received cover money this period (quick ref on the row).
 		if !b.CoveredAt.IsZero() && !b.CoveredAt.Before(bs) && b.CoveredAt.Before(be) {
 			covered[b.ID] = true
@@ -657,6 +669,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		Committed:      committedMap,
 		AgeMoney:       ageMoney,
 		Anchor:         anchor,
+		PeriodFrom:     periodFrom,
+		PeriodTo:       periodTo,
 	}
 }
 
@@ -833,9 +847,14 @@ type budgetRowProps struct {
 	Compact           bool                  // compact density: render the one-line row instead of the full card
 	Anchor            time.Time             // the view's period anchor (budgetView.Anchor); zero falls back to now (QA CF-05)
 	OnDelete          func(string)
-	OnRemoveRecurring func(string)               // clear this budget's recurring cover (confirmed)
-	OnDrill           func(categoryIDs []string) // open Transactions filtered to this budget's tracked categories (all of them, for a multi-category budget)
-	OnViewTodos       func()                     // open the To-dos page (shown when LinkedTodos > 0)
+	OnRemoveRecurring func(string) // clear this budget's recurring cover (confirmed)
+	// OnDrill opens Transactions filtered to this budget's tracked categories
+	// (all of them, for a multi-category budget) AND windowed to the budget's
+	// current period (from/to inclusive ISO dates; task #14).
+	OnDrill     func(categoryIDs []string, from, to string)
+	PeriodFrom  string // this budget's current-period start (inclusive ISO date)
+	PeriodTo    string // this budget's current-period end (inclusive ISO date)
+	OnViewTodos func() // open the To-dos page (shown when LinkedTodos > 0)
 }
 
 // budgetLeftValue formats a budget's remaining amount for the summary "Left" stat

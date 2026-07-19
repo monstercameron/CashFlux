@@ -1606,7 +1606,10 @@ func budgetListWidget(props budgetListProps) ui.Node {
 
 	// Drill from a budget to its spending: open Transactions filtered to the budget's
 	// category (mirrors Accounts→Transactions, C30/C50).
-	viewTransactions := func(categoryIDs []string) {
+	// Windowed to the budget's own period (task #14): the row's figures describe
+	// one period, so the drill lands on that period's rows — the From/To arrive
+	// as normal clearable filter chips.
+	viewTransactions := func(categoryIDs []string, from, to string) {
 		var f uistate.TxFilter
 		switch len(categoryIDs) {
 		case 0:
@@ -1616,6 +1619,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		default:
 			f.Categories = strings.Join(categoryIDs, ",") // multi: OR across all tracked categories
 		}
+		f.From, f.To = from, to
 		f = f.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
@@ -1728,6 +1732,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
+					PeriodFrom: v.PeriodFrom[s.Budget.ID], PeriodTo: v.PeriodTo[s.Budget.ID],
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
 					Anchor:    v.Anchor,
 					Committed: v.Committed[s.Budget.ID], HasCommitted: func() bool { _, ok := v.Committed[s.Budget.ID]; return ok }(),
