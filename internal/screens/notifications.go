@@ -420,9 +420,23 @@ func notifyRow(props notifyRowProps) ui.Node {
 	closeOvf := ui.UseEvent(Prevent(func() { ovfOpen.Set(false) }))
 	uiw.DismissPopover(ovfOpen.Get(), ovfID, func() { ovfOpen.Set(false) })
 	uiw.AnchorPopover(ovfOpen.Get(), ovfID)
-	snooze1 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(1) }))
-	snooze7 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(7) }))
-	snooze30 := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); snoozeFor(30) }))
+	// C369: snooze is its own visible, labelled control — a clock glyph with a
+	// "Snooze" tooltip — rather than being buried in the generic ••• overflow (the
+	// reviewer couldn't find it). Its own popover holds the three horizons; the •••
+	// overflow now carries only alert settings + the destructive dismiss.
+	snzOpen := ui.UseState(false)
+	snzID := ui.UseId()
+	toggleSnz := ui.UseEvent(Prevent(func() { snzOpen.Set(!snzOpen.Get()) }))
+	closeSnz := ui.UseEvent(Prevent(func() { snzOpen.Set(false) }))
+	uiw.DismissPopover(snzOpen.Get(), snzID, func() { snzOpen.Set(false) })
+	uiw.AnchorPopover(snzOpen.Get(), snzID)
+	snooze1 := ui.UseEvent(Prevent(func() { snzOpen.Set(false); snoozeFor(1) }))
+	snooze7 := ui.UseEvent(Prevent(func() { snzOpen.Set(false); snoozeFor(7) }))
+	snooze30 := ui.UseEvent(Prevent(func() { snzOpen.Set(false); snoozeFor(30) }))
+	snzHidden := ""
+	if !snzOpen.Get() {
+		snzHidden = " hidden-menu"
+	}
 	ovfSettings := ui.UseEvent(Prevent(func() { ovfOpen.Set(false); uistate.OpenGlobalSettingsAt("alerts") }))
 	ovfDismiss := ui.UseEvent(Prevent(func() {
 		ovfOpen.Set(false)
@@ -518,6 +532,23 @@ func notifyRow(props notifyRowProps) ui.Node {
 			Button(css.Class("notif-primary"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
 				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead),
 				uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(css.Class("notif-primary-label"), readLabel)),
+			// Visible snooze: a clock glyph with a "Snooze" tooltip, opening the three
+			// horizons (tomorrow / next week / next month). No longer buried in •••.
+			Div(css.Class("add-wrap"), Attr("id", snzID),
+				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-snooze-"+it.ID),
+					Attr("aria-label", withTitle(uistate.T("notifications.snooze"))), Title(uistate.T("notifications.snooze")),
+					Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(snzOpen.Get())),
+					OnClick(toggleSnz), uiw.Icon(icon.Clock, css.Class(tw.W4, tw.H4))),
+				Div(ClassStr("add-backdrop"+snzHidden), OnClick(closeSnz)),
+				Div(ClassStr("add-menu"+snzHidden), Attr("role", "menu"),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1d-"+it.ID), OnClick(snooze1), uistate.T("notifications.snooze1d")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1w-"+it.ID), OnClick(snooze7), uistate.T("notifications.snooze1w")),
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-snooze1m-"+it.ID), OnClick(snooze30), uistate.T("notifications.snooze1m")),
+				),
+			),
 			Div(css.Class("add-wrap"), Attr("id", ovfID),
 				Button(css.Class("notif-icon-btn"), Type("button"), Attr("data-testid", "notif-ovf-"+it.ID),
 					Attr("aria-label", withTitle(uistate.T("notifications.moreActions"))), Title(uistate.T("notifications.moreActions")),
@@ -525,12 +556,6 @@ func notifyRow(props notifyRowProps) ui.Node {
 					OnClick(toggleOvf), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 				Div(ClassStr("add-backdrop"+ovfHidden), OnClick(closeOvf)),
 				Div(ClassStr("add-menu"+ovfHidden), Attr("role", "menu"),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "notif-snooze1d-"+it.ID), OnClick(snooze1), uistate.T("notifications.snooze1d")),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "notif-snooze1w-"+it.ID), OnClick(snooze7), uistate.T("notifications.snooze1w")),
-					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-						Attr("data-testid", "notif-snooze1m-"+it.ID), OnClick(snooze30), uistate.T("notifications.snooze1m")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "notif-settings-"+it.ID), OnClick(ovfSettings), uistate.T("notifications.alertSettings")),
 					Button(css.Class("add-item add-item-danger"), Type("button"), Attr("role", "menuitem"),
