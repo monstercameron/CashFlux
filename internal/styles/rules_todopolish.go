@@ -9,38 +9,49 @@ package styles
 // registerGenerated() so it wins the cascade; all tones come from theme tokens so
 // light and dark both read correctly.
 func registerTodoPolish() {
-	// One command bar: a single row that wraps, so the surface reads as a focused
-	// workspace rather than a scattered tool collection. Zones — left (search + active
-	// view), middle (quick views + sort + filters), right (primary Add + More).
+	// One command bar of two deterministic rows (never a single wrapping line whose
+	// overflow scatters the controls): the TOP row is identity + primary action —
+	// search grows to fill the slack, the Add-task/More cluster is pinned right; the
+	// BOTTOM row is view + filters — the display switch and quick-view lens sit left,
+	// the sort/filter pills group right. Only the filter cluster wraps at narrow widths.
 	rule(".todo-cmdbar",
 		display("flex"),
-		flexWrap("wrap"),
-		alignItems("center"),
-		gap("0.5rem"),
+		flexDirection("column"),
+		gap("0.6rem"),
 		marginBottom("0.6rem"),
 	)
-	rule(".todo-cmdbar .cmdbar-group",
+	rule(".todo-cmdbar .cmdbar-row",
 		display("flex"),
-		flexWrap("wrap"),
 		alignItems("center"),
 		gap("0.5rem"),
-	)
-	// The left zone grows so the search box fills the slack; its search pill lifts the
-	// base max-width cap and fills the remaining room.
-	rule(".todo-cmdbar .cmdbar-left",
-		flex("1 1 16rem"),
 		minWidth("0"),
 	)
-	rule(".todo-cmdbar .cmdbar-left .todo-ctrl-search",
+	// Search owns the top row's slack; its pill lifts the base max-width cap.
+	rule(".todo-cmdbar .cmdbar-top .todo-ctrl-search",
 		flex("1 1 auto"),
 		maxWidth("none"),
 		minWidth("8rem"),
 	)
-	// The right zone is pushed to the far edge and holds its natural size — the single
-	// primary action plus the More menu, isolated from the filters.
-	rule(".todo-cmdbar .cmdbar-right",
+	// The primary action cluster holds its natural size at the far edge.
+	rule(".todo-cmdbar .cmdbar-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
 		marginLeft("auto"),
 		flex("none"),
+	)
+	// The views row may wrap as a whole at narrow widths; the filter pills right-align
+	// and wrap as one cluster first, keeping the two switches anchored on the left.
+	rule(".todo-cmdbar .cmdbar-views",
+		flexWrap("wrap"),
+	)
+	rule(".todo-cmdbar .cmdbar-filters",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		justifyContent("flex-end"),
+		gap("0.5rem"),
+		marginLeft("auto"),
 	)
 
 	// Quick-view + display-view segmented controls share the .todo-viewswitch chrome; a

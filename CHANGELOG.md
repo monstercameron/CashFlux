@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **To-do command bar realigned into two fixed rows:** the toolbar no longer relies on a single
+  wrapping flex row (which, at real widths, shrank the search box, orphaned the List/Board/Calendar
+  switch beneath it, and dropped `Add task`/`More tools` onto a mostly-empty third band). Row 1 is
+  identity + primary action — the search pill grows to fill the row with the `Add task` + `More
+  tools` cluster pinned right; row 2 is view + filters — the display switch and All/Today/Overdue
+  lens sit left while Sort/Show/Linked/Hide-done group right on the same baseline. Only the filter
+  cluster wraps at narrow widths, so the bar degrades predictably instead of scattering.
 - **Motion & interaction spec adherence (v1.2.3 motion spec, 2026-07-19):** the whole app now runs
   on the spec's single duration scale (`--motion-instant/micro/fast/standard/layout/overlay/data/
   narrative` = 0/80/120/180/240/280/320/450ms; legacy `--motion-base/medium/slow` alias onto it)

@@ -249,10 +249,12 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	if search.Get() != "" {
 		searchCls += " is-active"
 	}
-	// One standardized command bar (not a scattered tool collection): LEFT = search +
-	// the active display view; MIDDLE = the quick-view lens, sort, and the task filters;
-	// RIGHT = a single primary action (Add task) and one "More" menu for uncommon tools
-	// (the checklist templates). Zones are laid out by .todo-cmdbar (registerTodoPolish).
+	// One standardized command bar of two fixed rows (never a wrap-dependent single
+	// line): TOP = search filling the slack + the primary action cluster (Add task and
+	// the "More" menu of uncommon tools — the checklist templates) pinned right;
+	// BOTTOM = the display-view switch and quick-view lens on the left, with sort and
+	// the task filters grouped on the right. Rows are laid out by .todo-cmdbar
+	// (registerTodoPolish).
 	searchCtrl := Label(ClassStr(searchCls),
 		uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 		Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
@@ -313,21 +315,23 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 		Span(uistate.T("todo.addTask")))
 
 	toolbar := Div(css.Class("todo-cmdbar"),
-		Div(css.Class("cmdbar-group cmdbar-left"),
+		Div(css.Class("cmdbar-row cmdbar-top"),
 			searchCtrl,
-			viewSwitch,
+			Div(css.Class("cmdbar-actions"),
+				addBtn,
+				moreMenu,
+			),
 		),
-		Div(css.Class("cmdbar-group cmdbar-mid"),
+		Div(css.Class("cmdbar-row cmdbar-views"),
+			viewSwitch,
 			quickSwitch,
 			boardGroupCtrl,
-			sortCtrl,
-			prioCtrl,
-			linkCtrl,
-			hideToggle,
-		),
-		Div(css.Class("cmdbar-group cmdbar-right"),
-			addBtn,
-			moreMenu,
+			Div(css.Class("cmdbar-filters"),
+				sortCtrl,
+				prioCtrl,
+				linkCtrl,
+				hideToggle,
+			),
 		),
 	)
 	return uiw.Widget(uiw.WidgetProps{

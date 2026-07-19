@@ -1,3 +1,25 @@
+## 2026-07-19 — to-do command bar: two fixed rows instead of a wrap-fallback
+
+Cam flagged the to-do toolbar layout as broken. Screenshot at 1600px confirmed the degenerate
+state: the one-row `.todo-cmdbar` (three zoned groups, `flex-wrap: wrap`) never actually fits —
+the middle zone (lens + three labelled dropdowns + Hide done, ~870px) plus the right zone starved
+`.cmdbar-left` below its content width, so the left zone wrapped *internally* (view switch under a
+shrunken search) and the right zone wrapped onto a third band where `margin-left: auto` left the
+primary `Add task` floating beside ~60% dead space. The visible layout was the wrap emergency
+fallback, not a design — and it would re-degenerate differently at every width.
+
+Fix: make the two rows *intentional* and deterministic. `.todo-cmdbar` is now a column of two
+`.cmdbar-row`s: TOP = search (grows, owns the slack) + `.cmdbar-actions` (Add task + More tools)
+pinned right — the primary action gets the prime, stable spot; BOTTOM = `.cmdbar-views` with the
+display switch + quick lens anchored left and `.cmdbar-filters` (Sort/Show/Linked/Hide-done)
+right-aligned on the same baseline, the only cluster allowed to wrap at narrow widths. Ironically
+DEVLOG line 652 records the *opposite* migration (two-row `.filter-toolbar` → one zoned cmdbar);
+the lesson is that the one-row form only works if the controls actually fit — with seven control
+groups they don't, and the wrap fallback is worse than the two-row layout it replaced. Markup:
+`todo_tiles.go` regroup only, all testids + hook positions unchanged; CSS: `rules_todopolish.go`.
+Verified via gwc hot rebuild + Playwright screenshots (sample data, /todo): both rows on one
+baseline each, dead band gone, card ~50px shorter. `go test ./...` green.
+
 ## 2026-07-19 — v1.2.3 motion & interaction spec adherence pass (whole app)
 
 Scope: refine the app's interaction model onto the July 19 motion spec — one duration scale, three
