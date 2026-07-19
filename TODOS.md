@@ -809,6 +809,13 @@ Smart/+ contextual UI primitive backlog - research addendum, no new R-series:
 7. [ ] **R21-sample-transfers (C206, separate commit)** — convert the 4 loans' monthly payments from categorized expenses to checking→liability transfers (mirror the credit-card addTransfer) so balances actually amortize; re-check budget/chart history.
 
 ### ★ IMPL plan — R23 investment holdings/performance/allocation (C219-C222, from R23 design)
+> ✅ **STALE — SHIPPED (verified in-code 2026-07-19).** The boxes below were never ticked, but the
+> feature exists end-to-end: `internal/portfolio/` (calc), `domain.Holding` (entities.go:1263),
+> Holdings CRUD in store/appstate, the widgetized `/investments` surface
+> (`internal/screens/investments*.go`), and `internal/reports/investperf.go` (+CSV) in Reports.
+> Remaining genuine gaps are filed as C376–C381 in the W series (holdings import, sector/geo
+> allocation, fee drag, rebalancing targets, benchmarks, projected cash flow). Same staleness
+> applies to the R23 rows in decomposition batch ~line 3139.
 > Local-first, MANUAL price (no live feed; CurrentPrice+PriceAsOf are the seam a feed would later fill). Investment accts are balance-only today (no Holding type anywhere). Holdings live as a SEPARATE keyed entity (Dataset.Holdings []Holding), NOT Account.Holdings (mirrors Transactions). Pure calc package + tests FIRST.
 1. [ ] **R23-calc** — NEW `internal/portfolio/portfolio.go` (pure, native-test FIRST): `HoldingValue(h)`, `UnrealizedGain(h)`, `ReturnPct(h)` (guard cost==0), `PortfolioSummary(holdings)→{value,cost,gain,returnPct}`, `AllocationWeights(holdings)→[]{label,weight}` (by holding + by asset class). Zero store/UI deps. + portfolio_test.go (zero shares, zero-cost guard, mixed classes).
 2. [ ] **R23-domain** — `domain/entities.go`: add `Holding{ID,AccountID,Ticker,Name,Shares,CostBasis,CurrentPrice,PriceCurrency,PriceAsOf,AssetClass,Custom}` (PriceCurrency per Risk#multi-ccy); `domain/enums.go`: AssetClass consts (equity/bond/cash/real_estate/crypto/other). NAME the allocation type `PortfolioAllocation`/`HoldingWeight` — NOT AllocationProfile (collision w/ capital-allocator at entities.go:161).
@@ -4506,3 +4513,239 @@ struct fields), now living permanently as the **one-way ratchet test**
   `widgetregistry`'s "spotlight" preset content-layout templates ("This month", the Net/saved
   template line) are PERSISTED into the user's widget spec at creation — translate at
   spec-instantiation time (ratchet holds `../widgetregistry` at 2).
+
+## W. Nine-page 10/10 pass — 2026-07-19 (v1.2.6 black-box comp assessment) ★
+
+Source: `Desktop/CashFlux-v1.2.6-nine-page-comp-assessment-2026-07-19/` (black-box review of the
+running UI at 1202×1078, scored 9.0/10 overall vs Monarch/YNAB/Simplifi/Copilot/Rocket/Empower).
+**Key finding from the in-code verification (2026-07-19):** roughly half of what the reviewer
+called "missing" is SHIPPED but undiscoverable — the rules workbench (`/rules`), the undo engine +
+`/activity` ledger, the full `/investments` surface, saved report views + snapshots, the goal
+scenario slider (`goals/slider.go`) + trajectory bands, task recurrence/checklists (`taskrecur`,
+`taskchecklist`), notification snooze/quiet-hours/digest, and dashboard Focus presets all exist.
+So this series is ordered **surfacing first, new systems second** — cheapest points first. The
+reviewer's own priority order (report §"Priority order to reach a durable 9.5+") is preserved
+within the new-system groups. Discipline: every ticket lands bottom-up per the SDLC rule; **all
+new copy goes through `en_*.go` keys (screenlint ratchet is at 0 for the UI layer — keep it
+there)**; durable pref/state changes need `uistate.RequestPersist()`.
+
+### W1 — Surfacing: make shipped systems findable (the reviewer missed them)
+
+- [ ] **C363 [MAJOR][TXN] Surface Rules from Transactions as a first-class workbench entry.**
+  Reviewer: "Rules are not surfaced as a first-class workbench from the main page." `/rules` is a
+  full workbench (multi-condition, live preview, backfill, drag ordering, shadow/no-match conflict
+  flags) and `createRuleFromTxn` already prefills from a row — but nothing on /transactions points
+  there. Add a labeled Rules entry to the toolbar (with active-rule count) and keep the row-kebab
+  "Create rule from this transaction" path prominent. AC: /transactions → /rules in one visible click.
+- [ ] **C364 [MAJOR][UNDO] Tell the undo story at the moment of risk.** Reviewer: "needs a clearer
+  undo story for bulk categorization, imports, duplicate resolution, and AI extraction." The story
+  exists (`internal/history` diff-stack, Ctrl+Z/Shift+Z, `/activity` audit timeline, checkpoint
+  before bulk rules-apply) — it's just silent. Every bulk-mutation completion toast (bulk
+  recategorize, import commit, duplicate merge, rules apply, AI changeset apply) states
+  "Undo (Ctrl+Z) · View in Activity" with a working /activity link. AC: no bulk operation completes
+  without an on-screen reversal affordance.
+- [ ] **C365 [MAJOR][ACCT] Link the investments experience from Accounts.** Reviewer: "no visible
+  holdings-level investment experience on this page" — `/investments` (holdings, allocation,
+  per-account pools, growth) exists but Accounts never mentions it. Investment-section header gets
+  summary chips (value / gain / return% from `portfolio.PortfolioSummary`) + "Open investments";
+  each investment account row deep-links to its pool. AC: reviewer path Accounts → holdings ≤ 1 click.
+- [ ] **C366 [MINOR][DASH] Explain Focus presets in the picker.** Reviewer couldn't tell if Focus
+  changes "layout, content, or only emphasis" (it swaps the widget set AND compacts the hero).
+  One-line description per preset in `dashPresetPicker` + a "swaps widgets & detail level" subtitle.
+- [ ] **C367 [MINOR][GOAL] Promote the goal scenario tools.** Reviewer asked for an "Add $X/month
+  scenario slider with new completion date" — `goals/slider.go` (SliderRange/SliderPointAt/Ticks)
+  and `goaltrajectory.ProjectScenarios` already compute exactly this. Put a visible "What if I add
+  more?" affordance on the goal card/detail that opens the slider; show the conservative/expected/
+  best landing band alongside.
+- [ ] **C368 [MINOR][TODO] Expose recurrence + reminder lead time in the Add/Edit task form.**
+  Reviewer: "No recurrence field in Add task. No reminder control." `taskrecur.NextOccurrence`
+  (auto-respawn on completion) and `ReminderDue` exist — the form just never asks. Add a repeat
+  picker (off/daily/weekly/monthly/…) + reminder-offset field; recurring tasks show a repeat glyph.
+- [ ] **C369 [MINOR][NOTIF] Make snooze, quiet hours, and digest cadence visible.** Reviewer: "No
+  obvious snooze. No quiet hours or digest schedule." All three exist (`SnoozeFeedItem` +
+  1d/1w/1mo actions; `Rule.QuietStartMin/EndMin`; `default-digest` + `DigestCandidates`). Give
+  Needs-you rows a visible snooze control (not buried), and surface quiet-hours + digest cadence
+  in the alert-settings panel itself.
+- [ ] **C370 [MINOR][AI] Token/cost display honesty.** Reviewer: labels don't say per-response vs
+  cumulative; "$0.00 at thousands of tokens is too imprecise." Label per-message usage "this reply"
+  and the header total "this conversation"; `FormatCostUSD` renders sub-cent as "$0.004" (or
+  "<$0.01"), never $0.00 for nonzero tokens.
+- [ ] **C371 [MINOR][BUD] Make the 12-month annual grid discoverable.** Reviewer: "Future-month
+  planning is not as visible as current-month correction" — `BudgetAnnualGrid`
+  (plan-vs-actual matrix, year nav, drill-down) exists. Add a labeled "Plan the year" entry point
+  from the default budgets view; land on the current month with future months visually distinct.
+
+### W2 — Transaction rules workbench maturity + review triage (reviewer priority 1)
+
+- [ ] **C372 [MAJOR][RULES] Persist per-rule hit counts + last-run status.** Today the workbench
+  shows a live recomputed match count (`MatchCountFull` each render) — there is no durable
+  "fired N times, last run <date>". Add `HitCount`/`LastRunAt` to the rule entity, increment on
+  auto-apply/backfill/bulk apply, render as chips on each rule row. (Benchmark: Monarch rules.)
+- [ ] **C373 [MAJOR][RULES] Rule-action coverage audit vs the commercial benchmark.** Reviewer
+  benchmark set: rename, categorize, tag, member assignment, review status, exclude, split,
+  goal-link. Audit `internal/rules` action coverage and fill the gaps (member assignment, review
+  status, and goal-link are the suspected missing ones); each new action appears in the add-form
+  and in preview lines.
+- [ ] **C374 [MAJOR][TXN] Review-inbox triage header.** Reviewer: "A 252-item review backlog lacks
+  a visible triage summary or confidence breakdown." Header over the inbox: N auto-categorized
+  high-confidence / N needs a look / N possible duplicates, with one-click "Accept all
+  high-confidence" (undoable per C364).
+- [ ] **C375 [MINOR][TXN] Toolbar density pass.** Reviewer: Review inbox, Clear filters, Views,
+  More, Add, chips all compete. Fold Clear-filters + Views + More into a single Views menu; keep
+  Review inbox, search, and Add as the only top-level actions.
+
+### W3 — Investment analysis depth (reviewer priority 2; base surface already shipped)
+
+- [ ] **C376 [MAJOR][INVEST] Holdings CSV/paste import.** Only manual per-row add exists. Reuse
+  the transaction CSV mapping-wizard machinery for a holdings import (ticker, name, shares, cost
+  basis, price, as-of, class), preview before commit, dedupe by account+ticker (merge = update
+  shares/price), undoable.
+- [ ] **C377 [MAJOR][INVEST] Sector + geography allocation.** `AllocationByAssetClass`/`BySecurityType`
+  exist; reviewer benchmark (Empower) adds sector + geography. Add optional Sector/Region fields to
+  `domain.Holding`, allocation views for both, "unclassified" bucket when unset.
+- [ ] **C378 [MINOR][INVEST] Fee drag.** Optional expense-ratio (bps) per holding → annual fee-drag
+  line in the portfolio summary ("fees cost ≈ $X/yr at current value"), pure calc in
+  `internal/portfolio` first.
+- [ ] **C379 [MAJOR][INVEST] Rebalancing targets + drift.** Target % per asset class (per household),
+  drift view (current vs target with over/under bars), and suggested *virtual* rebalancing moves
+  (no real money — consistent with the goals set-aside language).
+- [ ] **C380 [MINOR][INVEST] User-imported benchmark + balance-history series.** CSV import of a
+  benchmark series and of investment-account balance history; growth chart gains a comparison
+  overlay. Keeps the no-live-market-data constraint.
+- [ ] **C381 [MINOR][ACCT] Projected account cash flow on account detail.** From local recurring
+  data (`internal/forecast` exists): next-90-day inflow/outflow projection line under the balance
+  chart, per account.
+
+### W4 — Reports: builder, ranges, export (reviewer priority 3)
+
+- [ ] **C382 [MAJOR][RPT] Custom report builder.** Reviewer: authored annual review, "no obvious
+  saved custom views… no visible filter set." (`savedreports` DOES store name+From/To+scope, cap
+  20 — reviewer missed it, so also surface it better.) Build the general layer: dimension picker
+  (date range, accounts, members, categories, tags, transaction types) × metric → table + chart,
+  saveable as a named view via the existing `savedreports` seam.
+- [ ] **C383 [MAJOR][RPT] First-class date-range + comparison-period pickers on the live report.**
+  The annual report is fixed 12-trailing-months with automatic YoY (`yoy.go`). Add a visible
+  arbitrary range picker and a user-chosen comparison period ("vs same period last year / prior
+  period / custom").
+- [ ] **C384 [MINOR][RPT] Export coverage audit.** CSV exists for ~9 typed tables and "Save as PDF"
+  is browser print. Audit: every table gets CSV; add a print stylesheet pass so print-to-PDF is
+  clean (page breaks per chapter, no nav chrome).
+- [ ] **C385 [MINOR][RPT] Methodology drawer.** Reviewer: "broad benchmark language without
+  exposing the benchmark source inline." Per-section "How this is computed" drawer: score
+  formulas, benchmark values + where they come from, exclusions (feed from `internal/provenance`
+  where applicable).
+- [ ] **C386 [MINOR][RPT] Clickable drill-downs on every chart.** Some exist (annual-grid cells,
+  category links). Audit all report charts; every mark drills to the filtered transaction list.
+
+### W5 — Assistant trust: evidence, permission, undo (reviewer priority 4)
+
+- [ ] **C387 [MAJOR][AI] "How I calculated this" citations on numeric answers.** KPI provenance
+  (`internal/provenance`) and explain-seeding (`internal/explainseed`) exist, but chat answers
+  carry no structured citations. Tools that return figures also return a provenance payload (txn
+  count/IDs, accounts, date range, exclusions); render an expandable citation block under the
+  answer. AC: any numeric claim in a reply can be expanded to its source rows.
+- [ ] **C388 [MAJOR][AI] Permission preview before approval.** `pendingApproval.preview` exists;
+  upgrade it to a structured preview derived from the changeset: data read, data changed
+  (entity + count), exact scope — before Approve/Decline.
+- [ ] **C389 [MAJOR][AI] Action history with per-action undo.** `agentreceipt` summarizes ops and
+  `/activity` records diffs — connect them: each receipt line links its audit entry with an Undo
+  button where safe (leverages the C364 checkpoint discipline).
+- [ ] **C390 [MINOR][AI] Per-conversation model + token-cap controls.** `agent.Options.TokenBudget`
+  exists (stop reason "budget") — expose model picker + budget cap per conversation in the chat
+  header; show remaining budget.
+- [ ] **C391 [MINOR][AI] Smart-findings grouping + confidence.** Reviewer: "repetitive list of
+  similar missing-bill notices." Group same-kind findings into one expandable row with a count;
+  attach a confidence tier per finding.
+- [ ] **C392 [MINOR][AI] IA cleanup: Ask / Insights / Automations.** Reviewer: "Ask, Insights,
+  Smart, and the broader Smart page overlap conceptually." Rename the tabs to Ask (conversation) /
+  Insights (generated analysis) / Automations (enabled smart rules); the Automations tab hosts the
+  enable/disable state and links to the full /smart catalog instead of duplicating it.
+
+### W6 — Budgets forward planning (reviewer priority 5)
+
+- [ ] **C393 [MAJOR][BUD] Scenario mode on the annual grid.** "If income changes by X, what becomes
+  underfunded?" — `internal/whatif` exists as the seam. Grid gains a scenario toggle: adjust
+  income ±X (or a category ±X), underfunded cells/months highlight, nothing persists unless
+  explicitly applied.
+- [ ] **C394 [MINOR][BUD] Project recurring bills + goal contributions into future months.** Future
+  cells of the annual grid pre-fill from recurring schedules + goal funding plans (distinct
+  "projected" styling vs planned vs actual).
+- [ ] **C395 [MINOR][BUD] Rollover legibility per category.** Engine + per-budget fields exist
+  (`budgeting/rollover.go`, caps, carried-over badge). Make policy legible at a glance: rollover
+  badge on every row (off / rolls / capped N periods) + popover explaining this month's carryover math.
+- [ ] **C396 [MINOR][BUD] Calm the over-budget treatment + density pass.** Reviewer: diagonal fills
+  "more visually aggressive than necessary"; list "still visually dense." Replace diagonals with a
+  flat status tone + thin overflow marker; tighten row chrome (respect the existing density pref).
+- [ ] **C397 [MINOR][BUD] "Smart" affordance clarity.** Reviewer: "'Smart' is too vague and
+  unexpectedly navigates." Label it as navigation ("Smart features →") with a tooltip naming the
+  destination, or open an in-place popover instead.
+
+### W7 — Goals: scenarios visible, history prominent (reviewer priority 6)
+
+- [ ] **C398 [MINOR][GOAL] Compare: explain eligibility + priority-order scenarios.** Reviewer got
+  two eligible goals "with no explanation of the eligibility rule" (no eligibility concept exists
+  in code — define + state it inline), and comparison is figure-based: add "compare funding
+  orders" showing which goal lands earlier/later when priorities swap (funding order + allocate
+  ranking already exist).
+- [ ] **C399 [MINOR][GOAL] Contribution calendar + planned-vs-actual chart.** `Goal.Contributions`
+  log exists (cap 50, undo-last). Add a per-goal contribution history panel (calendar/list) + a
+  planned-vs-actual monthly chart; roll entries older than the cap into monthly aggregates so
+  history survives the 50-entry cap.
+- [ ] **C400 [MINOR][GOAL] Persistent saved-vs-set-aside explainer.** Card legend exists; add a
+  page-level one-liner ("Saved = money in linked accounts · Set aside = earmarked, nothing moves")
+  + glossary popover.
+- [ ] **C401 [MINOR][GOAL] One-click actions from Needs a plan.** Re-date, increase contribution,
+  pause, archive — directly on the Needs-a-plan rows (today they require opening the goal).
+
+### W8 — To-do: bulk, reminders, automations (reviewer priority 7)
+
+- [ ] **C402 [MAJOR][TODO] Bulk select / assign / complete / reschedule.** No selection mechanism
+  exists in list or board. Checkbox multi-select + action bar (assign member, complete, due-date
+  shift, delete), undoable.
+- [ ] **C403 [MINOR][TODO] Browser reminders with offsets.** `taskrecur.ReminderDue` feeds the
+  attention digest only. Wire task reminders into the notification feed + browser notifications
+  (existing notify targets), honoring the per-task offset from C368.
+- [ ] **C404 [MINOR][TODO] Saved views + single adaptive toolbar.** Reviewer: "Three control rows
+  create toolbar density." Persist named filter/sort/view combos; collapse the three rows into one
+  toolbar + a filters popover (FilterToolbar pattern).
+- [ ] **C405 [MINOR][TODO] Automation-rule presets + template gallery.** Only 2 templates exposed.
+  Ship the reviewer's four as workflow-engine presets surfaced from More tools (subscription price
+  change → task; overdue bill → task; monthly reconciliation; quarterly account update) + grow the
+  financial template list (checklists via `taskchecklist`).
+- [ ] **C406 [MINOR][TODO] Note truncation.** List view clamps notes to 2 lines with expand-on-click
+  instead of heavy truncation.
+
+### W9 — Notifications: routing, evidence, copy (reviewer priority 8)
+
+- [ ] **C407 [MAJOR][NOTIF] Per-member routing.** No MemberID exists on `notify.Rule`/`Target` —
+  notifications are household-wide. Add optional member ownership on rules + a member filter in
+  the center + member chip on rows; digests can be per-member.
+- [ ] **C408 [MAJOR][NOTIF] Alert evidence + rule test/preview.** Feed candidates carry only
+  Title/Body. Add a structured Reason (rule fired, threshold, observed value, entity link) rendered
+  as "Why this fired"; alert settings gain a "Test this rule" preview showing what would fire today.
+- [ ] **C409 [MINOR][NOTIF] Direct Resolve actions on actionable alerts.** Bill-due → Mark paid /
+  Remind me; stale account → Mark updated; budget limit → open category — inline on the row
+  (some routes exist in `notifyroutes` — complete the set).
+- [ ] **C410 [MINOR][NOTIF] Copy + navigation fixes.** (a) `notify.billBody` "Due in %d days."
+  special-cases 0 → "Due today" / 1 → "Due tomorrow" (the feed-side fix landed; the i18n template
+  can still render "Due in 0 days"). (b) Humanize rule names in settings — reviewer saw raw
+  `default-unusual`. (c) "Alert settings" deep-links to the anchored alerts subsection, not the
+  top of the full Settings page.
+- [ ] **C411 [MINOR][NOTIF] Row interaction ambiguity.** One primary affordance per row (the
+  chevron); secondary actions fold into the kebab; hover reveals, keyboard reachable.
+
+### W10 — Density + polish across pages (reviewer priority 9)
+
+- [ ] **C412 [MINOR][ACCT] Collapsible institution/group sections with subtotals; demote
+  Update-balance.** Reviewer: "long flat account list… every manual row has a prominent Update
+  balance button." Group headers get subtotals + collapse; Update balance moves to hover-reveal /
+  kebab (destructive-stays-in-kebab rule already holds — this is the everyday-action inverse:
+  keep ONE inline everyday action max).
+- [ ] **C413 [MINOR][ACCT] Account-detail chart depth.** 90-day chart gains a range picker
+  (90d / 12m / all) + optional overlay of the C381 projection.
+- [ ] **C414 [MINOR][DASH] Recap labels + attention tiers.** Fix Monthly-recap label ellipsis at
+  compact width (content-width breakpoint vars, not viewport). Render Needs-attention severity
+  tiers distinctly (Critical vs Warning vs Info visual weight — `attention.Rank` already scores
+  them; today rows read equally weighted).
+- [ ] **C415 [MINOR][DASH] Edit-mode calm.** Resize/settings handles appear on hover/selection
+  only, not on every widget simultaneously.

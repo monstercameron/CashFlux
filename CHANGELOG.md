@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **W-series backlog (C363–C415) planned from the v1.2.6 nine-page black-box assessment** —
+  53 tickets in `TODOS.md` targeting a durable 9.5–10/10: surfacing pass first (rules workbench,
+  undo/Activity, /investments, goal scenarios, task recurrence, notification snooze, Focus presets
+  all exist but were undiscoverable to the reviewer), then rules-workbench maturity, investment
+  depth, report builder/export, assistant trust (citations/permission/undo), budget scenario mode,
+  goals/to-do/notifications gaps, and a cross-page density pass. Also corrected the stale R23
+  investment IMPL plan (shipped but never ticked).
+
 ## [1.2.6] - 2026-07-19
 
 Release: complete internationalization of the UI layer (zero hardcoded copy, ratchet-enforced),
