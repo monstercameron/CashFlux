@@ -1942,15 +1942,15 @@ func registerGenerated() {
 		flexDirection("column"),
 		gap("1rem"),
 	)
-	ruleMedia("(min-width: 1024px)", ".bills-layout",
+	ruleContentMin(1024-railCollapsedPx, ".bills-layout",
 		flexDirection("row"),
 		alignItems("flex-start"),
 	)
-	ruleMedia("(min-width: 1024px)", ".bills-layout > .card:first-child",
+	ruleContentMin(1024-railCollapsedPx, ".bills-layout > .card:first-child",
 		flex("1 1 auto"),
 		minWidth("0"),
 	)
-	ruleMedia("(min-width: 1024px)", ".bills-layout > .card:last-child",
+	ruleContentMin(1024-railCollapsedPx, ".bills-layout > .card:last-child",
 		flex("0 0 320px"),
 	)
 	rule(".bill-sub-actions",
@@ -2367,27 +2367,33 @@ func registerGenerated() {
 		opacity("0.45"),
 		cursor("default"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table, .txn-table tbody, .txn-table tr, .txn-table td",
+	// Ledger card mode keys on CONTENT width (breakpoints.go), not the viewport:
+	// the table stays a table while the pane can hold its columns (≥ contentGrid4)
+	// and becomes stacked cards below that — the same cutover whether the pane is
+	// narrow because the window is, or because the expanded rail is eating 240px.
+	// (Was a viewport ≤1200px rule, which carded a roomy collapsed-rail pane and
+	// clipped an expanded-rail one at 1201+.)
+	ruleContentMax(contentGrid4, ".txn-table, .txn-table tbody, .txn-table tr, .txn-table td",
 		display("block"),
 		width("100%"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table thead",
+	ruleContentMax(contentGrid4, ".txn-table thead",
 		display("none"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table tbody tr.row",
+	ruleContentMax(contentGrid4, ".txn-table tbody tr.row",
 		border("1px solid var(--border)"),
 		borderRadius("var(--radius)"),
 		marginBottom("0.5rem"),
 		padding("0.3rem 0.5rem"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table tbody td",
+	ruleContentMax(contentGrid4, ".txn-table tbody td",
 		border("0"),
 		padding("0.15rem 0.2rem"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table .td-amount",
+	ruleContentMax(contentGrid4, ".txn-table .td-amount",
 		textAlign("left"),
 	)
-	ruleMedia("(max-width: 1200px)", ".txn-table td.row-desc",
+	ruleContentMax(contentGrid4, ".txn-table td.row-desc",
 		maxWidth("none"),
 		whiteSpace("normal"),
 	)
@@ -4614,7 +4620,7 @@ func registerGenerated() {
 		gap("28px"),
 		alignItems("start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".studio-design-grid",
+	ruleContentMax(contentTwoCol, ".studio-design-grid",
 		gridTemplateColumns("1fr"),
 	)
 	rule(".studio-form",
@@ -10511,30 +10517,63 @@ func registerGenerated() {
 		paddingLeft("0"),
 		paddingRight("0"),
 	)
-	ruleMedia("(max-width: 767px)", ".bento",
-		gridTemplateColumns("1fr !important"),
-		gridTemplateRows("none !important"),
-		gridAutoRows("minmax(var(--cell), auto) !important"),
-	)
-	ruleMedia("(max-width: 767px)", ".bento > *",
-		gridColumn("1 / -1 !important"),
-		gridRow("auto !important"),
+	// Bento column regimes key on CONTENT width (breakpoints.go): 4 columns by
+	// default, 2 flow-placed columns below contentGrid4, a single column below
+	// contentGrid1 — the same cutovers whether the pane is narrow because the
+	// window is or because the expanded rail is eating 240px. Tracks are always
+	// minmax(0,1fr): a bare 1fr track keeps its min-content floor, and one wide
+	// tile (a table, a long flex row) silently pushed the whole grid past the
+	// pane's right edge with no scrollbar (the v1.2.4 responsiveness audit's
+	// top defect, /budgets + /todo + /accounts at 1024px).
+	// Shrink safety for the tiles themselves: a grid item's min-width:auto
+	// floor otherwise lets its content overflow a shrunken track.
+	rule(".bento > .w",
+		minWidth("0"),
 	)
 	ruleMedia("(max-width: 1024px)", ".row",
 		flexWrap("wrap"),
 		rowGap(".4rem"),
 	)
-	ruleMedia("(min-width: 768px) and (max-width: 1024px)", ".bento",
-		gridTemplateColumns("repeat(2, 1fr) !important"),
+	ruleContentMax(contentGrid4, ".bento",
+		gridTemplateColumns("repeat(2, minmax(0,1fr)) !important"),
 		gridTemplateRows("none !important"),
 		gridAutoRows("minmax(var(--cell), auto) !important"),
 	)
-	ruleMedia("(min-width: 768px) and (max-width: 1024px)", ".bento > *",
+	ruleContentMax(contentGrid4, ".bento > *",
 		gridColumn("auto !important"),
 		gridRow("auto !important"),
 	)
-	ruleMedia("(min-width: 768px) and (max-width: 1024px)", ".bento > *:first-child",
+	ruleContentMax(contentGrid4, ".bento > *:first-child",
 		gridColumn("1 / -1 !important"),
+	)
+	// The single-column regime is emitted AFTER the 2-column one so it wins the
+	// shared !important cascade below contentGrid1.
+	ruleContentMax(contentGrid1, ".bento",
+		gridTemplateColumns("minmax(0,1fr) !important"),
+		gridTemplateRows("none !important"),
+		gridAutoRows("minmax(var(--cell), auto) !important"),
+	)
+	ruleContentMax(contentGrid1, ".bento > *",
+		gridColumn("1 / -1 !important"),
+		gridRow("auto !important"),
+	)
+	// SURFACE bentos (.bento-todo, .bento-budgets, .bento-accounts, …) are not
+	// packed tile mosaics — they're page compositions (hero strip, toolbar,
+	// main list beside a side rail) whose tiles place themselves with inline
+	// spans over the 4-column template. Flow-packing those tiles two-up at
+	// compact widths shreds the composition (a toolbar beside a crushed task
+	// list), so below contentTwoCol every surface tile stacks full-width in
+	// source order — the drawer/stack behavior the two-column page layouts
+	// already adopt at that width. The attribute selector out-specifies the
+	// packed-bento rules above, so this wins wherever both apply.
+	ruleContentMax(contentTwoCol, ".bento[class*=\"bento-\"]",
+		gridTemplateColumns("minmax(0,1fr) !important"),
+		gridTemplateRows("none !important"),
+		gridAutoRows("auto !important"),
+	)
+	ruleContentMax(contentTwoCol, ".bento[class*=\"bento-\"] > *",
+		gridColumn("1 / -1 !important"),
+		gridRow("auto !important"),
 	)
 	ruleMedia("(max-width: 767px)", ".page .stat-grid",
 		gridTemplateColumns("repeat(auto-fit, minmax(120px, 1fr)) !important"),

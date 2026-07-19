@@ -58,7 +58,7 @@ func registerWorkflowsSurface() {
 		prop("gap", "1.5rem"),
 		prop("align-items", "start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".wf-quick-grid",
+	ruleContentMax(contentTwoCol, ".wf-quick-grid",
 		prop("grid-template-columns", "minmax(0, 1fr)"),
 	)
 	rule(".wf-quick-panel",
@@ -139,7 +139,7 @@ func registerWorkflowsSurface() {
 		prop("gap", "2.5rem"),
 		prop("align-items", "start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".wf-grid",
+	ruleContentMax(contentTwoCol, ".wf-grid",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
@@ -278,7 +278,7 @@ func registerWorkflowsSurface() {
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
-	ruleMedia("(max-width: 1100px)", ".wf-composer",
+	ruleContentMax(contentTwoCol, ".wf-composer",
 		prop("border-left", "none"),
 		prop("padding-left", "0"),
 		prop("max-width", "34rem"),

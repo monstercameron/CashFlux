@@ -135,7 +135,7 @@ func registerReportsSurface() {
 		prop("align-items", "start"),
 		prop("margin-bottom", "0.75rem"),
 	)
-	ruleMedia("(max-width: 1100px)", ".rpt-chart-pair",
+	ruleContentMax(contentTwoCol, ".rpt-chart-pair",
 		prop("grid-template-columns", "1fr"),
 	)
 

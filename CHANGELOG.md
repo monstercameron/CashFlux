@@ -7,6 +7,33 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Content-width breakpoint system — layouts respond to the pane, not the viewport:** the
+  desktop-responsiveness audit's root defect was that every layout breakpoint was a viewport
+  `@media` query while the pane a page actually gets is viewport minus the live rail (240px
+  expanded / 58px collapsed) — so collapsing the sidebar never re-flowed anything, and
+  expanded-rail windows silently clipped content past the pane's right edge with no scrollbar
+  (hidden balances, actions, table columns on /budgets, /todo, /accounts at 1024–1206px).
+  `styles/breakpoints.go` now defines the named scale (`contentGrid1` 710 / `contentGrid4` 966 /
+  `contentTwoCol` 1042 content-px) and `ruleContentMax`/`ruleContentMin` helpers that compile one
+  logical content-width condition into a rail-state pair of media rules, keyed on a new
+  `cf-rail-c` `<html>` mirror class the rail persists through (`uistate/rail.go`). Applied
+  across the app: bento tracks are always `minmax(0,1fr)` (a bare `1fr` track's min-content
+  floor was what pushed grids off-pane), the packed dashboard bento drops 4→2→1 columns by
+  content width, SURFACE bentos (todo/budgets/accounts/goals/notifications/…) stack their tiles
+  full-width below `contentTwoCol` instead of flow-packing a toolbar beside a crushed list, the
+  transaction ledger's table⇄cards cutover keys on `contentGrid4`, the bills two-column layout
+  and every `≤1100px` main+aside composition (assistant deck + drawer, reports chart pair,
+  budgets status strip, fields/workflows/studio composers) key on the content thresholds, and
+  account rows wrap their action cluster at compact widths instead of spilling. Collapsing the
+  rail now visibly re-flows the page in place (2-col ⇄ 4-col at 1180px), and the overflow probe
+  reports zero clipped elements across all nine first pages × 1024/1280/1366/1440/1920px × both
+  rail states.
+
+### Fixed
+- **Rail collapse state survives an immediate reload:** `PersistRailCollapsed` only wrote the
+  settings KV, which reaches IndexedDB on the autosave ticker/pagehide — reloading right after
+  toggling the sidebar silently reverted the choice (the same C2 lost-write class as the budgets
+  prefs). It now calls `RequestPersist()`.
 - **"Add a transaction" uses the large standard flip size:** the quick-add panel moved from a
   bespoke compact 384×420 to the FlipLarge standard (760×720), and its body adopted the
   edit-transaction discipline via `.qa-grid` — labeled fields pair in two calm columns

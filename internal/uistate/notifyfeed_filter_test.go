@@ -168,7 +168,7 @@ func TestDedupeFeed(t *testing.T) {
 		{ID: "a1", Title: "Backup ran", Body: "Your data was backed up."},
 		{ID: "a2", Title: "Backup ran", Body: "Your data was backed up."}, // exact dup of a1
 		{ID: "b", Title: "Bill due", Body: "Rent is due tomorrow."},
-		{ID: "c", Title: "Bill due", Body: "Gym is due tomorrow."}, // same title, different body — kept
+		{ID: "c", Title: "Bill due", Body: "Gym is due tomorrow."},        // same title, different body — kept
 		{ID: "a3", Title: "Backup ran", Body: "Your data was backed up."}, // another dup
 	}
 	got := uistate.DedupeFeed(items)

@@ -426,18 +426,18 @@ func registerAssistantSurface() {
 		prop("min-height", "30rem"),
 		prop("overflow", "hidden"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-deck",
+	ruleContentMax(contentTwoCol, ".ask-deck",
 		prop("grid-template-columns", "minmax(0, 1fr)"),
 		prop("height", "auto"), // stacked: let the page flow
 	)
 	// Stacked below the chat on narrow screens: the aside flows with the page (no cap,
 	// no inner scroll — that only makes sense beside the chat), and the chat takes a
 	// fixed viewport height instead of filling the (now-auto) deck.
-	ruleMedia("(max-width: 1100px)", ".ask-aside",
+	ruleContentMax(contentTwoCol, ".ask-aside",
 		prop("overflow-y", "visible"),
 		prop("padding-right", "0"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-main .chat-console",
+	ruleContentMax(contentTwoCol, ".ask-main .chat-console",
 		prop("flex", "none"),
 		prop("height", "calc(100vh - 15rem)"),
 	)

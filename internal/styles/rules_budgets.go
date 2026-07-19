@@ -852,11 +852,11 @@ func registerBudgetsSurface() {
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
 	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
 	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu.
-	ruleMedia("(max-width: 860px)", ".budget-crow",
+	ruleContentMax(860-railCollapsedPx, ".budget-crow",
 		gridTemplateColumns("minmax(7rem, 1fr) max-content max-content max-content"),
 	)
-	ruleMedia("(max-width: 860px)", ".budget-crow-bar", display("none"))
-	ruleMedia("(max-width: 860px)", ".budget-crow-left", display("none"))
+	ruleContentMax(860-railCollapsedPx, ".budget-crow-bar", display("none"))
+	ruleContentMax(860-railCollapsedPx, ".budget-crow-left", display("none"))
 
 	// --- 2026-07-17 audit P0: the summary's three-column status strip ---
 	// Plan (To-Assign hero / income basis) · Spending (the loader) · Age of money
@@ -922,10 +922,10 @@ func registerBudgetsSurface() {
 	rule(".budget-status-strip .budget-agemoney",
 		marginTop("0"),
 	)
-	ruleMedia("(max-width: 1100px)", ".budget-status-strip",
+	ruleContentMax(contentTwoCol, ".budget-status-strip",
 		gridTemplateColumns("1fr"),
 	)
-	ruleMedia("(max-width: 1100px)", ".budget-strip-cell.is-spend, .budget-strip-cell.is-age",
+	ruleContentMax(contentTwoCol, ".budget-strip-cell.is-spend, .budget-strip-cell.is-age",
 		borderLeft("0"),
 		paddingLeft("0"),
 	)

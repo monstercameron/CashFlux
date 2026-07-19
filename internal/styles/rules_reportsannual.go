@@ -178,7 +178,7 @@ func registerReportsAnnual() {
 	// than yielding to dot+number. Only true mobile (<=640px), where a row of long
 	// names would scroll a long way, falls back to the compact dot+number with the
 	// name preserved in each item's title tooltip.
-	ruleMedia("(max-width: 1280px)", ".rpta-index",
+	ruleContentMax(1280-railCollapsedPx, ".rpta-index",
 		flexWrap("nowrap"),
 		overflowX("auto"),
 	)

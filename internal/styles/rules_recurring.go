@@ -250,11 +250,11 @@ func registerRecurringSurface() {
 	)
 	// Give the calendar a real share of the two-column row (it used to sit at its
 	// natural width), and scale its grid up so dates read at a glance.
-	ruleMedia("(min-width: 1024px)", ".bills-layout > :first-child",
+	ruleContentMin(1024-railCollapsedPx, ".bills-layout > :first-child",
 		prop("flex", "1 1 52%"),
 		prop("min-width", "0"),
 	)
-	ruleMedia("(min-width: 1024px)", ".bills-cal-sticky",
+	ruleContentMin(1024-railCollapsedPx, ".bills-cal-sticky",
 		prop("flex", "1 1 48%"),
 		prop("min-width", "24rem"),
 	)

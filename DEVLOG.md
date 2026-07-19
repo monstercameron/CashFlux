@@ -1,3 +1,58 @@
+## 2026-07-19 — content-width breakpoints: the pane is the unit, not the viewport
+
+Cam handed over a desktop-responsiveness audit (v1.2.3, nine pages × 1024–2560px × both rail
+states, verdict 4.5/10: "silent horizontal clipping inside the application shell") and asked for
+well-defined breakpoints project-wide. First step was re-measuring against TODAY'S build — most
+of the audit was stale (v1.2.4 already fixed the transactions table, toolbars, 1440/1920 cases).
+A Playwright probe that enumerates every element whose right edge passes `#main`'s (outside a
+scrollable ancestor) found the real remaining defect set: /accounts, /budgets, /todo overflowing
+at 1024px, worse with the rail expanded.
+
+Root causes, in order of depth:
+1. **Bare `1fr` grid tracks.** The tablet-band bento override used `repeat(2, 1fr)` — a `1fr`
+   track keeps its min-content floor, so one wide tile blew the track to 742px in a 764px pane
+   and every full-span tile inherited the overflow. The base template's `minmax(0,1fr)` was
+   right all along; the band override wasn't. (Plus `.bento > .w { min-width: 0 }` so tiles
+   can't re-introduce the floor.)
+2. **Viewport queries can't see the rail.** Every layout cutover assumed the collapsed-rail
+   geometry, so a 1366px window with the rail expanded (pane 1126px) kept full-width layouts
+   while a 1024px one clipped. There's no `@media (content-width…)`, and container queries are
+   off the table because pages render position:fixed overlays INSIDE the pane (assistant
+   drawer, ledger action sheets) — a container-type ancestor would become their containing
+   block. So: the rail mirrors its state onto `<html>` as `cf-rail-c` (choke point =
+   `PersistRailCollapsed` + the atom seed, so every writer and boot path hits it), and
+   `styles/breakpoints.go` compiles one logical threshold into a dual `@media` emission —
+   `(max-width: N+58)` bare plus `(max-width: N+240)` behind `:where(html:not(.cf-rail-c))`,
+   the `:where()` keeping specificity identical to an unprefixed rule. Scale:
+   contentGrid1=710, contentGrid4=966, contentTwoCol=1042 (the legacy 768/1024/1100 idioms at
+   their collapsed-rail equivalents, so collapsed behavior is bit-identical to before).
+3. **Flow-packing is wrong for surface bentos.** First cut flowed every bento 2-up at compact
+   widths — fine for the packed dashboard mosaic, shredding for surfaces (/todo's toolbar
+   beside a 1-char-per-line task list). Surfaces are compositions (hero/toolbar/list+rail)
+   placed by inline spans, so `.bento[class*="bento-"]` stacks tiles full-width below
+   contentTwoCol; the attribute selector out-specifies the packed rules where both apply.
+
+Conversions: ledger table⇄cards (was viewport ≤1200 → contentGrid4), bills-layout two-col (was
+viewport ≥1024), every ≤1100 main+aside stack (assistant ×2 files, reports, budgets ×2,
+fields, workflows, studio ×2 + studio-design-grid), reportsannual ≤1280, budgets ≤860, accounts
+row-action wrap. Left as viewport queries on purpose: phone shell (≤640/767), pointer/hover,
+print, and the topbar's own ≤1535 two-row fold (documented in breakpoints.go).
+
+Found and fixed along the way: rail collapse state lost on immediate reload —
+`PersistRailCollapsed` never called `RequestPersist()` (same C2 lost-write class the budgets
+prefs hit; the probe's collapse→reload step exposed it).
+
+Verification: overflow probe now ZERO offenders across 9 routes × {1024,1280,1366,1440,1920} ×
+both rail states; silent-clip probe shows only the documented-intentional tag-chip fade and
+sr-only spans; screenshots confirm 1024-expanded /todo /accounts /budgets /reports read as
+designed compact layouts (full toolbars, stacked composition — not shrunken desktop); live
+toggle at 1180px flips 2⇄4 columns; native `go test ./...` green; new
+`regression/responsive.spec.mjs` ratchets all of it (no-silent-clipping × both rail states ×
+six widths incl. 2560, plus the mirror-class live/persist contract).
+
+Multi-lane note: header/accounts lane active in the same files all session — every staged file's
+hunks were audited as mine-only before commit; their install.go/accounts/detail work untouched.
+
 ## 2026-07-19 — header refine: stable anchors, standard control language, profile-switch fix
 
 Follow-on from the to-do toolbar fix: Cam asked for the header to be glanceable/10-10 and to use

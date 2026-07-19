@@ -5,6 +5,8 @@
 package uistate
 
 import (
+	"syscall/js"
+
 	"github.com/monstercameron/GoWebComponents/v4/state"
 )
 
@@ -51,9 +53,40 @@ func PersistRailCollapsed(collapsed bool) {
 		v = "1"
 	}
 	SettingKVSet(railCollapsedStore, v)
+	// Flush the autosave now: the KV write alone only reaches IndexedDB on the
+	// ticker/pagehide, and a reload right after toggling the rail silently
+	// reverted the choice (same C2 lost-write class as the budgets prefs).
+	RequestPersist()
+	mirrorRailClass(collapsed)
 }
 
 // loadRailCollapsed reads the saved collapsed state, defaulting to expanded.
 func loadRailCollapsed() bool {
-	return SettingKVGet(railCollapsedStore) == "1"
+	collapsed := SettingKVGet(railCollapsedStore) == "1"
+	// Seeding doubles as the boot-time sync for the <html> mirror class (every
+	// later change flows through PersistRailCollapsed, which mirrors again).
+	mirrorRailClass(collapsed)
+	return collapsed
+}
+
+// mirrorRailClass reflects the rail state onto <html> as `cf-rail-c` — the hook
+// the styles package's content-width breakpoint helpers key on
+// (styles/breakpoints.go): a collapsed rail leaves the content pane 182px
+// wider, and layout rules need to know which width they actually have. Class
+// absent = expanded, the conservative default (layouts compact sooner, nothing
+// clips). Idempotent; safe to call on every read.
+func mirrorRailClass(collapsed bool) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	root := doc.Get("documentElement")
+	if !root.Truthy() {
+		return
+	}
+	method := "remove"
+	if collapsed {
+		method = "add"
+	}
+	root.Get("classList").Call(method, "cf-rail-c")
 }

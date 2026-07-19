@@ -90,12 +90,12 @@ func registerLane6Fixes() {
 	rule(".ask-aside-backdrop",
 		display("none"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-aside-toggle",
+	ruleContentMax(contentTwoCol, ".ask-aside-toggle",
 		display("inline-flex"),
 	)
 	// Narrow widths: the aside becomes a right-hand slide-in drawer (it used to
 	// stack below the chat, burying saved conversations under the whole thread).
-	ruleMedia("(max-width: 1100px)", ".ask-aside",
+	ruleContentMax(contentTwoCol, ".ask-aside",
 		position("fixed"),
 		top("0"),
 		right("0"),
@@ -110,10 +110,10 @@ func registerLane6Fixes() {
 		transition("transform .25s ease"),
 		boxShadow("-18px 0 40px -18px rgba(0,0,0,.6)"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-aside.is-open",
+	ruleContentMax(contentTwoCol, ".ask-aside.is-open",
 		transform("translateX(0)"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-aside-close",
+	ruleContentMax(contentTwoCol, ".ask-aside-close",
 		display("inline-flex"),
 		position("absolute"),
 		top("0.6rem"),
@@ -125,7 +125,7 @@ func registerLane6Fixes() {
 		cursor("pointer"),
 		padding("0.3rem"),
 	)
-	ruleMedia("(max-width: 1100px)", ".ask-aside-backdrop",
+	ruleContentMax(contentTwoCol, ".ask-aside-backdrop",
 		display("block"),
 		position("fixed"),
 		inset("0"),

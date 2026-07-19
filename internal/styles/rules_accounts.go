@@ -183,6 +183,18 @@ func registerAccountsSurface() {
 		prop("gap", "0.4rem"),
 		prop("flex-shrink", "0"),
 	)
+	// Compact panes: the head row wraps instead of letting the never-shrinking
+	// actions cluster spill past the pane edge — the cluster drops to its own
+	// right-aligned line under the figure (its margin-left:auto is a no-op
+	// while everything still fits on one line, since the identity column
+	// already absorbs the slack).
+	ruleContentMax(contentGrid4, ".acct-row-head",
+		prop("flex-wrap", "wrap"),
+		prop("row-gap", "0.35rem"),
+	)
+	ruleContentMax(contentGrid4, ".acct-row-actions",
+		prop("margin-left", "auto"),
+	)
 	// The revealed detail block: indented to sit under the name, quietly separated from
 	// the primary line, with comfortable spacing between its stacked items.
 	rule(".acct-row-details",

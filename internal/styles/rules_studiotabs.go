@@ -30,7 +30,7 @@ func registerStudioTabs() {
 		prop("gap", "2.25rem"),
 		prop("align-items", "start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".wman-grid",
+	ruleContentMax(contentTwoCol, ".wman-grid",
 		prop("display", "flex"),
 		prop("flex-direction", "column-reverse"),
 	)
@@ -134,7 +134,7 @@ func registerStudioTabs() {
 		prop("position", "sticky"),
 		prop("top", "1rem"),
 	)
-	ruleMedia("(max-width: 1100px)", ".wman-aside",
+	ruleContentMax(contentTwoCol, ".wman-aside",
 		prop("position", "static"),
 	)
 	rule(".wman-aside-label",
@@ -212,7 +212,7 @@ func registerStudioTabs() {
 		prop("gap", "2.5rem"),
 		prop("align-items", "start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".spg-grid",
+	ruleContentMax(contentTwoCol, ".spg-grid",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
@@ -281,7 +281,7 @@ func registerStudioTabs() {
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
-	ruleMedia("(max-width: 1100px)", ".spg-composer",
+	ruleContentMax(contentTwoCol, ".spg-composer",
 		prop("position", "static"),
 		prop("border-left", "none"),
 		prop("padding-left", "0"),

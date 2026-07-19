@@ -20,11 +20,11 @@ func registerFieldsSurface() {
 		prop("gap", "2.5rem"),
 		prop("align-items", "start"),
 	)
-	ruleMedia("(max-width: 1100px)", ".fld-deck",
+	ruleContentMax(contentTwoCol, ".fld-deck",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
-	ruleMedia("(max-width: 1100px)", ".fld-composer",
+	ruleContentMax(contentTwoCol, ".fld-composer",
 		prop("order", "-1"),
 		prop("position", "static"),
 		prop("border-left", "none"),
