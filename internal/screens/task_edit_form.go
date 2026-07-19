@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
@@ -153,6 +154,13 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 	// a recurrence advances it), so both appear only once a due date is set — a reminder
 	// works for any dated task, recurring or not.
 	editHasDue := strings.TrimSpace(dueS.Get()) != ""
+	// C368: mirror the add form — a quiet hint when no due date is set, so the
+	// hidden Repeat + Remind controls are discoverable rather than silently absent.
+	var editScheduleHint ui.Node = Fragment()
+	if !editHasDue {
+		editScheduleHint = P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "task-edit-schedule-hint"),
+			uistate.T("todo.repeatNeedsDue"))
+	}
 	var remindField, repeatField ui.Node = Fragment(), Fragment()
 	if editHasDue {
 		remindField = labeledField(uistate.T("todo.remind"),
@@ -186,6 +194,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 		// Remind me sits directly under Due date (it's anchored to it), then Repeat.
 		remindField,
 		repeatField,
+		editScheduleHint,
 		If(len(app.Members()) >= 2, labeledField(uistate.T("todo.assignTo"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: taskAssigneeOptions(app.Members(), memberS.Get()), Selected: memberS.Get(),

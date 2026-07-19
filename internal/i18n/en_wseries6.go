@@ -21,6 +21,12 @@ var wseries6Keys = Catalog{
 	"goals.whatIfMore":     "What if I add more?",
 	"goals.whatIfMoreHide": "Hide what-if",
 
+	// ── C368 — task repeat/reminder discoverability ────────────────────────────
+	// The Repeat + Remind controls anchor to a due date and stay hidden until one
+	// is set — which is why the reviewer thought recurrence was missing. This hint
+	// makes the capability discoverable in the add/edit forms.
+	"todo.repeatNeedsDue": "Set a due date to add a repeat or reminder.",
+
 	// ── C370 — token/cost honesty ──────────────────────────────────────────────
 	// The per-message note now says "this reply" so one turn's spend reads as
 	// distinct from the conversation-cumulative receipt ("This chat: …").

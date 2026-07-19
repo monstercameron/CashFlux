@@ -176,6 +176,30 @@ func BoardCard(props boardCardProps) ui.Node {
 		dueNode = Span(ClassStr(dcls), props.DueLabel)
 	}
 
+	// C368: a recurring task carries a repeat glyph on the board too (list/board
+	// parity) so its auto-respawning nature is legible without opening the editor.
+	// A positive reminder lead adds a bell. Icon-only with a tooltip + aria-label
+	// (colour is never the only cue).
+	var metaNode ui.Node = Fragment()
+	var metaKids []ui.Node
+	if t.Recurrence != "" {
+		metaKids = append(metaKids, Span(ClassStr("tdb-meta-glyph"), Attr("data-testid", "tdb-recur-"+t.ID),
+			Attr("role", "img"), Attr("aria-label", taskCadenceLabel(t.Recurrence)), Title(taskCadenceLabel(t.Recurrence)),
+			uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W35, tw.H35))))
+	}
+	if t.ReminderLeadDays > 0 {
+		metaKids = append(metaKids, Span(ClassStr("tdb-meta-glyph"), Attr("data-testid", "tdb-remind-"+t.ID),
+			Attr("role", "img"), Attr("aria-label", taskReminderLabel(t.ReminderLeadDays)), Title(taskReminderLabel(t.ReminderLeadDays)),
+			uiw.Icon(icon.Bell, css.Class(tw.ShrinkO, tw.W35, tw.H35))))
+	}
+	if len(metaKids) > 0 {
+		metaArgs := []any{css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap1, tw.TextFaint)}
+		for _, k := range metaKids {
+			metaArgs = append(metaArgs, k)
+		}
+		metaNode = Span(metaArgs...)
+	}
+
 	// The advance affordance is status-only now (To-do → Done), so it reads as an
 	// explicit "mark done": a check glyph + the target-naming tooltip.
 	var nextNode ui.Node = Fragment()
@@ -201,6 +225,7 @@ func BoardCard(props boardCardProps) ui.Node {
 			Span(css.Class("tdb-card-title"), t.Title),
 		),
 		Div(css.Class("tdb-card-foot"),
+			metaNode,
 			dueNode,
 			nextNode,
 		),

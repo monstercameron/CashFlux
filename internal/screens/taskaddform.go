@@ -193,7 +193,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			ParentID: props.ParentID,
 			Status:   domain.StatusOpen, Priority: domain.TaskPriority(priority.Get()), Due: due, Source: domain.SourceManual,
 			RelatedType: rt, RelatedID: rid,
-			MemberID:    addMember.Get(),
+			MemberID: addMember.Get(),
 		}
 		// Repeat + reminder are anchored to a due date, so they only take effect when one
 		// is set (the UI hides both controls otherwise). A reminder applies to any dated
@@ -254,6 +254,16 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	// before it; a recurrence advances it), so they only appear once a due date is
 	// set — and a reminder works for any dated task, recurring or not.
 	hasDue := strings.TrimSpace(dueStr.Get()) != ""
+	// C368: when no due date is set the Repeat + Remind controls stay hidden (they
+	// anchor to a due date) — which is exactly why the reviewer thought recurrence
+	// was missing. A quiet hint tells the user the controls appear once a due date
+	// is set, so the capability is discoverable rather than silent.
+	var scheduleHint ui.Node = Fragment()
+	if !hasDue {
+		scheduleHint = Div(css.Class("tc-rail-row"),
+			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "task-add-schedule-hint"),
+				uistate.T("todo.repeatNeedsDue")))
+	}
 	var remindRow, repeatRow ui.Node = Fragment(), Fragment()
 	if hasDue {
 		remindRow = Div(css.Class("tc-rail-row"),
@@ -329,6 +339,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 				// Remind me sits directly under Due date (it's anchored to it), then Repeat.
 				remindRow,
 				repeatRow,
+				scheduleHint,
 				// Assignee — only when the household actually has people to pick
 				// between (a solo user never sees a one-option select).
 				If(len(app.Members()) >= 2, Div(css.Class("tc-rail-row"),
