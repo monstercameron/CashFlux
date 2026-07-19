@@ -6,6 +6,25 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **/budgets opens on one answer (B1 hero):** the summary tile now leads with the left-to-spend
+  figure as a single live-toned Fraunces number (red "Over budget" when the month goes negative;
+  the label — never a suffix baked into the number — carries state and tense, so a closed month
+  reads "Jun 2026 · Over budget / $509.58") over a slim month-ledger bar and one caption line
+  ("$X spent of $Y budgeted") with age-of-money reduced to a faint chip at the caption's right
+  edge. The three-cell status strip (plan prose · stat trio · age tile), the
+  "Needs attention" alert-card tile, and the standalone settings/add toolbar band are gone: an
+  amber "N need attention" chip beside the hero filters the list to those budgets (Cover-all sits
+  beside it when overages exist), the zero-based to-assign pool shows as one small chip, and the
+  Budget settings / + Add budget cluster now lives in the list card's head row next to the search
+  field. The issues rail, month-close offer, and income-received sub-line survive unchanged.
+
+### Fixed
+- **Budgets card view clipped its content:** a stale "slimmer cards" override (`padding: .45rem 0`)
+  stripped the card's horizontal inset, so body text clipped at the rounded corners and collided
+  with the 5px state accent-edge while the progress loader bled past the card edge. The trim now
+  keeps the horizontal padding.
+
 ### Added
 - **W-series backlog (C363–C415) planned from the v1.2.6 nine-page black-box assessment** —
   53 tickets in `TODOS.md` targeting a durable 9.5–10/10: surfacing pass first (rules workbench,

@@ -1,3 +1,35 @@
+## 2026-07-19 — /budgets B1 hero + card-view regression fix
+
+Cam reviewed /budgets against the rest of the app (screenshots at 1600px, sample data): four
+stacked cards before the first budget, the same over-limit fact painted three times (attention
+cards, resolve banner, list rows), a prose plan summary that reads instead of glances, and an
+orphan settings/add band. Two alternatives were proposed (row-ledger vs envelope board) plus two
+quieter permutations; Cam picked **B1 — "one answer"**: the page opens on a single live-toned
+LEFT-TO-SPEND Fraunces figure over a slim month-ledger bar with one caption line, and nothing
+else above the budgets.
+
+Implementation (budgets_tiles.go + budgets_widget.go + rules_budgetrefine.go + en_budgetshero.go):
+the summary tile's three-cell strip became the hero — tense/method logic all preserved (hist →
+"Unspent · Jun 2026" + neutral bar tone, last-month overlay keeps its accent tag, zero-based cap
+= income basis + rollover with a small "To assign" chip). budget-attention left the surface spec;
+its job moved to an amber "N need attention" chip that sets the existing attention-filter atom
+(closure reads counts assigned later in the same render — hook stays pre-early-return), with
+Cover-all re-homed beside it. budget-toolbar's content extracted to budgetToolbarContent and
+rendered inside the list card's head row (search grows, settings/add pins right); the standalone
+tile survives only for the flex-method surface which has no list card. Age of money reduced to a
+faint chip on the caption row (same testid + smart tooltip).
+
+Card-view regressions (Cam: "caught some regressions"): archaeology found four override layers on
+one card — base bordered grid card → R4 full-width lines → dp-borders deliberate border removal →
+budgetrefine's `padding: .45rem 0`, which stripped the HORIZONTAL inset against an anatomy it
+wasn't written for: body text clipped at the rounded corners ("ver budget", "EFT / DAY"),
+collided with the 5px accent edge, and the loader bled past the card edge. Fix: keep the vertical
+trim, restore the inset (`.45rem 1rem .5rem 1.15rem`). Lesson for this file's future passes: a
+"slim down" override must restate only the axis it means to change.
+
+Concurrency: the parallel lane's transactions_tiles.go WIP briefly broke the shared build
+(unused vars) — waited it out rather than touching their file.
+
 ## 2026-07-19 — release v1.2.6: fully internationalized UI layer
 
 Pre-release gate re-run at the current tree: screenlint + keycoverage both green with every UI

@@ -68,6 +68,19 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		basisDraft.Set(uistate.NewBudgetBasisDraft(pr))
 		basisOpen.Set(true)
 	}))
+	// B1 hero: the attention chip narrows the list via the shared attention filter
+	// (the same atom the issues rail's counts set). Hook registered before the early
+	// return; the counts it reads are assigned later in this render — the closure
+	// captures the variables, and it only runs on click, after they're set.
+	attnAtom := uistate.UseBudgetAttention()
+	var attnOver, attnNear int
+	filterAttn := ui.UseEvent(Prevent(func() {
+		if attnOver > 0 {
+			attnAtom.Set(uistate.BudgetAttentionOver)
+		} else if attnNear > 0 {
+			attnAtom.Set(uistate.BudgetAttentionNear)
+		}
+	}))
 	v := computeBudgetView(app, activeMemberID, vw, pr, showLM)
 	if len(v.Statuses) == 0 {
 		return Fragment()
@@ -82,7 +95,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// A discoverable button that opens the "Income to budget with" modal (the income-
 	// source picker + rules) — present in every method, so simple/envelope users can set
 	// which income funds the budget just like zero-based users.
-	basisBtn := Button(css.Class("btn btn-sm zbb-basis-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+	// Same .btn-tool chrome as Cover-all beside it — the hero side cluster speaks
+	// one control language (Cam 2026-07-19).
+	basisBtn := Button(css.Class("btn btn-tool zbb-basis-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 		Attr("data-testid", "budgets-basis-open"), Title(uistate.T("budgets.basisButtonTitle")), OnClick(openBasis),
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("budgets.basisButton")))
@@ -151,39 +166,16 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	case fillPct >= 85:
 		fillCls += " is-near"
 	}
-	loaderCls := "budget-loader"
-	if over {
-		loaderCls += " is-over"
-	}
-	// Progress semantics live on the childless FILL bar as role="img" with the
-	// value in the label (not role="progressbar" on the wrapper): the wrapper
-	// holds focusable figure children, and a labeled role wrapping interactive
-	// descendants fails axe nested-interactive (#67).
-	statGrid := Div(ClassStr(loaderCls),
-		Div(ClassStr(fillCls),
+	_ = spentTone       // spent tone now lives in the caption, which stays neutral
+	_ = spendLimitLabel // the labeled fig row is gone; the caption phrases the limit
+	// B1 hero bar: a slim month-ledger — the same fill-tone classes as before
+	// (is-over / is-near / is-hist) on a 10px track. Progress semantics live on the
+	// childless fill as role="img" (axe nested-interactive, #67).
+	heroBar := Div(css.Class("budget-hero-bar"),
+		Div(ClassStr(strings.Replace(fillCls, "budget-loader-fill", "budget-hero-fill", 1)),
 			Attr("role", "img"),
 			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), fillW)),
 			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
-		Div(css.Class("budget-loader-figs"),
-			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
-				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(barSpent, v.Base))),
-			),
-			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), spendLimitLabel),
-				Div(css.Class("budget-loader-value"), fmtMoney(money.New(spendLimit, v.Base))),
-			),
-			// "Left" (safe-to-spend) is the key figure — annotated with a smart explainer.
-			// In the last-month overlay it becomes "Unspent" (a historical fact, so the
-			// safe-to-spend explainer doesn't apply and is omitted).
-			Div(css.Class("budget-loader-fig", "is-right"),
-				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					leftLabel,
-					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
-				),
-				Div(ClassStr("budget-loader-value is-hero "+accentFor(leftM)), budgetLeftValue(leftM)),
-			),
-		),
 	)
 
 	// C130: clarify a custom top-bar range only changes the view window — it doesn't
@@ -219,21 +211,77 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		fundHasPool = true
 	}
 
-	// 2026-07-17 audit P0: ONE three-column status strip — the money you're
-	// planning with, the spend progress, and Age of money side by side — instead
-	// of the old vertical stack (hero, banner, loader, age line, footnotes) that
-	// pushed the first budget category below the fold.
-	var planCell ui.Node
-	if v.Method == budgeting.MethodZeroBased {
-		planCell = zeroBasedHero(v, basisBtn)
-	} else {
-		planCell = Div(css.Class("budget-plan-cell"),
-			Span(css.Class("budget-strip-label"), uistate.T("budgets.stripPlan")),
-			Div(css.Class("budget-basis-row"), budgetAssignBanner(v), basisBtn),
-		)
+	// B1 hero (2026-07-19): the summary opens on the ONE number a budget page
+	// answers — what's left to spend — over a slim month-ledger bar and a single
+	// caption. The old three-cell strip (plan prose · stat trio · age tile) is
+	// gone: the attention chip narrows the list, age of money shrinks to a faint
+	// caption-row chip, and the plan-level issues stay in the rail below.
+	for _, s := range v.Statuses {
+		switch s.State {
+		case budgeting.StateOver:
+			attnOver++
+		case budgeting.StateNear:
+			attnNear++
+		}
 	}
-	// #64: the plan figure is EXPECTED income — say what actually arrived beside it,
-	// so the basis never masquerades as money already received.
+	var attnChip ui.Node = Fragment()
+	if n := attnOver + attnNear; n > 0 && !hist && !v.LastMonthMode {
+		txt := uistate.T("budgets.heroAttn", n)
+		if n == 1 {
+			txt = uistate.T("budgets.heroAttnOne")
+		}
+		attnChip = Button(css.Class("budget-hero-attn"), Type("button"),
+			Attr("data-testid", "budgets-hero-attn"), Title(uistate.T("budgets.heroAttnTitle")),
+			OnClick(filterAttn), txt)
+	}
+	// Zero-based only: the still-unassigned pool as one small chip (over-assignment
+	// is an issue and lives in the rail, so the chip only speaks when positive).
+	var toAssignChip ui.Node = Fragment()
+	if v.Method == budgeting.MethodZeroBased && fundHasPool && fundFree > 0 {
+		toAssignChip = Span(css.Class("budget-hero-toassign"), Attr("data-testid", "budgets-toassign-chip"),
+			uistate.T("budgets.heroToAssign", fmtMoney(money.New(fundFree, v.Base))))
+	}
+	// The LABEL carries the state and tense; the NUMBER is only ever an amount.
+	// A closed month that ended over budget must read "Jun 2026 · Over budget /
+	// $509.58" — never "Unspent · Jun 2026 / $509.58 over", where the label and the
+	// value's baked-in suffix contradict each other (Cam, 2026-07-19).
+	heroLabel := uistate.T("budgets.heroLeftLabel")
+	heroVal := fmtMoney(leftM)
+	if v.LastMonthMode || hist {
+		heroLabel = leftLabel // "Unspent" (a historical fact)
+	}
+	if leftM.IsNegative() {
+		heroLabel = uistate.T("budgets.heroOverLabel")
+		heroVal = fmtMoney(leftM.Abs())
+	}
+	if hist && !v.LastMonthMode {
+		heroLabel = vw.Label() + " · " + heroLabel
+	}
+	numTone := accentFor(leftM)
+	if numTone == "" && attnOver+attnNear > 0 && !hist && !v.LastMonthMode {
+		numTone = "is-warn" // healthy total, but envelopes need eyes — the top says so
+	}
+	// Caption: spent-of-budgeted in one quiet, tenseless line (the label already
+	// names the period when it's a closed one); age of money at its right edge.
+	capTxt := uistate.T("budgets.heroCaption", fmtMoney(money.New(barSpent, v.Base)), fmtMoney(money.New(spendLimit, v.Base)))
+	_ = spendCap
+	var ageChip ui.Node = Fragment()
+	if am := v.AgeMoney; am.Ready {
+		num := strconv.Itoa(am.Days)
+		if am.Capped {
+			num += "+"
+		}
+		unit := uistate.T("budgets.ageMoneyUnit")
+		if am.Days == 1 && !am.Capped {
+			unit = uistate.T("budgets.ageMoneyUnitOne")
+		}
+		ageChip = Span(css.Class("budget-hero-age"), Attr("data-testid", "budgets-agemoney"),
+			uistate.T("budgets.ageMoneyLabel")+" · "+num+" "+unit,
+			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), uistate.T("budgets.ageMoneyWhy")))
+	}
+	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
+	// basis never masquerades as money already received. One quiet sub-line.
+	var incomeActual ui.Node = Fragment()
 	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
 		actualIncome := int64(0)
 		if lines, err := reports.IncomeByCategory(app.Transactions(), wStart, wEnd, currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}); err == nil {
@@ -245,16 +293,34 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		if hist {
 			key = "budgets.incomeActualEnded"
 		}
-		planCell = Fragment(planCell,
-			P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
-				uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base)))))
+		incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
+			uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base))))
 	}
-	strip := Div(css.Class("budget-status-strip"), Attr("data-testid", "budgets-status-strip"),
-		Div(css.Class("budget-strip-cell is-plan"), planCell),
-		Div(css.Class("budget-strip-cell is-spend"),
-			IfElse(v.LastMonthMode, lastMonthTag, P(css.Class("zbb-spend-cap"), Attr("data-testid", "budgets-spend-cap"), spendCap)),
-			statGrid),
-		Div(css.Class("budget-strip-cell is-age"), budgetAgeOfMoneyNode(v, smartSettings)),
+	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
+		Div(css.Class("budget-hero-top"),
+			Div(css.Class("budget-hero-main"),
+				Span(css.Class("budget-hero-label"),
+					heroLabel,
+					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe")))),
+				Div(ClassStr("budget-hero-num "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
+			),
+			Div(css.Class("budget-hero-side"),
+				If(v.LastMonthMode, lastMonthTag),
+				attnChip,
+				// Cover-all re-homes here from the retired budget-attention tile: it
+				// belongs beside the chip that names the overages it fixes.
+				If(attnOver > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
+					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
+				toAssignChip,
+				basisBtn,
+			),
+		),
+		heroBar,
+		Div(css.Class("budget-hero-cap"),
+			Span(Attr("data-testid", "budgets-spend-cap"), capTxt),
+			ageChip,
+		),
+		incomeActual,
 	)
 
 	// Every warning folds into ONE collapsed "N issues need attention" rail with
@@ -1347,12 +1413,22 @@ func budgetFundShortAlert(props budgetFundShortProps) ui.Node {
 
 // --- budget-toolbar --------------------------------------------------------------
 
-// budgetToolbarWidget is the actions tile: the in-context methodology picker, a
-// last-month toggle, the Auto-budget review, the one-click 50/30/20 starter template,
-// a Formulas reveal toggle, and an "Add budget" button — each an icon-and-label
-// button. It writes the shared method setting + the Formulas atom so the
-// summary/list/formula tiles react in step.
+// budgetToolbarWidget wraps the toolbar content in its own engine tile. Only the
+// FLEX methodology surface still places it standalone (the flex view has no list
+// tile to host it); the normal surface renders budgetToolbarContent inside the
+// list card's head row instead (B1: no orphan control band above the budgets).
 func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "budget-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: ui.CreateElement(budgetToolbarContent, props),
+	})
+}
+
+// budgetToolbarContent is the actions cluster: the "Budget settings" popover (the
+// in-context methodology picker, sort, density, last-month toggle, Auto-budget,
+// month-close, sweep config, bulk adjust) and the primary "Add budget" button. It
+// writes the shared method setting so the summary/list/formula tiles react in step.
+func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
 	sortAtom := uistate.UseBudgetSort()
@@ -1557,10 +1633,7 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 				Span(uistate.T("budgets.addBudget")))),
 		),
 	)
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "budget-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: toolbar,
-	})
+	return toolbar
 }
 
 // --- budget-list -----------------------------------------------------------------
@@ -1751,7 +1824,14 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		if compact {
 			listCls = "budget-clist"
 		}
-		body = Fragment(searchBar, attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
+		// B1: the list card's head row — search grows on the left, the settings/add
+		// cluster pins right — replacing the standalone toolbar tile (whose orphan
+		// band was mostly empty space above the budgets).
+		head := Div(css.Class("budlist-head"),
+			searchBar,
+			ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: app}),
+		)
+		body = Fragment(head, attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -1806,13 +1886,15 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 		budgetsForGrid = append(budgetsForGrid, s.Budget)
 	}
 	annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
-		Budgets:   budgetsForGrid,
-		Txns:      app.Transactions(),
-		Cats:      app.Categories(),
-		Rates:     currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
-		WeekStart: pr.WeekStartWeekday(),
-		Now:       time.Now(),
-		OnCell:    drillMonth,
+		Budgets:    budgetsForGrid,
+		Txns:       app.Transactions(),
+		Cats:       app.Categories(),
+		Recurrings: app.Recurring(), // W6/C394 — future-month bill + goal projection
+		Goals:      app.Goals(),
+		Rates:      currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
+		WeekStart:  pr.WeekStartWeekday(),
+		Now:        time.Now(),
+		OnCell:     drillMonth,
 	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-annualgrid", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

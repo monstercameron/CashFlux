@@ -64,11 +64,12 @@ func Budgets() ui.Node {
 	// itself (renders nothing) when there are no budgets. The formula tile appears only
 	// when the toolbar's Formulas toggle is on.
 	specs := []domain.WidgetSpec{
-		// "Needs attention" opens the page on real work: the three most over/at-risk
-		// budgets, above settings and methodology (self-gates to nothing when healthy).
-		budgetNativeSpec("budget-attention"),
+		// B1 (2026-07-19): the page opens on the hero summary — one left-to-spend
+		// number + ledger bar. The old budget-attention tile is gone from the surface
+		// (the hero's attention chip filters the list to the same budgets), and
+		// budget-toolbar's controls render inside the list card's head row (the
+		// standalone tile remains only on the flex surface below).
 		budgetNativeSpec("budget-summary"),
-		budgetNativeSpec("budget-toolbar"),
 		budgetNativeSpec("budget-list"),
 		// BG9: the annual plan-vs-actual grid as its own full-width cell below the list
 		// (self-gates to nothing when there are no budgets).
