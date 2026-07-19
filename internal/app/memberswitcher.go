@@ -95,14 +95,17 @@ func MemberSwitcher() uic.Node {
 		onChange,
 	}
 	args = append(args, opts...)
-	// C274: the "Switch profile…" (device-user) affordance is now an ICON-ONLY button
+	// C274: the "Switch profile…" (device-user) affordance is an ICON-ONLY button
 	// so it stops presenting as a second text dropdown about "profiles". It's a
 	// distinct identity action (who's using this device), visually subordinate to the
 	// view-scope select, with its accessible name preserved on the icon button.
+	// Header refine (2026-07-19): the visible "Viewing as" prefix text is gone — the
+	// select carries that meaning via its aria-label/title (and the C281 scope banner
+	// spells it out whenever a member lens is active), so the control reads as one
+	// compact standard select instead of a ~300px labelled cluster.
 	return Span(css.Class("cf-member-switcher-wrap"),
-		Span(css.Class("cf-viewas-label", tw.Text13, tw.TextFaint), uistate.T("member.viewAsPrefix")),
 		Select(args...),
-		Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Button(css.Class("icon-btn", tw.TextDim, tw.HoverTextFg),
 			Type("button"),
 			Attr("aria-label", uistate.T("profileSwitch.switchBtn")),
 			Attr("data-testid", "profile-switch-btn"),

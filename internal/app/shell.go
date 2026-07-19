@@ -992,18 +992,20 @@ func TopBar(props topBarProps) uic.Node {
 			// has exactly one top-level heading for screen-reader heading navigation.
 			H1(css.Class(tw.TextLg, tw.FontSemibold, tw.Truncate), Attr("aria-current", "page"), props.Title),
 		),
-		// Context zone: the view's scope (member) and period. On narrow screens this
-		// becomes its own full-width row beneath the title, scrolling horizontally if
-		// the date picker is wider than the viewport (rather than wrapping).
+		// Context zone: the view's scope (member) and period, LEFT-ANCHORED beside the
+		// title (the actions zone owns the row's slack via margin-left:auto). Order is
+		// permanent-controls-first — scope, then period — with the transient status
+		// chips (offline, sample data) LAST, so a chip appearing or disappearing never
+		// shifts the controls the user aims for.
 		Div(css.Class("tb-context", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.MinW0, tw.TextDim, tw.Text13),
-			// Sample-data status chip (audit P0): lives in the bar's context zone —
-			// "Sample data · Start fresh" — instead of a banner row above content.
-			uic.CreateElement(SampleDataBanner),
-			uic.CreateElement(OfflineIndicator),
 			uic.CreateElement(MemberSwitcher),
 			// QA CF-24: on /reports the compact month pill silently controls a rolling
 			// ANNUAL window — the prop makes the pill say so ("Year ending Jul 2026").
 			If(periodAware, uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: curPath == "/reports"})),
+			uic.CreateElement(OfflineIndicator),
+			// Sample-data status chip (audit P0): lives in the bar's context zone —
+			// "Sample data · Start fresh" — instead of a banner row above content.
+			uic.CreateElement(SampleDataBanner),
 			// DP-header refinement (2026-07-19): the freshness/activity stamp is a
 			// low-frequency, ambient control — relocated into the ⋯ More overflow so
 			// the context strip reads as just scope + period. Still mounted (its ticker
@@ -1011,9 +1013,11 @@ func TopBar(props topBarProps) uic.Node {
 		),
 		// Actions zone: stays on the title row at every size.
 		Div(css.Class("tb-actions", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.TextDim, tw.Text13),
-			// Secondary, low-frequency app toggles. Inline on the widest screens; folded
-			// into the "More" menu below 1580px. They stay mounted when hidden so stateful
-			// ones (e.g. MuzakToggle's player effect) keep running.
+			// Secondary, low-frequency app toggles. Permanently folded into the "More"
+			// menu at every width (.topbar-secondary is display:none — the DP-header
+			// refinement demoted them; the ⋯ menu is their only surface). They stay
+			// mounted here so stateful ones (e.g. MuzakToggle's player effect) keep
+			// running.
 			Span(css.Class("topbar-secondary", tw.Flex, tw.ItemsCenter, tw.Gap25),
 				If(onDashboard, uic.CreateElement(DashCustomizeButton)),
 				uic.CreateElement(ThemeToggle),

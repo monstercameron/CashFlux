@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Header (top bar) refined onto the standard control language:** the context group (member lens,
+  period, status chips) is now LEFT-ANCHORED beside the page title with the actions cluster owning
+  the right edge, so persona/period controls keep one stable position on every page instead of
+  drifting with the period pill's width/presence; transient status chips (offline, sample data)
+  moved to the END of the group so their appearance never shifts the controls. The member lens
+  dropped its "Viewing as" prefix text (aria-label/title + the scope banner carry the meaning) and
+  its companion "Switch profile" button wears the standard bordered chrome; all header controls sit
+  at the standard 38px `.btn-tool` height — bell and ⋯ More are standard bordered icon buttons, and
+  the `+` Add is a true joined split button (accent-tinted container, one-click quick-add + menu
+  caret behind an inner divider) instead of two floating glyphs. The period pill gained a min-width
+  so month-name length doesn't nudge neighbours, and the sample-data chip calmed one notch (softer
+  amber, height-aligned) while keeping its "Start fresh" link.
+
+### Fixed
+- **Profile-switch modal ("Who's using CashFlux?") rendered unstyled:** its `cf-ps-*`/`ps-card`
+  classes had no CSS at all, so the dialog painted as bare text floating over the blurred page
+  (member names run together, no panel). It now rides the standard `.cf-dialog` kit (panel, title,
+  message, actions) and the member cards are full-width standard-chrome buttons with the active
+  profile accent-marked and the 🔒 PIN badge right-aligned.
 - **To-do command bar realigned into two fixed rows:** the toolbar no longer relies on a single
   wrapping flex row (which, at real widths, shrank the search box, orphaned the List/Board/Calendar
   switch beneath it, and dropped `Add task`/`More tools` onto a mostly-empty third band). Row 1 is

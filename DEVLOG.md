@@ -1,3 +1,31 @@
+## 2026-07-19 — header refine: stable anchors, standard control language, profile-switch fix
+
+Follow-on from the to-do toolbar fix: Cam asked for the header to be glanceable/10-10 and to use
+the standard button + select styles. Review across six pages found the same disease class as the
+toolbar — position falling out of content width: `.tb-title{margin-right:auto}` right-packed the
+context group against the actions, so "Viewing as"/sample-chip started at x=726 on Dashboard,
+x=888 on To-do, and shifted again on Reports (wider "Year ending" pill). Fixes, in order of
+weight: (1) slack moved to `.tb-actions{margin-left:auto}` — context is left-anchored beside the
+title, order persona → period → offline → sample chip (transient status LAST so its
+mount/unmount can't move the controls); (2) the whole bar adopted the 38px `.btn-tool` standard
+(`--tb-h: 2.375rem`) — bell/⋯ are standard bordered icon buttons (killed the
+`transparent !important` bespoke treatment), the + Add became a real joined split button, the
+profile-switch icon button got standard chrome, the "Viewing as" prefix text died (~110px saved;
+aria/title + C281 scope banner carry the meaning — e2e checks the banner, not the prefix, so
+nothing broke); (3) period pill min-width 6.5rem + centered label; sample chip amber softened
+(45% mix border, 0.07 bg) and height-aligned. Light theme verified via the ⋯ theme toggle
+(localStorage prefs seed no longer works post-IDB-migration — drive the real toggle).
+
+Profile-switch modal ("Who's using CashFlux?", C274) turned out to be genuinely broken, not just
+off-style: `cf-ps-panel`/`cf-ps-cards`/`ps-card` had NO CSS anywhere — the dialog rendered as
+bare text over the blurred page. Rebuilt on the standard `.cf-dialog` kit + `.ps-card` rows in
+the `.btn` language (bordered bg-elev, accent-marked active, ellipsized names, 🔒 badge).
+
+Concurrency note: a parallel session's motion-spec commit (21655fa8) swept this pass's topbar
+CSS hunks (tb-h/anchor/split-button/sample-chip) into itself mid-flight — those are already on
+main; this commit carries the remainder (app markup, profile-switch CSS) selectively staged
+around that session's uncommitted content-width breakpoint work in the same file.
+
 ## 2026-07-19 — to-do command bar: two fixed rows instead of a wrap-fallback
 
 Cam flagged the to-do toolbar layout as broken. Screenshot at 1600px confirmed the degenerate

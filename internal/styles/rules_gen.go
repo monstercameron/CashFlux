@@ -11628,6 +11628,54 @@ func registerGenerated() {
 		justifyContent("flex-end"),
 		gap(".5rem"),
 	)
+	// "Who's using CashFlux?" profile-switch modal (C274): the panel rides the
+	// standard .cf-dialog kit; the member cards are full-width standard-chrome
+	// buttons (the .btn language) with the active profile accent-marked.
+	rule(".cf-ps-cards",
+		display("grid"),
+		gap(".45rem"),
+		margin(".35rem 0 1rem"),
+	)
+	rule(".ps-card",
+		display("flex"),
+		alignItems("center"),
+		gap(".5rem"),
+		width("100%"),
+		minHeight("44px"),
+		padding(".55rem .8rem"),
+		border("1px solid var(--border)"),
+		borderRadius("8px"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		font("inherit"),
+		fontWeight("500"),
+		textAlign("left"),
+		cursor("pointer"),
+		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".ps-card:hover",
+		background("color-mix(in srgb, var(--bg-elev) 94%, var(--text))"),
+		borderColor("color-mix(in srgb, var(--border) 88%, var(--text))"),
+	)
+	rule(".ps-card-active",
+		borderColor("var(--accent)"),
+		background("color-mix(in srgb, var(--accent) 10%, var(--bg-elev))"),
+	)
+	rule(".ps-card-name",
+		flex("1"),
+		minWidth("0"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".ps-pin-badge",
+		flex("none"),
+		fontSize(".8rem"),
+	)
+	rule(".ps-owner-note",
+		margin(".1rem 0 0"),
+		fontSize(".78rem"),
+	)
 	rule(".btn-danger",
 		background("linear-gradient(180deg, var(--action-danger), color-mix(in srgb, var(--action-danger) 85%, #000 15%))"),
 		borderColor("color-mix(in srgb, var(--action-danger) 82%, #000 18%)"),
