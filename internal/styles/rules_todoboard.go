@@ -27,12 +27,15 @@ func registerTodoBoardSurface() {
 	)
 
 	// --- A column card ------------------------------------------------------------
+	// Lanes SHARE the full canvas width (flex-grow) instead of parking at a fixed
+	// 260–320px: the status board has only two lanes, and fixed-width lanes left
+	// ~45% of the pane as dead space (UI/UX review task #28). The 260px basis
+	// still forces a horizontal scroll on genuinely narrow panes.
 	rule(".tdb-col",
 		display("flex"),
 		flexDirection("column"),
-		flexShrink("0"),
+		flex("1 1 280px"),
 		minWidth("260px"),
-		maxWidth("320px"),
 		gap("0.65rem"),
 		padding("0.85rem 0.8rem 1rem"),
 		border("1px solid var(--border)"),
@@ -202,5 +205,18 @@ func registerTodoBoardSurface() {
 		borderColor("color-mix(in srgb, var(--accent) 50%, var(--border))"),
 		color("var(--accent)"),
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
+	)
+	// Every card repeating its own "Done" pill read as noise ×37 (task #28): the
+	// affordance now appears on the card you're on (hover or keyboard focus) and
+	// stays always-visible on touch, where there is no hover to reveal it.
+	rule(".tdb-next",
+		opacity("0"),
+		transition("opacity 0.14s ease, border-color 0.14s ease, color 0.14s ease, background 0.14s ease"),
+	)
+	rule(".tdb-card:hover .tdb-next, .tdb-card:focus-within .tdb-next, .tdb-next:focus-visible",
+		opacity("1"),
+	)
+	ruleMedia("(hover: none)", ".tdb-next",
+		opacity("1"),
 	)
 }
