@@ -86,6 +86,7 @@ func Register() {
 	registerNotifAsst()
 	registerAcctxn()
 	registerBudgetRefine()
+	registerDesignPolish()
 	inject(Build())
 }
 
