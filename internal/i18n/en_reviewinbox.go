@@ -26,6 +26,12 @@ var reviewInboxKeys = Catalog{
 	"review.categorizeNext": "Categorize & next",
 	"review.chooseFirst":    "Choose a category first, then confirm.",
 
+	// Cross-link to /rules when ready-made rule suggestions exist (review #13/#18):
+	// filing many of the queue in one place beats one-at-a-time triage.
+	"review.rulesReadyOne":  "1 ready-made rule could file many of these",
+	"review.rulesReadyMany": "%d ready-made rules could file many of these",
+	"review.rulesReadyLink": "Review rules",
+
 	"review.categorizedUndo":      "Categorized as %s.",
 	"review.categorizedBatchUndo": "Categorized %d transactions as %s.",
 	"review.skip":           "Skip for now",

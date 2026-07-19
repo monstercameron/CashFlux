@@ -23,12 +23,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/payeeclean"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -177,6 +179,15 @@ func reviewAcctName(app *appstate.App, id string) string {
 	return ""
 }
 
+// reviewRulesReady is the "N ready-made rules could file many of these" lead-in for
+// the inbox's cross-link to /rules, correctly singular/plural.
+func reviewRulesReady(n int) string {
+	if n == 1 {
+		return uistate.T("review.rulesReadyOne")
+	}
+	return uistate.T("review.rulesReadyMany", n)
+}
+
 // ReviewInboxBody is the body of the review-inbox flip modal, mounted at the
 // shell root by app.ReviewInboxHost. It owns its controls (the FlipPanel is
 // NoFooter), stepping through the live queue.
@@ -288,6 +299,13 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		}
 	})
 	closeInbox := ui.UseEvent(func() { uistate.CloseReviewInbox() })
+	// CG-S2 cross-link: jump to /rules where the ready-made rule suggestions live,
+	// closing the inbox first so we don't return to a stale modal.
+	nav := router.UseNavigate()
+	gotoRules := ui.UseEvent(func() {
+		uistate.CloseReviewInbox()
+		nav.Navigate(uistate.RoutePath("/rules"))
+	})
 
 	if app == nil {
 		return Fragment()
@@ -415,6 +433,20 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		commitCls += " is-disabled"
 	}
 
+	// A quiet cross-link to /rules when ready-made rule suggestions exist: triaging
+	// 250 charges one at a time is slow if a handful of rules could file most of
+	// them. Same deterministic source as the /rules "Suggestions ready" stat.
+	var rulesLink ui.Node = Fragment()
+	if n := len(rulesuggest.Suggest(app.Transactions(), app.Rules(), 3)); n > 0 {
+		rulesLink = P(css.Class("rvw-rules-link"),
+			Span(reviewRulesReady(n)),
+			Text(" — "),
+			Button(css.Class("rvw-rules-link-btn"), Type("button"),
+				Attr("data-testid", "review-inbox-rules-link"), OnClick(gotoRules),
+				uistate.T("review.rulesReadyLink")),
+		)
+	}
+
 	return Div(css.Class("rvw"), Attr("data-testid", "review-inbox"),
 		// Progress: count + "N left" and a slim track.
 		Div(css.Class("rvw-progress"),
@@ -425,6 +457,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 				Div(css.Class("rvw-progress-fill"), Attr("style", progressWidth(pos, total.Get()))),
 			),
 		),
+		rulesLink,
 		// The transaction under review.
 		Div(css.Class("rvw-card"),
 			Div(css.Class("rvw-card-top"),

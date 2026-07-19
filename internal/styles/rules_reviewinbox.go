@@ -39,6 +39,23 @@ func registerReviewInboxSurface() {
 		transition("width .2s ease"),
 	)
 
+	// A quiet cross-link under the progress bar to /rules when ready-made rule
+	// suggestions exist — low-key, one small line, with an inline accent link.
+	rule(".rvw-rules-link",
+		fontSize("0.78rem"),
+		color("var(--text-dim)"),
+	)
+	rule(".rvw-rules-link-btn",
+		border("none"),
+		background("transparent"),
+		padding("0"),
+		color("var(--accent)"),
+		fontSize("0.78rem"),
+		fontWeight("600"),
+		cursor("pointer"),
+		textDecoration("underline"),
+	)
+
 	// The transaction under review.
 	rule(".rvw-card",
 		display("flex"),
