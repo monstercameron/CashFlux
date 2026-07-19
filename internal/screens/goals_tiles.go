@@ -310,16 +310,35 @@ func goalListWidget(props goalListProps) ui.Node {
 			planEntries = append(planEntries, planEntry{g: g})
 		}
 	}
-	// Most-severe first (missed → at risk → watch); ties keep the existing
-	// most-actionable order.
-	sort.SliceStable(planEntries, func(i, j int) bool {
-		ri := needsPlanRank(planEntries[i].missed, v.Health[planEntries[i].g.ID].Health)
-		rj := needsPlanRank(planEntries[j].missed, v.Health[planEntries[j].g.ID].Health)
-		if ri != rj {
-			return ri < rj
+	// Ordering: severity (missed → at risk → watch) is the presentation of the
+	// DEFAULT "Most actionable" sort. When the user picks an explicit sort in
+	// the toolbar it applies here too — the Watch-first pass silently ignored
+	// e.g. "Sort by name" inside this section, which both broke the sort
+	// promise and goals.spec's A→Z regression check.
+	if goalSort != uistate.GoalSortActionable {
+		planGoals := make([]domain.Goal, len(planEntries))
+		missedByID := make(map[string]bool, len(planEntries))
+		for i, e := range planEntries {
+			planGoals[i] = e.g
+			if e.missed {
+				missedByID[e.g.ID] = true
+			}
 		}
-		return goalsvc.LessForList(planEntries[i].g, planEntries[j].g)
-	})
+		sortGoals(planGoals, goalSort, v.Tasks, now)
+		planEntries = planEntries[:0]
+		for _, g := range planGoals {
+			planEntries = append(planEntries, planEntry{g: g, missed: missedByID[g.ID]})
+		}
+	} else {
+		sort.SliceStable(planEntries, func(i, j int) bool {
+			ri := needsPlanRank(planEntries[i].missed, v.Health[planEntries[i].g.ID].Health)
+			rj := needsPlanRank(planEntries[j].missed, v.Health[planEntries[j].g.ID].Health)
+			if ri != rj {
+				return ri < rj
+			}
+			return goalsvc.LessForList(planEntries[i].g, planEntries[j].g)
+		})
+	}
 
 	// Healthy remainders for the sections below: the goals NOT pulled up (on-track /
 	// no-verdict). Missed goals were never in v.Active, so activeSorted only sheds its
