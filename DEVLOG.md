@@ -1,3 +1,30 @@
+## 2026-07-19 — Nine-page component QA pass (post motion + i18n tranches)
+
+Cam: "check all of the components on the first 9 pages." Two scripted sweeps against a live
+build (e2e/_nine_page_component_check.mjs + _nine_page_targeted.mjs, serve.mjs :8124, pinned
+clock) over Dashboard, Transactions, Accounts, Budgets, Goals, To-do, Notifications, Assistant,
+Reports.
+
+Automated DOM audit per page — all NINE pages ZERO on every defect class: raw i18n key leaks
+(validates the third-tranche sweep at runtime), broken/leaked format verbs from the new
+T(key, args) call sites, "undefined"/"NaN" text leaks, visible unlabeled interactive controls,
+and console/page errors across the whole run.
+
+Component interactions exercised and screenshot-verified (15/15 after correcting two driver
+selector mistakes — the triage strip and Ask/Insights strips are properly role=tab, not button,
+and the generic [data-testid*=add] matched the global topbar + before page-level adds):
+transactions row ⋯ menu (all 9 actions) + Filters panel; accounts row ⋯ menu (destructive
+Delete red-and-last) + Update balance modal (context strip + focus ring); budgets Add modal
+(50/30/20 template + copy-existing) + Budget settings; goals Add modal (starter chips); todo
+Add form + Board view (kanban columns, priority dots, strikethrough done); notifications
+Needs-you/Watching tabs + row overflow + the wins card rendering confetti-free with a calm
+risen toast (live confirmation of the motion pass); assistant composer focus ring + rail;
+reports Summary→Full mode + named section-index jump. Quick-add modal verified from two pages.
+
+No product defects found — nothing to fix. The one todo add-FAIL in sweep 1 was a transient
+click-retry timeout under concurrent suite load; a direct probe clicks it fine. Screenshots in
+temp/nine_check/ (~35 states).
+
 ## 2026-07-19 — i18n sweep, third tranche: the screens layer hits ZERO hardcoded copy
 
 Cam's directive: "make sure all the copy on the pages goes through i18n translations." Two
