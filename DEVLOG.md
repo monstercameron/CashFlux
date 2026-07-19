@@ -1,3 +1,17 @@
+## 2026-07-19 — release v1.2.6: fully internationalized UI layer
+
+Pre-release gate re-run at the current tree: screenlint + keycoverage both green with every UI
+baseline exactly at 0 (screens/app/ui/uistate/pages/widgetrender/mermaid/chartspec) — no
+free-floating copy anywhere in the UI layer, including nothing new from today's concurrent
+lanes. The only remaining hardcoded English is the tracked C362 debt (smartengine 171,
+widgetcatalog 42 — generation-time copy in pure-Go packages awaiting key+args payloads).
+
+Bumped internal/version/version.go 1.2.5 → 1.2.6 and cut the [1.2.6] changelog section from
+Unreleased: the i18n third tranche (screens 115 → 0), lane-B UI/UX remediation, the
+content-width breakpoint system, and the rail-collapse/quick-add/rules-form fixes. Verification
+carried into the release: full regression suite green earlier today, smoke+interactions green on
+the i18n build, and the nine-page component QA pass (zero findings).
+
 ## 2026-07-19 — Nine-page component QA pass (post motion + i18n tranches)
 
 Cam: "check all of the components on the first 9 pages." Two scripted sweeps against a live

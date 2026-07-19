@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-07-19
+
+Release: complete internationalization of the UI layer (zero hardcoded copy, ratchet-enforced),
+plus the lane-B UI/UX remediation and the content-width breakpoint system. Verified by the
+screenlint + keycoverage guards, the full regression suite, and a nine-page component QA pass.
+
 ### Fixed
 - **UI/UX review remediation, lane B (2026-07-19)** — the per-screen half of the 39-item review,
   landed as twelve path-scoped commits (`0f36cab8…85a228cd`; changelog entries consolidated here
