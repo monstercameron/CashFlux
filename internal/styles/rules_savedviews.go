@@ -25,6 +25,14 @@ func registerSavedViews() {
 		opacity("var(--disabled-opacity)"),
 		cursor("not-allowed"),
 	)
+	// The leading + affordance: keep the icon at a small, fixed scale (the shared
+	// btn-tool svg sizing doesn't reach this row, which is why the raw glyph used to
+	// render ~100px). Never let it shrink or grow with the row's flex layout.
+	rule(".saved-views-save svg",
+		width("1rem"),
+		height("1rem"),
+		flexShrink("0"),
+	)
 	rule(".saved-views-empty",
 		padding("0.5rem"),
 		fontSize("0.85rem"),

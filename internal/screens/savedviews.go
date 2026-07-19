@@ -125,12 +125,12 @@ func savedViewsMenuBody(props txnSavedViewsMenuProps) ui.Node {
 		if hasFilters {
 			saveControl = Button(css.Class("add-item saved-views-save"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "saved-views-save"), OnClick(onOpenForm),
-				uiw.Icon(icon.Plus, css.Class("btn-tool-ico")), Text(uistate.T("savedViews.saveCurrent")))
+				uiw.Icon(icon.Plus, css.Class(tw.W4, tw.H4)), Text(uistate.T("savedViews.saveCurrent")))
 		} else {
 			saveControl = Div(css.Class("add-item saved-views-save is-disabled"),
 				Attr("data-testid", "saved-views-save-disabled"), Attr("aria-disabled", "true"),
 				Title(uistate.T("savedViews.saveDisabled")),
-				uiw.Icon(icon.Plus, css.Class("btn-tool-ico")), Text(uistate.T("savedViews.saveCurrent")))
+				uiw.Icon(icon.Plus, css.Class(tw.W4, tw.H4)), Text(uistate.T("savedViews.saveCurrent")))
 		}
 	}
 
