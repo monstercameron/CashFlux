@@ -108,7 +108,10 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 			Option(Value("warning"), SelectedIf(s == "warning"), notifySeverityLabel("warning")),
 			Option(Value("info"), SelectedIf(s == "info"), notifySeverityLabel("info")),
 		),
-		Button(css.Class("nhx-clear"), Type("button"), Attr("data-testid", "notif-history-clear"),
+		// Clearing history is destructive, so it wears the same danger treatment as the
+		// Needs-you tab's "Clear all" (notif-clear-danger), keeping nhx-clear's size and
+		// placement (review #27).
+		Button(css.Class("nhx-clear notif-clear-danger"), Type("button"), Attr("data-testid", "notif-history-clear"),
 			Attr("aria-label", uistate.T("notifHistory.clearAria")), OnClick(clearHistory),
 			Text(uistate.T("notifHistory.clear"))),
 		Span(css.Class("nhx-count"), uistate.T("notifHistory.count", len(items))),
