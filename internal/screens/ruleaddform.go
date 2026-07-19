@@ -315,7 +315,10 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 		// C105: Up to 3 bounded condition slots. Each slot's On* handlers are
 		// registered at stable hook positions above, not inside a loop.
-		Fieldset(css.Class("cond-slots"),
+		// fg-span: block-level rows span the full form-grid width — without it the
+		// auto-fit grid squeezed the fieldset/label/submit into single ~150px
+		// columns beside the fields on the wide /rules quick-add (task #1).
+		Fieldset(css.Class("cond-slots", "fg-span"),
 			Legend(uistate.T("rulecond.sectionLabel")),
 			P(css.Class("muted"), uistate.T("rulecond.overridesHint")),
 			condSlotRow(
@@ -350,21 +353,21 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				return Fragment()
 			}
 			liveCount := rules.Rule{Match: liveMatch, Conditions: liveConds}.MatchCountFull(ctxs)
-			return P(css.Class("muted"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))
+			return P(css.Class("muted", "fg-span"), Attr("role", "status"), uistate.T("rules.matchCountMeta", plural(liveCount, "transaction")))
 		}(),
 		// Retroactive vs future-only: saving alone is future-only; this opt-in
 		// also backfills the new rule onto its existing matches.
-		Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+		Label(css.Class("fg-span", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "rule-add-apply-existing"),
 				OnChange(onApplyExisting)}, checkedAttr(applyExistingS.Get())...)...),
 			Div(css.Class("row-main"),
 				Span(uistate.T("rules.applyExistingOpt")),
 				Span(css.Class("row-meta", tw.TextDim), uistate.T("rules.applyExistingOptHint")))),
-		errText("rule-err", errMsg.Get()),
+		Div(css.Class("fg-span"), errText("rule-err", errMsg.Get())),
 		// The inline quick-add's own primary action (QA M2) — the modal instance
 		// gets its submit from the FlipPanel footer instead.
 		If(props.InlineSubmit,
-			Div(Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "rule-add-submit"),
+			Div(css.Class("fg-span"), Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "rule-add-submit"),
 				uistate.T("rules.addRule")))),
 	)
 	return Form(formArgs...)

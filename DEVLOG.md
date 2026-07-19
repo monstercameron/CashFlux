@@ -26077,3 +26077,21 @@ buttons. Rather than ratchet-launder that, the chrome got testids (widget-gear-<
 widget-rz-<dir>-<id> — the normalizer collapses ids to *) and the manifest was regenerated
 against that build: dashboard now 98. /widget-manager's 183 (the builder canvas) and the
 rest of the dashboard's 98 are noted as debt, not fixed here.
+
+## 2026-07-19 — UI/UX remediation, lane B: /rules quick-add layout
+
+Kickoff of the 39-item UI/UX review remediation. Two sessions are working the shared task
+list in this tree concurrently, so this lane runs PARTITIONED: lane A owns quickadd/flip
+sizing, the rail/breakpoints responsive system, and the rules_gen token work; lane B (this
+lane) takes the per-screen fixes and the e2e/screenshot verification, staging commits by
+path only.
+
+First fix: the /rules quick-add form collapse. Root cause was structural, not a tweak —
+`.form-grid`'s `repeat(auto-fit, minmax(150px,1fr))` treats EVERY child as a field-sized
+cell, so at 1180px the conditions fieldset, apply-existing label, and submit row flowed
+into ~150px columns beside the fields (the "10ch-wide helper towers" from the review
+screenshots). Fix generalizes the `.goal-add` precedent: block-level rows get `.fg-span`
+(`grid-column: 1/-1`) via a new generic `.form-grid > .fg-span` rule, the fieldset drops
+its browser-default chrome, and `.cond-slot-body` lays field/op/value in one wrapping
+minmax row. Verified by fresh-profile Playwright screenshot at 1440×900 against the live
+dev server: helper block now measures 1156px wide (was 157px), slot editors row correctly.

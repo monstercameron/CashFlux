@@ -69,6 +69,42 @@ func registerRulesSurface() {
 		prop("gap", "0.45rem"),
 	)
 
+	// Block-level form rows span the whole grid. .form-grid is an auto-fit
+	// column grid, so without this the conditions fieldset, the apply-existing
+	// checkbox label, and the submit row each collapsed into a single ~150px
+	// column BESIDE the fields on the wide /rules quick-add — helper paragraphs
+	// rendered as 10ch-wide towers (task #1). Generic on purpose: any form-grid
+	// row tagged fg-span is a full-width row (matches the .goal-add convention).
+	rule(".form-grid > .fg-span",
+		prop("grid-column", "1 / -1"),
+	)
+	// The conditions fieldset reads as a quiet sub-section, not a browser-default
+	// bordered box; its legend takes the small set-label voice.
+	rule(".cond-slots",
+		prop("border", "0"),
+		prop("padding", "0"),
+		prop("margin", "0.2rem 0 0"),
+		prop("min-width", "0"),
+	)
+	rule(".cond-slots > legend",
+		prop("padding", "0"),
+		prop("font-size", "0.78rem"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text-dim)"),
+		prop("margin-bottom", "0.15rem"),
+	)
+	rule(".cond-slots > .muted",
+		prop("margin", "0 0 0.4rem"),
+	)
+	// An enabled slot's editors sit in one tidy field/op/value row that wraps on
+	// narrow widths instead of stacking full-width blocks.
+	rule(".cond-slot-body",
+		prop("display", "grid"),
+		prop("grid-template-columns", "repeat(auto-fit, minmax(160px, 1fr))"),
+		prop("gap", "0.4rem"),
+		prop("margin", "0.3rem 0 0.5rem 1.55rem"),
+	)
+
 	// ── Precedence chain: first-match-wins as a numbered spine. ─────────────
 	rule(".rule-chain",
 		prop("display", "flex"),

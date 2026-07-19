@@ -15,6 +15,18 @@ and every commit updates this file under `Unreleased`.
   kind control no longer overflows a squeezed auto-fit cell and the full form fits without
   scrolling.
 
+### Fixed
+- **/rules quick-add form no longer collapses into squeezed columns:** `.form-grid` is an
+  auto-fit column grid, so on the wide inline quick-add the conditions fieldset, the
+  "Also apply to what it already matches" checkbox row, the live match-count line, the error
+  row, and the Add-rule button each landed in a single ~150px column BESIDE the fields —
+  helper paragraphs rendered as ten-character-wide towers with a stranded checkbox. Those
+  block-level rows now carry the `.fg-span` full-width convention (new generic
+  `.form-grid > .fg-span` rule), the conditions fieldset reads as a quiet sub-section
+  (no browser-default border, set-label legend), and an enabled condition's field/op/value
+  editors sit in one wrapping row instead of full-width stacks. Fixes the same layout inside
+  the Add-rule modal instance for free.
+
 ## [1.2.5] - 2026-07-19
 
 ### Changed
