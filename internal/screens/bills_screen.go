@@ -822,19 +822,32 @@ func BillRow(props billRowProps) ui.Node {
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
 		// bill-sub-actions: fixed trailing group so action buttons don't crowd the
 		// name/amount area, mirroring the .sub-actions pattern from G10 (G11 follow-up).
+		// "Mark paid" is the single everyday inline action; the rarer "Remind me" and
+		// "Negotiate" live behind a per-row ⋯ kebab so each bill row reads cleanly
+		// (review #21). The Bill model carries no fixed/negotiable signal, so Negotiate
+		// is offered for every non-autopay recurring bill (unchanged availability).
 		Div(css.Class("bill-sub-actions"),
 			// C154: show "Unmark paid" when already paid, "Mark paid" otherwise.
 			IfElse(d.IsPaid,
 				Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.unmarkPaidTitle")), Attr("data-testid", "bill-unmark-paid"), OnClick(unmarkPaid), uistate.T("bills.unmarkPaid")),
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid")),
 			),
-			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
-			// Local bill-negotiation helper: seeds a to-do with talking points + a
-			// savings prompt (no external service). Shown for non-autopay recurring bills
-			// worth haggling (internet, insurance, phone) — small everyday bills aren't.
-			If(props.OnNegotiate != nil, Button(css.Class("btn btn-sm"), Type("button"),
-				Attr("data-testid", "bill-negotiate-"+d.Bill.AccountID),
-				Title(uistate.T("bills.negotiateTitle")), OnClick(negotiate), uistate.T("bills.negotiate"))),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "bill-menu-" + d.Bill.AccountID + "-" + d.Bill.DueDate.Format("2006-01-02"),
+				AriaLabel:    uistate.T("bills.moreActions") + " — " + d.Bill.Name,
+				ToggleClass:  "btn btn-sm",
+				ToggleTestID: "bill-menu-btn-" + d.Bill.AccountID,
+				Items: []ui.Node{
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Title(uistate.T("bills.remindTitle")), OnClick(remind), uistate.T("bills.remind")),
+					// Local bill-negotiation helper: seeds a to-do with talking points + a
+					// savings prompt (no external service). Shown for non-autopay recurring
+					// bills worth haggling (internet, insurance, phone).
+					If(props.OnNegotiate != nil, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "bill-negotiate-"+d.Bill.AccountID),
+						Title(uistate.T("bills.negotiateTitle")), OnClick(negotiate), uistate.T("bills.negotiate"))),
+				},
+			}),
 		),
 	)...)
 }

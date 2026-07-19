@@ -987,49 +987,46 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		)
 	} else {
 		// Actions live in a fixed-width trailing group (G10): keeps the row's name
-		// from being squeezed to nothing, and the destructive "Cancel" is a compact
-		// ghost-danger button so the list reads as subscriptions, not 10 cancel alerts.
+		// from being squeezed to nothing. "Remind me" is the single everyday inline
+		// action; the four rarer actions (mark cancelled / how-to-cancel / web search /
+		// not a subscription) live behind a per-row ⋯ kebab so the row reads as a
+		// subscription, not a wall of five buttons (review #20). Nothing here is
+		// destructive-styled — cancelling a detected subscription is reversible.
 		actions = Div(css.Class("sub-actions"),
 			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
-			Button(
-				css.Class("btn btn-sm btn-ghost-danger"),
-				Type("button"),
-				Title(uistate.T("subs.cancelTitle")),
-				Attr("aria-label", uistate.T("subs.cancelTitle")+" "+s.Name),
-				OnClick(cancel),
-				uistate.T("subs.cancel"),
-			),
-			// QA R3 CF-03: "How to cancel" now leads with LOCAL guidance — it files
-			// the step-by-step cancellation checklist as a due-today task — and the
-			// external web search demotes to a small secondary link (local-first:
-			// nothing leaves the device unless that link is deliberately clicked).
-			Button(
-				css.Class("btn btn-sm"),
-				Type("button"),
-				Attr("data-testid", "sub-howto-cancel-"+slug),
-				Title(uistate.T("subs.guideBtnTitle")),
-				Attr("aria-label", uistate.T("subs.guideBtnTitle")+" "+s.Name),
-				OnClick(guideEvt),
-				uistate.T("subs.howToCancel"),
-			),
-			A(
-				css.Class("btn-link", tw.Text12),
-				Attr("href", "https://duckduckgo.com/?q="+url.QueryEscape("how to cancel "+s.Name+" subscription")),
-				Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
-				Attr("data-testid", "sub-cancel-web-"+slug),
-				Title(uistate.T("subs.howToCancelTitle")),
-				Attr("aria-label", uistate.T("subs.howToCancelTitle")+" "+s.Name),
-				uistate.T("subs.webSearch"),
-			),
-			If(props.OnIgnore != nil, Button(
-				css.Class("btn btn-sm"),
-				Type("button"),
-				Title(uistate.T("subs.ignoreTitle")),
-				Attr("aria-label", uistate.T("subs.ignoreTitle")+" "+s.Name),
-				Attr("data-testid", "sub-ignore-"+slug),
-				OnClick(ignore),
-				uistate.T("subs.ignore"),
-			)),
+			uiw.KebabMenu(uiw.KebabMenuProps{
+				ID:           "sub-menu-" + slug,
+				AriaLabel:    uistate.T("subs.moreActions") + " — " + s.Name,
+				ToggleClass:  "btn btn-sm",
+				ToggleTestID: "sub-menu-btn-" + slug,
+				Items: []ui.Node{
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Title(uistate.T("subs.cancelTitle")),
+						Attr("aria-label", uistate.T("subs.cancelTitle")+" "+s.Name),
+						OnClick(cancel), uistate.T("subs.cancel")),
+					// QA R3 CF-03: "How to cancel" leads with LOCAL guidance — it files
+					// the step-by-step cancellation checklist as a due-today task; the
+					// external web search stays as a secondary item below it.
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "sub-howto-cancel-"+slug),
+						Title(uistate.T("subs.guideBtnTitle")),
+						Attr("aria-label", uistate.T("subs.guideBtnTitle")+" "+s.Name),
+						OnClick(guideEvt), uistate.T("subs.howToCancel")),
+					A(css.Class("add-item"), Attr("role", "menuitem"),
+						Attr("href", "https://duckduckgo.com/?q="+url.QueryEscape("how to cancel "+s.Name+" subscription")),
+						Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+						Attr("data-testid", "sub-cancel-web-"+slug),
+						Title(uistate.T("subs.howToCancelTitle")),
+						Attr("aria-label", uistate.T("subs.howToCancelTitle")+" "+s.Name),
+						uistate.T("subs.webSearch")),
+					// "Not a subscription" sits last (review #20).
+					If(props.OnIgnore != nil, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Title(uistate.T("subs.ignoreTitle")),
+						Attr("aria-label", uistate.T("subs.ignoreTitle")+" "+s.Name),
+						Attr("data-testid", "sub-ignore-"+slug),
+						OnClick(ignore), uistate.T("subs.ignore"))),
+				},
+			}),
 		)
 	}
 
