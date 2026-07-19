@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-07-19
+
 ### Changed
 - **Budgets hero rides the shared summary band:** the B1 top now opens on the same
   `.budget-loader` Spent/Budgeted/Left band the Goals and To-do headline tiles use (one visual
