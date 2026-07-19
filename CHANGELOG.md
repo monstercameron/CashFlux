@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-07-19
+
 ### Changed
 - **Header (top bar) refined onto the standard control language:** the context group (member lens,
   period, status chips) is now LEFT-ANCHORED beside the page title with the actions cluster owning
@@ -20,12 +22,18 @@ and every commit updates this file under `Unreleased`.
   so month-name length doesn't nudge neighbours, and the sample-data chip calmed one notch (softer
   amber, height-aligned) while keeping its "Start fresh" link.
 
+- **Music/audio mute toggle back inline in the top bar:** un/mute is a one-click reflex action, so
+  the ♪ button returned from the ⋯ More overflow to the actions cluster (beside the bell) with the
+  standard bordered chrome; the ⋯ menu keeps the activity stamp + Smart peek cluster.
+
 ### Fixed
 - **Profile-switch modal ("Who's using CashFlux?") rendered unstyled:** its `cf-ps-*`/`ps-card`
   classes had no CSS at all, so the dialog painted as bare text floating over the blurred page
-  (member names run together, no panel). It now rides the standard `.cf-dialog` kit (panel, title,
-  message, actions) and the member cards are full-width standard-chrome buttons with the active
-  profile accent-marked and the 🔒 PIN badge right-aligned.
+  (member names run together, no panel). It now rides the standard flip modal (`FlipPanel`,
+  FlipSmall size — same 3D-flip overlay as every other app modal, with header ✕/Escape/backdrop
+  dismissal and focus trapping) and the member cards are full-width standard-chrome buttons with
+  the active profile accent-marked and the 🔒 PIN badge right-aligned; the PIN challenge step
+  lives in the same panel.
 - **To-do command bar realigned into two fixed rows:** the toolbar no longer relies on a single
   wrapping flex row (which, at real widths, shrank the search box, orphaned the List/Board/Calendar
   switch beneath it, and dropped `Add task`/`More tools` onto a mostly-empty third band). Row 1 is
