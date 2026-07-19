@@ -74,6 +74,7 @@ func Transactions() ui.Node {
 	// receipt preview opening all flow through these atoms.
 	_ = uistate.UseDataRevision().Get()
 	selAtom := uistate.UseTxnSelection()
+	selAnchorAtom := uistate.UseTxnSelAnchor()
 	undoAtom := uistate.UseTxnUndo()
 	previewAtom := uistate.UseTxnPreview()
 	filterAtom := uistate.UseTxFilter()
@@ -93,6 +94,24 @@ func Transactions() ui.Node {
 	// is never mutated.
 	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
 		f.Member = am
+	}
+
+	// C13: a bulk selection must not outlive the filter/search it was made under. A
+	// quick-filter (or search, saved view, or member switch) that hides the selected
+	// rows would otherwise leave the "N selected" bulk bar — Delete included — acting
+	// on rows the user can no longer see. So drop the selection whenever the effective
+	// result-set scope changes (its filter fields + search text), while leaving sort
+	// and pagination alone: those reorder/paginate the SAME set without hiding rows.
+	selScope := f
+	selScope.Page, selScope.PageSize = 0, 0
+	selScope.Sort, selScope.Dir = "", ""
+	lastSelScope := ui.UseState(selScope)
+	if lastSelScope.Get() != selScope {
+		lastSelScope.Set(selScope)
+		if len(selAtom.Get()) > 0 {
+			selAtom.Set(map[string]bool{})
+			selAnchorAtom.Set("")
+		}
 	}
 
 	// Register mode (TX12): when the filter scopes to exactly one account, the
