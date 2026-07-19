@@ -434,8 +434,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	tagOpts := withAllOption(uistate.T("transactions.allTags"),
 		uiw.OptionsFrom(tagList, func(s string) string { return s }, func(s string) string { return s }, ""))
 
+	// The resting (empty) value reads as "no cleared-status filter" — the old
+	// "Cleared & not" label made the select look like an active filter at rest
+	// (review #19). Empty still maps to no-op; picking yes/no filters, clearing
+	// back to Any round-trips.
 	clearedOpts := []uiw.SelectOption{
-		{Value: "", Label: uistate.T("transactions.clearedAll")},
+		{Value: "", Label: uistate.T("transactions.clearedAny")},
 		{Value: "no", Label: uistate.T("transactions.notCleared")},
 		{Value: "yes", Label: uistate.T("transactions.cleared")},
 	}
