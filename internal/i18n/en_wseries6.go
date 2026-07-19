@@ -14,6 +14,13 @@ package i18n
 // editing en.go under concurrent work (mirrors the override precedent already in
 // the catalog).
 var wseries6Keys = Catalog{
+	// ── C367 — goal scenario tool, surfaced ────────────────────────────────────
+	// The contribution planner (slider + landing band) is the "what if I add more?"
+	// scenario tool; label it in the reviewer's words on both the compact affordance
+	// and the expanded disclosure so its purpose is unmistakable.
+	"goals.whatIfMore":     "What if I add more?",
+	"goals.whatIfMoreHide": "Hide what-if",
+
 	// ── C370 — token/cost honesty ──────────────────────────────────────────────
 	// The per-message note now says "this reply" so one turn's spend reads as
 	// distinct from the conversation-cumulative receipt ("This chat: …").

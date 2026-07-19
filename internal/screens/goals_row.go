@@ -112,6 +112,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	// expanded state; Delete stays in the kebab there per the standing directive.
 	cardExpanded := ui.UseState(false)
 	toggleExpand := ui.UseEvent(Prevent(func() { cardExpanded.Set(!cardExpanded.Get()) }))
+	// C367: the compact card's "What if I add more?" affordance jumps straight into
+	// the expanded scenario planner — one click reveals the contribution slider and
+	// the conservative/expected/best landing band, so the tool the reviewer asked
+	// for is discoverable without first expanding the card and hunting for it.
+	openWhatIf := ui.UseEvent(Prevent(func() { planOpen.Set(true); cardExpanded.Set(true) }))
 
 	// Inline target editing (parity with the budgets limit): click the target figure in
 	// the bar → a compact number input (Enter/✓ saves, ✕ cancels), undoable. props.Goal
@@ -660,9 +665,11 @@ func GoalRow(props goalRowProps) ui.Node {
 	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
 	// (completion propagates to every sub-feature, not just the tint).
 	showPlanner := financial && !g.Archived && !complete && sliderOK
-	planLabel := uistate.T("goalsredesign.planShow")
+	// C367: the planner is the "what if I add more?" scenario tool — label it in the
+	// reviewer's own words so its purpose is obvious, not a generic "plan contribution".
+	planLabel := uistate.T("goals.whatIfMore")
 	if planOpen.Get() {
-		planLabel = uistate.T("goalsredesign.planHide")
+		planLabel = uistate.T("goals.whatIfMoreHide")
 	}
 
 	// A free-text note on the goal — a clamped preview that opens the goal editor on click
@@ -741,6 +748,14 @@ func GoalRow(props goalRowProps) ui.Node {
 			compactSub,
 			Div(css.Class("goal-card-actions"),
 				compactPrimary,
+				// C367: a visible "What if I add more?" jump into the scenario planner —
+				// only when the goal actually has a plan to explore (mirrors showPlanner).
+				If(showPlanner, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
+					Attr("data-testid", "goal-whatif-"+g.ID),
+					Attr("aria-label", uistate.T("goals.whatIfMore")+" — "+g.Name), Title(uistate.T("goals.whatIfMore")),
+					OnClick(openWhatIf),
+					uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Span(uistate.T("goals.whatIfMore")))),
 				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
 					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
 					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
