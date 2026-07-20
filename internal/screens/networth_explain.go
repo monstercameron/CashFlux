@@ -88,6 +88,22 @@ func nwsBridgeExplain() ui.Node {
 	})
 }
 
+// nwsPaceExplain is the "?" for the projection chip. A forward-looking figure
+// is the one number on this page that is not a fact, so it is the one that most
+// needs its method on the record: what "recent pace" measures, what goes into
+// it, and that it is a straight line rather than a forecast.
+func nwsPaceExplain(perMonth, lookback string) ui.Node {
+	return ui.CreateElement(nwsExplain, nwsExplainProps{
+		ID:    "nws-explain-pace",
+		Title: uistate.T("nws.paceExplainTitle"),
+		Lines: []string{
+			uistate.T("nws.explainPace1", lookback, perMonth),
+			uistate.T("nws.explainPace2"),
+			uistate.T("nws.explainPace3"),
+		},
+	})
+}
+
 // nwsSidesExplain is the "?" for TWO SIDES.
 func nwsSidesExplain() ui.Node {
 	return ui.CreateElement(nwsExplain, nwsExplainProps{
@@ -97,6 +113,9 @@ func nwsSidesExplain() ui.Node {
 			uistate.T("nws.explainSides1"),
 			uistate.T("nws.explainSides2"),
 			uistate.T("nws.explainSides3"),
+			// The pace rail's "14 mo" between two dots is the one thing on this
+			// graphic with no label of its own, so the key for it lives here.
+			uistate.T("nws.explainSides4"),
 		},
 	})
 }

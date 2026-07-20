@@ -21,8 +21,11 @@ var netWorthRedesignKeys = Catalog{
 	"nws.agoMonth":        "at the start of this month",
 	"nws.agoMonths":       "%d months ago",
 	"nws.agoYears":        "two years ago",
-	"nws.deltaOver":       "over %s",
-	"nws.deltaTitle":      "How your net worth has moved across %s",
+	"nws.spanMonth":       "this month",
+	"nws.spanMonths":      "over the last %d months",
+	"nws.spanYears":       "over the last two years",
+	"nws.spanAll":         "since your records began",
+	"nws.deltaTitle":      "How your net worth has moved %s",
 
 	// ── THE BRIDGE
 	"nws.bridgeTitle": "What moved it",
@@ -67,6 +70,7 @@ var netWorthRedesignKeys = Catalog{
 	"nws.explainSides1":  "The top line is everything you own. The bottom line is everything you owe. The shaded space between them is your net worth.",
 	"nws.explainSides2":  "So when the gap grows, you're getting wealthier — whether that's because the top line rose, the bottom line fell, or both.",
 	"nws.explainSides3":  "The scale starts near your lowest figure rather than at zero, so small month-to-month movements are still visible. The dollar labels down the left tell you where you actually are.",
+	"nws.explainSides4":  "Beneath the chart, each dot marks a round figure your net worth passed, and the number between two dots is how long that climb took — \"14 mo\" means fourteen months from one to the next. Marks on the chart itself show where each of those crossings happened; a dashed one is a setback rather than a gain.",
 
 	// ── What the figure rests on. A disclosure, not a nag: plain about what is
 	// current and what is not, and never claiming a certainty the data cannot
@@ -77,8 +81,6 @@ var netWorthRedesignKeys = Catalog{
 	"nws.dqClean":          "Based on %d accounts",
 	"nws.dqStaleSummary":   "Based on %d accounts · %d need updating",
 	"nws.dqIncluded":       "%d accounts are counted in this figure.",
-	"nws.dqStaleAccount":   "%s hasn't been confirmed in %s, so its balance may have drifted.",
-	"nws.dqStaleNever":     "%s has never had its balance confirmed, so we can't tell how old it is.",
 	"nws.dqManual":         "Your oldest hand-entered value is %s, last confirmed %s.",
 	"nws.dqManualDominant": "Your oldest hand-entered value is %s, last confirmed %s — and it's about %d%% of everything you own, so this figure leans heavily on it being right.",
 	"nws.dqDominant":       "%s is about %d%% of everything you own, so this figure moves largely with it.",
@@ -87,7 +89,11 @@ var netWorthRedesignKeys = Catalog{
 	"nws.dqExcludedChoice": "%s you've chosen to leave out of net worth.",
 	"nws.dqExcludedNoRate": "%s couldn't be included: there's no exchange rate for its currency.",
 	"nws.dqAllCurrent":     "Every account is up to date.",
-	"nws.dqUpdate":         "Update balances",
+	"nws.dqUpdate":         "Open accounts to edit a figure",
+	"nws.dqColAccount":     "Account",
+	"nws.dqColConfirmed":   "Last confirmed",
+	"nws.dqColAge":         "Age",
+	"nws.dqConfirmAll":     "Confirm all %d as current",
 	"nws.and":              "and",
 
 	// ── Investigating a number in place
@@ -111,11 +117,11 @@ var netWorthRedesignKeys = Catalog{
 
 	// ── The read: takeaway + ratios
 	"nws.readTitle":     "What it means",
-	"nws.takeUp":        "Up %s over %s. The biggest single cause was %s, which was %d%% of everything that moved.",
-	"nws.takeDown":      "Down %s over %s. The biggest single cause was %s, which was %d%% of everything that moved.",
-	"nws.takeUpPlain":   "Up %s over %s.",
-	"nws.takeDownPlain": "Down %s over %s.",
-	"nws.takeFlat":      "Holding steady at %s across %s.",
+	"nws.takeUp":        "Up %s %s. The biggest single cause was %s, which was %d%% of everything that moved.",
+	"nws.takeDown":      "Down %s %s. The biggest single cause was %s, which was %d%% of everything that moved.",
+	"nws.takeUpPlain":   "Up %s %s.",
+	"nws.takeDownPlain": "Down %s %s.",
+	"nws.takeFlat":      "Holding steady at %s %s.",
 
 	"nws.causeMoneyKept":   "the money you kept",
 	"nws.causeMarket":      "the market moving your investments",
@@ -168,6 +174,13 @@ var netWorthRedesignKeys = Catalog{
 	"nws.paceFalls":    "It fell back %d times along the way.",
 	"nws.paceNone":     "No round figures reached over this period.",
 
+	// The projection's method, stated rather than trusted.
+	"nws.paceExplainTitle": "How this projection works",
+	"nws.paceLookback":     "the last %d months",
+	"nws.explainPace1":     "It takes your net worth over %s and averages the change: %s a month.",
+	"nws.explainPace2":     "That average counts everything that moved your net worth in the period — money you kept, debt you paid down, and any change in what your property and investments are valued at, converted to your base currency.",
+	"nws.explainPace3":     "It then draws a straight line from where you stand to the next round figure. It is one scenario, not a forecast: a month of unusual spending or a re-valued asset moves it. If your recent pace is flat or downward, no date is offered at all.",
+
 	"nws.historyShow":    "Show the numbers · %d months",
 	"nws.historyHide":    "Hide the numbers",
 	"nws.historyCaption": "Net worth month by month: what you own, what you owe, and the difference.",
@@ -175,7 +188,7 @@ var netWorthRedesignKeys = Catalog{
 	"nws.milestonesShowAll": "Show all %d milestones",
 	"nws.milestonesHide":    "Hide the full list",
 	"nws.winAll":            "All time",
-	"nws.agoAll":            "when your records begin",
+	"nws.agoAll":            "when your records began",
 
 	// ── Detail sections
 	"nws.indexAria":       "Jump to a section",
@@ -185,7 +198,7 @@ var netWorthRedesignKeys = Catalog{
 	"nws.secStand":        "Where you stand",
 	"nws.secStandNote":    "The balance sheet, as of today.",
 	"nws.secChanged":      "What changed",
-	"nws.secChangedNote":  "Every step of the move across %s, and every account behind it.",
+	"nws.secChangedNote":  "Every step of the move %s, and every account behind it.",
 	"nws.secOwn":          "What you own",
 	"nws.secOwnNote":      "%s in assets, measured against each other rather than against your debts.",
 	"nws.secOwe":          "What you owe",

@@ -37,6 +37,8 @@ import (
 type nwsQualityProps struct {
 	Q    balancesheet.Quality
 	Base string
+	// App backs the guided "confirm these are still current" action.
+	App *appstate.App
 	// AsOfLine is the "your balance sheet as of X" sentence the trigger sits
 	// beside, so the two read as one line rather than two competing labels.
 	AsOfLine string
@@ -52,6 +54,17 @@ func nwsQuality(p nwsQualityProps) ui.Node {
 	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	uiw.DismissPopover(open.Get(), id, func() { open.Set(false) })
 	uiw.AnchorPopover(open.Get(), id)
+	// The app's existing guided "mark all updated" prompt — it names the
+	// accounts, previews the blast radius and lands as one undoable batch.
+	// Reused rather than reinvented, so this popover and the accounts toolbar
+	// can never drift apart.
+	app := p.App
+	confirmStale := ui.UseEvent(Prevent(func() {
+		if app != nil {
+			markAllStalePrompt(app)
+		}
+		open.Set(false)
+	}))
 
 	q := p.Q
 	// The trigger states the headline of the disclosure, so the common case
@@ -71,16 +84,38 @@ func nwsQuality(p nwsQualityProps) ui.Node {
 	lines := []ui.Node{
 		P(css.Class("nws-explain-line"), uistate.T("nws.dqIncluded", q.AccountsIncluded)),
 	}
-	// Every overdue account is named. A count alone would tell the reader
-	// something is wrong without telling them what to go and fix.
-	for _, a := range q.Stale {
-		if a.DaysSince < 0 {
-			lines = append(lines, P(css.Class("nws-explain-line"), Attr("data-testid", "nws-dq-stale"),
-				uistate.T("nws.dqStaleNever", a.Name)))
-			continue
+	// The overdue accounts are DATA, so they are a table rather than nine
+	// near-identical sentences. Prose earns its place when a sentence carries a
+	// judgement — which is why the dominant-valuation note below stays prose —
+	// but "Chequing was last confirmed 214 days ago", repeated nine times with
+	// only the nouns changing, is a table that has been read aloud. Ranked
+	// oldest first, because that is the order the reader would work in.
+	if len(q.Stale) > 0 {
+		rows := make([]any, 0, len(q.Stale))
+		for _, a := range q.Stale {
+			when, age := uistate.T("nws.dqNever"), uistate.T("nws.dqNever")
+			if a.DaysSince >= 0 {
+				age = plural(a.DaysSince, "day")
+				if !a.AsOf.IsZero() {
+					when = uistate.LoadPrefs().FormatDate(a.AsOf)
+				}
+			}
+			rows = append(rows, Tr(Attr("data-testid", "nws-dq-stale"),
+				Td(a.Name),
+				Td(when),
+				Td(css.Class("nws-num"), age),
+			))
 		}
-		lines = append(lines, P(css.Class("nws-explain-line"), Attr("data-testid", "nws-dq-stale"),
-			uistate.T("nws.dqStaleAccount", a.Name, plural(a.DaysSince, "day"))))
+		lines = append(lines, Div(css.Class("nws-dq-scroll"),
+			Table(css.Class("nws-table", "nws-dq-table"), Attr("data-testid", "nws-dq-stale-table"),
+				Thead(Tr(
+					Th(Attr("scope", "col"), uistate.T("nws.dqColAccount")),
+					Th(Attr("scope", "col"), uistate.T("nws.dqColConfirmed")),
+					Th(css.Class("nws-num"), Attr("scope", "col"), uistate.T("nws.dqColAge")),
+				)),
+				Tbody(rows...),
+			),
+		))
 	}
 	// The oldest hand-entered valuation, and — when it is also most of what the
 	// household owns — why that matters for this particular figure.
@@ -133,8 +168,22 @@ func nwsQuality(p nwsQualityProps) ui.Node {
 				Attr("aria-label", uistate.T("nws.dqTitle")), Attr("data-testid", "nws-dq-pop"),
 				Div(css.Class("nws-explain-title"), uistate.T("nws.dqTitle")),
 				lines,
-				A(css.Class("btn", "btn-sm"), Href(uistate.RoutePath("/accounts")),
-					Attr("data-testid", "nws-dq-update"), uistate.T("nws.dqUpdate")),
+				// Two actions, because there are two different intents and the
+				// old single "Update balances" link served neither: it dropped
+				// the reader on the full accounts list to hunt for the nine.
+				// Confirming that the figures are still right is the common
+				// case and now runs the app's existing guided prompt, which
+				// names the accounts and previews the blast radius. Editing a
+				// figure is the other case, and still wants the accounts page.
+				Div(css.Class("nws-dq-actions"),
+					If(len(q.Stale) > 0,
+						Button(css.Class("btn", "btn-sm"), Type("button"),
+							Attr("data-testid", "nws-dq-confirm"),
+							OnClick(confirmStale),
+							uistate.T("nws.dqConfirmAll", len(q.Stale)))),
+					A(css.Class("btn", "btn-sm", "btn-ghost"), Href(uistate.RoutePath("/accounts")),
+						Attr("data-testid", "nws-dq-update"), uistate.T("nws.dqUpdate")),
+				),
 			),
 		),
 	)

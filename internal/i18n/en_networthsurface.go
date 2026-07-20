@@ -15,7 +15,7 @@ var netWorthSurfaceKeys = Catalog{
 	// Window + drills
 	"nw.horizon24":    "2 years",
 	"nw.viewDebts":    "View debts",
-	"nw.metricsShow":  "Net-worth metrics",
+	"nw.metricsShow":  "Build a custom metric",
 	"nw.metricsHide":  "Hide metrics",
 	"nw.metricsTitle": "Show every balance-sheet figure as a live formula variable",
 
