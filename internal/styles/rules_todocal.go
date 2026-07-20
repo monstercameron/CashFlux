@@ -143,4 +143,9 @@ func registerTodoCalSurface() {
 		color("var(--accent)"),
 		background("color-mix(in srgb, var(--accent) 12%, var(--bg-card))"),
 	)
+
+	// Make the 7-day grid fit the pane instead of clipping at the right edge
+	// (2026-07-19 review, lane E #2). Chained here so it wins over the shared
+	// primitive's `repeat(7, 1fr)` on the `.tcal` scope.
+	registerTodoCalFit()
 }
