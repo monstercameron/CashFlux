@@ -6,6 +6,28 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **UI/UX review remediation — final tranche (2026-07-19, all 39 review tasks now closed):**
+  - **Design tokens:** `--muted` exists in the dark base (was light-only, resolving to
+    nothing); ~500 off-scale rem font sizes snap to the `--type-*` scale (±0.6px shifts that
+    collapse the near-duplicate 12.4–13.8px cluster); literal corner radii consolidate to
+    `--radius-xs…xl` (new `--radius-xl` 12px; 10px folds into lg); `--radius` documented as
+    the THEME EDITOR's knob, not a legacy token.
+  - **Charts:** axis policy codified (trend-class = axis-free with captions + hover values;
+    operational = labeled axes) and `#main svg text` inherits the app face.
+  - **Shell:** rail nav gains scroll affordances (thin scrollbar + seam before the pinned
+    block); the bell badge counts only Needs-you so it matches the landing tab; the ⋯ menu's
+    activity/insights cluster is captioned; the gwc dev bubble no longer covers the privacy
+    line (which was never truncated — the review's read was the overlay).
+  - **Popovers:** AnchorPopover clamps menus taller than their chosen side to that side's
+    space with internal scroll; the Budget-settings panel widens so its method select shows
+    its full value.
+  - **Flip modals size to content:** Height is now a max bound over an in-flow back face —
+    sparse panels hug their content (Compare goals 850→280px), dense ones clamp and scroll
+    as before. Motion + a11y + smoke suites green after the change.
+  - **Reports:** the full report's sticky jump index is an opaque shelf — Sankey labels no
+    longer read through it.
+
 ### Changed
 - **Budgets summary band shows the overage as a striped section:** when the month passes its cap
   the track now rescales so its full width is the SPENT total — the cap moves left to limit/spent

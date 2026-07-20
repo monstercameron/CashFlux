@@ -26339,3 +26339,20 @@ responsive+a11y+motion 23✓ (stale specs realigned where earlier deliberate UX 
 outrun them — single todo pager, "Account settings" label, stale-row drill demotion,
 kebab-first subscription/bill actions). Overflow probe: zero clipped elements on dashboard/
 budgets/board at 1024/1920/2560.
+
+## 2026-07-19 — review remediation complete: all 39 tasks closed
+
+Final tranche took the eleven items originally partitioned to the other lane (which had
+moved on to W-series features): the token trio (--muted dark-base gap, ~500-site type-scale
+snap, radius consolidation), the chart axis policy, and the shell/overlay cluster. Two
+findings worth remembering: `--radius` looked like a dead legacy token but is the THEME
+EDITOR's per-theme knob (theme.go re-emits it — an early sweep briefly broke that and was
+reverted within the session), and the "truncated" rail privacy line was never truncated —
+the gwc dev-runner's status bubble sits exactly on top of it (now shepherded to the right
+edge via !important overrides, dev-only cosmetics). AnchorPopover gained a general
+tall-menu clamp (chosen side's space, internal scroll), and FlipPanel's Height became a
+max bound over an in-flow back face, so modals finally size to content — verified across
+sparse (280px) and dense (603px) panels with motion/a11y/smoke green (23 passed).
+
+Every fix screenshot-verified live; the honest badge invariant is now count-clicked ==
+count-landed (15 = 15 after the day's feature work grew the sample feed).
