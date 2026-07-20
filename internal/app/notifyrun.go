@@ -88,7 +88,7 @@ func runNotifyCatchUp() {
 			}
 			return uistate.T("notify.budgetNearTitle", name), uistate.T("notify.budgetNearBody")
 		})...)
-	cands = append(cands, weeklyDigestCandidates(app, now)...)
+	cands = append(cands, digestCandidates(app, now, ruleCfg)...)
 	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
 	cands = append(cands, unusualChargeCandidates(app, now, ruleCfg)...)
 	cands = append(cands, backupReminderCandidates(app, now)...)
@@ -129,7 +129,12 @@ func runNotifyCatchUp() {
 		}
 	}
 	uistate.PrependNotifyFeed(feed)
-	postBrowserNotifications(out)
+	// Quiet hours suppress browser pop-ups only (C416). The in-app feed above has
+	// already recorded every alert, so nothing is lost — it just doesn't buzz the
+	// OS during the user's do-not-disturb window.
+	if !ruleCfg.InQuietHours(now) {
+		postBrowserNotifications(out)
+	}
 
 	// One unobtrusive summary toast: the single reminder's title, or a count.
 	msg := out[0].Title
@@ -173,11 +178,13 @@ func postBrowserNotifications(out []notify.Notification) {
 	}
 }
 
-// weeklyDigestCandidates emits a once-per-ISO-week summary of the previous
-// completed week's income and spending (keyed by the current week, so the first
-// open each week shows last week's recap). It produces nothing when there was no
-// activity, so a quiet week doesn't nag.
-func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate {
+// digestCandidates emits a periodic summary of the previous completed period's
+// income and spending, keyed by the current period so the first open each period
+// shows the prior recap. The cadence (weekly / monthly) comes from the user's
+// rule config (C416) — weekly recaps last ISO-week, monthly recaps last calendar
+// month. It produces nothing when there was no activity, so a quiet period
+// doesn't nag.
+func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -187,15 +194,24 @@ func weeklyDigestCandidates(app *appstate.App, now time.Time) []notify.Candidate
 	// any component render, where calling a hook panics with "GoUseAtom called
 	// outside component context" (caught by recover, but it silently kills catch-up).
 	weekStart := uistate.CurrentPrefs().WeekStartWeekday()
-	prev := period.NewWindow(period.Week, now, weekStart).Shift(-1)
+	res := period.Week
+	periodKey := notify.WeekKey(now)
+	title := uistate.T("notify.digestTitle")
+	bodyKey := "notify.digestBody"
+	if cfg.EffectiveDigestCadence() == notify.DigestMonthly {
+		res = period.Month
+		periodKey = notify.MonthKey(now)
+		title = uistate.T("notify.digestTitleMonthly")
+		bodyKey = "notify.digestBodyMonthly"
+	}
+	prev := period.NewWindow(res, now, weekStart).Shift(-1)
 	ps, pe := prev.Range()
 	flow, err := reports.IncomeVsExpense(app.Transactions(), ps, pe, rates)
 	if err != nil || (flow.Income == 0 && flow.Expense == 0) {
 		return nil
 	}
-	title := uistate.T("notify.digestTitle")
-	body := uistate.T("notify.digestBody", fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base))
-	return notifyfeed.DigestCandidates("default-digest", notify.WeekKey(now), title, body, now)
+	body := uistate.T(bodyKey, fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base))
+	return notifyfeed.DigestCandidates("default-digest", periodKey, title, body, now)
 }
 
 // largeTransactionCandidates flags recent unusually large expenses (B19), over

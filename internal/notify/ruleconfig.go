@@ -2,7 +2,21 @@
 
 package notify
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
+
+// DigestCadence names how often the periodic spending digest is generated.
+// It is a stable storage value persisted in RuleConfig.
+type DigestCadence string
+
+const (
+	// DigestWeekly emits a once-per-ISO-week recap of the previous week (default).
+	DigestWeekly DigestCadence = "weekly"
+	// DigestMonthly emits a once-per-month recap of the previous calendar month.
+	DigestMonthly DigestCadence = "monthly"
+)
 
 // RuleConfig holds per-ruleID user preferences: an enabled/disabled flag for
 // each rule and optional threshold overrides. It is persisted as a JSON object
@@ -15,6 +29,42 @@ type RuleConfig struct {
 	// rule's default uses (minor currency units for money rules; days for bill-due).
 	// A zero or negative value means "use the rule default".
 	Thresholds map[string]int64 `json:"thresholds"`
+
+	// QuietStartMin and QuietEndMin define a single account-wide do-not-disturb
+	// window in minutes since local midnight, in [0, 1440). End is exclusive; when
+	// the two are equal quiet hours are OFF. The window may wrap past midnight
+	// (start > end), e.g. 22:00–07:00 is 1320..420. During quiet hours the feed
+	// still records every alert, but browser pushes are suppressed (C416). Omitted
+	// from JSON when both are zero so older payloads round-trip unchanged.
+	QuietStartMin int `json:"quietStartMin,omitempty"`
+	QuietEndMin   int `json:"quietEndMin,omitempty"`
+
+	// DigestCadence selects how often the spending digest is generated
+	// ("weekly" or "monthly"). Empty is treated as weekly (C416). Omitted from
+	// JSON when empty so older payloads round-trip unchanged.
+	DigestCadence DigestCadence `json:"digestCadence,omitempty"`
+}
+
+// QuietHoursEnabled reports whether a non-empty do-not-disturb window is set.
+func (c RuleConfig) QuietHoursEnabled() bool {
+	return c.QuietStartMin != c.QuietEndMin
+}
+
+// InQuietHours reports whether the local clock time of t falls inside the
+// account-wide do-not-disturb window. A zero-width window (start == end)
+// disables quiet hours. The window is half-open [start, end) and may wrap past
+// midnight. It shares Rule.InQuietHours so the config and per-rule math agree.
+func (c RuleConfig) InQuietHours(t time.Time) bool {
+	return Rule{QuietStartMin: c.QuietStartMin, QuietEndMin: c.QuietEndMin}.InQuietHours(t)
+}
+
+// EffectiveDigestCadence returns the configured digest cadence, defaulting to
+// DigestWeekly when unset or unrecognized.
+func (c RuleConfig) EffectiveDigestCadence() DigestCadence {
+	if c.DigestCadence == DigestMonthly {
+		return DigestMonthly
+	}
+	return DigestWeekly
 }
 
 // DefaultRuleConfig returns a config with every default rule enabled and no
