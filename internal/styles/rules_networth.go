@@ -1105,7 +1105,8 @@ func registerNwsDetail() {
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "999px"),
 		prop("cursor", "pointer"),
-		prop("transition", "color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard)"),
+		prop("transition", "color var(--motion-fast, 120ms) var(--ease-standard, ease),"+
+			" border-color var(--motion-fast, 120ms) var(--ease-standard, ease)"),
 	)
 	rule(".nws-milestones-more:hover",
 		prop("color", "var(--text)"),
