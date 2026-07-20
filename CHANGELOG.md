@@ -6,6 +6,25 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **The bridge's legs name which accounts produced them.** `attribution.Leg` now carries
+  `Contributors` — the accounts behind that leg, largest magnitude first — so "debt paid down
+  $21,295" can answer "by which debts?". They are recorded during the same single pass that computes
+  the leg rather than recomputed, which is why a contributor list always sums exactly to its leg (a
+  test asserts it per leg). `LegResidual` has none by definition: the residual is precisely what
+  could not be attributed to an account, and inventing contributors for it would undo the honesty
+  the residual exists to provide.
+- **A data-quality disclosure for the balance sheet** (`balancesheet.AssessQuality`). A net-worth
+  figure is only as trustworthy as the balances under it, and those are not equally trustworthy: a
+  checking account reconciles itself from transactions, while a property holding worth ~78% of the
+  asset side is a number somebody typed in once. One stale valuation or FX rate can move the
+  headline more than a year of saving. It reports what the figure rests on — accounts included,
+  which are overdue, the oldest hand-entered valuation, whether one holding dominates, which
+  currencies were converted, what was excluded — and deliberately does NOT define staleness: the
+  caller passes the app's own `freshness.IsStale` in, because a second private idea of "stale" that
+  disagreed with the rest of the app would be worse than none. It stays quiet when there is nothing
+  to say, and dominance is only reported when there is more than one holding to dominate.
+
 ### Changed
 - **Coverage manifest: /networth's control inventory acknowledges the redesign.** `nws-view-glance`
   and `nws-view-detail` are new; `networth-drill` and `nw-owe-drill` left the DEFAULT view without

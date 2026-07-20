@@ -4,6 +4,7 @@ package attribution
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -56,11 +57,26 @@ var BridgeLegOrder = []LegKind{
 	LegMoneyKept, LegMarketMovement, LegDebtPaidDown, LegNewDebt, LegRevaluation, LegResidual,
 }
 
+// Contributor is one account's share of a leg, in base-currency minor units.
+// It is the next level of "why": a leg names WHAT moved net worth, and its
+// contributors name WHICH accounts produced it.
+type Contributor struct {
+	AccountID   string
+	AccountName string
+	AmountMinor int64
+}
+
 // Leg is one signed step of the bridge, in base-currency minor units. A
 // positive amount pushed net worth up over the window.
 type Leg struct {
 	Kind        LegKind
 	AmountMinor int64
+	// Contributors are the accounts behind this leg, largest magnitude first.
+	// They are recorded on the way through the same single pass that computes
+	// the leg, never recomputed, so a contributor list always sums to its leg.
+	// LegResidual has none by definition: the residual is precisely what could
+	// not be attributed to an account.
+	Contributors []Contributor
 }
 
 // Bridge decomposes the movement of net worth across one window into signed
@@ -83,6 +99,16 @@ type Bridge struct {
 
 // DeltaMinor is the window's total net-worth movement (EndMinor - StartMinor).
 func (b Bridge) DeltaMinor() int64 { return b.EndMinor - b.StartMinor }
+
+// Contributors returns the accounts behind one leg, largest magnitude first.
+func (b Bridge) Contributors(k LegKind) []Contributor {
+	for _, l := range b.Legs {
+		if l.Kind == k {
+			return l.Contributors
+		}
+	}
+	return nil
+}
 
 // Leg returns the signed amount of one leg (0 when absent).
 func (b Bridge) Leg(k LegKind) int64 {
@@ -136,6 +162,7 @@ func BuildBridge(in Input) (Bridge, error) {
 	}
 
 	legs := map[LegKind]int64{}
+	contribs := map[LegKind][]Contributor{}
 	for _, a := range in.Accounts {
 		if a.Archived {
 			continue
@@ -215,6 +242,11 @@ func BuildBridge(in Input) (Bridge, error) {
 				return Bridge{}, err
 			}
 			legs[k] += v
+			if v != 0 {
+				contribs[k] = append(contribs[k], Contributor{
+					AccountID: a.ID, AccountName: a.Name, AmountMinor: v,
+				})
+			}
 		}
 	}
 
@@ -231,7 +263,14 @@ func BuildBridge(in Input) (Bridge, error) {
 
 	b.Legs = make([]Leg, 0, len(BridgeLegOrder))
 	for _, k := range BridgeLegOrder {
-		b.Legs = append(b.Legs, Leg{Kind: k, AmountMinor: legs[k]})
+		c := contribs[k]
+		sort.SliceStable(c, func(i, j int) bool {
+			if d := abs64(c[i].AmountMinor) - abs64(c[j].AmountMinor); d != 0 {
+				return d > 0
+			}
+			return c[i].AccountID < c[j].AccountID
+		})
+		b.Legs = append(b.Legs, Leg{Kind: k, AmountMinor: legs[k], Contributors: c})
 	}
 	return b, nil
 }

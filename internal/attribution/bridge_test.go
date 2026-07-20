@@ -263,3 +263,67 @@ func TestBuildBridgeAgreesWithCompute(t *testing.T) {
 		t.Fatalf("bridge delta %d != attribution NetDeltaMinor %d", b.DeltaMinor(), rep.NetDeltaMinor)
 	}
 }
+
+// TestBridgeContributorsSumToTheirLeg is the next-level-of-why contract: a leg
+// names WHAT moved net worth, its contributors name WHICH accounts did it, and
+// the two can never disagree because both come from one pass.
+func TestBridgeContributorsSumToTheirLeg(t *testing.T) {
+	in := Input{
+		Accounts: []domain.Account{
+			assetOfType("chk", "Checking", domain.TypeChecking, 100000),
+			assetOfType("sav", "Savings", domain.TypeSavings, 500000),
+			liabilityAcct("visa", "Visa", domain.TypeCreditCard, -200000),
+			liabilityAcct("mort", "Mortgage", domain.TypeMortgage, -25000000),
+		},
+		Txns: []domain.Transaction{
+			txn("t1", "chk", 12, 40000, "Payroll", "salary"),
+			txn("t2", "sav", 12, 60000, "Transfer in", ""),
+			txn("t3", "visa", 13, 15000, "Card payment", ""),
+			txn("t4", "mort", 14, 85000, "Mortgage payment", ""),
+			txn("t5", "visa", 15, -9000, "New charge", ""),
+		},
+		Rates: rates(), Since: since, Until: until, IsAdjustment: isAdjDesc,
+	}
+	b, err := BuildBridge(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range BridgeLegOrder {
+		cs := b.Contributors(k)
+		if k == LegResidual {
+			if len(cs) != 0 {
+				t.Errorf("the residual must have no contributors — it is what could not be attributed, got %v", cs)
+			}
+			continue
+		}
+		if b.Leg(k) == 0 {
+			continue
+		}
+		var sum int64
+		for _, c := range cs {
+			sum += c.AmountMinor
+			if c.AccountName == "" || c.AccountID == "" {
+				t.Errorf("leg %s: contributor is unidentified: %+v", k, c)
+			}
+		}
+		if sum != b.Leg(k) {
+			t.Errorf("leg %s: contributors sum to %d, leg is %d", k, sum, b.Leg(k))
+		}
+		// Largest magnitude first, so a view can answer "which one mattered".
+		for i := 1; i < len(cs); i++ {
+			if abs64(cs[i-1].AmountMinor) < abs64(cs[i].AmountMinor) {
+				t.Errorf("leg %s: contributors not ordered by magnitude: %+v", k, cs)
+			}
+		}
+	}
+	// The specific reading the page promises: the mortgage did most of the
+	// paying down, not the card.
+	paid := b.Contributors(LegDebtPaidDown)
+	if len(paid) != 2 || paid[0].AccountName != "Mortgage" {
+		t.Fatalf("debt paid down contributors = %+v, want Mortgage first", paid)
+	}
+	kept := b.Contributors(LegMoneyKept)
+	if len(kept) != 2 || kept[0].AccountName != "Savings" {
+		t.Fatalf("money kept contributors = %+v, want Savings first", kept)
+	}
+}
