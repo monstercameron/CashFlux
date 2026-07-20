@@ -26,10 +26,16 @@ import (
 )
 
 // trailingRef matches trailing processor reference noise: a run of store
-// numbers, auth codes, or hashes at the end of a merchant string, optionally
-// introduced by '#', '*', or whitespace. Examples stripped: " *2K4RT0",
-// " #1234", " 08842", "  X5J2Q".
-var trailingRef = regexp.MustCompile(`(?i)[\s#*]+[A-Z0-9]*\d[A-Z0-9]*$`)
+// numbers, auth codes, hashes, or a customer-service phone number at the end of
+// a merchant string, optionally introduced by '#', '*', or whitespace. Examples
+// stripped: " *2K4RT0", " #1234", " 08842", "  X5J2Q", " 855-431-0459",
+// " 425-6816830".
+//
+// Hyphens and parentheses are part of the reference token because card
+// descriptors routinely append a support number ("DD DOORDASH WINGSTOP
+// 855-431-0459"), and a token whose punctuation is not consumed is a token that
+// survives into the display name.
+var trailingRef = regexp.MustCompile(`(?i)[\s#*]+[A-Z0-9()-]*\d[A-Z0-9()-]*$`)
 
 // collapseSpace collapses internal whitespace runs to a single space.
 var collapseSpace = regexp.MustCompile(`\s+`)
@@ -59,6 +65,20 @@ var rulePack = []prefixRule{
 	{Prefix: "VENMO", Canonical: "Venmo"},
 	{Prefix: "PAYPAL *"}, // "PAYPAL *STEAMGAMES" → "Steamgames"
 	{Prefix: "PAYPAL"},
+	// Delivery platforms bill under the RESTAURANT they delivered from ("DD
+	// DOORDASH WINGSTOP"), which spawns a fresh "merchant" per takeaway order.
+	// The merchant is the platform; the restaurant is an order detail.
+	{Prefix: "DD *DOORDASH", Canonical: "DoorDash"},
+	{Prefix: "DD DOORDASH", Canonical: "DoorDash"},
+	{Prefix: "DOORDASH", Canonical: "DoorDash"},
+	{Prefix: "UBER EATS", Canonical: "Uber Eats"},
+	{Prefix: "UBER *EATS", Canonical: "Uber Eats"},
+	{Prefix: "GRUBHUB", Canonical: "Grubhub"},
+	// Microsoft bills its consumer services through one descriptor prefix
+	// ("MSFT * XBOX GAME PASS"); the service after it is the real name.
+	{Prefix: "MSFT *"},
+	{Prefix: "MSFT*"},
+	{Prefix: "MSFT "},
 	{Prefix: "SQ *"},    // Square: "SQ *BLUE BOTTLE" → "Blue Bottle"
 	{Prefix: "TST*"},    // Toast: "TST* JOES PIZZA" → "Joes Pizza"
 	{Prefix: "CKE*"},    // Clover: "CKE*THE CORNER CAFE" → "The Corner Cafe"
@@ -107,8 +127,17 @@ func tidy(s string) string {
 	if s == "" {
 		return ""
 	}
-	stripped := trailingRef.ReplaceAllString(s, "")
-	stripped = strings.TrimSpace(stripped)
+	// Descriptors often carry MORE than one trailing reference ("… 425 6816830"),
+	// so strip repeatedly rather than once. Bounded, and never down to nothing:
+	// a name that is entirely reference noise keeps its last token.
+	stripped := s
+	for i := 0; i < 4; i++ {
+		next := strings.TrimSpace(trailingRef.ReplaceAllString(stripped, ""))
+		if next == "" || next == stripped {
+			break
+		}
+		stripped = next
+	}
 	if stripped == "" {
 		stripped = s
 	}

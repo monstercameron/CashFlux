@@ -64,6 +64,7 @@ var rhythmKeys = Catalog{
 	"rhythm.evAbout":       "about %s",
 	"rhythm.evLast":        "last %s",
 	"rhythm.evScheduledAs": "detected %s, tracked as %s",
+	"rhythm.evTxnMissing":  "This charge is no longer in your transactions",
 
 	// Detected-rhythm labels (lowercase, for the evidence sentence — distinct
 	// from the recurring.cadence* adjectives used elsewhere).

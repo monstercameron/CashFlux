@@ -30,6 +30,16 @@ func TestNormalize(t *testing.T) {
 		{"acronym preserved", "AMC LLC 0091", "AMC LLC"},
 		{"empty", "   ", ""},
 		{"whitespace collapse", "BIG   MART   0012", "Big Mart"},
+		// Descriptor noise the recurring-discovery review strip was showing raw.
+		{"support phone stripped", "MSFT * XBOX GAME PASS 425-6816830", "Xbox Game Pass"},
+		{"msft star no space", "MSFT*XBOX GAME PASS", "Xbox Game Pass"},
+		{"doordash platform", "DD DOORDASH WINGSTOP 855-431-0459", "DoorDash"},
+		{"doordash star", "DD *DOORDASH CHIPOTLE", "DoorDash"},
+		{"doordash bare", "DOORDASH*MCDONALDS", "DoorDash"},
+		{"uber eats", "UBER EATS PENDING 8005928996", "Uber Eats"},
+		{"grubhub", "GRUBHUB*JOES", "Grubhub"},
+		{"multiple trailing refs", "CORNER DELI 4471 00982", "Corner Deli"},
+		{"all reference keeps a token", "998812", "998812"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

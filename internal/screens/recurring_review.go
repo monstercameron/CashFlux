@@ -289,11 +289,11 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	res := recurdiscover.Discover(txns, rhyCommitments(app, rates), loadRecurPins(), recurdiscover.Options{Now: now})
 	res.Candidates = rhyDemoteNoise(app, res.Candidates)
 
-	// txn date lookup so a confirm can back-claim each evidence transaction as its
-	// own prior cycle.
-	dateOf := map[string]time.Time{}
+	// Evidence transactions by ref: a confirm back-claims each as a prior cycle,
+	// and the evidence list renders each one's raw descriptor and real amount.
+	txnByID := map[string]domain.Transaction{}
 	for _, t := range app.Transactions() {
-		dateOf[t.ID] = t.Date
+		txnByID[t.ID] = t
 	}
 
 	var groupA, leftovers []recurdiscover.Candidate
@@ -330,7 +330,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		for _, tid := range c.Evidence.TxnIDs {
 			_ = app.PutTxnLink(domain.TxnLink{
 				ID: id.New(), Kind: domain.TxnLinkBillMatch, TxnIDs: []string{tid},
-				RecurringID: r.ID, OccurrenceDate: dateOf[tid], CreatedAt: now,
+				RecurringID: r.ID, OccurrenceDate: txnByID[tid].Date, CreatedAt: now,
 			})
 		}
 		uistate.BumpDataRevision()
@@ -349,7 +349,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		for _, c := range groupA[sA:eA] {
 			cand := c
 			cands = append(cands, ui.CreateElement(rhyReviewCand, rhyReviewCandProps{
-				Cand: cand, Base: base, OnConfirm: onConfirm, OnReject: onReject,
+				Cand: cand, Base: base, Txns: txnByID, OnConfirm: onConfirm, OnReject: onReject,
 			}))
 		}
 		groups = append(groups, Div(css.Class("rhy-review-group"),
@@ -431,7 +431,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 				note = uistate.T("rhythm.verifiedLocally")
 			}
 			pageItems = append(pageItems, ui.CreateElement(rhyReviewCand, rhyReviewCandProps{
-				Cand: cand, Base: base, IsPlus: true, Verified: v.Verified, Note: note,
+				Cand: cand, Base: base, Txns: txnByID, IsPlus: true, Verified: v.Verified, Note: note,
 				OnConfirm: onConfirm, OnReject: onReject,
 			}))
 		}
@@ -588,8 +588,11 @@ func rhyNextDue(cad domain.RecurringCadence, lastSeen, now time.Time) time.Time 
 
 // rhyReviewCandProps drives one review candidate.
 type rhyReviewCandProps struct {
-	Cand      recurdiscover.Candidate
-	Base      string
+	Cand recurdiscover.Candidate
+	Base string
+	// Txns resolves an evidence transaction ref to the transaction itself, so the
+	// evidence list can show the raw descriptor and the real per-charge amount.
+	Txns      map[string]domain.Transaction
 	IsPlus    bool
 	Verified  bool
 	Note      string
@@ -636,19 +639,32 @@ func rhyReviewCand(props rhyReviewCandProps) ui.Node {
 		P(css.Class("rhy-cand-ev"), rhyEvidenceSentence(c.Evidence, props.Base)),
 		Button(css.Class("btn btn-sm strip-toggle", tw.Mt1), Type("button"), Attr("aria-expanded", ariaBool(show.Get())),
 			Attr("data-testid", "rhy-review-evidence-"+sig), OnClick(toggle), evLabel),
-		If(show.Get(), rhyEvidenceList(c.Evidence, props.Base)),
+		If(show.Get(), rhyEvidenceList(c.Evidence, props.Base, props.Txns)),
 	)
 }
 
-// rhyEvidenceList renders the expandable per-transaction evidence.
-func rhyEvidenceList(ev recurdiscover.Evidence, base string) ui.Node {
+// rhyEvidenceList renders the expandable per-transaction evidence: the date, the
+// RAW bank descriptor, and that transaction's own amount.
+//
+// The candidate's name is deliberately the cleaned-up merchant ("Xbox Game
+// Pass"); the descriptor it was cleaned FROM ("MSFT * XBOX GAME PASS
+// 425-6816830") is what the user will recognise on their statement, so the
+// evidence list is exactly where it belongs. Per-transaction amounts also make a
+// banded candidate legible — a list repeating one typical figure hid the spread
+// that justifies the band.
+func rhyEvidenceList(ev recurdiscover.Evidence, base string, txns map[string]domain.Transaction) ui.Node {
 	items := []any{css.Class("rhy-ev-list")}
+	pr := uistate.LoadPrefs()
 	for i, tid := range ev.TxnIDs {
+		label := strconv.Itoa(i+1) + ". "
 		amt := fmtMoney(money.New(ev.Amount.Typical, base))
-		items = append(items, Li(
-			Span(strconv.Itoa(i+1)+". "+tid),
-			Span(amt),
-		))
+		if t, ok := txns[tid]; ok {
+			label += pr.FormatDate(t.Date) + " · " + strings.TrimSpace(t.Payee)
+			amt = fmtMoney(t.Amount.Abs())
+		} else {
+			label += uistate.T("rhythm.evTxnMissing")
+		}
+		items = append(items, Li(Span(label), Span(amt)))
 	}
 	return Ul(items...)
 }

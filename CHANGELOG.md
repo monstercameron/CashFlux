@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Review candidates were named after the bank's descriptor, not the merchant.** The strip offered
+  "Msft * Xbox Game Pass 425-6816830" and "Dd Doordash Wingstop 855-431-0459" — the processor prefix
+  and the support phone number read as part of the name. The payee resolver now strips a trailing
+  reference even when it carries hyphens or parentheses (a support number is the common case), strips
+  more than one of them, and knows the Microsoft consumer-billing prefix and the delivery platforms, so
+  those two become "Xbox Game Pass" and "DoorDash". Because delivery platforms bill under the
+  RESTAURANT they delivered from, every takeaway used to become its own "merchant"; they now resolve to
+  the platform, which is also what makes them cluster honestly. The raw descriptor is not lost — the
+  candidate's expandable transaction list now shows each charge's date, its RAW descriptor, and its own
+  amount (it previously listed internal transaction IDs against one repeated typical figure).
+
 ### Changed
 - **Review-candidate testids are slugged.** `rhy-review-confirm-MSFT XBOX GAME PASS #` becomes
   `rhy-review-confirm-msft-xbox-game-pass` — a raw discovery signature carries spaces and the `#`
