@@ -253,7 +253,7 @@ type rhythmView struct {
 // computeRhythm assembles the whole surface model from the store and the pure
 // engine. Deterministic and hook-free.
 func computeRhythm(app *appstate.App, now time.Time) rhythmView {
-	rv := rhythmView{recurView: computeRecurView(app, now), Now: now}
+	rv := rhythmView{recurView: recurViewOf(app, now), Now: now}
 	base := rv.Base
 	rv.Rates = currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
@@ -288,9 +288,8 @@ func computeRhythm(app *appstate.App, now time.Time) rhythmView {
 
 	// Discovery: evidence-carrying candidates + the cluster matches that belong to
 	// existing commitments (for the review strip + death detection).
-	rv.DiscoverTxn = buildDiscoverTxns(app, rv.Rates)
-	rv.Discover = recurdiscover.Discover(rv.DiscoverTxn, rhyCommitments(app, rv.Rates), loadRecurPins(),
-		recurdiscover.Options{Now: now})
+	rv.DiscoverTxn = discoverTxns(app, rv.Rates)
+	rv.Discover = rhyDiscover(app, rv.Rates, now)
 
 	// Findings: charged-after-cancel + "seems stopped" (from the cycle matches'
 	// last-seen, so the death check reuses the engine's own rhythm).

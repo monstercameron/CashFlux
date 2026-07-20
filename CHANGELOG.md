@@ -15,6 +15,15 @@ and every commit updates this file under `Unreleased`.
   resolver when resolving many payees. `buildDiscoverTxns` and `rhyCommitments` now build it once per
   sweep: 11.7ms → 3.2ms measured natively, and `buildDiscoverTxns` runs three times per render of the
   surface. Pure cost removal — the resolved names, and so every candidate, are identical.
+- **Bills & recurring swept the transaction history six times to render one frame. (RH-PERF2)** The
+  surface is split into components so their hooks stay isolated, and each one independently re-derived
+  the same model from the same store on the same frame: `buildDiscoverTxns` ran three times,
+  `recurdiscover.Discover` twice, `computeRecurView` twice — every one a full sweep of the ledger,
+  every one producing a byte-identical result. A new frame-scoped memo layer
+  (`internal/screens/recurring_memo.go`, built on the existing `memoByRev`) collapses each to once.
+  The cache key carries the store revision plus the two inputs that live outside the store — the day
+  (discovery's liveness windows) and the persisted discovery pins — so rejecting a candidate still
+  takes effect on the very next render rather than waiting for an unrelated data write.
 - **"Negotiate" handed over a reminder instead of the script. (RH5)** The point of the feature is the
   talking points — note your rate and tenure, cite a competitor's promo, ask for retention, escalate
   or call back, log the new rate — with the to-do as the follow-up that keeps it from being forgotten.

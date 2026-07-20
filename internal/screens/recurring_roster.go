@@ -74,7 +74,7 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 	sortKey := ui.UseState("size")
 	onSort := ui.UseEvent(func(v string) { sortKey.Set(v) })
 
-	v := computeRecurView(app, now)
+	v := recurViewOf(app, now)
 	base := v.Base
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 

@@ -332,7 +332,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	txns := buildDiscoverTxns(app, rates)
+	txns := discoverTxns(app, rates)
 	groupA, leftovers := rhySplitCandidates(app, now, base)
 
 	// Evidence transactions by ref: a confirm back-claims each as a prior cycle,
@@ -564,8 +564,7 @@ const rhyReviewPageSize = 5
 // three totals — 57, 6 and 5 — of which only the last was reachable.
 func rhySplitCandidates(app *appstate.App, now time.Time, base string) (review, weak []recurdiscover.Candidate) {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	res := recurdiscover.Discover(buildDiscoverTxns(app, rates), rhyCommitments(app, rates),
-		loadRecurPins(), recurdiscover.Options{Now: now})
+	res := rhyDiscover(app, rates, now)
 	for _, c := range rhyDemoteNoise(app, res.Candidates) {
 		// Every candidate must be able to justify itself. One whose evidence
 		// sentence would render empty has nothing to show the user, so it is never
