@@ -1146,6 +1146,8 @@
       "nws-dq-update",
       "nws-explain-bridge-btn",
       "nws-explain-sides-btn",
+      "nws-history-toggle",
+      "nws-milestones-more",
       "nws-view-detail",
       "nws-view-glance",
       "nws-win-*",
