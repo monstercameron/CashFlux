@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Bills & recurring reports when its deferred sections have arrived.** The page root carries
+  `data-settled`, so anything waiting on the surface — the regression suite today — can tell "not here
+  yet" apart from "here, with nothing to show". A deferred section may legitimately render nothing (no
+  review candidates, no commitments), which makes waiting on its content ambiguous in exactly the case
+  that matters: such a wait hangs on the empty page and passes early on the full one. `rhythm.spec.mjs`
+  now waits on the flag when it lands on a surface route, rather than reading sections the page
+  deliberately no longer paints on mount. No assertion was relaxed. The flag is an attribute on an
+  existing element rather than a new `data-testid`, so the coverage manifest's per-route control
+  inventory is unchanged — deferral scaffolding is not a control.
+
 ### Fixed
 - **Bills & recurring rendered square, flat panels while every other page rendered rounded, lifted
   ones. (RH-GARNISH1)** The new surface set its section corners from `var(--radius)`, which is the

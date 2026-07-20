@@ -41,6 +41,11 @@ const SURFACE_ROUTES = ["/recurring", "/bills", "/subscriptions"];
 // overdue strip and the calendar's missed state both have something real to say.
 const OVERDUE_NOW = "2026-07-22T12:00:00.000Z";
 
+// This surface defers its review strip and roster past first paint (useAfterSettle
+// keeps the discovery pipeline off the mount path), so "mounted" is not the same as
+// "readable" here. The wait lives in fixtures' nav, which is generic over the
+// data-settled flag, so nothing in this file has to think about it.
+
 // money parses the app's accounting format — "($1,480.00)" is negative,
 // "$4,700.00" positive — into minor units, so test arithmetic stays integral.
 function money(text) {
@@ -492,6 +497,13 @@ test.describe("up next — agenda", () => {
   });
 
   test("the COMPACT | CALENDAR choice persists across a reload", async ({ app }) => {
+    // The only test here that reboots the app: a full reload re-downloads and
+    // re-instantiates the wasm and re-seeds the store, which alone can eat most of
+    // the default 60s budget on a loaded machine — this test was already the
+    // suite's flakiest for that reason. Landing on the surface twice, each landing
+    // now waiting out the deferred sections, is enough to tip it over. The budget is
+    // the thing that is wrong here, not the behavior, so the budget is what moves.
+    test.setTimeout(150_000);
     await nav(app, "/recurring");
     await expect(app.getByTestId("rhy-view-compact")).toHaveAttribute("aria-pressed", "true");
     await expect(app.getByTestId("rhy-agenda")).toBeVisible();

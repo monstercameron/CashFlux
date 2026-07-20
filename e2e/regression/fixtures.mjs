@@ -123,6 +123,32 @@ export async function nav(page, route) {
   }, route);
   const sel = `#main[data-route="${route}"]`;
   await expect(page.locator(sel).first()).toBeVisible();
+  await navSettled(page, route);
+}
+
+// navSettled waits for a screen that defers below-the-fold sections past its first
+// paint (useAfterSettle) to have finished filling them in. Such a screen advertises
+// the state on its root as data-settled, and "mounted" is then not the same as
+// "readable": Bills & recurring, for instance, deliberately paints its hero, overdue
+// strip and agenda first and mounts the review strip and roster ~300ms later.
+//
+// It is deliberately generic — keyed off the attribute, not off a list of routes —
+// so a page adopting the pattern is covered without every spec learning about it,
+// and screens that do not defer (no attribute) fall straight through.
+//
+// The signal is an explicit flag rather than "the deferred content is present"
+// because a deferred section may legitimately render nothing (no candidates, no
+// commitments). A content-based wait cannot tell "nothing to show" apart from "not
+// here yet": it would hang on the empty case and pass early on the full one.
+async function navSettled(page, route) {
+  await page.waitForFunction(
+    (r) => {
+      const el = document.querySelector(`#main[data-route="${r}"] [data-settled]`);
+      return !el || el.getAttribute("data-settled") === "true";
+    },
+    route,
+    { timeout: 30_000 },
+  );
 }
 
 // mainText returns the main pane's innerText. `.first()` because repeated

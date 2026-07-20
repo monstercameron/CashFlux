@@ -401,7 +401,13 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 	addIncome := ui.UseEvent(Prevent(func() { edit.Set("new") }))
 	csv := ui.UseEvent(rhyCsvExport(rv))
 
-	return Div(css.Class("rhy"),
+	// data-settled says whether the deferred sections have arrived. It is stated
+	// rather than inferred because a deferred section may legitimately render
+	// nothing (no review candidates, no commitments) — so "has content" cannot tell
+	// "nothing to show" apart from "not here yet", which is precisely the
+	// distinction anything waiting on this page needs. Same idea as the shell's
+	// data-app-ready for boot.
+	return Div(css.Class("rhy"), Attr("data-settled", ariaBool(settled)),
 		// XC9: payday pre-flight ritual card keeps a quiet slot at the top.
 		ui.CreateElement(paydayPreflightCard),
 		rhyHeroSection(rv, addIncome),
@@ -411,9 +417,9 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 		// appends itself to the end of the container, which would land the review
 		// strip below the toolbar; a real (display:contents, so layout-neutral)
 		// element pins the position instead.
-		rhySlot("rhy-review-slot", If(settled, ui.CreateElement(rhyReviewSection, rhyReviewProps{}))),
+		rhySlot(If(settled, ui.CreateElement(rhyReviewSection, rhyReviewProps{}))),
 		ui.CreateElement(rhyAgendaSection, rhyAgendaProps{Focus: props.Focus, Acts: acts}),
-		rhySlot("rhy-roster-slot", If(settled, ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}))),
+		rhySlot(If(settled, ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}))),
 		rhyFindingsSection(rv, acts),
 		rhyToolbar(rv, postMsg.Get(), showMetrics.Get(), postDue, toggleMetrics, csv),
 		If(showMetrics.Get(), Div(css.Class("rhy-section"),
@@ -442,8 +448,12 @@ type rhyActions struct {
 // becomes the flex item, exactly as if it had been rendered there all along.
 // Its only job is to exist in the DOM from the first paint so a late mount lands
 // here rather than being appended after the last child.
-func rhySlot(testid string, body ui.Node) ui.Node {
-	return Div(css.Class("rhy-slot"), Attr("data-testid", testid), body)
+//
+// It carries no data-testid: it is a position holder, not a control, and the
+// coverage manifest's per-route testid inventory should not gain entries for
+// scaffolding. Readiness is reported once on the page root instead (data-settled).
+func rhySlot(body ui.Node) ui.Node {
+	return Div(css.Class("rhy-slot"), body)
 }
 
 // rhySection is the from-scratch section chrome: a titled card that fills the
