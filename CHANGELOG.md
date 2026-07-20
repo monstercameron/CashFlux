@@ -24,6 +24,13 @@ and every commit updates this file under `Unreleased`.
   The cache key carries the store revision plus the two inputs that live outside the store — the day
   (discovery's liveness windows) and the persisted discovery pins — so rejecting a candidate still
   takes effect on the very next render rather than waiting for an unrelated data write.
+- **Bills & recurring ran the old subscription detector on every render and threw the answer away.
+  (RH-PERF3)** `computeRecurView` still populated `recurView.Detected` — a `subscriptions.Detect`
+  sweep plus an `IsLiabilityPayment` check per detected group — and `computeRhythm` still populated
+  `rhythmView.DiscoverTxn`. Both were left behind when the redesign replaced the detected-charges list
+  with the discovery engine's review strip, and nothing on the surface has read either since. That was
+  ~8ms of measured native work per render, before the wasm multiplier, computing something the page
+  never showed. Removed. Nothing rendered changes.
 - **"Negotiate" handed over a reminder instead of the script. (RH5)** The point of the feature is the
   talking points — note your rate and tenure, cite a competitor's promo, ask for retention, escalate
   or call back, log the new rate — with the to-do as the follow-up that keeps it from being forgotten.

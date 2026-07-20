@@ -83,7 +83,6 @@ type recurView struct {
 	Upcoming    []recurOccurrence // overdue + next 30 days, sorted by date
 	UpcomingIn  int64
 	UpcomingOut int64
-	Detected    []subscriptions.Subscription // in history, not yet planned
 	// VarPrefixByID maps a flow ID to its engine-variable prefix ("recurring_<slug>_")
 	// — the flow's stable formula identity. Computed over the flows in STORE order
 	// (the same order the engine disambiguates in), so the name shown on a row is
@@ -165,23 +164,6 @@ func computeRecurView(app *appstate.App, now time.Time) recurView {
 	}
 	sort.SliceStable(v.Upcoming, func(i, j int) bool { return v.Upcoming[i].Date.Before(v.Upcoming[j].Date) })
 
-	// Detected charges not already planned (and not liability payments, which would
-	// double-count a loan/card autopay).
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	existing := map[string]bool{}
-	for _, r := range v.Flows {
-		existing[strings.ToLower(strings.TrimSpace(r.Label))] = true
-	}
-	detected, _ := subscriptions.Detect(app.Transactions(), rates, 3)
-	for _, s := range detected {
-		if existing[strings.ToLower(strings.TrimSpace(s.Name))] {
-			continue
-		}
-		if subscriptions.IsLiabilityPayment(s, app.Transactions(), app.Accounts()) {
-			continue
-		}
-		v.Detected = append(v.Detected, s)
-	}
 	return v
 }
 
@@ -243,7 +225,6 @@ type rhythmView struct {
 	Overdue     []recurOccurrence
 	Agenda      []recurOccurrence
 	Discover    recurdiscover.Result
-	DiscoverTxn []recurdiscover.Txn
 	LateCharges []subscriptions.LateCharge
 	Stopped     []recurdiscover.StopSignal
 	LiquidMinor int64
@@ -288,7 +269,6 @@ func computeRhythm(app *appstate.App, now time.Time) rhythmView {
 
 	// Discovery: evidence-carrying candidates + the cluster matches that belong to
 	// existing commitments (for the review strip + death detection).
-	rv.DiscoverTxn = discoverTxns(app, rv.Rates)
 	rv.Discover = rhyDiscover(app, rv.Rates, now)
 
 	// Findings: charged-after-cancel + "seems stopped" (from the cycle matches'
