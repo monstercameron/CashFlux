@@ -776,6 +776,16 @@ func registerBudgetsSurface() {
 	// of the track, sized to the overshoot. The under-cap fill keeps the healthy
 	// accent; the stripes reuse the app's diagonal over-budget hazard idiom
 	// (rules_budgetovercalm.go) in the danger tone.
+	// The under-cap fill in the over state pins to the app's semantic GREEN
+	// (--money-positive, green in both themes) at a near-flat alpha, so it reads
+	// as solidly green as the To-do/Goals bands (Cam 2026-07-19). The base fill's
+	// accent gradient fades to 15% alpha — fine for short fills, but stretched
+	// to ~80% width beside vivid danger stripes it went murky and stopped reading
+	// "healthy up to the cap".
+	rule(".budget-loader.is-over .budget-loader-fill",
+		background("linear-gradient(90deg, color-mix(in srgb, var(--money-positive) 34%, transparent), color-mix(in srgb, var(--money-positive) 26%, transparent))"),
+		borderRight("2px solid color-mix(in srgb, var(--money-positive) 80%, transparent)"),
+	)
 	rule(".budget-loader-overage",
 		position("absolute"),
 		top("0"),
