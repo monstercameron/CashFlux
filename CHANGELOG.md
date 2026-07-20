@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **English copy for the unified Bills & Recurring surface (`rhythm.*` keys).** All copy for the
+  new "month's rhythm" page — tideline hero, pinch caption, overdue/review/findings strips, the
+  evidence-sentence fragments, posting-mode badges, the up-next agenda's compact|calendar toggle, and
+  the lineup roster (lenses, sort picker, anchor/creep chips, pause/cancel-watching verbs) — routed
+  through `internal/i18n/en_rhythm.go` so the UI layer stays at zero hardcoded copy. Unchanged copy is
+  reused from the existing recurring./bills./subs./pricecreep. catalogs at the call site.
 - **`rhy-` style vocabulary for the unified Bills & Recurring surface.** A from-scratch design system
   (`internal/styles/rules_rhythm.go`, registered in `install.go`) for the "month's rhythm" page — NOT
   the bento tile kit: a full-width vertical stack of sections. It styles the tideline hero (SVG band
