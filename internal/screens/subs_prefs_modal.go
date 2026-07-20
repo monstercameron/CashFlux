@@ -135,6 +135,7 @@ func SubsDetectPrefsForm(props SubsDetectPrefsFormProps) ui.Node {
 		)),
 		catFilterSection,
 		rhyWeakSignalsSection(app),
+		rhyHiddenSection(),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "subs-prefs-done"), OnClick(done), uistate.T("recurring.done")),
 		),
@@ -171,5 +172,51 @@ func rhyWeakSignalsSection(app *appstate.App) ui.Node {
 			uistate.T("subs.weakSignalsLabel", len(weak))),
 		P(css.Class("row-meta"), uistate.T("subs.weakSignalsDesc")),
 		Ul(items...),
+	)
+}
+
+// rhyHiddenSection lists the candidates the user rejected with "Not recurring",
+// each with the way back.
+//
+// Rejecting wrote a suppressed signature and nothing surfaced it again — one
+// misclick permanently hid a real commitment, with no route back and no way to
+// even learn that something was missing. A destructive action with no undo has no
+// business being a single unconfirmed click, and the cheapest honest fix is to
+// keep the list where the other detection judgments already live. It stays quiet:
+// a small section at the tail, rendered only when there is something in it.
+func rhyHiddenSection() ui.Node {
+	hidden := uistate.LoadRecurPins().SuppressedList()
+	if len(hidden) == 0 {
+		return Fragment()
+	}
+	items := []any{css.Class("rhy-weak-list rhy-hidden-list"), Attr("data-testid", "rhy-hidden-list")}
+	for _, h := range hidden {
+		items = append(items, ui.CreateElement(rhyHiddenRow, rhyHiddenRowProps{Entry: h}))
+	}
+	return Div(css.Class(tw.Fold(tw.Mt3)),
+		Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)),
+			uistate.T("rhythm.hiddenLabel", len(hidden))),
+		P(css.Class("row-meta"), uistate.T("rhythm.hiddenDesc")),
+		Ul(items...),
+	)
+}
+
+// rhyHiddenRowProps drives one rejected-candidate row.
+type rhyHiddenRowProps struct{ Entry uistate.SuppressedEntry }
+
+// rhyHiddenRow renders one rejected candidate with its un-hide verb. Its own
+// component so the hook sits at a stable position inside the list.
+func rhyHiddenRow(props rhyHiddenRowProps) ui.Node {
+	sig := props.Entry.Signature
+	restore := ui.UseEvent(Prevent(func() {
+		uistate.UnsuppressSignature(sig)
+		uistate.BumpDataRevision()
+	}))
+	return Li(
+		Span(css.Class("rhy-weak-name"), props.Entry.Name),
+		Button(css.Class("btn btn-sm"), Type("button"),
+			Attr("data-testid", "rhy-unhide-"+rhySlug(sig)),
+			Title(uistate.T("rhythm.unsuppressTitle")), OnClick(restore),
+			uistate.T("rhythm.unsuppress")),
 	)
 }

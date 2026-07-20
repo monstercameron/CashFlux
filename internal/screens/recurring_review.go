@@ -357,7 +357,9 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		uistate.BumpDataRevision()
 	}
 	onReject := func(c recurdiscover.Candidate) {
-		uistate.SuppressSignature(c.Signature)
+		// The display name rides along so Detection preferences can offer the way
+		// back in a form the user recognises, not as a raw bank signature.
+		uistate.SuppressSignature(c.Signature, c.Payee)
 		uistate.BumpDataRevision()
 	}
 

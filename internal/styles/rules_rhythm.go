@@ -389,6 +389,14 @@ func registerRhythmStrips() {
 		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-dim)"),
 	)
+	// The rejected list carries a verb per row, so its rows read across rather
+	// than down: name on the left, the way back on the right.
+	rule(".rhy-hidden-list li",
+		prop("flex-direction", "row"),
+		prop("align-items", "center"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.6rem"),
+	)
 	// The disabled opt-in reads as one unavailable control, not an enabled button
 	// contradicted by the sentence beside it.
 	rule(".rhy-review-foot.is-disabled .btn[disabled]",

@@ -60,6 +60,13 @@ var rhythmKeys = Catalog{
 	"rhythm.noLocalConfirm":     "no local way to confirm",
 	"rhythm.reviewNone":         "Nothing new to review — every repeating charge we found is already on your plan.",
 
+	// The way back out of "Not recurring" — a quiet section in Detection
+	// preferences, beside the other judgments the user can inspect and change.
+	"rhythm.hiddenLabel":     "Hidden as not recurring (%d)",
+	"rhythm.hiddenDesc":      "Charges you told us don't repeat, so we stopped proposing them. Changed your mind about one? Show it again and it goes back in the review queue.",
+	"rhythm.unsuppress":      "Show this again",
+	"rhythm.unsuppressTitle": "Let this charge be proposed for review again",
+
 	// Evidence sentence fragments (composed in order in Go).
 	"rhythm.evPayments":    "%d payments",
 	"rhythm.evAround":      "%s around the %s",
@@ -91,14 +98,14 @@ var rhythmKeys = Catalog{
 	"rhythm.agendaNote":    "Everything due in the next %d days, income included. Grouped by month, so a monthly bill appears once in each.",
 	"rhythm.agendaNoteCal": "Everything due, a month at a time, income included.",
 	"rhythm.agendaNone":    "Nothing scheduled ahead.",
-	"rhythm.viewAria":     "Agenda view",
-	"rhythm.viewCompact":  "Compact",
-	"rhythm.viewCalendar": "Calendar",
-	"rhythm.showAll":      "Show all %d",
-	"rhythm.showFewer":    "Show fewer",
-	"rhythm.calMore":      "+%d more",
-	"rhythm.calMissed":    "This one went by without being paid",
-	"rhythm.calPast":      "Already gone by",
+	"rhythm.viewAria":      "Agenda view",
+	"rhythm.viewCompact":   "Compact",
+	"rhythm.viewCalendar":  "Calendar",
+	"rhythm.showAll":       "Show all %d",
+	"rhythm.showFewer":     "Show fewer",
+	"rhythm.calMore":       "+%d more",
+	"rhythm.calMissed":     "This one went by without being paid",
+	"rhythm.calPast":       "Already gone by",
 
 	// Posting-mode badges.
 	"rhythm.modeAuto":       "Auto",

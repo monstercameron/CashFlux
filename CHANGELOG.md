@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **"Not recurring" was a one-way door.** Rejecting a review candidate wrote a suppressed signature
+  and nothing ever surfaced it again: one misclick could permanently hide a real commitment, with no
+  route back and no way to learn something was missing. Detection preferences — which already lists
+  the weak signals it declined to propose — now also lists what you rejected, each with "Show this
+  again", which un-suppresses it and puts it back in the review queue. The reject also records the
+  candidate's display name, so the list reads "Xbox Game Pass" rather than the raw bank signature
+  (pins written before this fall back to the signature). It stays quiet: a small section at the tail
+  of the modal, rendered only when there is something in it.
 - **The agenda promised one pay cycle and listed six weeks.** Its note read "Everything due through
   your next pay cycle" while the list ran to 1 September, with Rewards Credit Card and HOA dues each
   appearing TWICE — the second occurrence being next month's, not a second charge. The horizon is

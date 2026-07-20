@@ -50,6 +50,35 @@ type RecurPins struct {
 	Suppressed []string    `json:"suppressed,omitempty"`
 	NeverMerge [][2]string `json:"neverMerge,omitempty"`
 	ForceMerge [][2]string `json:"forceMerge,omitempty"`
+	// SuppressedNames maps a suppressed signature to the display name the user
+	// actually rejected ("Xbox Game Pass" rather than "MSFT XBOX GAME PASS #").
+	// Additive and optional: pins written before this existed simply fall back to
+	// showing the signature, which is the descriptor the bank prints anyway.
+	//
+	// It exists because a rejection has to be undoable, and an undo list the user
+	// cannot read is not an undo list.
+	SuppressedNames map[string]string `json:"suppressedNames,omitempty"`
+}
+
+// SuppressedEntry is one rejected signature paired with a readable name, for the
+// un-suppress list in Detection preferences.
+type SuppressedEntry struct {
+	Signature string
+	Name      string
+}
+
+// SuppressedList returns the rejected signatures with their display names, in the
+// order they were rejected. A signature with no recorded name shows as itself.
+func (p RecurPins) SuppressedList() []SuppressedEntry {
+	out := make([]SuppressedEntry, 0, len(p.Suppressed))
+	for _, s := range p.Suppressed {
+		name := p.SuppressedNames[s]
+		if name == "" {
+			name = s
+		}
+		out = append(out, SuppressedEntry{Signature: s, Name: name})
+	}
+	return out
 }
 
 // LoadRecurPins reads the persisted discovery pins (empty when unset).
@@ -75,17 +104,42 @@ func SaveRecurPins(p RecurPins) {
 }
 
 // SuppressSignature adds a canonical signature to the suppressed ("not
-// recurring") set and persists it; a duplicate is ignored.
-func SuppressSignature(sig string) {
+// recurring") set and persists it, recording name so the rejection can be shown
+// back to the user in a form they recognise. A duplicate refreshes the name only.
+func SuppressSignature(sig, name string) {
 	if sig == "" {
 		return
 	}
 	p := LoadRecurPins()
+	if p.SuppressedNames == nil {
+		p.SuppressedNames = map[string]string{}
+	}
+	if name != "" {
+		p.SuppressedNames[sig] = name
+	}
 	for _, s := range p.Suppressed {
 		if s == sig {
+			SaveRecurPins(p)
 			return
 		}
 	}
 	p.Suppressed = append(p.Suppressed, sig)
+	SaveRecurPins(p)
+}
+
+// UnsuppressSignature removes a signature from the suppressed set, so discovery
+// may propose it again. It is the way back out of "Not recurring": a one-click
+// reject that cannot be undone can permanently hide a real commitment, and the
+// user would have no route back and no way to know something was missing.
+func UnsuppressSignature(sig string) {
+	p := LoadRecurPins()
+	kept := make([]string, 0, len(p.Suppressed))
+	for _, s := range p.Suppressed {
+		if s != sig {
+			kept = append(kept, s)
+		}
+	}
+	p.Suppressed = kept
+	delete(p.SuppressedNames, sig)
 	SaveRecurPins(p)
 }
