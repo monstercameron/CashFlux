@@ -206,7 +206,17 @@ func nwsAtLeastOne(v int64) int64 {
 // nwsSection is the page's section chrome: a titled card filling the content
 // column. flush drops the card frame for the hero, which draws its own field.
 func nwsSection(id, title, note string, action, body ui.Node, flush bool) ui.Node {
+	return nwsSectionCls(id, "", title, note, action, body, flush)
+}
+
+// nwsSectionCls is nwsSection with an extra modifier class, which is how a
+// section states its place in the Glance grid (a full-width row, the narrow
+// interpretation column) without the layout leaking into the page function.
+func nwsSectionCls(id, mod, title, note string, action, body ui.Node, flush bool) ui.Node {
 	cls := "nws-section"
+	if mod != "" {
+		cls += " " + mod
+	}
 	if flush {
 		cls += " nws-flush"
 	}
@@ -327,6 +337,8 @@ func NetWorth() ui.Node {
 	// interpreted ratios and the Detail document's long tables arrive once the
 	// route has settled, so mount never blocks on the history math.
 	settled := useAfterSettle("networth")
+	// The scroll-spy runs only in Detail, and its hook stays unconditional.
+	nwsScrollSpy(view.Get() == uistate.NetWorthViewDetail)
 
 	if len(app.Accounts()) == 0 {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{
@@ -363,12 +375,15 @@ func NetWorth() ui.Node {
 	)
 
 	// ── Glance ───────────────────────────────────────────────────────────────
-	glance := Fragment(
+	// A two-column editorial layout, not a stack: the interpretation belongs
+	// BESIDE the evidence, not below it. Stacked, a reader met three charts
+	// before a single sentence telling them what to make of them — and on a
+	// common desktop viewport the sentence was below the fold entirely, which
+	// for a view called Glance is a contradiction in terms.
+	glance := Div(css.Class("nws-glance"),
 		nwsSection("sec-nw-bridge", uistate.T("nws.bridgeTitle"),
 			uistate.T("nws.bridgeNote", nwsWindowAgo(v.Months)), nwsBridgeExplain(), nwsBridge(v), false),
-		nwsSlot(If(settled, nwsSection("sec-nw-sides", uistate.T("nws.sidesTitle"),
-			uistate.T("nws.sidesNote"), nwsSidesExplain(), nwsSides(v), false))),
-		nwsSlot(If(settled, nwsSection("sec-nw-read", uistate.T("nws.readTitle"), "", nil, Fragment(
+		nwsSlot(If(settled, nwsSectionCls("sec-nw-read", "nws-read", uistate.T("nws.readTitle"), "", nil, Fragment(
 			P(ClassStr("nws-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "nw-takeaway"), nwsTakeaway(v)),
 			Div(Style(map[string]string{"margin-top": "0.9rem"}), nwsRatioCards(v)),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2), Style(map[string]string{"margin-top": "0.9rem"}),
@@ -378,11 +393,13 @@ func NetWorth() ui.Node {
 					Attr("data-testid", "nw-debt-link"), uistate.T("nw.viewDebts")),
 			),
 		), false))),
+		nwsSlot(If(settled, nwsSectionCls("sec-nw-sides", "nws-wide", uistate.T("nws.sidesTitle"),
+			uistate.T("nws.sidesNote"), nwsSidesExplain(), nwsSides(v), false))),
 	)
 
 	// ── Detail ───────────────────────────────────────────────────────────────
 	detail := Fragment(
-		nwsIndex(),
+		nwsIndex(onGlance),
 		nwsStandSection(v),
 		nwsChangedSection(v),
 		nwsSlot(If(settled, nwsSideSection(v, true))),

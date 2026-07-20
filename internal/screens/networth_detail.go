@@ -38,10 +38,17 @@ var nwsDetailSections = []struct{ ID, Num, TitleKey string }{
 	{"nws-05", "05", "nws.secHealth"},
 }
 
-// nwsIndex is the sticky chip index. Items are buttons that scroll their
-// section into view rather than hash anchors, which would push a fragment URL
-// through the SPA router.
-func nwsIndex() ui.Node {
+// nwsIndex is the sticky chip index: where you are in the document, and the way
+// back out of it. Items are buttons that scroll their section into view rather
+// than hash anchors, which would push a fragment URL through the SPA router.
+//
+// Detail is a long document, and a reader deep inside it needs three things the
+// first version did not provide: to land on a section's TITLE rather than
+// mid-chart behind the fixed header (fixed with scroll-margin-top on the
+// sections), to see which section they are currently in (the scroll-spy below
+// marks it .is-current), and to get back to the top or to Glance without
+// hunting for a control that has scrolled away.
+func nwsIndex(onGlance ui.Handler) ui.Node {
 	scrollTo := func(id string) func() {
 		return func() {
 			if el := js.Global().Get("document").Call("getElementById", id); el.Truthy() {
@@ -55,21 +62,84 @@ func nwsIndex() ui.Node {
 			Attr("data-testid", "nws-idx-"+num), Attr("data-section", id),
 			Title(label), OnClick(scrollTo(id)),
 			Span(css.Class("nws-idx-num"), num),
-			Span(label),
+			Span(css.Class("nws-idx-label"), label),
 		)
 	}
 	// Written out rather than looped: On* prop options register hooks, which must
 	// sit at stable render positions (CLAUDE.md, "CRITICAL gotchas").
-	s := nwsDetailSections
+	sec := nwsDetailSections
 	return Nav(css.Class("nws-index"), Attr("data-testid", "nws-index"),
 		Attr("aria-label", uistate.T("nws.indexAria")),
-		item(s[0].ID, s[0].Num, s[0].TitleKey),
-		item(s[1].ID, s[1].Num, s[1].TitleKey),
-		item(s[2].ID, s[2].Num, s[2].TitleKey),
-		item(s[3].ID, s[3].Num, s[3].TitleKey),
-		item(s[4].ID, s[4].Num, s[4].TitleKey),
-		item(s[5].ID, s[5].Num, s[5].TitleKey),
+		item(sec[0].ID, sec[0].Num, sec[0].TitleKey),
+		item(sec[1].ID, sec[1].Num, sec[1].TitleKey),
+		item(sec[2].ID, sec[2].Num, sec[2].TitleKey),
+		item(sec[3].ID, sec[3].Num, sec[3].TitleKey),
+		item(sec[4].ID, sec[4].Num, sec[4].TitleKey),
+		item(sec[5].ID, sec[5].Num, sec[5].TitleKey),
+		Span(css.Class("nws-idx-sep"), Attr("aria-hidden", "true")),
+		Button(css.Class("nws-idx", "nws-idx-back"), Type("button"),
+			Attr("data-testid", "nws-idx-top"), Title(uistate.T("nws.backTop")),
+			OnClick(scrollTo("nws-00")),
+			Span(Attr("aria-hidden", "true"), "↑ "), uistate.T("nws.backTop")),
+		Button(css.Class("nws-idx", "nws-idx-back"), Type("button"),
+			Attr("data-testid", "nws-idx-glance"), Title(uistate.T("nws.backGlanceTitle")),
+			OnClick(onGlance), uistate.T("nws.backGlance")),
 	)
+}
+
+// nwsScrollSpy marks the section the reader is currently inside, so a long
+// document never loses its place. It toggles the class directly on the DOM
+// rather than through state, so scrolling never re-renders the document. Detail
+// only; Glance has no index.
+func nwsScrollSpy(active bool) {
+	ui.UseEffect(func() func() {
+		if !active {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		ioCtor := js.Global().Get("IntersectionObserver")
+		if !doc.Truthy() || !ioCtor.Truthy() {
+			return nil
+		}
+		var secs []js.Value
+		for _, s := range nwsDetailSections {
+			if el := doc.Call("getElementById", s.ID); el.Truthy() {
+				secs = append(secs, el)
+			}
+		}
+		if len(secs) == 0 {
+			return nil
+		}
+		apply := func() {
+			// Current = the last section whose heading has reached the band just
+			// under the sticky index: the greatest top still above it.
+			const band = 170.0
+			cur := secs[0].Get("id").String()
+			best := -1e18
+			for _, el := range secs {
+				top := el.Call("getBoundingClientRect").Get("top").Float()
+				if top <= band && top > best {
+					best, cur = top, el.Get("id").String()
+				}
+			}
+			items := doc.Call("querySelectorAll", ".nws-idx[data-section]")
+			for i := 0; i < items.Get("length").Int(); i++ {
+				it := items.Call("item", i)
+				on := it.Call("getAttribute", "data-section").String() == cur
+				it.Get("classList").Call("toggle", "is-current", on)
+			}
+		}
+		cb := js.FuncOf(func(js.Value, []js.Value) any { apply(); return nil })
+		io := ioCtor.New(cb, map[string]any{"rootMargin": "-150px 0px -55% 0px", "threshold": 0})
+		for _, el := range secs {
+			io.Call("observe", el)
+		}
+		apply()
+		return func() {
+			io.Call("disconnect")
+			cb.Release()
+		}
+	}, "nws-spy|"+boolStr(active))
 }
 
 // nwsDetailSection is one numbered document section.

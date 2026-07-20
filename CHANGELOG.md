@@ -6,6 +6,25 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Glance is one screen again: the interpretation now sits beside the evidence.** At a 1202x1078
+  viewport "What it means" and its three health cards fell below the fold, so a reader met three
+  charts before a single sentence telling them what to make of them. Glance is now a two-column
+  editorial layout — "What moved it" left, takeaway + health metrics right, "Two sides" full width
+  beneath. Measured at that viewport the hero (112-295), the bridge (355-717) and the interpretation
+  (355-964) all land above the 1078 fold. The grid holds its two columns down to 860px content
+  rather than the shared 966px bento step, because at a 1202px viewport the pane is ~960px and
+  collapsing there would push the interpretation back below the fold on exactly the size this
+  layout exists to serve; bridge labels were verified unclipped at that width.
+- **Detail's section jumps no longer land behind the header.** "04 History" scrolled its heading to
+  ~17px from the top, behind the fixed header, so the reader arrived mid-chart with no section title
+  on screen. Sections carry `scroll-margin-top`; the same jump now lands the section at 88px and its
+  title at 105px.
+- **Detail keeps its place and offers a way out.** The section index gains a scroll-spy marking the
+  section currently in view (toggled directly on the DOM, so scrolling never re-renders the
+  document) plus "Top" and "Back to Glance" buttons — by the time a reader is deep in the document
+  the view toggle has scrolled away, and hunting for it is not navigation.
+
 ### Added
 - **The bridge's legs name which accounts produced them.** `attribution.Leg` now carries
   `Contributors` — the accounts behind that leg, largest magnitude first — so "debt paid down

@@ -98,6 +98,29 @@ func registerNwsShell() {
 		prop("margin", "0 0 0.5rem"),
 	)
 
+	// ── The Glance grid: the interpretation sits BESIDE the evidence, so a
+	// reader meets "what it means" at the same moment as the chart it explains
+	// rather than a scroll later. Sections opt into a full-width row themselves.
+	rule(".nws-glance",
+		prop("display", "grid"),
+		prop("grid-template-columns", "minmax(0, 1.62fr) minmax(19rem, 1fr)"),
+		prop("gap", "0.85rem"),
+		prop("align-items", "start"),
+	)
+	rule(".nws-glance > .nws-wide",
+		prop("grid-column", "1 / -1"),
+	)
+	rule(".nws-read .nws-ratios",
+		prop("grid-template-columns", "1fr"),
+		prop("gap", "0.5rem"),
+	)
+	rule(".nws-read .nws-ratio",
+		prop("padding", "0.6rem 0.75rem"),
+	)
+	rule(".nws-read .nws-ratio-value",
+		prop("font-size", "1.25rem"),
+	)
+
 	// ── Glance | Detail toggle: the same segmented affordance the Reports
 	// Summary | Full report pair uses, at the page's own scale.
 	rule(".nws-views",
@@ -334,6 +357,10 @@ func registerNwsBridge() {
 		prop("color", "var(--text-dim)"),
 		prop("font-size", "var(--type-12, 0.75rem)"),
 		prop("line-height", "1.25"),
+		// Two lines' worth of space whether the name needs it or not, so a
+		// wrapping label ("Debt paid down") does not push its own figure out of
+		// line with the figures either side of it.
+		prop("min-height", "2.5em"),
 	)
 	rule(".nws-bridge-amount",
 		prop("font-size", "var(--type-13)"),
@@ -686,6 +713,12 @@ func registerNwsTones(selectors ...string) {
 // registerNwsDetail emits the Detail view: the numbered section chips and the
 // balance-sheet tables.
 func registerNwsDetail() {
+	// A jumped-to section lands clear of the app header AND the sticky index
+	// above it. Without this the reader arrives mid-chart with no section title
+	// on screen, which is exactly the moment they most need one.
+	rule(".nws-section[id]",
+		prop("scroll-margin-top", "5.5rem"),
+	)
 	rule(".nws-index",
 		prop("display", "flex"),
 		prop("flex-wrap", "wrap"),
@@ -718,6 +751,20 @@ func registerNwsDetail() {
 	rule(".nws-idx.is-current",
 		prop("color", "var(--text)"),
 		prop("background", "var(--bg)"),
+	)
+	rule(".nws-idx.is-current",
+		prop("color", "var(--text)"),
+		prop("background", "var(--bg)"),
+		prop("font-weight", "600"),
+	)
+	rule(".nws-idx-sep",
+		prop("width", "1px"),
+		prop("align-self", "stretch"),
+		prop("margin", "0.15rem 0.25rem"),
+		prop("background", "var(--border)"),
+	)
+	rule(".nws-idx-back",
+		prop("color", "var(--text-dim)"),
 	)
 	rule(".nws-idx-num",
 		prop("font-weight", "600"),
@@ -800,6 +847,11 @@ func registerNwsDetail() {
 // rather than by clipping: below the single-column content width the waterfall
 // becomes a stacked list of the same legs with the same figures, and the
 // mirrored chart loses height rather than legibility.
+// nwsGlanceStack is the content width below which the Glance grid stops being
+// two columns. Chosen from the waterfall's needs, not from the shared bento
+// steps: below this the left column cannot fit the bridge's labels.
+const nwsGlanceStack = 860
+
 func registerNwsBreakpoints() {
 	ruleContentMax(contentGrid4, ".nws-hero",
 		prop("grid-template-columns", "1fr"),
@@ -821,6 +873,15 @@ func registerNwsBreakpoints() {
 	)
 	ruleContentMax(contentGrid1, ".nws-bridge-stack",
 		prop("display", "flex"),
+	)
+	// The Glance grid holds its two columns further down than the bento
+	// breakpoints do, deliberately: at a 1202px viewport the content pane is
+	// ~960px, and collapsing there would push the interpretation back below the
+	// fold on exactly the common desktop size this layout exists to serve. It
+	// stacks at 860px, the width below which the left column can no longer label
+	// the waterfall honestly.
+	ruleContentMax(nwsGlanceStack, ".nws-glance",
+		prop("grid-template-columns", "1fr"),
 	)
 	ruleContentMax(contentGrid4, ".nws-sides",
 		prop("grid-template-columns", "1fr"),
