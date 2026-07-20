@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The agenda promised one pay cycle and listed six weeks.** Its note read "Everything due through
+  your next pay cycle" while the list ran to 1 September, with Rewards Credit Card and HOA dues each
+  appearing TWICE — the second occurrence being next month's, not a second charge. The horizon is
+  kept (a merged bills-and-income agenda that stops at the next paycheck would hide most of what the
+  household owes, and the tideline hero above it is already the pay-cycle view), and the claim is now
+  the one that is true: "Everything due in the next 45 days, income included." The list is broken by
+  month, so a monthly commitment appearing twice reads as two months rather than two debts, and the
+  calendar view — which draws one month at a time, not 45 days — states its own window instead of
+  inheriting the list's.
 - **The compact agenda's date ran straight into the item's name.** The date column was a guessed
   4.2rem (3.6rem when the pane narrows) holding a nowrap full date, so any two-digit day overflowed
   its track with no gap at all and rendered as "Aug 15, 2026Car payment (Marcus)". The column is now

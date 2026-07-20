@@ -84,9 +84,13 @@ var rhythmKeys = Catalog{
 	"rhythm.rcUnknown":     "irregularly",
 
 	// ── Up next — the agenda ────────────────────────────────────────────────
-	"rhythm.agendaTitle":  "Up next",
-	"rhythm.agendaNote":   "Everything due through your next pay cycle, income included.",
-	"rhythm.agendaNone":   "Nothing scheduled ahead.",
+	"rhythm.agendaTitle": "Up next",
+	// The note names the window each view actually draws. The compact list runs
+	// well past one pay cycle, so a monthly bill appears in it more than once — the
+	// month headings are what stop that reading as owing it twice.
+	"rhythm.agendaNote":    "Everything due in the next %d days, income included. Grouped by month, so a monthly bill appears once in each.",
+	"rhythm.agendaNoteCal": "Everything due, a month at a time, income included.",
+	"rhythm.agendaNone":    "Nothing scheduled ahead.",
 	"rhythm.viewAria":     "Agenda view",
 	"rhythm.viewCompact":  "Compact",
 	"rhythm.viewCalendar": "Calendar",

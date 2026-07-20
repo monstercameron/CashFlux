@@ -256,13 +256,18 @@ func rhyAgendaSection(props rhyAgendaProps) ui.Node {
 		rhyToggleBtn(uistate.T("rhythm.viewCalendar"), "rhy-view-calendar", view.Get() == uistate.AgendaViewCalendar, onCalendar),
 	)
 
+	// The note describes the window each view actually draws. The compact list runs
+	// the whole agenda horizon — which is longer than one pay cycle, and saying
+	// otherwise while listing September was the page overpromising its own scope.
 	var body ui.Node
+	note := uistate.T("rhythm.agendaNote", agendaWindowDays)
 	if view.Get() == uistate.AgendaViewCalendar {
 		body = rhyAgendaCalendar(app, now, calOffset.Get(), base, calPrev, calNext, calToday)
+		note = uistate.T("rhythm.agendaNoteCal")
 	} else {
 		body = rhyAgendaCompact(buildAgenda(app, now, base), base, showAll.Get(), toggleAll)
 	}
-	return rhySection("sec-agenda", uistate.T("rhythm.agendaTitle"), uistate.T("rhythm.agendaNote"), toggle, body)
+	return rhySection("sec-agenda", uistate.T("rhythm.agendaTitle"), note, toggle, body)
 }
 
 // rhyToggleBtn renders one segment of the view toggle.
@@ -277,6 +282,12 @@ func rhyToggleBtn(label, testid string, on bool, onClick any) ui.Node {
 
 // rhyAgendaCompact renders the dense single-line agenda (default), capped with a
 // real "show all" expander rather than a silent "+N more".
+//
+// The list is broken by month. The window runs past a single cycle, so a monthly
+// commitment legitimately appears in it twice — HOA dues on the 1st of August AND
+// the 1st of September. Undivided, that reads as owing the same bill twice, which
+// is the worst thing a bills list can say. A month heading costs one dim line and
+// makes the repetition mean what it actually means.
 func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll any) ui.Node {
 	if len(items) == 0 {
 		return P(css.Class("muted"), Attr("data-testid", "rhy-agenda-none"), uistate.T("rhythm.agendaNone"))
@@ -287,8 +298,15 @@ func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll
 	if !showAll && len(items) > maxRows {
 		shown = items[:maxRows]
 	}
+	month := ""
 	for _, it := range shown {
 		row := it
+		if m := monthLabel(row.Date); m != month {
+			month = m
+			// No testid: it would have to carry the month, and a testid that changes
+			// every month is a CI failure with a date on it. The class is the handle.
+			rows = append(rows, Div(css.Class("rhy-ag-month"), Attr("role", "presentation"), m))
+		}
 		rows = append(rows, ui.CreateElement(rhyAgendaRow, rhyAgendaRowProps{Item: row, Base: base}))
 	}
 	list := Div(rows...)

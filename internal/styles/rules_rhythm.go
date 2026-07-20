@@ -465,6 +465,26 @@ func registerRhythmAgenda() {
 	rule(".rhy-ag-row:first-of-type",
 		prop("border-top", "0"),
 	)
+	// Month heading: the quiet divider that makes a monthly bill appearing twice in
+	// the window read as two months rather than two charges.
+	rule(".rhy-ag-month",
+		prop("font-size", "var(--type-11)"),
+		prop("font-weight", "700"),
+		prop("letter-spacing", "0.04em"),
+		prop("text-transform", "uppercase"),
+		prop("color", "var(--text-dim)"),
+		prop("padding", "0.75rem 0 0.3rem"),
+		prop("border-top", "1px solid var(--border)"),
+	)
+	rule(".rhy-ag-month:first-of-type",
+		prop("border-top", "0"),
+		prop("padding-top", "0"),
+	)
+	// The heading already draws the separating line, so the row beneath it must not
+	// draw a second one right under it.
+	rule(".rhy-ag-month + .rhy-ag-row",
+		prop("border-top", "0"),
+	)
 	rule(".rhy-ag-row.is-overdue .rhy-ag-date",
 		prop("color", "var(--danger)"),
 	)
