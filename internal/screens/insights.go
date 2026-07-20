@@ -627,7 +627,9 @@ func Insights() ui.Node {
 		}
 		msgs := make([]domain.ChatMessage, len(ts))
 		for i, t := range ts {
-			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text, Tokens: t.Usage.TotalTokens, CreatedAt: time.Now()}
+			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text,
+				Tokens: t.Usage.TotalTokens, PromptTokens: t.Usage.PromptTokens, CompletionTokens: t.Usage.CompletionTokens,
+				CreatedAt: time.Now()}
 		}
 		// Keep an AI-generated name once set, rather than re-deriving from the first line.
 		title, named := conversationTitle(ts), false
@@ -649,7 +651,8 @@ func Insights() ui.Node {
 			}
 			ts := make([]chatTurn, len(c.Messages))
 			for i, m := range c.Messages {
-				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text, Usage: ai.Usage{TotalTokens: m.Tokens}}
+				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text,
+					Usage: ai.Usage{PromptTokens: m.PromptTokens, CompletionTokens: m.CompletionTokens, TotalTokens: m.Tokens}}
 			}
 			turns.Set(ts)
 			convID.Set(cid)
@@ -1394,7 +1397,7 @@ func Insights() ui.Node {
 						Title(uistate.T("insights.privacyLabel")), OnClick(togglePrivacyEvt),
 						uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W3, tw.H3)), Span(tierLabel)),
 					Span(css.Class("chat-dock-scope"), Attr("data-testid", "assistant-scope-line"),
-						uistate.T("assistant.nextScope", strings.ToLower(tierLabel), shareEstTokens)),
+						uistate.T("insights.nextScopeContext", strings.ToLower(tierLabel), ai.FormatTokens(shareEstTokens))),
 					P(css.Class("chat-dock-hint", tw.TextFaint), uistate.T("assistant.composerHint")),
 				),
 			),
@@ -1848,11 +1851,28 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 	}))
 	var note ui.Node = Fragment()
 	if p.Usage.TotalTokens > 0 {
-		// UX-09 honesty: unknown pricing says "cost unavailable" instead of the
-		// bare token count that read as a free (or $0.00) turn.
-		txt := uistate.T("insights.usageCostUnknown", p.Usage.TotalTokens)
-		if cost, ok := ai.EstimateCostUSD(p.Model, p.Usage); ok {
-			txt = uistate.T("insights.usageCost", p.Usage.TotalTokens, ai.FormatCostUSD(cost))
+		// QPASS-D honesty: the old line labelled the WHOLE request ("This reply:
+		// 8,578 tokens") as the reply and formatted a $0.00 cost from a rehydrated
+		// turn whose input/output split had been zeroed. Split the display — reply
+		// (output) tokens as the headline, context (input) as secondary — and cost
+		// the turn from the split, never from a zeroed one.
+		var txt string
+		if p.Usage.PromptTokens > 0 || p.Usage.CompletionTokens > 0 {
+			// Full split available: cost is trustworthy (or "cost unavailable"
+			// when the model has no known pricing) — never a bogus $0.00.
+			costText := uistate.T("insights.costUnavailable")
+			if cost, ok := ai.EstimateCostUSD(p.Model, p.Usage); ok {
+				costText = ai.FormatCostUSD(cost)
+			}
+			txt = uistate.T("insights.replyUsageSplit",
+				ai.FormatTokens(p.Usage.CompletionTokens),
+				ai.FormatTokens(p.Usage.PromptTokens),
+				costText)
+		} else {
+			// Legacy turn saved before the split was recorded: only the total
+			// survived, so an accurate input/output cost can't be recomputed —
+			// say the honest total rather than invent a $0.00.
+			txt = uistate.T("insights.replyUsageTotalNA", ai.FormatTokens(p.Usage.TotalTokens))
 		}
 		note = P(css.Class(tw.TextFaint, tw.Text11, tw.Mt2), txt)
 	}

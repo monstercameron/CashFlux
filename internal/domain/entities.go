@@ -498,13 +498,19 @@ type SavedInsight struct {
 }
 
 // ChatMessage is one turn in an Insights conversation. Role is "user" or
-// "assistant"; Tokens records the assistant reply's token usage (0 for user turns).
+// "assistant"; Tokens records the assistant turn's TOTAL token usage — context
+// plus reply — (0 for user turns). PromptTokens/CompletionTokens carry the
+// input(context)/output(reply) split so a reopened conversation can still show
+// the honest per-message breakdown and an accurate cost; they are additive and
+// absent (0) on conversations saved before the split was recorded.
 type ChatMessage struct {
-	ID        string    `json:"id"`
-	Role      string    `json:"role"`
-	Text      string    `json:"text"`
-	Tokens    int       `json:"tokens,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	Role             string    `json:"role"`
+	Text             string    `json:"text"`
+	Tokens           int       `json:"tokens,omitempty"`
+	PromptTokens     int       `json:"promptTokens,omitempty"`
+	CompletionTokens int       `json:"completionTokens,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 // Conversation is a saved Insights chat: an ordered list of messages with a title
