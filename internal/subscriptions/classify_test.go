@@ -355,3 +355,35 @@ func TestIsRealSubscriptionName(t *testing.T) {
 		}
 	}
 }
+
+// TestIsHabitualName locks the habitual-spend judgment the recurring-discovery
+// review strip needs: a coffee or takeaway habit charges a consistent amount on
+// a consistent rhythm, so every amount-based test passes it — only the merchant
+// or category says it is not a commitment. Essential spend keeps its own
+// separate judgment (groceries are not a night out).
+func TestIsHabitualName(t *testing.T) {
+	habitual := []string{
+		"Blue Bottle Coffee", "DoorDash", "Uber Eats", "Grubhub",
+		"Dining out", "Restaurants", "Fast food", "Joes Pizza",
+		"The Corner Cafe", "Wingstop", "Starbucks", "Village Tavern",
+	}
+	for _, s := range habitual {
+		if !IsHabitualName(s) {
+			t.Errorf("IsHabitualName(%q) = false, want true", s)
+		}
+	}
+	notHabitual := []string{
+		"Netflix", "Meridian Mortgage", "Xbox Game Pass", "City Water",
+		"Blue Cross Insurance", "Corner Grocery", "Adobe Creative Cloud", "",
+	}
+	for _, s := range notHabitual {
+		if IsHabitualName(s) {
+			t.Errorf("IsHabitualName(%q) = true, want false", s)
+		}
+	}
+	// Habitual is NOT essential: the two judgments stay independent, so no
+	// surface can quietly relabel a coffee habit as a household necessity.
+	if IsEssentialName("Blue Bottle Coffee") {
+		t.Error("a coffee habit must not read as essential spend")
+	}
+}

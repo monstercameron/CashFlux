@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **A coffee habit was still being proposed as a commitment.** "Blue Bottle Coffee · 121 payments ·
+  twice a month · about $7.35" survived every filter, because every filter was an amount test and the
+  amount IS consistent — that is what a coffee costs. Two judgments were missing and are now made.
+  (1) Eating and drinking out is habitual spending, not an obligation: a new merchant/category
+  judgment (`subscriptions.IsHabitualName`) demotes coffee shops, restaurants, takeaway and the
+  delivery platforms to Silent, the same tier groceries and fuel already got. It is deliberately a
+  SEPARATE list from the essential-spend one — groceries are a necessity, a night out is not, and no
+  surface should quietly relabel one as the other. (2) A cluster whose charge count far exceeds what
+  its own detected cadence explains over the span it was observed (`recurdiscover.OverFrequent`) is
+  describing how often the household goes somewhere, not what it owes — which is how "7 payments ·
+  yearly" gets read for what it is. Both DEMOTE to Silent; nothing is dropped.
 - **Review candidates were named after the bank's descriptor, not the merchant.** The strip offered
   "Msft * Xbox Game Pass 425-6816830" and "Dd Doordash Wingstop 855-431-0459" — the processor prefix
   and the support phone number read as part of the name. The payee resolver now strips a trailing

@@ -213,3 +213,85 @@ func IsEssentialName(s string) bool { return containsEssentialPhrase(s) }
 // the same phrase list IsLiabilityPayment applies. See IsEssentialName for why
 // the raw judgment is exported.
 func IsLenderName(s string) bool { return containsLenderPhrase(s) }
+
+// habitualPhrases marks HABITUAL DISCRETIONARY SPENDING — eating and drinking
+// out. It is deliberately a separate list from essentialPhrases: groceries and
+// fuel are things a household must buy, coffee and takeaway are things it
+// chooses to buy often, and calling the second kind "essential" would be a lie
+// in every surface that reads that judgment.
+//
+// What they share is the only thing that matters to recurring discovery: NEITHER
+// is a commitment. A commitment is money owed on a schedule; a coffee habit is a
+// merchant visited regularly. The distinction is invisible to the amount tests —
+// a daily coffee costs the same $7.35 every time, so it passes the "amount is
+// consistent" bar that a real subscription passes — which is exactly why the
+// judgment has to be made by category and merchant instead.
+var habitualPhrases = []string{
+	"coffee",
+	"cafe",
+	"caffe",
+	"espresso",
+	"restaurant",
+	"dining",
+	"diner",
+	"eatery",
+	"bistro",
+	"bar & grill",
+	"grill",
+	"brewery",
+	"brewing",
+	"tavern",
+	"pub",
+	"pizza",
+	"pizzeria",
+	"burger",
+	"taco",
+	"sushi",
+	"deli",
+	"bakery",
+	"donut",
+	"doughnut",
+	"bagel",
+	"sandwich",
+	"barbecue",
+	"fast food",
+	"takeout",
+	"take-out",
+	"food delivery",
+	"doordash",
+	"uber eats",
+	"ubereats",
+	"grubhub",
+	"postmates",
+	"seamless",
+	"starbucks",
+	"dunkin",
+	"mcdonald",
+	"chipotle",
+	"wingstop",
+	"subway",
+	"chick-fil-a",
+	"panera",
+	"wendy",
+	"popeyes",
+	"taco bell",
+	"blue bottle",
+}
+
+// IsHabitualName reports whether a merchant, description, or category name reads
+// as habitual eating-and-drinking-out spend rather than a commitment worth
+// scheduling. See habitualPhrases for why this is judged by name rather than by
+// amount stability.
+func IsHabitualName(s string) bool { return containsHabitualPhrase(s) }
+
+// containsHabitualPhrase reports whether s contains any habitualPhrases as a
+// case-insensitive substring.
+func containsHabitualPhrase(s string) bool {
+	lower := strings.ToLower(s)
+	for _, phrase := range habitualPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}

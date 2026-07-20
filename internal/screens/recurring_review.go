@@ -166,6 +166,17 @@ func rhyDemoteNoise(app *appstate.App, cands []recurdiscover.Candidate) []recurd
 			keep = false
 		case rhyIsEssentialOrLender(c, txnByID, catName, liability):
 			keep = false
+		case rhyIsHabitual(c, txnByID, catName):
+			// Eating and drinking out is the case the amount tests cannot reach: a
+			// daily coffee costs the same $7.35 every time, so it passes every
+			// consistency bar a real subscription passes. Only the merchant and the
+			// category know it is a habit rather than an obligation.
+			keep = false
+		case recurdiscover.OverFrequent(c.Evidence):
+			// And the case the merchant list cannot reach: a cluster carrying far
+			// more charges than its own cadence explains over the span it was seen
+			// is describing how often the household goes somewhere, not what it owes.
+			keep = false
 		case rhyAmountTooVariable(c.Evidence):
 			// A commitment is something owed on a schedule, not a merchant visited
 			// regularly. Groceries, restaurants and fuel repeat with a wildly
@@ -206,6 +217,35 @@ func rhyIsEssentialOrLender(c recurdiscover.Candidate, txnByID map[string]domain
 			return true
 		}
 		if n := catName[t.CategoryID]; n != "" && (subscriptions.IsEssentialName(n) || subscriptions.IsLenderName(n)) {
+			return true
+		}
+	}
+	return false
+}
+
+// rhyIsHabitual applies the subscriptions package's habitual-spend judgment
+// across everything the candidate carries — its payee, and the payee /
+// description / category name of each evidencing transaction — so a coffee shop
+// or a takeaway habit never leads the review queue.
+//
+// It mirrors rhyIsEssentialOrLender deliberately: the two judgments answer
+// different questions ("must the household buy this?" vs "does the household
+// simply buy this often?") and only agree on the answer that matters here —
+// neither is a commitment.
+func rhyIsHabitual(c recurdiscover.Candidate, txnByID map[string]domain.Transaction,
+	catName map[string]string) bool {
+	if subscriptions.IsHabitualName(c.Payee) {
+		return true
+	}
+	for _, id := range c.Evidence.TxnIDs {
+		t, ok := txnByID[id]
+		if !ok {
+			continue
+		}
+		if subscriptions.IsHabitualName(t.Payee) || subscriptions.IsHabitualName(t.Desc) {
+			return true
+		}
+		if n := catName[t.CategoryID]; n != "" && subscriptions.IsHabitualName(n) {
 			return true
 		}
 	}
