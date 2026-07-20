@@ -2,7 +2,7 @@
 // real user action and asserts the RESULT (not just "the page loaded"), pinning a
 // specific fixed bug so it can't silently regress. Ported from the v1 wave-1/2
 // bespoke scripts onto the Playwright runner with web-first waits.
-import { test, expect, nav, mainText, setTheme } from "./fixtures.mjs";
+import { test, expect, nav, setTheme } from "./fixtures.mjs";
 
 test.describe("wave-1 fixes", () => {
   test("todo: adding a task refreshes the list and toasts", async ({ app }) => {
@@ -23,21 +23,18 @@ test.describe("wave-1 fixes", () => {
     await expect(app.locator("body")).toContainText(/task added/i, { timeout: 20_000 });
   });
 
-  test("bills: a liability + its recurring flow are not double-counted", async ({ app }) => {
-    await nav(app, "/bills");
-    const text = await mainText(app);
-    const marcusCarRows = (text.match(/car payment \(marcus\)/gi) || []).length;
-    expect(marcusCarRows, "Marcus car payment should appear at most once").toBeLessThanOrEqual(1);
-  });
-
-  test("subscriptions: share is sane and planned recurring isn't flagged cancellable", async ({ app }) => {
-    await nav(app, "/subscriptions");
-    const text = await mainText(app);
-    const share = text.match(/share of spending\s*\n?\s*(\d+)%/i);
-    if (share) expect(Number(share[1]), "share of spending ≤ 100%").toBeLessThanOrEqual(100);
-    await expect(app.locator("body")).not.toContainText(/how to cancel hoa/i);
-  });
-
+  // MIGRATED to rhythm.spec.mjs — /bills and /subscriptions now render the one
+  // unified Bills & recurring surface, so both of these assertions were reading a
+  // page that no longer exists:
+  //
+  //   - "a liability + its recurring flow are not double-counted" counted a name's
+  //     occurrences in the whole page text, which the merged surface legitimately
+  //     shows twice (agenda row + roster row). The invariant itself is now enforced
+  //     by bills.DedupeObligations and is asserted per due date, plus the anchor
+  //     chip that proves the fold kept the liability's identity.
+  //   - "share is sane / planned recurring isn't flagged cancellable" read the old
+  //     subscriptions panel's share bar; shares are now the roster's %-of-outflow
+  //     spine.
   test("investments: holdings carry real security-type badges", async ({ app }) => {
     await nav(app, "/investments");
     await expect(app.locator("#main")).toContainText(/mutual fund|etf|stock/i);
@@ -174,30 +171,11 @@ test.describe("payment linkage", () => {
     await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
   });
 
-  test("subscription: mark via the flip modal → subscriptions row shows it and drills to it", async ({ app }) => {
-    // Read a real subscription name off the panel first, so the one we link is
-    // guaranteed to be both offered by the picker and displayed on the page.
-    await nav(app, "/subscriptions");
-    const subName = (await app.locator(".sub-row .sub-drill").first().innerText()).trim();
-    expect(subName.length).toBeGreaterThan(0);
-
-    await nav(app, "/transactions");
-    await openLinkModal(app, "txn-marksub-open");
-
-    // The modal opens on the Subscription picker; choose the subscription by name.
-    const select = app.getByTestId("txnlink-sub-select");
-    await expect(select).toBeVisible();
-    await select.selectOption({ label: subName });
-    await app.getByTestId("txnlink-save").click();
-
-    // The subscriptions page now shows exactly one "last paid" line (the one we linked),
-    // and its link drills to exactly that transaction.
-    await nav(app, "/subscriptions");
-    await expect(app.locator('[data-testid^="sub-pay-"]:not([data-testid^="sub-pay-link-"])')).toHaveCount(1);
-    await app.locator('[data-testid^="sub-pay-link-"]').first().click();
-    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
-    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
-  });
+  // MIGRATED to rhythm.spec.mjs — the subscription half of this pair read
+  // `.sub-row .sub-drill` and `sub-pay-*`, the retired subscriptions-panel
+  // vocabulary. The linkage itself is asserted there as a durable round-trip
+  // through the flip modal; the "last paid" line it used to drill from has no
+  // home on the unified surface (recorded as a gap, not silently dropped).
 });
 
 test.describe("account class override", () => {

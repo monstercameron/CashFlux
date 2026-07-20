@@ -84,6 +84,20 @@ and every commit updates this file under `Unreleased`.
   left ahead — and only then, since the current month is where a user expects to land. Prev / today /
   next paging is unchanged.
 
+### Changed
+- **The three-tab era's recurring assertions were migrated, not deleted.** Six regression tests and one
+  standalone script drove `/bills` and `/subscriptions` as separate pages. None of them could pass on
+  the unified surface and none of them was wrong — each pinned a real invariant — so each moved to
+  `rhythm.spec.mjs` with a note at the old site saying where its intent went and why the old mechanism
+  stopped working. The double-counting test measured a name's occurrences in the whole page text,
+  which the merged surface legitimately shows twice (agenda row + roster row); it now asserts one row
+  per due date plus the anchor chip proving the fold kept the liability's identity. The subscription
+  flip-modal test read the retired `.sub-row .sub-drill` / `sub-pay-*` vocabulary; the link is now
+  asserted as a durable round-trip. `e2e/recurring_match_verify.mjs` — which asserted `/OVERDUE/` and
+  `.rec-tag-paid` against a hand-started server on :8097 and slept on fixed timeouts — is replaced by a
+  web-first test on the hermetic runner. Three capability losses found during the port are kept as
+  expected-to-fail tests rather than dropped or softened, so each goes red the day it is fixed.
+
 ### Added
 - **An end-to-end suite for the unified Bills & recurring surface** (`e2e/regression/rhythm.spec.mjs`).
   The redesign replaced three tabbed pages with one surface on three routes, and the coverage that

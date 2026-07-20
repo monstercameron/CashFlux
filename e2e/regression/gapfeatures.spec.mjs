@@ -71,25 +71,15 @@ test.describe("gap features", () => {
     await expect(figs).toContainText(/5% growth/i);
   });
 
-  test("subscription cancel helper: 'remind me' creates a tracked cancellation task", async ({ app }) => {
-    await nav(app, "/subscriptions");
-    await app.getByRole("button", { name: /remind me/i }).first().click();
-    await expect(app.locator("body")).toContainText(/added a reminder to review/i, { timeout: 15_000 });
-    // The created task is a guided cancellation checklist on the To-do list.
-    await nav(app, "/todo");
-    await expect(app.locator("#main")).toContainText(/review subscription/i, { timeout: 15_000 });
-  });
-
-  test("bill negotiation helper: 'negotiate' opens a task pre-filled with talking points", async ({ app }) => {
-    await nav(app, "/bills");
-    // Negotiate moved into the per-row ⋯ kebab (UI/UX task #21) — open it first.
-    await app.locator('[data-testid^="bill-menu-btn-"]').first().click();
-    await app.locator('.add-menu:not(.hidden-menu) [data-testid^="bill-negotiate-"]').first().click();
-    const notes = app.locator("textarea.tc-notes").first();
-    await expect(notes).toBeVisible();
-    await expect(notes).toHaveValue(/competitor/i);
-    await expect(notes).toHaveValue(/retention/i);
-  });
+  // MIGRATED to rhythm.spec.mjs — both drove the retired /subscriptions and
+  // /bills panels:
+  //
+  //   - the "remind me" cancellation helper was removed with the subscriptions
+  //     panel. Its intent (a cancellation concern becomes a tracked to-do) is
+  //     asserted on the findings strip's charged-after-cancellation row, which
+  //     fires on evidence rather than on demand.
+  //   - "negotiate" still exists, now behind the AGENDA row's kebab
+  //     (rhy-ag-menu-*), not the old bill-menu-btn-*.
 
   test("daily safe-to-spend: the cash runway shows a per-day allowance until next income", async ({ app }) => {
     await nav(app, "/planning");
@@ -167,19 +157,10 @@ test.describe("gap features", () => {
     await expect(app.locator('[data-testid^="wins-row-"]').first()).toBeVisible();
   });
 
-  test("bill → budget-fit chip: an upcoming bill shows whether it fits its budget", async ({ app }) => {
-    // The seeded "Streaming & apps" recurring ($38) maps to the Subscriptions budget
-    // ($40), and car payments map to Transportation — so at least one bill row shows a
-    // fit chip stating whether paying it stays within that budget for the period.
-    await nav(app, "/bills");
-    const chip = app.locator('[data-testid^="bill-fit-"]').first();
-    await expect(chip).toBeVisible({ timeout: 15_000 });
-    await expect(chip).toContainText(/fits|over/i);
-    // Clicking it deep-links to the budget and flashes that budget's card.
-    await chip.click();
-    await expect(app).toHaveURL(/\/budgets/, { timeout: 10_000 });
-    await expect(app.locator(".budget.deeplink-flash").first()).toBeVisible({ timeout: 10_000 });
-  });
+  // MIGRATED to rhythm.spec.mjs — the budget-fit chip survived onto the unified
+  // surface's agenda rows and is asserted there. Its deep-link into the budget it
+  // names did NOT survive (the chip is now a plain span); that half is kept as an
+  // expected-to-fail test rather than dropped, so it goes red the day it is fixed.
 
   test("budget driver panel: an over budget reveals what's driving it", async ({ app }) => {
     // The seeded Groceries budget is over; its card offers a "What's driving this"
