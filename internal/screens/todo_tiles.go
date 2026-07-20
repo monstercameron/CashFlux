@@ -174,6 +174,18 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			{Title: uistate.T("todo.tmplTaxExport")},
 		}, due)
 	}
+	// A quarterly account review — reconcile balances, prune subscriptions, sanity-check
+	// budgets, and rebalance goal funding. Due in two weeks so there's runway to work the
+	// steps, wired exactly like the month-end / tax templates above.
+	addQuarterlyReview := func() {
+		due := time.Now().AddDate(0, 0, 14)
+		runChecklist("todo.tmplQuarterly", []taskchecklist.Item{
+			{Title: uistate.T("todo.tmplQtrBalances"), DueOffsetDays: -10},
+			{Title: uistate.T("todo.tmplQtrSubscriptions"), DueOffsetDays: -7},
+			{Title: uistate.T("todo.tmplQtrBudgets"), DueOffsetDays: -3},
+			{Title: uistate.T("todo.tmplQtrGoals")},
+		}, due)
+	}
 	// View switch (list / board / calendar) + the board's group-by. Fixed set of
 	// controls, so their handlers sit at stable hook positions (no loop).
 	setViewList := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewList) }))
@@ -297,16 +309,18 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	)
 	hideToggle := Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
 		Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel))
-	// One "More" menu for the uncommon tools — the checklist templates (month-end close
-	// / tax-prep) that instantiate a parent task + ordered steps.
+	// The "Templates & tools" menu — the checklist templates (month-end close, tax prep,
+	// quarterly account review) that instantiate a parent task + ordered steps. Named for
+	// what it holds rather than a vague "More".
 	moreMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
-		TriggerText:   uistate.T("todo.moreTools"),
-		TriggerLabel:  uistate.T("todo.moreTools"),
+		TriggerText:   uistate.T("todo.templatesTools"),
+		TriggerLabel:  uistate.T("todo.templatesTools"),
 		TriggerTestID: "todo-checklists-btn",
 		TriggerClass:  "btn btn-tool",
 		Items: []uiw.OverflowMenuItem{
 			{Label: uistate.T("todo.checklistMonthEnd"), Icon: icon.Calendar, TestID: "todo-checklist-monthend", OnSelect: addMonthEndClose},
 			{Label: uistate.T("todo.checklistTaxPrep"), Icon: icon.FileText, TestID: "todo-checklist-taxprep", OnSelect: addTaxPrep},
+			{Label: uistate.T("todo.checklistQuarterly"), Icon: icon.Refresh, TestID: "todo-checklist-quarterly", OnSelect: addQuarterlyReview},
 		},
 	})
 	addBtn := Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),

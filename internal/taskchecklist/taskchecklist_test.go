@@ -56,6 +56,38 @@ func TestInstantiate(t *testing.T) {
 	}
 }
 
+// TestInstantiateStepsDueOnOrBeforePrepDeadline guards the invariant every financial
+// template (month-end close, tax prep, quarterly account review) relies on: when a
+// step's DueOffsetDays is non-positive (prep work leading up to the checklist date), its
+// due date must land on or before the parent's due date — a prep step should never come
+// due after the thing it prepares for. Uses the quarterly-review shape as a witness.
+func TestInstantiateStepsDueOnOrBeforePrepDeadline(t *testing.T) {
+	due := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	n := 0
+	newID := func() string { n++; return fmt.Sprintf("q-%d", n) }
+	items := []Item{
+		{Title: "Update every account balance to today", DueOffsetDays: -10},
+		{Title: "Review recurring subscriptions", DueOffsetDays: -7},
+		{Title: "Check each budget", DueOffsetDays: -3},
+		{Title: "Rebalance goal contributions"}, // 0 = on the review date
+	}
+	got := Instantiate("Quarterly review", items, due, newID)
+	if len(got) != len(items)+1 {
+		t.Fatalf("len = %d, want %d", len(got), len(items)+1)
+	}
+	for _, child := range got[1:] {
+		if child.Due.After(due) {
+			t.Errorf("step %q due %v falls after the parent due %v", child.Title, child.Due, due)
+		}
+	}
+	// Steps stay in the given order (manual sort), earliest prep first.
+	for i := 1; i < len(got)-1; i++ {
+		if got[i].Due.After(got[i+1].Due) {
+			t.Errorf("step order not chronological: %v after %v", got[i].Due, got[i+1].Due)
+		}
+	}
+}
+
 func TestInstantiateEmptyItems(t *testing.T) {
 	got := Instantiate("Solo", nil, time.Now(), func() string { return "x" })
 	if len(got) != 1 {
