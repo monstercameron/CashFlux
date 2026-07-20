@@ -36,9 +36,9 @@ var ruleCondKeys = Catalog{
 	"rulecond.op.in-month": "in month",
 
 	// UI chrome: condition slot labels and helpers.
-	"rulecond.slot1":        "Condition 1",
-	"rulecond.slot2":        "Condition 2",
-	"rulecond.slot3":        "Condition 3",
+	"rulecond.slot1":        "Match a field (amount, account, or date)",
+	"rulecond.slot2":        "Add a second condition",
+	"rulecond.slot3":        "Add a third condition",
 	"rulecond.sectionLabel": "Additional conditions (optional, all must match)",
 	"rulecond.valueLabel":   "Value",
 	"rulecond.fieldLabel":   "Field",

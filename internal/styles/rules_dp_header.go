@@ -38,4 +38,13 @@ func registerDpHeader() {
 	rule(".add-menu .tb-more-quick .muzak-btn, .add-menu .tb-more-quick .smart-peek-tb, .add-menu .tb-more-quick .tb-updated",
 		padding("0.3rem 0.4rem"),
 	)
+	// The activity/history "Updated …" stamp collapses to icon-only in the crowded
+	// top bar (rules_dp_header's max-width:1720px rule hides .tb-updated-label). But
+	// inside the ⋯ More popover that same viewport-width media query still matched,
+	// so the relocated stamp showed as a lone clock glyph with no label — an unlabeled
+	// empty row under "ACTIVITY & INSIGHTS" (task #4). Force the label visible in the
+	// menu (higher specificity beats the media rule; media queries add no specificity).
+	rule(".add-menu .tb-more-quick .tb-updated .tb-updated-label",
+		display("inline"),
+	)
 }

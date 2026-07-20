@@ -58,6 +58,17 @@ and every commit updates this file under `Unreleased`.
   (C363/C364) rides in `56035b98`, and C397's files ride in `11cb9fc0`; content verified.
 
 ### Fixed
+- **Black-box UI/UX loop, batch 1 (2026-07-19/20):** end-of-page controls (dashboard Resolve,
+  Smart Dismiss, alert toggles) clear the floating dev assistant bubble via `:has()`-gated bottom
+  clearance (dev-only, production unaffected); the boot skeleton now fades ≤300ms once the app
+  mounts (was up to ~4s of translucent ghosting with doubled titles on heavy routes) with an
+  inline CSS fallback independent of the JS observer; Rules quick-add "Condition 1/2/3"
+  placeholders replaced with descriptive labels; the top-bar overflow menu's icon-only blank row
+  regained its "Updated…" label (a crowded-topbar media rule hid it); `main.wasm.gz` is built and
+  deployed alongside the wasm so every route stops logging a compressed-load 404; Monthly-recap
+  "Biggest expense" wraps instead of clipping ("Car payment (…"); the net-worth trend's clipped
+  "(so far)" axis tick became "Now"; quiet-hours From/Until labels got proper gap + content-sized
+  inputs.
 - **UI/UX review remediation — final tranche (2026-07-19, all 39 review tasks now closed):**
   - **Design tokens:** `--muted` exists in the dark base (was light-only, resolving to
     nothing); ~500 off-scale rem font sizes snap to the `--type-*` scale (±0.6px shifts that

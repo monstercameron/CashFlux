@@ -197,7 +197,7 @@ func registerGenerated() {
 		placeItems("center"),
 		background("var(--bg)"),
 		zIndex("10"),
-		transition("opacity var(--motion-narrative) var(--ease-exit), transform var(--motion-narrative) var(--ease-exit)"),
+		transition("opacity var(--motion-overlay) var(--ease-exit), transform var(--motion-overlay) var(--ease-exit)"),
 	)
 	rule("#boot.hidden",
 		opacity("0"),
@@ -11923,6 +11923,13 @@ func registerGenerated() {
 		zIndex("-1 !important"),
 	)
 	rule("#app:not(:empty) ~ #boot,\n      body:has(#app:not(:empty)) #boot:not(.hidden)",
+		// Fade the boot skeleton the instant the app mounts content, independent of the
+		// JS hideBoot() path — on some heavy routes (Budgets, Accounts) the MutationObserver
+		// dismissal lagged and the fully-opaque skeleton ghosted UNDER the fading-in app for
+		// ~4s (doubled titles, "Getting your money in order…" showing through; task #2). The
+		// #boot transition (motion-overlay, ~280ms) carries the fade; z-index/pointer-events
+		// keep it inert behind #app in the meantime.
+		opacity("0 !important"),
 		pointerEvents("none !important"),
 		zIndex("-1 !important"),
 	)

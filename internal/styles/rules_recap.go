@@ -67,7 +67,15 @@ func registerRecapSurface() {
 		lineHeight("1.15"),
 		color("var(--text)"),
 		fontVariantNumeric("tabular-nums"),
-		whiteSpace("nowrap"),
+		// Long labels ("Car payment (Marcus)") wrap to two lines instead of clipping to
+		// "Car payment (…" — auto-fit up to two lines, then ellipsize (task #6a). Short
+		// numeric figures ("↓46%", "$620.00") stay on one line and are unaffected.
+		prop("display", "-webkit-box"),
+		prop("-webkit-box-orient", "vertical"),
+		prop("-webkit-line-clamp", "2"),
+		prop("line-clamp", "2"),
+		whiteSpace("normal"),
+		overflowWrap("anywhere"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 	)

@@ -94,10 +94,21 @@
       /* Page-shaped loading skeleton (#78): the boot layer previews the shell —
          rail, top bar, hero + tile grid — instead of a centered splash card, so
          the first paint already looks like the app that's about to appear. */
-      #boot{position:fixed;inset:0;background:#0e0e0f;z-index:10;transition:opacity .45s ease,transform .45s ease}
+      #boot{position:fixed;inset:0;background:#0e0e0f;z-index:10;transition:opacity .28s ease,transform .28s ease}
       #boot.hidden{opacity:0;transform:scale(1.015);pointer-events:none}
+      /* Auto-fade the skeleton the moment the app mounts content, independent of the
+         hideBoot() JS below — on heavy routes the JS dismissal lagged and the opaque
+         skeleton ghosted under the fading-in app for ~4s (doubled titles, tagline
+         showing through). Pure CSS fires on the first #app child. */
+      body:has(#app:not(:empty)) #boot{opacity:0;transform:scale(1.015);pointer-events:none}
       .sk-shell{display:flex;height:100%}
-      .sk-rail{width:240px;flex:none;border-right:1px solid #1e1e21;padding:1rem .9rem;display:flex;flex-direction:column;gap:.65rem}
+      /* Rail width MUST be 15rem, matching the real shell's rail (tw.W60 = css.Rem(15)),
+         not a fixed 240px. The app applies the saved theme's --ui-scale (root font-size)
+         at mount, so the real rem-based rail grows/shrinks with scale while a px skeleton
+         rail stayed put — at any non-default text size the skeleton and the shell it hands
+         off to no longer lined up, and the layout visibly jumped at handoff (batch #5 #6).
+         In rem the skeleton tracks the same scale, so rail x/width match at every setting. */
+      .sk-rail{width:15rem;flex:none;border-right:1px solid #1e1e21;padding:1rem .9rem;display:flex;flex-direction:column;gap:.65rem}
       .sk-brand{display:flex;align-items:center;gap:.5rem;margin-bottom:.9rem}
       .sk-mark{display:grid;place-items:center;width:1.6rem;height:1.6rem;background:#2e8b57;color:#052e13;border-radius:8px;font-weight:900;animation:sk-breathe 1.8s ease-in-out infinite}
       .sk-brand-word{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:1.05rem}
@@ -300,7 +311,7 @@
           boot.classList.add("hidden");
           var remove = function () { boot.style.display = "none"; };
           boot.addEventListener("transitionend", remove, { once: true });
-          setTimeout(remove, 700); // fallback if transitionend never fires
+          setTimeout(remove, 500); // fallback if transitionend never fires
         }
 
         if (app) {
@@ -316,8 +327,9 @@
             obs.observe(app, { childList: true });
           }
           // Safety net: never let the splash outlive the boot, even if a re-mount
-          // races the observer.
-          setTimeout(function () { if (app.children.length > 0) hideBoot(); }, 4000);
+          // races the observer. (The CSS auto-fade above already handles the common
+          // case; this only guarantees the element is fully removed from the layer.)
+          setTimeout(function () { if (app.children.length > 0) hideBoot(); }, 1200);
         }
 
         if (typeof Go !== "function") {

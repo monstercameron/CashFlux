@@ -36,6 +36,36 @@ func registerUxbatch4() {
 		prop("bottom", "84px !important"),
 	)
 
+	// When that dev-runner bubble is present it parks at bottom:84px on the right,
+	// overhanging the last row of a scrolled-to-the-end page — it permanently covered
+	// end-of-page controls (the dashboard "Resolve" button, Assistant "Dismiss" links,
+	// transaction-row kebabs, the Alerts "Unusually large transaction" toggle, the
+	// year-planner "Scenarios" button; UI/UX task #1). Give the main scroll region
+	// extra bottom clearance so end content always clears the bubble. Gated on the
+	// bubble's presence via :has(), so production (no bubble) keeps its lean padding.
+	rule("body:has(#gwc-status-icon) main.cf-scroll",
+		prop("padding-bottom", "9.5rem"),
+	)
+
+	// Settings → Alerts → Quiet hours (task #7): the "From"/"Until" rows reused the
+	// bare `.toggle-row` (space-between + a width:100% `.set-input`), so the full-width
+	// time input butted flush against its label with no gap. Left-align the row, add a
+	// consistent gap, align the two labels to a shared width, and let the time input
+	// size to its content — matching the calm rhythm of the other settings rows.
+	rule("[data-testid=\"settings-quiet-hours\"] .toggle-row",
+		prop("justify-content", "flex-start"),
+		prop("gap", "0.75rem"),
+	)
+	rule("[data-testid=\"settings-quiet-hours\"] .toggle-row > span",
+		prop("flex", "none"),
+		prop("min-width", "3rem"),
+	)
+	rule("[data-testid=\"settings-quiet-hours\"] .toggle-row .set-input",
+		prop("width", "auto"),
+		prop("flex", "none"),
+		prop("min-width", "9rem"),
+	)
+
 	// The rail's nav list scrolls above the pinned Cloud/household/footer block,
 	// but nothing SAID so — an expanded section's last items (e.g. the active
 	// "Planning") sat half-cut at the invisible scroll boundary and read as

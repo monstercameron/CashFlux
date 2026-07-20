@@ -1597,7 +1597,6 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 			showXAxis = f.Bool(c.Spec.Settings)
 		}
 	}
-	start := dateutil.MonthStart(time.Now())
 	valCol, _ := fr.Column("value")
 	tCol, _ := fr.Column("t")
 	series := make([]money.Money, fr.Rows)
@@ -1649,7 +1648,11 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		// month's data "so far" — label it as the current month + "(so far)" instead
 		// of the next month's name, which read as a confusing unlabeled partial point.
 		if i == len(series)-1 {
-			label = trendPointLabel(start, months) + " " + uistate.T("dashboard.trendSoFar")
+			// The current partial month's point. "Jul '26 (so far)" was too wide for the
+			// last x-axis tick (it sits at the right edge, middle-anchored) and clipped to
+			// "Jul '26 (so f…". A short, distinct "Now" reads clearly as the live point and
+			// never collides with the prior "Jul '26" cutoff tick (task #6b).
+			label = uistate.T("dashboard.trendNow")
 		}
 		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: label}
 	}
