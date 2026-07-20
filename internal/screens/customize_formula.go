@@ -94,6 +94,32 @@ func groupThousands(f float64) string {
 	s := strconv.FormatFloat(f, 'f', 2, 64)
 	s = strings.TrimRight(s, "0")
 	s = strings.TrimRight(s, ".")
+	out := groupDigits(s)
+	if neg {
+		out = "-" + out
+	}
+	return out
+}
+
+// groupThousandsMoney is groupThousands with money precision: it always keeps
+// exactly two decimals (no trailing-zero trimming), so a money-valued figure
+// tile reads "383,080.40" not "383,080.4". Used for money variables in the
+// formula picker; counts keep integer formatting via groupThousands.
+func groupThousandsMoney(f float64) string {
+	neg := f < 0
+	if neg {
+		f = -f
+	}
+	out := groupDigits(strconv.FormatFloat(f, 'f', 2, 64))
+	if neg {
+		out = "-" + out
+	}
+	return out
+}
+
+// groupDigits inserts thousands separators into the integer part of an
+// already-formatted, non-negative decimal string like "383080.40".
+func groupDigits(s string) string {
 	intPart, frac := s, ""
 	if i := strings.IndexByte(s, '.'); i >= 0 {
 		intPart, frac = s[:i], s[i:]
@@ -106,11 +132,7 @@ func groupThousands(f float64) string {
 		}
 		b.WriteByte(intPart[i])
 	}
-	out := b.String() + frac
-	if neg {
-		out = "-" + out
-	}
-	return out
+	return b.String() + frac
 }
 
 // formatFormulaValue renders a formula result (number, bool, or string).

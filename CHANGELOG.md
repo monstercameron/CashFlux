@@ -58,6 +58,14 @@ and every commit updates this file under `Unreleased`.
   (C363/C364) rides in `56035b98`, and C397's files ride in `11cb9fc0`; content verified.
 
 ### Fixed
+- **Black-box UI/UX loop, batch 3 (2026-07-20):** the wide transactions-table band
+  (~966–1042px content) sizes its secondary columns by stable `td-*` classes instead of
+  positional `nth-child` fixed pixels — the greedy fixed widths over-subscribed the
+  `table-layout:fixed` table so the only flexible column (Description) absorbed all the shrink
+  ("VEN…"), and positional widths misaligned whenever column visibility toggled (the
+  User-column-collapses-to-0px quirk); scope-chip title-casing keeps connector words lowercase
+  ("Line of Credit", was "Line Of Credit"); formula-calculator money tiles always render two
+  decimals ("383,080.40", was "383,080.4") while count variables stay integers.
 - **Black-box UI/UX loop, batch 2 (2026-07-20):** settings writes (theme, alert toggles, quiet
   hours, digest cadence, …) now issue a coalesced durable persist ~250ms after the change instead
   of waiting for the ~4s autosave tick — a reload right after changing a setting no longer

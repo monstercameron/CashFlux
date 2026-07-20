@@ -755,17 +755,20 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		// the width-priority rule (2026-07-17 audit — description reads first) must
 		// live on the th, not the td.
 		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colDescription"), SortKey: "payee", Class: "row-desc-col"})
+		// The secondary columns carry their td-* class on the header too, so the
+		// fixed-layout ledger sizes each column by class (not by fragile positional
+		// nth-child that misaligns when a column's visibility toggles).
 		if colVis.Account {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: "account"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: "account", Class: "td-acct"})
 		}
 		if colVis.Category {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colCategory"), SortKey: "category"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colCategory"), SortKey: "category", Class: "td-cat"})
 		}
 		if colVis.Source {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colSource"), SortKey: "source"})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colSource"), SortKey: "source", Class: "td-source"})
 		}
 		if colVis.User {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser")})
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser"), Class: "td-user"})
 		}
 		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colActions")), Class: "td-actions"})
 		dtp := uiw.DataTableProps{

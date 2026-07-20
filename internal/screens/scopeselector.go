@@ -363,14 +363,27 @@ func ScopeSelector() ui.Node {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// titleCaseConnectors are short function words that stay lowercase inside a
+// title (unless they lead it), so "line_of_credit" reads "Line of Credit"
+// rather than "Line Of Credit".
+var titleCaseConnectors = map[string]bool{
+	"of": true, "and": true, "the": true, "a": true, "an": true,
+	"to": true, "for": true, "in": true, "on": true, "or": true,
+}
+
 // selectorTypeLabel converts a snake_case domain.AccountType to a Title Case
-// human-readable label (e.g. "credit_card" → "Credit Card").
+// human-readable label (e.g. "credit_card" → "Credit Card", "line_of_credit" →
+// "Line of Credit").
 func selectorTypeLabel(t domain.AccountType) string {
 	words := strings.Split(string(t), "_")
 	for i, w := range words {
-		if len(w) > 0 {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		if w == "" {
+			continue
 		}
+		if i > 0 && titleCaseConnectors[w] {
+			continue // keep connector words lowercase mid-title
+		}
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
 	}
 	return strings.Join(words, " ")
 }

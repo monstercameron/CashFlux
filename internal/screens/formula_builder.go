@@ -522,9 +522,15 @@ func formulaMetricRow(p formulaMetricRowProps) ui.Node {
 	if p.Metric.Molecule && p.Metric.Formula != "" {
 		tip = p.Metric.Name + " = " + prettyFormula(p.Metric.Formula)
 	}
+	// Money variables render with exactly two decimals ("383,080.40"); only the
+	// Counts group holds whole-number tallies, which stay integer-formatted.
+	val := groupThousandsMoney(p.Value)
+	if p.Metric.Group == widgetcatalog.GroupCounts {
+		val = groupThousands(p.Value)
+	}
 	return Button(css.Class("fb-chip"), Type("button"), Title(tip),
 		Attr("aria-label", uistate.T("customize.insertShort", p.Metric.Name)), OnClick(ins),
 		Span(css.Class("fb-chip-label"), p.Metric.Label),
-		Span(css.Class("fb-chip-val"), groupThousands(p.Value)),
+		Span(css.Class("fb-chip-val"), val),
 	)
 }
