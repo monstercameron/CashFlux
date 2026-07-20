@@ -4529,48 +4529,65 @@ within the new-system groups. Discipline: every ticket lands bottom-up per the S
 new copy goes through `en_*.go` keys (screenlint ratchet is at 0 for the UI layer — keep it
 there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
+> **Status 2026-07-19 (same day):** W1 (C363–C371), W6 (C393–C397), and W10 (C412–C415) SHIPPED
+> via a 6-lane parallel build — see CHANGELOG. Verified at merged HEAD: full native suite green,
+> wasm builds clean, targeted e2e (67 passed; 5 budgets-spec failures belong to the concurrent
+> B1-redesign lane's stale specs, not this batch), light+dark screenshot pass on all touched
+> pages. Remainders filed below: C369 shipped the snooze surfacing only — quiet hours + digest
+> cadence exist as types but are NOT persisted/enforced (`notify.RuleConfig` lacks the fields;
+> digest hard-coded weekly in `internal/app/notifyrun.go`) — that slice moved to C416. New nit
+> from the screenshot pass → C417.
+- [ ] **C416 [MINOR][NOTIF] Enforce + surface quiet hours and digest cadence (C369 remainder).**
+  Add quiet-hours + digest-cadence fields to `notify.RuleConfig` (persisted), consume them in
+  `internal/app/notifyrun.go` (quiet window suppresses browser pushes; digest cadence drives
+  `DigestCandidates`), then surface both in the notifications page's alert-settings panel.
+  Ship functional controls only — no dead toggles.
+- [ ] **C417 [MINOR][DASH] Attention digest task rows say "0 days overdue".** Same disease as
+  the fixed "Due in 0 days": special-case 0 → "due today" (and 1 → "1 day overdue") in the
+  attention row copy.
+
 ### W1 — Surfacing: make shipped systems findable (the reviewer missed them)
 
-- [ ] **C363 [MAJOR][TXN] Surface Rules from Transactions as a first-class workbench entry.**
+- [x] **C363 [MAJOR][TXN] Surface Rules from Transactions as a first-class workbench entry.**
   Reviewer: "Rules are not surfaced as a first-class workbench from the main page." `/rules` is a
   full workbench (multi-condition, live preview, backfill, drag ordering, shadow/no-match conflict
   flags) and `createRuleFromTxn` already prefills from a row — but nothing on /transactions points
   there. Add a labeled Rules entry to the toolbar (with active-rule count) and keep the row-kebab
   "Create rule from this transaction" path prominent. AC: /transactions → /rules in one visible click.
-- [ ] **C364 [MAJOR][UNDO] Tell the undo story at the moment of risk.** Reviewer: "needs a clearer
+- [x] **C364 [MAJOR][UNDO] Tell the undo story at the moment of risk.** Reviewer: "needs a clearer
   undo story for bulk categorization, imports, duplicate resolution, and AI extraction." The story
   exists (`internal/history` diff-stack, Ctrl+Z/Shift+Z, `/activity` audit timeline, checkpoint
   before bulk rules-apply) — it's just silent. Every bulk-mutation completion toast (bulk
   recategorize, import commit, duplicate merge, rules apply, AI changeset apply) states
   "Undo (Ctrl+Z) · View in Activity" with a working /activity link. AC: no bulk operation completes
   without an on-screen reversal affordance.
-- [ ] **C365 [MAJOR][ACCT] Link the investments experience from Accounts.** Reviewer: "no visible
+- [x] **C365 [MAJOR][ACCT] Link the investments experience from Accounts.** Reviewer: "no visible
   holdings-level investment experience on this page" — `/investments` (holdings, allocation,
   per-account pools, growth) exists but Accounts never mentions it. Investment-section header gets
   summary chips (value / gain / return% from `portfolio.PortfolioSummary`) + "Open investments";
   each investment account row deep-links to its pool. AC: reviewer path Accounts → holdings ≤ 1 click.
-- [ ] **C366 [MINOR][DASH] Explain Focus presets in the picker.** Reviewer couldn't tell if Focus
+- [x] **C366 [MINOR][DASH] Explain Focus presets in the picker.** Reviewer couldn't tell if Focus
   changes "layout, content, or only emphasis" (it swaps the widget set AND compacts the hero).
   One-line description per preset in `dashPresetPicker` + a "swaps widgets & detail level" subtitle.
-- [ ] **C367 [MINOR][GOAL] Promote the goal scenario tools.** Reviewer asked for an "Add $X/month
+- [x] **C367 [MINOR][GOAL] Promote the goal scenario tools.** Reviewer asked for an "Add $X/month
   scenario slider with new completion date" — `goals/slider.go` (SliderRange/SliderPointAt/Ticks)
   and `goaltrajectory.ProjectScenarios` already compute exactly this. Put a visible "What if I add
   more?" affordance on the goal card/detail that opens the slider; show the conservative/expected/
   best landing band alongside.
-- [ ] **C368 [MINOR][TODO] Expose recurrence + reminder lead time in the Add/Edit task form.**
+- [x] **C368 [MINOR][TODO] Expose recurrence + reminder lead time in the Add/Edit task form.**
   Reviewer: "No recurrence field in Add task. No reminder control." `taskrecur.NextOccurrence`
   (auto-respawn on completion) and `ReminderDue` exist — the form just never asks. Add a repeat
   picker (off/daily/weekly/monthly/…) + reminder-offset field; recurring tasks show a repeat glyph.
-- [ ] **C369 [MINOR][NOTIF] Make snooze, quiet hours, and digest cadence visible.** Reviewer: "No
+- [x] **C369 [MINOR][NOTIF] Make snooze, quiet hours, and digest cadence visible.** Reviewer: "No
   obvious snooze. No quiet hours or digest schedule." All three exist (`SnoozeFeedItem` +
   1d/1w/1mo actions; `Rule.QuietStartMin/EndMin`; `default-digest` + `DigestCandidates`). Give
   Needs-you rows a visible snooze control (not buried), and surface quiet-hours + digest cadence
   in the alert-settings panel itself.
-- [ ] **C370 [MINOR][AI] Token/cost display honesty.** Reviewer: labels don't say per-response vs
+- [x] **C370 [MINOR][AI] Token/cost display honesty.** Reviewer: labels don't say per-response vs
   cumulative; "$0.00 at thousands of tokens is too imprecise." Label per-message usage "this reply"
   and the header total "this conversation"; `FormatCostUSD` renders sub-cent as "$0.004" (or
   "<$0.01"), never $0.00 for nonzero tokens.
-- [ ] **C371 [MINOR][BUD] Make the 12-month annual grid discoverable.** Reviewer: "Future-month
+- [x] **C371 [MINOR][BUD] Make the 12-month annual grid discoverable.** Reviewer: "Future-month
   planning is not as visible as current-month correction" — `BudgetAnnualGrid`
   (plan-vs-actual matrix, year nav, drill-down) exists. Add a labeled "Plan the year" entry point
   from the default budgets view; land on the current month with future months visually distinct.
@@ -4663,20 +4680,20 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W6 — Budgets forward planning (reviewer priority 5)
 
-- [ ] **C393 [MAJOR][BUD] Scenario mode on the annual grid.** "If income changes by X, what becomes
+- [x] **C393 [MAJOR][BUD] Scenario mode on the annual grid.** "If income changes by X, what becomes
   underfunded?" — `internal/whatif` exists as the seam. Grid gains a scenario toggle: adjust
   income ±X (or a category ±X), underfunded cells/months highlight, nothing persists unless
   explicitly applied.
-- [ ] **C394 [MINOR][BUD] Project recurring bills + goal contributions into future months.** Future
+- [x] **C394 [MINOR][BUD] Project recurring bills + goal contributions into future months.** Future
   cells of the annual grid pre-fill from recurring schedules + goal funding plans (distinct
   "projected" styling vs planned vs actual).
-- [ ] **C395 [MINOR][BUD] Rollover legibility per category.** Engine + per-budget fields exist
+- [x] **C395 [MINOR][BUD] Rollover legibility per category.** Engine + per-budget fields exist
   (`budgeting/rollover.go`, caps, carried-over badge). Make policy legible at a glance: rollover
   badge on every row (off / rolls / capped N periods) + popover explaining this month's carryover math.
-- [ ] **C396 [MINOR][BUD] Calm the over-budget treatment + density pass.** Reviewer: diagonal fills
+- [x] **C396 [MINOR][BUD] Calm the over-budget treatment + density pass.** Reviewer: diagonal fills
   "more visually aggressive than necessary"; list "still visually dense." Replace diagonals with a
   flat status tone + thin overflow marker; tighten row chrome (respect the existing density pref).
-- [ ] **C397 [MINOR][BUD] "Smart" affordance clarity.** Reviewer: "'Smart' is too vague and
+- [x] **C397 [MINOR][BUD] "Smart" affordance clarity.** Reviewer: "'Smart' is too vague and
   unexpectedly navigates." Label it as navigation ("Smart features →") with a tooltip naming the
   destination, or open an in-place popover instead.
 
@@ -4736,16 +4753,16 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W10 — Density + polish across pages (reviewer priority 9)
 
-- [ ] **C412 [MINOR][ACCT] Collapsible institution/group sections with subtotals; demote
+- [x] **C412 [MINOR][ACCT] Collapsible institution/group sections with subtotals; demote
   Update-balance.** Reviewer: "long flat account list… every manual row has a prominent Update
   balance button." Group headers get subtotals + collapse; Update balance moves to hover-reveal /
   kebab (destructive-stays-in-kebab rule already holds — this is the everyday-action inverse:
   keep ONE inline everyday action max).
-- [ ] **C413 [MINOR][ACCT] Account-detail chart depth.** 90-day chart gains a range picker
+- [x] **C413 [MINOR][ACCT] Account-detail chart depth.** 90-day chart gains a range picker
   (90d / 12m / all) + optional overlay of the C381 projection.
-- [ ] **C414 [MINOR][DASH] Recap labels + attention tiers.** Fix Monthly-recap label ellipsis at
+- [x] **C414 [MINOR][DASH] Recap labels + attention tiers.** Fix Monthly-recap label ellipsis at
   compact width (content-width breakpoint vars, not viewport). Render Needs-attention severity
   tiers distinctly (Critical vs Warning vs Info visual weight — `attention.Rank` already scores
   them; today rows read equally weighted).
-- [ ] **C415 [MINOR][DASH] Edit-mode calm.** Resize/settings handles appear on hover/selection
+- [x] **C415 [MINOR][DASH] Edit-mode calm.** Resize/settings handles appear on hover/selection
   only, not on every widget simultaneously.

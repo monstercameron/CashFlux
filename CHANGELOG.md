@@ -6,6 +6,33 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **W-series batch 1 — W1 surfacing + W6 budgets planning + W10 polish (2026-07-19), 18 tickets
+  (C363–C371, C393–C397, C412–C415) via a 6-lane parallel build.** Highlights: Transactions
+  toolbar gets a first-class `Rules (N)` entry + per-row "Create rule from this transaction"
+  (C363); every bulk mutation (bulk edits, imports, duplicate resolution, rules apply, AI
+  changesets) now tells the undo story — "Undo (Ctrl+Z) · View in Activity" (C364, incl. the
+  assistant's changeset receipt); Accounts links the investments experience (value/gain/return
+  banner + per-account "View holdings", C365) and gains collapsible group sections with
+  subtotals + a demoted Update-balance (C412) and a 90d/12m/all detail-chart range picker
+  backed by new pure `internal/acctseries` (C413); dashboard Focus presets explain themselves
+  (C366), Needs-attention renders severity tiers distinctly + recap labels wrap at compact
+  pane widths (C414), and edit-layout mode calms to hover/focus-revealed handles (C415);
+  goals surface the "What if I add more?" scenario planner on every card (C367); the task
+  board shows repeat/reminder glyphs + the add/edit forms hint at the due-date-gated controls
+  (C368); notification snooze is a visible clock control (C369 — quiet-hours/digest *engine
+  enforcement* remains open, see TODOS); AI cost is honest below a cent ("This reply" vs
+  "This chat", `$0.004`, never `$0.00`, C370); the budgets annual grid becomes a
+  "Plan the year" planner — discoverable entry, current-month landing, future months
+  distinct (C371), with projected recurring bills + goal contributions in future cells
+  (C394, new pure `internal/budgetplan`) and an ephemeral income-scenario mode with
+  underfunded-cell highlighting (C393); budget rows carry a rollover-policy pill with a
+  deterministic carryover-math popover (C395), the over-budget diagonal hatch calms to a
+  flat fill + thin overflow cap (C396), and the vague "Smart" button reads
+  "Smart features →" (C397). E2E: snooze spec follows the promoted clock control.
+  *Attribution note:* two shared-index races bundled some lane commits — lane-1 work
+  (C363/C364) rides in `56035b98`, and C397's files ride in `11cb9fc0`; content verified.
+
 ### Fixed
 - **UI/UX review remediation — final tranche (2026-07-19, all 39 review tasks now closed):**
   - **Design tokens:** `--muted` exists in the dark base (was light-only, resolving to

@@ -1,3 +1,33 @@
+## 2026-07-19 — W-series batch 1: six parallel lanes ship W1 + W6 + W10 (18 tickets)
+
+Ran the first implementation tranche of the nine-page 10/10 plan as a 6-lane parallel build
+(shared tree, per-lane file ownership, path-scoped commits): lane 1 Transactions rules+undo
+(C363/364), lane 2 Accounts (C365/412/413), lane 3 Dashboard (C366/414/415), lane 4 Budgets
+annual grid (C371/393/394 + new pure `internal/budgetplan`), lane 5 Budgets rows (C395/396/397),
+lane 6 cross-page surfacing (C367-370 + the assistant undo-story carve-out).
+
+Decisions + incidents worth remembering:
+- **The shared git index raced twice** (a lane's `git add`+`commit` swept another lane's staged
+  files): lane-1 work rides inside lane-6's `56035b98`; C397's files ride inside the concurrent
+  session's `11cb9fc0`. Content verified present both times; history left unrewritten. The fix
+  that held for later lanes: **commit with an explicit pathspec** (`git commit -- <paths>`),
+  never bare `git commit` after `git add`, in any multi-writer tree.
+- **A separate concurrent session** was mid-flight on the budgets B1 redesign + a token snap all
+  day (shipped v1.2.7 mid-batch). Its 5 budgets specs fail against its own redesign — stale
+  specs on their lane, NOT this batch (verified from the failure snapshots: no card grid, no
+  visible density toggle — their new hero/progressbar layout). Left for that lane to reconcile.
+- **C369 honesty cut:** quiet hours + digest cadence turned out to be types-only (never
+  persisted/enforced) — refused to ship dead toggles; snooze surfacing shipped, enforcement
+  filed as C416.
+- **Verification at merged HEAD:** full native suite green, wasm clean, 67 e2e passed, the one
+  real spec break (snooze moved to its clock control) updated after a live-repro proved the UI
+  correct (an earlier "wrong menu opens" scare was the OLD spec text executing while the file
+  showed new code — Playwright reads code frames from disk at report time; don't debug from the
+  frame, debug from what RAN). Light+dark screenshot pass on all touched pages; dashboard's
+  "blank tiles" in fullPage shots are a stitch artifact of below-fold deferral, not a bug.
+- Deployed to web/bin (temp+atomic). New testids for e2e: txn-rules-btn, txn-create-rule,
+  budget-annualgrid-scenario-*, budget-smart-features-link, notif-snooze-<id>, acct group
+  toggles. Screenshot sweep archive: scratchpad wshots/ (18 shots, both themes).
 ## 2026-07-19 — Annual Review money-flow: the "Income"-category self-loop
 
 Cam's REAL dataset (private — debugged from code + his pasted report numbers, no data shared)
