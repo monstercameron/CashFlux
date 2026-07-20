@@ -996,7 +996,8 @@ func registerBudgetsSurface() {
 		fontSize("0.78rem"),
 		color("var(--text-dim)"),
 	)
-	// W6 rows/styling lane: the per-row rollover policy badge (C395). Chained here
-	// rather than in the contended install.go.
+	// W6 rows/styling lane: the per-row rollover policy badge (C395) + the calmer
+	// over-budget bar (C396). Chained here rather than in the contended install.go.
 	registerBudgetRolloverBadge()
+	registerBudgetOverCalm()
 }
