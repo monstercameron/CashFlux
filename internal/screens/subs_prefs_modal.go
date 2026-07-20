@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -133,8 +134,42 @@ func SubsDetectPrefsForm(props SubsDetectPrefsFormProps) ui.Node {
 			),
 		)),
 		catFilterSection,
+		rhyWeakSignalsSection(app),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "subs-prefs-done"), OnClick(done), uistate.T("recurring.done")),
 		),
+	)
+}
+
+// rhyWeakSignalsSection lists the repeating patterns discovery judged too weak
+// to propose — the Silent tier. It is display-only (no hooks), so it is safe
+// inside the preferences form's render.
+//
+// The review strip's header names this count and links here. A number the user
+// is told about and cannot reach is worse than no number at all: it was the
+// reason the strip could claim "57 found" while offering five. Each entry
+// carries the same evidence sentence the strip would have shown, so "too weak"
+// is a judgment the user can check rather than take on trust.
+func rhyWeakSignalsSection(app *appstate.App) ui.Node {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	_, weak := rhySplitCandidates(app, time.Now(), base)
+	if len(weak) == 0 {
+		return Fragment()
+	}
+	items := []any{css.Class("rhy-weak-list"), Attr("data-testid", "rhy-weak-signals-list")}
+	for _, c := range weak {
+		items = append(items, Li(
+			Span(css.Class("rhy-weak-name"), c.Payee),
+			Span(css.Class("rhy-weak-ev"), rhyEvidenceSentence(c.Evidence, base)),
+		))
+	}
+	return Div(css.Class(tw.Fold(tw.Mt3)),
+		Span(css.Class("row-meta "+tw.Fold(tw.FontMedium, tw.Block, tw.Mb1)),
+			uistate.T("subs.weakSignalsLabel", len(weak))),
+		P(css.Class("row-meta"), uistate.T("subs.weakSignalsDesc")),
+		Ul(items...),
 	)
 }

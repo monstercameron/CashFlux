@@ -3403,6 +3403,8 @@ var english = Catalog{
 	// C166: subscription detection preferences — ignore categories / account types.
 	"subs.detectPrefsTitle": "Detection preferences",
 	"subs.detectPrefsDesc":  "Transactions in ignored categories or account types are skipped during detection. Use this to keep noisy spending out of your subscription list.",
+	"subs.weakSignalsLabel": "Weaker signals (%d)",
+	"subs.weakSignalsDesc":  "Patterns that repeat, but not clearly enough — or not in a way that looks like something you owe — so we didn't put them in your review queue. They're listed here so you can judge for yourself.",
 	// C166: detection-sensitivity (minimum repeat count) preference.
 	"subs.detectSensitivityLabel":  "Detection sensitivity",
 	"subs.detectSens2":             "Seen at least 2 times (most charges)",

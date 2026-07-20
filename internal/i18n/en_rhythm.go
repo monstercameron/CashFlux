@@ -31,8 +31,13 @@ var rhythmKeys = Catalog{
 
 	// ── Review strip ────────────────────────────────────────────────────────
 	"rhythm.reviewTitle": "Waiting for your review",
-	// The strip header always states the honest total, so paging never hides scale.
-	"rhythm.reviewTitleCount": "Waiting for your review · %d found",
+	// The header counts what is actually reviewable HERE — the same number the
+	// lane header and the pager count. Demoted signals get their own figure and
+	// their own route (rhythm.weakSignalsLink) rather than being folded into a
+	// headline total that leads to a five-item queue.
+	"rhythm.reviewTitleCount": "Waiting for your review · %d to review",
+	"rhythm.weakSignalsLink":  "%d weaker signals",
+	"rhythm.weakSignalsTitle": "See the patterns we judged too weak to propose, in Detection preferences",
 	"rhythm.reviewNote":       "Repeating charges we found in your history. Confirm the real ones so they join your plan.",
 	"rhythm.smartMark":        "Smart",
 	"rhythm.smartPlusMark":    "Smart+",

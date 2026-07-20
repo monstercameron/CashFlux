@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The review strip stated three contradictory totals.** Its header said "Waiting for your review · 57
+  found", its lane header said "Smart found 6 repeating charges in your history", and its pager said
+  "1–5 of 5". The 57 counted Silent-tier candidates that were never shown anywhere, so the headline was
+  unreachable by design. The strip's header, lane header and pager now all derive from ONE split
+  (`rhySplitCandidates`) and count the same thing — what is actually reviewable here ("Waiting for your
+  review · 6 to review"). The demoted signals are still acknowledged, but honestly: their own figure,
+  as a link ("51 weaker signals") that opens Detection preferences, which now LISTS them with the same
+  evidence sentence the strip would have shown. A number the user is told about and cannot reach is
+  worse than no number at all.
 - **The agenda's calendar view landed on a nearly-empty month.** Opening it on 20 July showed a grid
   blank for its first three weeks, one entry on the 22nd, and August's obligations bleeding into the
   trailing edge — it read as broken, and was strictly worse than the compact list it is supposed to be

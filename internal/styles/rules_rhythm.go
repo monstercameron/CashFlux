@@ -356,6 +356,39 @@ func registerRhythmStrips() {
 		prop("max-height", "44rem"),
 		prop("overflow-y", "auto"),
 	)
+	// The demoted ("weaker") signals, listed in Detection preferences — the place
+	// the review strip's header sends you. Bounded and scrollable: on a long
+	// history there are dozens, and they must not push the preferences form's own
+	// controls off the modal.
+	rule(".rhy-weak-list",
+		prop("margin", "0.4rem 0 0"),
+		prop("padding", "0.4rem 0.6rem"),
+		prop("list-style", "none"),
+		prop("max-height", "18rem"),
+		prop("overflow-y", "auto"),
+		prop("background", "var(--bg)"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius)"),
+	)
+	rule(".rhy-weak-list li",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.05rem"),
+		prop("padding", "0.3rem 0"),
+		prop("border-top", "1px solid var(--border)"),
+	)
+	rule(".rhy-weak-list li:first-child",
+		prop("border-top", "0"),
+	)
+	rule(".rhy-weak-name",
+		prop("font-size", "var(--type-12)"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text)"),
+	)
+	rule(".rhy-weak-ev",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-dim)"),
+	)
 	// The disabled opt-in reads as one unavailable control, not an enabled button
 	// contradicted by the sentence beside it.
 	rule(".rhy-review-foot.is-disabled .btn[disabled]",

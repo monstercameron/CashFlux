@@ -326,8 +326,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	txns := buildDiscoverTxns(app, rates)
-	res := recurdiscover.Discover(txns, rhyCommitments(app, rates), loadRecurPins(), recurdiscover.Options{Now: now})
-	res.Candidates = rhyDemoteNoise(app, res.Candidates)
+	groupA, leftovers := rhySplitCandidates(app, now, base)
 
 	// Evidence transactions by ref: a confirm back-claims each as a prior cycle,
 	// and the evidence list renders each one's raw descriptor and real amount.
@@ -335,24 +334,6 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	for _, t := range app.Transactions() {
 		txnByID[t.ID] = t
 	}
-
-	var groupA, leftovers []recurdiscover.Candidate
-	for _, c := range res.Candidates {
-		// Every candidate must be able to justify itself. A candidate whose
-		// evidence sentence would render empty has nothing to show the user, so it
-		// is never proposed.
-		if rhyEvidenceSentence(c.Evidence, base) == "" {
-			continue
-		}
-		if c.Tier == recurdiscover.TierSilent {
-			leftovers = append(leftovers, c)
-		} else {
-			groupA = append(groupA, c)
-		}
-	}
-	// Most valuable first: confidence tier, then monthly cost impact.
-	rhyOrderCandidates(groupA)
-	rhyOrderCandidates(leftovers)
 
 	onConfirm := func(c recurdiscover.Candidate) {
 		mag := c.Evidence.Amount.Typical
@@ -524,13 +505,65 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	if footer != nil {
 		secBody = append(secBody, footer)
 	}
-	// The header states the honest total up front, so paging never hides scale.
-	title := uistate.T("rhythm.reviewTitleCount", len(groupA)+len(leftovers))
-	return rhySection("sec-review", title, uistate.T("rhythm.reviewNote"), nil, Fragment(secBody...))
+	// ONE arithmetic for the whole strip. The header counts what is actually
+	// REVIEWABLE here — the number the lane header and the pager also count — so
+	// the three figures agree. The demoted signals are still acknowledged, but as
+	// their own honest figure with somewhere to go, never folded into a headline
+	// total that leads to a queue five items long.
+	title := uistate.T("rhythm.reviewTitleCount", len(groupA))
+	var action ui.Node
+	if len(leftovers) > 0 {
+		action = ui.CreateElement(rhyWeakSignalsLink, rhyWeakSignalsProps{Count: len(leftovers)})
+	}
+	return rhySection("sec-review", title, uistate.T("rhythm.reviewNote"), action, Fragment(secBody...))
+}
+
+// rhyWeakSignalsProps carries the demoted-signal count to the header link.
+type rhyWeakSignalsProps struct{ Count int }
+
+// rhyWeakSignalsLink is the route from the review strip's header to the demoted
+// signals: it opens Detection preferences, which lists them. Its own component
+// so the modal-open hook sits at a stable position.
+func rhyWeakSignalsLink(props rhyWeakSignalsProps) ui.Node {
+	open := uistate.UseSubsPrefsOpen()
+	click := ui.UseEvent(Prevent(func() { open.Set(true) }))
+	return Button(css.Class("strip-toggle btn-sm"), Type("button"), Attr("data-testid", "rhy-weak-signals"),
+		Title(uistate.T("rhythm.weakSignalsTitle")), OnClick(click),
+		uistate.T("rhythm.weakSignalsLink", props.Count))
 }
 
 // rhyReviewPageSize is the default candidates-per-page in the review strip.
 const rhyReviewPageSize = 5
+
+// rhySplitCandidates runs discovery and splits the result the way the review
+// strip does: the candidates actually reviewable in the strip, and the demoted
+// Silent ones (the "weaker signals"). Both are ordered most-valuable-first.
+//
+// It exists so the strip's headline count, its lane headers, its pager, and the
+// weak-signals list in Detection preferences all derive from ONE split. They
+// previously each counted something different, and the page ended up stating
+// three totals — 57, 6 and 5 — of which only the last was reachable.
+func rhySplitCandidates(app *appstate.App, now time.Time, base string) (review, weak []recurdiscover.Candidate) {
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	res := recurdiscover.Discover(buildDiscoverTxns(app, rates), rhyCommitments(app, rates),
+		loadRecurPins(), recurdiscover.Options{Now: now})
+	for _, c := range rhyDemoteNoise(app, res.Candidates) {
+		// Every candidate must be able to justify itself. One whose evidence
+		// sentence would render empty has nothing to show the user, so it is never
+		// proposed — and never counted, in either bucket.
+		if rhyEvidenceSentence(c.Evidence, base) == "" {
+			continue
+		}
+		if c.Tier == recurdiscover.TierSilent {
+			weak = append(weak, c)
+		} else {
+			review = append(review, c)
+		}
+	}
+	rhyOrderCandidates(review)
+	rhyOrderCandidates(weak)
+	return review, weak
+}
 
 // rhySlug turns a candidate signature into a selector-friendly testid suffix:
 // lowercase, non-alphanumerics collapsed to single hyphens, trimmed. A raw
