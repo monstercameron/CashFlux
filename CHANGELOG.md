@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`internal/recurdiscover` stage 1 — signature clustering (Bills & Recurring redesign engine).**
+  New pure package that quarantines per-transaction reference noise (mixed letter+digit tokens,
+  six-plus-digit runs, vowelless high-entropy runs → a single `#`) so rotating order/auth ids
+  collapse ("SPOTIFY P1A2B3" / "SPOTIFY K9X2M1" → "SPOTIFY #"), then clusters transactions by an
+  exact-or-fuzzy (0.90 token-set) signature match within the hard keys of account + direction.
+  Guardrails: an eight-character length floor (short brand tokens like "UBER" join by exact match
+  only, never fuzzing into "UBER EATS"); a canonical (most-common) signature newcomers compare
+  against; chronological, insertion-order-independent processing; and user never-merge / force-merge
+  pins. Exhaustively table-tested (quarantine, hash rotation, fuzzy join, short-string guard, hard
+  keys, pins, determinism).
 - **`domain.Recurring.Paused` — additive suspend flag (Bills & Recurring redesign, engine layer).**
   A recurring can now be temporarily paused: it keeps its definition and history but reads as
   inactive to scheduling/forecasting consumers via the new `Recurring.Active()` predicate. The flag
