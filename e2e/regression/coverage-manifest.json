@@ -749,10 +749,16 @@
       "debt-edit-acct-card",
       "debt-edit-acct-carloan-marcus",
       "debt-edit-acct-carloan-priya",
+      "debt-extra-dec",
+      "debt-extra-inc",
+      "debt-extra-input",
+      "debt-extra-suggest",
       "debt-jump-sec-*",
       "debt-jump-sec-credit",
       "debt-jump-sec-ladder",
+      "debt-jump-sec-learn",
       "debt-jump-sec-loans",
+      "debt-jump-sec-tuner",
       "debt-link-/accounts",
       "debt-link-/allocate",
       "debt-link-/networth",
@@ -762,6 +768,7 @@
       "debt-payoff-toggle-acct-carloan-marcus",
       "debt-payoff-toggle-acct-carloan-priya",
       "debt-toggle-*",
+      "debt-tuner-*",
       "debt-view-acct-*",
       "debt-view-acct-card",
       "debt-view-acct-carloan-marcus",
@@ -777,7 +784,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 31
+    "untestided": 30
   },
   "/investments": {
     "testids": [
