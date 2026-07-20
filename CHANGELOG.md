@@ -6,6 +6,22 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The agenda double-counted an obligation that has both a liability statement and a recurring flow.**
+  A car loan showed as BOTH "Car payment (Marcus)" (the recurring flow) and "Marcus's Car Loan" (the
+  liability account's statement bill) on the same day for the same amount — inflating apparent outflow,
+  and rendering as "($620.00) ($620.00)" in the calendar. `bills.UpcomingAll` already deduped this for
+  its next-bill-per-account view, but `bills.OccurrencesWithin` (which the agenda uses for the whole
+  window) did not. New `bills.DedupeObligations` collapses them: same date, amount, and currency with a
+  MONTHLY recurring side is one obligation (a weekly/quarterly flow coinciding once is a coincidence).
+  The surviving row is the recurring one — it carries the household's own label, posting mode, and the
+  schedule "mark paid" advances — and records the liability in the new `Bill.AnchorAccountID`, which the
+  agenda renders as an anchor chip so the merged row keeps both identities' capabilities. Table-tested,
+  including the multi-occurrence window, the non-monthly case, and the different-amount/different-day
+  cases. Guards the `interactions.spec` "a liability + its recurring flow are not double-counted"
+  invariant.
+- **Overdue summary read "3 overdue items overdue".** Now "3 items overdue · $127.00 total".
+
 ### Changed
 - **The agenda's CALENDAR view shows real amounts on the days, not bare dots.** The month grid now
   renders the SAME merged agenda data as the compact list — each day carries its actual amounts (up to

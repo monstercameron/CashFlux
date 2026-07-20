@@ -52,6 +52,23 @@ Notable decisions/traps:
   `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
   invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
   ("verified locally ✓" vs an honest "no local way to confirm").
+### The dual-bill-identity double-count (blocker)
+
+Screenshot review caught the agenda listing the same obligation twice: "Car payment (Marcus)" (the
+recurring flow) beside "Marcus's Car Loan" (the liability statement), same day, same $620 — and the
+calendar rendering it as a bare "($620.00) ($620.00)". The recon had flagged dual bill identity; the
+trap was that `bills.UpcomingAll` dedupes (currency, amount, due-day) but `OccurrencesWithin` — the
+multi-occurrence window the agenda needs — does not, so the merged agenda inherited the duplicate.
+
+Fixed at the service layer rather than in the view, since the rule is domain knowledge and had to be
+natively testable: `bills.DedupeObligations(bills, recurring)`. Same date + amount + currency, and the
+recurring side must be MONTHLY (only a monthly flow can mirror a monthly statement; a weekly flow that
+coincides once is a coincidence). The recurring row survives — it owns the household's label, posting
+mode, and the schedule that mark-paid advances — and absorbs the liability into a new
+`Bill.AnchorAccountID`, so the single row keeps the account identity too and renders it as an anchor
+chip. Table test covers the merge, every-occurrence-in-window, non-monthly, different-amount, and
+different-day cases.
+
 ### Calendar view: amounts, not dots
 
 The first self-check screenshot showed the CALENDAR view was still the old bills dot-grid — a coloured

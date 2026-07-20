@@ -465,17 +465,29 @@ func registerRhythmAgenda() {
 		prop("color", "var(--text)"),
 		prop("font-weight", "700"),
 	)
-	rule(".rhy-cal-amt",
-		prop("display", "block"),
-		prop("max-width", "100%"),
+	// One in-cell entry: the name (truncated) plus its amount, so the grid says
+	// WHAT is due, not just how much.
+	rule(".rhy-cal-item",
+		prop("display", "flex"),
+		prop("align-items", "baseline"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.3rem"),
+		prop("width", "100%"),
+		prop("min-width", "0"),
 		prop("font-size", "var(--type-11)"),
-		prop("font-variant-numeric", "tabular-nums"),
 		prop("color", "var(--text-dim)"),
-		prop("white-space", "nowrap"),
+	)
+	rule(".rhy-cal-name",
+		prop("min-width", "0"),
 		prop("overflow", "hidden"),
 		prop("text-overflow", "ellipsis"),
+		prop("white-space", "nowrap"),
 	)
-	rule(".rhy-cal-amt.is-in",
+	rule(".rhy-cal-amt",
+		prop("flex-shrink", "0"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".rhy-cal-item.is-in",
 		prop("color", "var(--accent)"),
 		prop("font-weight", "600"),
 	)

@@ -43,6 +43,10 @@ type agendaItem struct {
 	Negotiable bool
 	Paid       bool
 	Income     bool
+	// AnchorAccountID is the liability account this row settles when the row is a
+	// merged obligation (the statement bill folded into its recurring flow), so
+	// the single row keeps the account identity's capabilities.
+	AnchorAccountID string
 }
 
 // buildAgenda merges the forward bill occurrences (recurring-derived + liability
@@ -66,7 +70,12 @@ func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []ag
 	}
 
 	var items []agendaItem
-	for _, b := range bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, until) {
+	// A liability's statement bill and the monthly recurring flow that pays it are
+	// ONE obligation — listing both double-counts the money owed. DedupeObligations
+	// collapses them onto the recurring row and records the liability as its anchor.
+	occurrences := bills.DedupeObligations(
+		bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, until), app.Recurring())
+	for _, b := range occurrences {
 		if b.DueDate.Before(today) {
 			continue // overdue lives in its own strip
 		}
@@ -77,6 +86,7 @@ func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []ag
 		it := agendaItem{
 			Date: b.DueDate, Name: b.Name, AccountID: b.AccountID,
 			Amount: money.New(-amt.Amount, base), Fit: billFitFor(b),
+			AnchorAccountID: b.AnchorAccountID,
 		}
 		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
 			it.ModeLabel, it.ModeHint, it.ModeCls = postingMode(recByID[rid])
@@ -262,11 +272,16 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 					cell = append(cell, Span(css.Class("rhy-cal-more"), uistate.T("rhythm.calMore", len(items)-maxChips)))
 					break
 				}
-				chip := "rhy-cal-amt"
+				// A calendar of anonymous numbers is half a feature — the name says
+				// WHAT is due; CSS truncates it when the cell is narrow.
+				chip := "rhy-cal-item"
 				if it.Income {
 					chip += " is-in"
 				}
-				cell = append(cell, Span(ClassStr(chip), Title(it.Name), fmtMoney(it.Amount)))
+				cell = append(cell, Div(ClassStr(chip), Title(it.Name+" · "+fmtMoney(it.Amount)),
+					Span(css.Class("rhy-cal-name"), it.Name),
+					Span(css.Class("rhy-cal-amt"), fmtMoney(it.Amount)),
+				))
 			}
 			args = append(args, Div(cell...))
 		}
@@ -359,6 +374,11 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		Div(css.Class("rhy-ag-body"),
 			Span(css.Class("rhy-ag-name"), it.Name),
 			Span(ClassStr("rhy-badge "+it.ModeCls), Title(it.ModeHint), it.ModeLabel),
+			// A merged obligation keeps the liability it settles visible, so folding
+			// the statement bill into the flow loses no information.
+			If(it.AnchorAccountID != "", Span(css.Class("rhy-chip"),
+				Title(uistate.T("rhythm.anchorTitle", rhyAccountName(it.AnchorAccountID))),
+				rhyAccountName(it.AnchorAccountID))),
 			fitNode,
 		),
 		Span(ClassStr("rhy-ag-amt "+recurAmountTone(it.Amount)), fmtMoney(it.Amount)),

@@ -512,7 +512,7 @@ func rhyOverdueSection(rv rhythmView, acts rhyActions) ui.Node {
 	}
 	head := Div(css.Class("rhy-overdue-head"),
 		uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(uistate.T("rhythm.overdueSummary", plural(len(rv.Overdue), "overdue item"), fmtMoney(money.New(total, rv.Base)))),
+		Span(uistate.T("rhythm.overdueSummary", plural(len(rv.Overdue), "item"), fmtMoney(money.New(total, rv.Base)))),
 	)
 	body := append([]any{css.Class("rhy-section rhy-overdue"), Attr("data-testid", "rhy-overdue"), head}, rows...)
 	return Div(body...)

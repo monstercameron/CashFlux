@@ -13,6 +13,7 @@ package bills
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -27,6 +28,87 @@ type Bill struct {
 	DueDate   time.Time   // the next due date on or after the reference time
 	DaysUntil int         // whole days from the reference date to DueDate (0 = due today)
 	Autopay   bool        // C154/C157: biller charges this automatically (recurring-derived bills only)
+	// AnchorAccountID is set by DedupeObligations when this bill absorbed the
+	// liability-statement bill for the SAME real payment: it names the liability
+	// account the payment settles, so a surface can still offer the account
+	// (anchor chip, payoff drill-down) on the single merged row. Empty when the
+	// bill was not a merge.
+	AnchorAccountID string
+}
+
+// recurringAccountPrefix marks a Bill derived from a recurring flow rather than
+// from a liability account's statement: its AccountID is "recurring:<id>".
+const recurringAccountPrefix = "recurring:"
+
+// RecurringIDFromAccount extracts the recurring-flow id from a bill's AccountID
+// when the bill was derived from a recurring rule, reporting ok=false for a
+// liability-statement bill (which carries a real account id).
+func RecurringIDFromAccount(accountID string) (string, bool) {
+	return strings.CutPrefix(accountID, recurringAccountPrefix)
+}
+
+// DedupeObligations collapses the DUAL BILL IDENTITY: a liability account's own
+// statement bill and the recurring flow the household created to pay it are the
+// SAME real payment, and listing both double-counts the money owed (a car loan
+// showing as "Car payment (Marcus)" AND "Marcus's Car Loan" on the same day for
+// the same amount).
+//
+// Two bills are the same obligation when they fall on the same date for the same
+// amount and currency, and the recurring side repeats MONTHLY — only a monthly
+// flow can mirror a monthly statement, so a weekly or quarterly flow that happens
+// to coincide once is a coincidence, not a duplicate. This mirrors the
+// (currency, amount, due-day) rule UpcomingAll already applies to the
+// next-bill-per-account view; DedupeObligations is its equivalent for the
+// multi-occurrence window OccurrencesWithin returns.
+//
+// The surviving row is the RECURRING one — it carries the household's own label,
+// its posting mode, and the schedule that "mark paid" advances — and it records
+// the liability account in AnchorAccountID so the merged row keeps both
+// identities' capabilities. Input order is preserved.
+func DedupeObligations(bs []Bill, recurring []domain.Recurring) []Bill {
+	cadence := make(map[string]domain.RecurringCadence, len(recurring))
+	for _, r := range recurring {
+		cadence[r.ID] = r.Cadence
+	}
+	obligationKey := func(b Bill) string {
+		return b.Amount.Currency + ":" + strconv.FormatInt(b.Amount.Amount, 10) + ":" + b.DueDate.Format("2006-01-02")
+	}
+	// Index the account-derived (statement) bills by obligation.
+	statement := make(map[string][]int, len(bs))
+	for i, b := range bs {
+		if _, isRecurring := RecurringIDFromAccount(b.AccountID); isRecurring {
+			continue
+		}
+		k := obligationKey(b)
+		statement[k] = append(statement[k], i)
+	}
+	dropped := make(map[int]bool, len(bs))
+	anchorOf := make(map[int]string, len(bs))
+	for i, b := range bs {
+		rid, isRecurring := RecurringIDFromAccount(b.AccountID)
+		if !isRecurring || cadence[rid] != domain.CadenceMonthly {
+			continue
+		}
+		for _, j := range statement[obligationKey(b)] {
+			if dropped[j] {
+				continue // already absorbed by an earlier occurrence
+			}
+			dropped[j] = true
+			anchorOf[i] = bs[j].AccountID
+			break
+		}
+	}
+	out := make([]Bill, 0, len(bs))
+	for i, b := range bs {
+		if dropped[i] {
+			continue
+		}
+		if anchor, ok := anchorOf[i]; ok {
+			b.AnchorAccountID = anchor
+		}
+		out = append(out, b)
+	}
+	return out
 }
 
 // Upcoming returns the next bill for each active liability account that has a
