@@ -43,6 +43,13 @@ type SubsDetectPrefsFormProps struct {
 // own component so its hooks sit at stable positions.
 func SubsDetectPrefsForm(props SubsDetectPrefsFormProps) ui.Node {
 	app := appstate.Default
+	// The form's own controls bump the data revision, but it never subscribed to
+	// one — so the surface behind the modal updated while the modal itself showed
+	// what it had rendered on open. That was invisible while every control was a
+	// toggle showing its own state, and stopped being invisible the moment the
+	// modal grew a list that a control REMOVES a row from: un-hiding a rejection
+	// put it back in the review queue and left it sitting in the hidden list.
+	_ = uistate.UseDataRevision().Get()
 
 	onMinOccur := ui.UseEvent(func(e ui.Event) {
 		n, _ := strconv.Atoi(e.GetValue())

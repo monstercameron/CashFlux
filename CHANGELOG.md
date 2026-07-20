@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Detection preferences showed a stale copy of itself.** The modal bumps the data revision when its
+  controls change something, but never subscribed to one — so it rendered once on open and then went
+  quiet while the surface behind it updated live. Invisible while every control was a toggle showing
+  its own state; visible the moment the modal grew a list that a control REMOVES a row from:
+  un-hiding a rejection put it back in the review queue and left it sitting in the hidden list. The
+  form now subscribes.
 - **A flip modal taller than its Height bound rendered past the bottom of the screen.** The Height
   prop is documented as a MAXIMUM that a dense panel clamps and scrolls within, but the chain from the
   wrap to the scrolling body was broken: `.flip-inner` carries `height: 100%`, which against the
