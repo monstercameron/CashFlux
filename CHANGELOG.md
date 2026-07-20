@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **A flip modal taller than its Height bound rendered past the bottom of the screen.** The Height
+  prop is documented as a MAXIMUM that a dense panel clamps and scrolls within, but the chain from the
+  wrap to the scrolling body was broken: `.flip-inner` carries `height: 100%`, which against the
+  wrap's `height: auto` resolves to auto, so the inner sized to its content and the wrap's max-height
+  clipped nothing. Detection preferences ran to 1082px inside a 680px wrap — its footer, and any
+  control near it, simply off-screen and unclickable — while `.set-body`, which is built to scroll,
+  was never given a height to scroll within. The inner is now a shrinkable flex item, so the bound
+  binds and dense panels scroll. Sparse panels still hug their content, unchanged.
 - **The overdue strip and the calendar answered "is this bill dealt with?" differently.** The
   calendar honoured three kinds of evidence (a hand-marked occurrence, a matched transaction, or the
   flow's schedule having advanced past the date); the strip honoured only the matched transaction. So
