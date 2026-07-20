@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Coverage manifest: /networth's control inventory acknowledges the redesign.** `nws-view-glance`
+  and `nws-view-detail` are new; `networth-drill` and `nw-owe-drill` left the DEFAULT view without
+  leaving the page — both now live in the Detail view as section-header drills, which is also the
+  fix for the old page's duplicated toolbar/section links, and both are asserted present by
+  `networth.spec.mjs`. Hand-edited and scoped to the `/networth` entry alone rather than regenerated,
+  so no other route's inventory moves with it; the untestable-control count is unchanged at 19.
+
+### Changed
 - **/networth rebuilt from scratch as a balance sheet with two readings.** The page had a smooth
   trend line that only restated its own headline, a "by account" list where a $304k condo flattened
   every other bar to a stub, a silent "+2 more accounts" cap, bare ratios the reader had to judge
