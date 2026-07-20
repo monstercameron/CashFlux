@@ -788,9 +788,15 @@ func registerBudgetsSurface() {
 		flexDirection("column"),
 		gap("0.35rem"),
 	)
+	// FIXED data columns (2026-07-19): only name + bar flex; amount, left-phrase,
+	// chip, and kebab hold constant widths. Each row is its own grid, so the old
+	// max-content columns measured each row's own text — bars started/ended at
+	// different x per row and the amounts never formed a column. Widths: amt fits
+	// "$00,000.00 / $00,000.00" at type-14 tabular; left fits "$0,000.00 left";
+	// chip fits the widest pill ("Over budget").
 	rule(".budget-crow",
 		display("grid"),
-		gridTemplateColumns("minmax(8rem, 1.2fr) minmax(7rem, 1.6fr) max-content max-content max-content max-content"),
+		gridTemplateColumns("minmax(8rem, 1fr) minmax(9rem, 1.4fr) 10.5rem 7.5rem 7rem 2.5rem"),
 		alignItems("center"),
 		gap("0.8rem"),
 		padding("0.4rem 0.6rem 0.4rem 0.75rem"),
@@ -798,6 +804,21 @@ func registerBudgetsSurface() {
 		borderLeft("3px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
+	)
+	// The name cell: title + optional rollover badge sharing one grid cell; the
+	// title ellipsizes first, the badge never wraps.
+	rule(".budget-crow-head",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+		minWidth("0"),
+	)
+	rule(".budget-crow-head .budget-crow-name",
+		flex("0 1 auto"),
+		minWidth("0"),
+	)
+	rule(".budget-crow-head > :not(.budget-crow-name)",
+		flexShrink("0"),
 	)
 	rule(".budget-crow.is-over", borderLeftColor("var(--danger)"))
 	rule(".budget-crow.is-near", borderLeftColor("var(--warn)"))
@@ -837,23 +858,38 @@ func registerBudgetsSurface() {
 		borderRadius("0"),
 		boxShadow("none"),
 	)
+	// Numeric cells right-align inside their fixed columns so decimals stack into
+	// true columns across rows (tabular numerals do the digit work).
 	rule(".budget-crow-amt",
 		fontSize("var(--type-14)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
+		textAlign("right"),
+		justifySelf("end"),
+	)
+	rule(".budget-crow-spent",
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".budget-crow-limit",
+		color("var(--text-dim)"),
 	)
 	rule(".budget-crow-left",
 		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
+		textAlign("right"),
+		justifySelf("end"),
 	)
-	rule(".budget-crow-chip", whiteSpace("nowrap"))
+	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
+	rule(".budget-crow > .add-wrap", justifySelf("end"))
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
 	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
-	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu.
+	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu
+	// — same fixed-column discipline as the full row so narrow panes align too.
 	ruleContentMax(860-railCollapsedPx, ".budget-crow",
-		gridTemplateColumns("minmax(7rem, 1fr) max-content max-content max-content"),
+		gridTemplateColumns("minmax(7rem, 1fr) 10.5rem 7rem 2.5rem"),
 	)
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-bar", display("none"))
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-left", display("none"))

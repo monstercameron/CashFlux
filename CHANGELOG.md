@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Compact budget rows align into fixed columns:** each compact row is its own grid and its
+  amount/left/chip columns were `max-content` — sized by each row's own text — so meters started
+  and ended at different x positions and the amounts never formed a column. Only name + meter flex
+  now; amount (spent bold, "/ limit" muted), left-phrase, status pill, and kebab hold constant
+  right-aligned widths, so decimals stack across rows. The conditional rollover badge also used to
+  render as a seventh child in the six-column template (shifting every later cell and wrapping the
+  kebab onto a second line) — it now rides inside the name cell. The narrow-pane fallback uses the
+  same fixed-column discipline.
 - **Annual Review "Money flow" silently hid income categories named "Income":** the sankey keys
   nodes by display label, so a category named exactly like the hub formed a From==To self-loop
   the layout (correctly) drops — a salary categorized under a category called "Income" vanished

@@ -452,15 +452,23 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
 		}
 		return Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
-			crowTitle,
+			// Name cell: the title and the conditional C395 rollover badge share ONE
+			// grid cell, so the row is always exactly six children. The badge used to
+			// be a seventh top-level child in a six-column template — every later cell
+			// shifted a column right and the kebab wrapped onto an implicit row.
+			Div(css.Class("budget-crow-head"),
+				crowTitle,
+				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
+			),
 			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
 				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-			Span(css.Class("budget-crow-amt fig"), barSpent+" / "+fmtMoney(limit)),
+			// Spent carries the weight, the "/ limit" reads muted — same voice as the
+			// card loader's figures.
+			Span(css.Class("budget-crow-amt fig"),
+				Span(css.Class("budget-crow-spent"), barSpent),
+				Span(css.Class("budget-crow-limit"), " / "+fmtMoney(limit)),
+			),
 			crowLeft,
-			// C395: in the dense single-line row, show the rollover badge only when the
-			// policy is ON — an accent pill worth the space; a "No rollover" pill on every
-			// compact row would be noise the card view already carries in full.
-			If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 			crowChip,
 			kebabNode,
 		)
