@@ -42,13 +42,17 @@ var rhythmKeys = Catalog{
 	"rhythm.smartMark":        "Smart",
 	"rhythm.smartPlusMark":    "Smart+",
 	"rhythm.reviewSmartGroup": "found %s in your history",
-	"rhythm.reviewPlusGroup":  "%s found by AI",
-	"rhythm.confirm":          "Confirm",
-	"rhythm.notRecurring":     "Not recurring",
-	"rhythm.seeEvidence":      "See transactions",
-	"rhythm.hideEvidence":     "Hide transactions",
-	"rhythm.lookDeeper":       "Look deeper with Smart+ — about %d tokens, on your OpenAI key",
-	"rhythm.lookDeeperNoKey":  "Add an OpenAI key in Settings to look deeper with Smart+",
+	// The Smart+ lane's number counts the leftover patterns it SENDS, and the list
+	// is the same before and after the round trip — so it never counted anything
+	// "found by AI". Each state says what its number actually is.
+	"rhythm.reviewPlusSent":  "%s sent for a deeper look",
+	"rhythm.reviewPlusRead":  "%s looked at, still checked here locally",
+	"rhythm.confirm":         "Confirm",
+	"rhythm.notRecurring":    "Not recurring",
+	"rhythm.seeEvidence":     "See transactions",
+	"rhythm.hideEvidence":    "Hide transactions",
+	"rhythm.lookDeeper":      "Look deeper with Smart+ — about %d tokens, on your OpenAI key",
+	"rhythm.lookDeeperNoKey": "Add an OpenAI key in Settings to look deeper with Smart+",
 	// Disabled state: the button says what it would do, the sentence says why it
 	// can't and where to fix it — never an enabled-looking button beside a
 	// "you need a key" note.

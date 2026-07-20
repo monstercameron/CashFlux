@@ -425,10 +425,20 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	}))
 
 	if aiOpen.Get() {
+		// The number in this header has only ever counted the leftovers the lane
+		// SENDS to the model — it is the same list before and after the round trip,
+		// so "found by AI" described neither state. The model returns a written read,
+		// not a set of finds, and every row in the lane is still re-scored locally
+		// here. So the header says what the number is: patterns sent, and once the
+		// read is back, patterns looked at.
+		plusHead := uistate.T("rhythm.reviewPlusSent", plural(len(leftovers), "pattern"))
+		if aiText.Get() != "" {
+			plusHead = uistate.T("rhythm.reviewPlusRead", plural(len(leftovers), "pattern"))
+		}
 		gb := []any{css.Class("rhy-review-group"),
 			Div(css.Class("rhy-group-head"),
 				Span(css.Class("rhy-smark is-plus"), uistate.T("rhythm.smartPlusMark")),
-				Span(uistate.T("rhythm.reviewPlusGroup", plural(len(leftovers), "pattern"))),
+				Span(plusHead),
 			),
 		}
 		switch {

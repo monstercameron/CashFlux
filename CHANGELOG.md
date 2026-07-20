@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The Smart+ lane header said "N found by AI" about patterns it had not sent yet.** N has only ever
+  counted the leftover patterns the lane sends to the model, and the list is the same before and after
+  the round trip — the model returns a written read, not a set of finds, and every row is still
+  re-scored locally. The header now matches its own number at each state: "6 patterns sent for a
+  deeper look" while the request is out, "6 patterns looked at, still checked here locally" once the
+  read is back.
 - **"Not recurring" was a one-way door.** Rejecting a review candidate wrote a suppressed signature
   and nothing ever surfaced it again: one misclick could permanently hide a real commitment, with no
   route back and no way to learn something was missing. Detection preferences — which already lists
