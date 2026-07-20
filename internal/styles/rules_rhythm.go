@@ -62,9 +62,14 @@ func registerRhythmSurface() {
 		prop("flex-wrap", "wrap"),
 		prop("margin-bottom", "0.6rem"),
 	)
+	// The section title matches the app's shared section-title garnish verbatim —
+	// the `.card-title` treatment the established pages render (sans, 1rem, 600,
+	// -0.01em tracking, 1.35 leading, left edge). It was a half-step heavier at 650,
+	// which is enough to read as a different heading level page-to-page.
 	rule(".rhy-sec-title",
 		prop("font-size", "var(--type-16)"),
-		prop("font-weight", "650"),
+		prop("font-weight", "600"),
+		prop("line-height", "1.35"),
 		prop("letter-spacing", "-0.01em"),
 		prop("margin", "0"),
 	)
@@ -206,15 +211,24 @@ func registerRhythmTideline() {
 		prop("flex-direction", "column"),
 		prop("gap", "0.1rem"),
 	)
+	// Stat labels use the app's shared `.stat-label` garnish: the 12-13px metadata
+	// band (a bare 11px sits below it and reads as texture rather than text — the
+	// exact drift rules_dp_type.go was written to correct) with the 0.05em uppercase
+	// tracking every other stat tile in the app carries.
 	rule(".rhy-stat-label",
-		prop("font-size", "var(--type-11)"),
+		prop("font-size", "var(--type-13)"),
 		prop("color", "var(--text-dim)"),
 		prop("text-transform", "uppercase"),
-		prop("letter-spacing", "0.04em"),
+		prop("letter-spacing", "0.05em"),
 	)
+	// …and the value takes the shared `.stat-value` weight/tracking, so a figure on
+	// this surface reads at the same level as a figure on any other stat tile. The
+	// size stays 20px: the rail sits beside the band rather than owning a tile, and
+	// it is not this page's ONE hero value.
 	rule(".rhy-stat-value",
 		prop("font-size", "var(--type-20)"),
-		prop("font-weight", "650"),
+		prop("font-weight", "700"),
+		prop("letter-spacing", "-0.015em"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 }

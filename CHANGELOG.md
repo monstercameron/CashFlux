@@ -19,6 +19,13 @@ and every commit updates this file under `Unreleased`.
   (`rules_dp_borders.go`): inside an already-bordered, elevated panel an inner block drops its own
   box and separates with the shared `--bg-elev` subtle-lift instead. `--radius` is untouched and
   still drives everything the theme editor owns.
+- **Bills & recurring set its own type weights instead of the app's. (RH-GARNISH2)** Three readouts
+  on the surface sat a half-step off the shared scale, which is enough to read as a different
+  heading level page-to-page: the section title was 650 where the app's shared section-title garnish
+  (`.card-title`) is 600/1.35, the stat value was 650 with no tracking where `.stat-value` is
+  700/-0.015em, and the stat label was 11px/0.04em — below the 12-13px metadata band that
+  `rules_dp_type.go` exists to hold, and off `.stat-label`'s 0.05em uppercase tracking. All three now
+  match their shared counterparts exactly. Sizes are unchanged.
 - **Bills & recurring rebuilt the payee-cleanup table once per transaction. (RH-PERF1)** Discovery
   feeds every transaction through `app.ResolvePayee`, and that convenience wrapper constructs a fresh
   `payeealias.Resolver` on each call — which re-queries the alias table from the store. Over the
