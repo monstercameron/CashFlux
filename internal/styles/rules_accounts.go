@@ -238,4 +238,6 @@ func registerAccountsSurface() {
 	// standing explanation, "Mark all cleared" bulk row). Chained here so the
 	// shared install.go Register() list is untouched by this lane.
 	registerReconcileFlow()
+	// 2026-07-19 detail-polish lane 1: subdued stale dot + stale-summary line.
+	registerDetail1Accounts()
 }

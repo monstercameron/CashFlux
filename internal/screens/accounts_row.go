@@ -37,6 +37,12 @@ type accountRowProps struct {
 	// on the stale badge so the row says HOW stale it is — matching the "it's been N
 	// days" wording of the balance-update notification. Only read when Stale is true.
 	DaysStale int
+	// StaleCollapsed is set by the list when more than half the visible accounts are
+	// stale: in that state the loud per-row STALE badge collapses to a subdued dot and
+	// a single "Most accounts need a balance update — Mark all updated" summary line
+	// leads the list, so the warning keeps its prioritising force instead of becoming
+	// wallpaper. Below that threshold it's false and the full badge shows as before.
+	StaleCollapsed bool
 	Members    []domain.Member
 	Accounts   []domain.Account // all non-archived accounts (for Transfer to-picker)
 	Categories []domain.Category
@@ -143,6 +149,58 @@ func staleBadgeTitle(t domain.AccountType, days int) string {
 		return uistate.T("accounts.staleNeverTitle")
 	}
 	return uistate.T("accounts.staleDaysTitle", days)
+}
+
+// staleBadgeNode renders the account's freshness marker on the name line. Normally
+// that's the full "Stale · 24d" badge; when the list is in the collapsed state
+// (StaleCollapsed — more than half the visible accounts are stale) it shrinks to a
+// subdued neutral dot, and the one summary line at the top of the list carries the
+// call to action instead. Renders nothing when the account isn't stale.
+func staleBadgeNode(props accountRowProps) ui.Node {
+	if !props.Stale {
+		return Fragment()
+	}
+	a := props.Account
+	if props.StaleCollapsed {
+		return Span(css.Class("acct-stale-dot"), Attr("data-testid", "acct-stale-dot-"+a.ID),
+			Attr("role", "img"), Attr("aria-label", uistate.T("accounts.staleDotAria")),
+			Title(staleBadgeTitle(a.Type, props.DaysStale)))
+	}
+	return Span(css.Class("badge badge-prio prio-med"), Attr("data-testid", "acct-stale-badge-"+a.ID),
+		Title(staleBadgeTitle(a.Type, props.DaysStale)), staleBadgeText(a.Type, props.DaysStale))
+}
+
+// acctOwnerName resolves the display name of the member that owns an account, or ""
+// when the id is empty / group-owned / not a known member. Used to show ownership on
+// individually-owned rows (the Shared chip already marks group/shared ones).
+func acctOwnerName(members []domain.Member, ownerID string) string {
+	if ownerID == "" || ownerID == domain.GroupOwnerID {
+		return ""
+	}
+	for _, m := range members {
+		if m.ID == ownerID {
+			return m.Name
+		}
+	}
+	return ""
+}
+
+// acctOwnerChip renders a quiet owner chip on an individually-owned account row,
+// matching the SHARED chip's weight (badge-muted). Shared / group / fractionally-
+// shared accounts already wear the SHARED chip, so they get nothing here; rows with
+// no resolvable Member owner also render nothing.
+func acctOwnerChip(props accountRowProps) ui.Node {
+	a := props.Account
+	if a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0 {
+		return Fragment()
+	}
+	name := acctOwnerName(props.Members, a.OwnerID)
+	if name == "" {
+		return Fragment()
+	}
+	return Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-owner-badge-"+a.ID),
+		Title(uistate.T("accounts.ownerBadgeTitle", name)),
+		Attr("aria-label", uistate.T("accounts.ownerBadgeTitle", name)), name)
 }
 
 func moneyMajorOrEmpty(m money.Money, dec int) string {
@@ -456,7 +514,12 @@ func AccountRow(props accountRowProps) ui.Node {
 					If(a.Scope == domain.ScopeShared || a.OwnerID == domain.GroupOwnerID || len(a.OwnershipShares) > 0,
 						Span(css.Class("badge badge-muted"), Attr("data-testid", "acct-shared-badge-"+a.ID),
 							Title(uistate.T("accounts.sharedBadgeTitle")), uistate.T("accounts.sharedBadge"))),
-					If(props.Stale, Span(css.Class("badge badge-prio prio-med"), Title(staleBadgeTitle(a.Type, props.DaysStale)), staleBadgeText(a.Type, props.DaysStale))),
+					// #66 follow-up: individually-owned rows name their owner (a Member) with a
+					// quiet chip of the same weight as SHARED, so ownership is visible for both.
+					acctOwnerChip(props),
+					// Freshness marker: full badge normally; a subdued dot when the list has
+					// collapsed the stale badges (StaleCollapsed) into one summary line.
+					staleBadgeNode(props),
 					smartBadgeFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					smartOverlayFor(props.SmartSettings, props.SmartByEntity, a.ID),
 					If(hasInst, institutionChip(props.InstByID, a.InstitutionID)),

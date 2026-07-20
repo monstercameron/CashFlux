@@ -686,6 +686,57 @@ func acctToolbarGlyph(testID string, ic icon.Name, label, title, kind, variant s
 	return Button(args...)
 }
 
+// markAllStalePrompt is the shared "Mark all updated" action (#77): it collects the
+// non-archived stale accounts, previews the blast radius in the confirm (how many
+// balances and which), and — on confirm — stamps every balance now as one undoable
+// batch. Pure of hooks so any component can call it from a UseEvent; a no-op when
+// nothing is stale. Used by both the toolbar's Mark-all button and the accounts
+// list's stale-summary line, so the two stay in lockstep.
+func markAllStalePrompt(app *appstate.App) {
+	w := app.FreshnessWindows()
+	now := time.Now()
+	var staleAccts []domain.Account
+	for _, ac := range app.Accounts() {
+		if !ac.Archived && freshness.IsStale(ac, w, now) {
+			staleAccts = append(staleAccts, ac)
+		}
+	}
+	if len(staleAccts) == 0 {
+		return
+	}
+	names := make([]string, 0, 3)
+	for i, ac := range staleAccts {
+		if i == 3 {
+			break
+		}
+		names = append(names, ac.Name)
+	}
+	list := strings.Join(names, ", ")
+	if len(staleAccts) > 3 {
+		list = uistate.T("accounts.markAllMore", list, len(staleAccts)-3)
+	}
+	uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list)+" "+uistate.T("acctxn.markAllMeaning"),
+		uistate.T("accounts.markAll"), false, func(ok bool) {
+			if !ok {
+				return
+			}
+			n := 0
+			for _, ac := range staleAccts {
+				ac.BalanceAsOf = time.Now()
+				if err := app.PutAccount(ac); err != nil {
+					uistate.PostNotice(uistate.T("accounts.markErr", err.Error()), true)
+					continue
+				}
+				n++
+			}
+			uistate.BumpDataRevision()
+			if n > 0 {
+				auditview.CaptureNow()
+				uistate.PostUndoable(uistate.T("accounts.markedUpdated", plural(n, "balance")))
+			}
+		})
+}
+
 // acctToolbarWidget is the filter toolbar tile, modelled on the /transactions
 // toolbar: a search box, a Filters popover (account type + show-archived), active
 // chips, and the page actions (Transfer money, Mark all updated, Manage exchange
@@ -735,51 +786,10 @@ func acctToolbarWidget(props acctToolbarProps) ui.Node {
 	openFX := func() { uistate.OpenGlobalSettingsAt("household") }
 	// #77: a high-impact bulk write previews its blast radius first — the confirm
 	// names how many balances it touches (and which) — and the apply is undoable
-	// (one capture for the whole batch, so a single Undo restores every stamp).
-	markAll := ui.UseEvent(Prevent(func() {
-		w := app.FreshnessWindows()
-		now := time.Now()
-		var staleAccts []domain.Account
-		for _, ac := range app.Accounts() {
-			if !ac.Archived && freshness.IsStale(ac, w, now) {
-				staleAccts = append(staleAccts, ac)
-			}
-		}
-		if len(staleAccts) == 0 {
-			return
-		}
-		names := make([]string, 0, 3)
-		for i, ac := range staleAccts {
-			if i == 3 {
-				break
-			}
-			names = append(names, ac.Name)
-		}
-		list := strings.Join(names, ", ")
-		if len(staleAccts) > 3 {
-			list = uistate.T("accounts.markAllMore", list, len(staleAccts)-3)
-		}
-		uistate.ConfirmModalLabeled(uistate.T("accounts.markAllConfirm", plural(len(staleAccts), "balance"), list)+" "+uistate.T("acctxn.markAllMeaning"),
-			uistate.T("accounts.markAll"), false, func(ok bool) {
-				if !ok {
-					return
-				}
-				n := 0
-				for _, ac := range staleAccts {
-					ac.BalanceAsOf = time.Now()
-					if err := app.PutAccount(ac); err != nil {
-						uistate.PostNotice(uistate.T("accounts.markErr", err.Error()), true)
-						continue
-					}
-					n++
-				}
-				uistate.BumpDataRevision()
-				if n > 0 {
-					auditview.CaptureNow()
-					uistate.PostUndoable(uistate.T("accounts.markedUpdated", plural(n, "balance")))
-				}
-			})
-	}))
+	// (one capture for the whole batch, so a single Undo restores every stamp). The
+	// preview/apply body is shared (markAllStalePrompt) so the accounts list's
+	// stale-summary line triggers the identical action.
+	markAll := ui.UseEvent(Prevent(func() { markAllStalePrompt(app) }))
 
 	accounts := app.Accounts()
 	base := app.Settings().BaseCurrency
@@ -1035,6 +1045,10 @@ func acctListWidget(props acctListProps) ui.Node {
 	// C365: the investment-section header's "Open investments" link. Declared
 	// unconditionally (stable hook position) alongside goToDebt.
 	goToInvestments := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/investments")) }))
+	// The stale-summary line's "Mark all updated" (shown when most accounts are
+	// stale) reuses the toolbar's exact action. Declared unconditionally so the hook
+	// position stays stable even when the summary line isn't rendered.
+	markAllStale := ui.UseEvent(Prevent(func() { markAllStalePrompt(app) }))
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
@@ -1105,6 +1119,18 @@ func acctListWidget(props acctListProps) ui.Node {
 		return acctsort.RiskFirstLess(staleOf(shown[i]), staleOf(shown[j]), convBal(shown[i]), convBal(shown[j]))
 	})
 
+	// Stale-badge prioritisation collapse: once more than half the visible accounts are
+	// stale, a per-row STALE badge on nearly every line ranks nothing — so collapse the
+	// badges to subdued dots and lead the list with one summary line + Mark-all instead.
+	// Below the threshold each row keeps its full badge.
+	staleShown := 0
+	for _, ac := range shown {
+		if staleOf(ac) {
+			staleShown++
+		}
+	}
+	staleCollapsed := len(shown) > 0 && staleShown*2 > len(shown)
+
 	smartSettings := uistate.LoadSmartSettings()
 	pr := uistate.UsePrefs().Get()
 	smartIn := buildSmartInput(app, pr.WeekStartWeekday())
@@ -1151,7 +1177,8 @@ func acctListWidget(props acctListProps) ui.Node {
 		}
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
-			Members: members, Accounts: accounts, Categories: categories,
+			StaleCollapsed: staleCollapsed,
+			Members:        members, Accounts: accounts, Categories: categories,
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
 			SmartSettings: smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
@@ -1208,6 +1235,19 @@ func acctListWidget(props acctListProps) ui.Node {
 		bodyContent = groupedBody()
 	default:
 		bodyContent = Div(css.Class("rows"), MapKeyed(shown, keyOf, renderRow))
+	}
+
+	// Collapsed-stale state: one summary line leads the list, its Mark-all reusing the
+	// toolbar action. Prepended so it sits above the (grouped or flat) rows.
+	if staleCollapsed {
+		bodyContent = Fragment(
+			Div(css.Class("acct-stale-summary"), Attr("data-testid", "acct-stale-summary"), Attr("role", "status"),
+				Span(uistate.T("accounts.staleSummary")),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "acct-stale-summary-markall"),
+					Title(uistate.T("acctxn.markAllMeaning")), OnClick(markAllStale), uistate.T("accounts.markAll")),
+			),
+			bodyContent,
+		)
 	}
 
 	// Section title tracks the class view; the segmented toggle is the class picker
