@@ -100,6 +100,7 @@ func Register() {
 	registerUxbatch3()
 	registerUxbatch4()
 	registerFlipFit()
+	registerWhatChanged()
 	registerLane3Dashboard()
 	inject(Build())
 }

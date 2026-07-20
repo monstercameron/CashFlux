@@ -1017,6 +1017,10 @@ func Dashboard() ui.Node {
 		// C329: first-run onboarding callout — a dismissible setup checklist with a
 		// link to the help center. Self-hides once setup is complete or dismissed.
 		ui.CreateElement(dashOnboardCard),
+		// E-DB: "What changed since your last visit" — the E1 attribution card
+		// (top-3 ranked findings with evidence). Renders nothing on a first-ever
+		// open or a quiet window.
+		ui.CreateElement(dashWhatChangedCard),
 		// C271: "While you were away" catch-up card — shown when new notifications
 		// have arrived since the last time the user opened the Notification Center.
 		// Dismissed per session (the atom resets on reload). Only shown when

@@ -26400,3 +26400,18 @@ correctness features that must never be opt-in toggles; (c) the copilot/orchestr
 stays excluded — the one-shot item-scoped Smart+ rule from 2026-07-15 stands. Backlog
 recorded in TODOS.md (E-series). Next: a Dashboard vertical slice of E1 ("What changed
 since your last visit", top-3 ranked with evidence) as the UX experiment.
+
+## 2026-07-19 — E1 experiment: the "What changed" attribution card
+
+First vertical slice of the E-series: pure `internal/attribution` (E1) + a dashboard card.
+Design notes worth keeping: (1) the decomposition is exact by construction — flow and
+adjustments are computed, "other" is the residual to the true net-worth delta, so excluded
+transactions, FX transfer asymmetry, and liability sign edges can never silently distort the
+headline; (2) new-payee findings are expense-side only — a new income source is the income
+finding's story, and letting it double as a "new payee" produced a duplicate finding in the
+first test run (the one-issue-one-finding contract already earning its keep); (3) the visit
+baseline rolls only after a 45-minute gap, so reloads keep answering "since Friday" instead
+of "since two minutes ago", and "Got it" is an explicit catch-up. Card follows the resume/
+catch-up chrome, evidence lines are static text (no hooks in loops), all copy through i18n.
+Deploy is currently blocked on another lane's in-flight compile errors (accounts_tiles.go,
+documents.go) — committed via selective staging; will deploy when the tree builds.

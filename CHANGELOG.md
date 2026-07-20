@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"What changed since your last visit" dashboard card (E-DB, the first E1 attribution slice).**
+  New pure `internal/attribution` engine decomposes the window since the persisted visit baseline
+  into ranked, evidence-carrying findings — net-worth movement split into cash flow / balance
+  updates / other (exact residual, never dropped), the biggest account move with its own
+  flow-vs-adjustment split, top spending category, income landed, a ≥30%-of-spending large
+  expense, and first-ever merchants paid — reusing the app's canonical conventions
+  (NetWorthSeries cutoffs, PeriodTotals semantics, liability magnitude rule). The card renders
+  the top 3 above the bento with per-row evidence lines and jump links; "Got it" rolls the
+  baseline to now; a 45-minute gap defines a new visit (`uistate` visit stamps, SQLite KV).
 - **E-series backlog — cognitive-compression engines (TODOS.md).** Recorded the agreed intelligence
   roadmap: five reusable engines (E1 attribution "what changed & why", E2 unified case queue,
   E3 cross-page contradiction detector, E4 batch resolution, E5 insight evidence/confidence/impact +
