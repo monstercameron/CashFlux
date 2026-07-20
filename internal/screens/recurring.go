@@ -274,21 +274,18 @@ func computeRhythm(app *appstate.App, now time.Time) rhythmView {
 	}
 	if pc, err := runway.Tideline(rv.LiquidMinor, active, now, rv.Rates); err == nil {
 		rv.PayCycle = pc
-		rv.Tide, _ = runway.Events(active, now, pc.WindowDays, rv.Rates)
+		// WindowDays+1: the window is sized to the next income event, and Events
+		// is half-open (day < days), so asking for exactly WindowDays drops the
+		// very paycheck that anchors the cycle — the band then renders with no
+		// income up-tick at all.
+		rv.Tide, _ = runway.Events(active, now, pc.WindowDays+1, rv.Rates)
 	}
 
 	// Discovery: evidence-carrying candidates + the cluster matches that belong to
 	// existing commitments (for the review strip + death detection).
 	rv.DiscoverTxn = buildDiscoverTxns(app, rv.Rates)
-	existing := make([]recurdiscover.Commitment, 0, len(rv.Flows))
-	for _, r := range rv.Flows {
-		dir := recurdiscover.Out
-		if !r.Amount.IsNegative() {
-			dir = recurdiscover.In
-		}
-		existing = append(existing, recurdiscover.Commitment{ID: r.ID, Payee: r.Label, AccountID: r.AccountID, Direction: dir})
-	}
-	rv.Discover = recurdiscover.Discover(rv.DiscoverTxn, existing, loadRecurPins(), recurdiscover.Options{Now: now})
+	rv.Discover = recurdiscover.Discover(rv.DiscoverTxn, rhyCommitments(app, rv.Rates), loadRecurPins(),
+		recurdiscover.Options{Now: now})
 
 	// Findings: charged-after-cancel + "seems stopped" (from the cycle matches'
 	// last-seen, so the death check reuses the engine's own rhythm).
@@ -469,9 +466,12 @@ func rhyHeroSection(rv rhythmView, onAddIncome any) ui.Node {
 		rhyStat(uistate.T("rhythm.statIn"), fmtMoney(money.New(rv.MonthlyIn, rv.Base)), " "+tw.ColorClass("text-up"), ""),
 		rhyStat(uistate.T("rhythm.statOut"), fmtMoney(money.New(rv.MonthlyOut, rv.Base)), " "+tw.ColorClass("text-down"), ""),
 	)
+	// The household's own "keep at least this much" floor (from the smart pay
+	// schedule) is the honest threshold for calling a cycle tight.
+	keepFloor := uistate.BillsSmartConfigGet().MinKeepMinor
 	band := Div(css.Class("rhy-tide"),
 		rhyTideline(rv.PayCycle, rv.Tide, rv.Base, rv.Dec, rv.Now),
-		rhyPinchNote(rv.PayCycle, rv.Base),
+		rhyPinchNote(rv.PayCycle, rv.Base, keepFloor),
 		If(!rv.PayCycle.HasIncome,
 			Button(css.Class("btn btn-sm", tw.Mt2), Type("button"), Attr("data-testid", "rhy-add-income"),
 				OnClick(onAddIncome), uistate.T("rhythm.tideAddIncome"))),

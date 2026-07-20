@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -120,9 +121,14 @@ func rhyTideline(pc runway.PayCycle, events []cashflow.Event, base string, dec i
 		if mag < 0 {
 			mag = -mag
 		}
-		h := float64(mag) / float64(maxAbs) * tideTickH
-		if h < 3 {
-			h = 3
+		// SQUARE-ROOT scale, not linear: with one large item (a mortgage) setting
+		// the ceiling, a linear scale renders every ordinary bill as a 1px stub and
+		// the band reads as empty. Sqrt keeps the big ones dominant while letting
+		// small ones actually register, and a floor guarantees every tick is
+		// visible.
+		h := math.Sqrt(float64(mag)/float64(maxAbs)) * tideTickH
+		if h < 8 {
+			h = 8
 		}
 		x := xOf(e.Day)
 		cls := "rhy-tick-out"
@@ -171,21 +177,60 @@ func rhyTideline(pc runway.PayCycle, events []cashflow.Event, base string, dec i
 	return Svg(kids...)
 }
 
-// rhyPinchNote renders the pinch caption below the band: amber "tightest"
-// normally, red only when the projected cushion goes negative.
-func rhyPinchNote(pc runway.PayCycle, base string) ui.Node {
-	if !pc.HasIncome && len(pc.Cushion) == 0 {
+// pinchDrawdownShare is the fraction of the starting cushion a pay cycle must
+// consume before its low point is worth flagging. A household with a large
+// balance relative to its commitments never gets meaningfully tight, and a
+// "tightest" flag that fires every cycle is decoration — so unless the cycle
+// eats a real share of the cushion (or breaches a floor), the hero says so
+// calmly instead of crying wolf.
+const pinchDrawdownShare = 0.25
+
+// rhyPinchNotable reports whether a pay cycle's low point deserves a flag, and
+// whether it is the red case. A pinch is notable when the cushion goes negative
+// (red), falls below the household's own keep-floor, or the cycle draws the
+// cushion down by at least pinchDrawdownShare of where it started.
+func rhyPinchNotable(pc runway.PayCycle, keepFloorMinor int64) (notable, negative bool) {
+	if len(pc.Cushion) == 0 {
+		return false, false
+	}
+	if pc.Pinch.Negative {
+		return true, true
+	}
+	if keepFloorMinor > 0 && pc.Pinch.AmountMinor < keepFloorMinor {
+		return true, false
+	}
+	if pc.StartMinor > 0 {
+		drawdown := pc.StartMinor - pc.Pinch.AmountMinor
+		if float64(drawdown) >= float64(pc.StartMinor)*pinchDrawdownShare {
+			return true, false
+		}
+	}
+	return false, false
+}
+
+// rhyPinchNote renders the cushion caption below the band. Red when the cushion
+// goes negative, amber when the cycle is genuinely tight, and a calm "no tight
+// spots" line (still carrying the low point, so no information is lost) when the
+// cycle never gets close.
+func rhyPinchNote(pc runway.PayCycle, base string, keepFloorMinor int64) ui.Node {
+	if len(pc.Cushion) == 0 {
 		return Fragment()
 	}
 	amt := fmtMoney(money.New(pc.Pinch.AmountMinor, base))
 	when := pc.Pinch.Date.Format("Jan 2")
-	if pc.Pinch.Negative {
+	notable, negative := rhyPinchNotable(pc, keepFloorMinor)
+	switch {
+	case negative:
 		short := fmtMoney(money.New(-pc.Pinch.AmountMinor, base))
 		return P(css.Class("rhy-pinch-note is-neg"), Attr("data-testid", "rhy-pinch"),
 			uistate.T("rhythm.pinchNeg", when, short))
+	case notable:
+		return P(css.Class("rhy-pinch-note"), Attr("data-testid", "rhy-pinch"),
+			uistate.T("rhythm.pinch", when, amt))
+	default:
+		return P(css.Class("rhy-pinch-note is-calm"), Attr("data-testid", "rhy-pinch-calm"),
+			uistate.T("rhythm.pinchCalm", amt, when))
 	}
-	return P(css.Class("rhy-pinch-note"), Attr("data-testid", "rhy-pinch"),
-		uistate.T("rhythm.pinch", when, amt))
 }
 
 // rhyTideEmpty is the graceful no-data band: a prompt to add income (the driver

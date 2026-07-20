@@ -52,6 +52,26 @@ Notable decisions/traps:
   `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
   invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
   ("verified locally ✓" vs an honest "no local way to confirm").
+### Making the hero earn its space
+
+Review verdict on the tideline: "a pinch that never looks tight is decoration". True — it reported
+$47,463 as the "tightest" point, which is essentially the whole liquid balance, because this household's
+commitments never meaningfully dent its cash. Rather than fork the projection (the pay-cycle low IS the
+right number, and the runway/billsched engine owns it), the fix is in what we SAY about it: the flag only
+appears when the low point is notable — negative (red), below the household's own keep-floor from the
+smart pay schedule (amber), or a drawdown of at least a quarter of the starting cushion (amber). Otherwise
+a calm line that still reports the low point. The threshold is a stated constant, not a magic number
+buried in a conditional.
+
+Two visual bugs, one of them substantive:
+- Ticks were scaled linearly against the largest item, so with a $1,480 mortgage in the window every
+  $38 subscription rendered as a 1px stub and the band read as empty. Square-root scaling plus a minimum
+  height keeps the big items dominant while letting small ones register.
+- The income up-tick NEVER rendered. `Tideline` sizes the window to the next income event, and
+  `runway.Events` is half-open (`day < days`), so asking for exactly `WindowDays` excludes the very
+  paycheck that defines the cycle. Asking for `WindowDays+1` brings it back — and the accent up-tick at
+  the right edge is what makes the pay cycle legible as a cycle.
+
 ### Review-strip quality: why 63 candidates was mostly noise
 
 Screenshot review: page 1 led with "Meridian Data ~$4,400/mo" (the employer's payroll deposit),

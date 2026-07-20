@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The tideline hero flagged a "tightest point" that was never tight, and the band was barely visible.**
+  The pinch reported essentially the whole liquid balance every cycle, so it warned about nothing — a
+  flag that fires every time is decoration. The cushion low point is now only flagged when it is
+  genuinely notable: red when it goes negative, amber when it falls below the household's own keep-floor
+  (the smart pay schedule's minimum-balance setting) or when the cycle draws the cushion down by at
+  least a quarter; otherwise the hero says so calmly ("No tight spots this cycle · lowest $X on <date>"),
+  still reporting the low point so no information is lost. The band itself is now legible: ticks scale by
+  the SQUARE ROOT of amount (a linear scale with one mortgage-sized item rendered every ordinary bill as
+  a 1px stub), with a minimum height and heavier strokes, and the cushion line takes the accent at full
+  weight. Also fixes a bug where the income up-tick never rendered at all: the tideline window is sized
+  to the next income event and `runway.Events` is half-open, so requesting exactly `WindowDays` dropped
+  the very paycheck that anchors the cycle.
 - **The review strip proposed things you already track, and led with the worst of them.** On the sample
   household it surfaced 63 candidates headed by the employer's payroll deposit, an already-tracked
   insurer, groceries and fuel. Three causes, all fixed: (1) dedupe matched a commitment's DISPLAY LABEL
