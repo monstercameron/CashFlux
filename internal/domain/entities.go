@@ -415,6 +415,40 @@ func (c RecurringCadence) Next(from time.Time) time.Time {
 	}
 }
 
+// Prev returns the date one cadence step BEFORE from — the exact inverse of
+// Next, so Next(Prev(d)) == d for any date a schedule can actually land on.
+//
+// A schedule is stored as its NEXT due date, which is all a forward agenda
+// needs. A calendar has to render months that have already happened, and "what
+// was due on the 12th of last month" is a question the stored schedule can only
+// answer by being wound backwards. Stepping back by a fixed number of days would
+// desynchronise a month-based cadence (months are not 30 days), so the reverse
+// walks the same calendar arithmetic Next does.
+func (c RecurringCadence) Prev(from time.Time) time.Time {
+	switch c {
+	case CadenceDaily:
+		return from.AddDate(0, 0, -1)
+	case CadenceWeekly:
+		return from.AddDate(0, 0, -7)
+	case CadenceBiweekly:
+		return from.AddDate(0, 0, -14)
+	case CadenceSemimonthly:
+		// Mirror of Next's 1st/15th rhythm: on or after the 15th → back to the 1st
+		// of the same month; before it → the 15th of the previous month.
+		if from.Day() >= 15 {
+			return time.Date(from.Year(), from.Month(), 1, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), from.Location())
+		}
+		prev := dateutil.AddMonths(from, -1)
+		return time.Date(prev.Year(), prev.Month(), 15, prev.Hour(), prev.Minute(), prev.Second(), prev.Nanosecond(), prev.Location())
+	case CadenceQuarterly:
+		return dateutil.AddMonths(from, -3)
+	case CadenceYearly:
+		return dateutil.AddMonths(from, -12)
+	default:
+		return dateutil.AddMonths(from, -1)
+	}
+}
+
 // Recurring is a scheduled cash flow that repeats on a cadence — a bill, a
 // paycheck, a subscription. Amount is signed (negative = money out) and carries
 // its currency, mirroring Transaction; Autopost (later) turns due ones into real

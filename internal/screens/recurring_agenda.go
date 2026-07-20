@@ -43,6 +43,11 @@ type agendaItem struct {
 	Negotiable bool
 	Paid       bool
 	Income     bool
+	// Past marks an occurrence whose due date has already gone by. The forward
+	// agenda never carries these (overdue has its own strip), but the calendar
+	// renders whole months, and a month whose first three weeks are blank because
+	// they already happened reads as a broken calendar rather than a settled one.
+	Past bool
 	// AnchorAccountID is the liability account this row settles when the row is a
 	// merged obligation (the statement bill folded into its recurring flow), so
 	// the single row keeps the account identity's capabilities.
@@ -57,28 +62,45 @@ func buildAgenda(app *appstate.App, now time.Time, base string) []agendaItem {
 	return buildAgendaRange(app, now, today.AddDate(0, 0, agendaWindowDays), base)
 }
 
-// buildAgendaRange is buildAgenda over an explicit horizon — the calendar view
-// pages to arbitrary months, so it needs the same merged model out to the end of
-// whatever month is displayed.
+// buildAgendaRange is buildAgenda over an explicit forward horizon — everything
+// due between now and until, overdue excluded (it has its own strip).
 func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []agendaItem {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	all := buildAgendaSpan(app, now, now, until, base)
+	out := all[:0:0]
+	for _, it := range all {
+		if it.Date.Before(today) {
+			continue
+		}
+		out = append(out, it)
+	}
+	return out
+}
+
+// buildAgendaSpan is the merged agenda model over an ARBITRARY span, which may
+// start in the past. The calendar view needs this: it renders whole months, and
+// a stored schedule only knows its NEXT due date, so the flows are wound back to
+// the start of the span (domain.RecurringCadence.Prev) before being projected
+// forward across it. now stays separate from from — it decides what counts as
+// already-happened and is not the window.
+func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string) []agendaItem {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	start := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
 
 	recByID := map[string]domain.Recurring{}
 	for _, r := range app.Recurring() {
 		recByID[r.ID] = r
 	}
+	rewound := rhyRewind(app.Recurring(), start)
 
 	var items []agendaItem
 	// A liability's statement bill and the monthly recurring flow that pays it are
 	// ONE obligation — listing both double-counts the money owed. DedupeObligations
 	// collapses them onto the recurring row and records the liability as its anchor.
 	occurrences := bills.DedupeObligations(
-		bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, until), app.Recurring())
+		bills.OccurrencesWithin(app.Accounts(), rewound, start, until), app.Recurring())
 	for _, b := range occurrences {
-		if b.DueDate.Before(today) {
-			continue // overdue lives in its own strip
-		}
 		amt, err := rates.Convert(b.Amount, base)
 		if err != nil {
 			amt = money.New(b.Amount.Amount, base)
@@ -98,11 +120,22 @@ func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []ag
 			it.Negotiable = true
 		}
 		it.Paid = app.OccurrencePaid(b.AccountID, b.DueDate)
+		// A real transaction that settled the occurrence counts as paid just as
+		// much as a hand-marked one — otherwise a month of auto-matched bills
+		// renders as a month of misses.
+		if !it.Paid {
+			if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
+				if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
+					it.Paid = true
+				}
+			}
+		}
+		it.Past = b.DueDate.Before(today)
 		items = append(items, it)
 	}
 
 	// Income paychecks make the rhythm real.
-	for _, r := range app.Recurring() {
+	for _, r := range rewound {
 		if !r.Active() || r.Amount.IsNegative() {
 			continue
 		}
@@ -112,18 +145,56 @@ func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []ag
 		}
 		label, hint, cls := postingMode(r)
 		d := r.NextDue
-		for i := 0; i < 8 && !d.After(until); i++ {
-			if !d.Before(today) {
+		for i := 0; i < 24 && !d.After(until); i++ {
+			if !d.Before(start) {
 				items = append(items, agendaItem{
 					Date: d, Name: r.Label, Amount: money.New(amt.Amount, base),
 					ModeLabel: label, ModeHint: hint, ModeCls: cls, Income: true,
+					Past: d.Before(today),
 				})
 			}
-			d = r.Cadence.Next(d)
+			next := r.Cadence.Next(d)
+			if !next.After(d) {
+				break
+			}
+			d = next
 		}
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].Date.Before(items[j].Date) })
 	return items
+}
+
+// rhyRewindCap bounds the backward walk so a flow whose NextDue sits far in the
+// future (or a degenerate imported cadence) cannot spin.
+const rhyRewindCap = 400
+
+// rhyRewind returns copies of the flows with NextDue wound back to the last
+// occurrence on or before from, so a projection starting at from sees the
+// occurrences that already happened rather than only the ones still ahead.
+//
+// The store keeps a schedule as its NEXT due date, which is everything a forward
+// agenda needs and nothing a calendar does: asking "what was due on the 12th of
+// last month" of a flow whose NextDue is the 12th of next month gets silence,
+// which is what made past weeks render blank. Winding back through the cadence's
+// own inverse (never a fixed day count — months are not 30 days long) keeps the
+// anchor day exactly where the schedule puts it.
+func rhyRewind(recs []domain.Recurring, from time.Time) []domain.Recurring {
+	out := make([]domain.Recurring, 0, len(recs))
+	for _, r := range recs {
+		if !r.NextDue.IsZero() {
+			d := r.NextDue
+			for i := 0; i < rhyRewindCap && d.After(from); i++ {
+				prev := r.Cadence.Prev(d)
+				if !prev.Before(d) {
+					break // a cadence that does not move backwards cannot be wound
+				}
+				d = prev
+			}
+			r.NextDue = d
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // rhyAgendaProps configures the agenda section.
@@ -141,6 +212,10 @@ func rhyAgendaSection(props rhyAgendaProps) ui.Node {
 	}
 	_ = uistate.UseDataRevision().Get()
 	now := time.Now()
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
 
 	view := ui.UseState(uistate.AgendaViewGet())
 	setView := func(v string) {
@@ -151,15 +226,15 @@ func rhyAgendaSection(props rhyAgendaProps) ui.Node {
 	onCalendar := ui.UseEvent(Prevent(func() { setView(uistate.AgendaViewCalendar) }))
 	showAll := ui.UseState(false)
 	toggleAll := ui.UseEvent(Prevent(func() { showAll.Set(!showAll.Get()) }))
-	calOffset := ui.UseState(0)
+	// The calendar opens on a month that has something IN it. Landing on today's
+	// month unconditionally meant that opening the page late in the month showed a
+	// grid whose remaining days were empty and whose next obligations were one
+	// click away in a month the user could not see — strictly worse than the
+	// compact list it is meant to be a peer of.
+	calOffset := ui.UseState(rhyCalendarLanding(app, now, base))
 	calPrev := ui.UseEvent(Prevent(func() { calOffset.Set(calOffset.Get() - 1) }))
 	calNext := ui.UseEvent(Prevent(func() { calOffset.Set(calOffset.Get() + 1) }))
 	calToday := ui.UseEvent(Prevent(func() { calOffset.Set(0) }))
-
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
 
 	toggle := Div(css.Class("rhy-view-toggle", tw.InlineFlex, tw.Gap1), Attr("role", "group"), Attr("aria-label", uistate.T("rhythm.viewAria")),
 		rhyToggleBtn(uistate.T("rhythm.viewCompact"), "rhy-view-compact", view.Get() == uistate.AgendaViewCompact, onCompact),
@@ -213,16 +288,50 @@ func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll
 	return list
 }
 
+// rhyCalendarLanding picks the month the calendar opens on, as an offset from
+// today's month: today's month when it still holds an obligation ahead, else the
+// month containing the next one.
+//
+// It deliberately does NOT jump to a month merely because today's is sparse —
+// the current month is where a user expects to land, and paging is one click.
+// The jump happens only when this month has nothing left to show at all, which
+// is the case that made the calendar read as broken.
+func rhyCalendarLanding(app *appstate.App, now time.Time, base string) int {
+	thisMonthEnd := dateutil.AddMonths(dateutil.MonthStart(now), 1)
+	ahead := buildAgendaRange(app, now, thisMonthEnd.AddDate(0, 0, agendaWindowDays), base)
+	for _, it := range ahead {
+		if it.Date.Before(thisMonthEnd) {
+			return 0 // this month still has something in it
+		}
+	}
+	if len(ahead) == 0 {
+		return 0
+	}
+	return rhyMonthOffset(now, ahead[0].Date)
+}
+
+// rhyMonthOffset counts whole calendar months from a's month to b's month.
+func rhyMonthOffset(a, b time.Time) int {
+	return (b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
+}
+
 // rhyAgendaCalendar renders the month-grid view of the SAME agenda data as the
 // compact list — real amounts on the days, not bare dots, with income visually
 // distinct from outflow. It keeps the cal-prev/cal-next/cal-today testids.
+//
+// The window is the WHOLE displayed month, not today onward: a calendar that
+// only draws the future leaves the days that already happened blank, which reads
+// as missing data rather than as settled obligations. Past days carry what
+// actually happened — paid, or missed.
 func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string, calPrev, calNext, calToday any) ui.Node {
 	pr := uistate.LoadPrefs()
 	disp := dateutil.AddMonths(dateutil.MonthStart(now), offset)
 	monthEnd := dateutil.AddMonths(disp, 1)
-	// Bucket the merged agenda (bills + income) by calendar day.
+	// Bucket the merged agenda (bills + income) by calendar day. The grid's
+	// leading/trailing edge days belong to the neighbouring months, so the span is
+	// widened a week each way to fill them too.
 	byDay := map[string][]agendaItem{}
-	for _, it := range buildAgendaRange(app, now, monthEnd.AddDate(0, 0, 1), base) {
+	for _, it := range buildAgendaSpan(app, now, disp.AddDate(0, 0, -7), monthEnd.AddDate(0, 0, 7), base) {
 		k := it.Date.Format("2006-01-02")
 		byDay[k] = append(byDay[k], it)
 	}
@@ -275,10 +384,19 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 				// A calendar of anonymous numbers is half a feature — the name says
 				// WHAT is due; CSS truncates it when the cell is narrow.
 				chip := "rhy-cal-item"
-				if it.Income {
+				tip := it.Name + " · " + fmtMoney(it.Amount)
+				switch {
+				case it.Income:
 					chip += " is-in"
+				case it.Past && it.Paid:
+					// A day that has gone by says what HAPPENED, not what was due.
+					chip += " is-done"
+					tip += " · " + uistate.T("bills.paidBadge")
+				case it.Past:
+					chip += " is-missed"
+					tip += " · " + uistate.T("rhythm.calMissed")
 				}
-				cell = append(cell, Div(ClassStr(chip), Title(it.Name+" · "+fmtMoney(it.Amount)),
+				cell = append(cell, Div(ClassStr(chip), Title(tip),
 					Span(css.Class("rhy-cal-name"), it.Name),
 					Span(css.Class("rhy-cal-amt"), fmtMoney(it.Amount)),
 				))

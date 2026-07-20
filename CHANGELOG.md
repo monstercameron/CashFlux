@@ -7,6 +7,22 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The agenda's calendar view landed on a nearly-empty month.** Opening it on 20 July showed a grid
+  blank for its first three weeks, one entry on the 22nd, and August's obligations bleeding into the
+  trailing edge — it read as broken, and was strictly worse than the compact list it is supposed to be
+  a peer of. Two causes. (1) The calendar only ever drew the FUTURE, so days that had already gone by
+  were empty; it now renders the whole displayed month (plus the grid's edge days), and past days carry
+  what actually happened — settled obligations recede with a struck amount, ones that went by unpaid
+  take the amber warning tone. Auto-matched bills count as settled, not missed. (2) It always opened on
+  today's month; it now opens on the month containing the next obligation when this month has nothing
+  left ahead — and only then, since the current month is where a user expects to land. Prev / today /
+  next paging is unchanged.
+
+### Added
+- **`domain.RecurringCadence.Prev`** — the exact inverse of `Next`. A schedule is stored as its NEXT
+  due date, which is all a forward agenda needs and nothing a calendar does: rendering a month that has
+  already happened means winding the schedule backwards, and stepping back by a fixed day count would
+  desynchronise every month-based cadence.
 - **The tideline hero's window was too short to show a rhythm.** It ran from today to the next income
   event, floored at 14 days — so on a household paid fortnightly the band was a two-week strip holding
   one paycheck and almost no outflow, and read as an empty chart. The floor is now a full month (31

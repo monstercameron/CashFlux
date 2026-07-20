@@ -172,3 +172,55 @@ func TestEntitiesCarryCustomFields(t *testing.T) {
 		t.Error("custom field not stored")
 	}
 }
+
+// TestRecurringCadencePrev locks Prev as the exact inverse of Next. The calendar
+// view renders months that have already happened, and a schedule stored as its
+// NEXT due date can only answer "what was due last month" by being wound back —
+// so any drift between the two directions shows up as a bill on the wrong day.
+func TestRecurringCadencePrev(t *testing.T) {
+	base := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	cases := map[RecurringCadence]time.Time{
+		CadenceDaily:       time.Date(2026, 1, 14, 0, 0, 0, 0, time.UTC),
+		CadenceWeekly:      time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC),
+		CadenceBiweekly:    time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		CadenceMonthly:     time.Date(2025, 12, 15, 0, 0, 0, 0, time.UTC),
+		CadenceSemimonthly: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), // day 15 → 1st of the same month
+		CadenceQuarterly:   time.Date(2025, 10, 15, 0, 0, 0, 0, time.UTC),
+		CadenceYearly:      time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC),
+	}
+	for cad, want := range cases {
+		if got := cad.Prev(base); !got.Equal(want) {
+			t.Errorf("%s.Prev = %s, want %s", cad, got.Format("2006-01-02"), want.Format("2006-01-02"))
+		}
+	}
+	if got := RecurringCadence("nope").Prev(base); !got.Equal(cases[CadenceMonthly]) {
+		t.Errorf("unknown cadence Prev = %s, want monthly", got.Format("2006-01-02"))
+	}
+	// Semimonthly before the 15th steps back to the 15th of the previous month.
+	early := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+	if got := CadenceSemimonthly.Prev(early); !got.Equal(time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)) {
+		t.Errorf("semimonthly before-15 Prev = %s, want 2026-02-15", got.Format("2006-01-02"))
+	}
+	// Round-trip: stepping back then forward returns the same date, across a year
+	// boundary and a short month. Semimonthly is exercised only on the days its
+	// schedule can actually land on (the 1st and the 15th) - it is the one cadence
+	// with a fixed anchor rather than a free-running step, so an arbitrary date is
+	// not a point on its schedule at all.
+	for _, cad := range []RecurringCadence{CadenceDaily, CadenceWeekly, CadenceBiweekly,
+		CadenceSemimonthly, CadenceMonthly, CadenceQuarterly, CadenceYearly} {
+		dates := []time.Time{
+			time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
+			time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC),
+		}
+		if cad != CadenceSemimonthly {
+			dates = append(dates, time.Date(2026, 12, 28, 0, 0, 0, 0, time.UTC))
+		}
+		for _, d := range dates {
+			if got := cad.Next(cad.Prev(d)); !got.Equal(d) {
+				t.Errorf("%s: Next(Prev(%s)) = %s, want the original date",
+					cad, d.Format("2006-01-02"), got.Format("2006-01-02"))
+			}
+		}
+	}
+}

@@ -505,6 +505,19 @@ func registerRhythmAgenda() {
 		prop("flex-shrink", "0"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
+	// Days that have already gone by say what HAPPENED. Settled obligations
+	// recede (struck amount, dimmed); ones that went by unpaid take the amber
+	// warning tone — red stays reserved for the overdue strip and a negative
+	// cushion.
+	rule(".rhy-cal-item.is-done",
+		prop("opacity", "0.75"),
+	)
+	rule(".rhy-cal-item.is-done .rhy-cal-amt",
+		prop("text-decoration", "line-through"),
+	)
+	rule(".rhy-cal-item.is-missed",
+		prop("color", "var(--warn)"),
+	)
 	rule(".rhy-cal-item.is-in",
 		prop("color", "var(--accent)"),
 		prop("font-weight", "600"),

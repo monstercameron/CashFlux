@@ -88,6 +88,7 @@ var rhythmKeys = Catalog{
 	"rhythm.showAll":      "Show all %d",
 	"rhythm.showFewer":    "Show fewer",
 	"rhythm.calMore":      "+%d more",
+	"rhythm.calMissed":    "This one went by without being paid",
 
 	// Posting-mode badges.
 	"rhythm.modeAuto":       "Auto",
