@@ -2482,7 +2482,7 @@ func flaggedGroupHeading(feature string, n int) string {
 type smartAnomalyGroupRowProps struct {
 	Run         insightRun
 	Heading     string
-	ReviewLabel string       // "" = no primary action
+	ReviewLabel string // "" = no primary action
 	ReviewAria  string
 	OnReview    func()       // nil unless ReviewLabel is set
 	OnNavigate  func(string) // per-item source navigation

@@ -19,9 +19,9 @@ var detail5Keys = Catalog{
 
 	// The group's expand/collapse toggle and its aria labels (the count rides the
 	// name so assistive tech announces how many rows the control reveals).
-	"detail5.groupExpand":      "Show all",
-	"detail5.groupCollapse":    "Hide",
-	"detail5.groupExpandAria":  "Show the %d findings in this group",
+	"detail5.groupExpand":       "Show all",
+	"detail5.groupCollapse":     "Hide",
+	"detail5.groupExpandAria":   "Show the %d findings in this group",
 	"detail5.groupCollapseAria": "Hide the %d findings in this group",
 
 	// The group's primary action for missed/expected payments: jump to the
