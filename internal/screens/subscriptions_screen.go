@@ -841,12 +841,12 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	)
 }
 
-// Subscriptions is the /subscriptions route — a thin shell that renders
-// SubscriptionsPanel. The shell provides the heading and subtitle from the route
-// registry; SubscriptionsPanel owns all content, hooks, and logic
-// (FEATURE_MAP §5.3/§5.7b).
+// Subscriptions is the /subscriptions route — a thin shell over the unified
+// Bills & Recurring surface (RhythmSurface), opening the roster's Subscriptions
+// lens. The old SubscriptionsPanel is retained as a helper source, no longer
+// routed.
 func Subscriptions() ui.Node {
-	return ui.CreateElement(SubscriptionsPanel, SubscriptionsPanelProps{})
+	return rhythmSurfaceFocused(focusSubs)
 }
 
 // subscriptionRowProps holds the props for a single subscription row.

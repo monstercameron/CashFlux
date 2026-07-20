@@ -485,12 +485,11 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 	)
 }
 
-// Bills is the /bills route — a thin shell that renders BillsPanel. The shell
-// provides the heading and subtitle from the route registry (nav.bills /
-// screen.billsSub); BillsPanel owns all content, hooks, and logic
-// (FEATURE_MAP §5.3/§5.7b).
+// Bills is the /bills route — a thin shell over the unified Bills & Recurring
+// surface (RhythmSurface), landing on the up-next agenda. The old BillsPanel is
+// retained as a helper source (billsCalendar / billsSmart*), no longer routed.
 func Bills() ui.Node {
-	return ui.CreateElement(BillsPanel, BillsPanelProps{})
+	return rhythmSurfaceFocused(focusAgenda)
 }
 
 // monthLabel renders a month/year heading like "June 2026".

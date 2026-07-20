@@ -19,6 +19,42 @@ deliberately not the bento tile kit: a full-width vertical stack of sections. De
 Next: the i18n keys, then the screen rewrite (tideline hero, overdue/review/findings strips, up-next
 agenda with the compact|calendar toggle, and the weight-first lineup roster).
 
+### The screen rewrite
+
+Replaced the three-tab `RecurringHub` with `RhythmSurface`, a single component that owns the page
+handlers + hooks and delegates to per-section components (review, agenda, roster) and per-row
+components (overdue, agenda, claim, finding, review-candidate) so hooks stay stable — the framework's
+"never call `On*` in a variable-length loop" rule. `/bills` and `/subscriptions` keep their thin
+shells but now render the same surface with a deep-link focus (agenda / subscriptions lens). The old
+`BillsPanel`/`SubscriptionsPanel` stay put purely as the source of reused helpers (`billsCalendar`,
+`computeBillsSmart`, `billFitFor`), so the calendar view and budget-fit chips didn't get reinvented.
+
+Notable decisions/traps:
+- `computeRhythm` composes the tested engine end to end: `computeRecurView` (monthly totals + derived
+  occurrences) → split overdue vs agenda → `ledger.LiquidBalance` + `runway.Tideline` for the hero →
+  `recurdiscover.Discover` for the review strip and, via its cluster-matches' last-seen,
+  `recurdiscover.DetectStopped` for the "seems stopped" findings. No recomputation forks the engine.
+- The recurring path of `RecordBillPayment` ignores its amount, posts `r.Amount`, and advances the
+  schedule — so agenda/overdue mark-paid uses `"recurring:"+id` (mirroring how bills.OccurrencesWithin
+  tags recurring-derived bills), keeping the paid-map + advance behaviour identical to the old bills
+  tab.
+- Testid preservation: the roster kebab keeps every `recurring-{edit,del,viewtxns,viewacct,viewbudget}
+  -<id>` + `recurring-menu-<id>` id; the lenses carry `recurring-tab-{scheduled,bills,subscriptions}`;
+  the agenda keeps `bill-fit-<id>` / `bill-negotiate-<id>` and the calendar keeps
+  `cal-{prev,next,today}`; the toolbar keeps `recurring-add`, `recurring-post-due`, `bills-smart-open`,
+  `subs-detect-prefs-toggle`, `recurring-toggle-formulas`. The deep subscription-help flows
+  (`sub-cancel-*`, `subs-review-*`, `subs-select-all-btn`) and some bill ids move/retire to a dedicated
+  coverage-manifest commit for the e2e migration agent.
+- Confirming a review candidate builds a `domain.Recurring` from the evidence (amount sign from
+  direction, `DomainCadence` for the persistable cadence, next-due stepped past now) and back-claims
+  each evidence transaction as a `TxnLinkBillMatch` link keyed by the transaction's own date.
+- Smart+ is opt-in only: the footer shows an up-front token estimate (`len(payload)/4`, the insights
+  `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
+  invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
+  ("verified locally ✓" vs an honest "no local way to confirm").
+- Screenlint stays at zero hardcoded UI copy — all new strings route through `en_rhythm.go`; ordinal
+  suffixes (st/nd/rd/th) stay in code since they're not prose to the ratchet.
+
 ## 2026-07-20 — Bills & Recurring redesign: the engine layer (recurdiscover + runway pinch)
 
 Built the pure-logic foundation for the from-scratch Bills & Recurring surface, bottom-up and

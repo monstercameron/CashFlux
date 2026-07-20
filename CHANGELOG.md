@@ -6,6 +6,29 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Unified Bills & Recurring surface — one page replaces the Scheduled | Bills | Subscriptions tabs.**
+  `/recurring`, `/bills`, and `/subscriptions` now all render the "month's rhythm" surface (the deep
+  routes land on the agenda / the roster's Subscriptions lens). The page is a full-width stack built on
+  the tested engine: a **tideline hero** (SVG pay-cycle band from `runway.Tideline` — accent income
+  up-ticks, muted outflow down-ticks scaled by amount, a cushion line, a today marker, and an amber/red
+  pinch flag — beside compact net/in/out stats, degrading gracefully with no income); an **overdue
+  strip** (only when overdue, with inline Mark-paid); a **review strip** (`recurdiscover.Discover`
+  candidates with a plain-English evidence sentence + expandable transactions and Confirm /
+  Not-recurring verbs — confirm creates the recurring and back-claims its evidence transactions as
+  bill-match links, reject persists a suppressed-signature pin; plus an opt-in Smart+ lane with an
+  up-front token estimate + OpenAI-key gating that re-verifies leftovers locally via
+  `recurdiscover.Verify`); an **up-next agenda** merging bill occurrences and income with a persisted
+  **Compact | Calendar** toggle, posting-mode badges, and budget-fit chips; a weight-first **lineup
+  roster** with a %-of-outflow spine, All | Bills | Subscriptions | Income lenses (subscriptions
+  subtotal), a sort picker, anchor/creep chips, a per-row kebab (edit / pause / cancel-keep-watching /
+  copy formula variable / delete), and a collapsed watching-after-cancellation tail; a **findings
+  strip** (charged-after-cancel → dispute to-do, price creep, `DetectStopped` "seems stopped"); and a
+  quiet **utilities toolbar** (Add recurring, Post due, Detection preferences, Smart pay schedule,
+  schedule-metrics toggle, demoted CSV — no nag banner). The detection view choice and clustering pins
+  persist via the settings KV. Old `BillsPanel` / `SubscriptionsPanel` are retained only as a source
+  of shared helpers (calendar, smart-schedule, budget-fit), no longer routed.
+
 ### Added
 - **English copy for the unified Bills & Recurring surface (`rhythm.*` keys).** All copy for the
   new "month's rhythm" page — tideline hero, pinch caption, overdue/review/findings strips, the
