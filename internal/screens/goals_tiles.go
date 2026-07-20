@@ -277,7 +277,7 @@ func goalListWidget(props goalListProps) ui.Node {
 		})
 	}
 	overbooked := overbookedGoals(app)
-	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
+	rowForU := func(g domain.Goal, fundSetAside int64, catName string, urgency goalsvc.PlanUrgency) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
 			OnDelete:       deleteGoal,
@@ -287,7 +287,11 @@ func goalListWidget(props goalListProps) ui.Node {
 			EarmarkOverbooked: overbooked[g.ID],
 			Health:            v.Health[g.ID],
 			Base:              v.Base,
+			PlanUrgency:       urgency,
 		})
+	}
+	rowFor := func(g domain.Goal, fundSetAside int64, catName string) ui.Node {
+		return rowForU(g, fundSetAside, catName, goalsvc.UrgencyNone)
 	}
 
 	now := time.Now()
@@ -339,11 +343,26 @@ func goalListWidget(props goalListProps) ui.Node {
 			planEntries = append(planEntries, planEntry{g: g, missed: missedByID[g.ID]})
 		}
 	} else {
+		// Within the default "Most actionable" sort: missed → at risk → watch (the coarse
+		// verdict rank), then — crucially, since a whole cluster can share the Watch
+		// verdict — by the finer how-far-behind grade so the worst stretch leads instead
+		// of an arbitrary order. Both are pure reads of figures already on v.Health.
+		urgencyOf := func(e planEntry) goalsvc.PlanUrgency {
+			if e.missed {
+				return goalsvc.UrgencyNone
+			}
+			p := v.Health[e.g.ID]
+			return goalsvc.ClassifyPlanUrgency(p.RequiredMinor, p.SurplusMinor, p.FairMinor)
+		}
 		sort.SliceStable(planEntries, func(i, j int) bool {
 			ri := needsPlanRank(planEntries[i].missed, v.Health[planEntries[i].g.ID].Health)
 			rj := needsPlanRank(planEntries[j].missed, v.Health[planEntries[j].g.ID].Health)
 			if ri != rj {
 				return ri < rj
+			}
+			ui, uj := urgencyOf(planEntries[i]).Rank(), urgencyOf(planEntries[j]).Rank()
+			if ui != uj {
+				return ui < uj
 			}
 			return goalsvc.LessForList(planEntries[i].g, planEntries[j].g)
 		})
@@ -365,18 +384,27 @@ func goalListWidget(props goalListProps) ui.Node {
 		}
 	}
 
-	rowForPlan := func(g domain.Goal) ui.Node {
-		if g.IsSinkingFund {
-			return rowFor(g, goalsvc.FundSetAsideMinor(g, now), categoryNameByID(v.Categories, g.CategoryID))
+	rowForPlan := func(e planEntry) ui.Node {
+		g := e.g
+		// The urgency grade drives the differentiated badge; missed goals keep their
+		// own "Overdue" badge (UrgencyNone), so only behind-schedule stretch goals get
+		// the Far behind / Slipping / Watch label.
+		urgency := goalsvc.UrgencyNone
+		if !e.missed {
+			p := v.Health[g.ID]
+			urgency = goalsvc.ClassifyPlanUrgency(p.RequiredMinor, p.SurplusMinor, p.FairMinor)
 		}
-		return rowFor(g, 0, "")
+		if g.IsSinkingFund {
+			return rowForU(g, goalsvc.FundSetAsideMinor(g, now), categoryNameByID(v.Categories, g.CategoryID), urgency)
+		}
+		return rowForU(g, 0, "", urgency)
 	}
 
 	// The "Needs a plan" lead card.
 	var needsPlanSection ui.Node = Fragment()
 	if len(planEntries) > 0 {
 		planRows := MapKeyed(planEntries, func(e planEntry) any { return e.g.ID }, func(e planEntry) ui.Node {
-			return rowForPlan(e.g)
+			return rowForPlan(e)
 		})
 		needsPlanSection = uiw.Card(uiw.CardProps{
 			Attrs: []any{Attr("aria-label", uistate.T("goals.needsPlanSection")), Attr("data-testid", "goals-needsplan-section")},

@@ -295,7 +295,15 @@ func GoalRow(props goalRowProps) ui.Node {
 	// one fact, one place.)
 	var paceBadgeNode, fundChip, streakChip, paceReasonNode ui.Node = Fragment(), Fragment(), Fragment(), Fragment()
 	if financial {
-		paceBadgeNode = goalPaceBadge(pace, props.Health.Health)
+		// In the "Needs a plan" section the row carries a finer urgency grade (Far
+		// behind / Slipping / Watch) so a cluster of Watch goals is differentiated; it
+		// takes the badge slot there. Everywhere else PlanUrgency is None and the normal
+		// pace badge shows. Overdue/complete calendar states still win via goalPaceBadge.
+		if props.PlanUrgency != goalsvc.UrgencyNone && pace != goalsvc.PaceOverdue && pace != goalsvc.PaceComplete && pace != goalsvc.PaceFinalStretch {
+			paceBadgeNode = goalUrgencyBadge(props.PlanUrgency, g.ID)
+		} else {
+			paceBadgeNode = goalPaceBadge(pace, props.Health.Health)
+		}
 		// The diagnostic "why" behind the badge (required /mo + available-money
 		// constraint), shown only on the live card (not archived/complete).
 		if !g.Archived && !complete {

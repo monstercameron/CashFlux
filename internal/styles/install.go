@@ -103,6 +103,7 @@ func Register() {
 	registerWhatChanged()
 	registerLane3Dashboard()
 	registerDetail6()
+	registerDetail4()
 	inject(Build())
 }
 

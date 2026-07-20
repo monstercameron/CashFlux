@@ -346,6 +346,11 @@ type goalRowProps struct {
 	// Base is the household base currency, used to format the Health figures (they are
 	// base-currency minor units).
 	Base string
+	// PlanUrgency grades how far behind a "Needs a plan" card is (Far behind / Slipping
+	// / Watch), refining the shared Watch verdict so the group is prioritised. Set ONLY
+	// for cards in that section; UrgencyNone (the zero value) elsewhere leaves the normal
+	// pace badge untouched.
+	PlanUrgency goalsvc.PlanUrgency
 }
 
 // goalKindOptions builds the goal-type SelectOptions (savings / checklist /
@@ -477,6 +482,27 @@ func goalPaceBadge(p goalsvc.Pace, h goalsvc.Health) ui.Node {
 		return Fragment()
 	}
 	return Span(ClassStr("pace-badge pace-"+mod), label)
+}
+
+// goalUrgencyBadge renders the finer "how far behind" grade for a goal in the "Needs a
+// plan" section, so a cluster that all shares the Watch verdict no longer reads as one
+// undifferentiated block: Far behind (danger), Slipping (warn), Watch (neutral). The
+// grade comes from goalsvc.ClassifyPlanUrgency (required-monthly vs. fair share), never
+// recomputed here. UrgencyNone renders nothing so callers can fall back to the pace
+// badge. goalID gives the badge a stable testid.
+func goalUrgencyBadge(u goalsvc.PlanUrgency, goalID string) ui.Node {
+	var label, mod string
+	switch u {
+	case goalsvc.UrgencyFarBehind:
+		label, mod = uistate.T("goals.urgencyFarBehind"), "atrisk"
+	case goalsvc.UrgencySlipping:
+		label, mod = uistate.T("goals.urgencySlipping"), "watch"
+	case goalsvc.UrgencyWatch:
+		label, mod = uistate.T("goals.urgencyWatch"), "planwatch"
+	default:
+		return Fragment()
+	}
+	return Span(ClassStr("pace-badge pace-"+mod), Attr("data-testid", "goal-urgency-"+goalID), label)
 }
 
 // goalPaceReason renders the one-line justification behind a goal's pace verdict — the
