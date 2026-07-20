@@ -1,3 +1,97 @@
+## 2026-07-20 — Bills & recurring: the redesign was blocking first paint on the discovery engine
+
+The unified surface took ~800-1000ms to mount where comparable pages take ~140ms, and it took long
+enough that the boot overlay was still fading over live content — a doubled title, translucent
+skeleton panels, the "Getting your money in order…" tagline bleeding through the real page. That
+reads exactly like the boot-layer ghosting bug this project already fixed once, and it is worth
+being precise that it was NOT that bug again. The overlay was behaving correctly. The page was
+simply too slow to arrive underneath it, and the overlay's fade is what made the slowness visible.
+
+**Measure first, and measure natively.** The obvious suspect was `recurdiscover.Discover` — it is
+the biggest thing on the page and the hypothesis handed to me named it. It was indeed the largest
+single stage, but it was nowhere near the whole story, and two of the three real costs would have
+survived a deferral of Discover alone. A throwaway native harness over the seeded sample dataset
+(3,227 transactions) timed each stage:
+
+    buildDiscoverTxns                 11.65 ms
+    recurdiscover.Discover            19.82 ms
+    subscriptions.IsLiabilityPayment   7.33 ms  (the loop over detected groups)
+    subscriptions.Detect               0.65 ms
+    bills.OccurrencesWithin + Dedupe   0.05 ms
+    runway.Tideline / Events           ~0.00 ms
+    bills.LiabilityAnchors             ~0.00 ms
+
+The hero — the thing the page is named for, the thing that looks expensive — costs nothing. The
+tideline, the pay-cycle band, the pinch: all of it rounds to zero. Everything expensive on this page
+feeds content below the fold. That is a good position to be in, and it decided the shape of the fix.
+
+**Three findings, in increasing order of interest.**
+
+*One: the page rebuilt the payee-cleanup table once per transaction.* `app.ResolvePayee` constructs
+a fresh `payeealias.Resolver` per call, which re-queries the alias table from the store.
+`buildDiscoverTxns` called it per row — 3,227 store round-trips to answer a question that is fixed
+for the whole sweep. `PayeeResolver`'s own doc comment already said to hoist it when resolving many
+payees; the call site just did not. 11.65ms → 3.15ms. This is the kind of cost that never shows up
+in a design review, because the code reads perfectly reasonably.
+
+*Two: one page, rendered by several components, derived the same model several times.* The surface
+is split into components so their hooks stay isolated — correct, and required by the framework. But
+each component independently rebuilt the shared model from the same store on the same frame:
+`buildDiscoverTxns` ×3, `Discover` ×2, `computeRecurView` ×2. Eight full sweeps of the ledger,
+producing three distinct answers. A frame-scoped memo layer over the existing `memoByRev` collapses
+them. The subtlety is the cache key: `memoByRev`'s contract is that the key carries the store
+revision PLUS anything the store cannot see, and discovery has two such inputs — the day (its
+liveness and expiry windows) and the user's discovery pins, which live in prefs. Leave the pins out
+and "Not recurring" appears to do nothing until some unrelated write bumps the revision. That is a
+worse bug than the one being fixed, and it would have been intermittent.
+
+*Three, and this is the one worth remembering: ~8ms per render was spent computing something the
+page does not display.* `recurView.Detected` and `rhythmView.DiscoverTxn` are both write-only. The
+redesign replaced the old detected-charges list with the discovery engine's review strip and left
+the derivation behind — a full `subscriptions.Detect` sweep plus an `IsLiabilityPayment` check per
+group, every render, feeding nothing. Nobody would have found this by profiling for slow functions;
+it turned up by asking who *reads* each field. When a page is rewritten from scratch, the dead
+inputs to the old design are worth an explicit sweep.
+
+Commits 1-3 took the three routes from D/D/D (51/49/46) to B/C/C (76/74/61) with no deferral at all.
+That ordering was deliberate: deferring work is a way of hiding cost, and hiding cost you could have
+simply deleted is how a page gets slow again six months later. Remove the waste first, then defer
+what legitimately remains.
+
+**Then the deferral.** `useAfterSettle` — the same mechanism that took all 46 pages to an A — now
+gates the review strip, the roster, and the `Discover` call that both depend on. What stays on the
+first paint: the tideline hero and its stats (the page's signature element, and free), the overdue
+strip and the agenda's occurrence walk (what the user came to see — deferring what they owe would
+be solving the measurement and not the problem), and `ChargedAfterCancel` at 0.4ms, which is not
+worth splitting the findings strip in two for.
+
+**Two traps in the deferral, both known to this project, both live here.** The first is the
+late-mount append: a component whose placeholder is an empty `Fragment` appends itself to the END of
+its container when it finally mounts, which would have landed the review strip below the toolbar.
+The fix is `rhySlot` — a real element present from the first paint. The second is that the obvious
+placeholder, a plain div, is a flex item, and `.rhy` is a flex column with a 1.15rem gap, so an
+empty placeholder would have reserved a visible gap and then shifted the page when filled.
+`display: contents` solves both at once: no box and no gap while empty, and when the section arrives
+it becomes the flex item directly, exactly as if it had been rendered there all along. Measured CLS
+is 0 before and after.
+
+**The deferral broke six tests, and the fix went in the wait, not the assertion.** Six rhythm.spec
+tests that read the review strip or the roster went flaky — they asserted on content that is now
+deliberately absent from the first paint. The temptation is to relax the assertion; the assertions
+are correct and were left alone. The suite's `nav` now waits for the surface to be readable, not
+merely mounted. Worth noting why the wait is on a `data-settled` flag and not on the sections'
+content: a deferred section may legitimately render nothing — no candidates, no commitments — and a
+content wait cannot tell "nothing to show" apart from "not here yet". It would hang on the empty case
+and pass early on the full one. The flag states it outright, the same way the shell's
+`data-app-ready` does for boot. It went on the page root as a plain attribute rather than as a
+`data-testid` on the slots, because `coverage.spec.mjs` asserts an exact per-route control inventory
+and deferral scaffolding is not a control — buying a readiness signal with a coverage-manifest
+regeneration, under concurrent work on this same surface, would have been a poor trade.
+
+Final, warm SPA route mount on the sample dataset: /recurring 769→115ms (D 51 → A 95), /bills
+836→136ms (D 49 → A 93), /subscriptions 1029→239ms (D 46 → B 82), against /budgets as an untouched
+control at A. Nothing the page computes or displays changed — only when.
+
 ## 2026-07-20 — Bills & recurring: three capabilities the redesign dropped, put back
 
 The migration pass that rewrote this surface's coverage also catalogued what the redesign had
