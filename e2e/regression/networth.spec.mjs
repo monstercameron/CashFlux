@@ -467,13 +467,20 @@ test("the period scope reaches all time and survives navigation", async ({ app }
   const allTime = app.locator(".nws-window button", { hasText: "All time" }).first();
   await expect(allTime).toBeVisible();
   await allTime.click();
-  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/all time/i);
+  // The scope is checked on the CONTROL, which is what "the period is selected"
+  // actually means, plus the sentence the hero prints. This used to look for the
+  // literal words "all time" in the delta -- but the delta must not print the
+  // button's caption raw ("over All time" is not English), so matching on the
+  // caption would pin a copy defect in place. It asserts the phrasing instead.
+  await expect(allTime).toHaveAttribute("aria-pressed", "true");
+  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/since your records began/i);
 
   // Leaving and returning must keep the frame of reference.
   await nav(app, "/budgets");
   await nav(app, "/networth");
   await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/all time/i);
+  await expect(app.locator(".nws-window button", { hasText: "All time" }).first()).toHaveAttribute("aria-pressed", "true");
+  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/since your records began/i);
 
   // Restore, so the suite leaves no sticky frame behind.
   await app.locator(".nws-window button", { hasText: "6 months" }).first().click();
@@ -819,6 +826,150 @@ test("History leads with the graph and keeps the numbers reachable", async ({ ap
     for (const t of whens) {
       expect(t.trim(), `"${t}" is not a full month and year`).toMatch(/^[A-Z][a-z]{2} \d{4}$/);
     }
+  } finally {
+    await sixMonths(app);
+  }
+});
+
+test("the Detail navigator clears the global header at every width", async ({ app }) => {
+  for (const [w, h] of [[1440, 900], [1202, 900], [950, 900]]) {
+    await app.setViewportSize({ width: w, height: h });
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await detail(app);
+    await app.locator('[data-testid="nws-idx-04"]').click();
+    await app.waitForTimeout(1200);
+    const where = `@ ${w}`;
+
+    const geo = await app.evaluate(() => {
+      const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { top: b.top, bottom: b.bottom }; };
+      const idx = document.querySelector(".nws-index");
+      const cur = document.querySelector(".nws-idx.is-current");
+      return {
+        header: r(".topbar"), index: r(".nws-index"), sec: r("#nws-04"),
+        idxZ: Number(getComputedStyle(idx).zIndex),
+        headerZ: Number(getComputedStyle(document.querySelector(".topbar")).zIndex),
+        current: cur ? cur.getAttribute("data-section") : null,
+        ariaCurrent: cur ? cur.getAttribute("aria-current") : null,
+      };
+    });
+
+    // The navigator must sit BELOW the header, not underneath it. It used to be
+    // sticky at top 4px against a ~101px header, so it vanished while scrolling.
+    expect(geo.index.top, `${where}: the navigator is hidden behind the header`).toBeGreaterThanOrEqual(geo.header.bottom - 1);
+    // Above the document it indexes, below the header it hangs from.
+    expect(geo.idxZ, `${where}: navigator must sit above content`).toBeGreaterThan(3);
+    expect(geo.idxZ, `${where}: navigator must sit below the header`).toBeLessThan(geo.headerZ);
+
+    // A jumped-to section lands clear of BOTH, so its title is readable.
+    expect(geo.sec.top, `${where}: the section landed under the navigator`).toBeGreaterThanOrEqual(geo.index.bottom - 1);
+
+    // And the scroll-spy agrees with what is on screen. It reported "03 What
+    // you owe" while History filled the screen, because its band was a literal
+    // that did not know the header's height.
+    expect(geo.current, `${where}: the navigator lost track of where you are`).toBe("nws-04");
+    expect(geo.ariaCurrent, `${where}: where you are must be announced, not only tinted`).toBe("location");
+  }
+  await app.setViewportSize({ width: 1440, height: 900 });
+});
+
+test("every column of percentages adds to exactly 100", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await detail(app);
+
+  // Truncation gave an asset side of 99% and a liability side of 98%. On a page
+  // that draws an "unexplained" bar so its waterfall reconciles to the cent, a
+  // column that visibly fails to reach 100 undoes the trust that bar buys.
+  for (const sec of ["#nws-02", "#nws-03"]) {
+    const pcts = await app.locator(sec + ' [data-testid="nws-comp-row"] td:nth-child(3)').allInnerTexts();
+    expect(pcts.length, sec + ": expected composition rows").toBeGreaterThan(1);
+    const sum = pcts.map((t) => parseInt(t, 10)).reduce((a, b) => a + b, 0);
+    expect(sum, sec + ": composition percentages sum to " + sum + ", not 100").toBe(100);
+  }
+
+  // The chart legend quotes the same shares and must agree with them.
+  for (const side of [0, 1]) {
+    const items = await app.locator('[data-testid="nws-strip"]').nth(side).locator(".nws-legend-item").allInnerTexts();
+    const sum = items.map((t) => Number((t.match(/\((\d+)%\)/) || [0, 0])[1])).reduce((a, b) => a + b, 0);
+    expect(sum, "strip " + side + ": legend percentages sum to " + sum + ", not 100").toBe(100);
+  }
+});
+
+test("period phrasing reads as English in every sentence that names it", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  const want = { "This month": /this month/i, "6 months": /over the last 6 months/i, "All time": /since your records began/i };
+  for (const label of ["This month", "6 months", "All time"]) {
+    await app.locator(".nws-window button", { hasText: label }).first().click();
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+    const delta = await app.locator('[data-testid="nw-delta"]').innerText();
+    const takeaway = await app.locator('[data-testid="nw-takeaway"]').innerText();
+    const title = await app.locator('[data-testid="nw-delta"]').getAttribute("title");
+
+    for (const [what, text] of [["delta", delta], ["takeaway", takeaway], ["delta title", title]]) {
+      // The period control's CAPTION must never be dropped raw into a sentence:
+      // "over This month", "over All time", "across All time".
+      expect(text, label + ": " + what + " interpolates the button caption - " + text)
+        .not.toMatch(/\b(over|across)\s+(This month|All time|\d+ months)\b/);
+      // And no sentence may end up with a doubled preposition.
+      expect(text, label + ": " + what + " has a broken preposition - " + text).not.toMatch(/\b(over|across)\s+(over|across)\b/);
+    }
+    expect(delta, label + ": delta should carry a sentence-fit phrase").toMatch(want[label]);
+  }
+  await app.locator(".nws-window button", { hasText: "6 months" }).first().click();
+});
+
+test("the projection shows its working, and the freshness list is data not prose", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await allTime(app);
+  try {
+    // A projection is the one figure here that is not a fact, so its method is
+    // inspectable through the page's existing "?" idiom rather than being static
+    // text asking to be trusted.
+    const btn = app.locator('[data-testid="nws-explain-pace-btn"]').first();
+    if (await btn.count()) {
+      await expect(btn).toBeVisible();
+      await btn.focus();
+      await expect(btn).toBeFocused();
+      await app.keyboard.press("Enter");
+      const pop = app.locator('[data-testid="nws-explain-pace-pop"]').first();
+      await expect(pop).toBeVisible();
+      const text = await pop.innerText();
+      expect(text, "must state the lookback").toMatch(/last \d+ months/i);
+      expect(text, "must state the average monthly change").toMatch(/a month/i);
+      expect(text, "must say what the average counts").toMatch(/valu|currency/i);
+      expect(text, "must frame itself as a scenario, not a promise").toMatch(/scenario|not a forecast/i);
+      expect(text, "must not promise").not.toMatch(/guarantee|you will\b/i);
+      await app.keyboard.press("Escape");
+    }
+
+    // Nine stale accounts are DATA. They were nine near-identical sentences.
+    await app.locator('[data-testid="nws-dq-btn"]').click();
+    const pop = app.locator('[data-testid="nws-dq-pop"]');
+    await expect(pop).toBeVisible();
+    const staleRows = pop.locator('[data-testid="nws-dq-stale"]');
+    if (await staleRows.count()) {
+      await expect(pop.locator('[data-testid="nws-dq-stale-table"]')).toBeVisible();
+      // Ranked oldest first, so the reader works top-down.
+      const ages = await staleRows.locator("td:nth-child(3)").allInnerTexts();
+      const days = ages.map((t) => (/never/i.test(t) ? Infinity : parseInt(t, 10)));
+      for (let i = 1; i < days.length; i++) {
+        expect(days[i], "stale accounts must be ranked oldest first").toBeLessThanOrEqual(days[i - 1]);
+      }
+      // A guided way to act on them, not just a link to everything.
+      await expect(pop.locator('[data-testid="nws-dq-confirm"]')).toBeVisible();
+    }
+    // The judgement about the dominant valuation stays PROSE - that one is worth
+    // a sentence even though the nine above are not.
+    const manual = pop.locator('[data-testid="nws-dq-manual"]');
+    if (await manual.count()) {
+      expect((await manual.innerText()).length, "the valuation note is a judgement, kept as prose").toBeGreaterThan(40);
+    }
+    await app.keyboard.press("Escape");
   } finally {
     await sixMonths(app);
   }
