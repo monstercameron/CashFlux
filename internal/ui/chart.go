@@ -36,6 +36,14 @@ type AreaChartProps struct {
 // AreaChart renders a filled area sparkline from a value series using the pure
 // internal/chart geometry: a soft top-to-bottom gradient fill under a stroked
 // line. Stretches to its container width (non-uniform scaling, like the mockup).
+//
+// AXIS POLICY (UI/UX task #33): charts split into two classes and each keeps
+// one treatment. TREND-class charts (this component — hero/net-worth/debt
+// sparklines) are axis-free: HTML period captions below (Labels) and exact
+// values on hover (ValueLabels) — pass BOTH so a trend is never unreadable.
+// OPERATIONAL charts (the planning cash-runway, cash-flow bars) carry labeled
+// axes/gridlines, because users act on their absolute values. Don't add SVG
+// axis text here, and don't strip the axes there.
 func AreaChart(props AreaChartProps) uic.Node {
 	w, h := props.Width, props.Height
 	if w == 0 {

@@ -65,7 +65,7 @@ func registerDpType() {
 	// .t-caption carried a size (12px) but no colour, inheriting whatever faint
 	// parent it sat under; anchor it to a legible dim so captions never fade out.
 	rule(".t-caption",
-		fontSize("0.78rem"), // ~12.5px, mid-band
+		fontSize("var(--type-12)"), // mid-band, landed on the type scale (task #32)
 		color("var(--text-dim)"),
 	)
 }

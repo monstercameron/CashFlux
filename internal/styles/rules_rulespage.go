@@ -35,7 +35,7 @@ func registerRulesSurface() {
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 	rule(".rule-figure-sub",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-dim)"),
 		prop("white-space", "nowrap"),
 	)
@@ -88,7 +88,7 @@ func registerRulesSurface() {
 	)
 	rule(".cond-slots > legend",
 		prop("padding", "0"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("color", "var(--text-dim)"),
 		prop("margin-bottom", "0.15rem"),
@@ -96,6 +96,14 @@ func registerRulesSurface() {
 	rule(".cond-slots > .muted",
 		prop("margin", "0 0 0.4rem"),
 	)
+	// Any SVG <text> inherits the app face (UI/UX task #33): third-party or
+	// future chart code that emits SVG text would otherwise fall back to the
+	// UA's 10px sans-serif (the review caught exactly that on v1.2.3 charts).
+	// Presentation attributes lose to CSS, so this is a safe blanket.
+	rule("#main svg text",
+		prop("font-family", "inherit"),
+	)
+
 	// An enabled slot's editors sit in one tidy field/op/value row that wraps on
 	// narrow widths instead of stacking full-width blocks.
 	rule(".cond-slot-body",
@@ -135,7 +143,7 @@ func registerRulesSurface() {
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--accent)"),
 		prop("color", "var(--accent)"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 		prop("font-weight", "700"),
 	)
 	rule(".rule-chain-body",
@@ -150,10 +158,10 @@ func registerRulesSurface() {
 	)
 	rule(".rule-chain-cat",
 		prop("color", "var(--text-dim)"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 	)
 	rule(".rule-chain-warn",
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("flex-basis", "100%"),
 	)
 	rule(".rule-chain-item.rule-chain-shadowed .rule-chain-match",
