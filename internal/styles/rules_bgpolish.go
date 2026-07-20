@@ -24,7 +24,7 @@ func registerBgPolish() {
 		color("var(--text)"),
 	)
 	rule(".bgattn-sub",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 	)
 	// One problem row: name + figures on the left, a status pill and one action right.
@@ -63,7 +63,7 @@ func registerBgPolish() {
 		prop("white-space", "nowrap"),
 	)
 	rule(".bgattn-nums",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 	)
 	rule(".bgattn-over",
@@ -73,12 +73,12 @@ func registerBgPolish() {
 	// Status pill — small, uppercase, tone-keyed.
 	rule(".bgattn-pill",
 		flexShrink("0"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
 		padding("0.15rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	rule(".bgattn-pill.is-over",
 		background("rgba(216,113,111,0.18)"),

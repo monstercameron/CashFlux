@@ -41,7 +41,7 @@ func registerFieldsSurface() {
 		prop("flex-wrap", "wrap"),
 	)
 	rule(".fld-kicker",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.14em"),
 		prop("text-transform", "uppercase"),
@@ -49,7 +49,7 @@ func registerFieldsSurface() {
 	)
 	rule(".fld-reg-count",
 		prop("font-family", mono),
-		prop("font-size", "0.74rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.6"),
 	)
 	rule(".fld-reg-lede",
@@ -78,16 +78,16 @@ func registerFieldsSurface() {
 	)
 	rule(".fld-group-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
+		prop("font-size", "var(--type-18)"),
 		prop("font-weight", "600"),
 		prop("margin", "0"),
 	)
 	rule(".fld-group-count",
 		prop("font-family", mono),
-		prop("font-size", "0.74rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--accent)"),
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 35%, transparent)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0 0.45rem"),
 		prop("line-height", "1.35"),
 	)
@@ -96,7 +96,7 @@ func registerFieldsSurface() {
 		prop("background", "none"),
 		prop("border", "none"),
 		prop("padding", "0"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("color", "var(--accent)"),
 		prop("cursor", "pointer"),
@@ -116,16 +116,16 @@ func registerFieldsSurface() {
 		prop("padding", "1.05rem 0"),
 	)
 	rule(".fld-undef-label",
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("opacity", "0.6"),
 	)
 	rule(".fld-undef-chip",
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("color", "inherit"),
 		prop("background", "none"),
 		prop("border", "1px dashed var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0.2rem 0.7rem"),
 		prop("cursor", "pointer"),
 		prop("opacity", "0.8"),
@@ -161,7 +161,7 @@ func registerFieldsSurface() {
 	// The warning reads in normal fg for contrast safety on both themes; the
 	// danger tone lives on the destructive button itself.
 	rule(".fld-confirm-msg",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("opacity", "0.85"),
 	)
 	rule(".fld-confirm-del",
@@ -170,7 +170,7 @@ func registerFieldsSurface() {
 		prop("color", "var(--danger)"),
 		prop("background", "none"),
 		prop("border", "1px solid var(--danger)"),
-		prop("border-radius", "6px"),
+		prop("border-radius", "var(--radius-md)"),
 		prop("padding", "0.2rem 0.6rem"),
 		prop("cursor", "pointer"),
 	)
@@ -183,7 +183,7 @@ func registerFieldsSurface() {
 		prop("color", "inherit"),
 		prop("background", "none"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "6px"),
+		prop("border-radius", "var(--radius-md)"),
 		prop("padding", "0.2rem 0.6rem"),
 		prop("cursor", "pointer"),
 		prop("opacity", "0.85"),
@@ -199,7 +199,7 @@ func registerFieldsSurface() {
 		prop("text-transform", "uppercase"),
 		prop("text-align", "center"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "4px"),
+		prop("border-radius", "var(--radius-sm)"),
 		prop("padding", "0.22rem 0.2rem"),
 		prop("opacity", "0.8"),
 		prop("white-space", "nowrap"),
@@ -214,7 +214,7 @@ func registerFieldsSurface() {
 		prop("font-size", "0.92rem"),
 	)
 	rule(".fld-req",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.06em"),
 		prop("text-transform", "uppercase"),
@@ -232,15 +232,15 @@ func registerFieldsSurface() {
 		prop("opacity", "0.65"),
 	)
 	rule(".fld-opts",
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.55"),
 	)
 	rule(".fld-var",
 		prop("font-family", mono),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--accent)"),
 		prop("background", "color-mix(in srgb, var(--accent) 10%, transparent)"),
-		prop("border-radius", "4px"),
+		prop("border-radius", "var(--radius-sm)"),
 		prop("padding", "0.18rem 0.4rem"),
 		prop("white-space", "nowrap"),
 	)
@@ -256,12 +256,12 @@ func registerFieldsSurface() {
 	)
 	rule(".fld-comp-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
+		prop("font-size", "var(--type-18)"),
 		prop("font-weight", "600"),
 		prop("margin", "0"),
 	)
 	rule(".fld-comp-lede",
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("line-height", "1.5"),
 		prop("opacity", "0.65"),
 		prop("margin", "0.4rem 0 1rem"),
@@ -277,7 +277,7 @@ func registerFieldsSurface() {
 		prop("margin-bottom", "0.85rem"),
 	)
 	rule(".fld-lbl",
-		prop("font-size", "0.66rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.1em"),
 		prop("text-transform", "uppercase"),
@@ -287,7 +287,7 @@ func registerFieldsSurface() {
 		prop("width", "100%"),
 	)
 	rule(".fld-hint",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("opacity", "0.55"),
 	)
 
@@ -308,7 +308,7 @@ func registerFieldsSurface() {
 		prop("opacity", "0.5"),
 	)
 	rule(".fld-foot-line",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("line-height", "1.45"),
 		prop("opacity", "0.78"),
 		prop("margin", "0"),

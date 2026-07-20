@@ -22,13 +22,13 @@ func registerLane3Dashboard() {
 		gap("0.25rem"),
 	)
 	rule(".dash-preset-desc",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		lineHeight("1.3"),
 		color("var(--text-dim)"),
 		maxWidth("22rem"),
 	)
 	rule(".dash-preset-sub",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		lineHeight("1.25"),
 		color("var(--text-faint)"),
 		maxWidth("22rem"),

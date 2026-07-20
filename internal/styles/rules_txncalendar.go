@@ -34,7 +34,7 @@ func registerTxnCalendar() {
 		prop("min-height", "84px"),
 		prop("padding", "6px 8px"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "var(--bg-card)"),
 		prop("text-align", "left"),
 		prop("cursor", "pointer"),
@@ -58,7 +58,7 @@ func registerTxnCalendar() {
 		prop("box-shadow", "inset 0 0 0 1px var(--accent)"),
 	)
 	rule(".txn-cal-net",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -77,7 +77,7 @@ func registerTxnCalendar() {
 	// Ghost: a dimmed recurring label projected onto its due date; no interaction.
 	rule(".txn-cal-ghost",
 		prop("display", "block"),
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("line-height", "1.25"),
 		prop("overflow", "hidden"),
 		prop("text-overflow", "ellipsis"),

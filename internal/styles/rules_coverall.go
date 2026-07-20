@@ -30,7 +30,7 @@ func registerCoverAllSurface() {
 		flexWrap("wrap"),
 		padding("0.6rem 0.75rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".cover-all-row-main",
@@ -47,7 +47,7 @@ func registerCoverAllSurface() {
 		whiteSpace("nowrap"),
 	)
 	rule(".cover-all-row-over",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".cover-all-row-src",

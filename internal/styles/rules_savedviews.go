@@ -35,7 +35,7 @@ func registerSavedViews() {
 	)
 	rule(".saved-views-empty",
 		padding("0.5rem"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".saved-views-list",
 		display("flex"),
@@ -63,7 +63,7 @@ func registerSavedViews() {
 		background("transparent"),
 		color("var(--text)"),
 		cursor("pointer"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		textAlign("left"),
 	)
 	rule(".saved-view-apply:hover",
@@ -84,10 +84,10 @@ func registerSavedViews() {
 		gap("0.4rem"),
 		marginTop("0.35rem"),
 		padding("0.4rem 0.5rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		background("var(--accent-dim)"),
 		color("var(--text)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".saved-view-alert-form",
 		display("flex"),
@@ -95,7 +95,7 @@ func registerSavedViews() {
 		gap("0.35rem"),
 		marginTop("0.35rem"),
 		padding("0.4rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".saved-views-form",
@@ -186,7 +186,7 @@ func registerSavedViews() {
 		whiteSpace("nowrap"),
 	)
 	rule(".saved-view-tile-sub",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		prop("font-variant-numeric", "tabular-nums"),
 		maxWidth("100%"),
@@ -199,7 +199,7 @@ func registerSavedViews() {
 		alignItems("center"),
 		gap("0.15rem"),
 		flexShrink("0"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--accent)"),
 	)

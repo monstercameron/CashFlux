@@ -45,7 +45,7 @@ func registerStudioTabs() {
 	rule(".wman-count",
 		prop("margin-left", "auto"),
 		prop("font-family", mono),
-		prop("font-size", "0.74rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.6"),
 	)
 
@@ -57,7 +57,7 @@ func registerStudioTabs() {
 		prop("align-items", "center"),
 		prop("padding", "0.5rem 0.35rem"),
 		prop("border-bottom", "1px solid color-mix(in srgb, var(--text) 8%, transparent)"),
-		prop("border-radius", "8px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("transition", "background 400ms ease"),
 	)
 	rule(".wman-row.is-flash",
@@ -65,7 +65,7 @@ func registerStudioTabs() {
 	)
 	rule(".wman-ord",
 		prop("font-family", mono),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.5"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -90,7 +90,7 @@ func registerStudioTabs() {
 		prop("letter-spacing", "0.08em"),
 		prop("text-transform", "uppercase"),
 		prop("border", "1px dashed var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0.05rem 0.45rem"),
 		prop("opacity", "0.7"),
 		prop("white-space", "nowrap"),
@@ -138,7 +138,7 @@ func registerStudioTabs() {
 		prop("position", "static"),
 	)
 	rule(".wman-aside-label",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.14em"),
 		prop("text-transform", "uppercase"),
@@ -151,7 +151,7 @@ func registerStudioTabs() {
 		prop("gap", "5px"),
 		prop("padding", "0.6rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("background", "color-mix(in srgb, var(--text) 2.5%, transparent)"),
 	)
 	rule(".wman-map-tile",
@@ -186,7 +186,7 @@ func registerStudioTabs() {
 		prop("-webkit-box-orient", "vertical"),
 	)
 	rule(".wman-map-hint",
-		prop("font-size", "0.74rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.55"),
 		prop("margin", "0"),
 	)
@@ -264,7 +264,7 @@ func registerStudioTabs() {
 		prop("opacity", "0.55"),
 	)
 	rule(".spg-open",
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("color", "var(--accent)"),
 		prop("text-decoration", "none"),
@@ -289,12 +289,12 @@ func registerStudioTabs() {
 	)
 	rule(".spg-comp-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
+		prop("font-size", "var(--type-18)"),
 		prop("font-weight", "600"),
 		prop("margin", "0"),
 	)
 	rule(".spg-comp-lede",
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("line-height", "1.5"),
 		prop("opacity", "0.65"),
 		prop("margin", "0.4rem 0 1rem"),
@@ -338,14 +338,14 @@ func registerStudioTabs() {
 	)
 	rule(".wman-section-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.2rem"),
+		prop("font-size", "var(--type-20)"),
 		prop("font-weight", "600"),
 		prop("border-left", "3px solid var(--accent)"),
 		prop("padding-left", "0.6rem"),
 		prop("margin", "0 0 0.35rem"),
 	)
 	rule(".wman-section-lede",
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 		prop("opacity", "0.65"),
 		prop("margin", "0 0 1rem"),
 		prop("max-width", "42rem"),

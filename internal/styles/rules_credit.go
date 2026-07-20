@@ -23,7 +23,7 @@ func registerCreditSurface() {
 		prop("gap", "0.45rem"),
 		prop("padding", "0.3rem 0.7rem"),
 		prop("border", "1px dashed var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("font-size", "0.75rem"),
 		prop("color", "var(--text-dim)"),
 		prop("opacity", "0.85"),

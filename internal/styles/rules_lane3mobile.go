@@ -190,7 +190,7 @@ func registerLane3Mobile() {
 	)
 	ruleMedia("(max-width: 640px)", ".txn-table tbody tr.row > td:nth-child(2), .txn-table tbody tr.row > td.td-acct, .txn-table tbody tr.row > td.td-cat",
 		order("3"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		color("var(--text-dim)"),
 		flex("0 1 auto"),
 		whiteSpace("nowrap"),
@@ -212,7 +212,7 @@ func registerLane3Mobile() {
 		minWidth("5.5rem"),
 	)
 	ruleMedia("(max-width: 360px)", ".txn-table tbody tr.row > td.td-amount",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	// The ⋯ keeps its 44px target by floating right-center of the card instead
 	// of consuming a text line (the row padding clears its column). Centered

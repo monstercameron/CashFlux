@@ -35,7 +35,7 @@ func registerCategoriesSurface() {
 		prop("font-size", "0.95rem"),
 	)
 	rule(".cat-figure-sub",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-dim)"),
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("white-space", "nowrap"),
@@ -48,9 +48,9 @@ func registerCategoriesSurface() {
 	// Deductible tag: neutral metadata chrome (mirrors .rpt-new-tag).
 	rule(".cat-tag",
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0 0.45rem"),
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.05em"),
 		prop("color", "var(--text-dim)"),

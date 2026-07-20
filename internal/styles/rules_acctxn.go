@@ -32,14 +32,14 @@ func registerAcctxn() {
 		alignItems("center"),
 		gap("0.15rem 0.85rem"),
 		padding("0.35rem 0.1rem 0.1rem"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".txn-legend-label",
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		textTransform("uppercase"),
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 	)
 	rule(".txn-legend-item",
 		display("inline-flex"),

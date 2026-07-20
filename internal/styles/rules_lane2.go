@@ -23,7 +23,7 @@ func registerLane2Dashboard() {
 		marginBottom("0.25rem"),
 	)
 	rule(".home-hero--focused .home-hero-greeting",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 	)
 	rule(".home-hero--focused .home-hero-nw-fig",
 		fontSize("1.9rem"),
@@ -60,11 +60,11 @@ func registerLane2Dashboard() {
 		marginTop("0.6rem"),
 		padding("0.5rem 0.75rem"),
 		border("1px dashed var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".dash-daily-nudge-text",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 	)
 
@@ -78,7 +78,7 @@ func registerLane2Dashboard() {
 		border("none"),
 		background("transparent"),
 		color("var(--accent)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		cursor("pointer"),
 	)
 	rule(".dash-view-all:hover",
@@ -89,7 +89,7 @@ func registerLane2Dashboard() {
 	// between the hero and the bento, in the catch-up card's vocabulary.
 	rule(".resume-card",
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("var(--bg-card)"),
 		padding("0.7rem 0.9rem"),
 		margin("0.6rem 0"),
@@ -125,7 +125,7 @@ func registerLane2Dashboard() {
 		flexWrap("wrap"),
 	)
 	rule(".resume-row-text",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 	)
 

@@ -63,7 +63,7 @@ func registerTodoPolish() {
 		minWidth("1.1rem"),
 		marginLeft("0.3rem"),
 		padding("0 0.3rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize("0.65rem"),
 		fontWeight("700"),
 		lineHeight("1.4"),
@@ -82,7 +82,7 @@ func registerTodoPolish() {
 	rule(".todo-suggest",
 		marginTop("0.75rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
 	rule(".todo-suggest-head",
@@ -95,7 +95,7 @@ func registerTodoPolish() {
 		border("0"),
 		color("var(--text)"),
 		fontWeight("600"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		cursor("pointer"),
 		textAlign("left"),
 	)

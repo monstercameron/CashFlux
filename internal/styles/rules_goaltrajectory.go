@@ -30,7 +30,7 @@ func registerGoalTrajectorySurface() {
 	// Heading: a small uppercase label, matching the goal figures' key style so the
 	// section reads as part of the same card language.
 	rule(".gtj-head",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		letterSpacing("0.09em"),
 		prop("text-transform", "uppercase"),
 		fontWeight("600"),
@@ -50,9 +50,9 @@ func registerGoalTrajectorySurface() {
 		alignItems("center"),
 		flexShrink("0"),
 		padding("0.08rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		whiteSpace("nowrap"),
 		color("var(--text-dim)"),
@@ -79,7 +79,7 @@ func registerGoalTrajectorySurface() {
 		position("relative"),
 		height("8px"),
 		marginTop("0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, var(--text) 9%, transparent)"),
 	)
 	rule(".gtj-rail-fill",
@@ -87,7 +87,7 @@ func registerGoalTrajectorySurface() {
 		left("0"),
 		top("0"),
 		bottom("0"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		minWidth("6px"),
 	)
 	rule(".gtj-rail-fill.is-ahead, .gtj-rail-fill.is-done",
@@ -130,7 +130,7 @@ func registerGoalTrajectorySurface() {
 		justifyContent("space-between"),
 		gap("0.75rem"),
 		marginTop("0.5rem"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text-dim)"),
 	)
@@ -138,7 +138,7 @@ func registerGoalTrajectorySurface() {
 	// ETA readout: a plain, readable one-liner. The target month reads in the accent
 	// so the "when" pops without shouting.
 	rule(".gtj-eta",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		lineHeight("1.4"),
 		color("var(--text)"),
 	)

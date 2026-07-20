@@ -17,7 +17,7 @@ func registerRecapSurface() {
 		gap("0.75rem"),
 		padding("0.85rem 1rem"),
 		borderLeft("3px solid var(--accent)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--accent) 5%, transparent)"),
 	)
 
@@ -55,7 +55,7 @@ func registerRecapSurface() {
 		display("flex"),
 		alignItems("center"),
 		gap("0.3rem"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.04em"),
 		textTransform("uppercase"),
@@ -74,7 +74,7 @@ func registerRecapSurface() {
 	rule(".cf-recap-val.good", color("var(--accent)"))
 	rule(".cf-recap-val.bad", color("var(--danger)"))
 	rule(".cf-recap-sub",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),

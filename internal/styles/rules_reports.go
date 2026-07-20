@@ -34,7 +34,7 @@ func registerReportsSurface() {
 	)
 	rule(".rpt-hero-eyebrow",
 		prop("margin", "0"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 	)
 	rule(".rpt-hero-main",
 		prop("display", "flex"),
@@ -44,7 +44,7 @@ func registerReportsSurface() {
 		prop("gap", "1.25rem"),
 	)
 	rule(".rpt-hero-label",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
@@ -60,7 +60,7 @@ func registerReportsSurface() {
 		prop("gap", "0.3rem"),
 		prop("margin-top", "0.35rem"),
 		prop("padding", "0.1rem 0.55rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("font-size", "0.75rem"),
 		prop("border", "1px solid var(--border)"),
 		prop("background", "var(--bg-elev)"),
@@ -68,7 +68,7 @@ func registerReportsSurface() {
 	rule(".rpt-delta.pos", prop("color", "var(--up, #54b884)"))
 	rule(".rpt-delta.neg", prop("color", "var(--down, #d8716f)"))
 	rule(".rpt-chip-sub",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("margin-top", "0.15rem"),
 	)
 	rule(".rpt-hero-trend", prop("margin", "0"))
@@ -76,7 +76,7 @@ func registerReportsSurface() {
 	// ── Takeaway pull-quote: the one-sentence insight leading a section. ────────
 	rule(".rpt-takeaway",
 		prop("margin", "0 0 0.6rem"),
-		prop("font-size", "1.02rem"),
+		prop("font-size", "var(--type-16)"),
 		prop("font-style", "italic"),
 		prop("border-left", "2px solid var(--accent)"),
 		prop("padding-left", "0.7rem"),
@@ -88,14 +88,14 @@ func registerReportsSurface() {
 		prop("max-width", "100%"),
 		prop("margin-top", "0.3rem"),
 		prop("background", "var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("overflow", "hidden"),
 	)
 	rule(".share-bar-thin", prop("height", "4px"))
 	rule(".share-bar-fill",
 		prop("height", "100%"),
 		prop("background", "var(--accent)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 	)
 
 	// Ranked-row drill buttons: buttons stretch + center by default inside the
@@ -112,9 +112,9 @@ func registerReportsSurface() {
 	// reserved for negative money).
 	rule(".rpt-new-tag",
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0 0.45rem"),
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.05em"),
 	)
@@ -122,7 +122,7 @@ func registerReportsSurface() {
 	// but none now, folded behind a quiet summary line.
 	rule(".rpt-zeroed > summary",
 		prop("cursor", "pointer"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("margin", "0.6rem 0 0.3rem"),
 		prop("opacity", "0.75"),
 	)
@@ -162,7 +162,7 @@ func registerReportsSurface() {
 	)
 	rule(".scope-label",
 		prop("flex", "0 0 7.5rem"),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
 		prop("color", "var(--text-dim)"),
@@ -178,9 +178,9 @@ func registerReportsSurface() {
 		prop("border", "1px solid var(--border)"),
 		prop("background", "transparent"),
 		prop("color", "inherit"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("padding", "0.2rem 0.7rem"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("line-height", "1.4"),
 		prop("cursor", "pointer"),
 		prop("transition", "border-color 120ms ease, background 120ms ease"),
@@ -210,7 +210,7 @@ func registerReportsSurface() {
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("gap", "0.35rem"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("cursor", "pointer"),
 	)
 	rule(".scope-sv-select",

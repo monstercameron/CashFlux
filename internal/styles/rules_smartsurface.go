@@ -29,7 +29,7 @@ func registerSmartSurface() {
 		prop("border-bottom", "1px solid var(--border)"),
 	)
 	rule(".smt-kicker",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.14em"),
 		prop("text-transform", "uppercase"),
@@ -49,14 +49,14 @@ func registerSmartSurface() {
 		prop("letter-spacing", "-0.02em"),
 	)
 	rule(".smt-count-label",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.08em"),
 		prop("text-transform", "uppercase"),
 	)
 	// The agent's voice — a serif editorial line ruled with a soft accent spine.
 	rule(".smt-voice",
-		prop("font-size", "1.2rem"),
+		prop("font-size", "var(--type-20)"),
 		prop("font-style", "italic"),
 		prop("line-height", "1.4"),
 		prop("margin", "0.5rem 0 0"),
@@ -76,7 +76,7 @@ func registerSmartSurface() {
 		prop("gap", "0.15rem"),
 	)
 	rule(".smt-metric-label",
-		prop("font-size", "0.66rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "600"),
 		prop("letter-spacing", "0.1em"),
 		prop("text-transform", "uppercase"),
@@ -115,7 +115,7 @@ func registerSmartSurface() {
 	)
 	rule(".smt-deck .card-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.2rem"),
+		prop("font-size", "var(--type-20)"),
 		prop("font-weight", "600"),
 		prop("border-left", "3px solid var(--accent)"),
 		prop("padding-left", "0.6rem"),

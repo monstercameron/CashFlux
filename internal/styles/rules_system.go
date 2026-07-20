@@ -84,13 +84,13 @@ func registerSystemSurface() {
 	)
 	rule(".rail-foot-hh-name",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("line-height", "1.2"),
 		prop("color", "var(--text-dim)"),
 	)
 	rule(".rail-foot-hh-sub",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("line-height", "1.2"),
 		prop("color", "var(--text-faint)"),
 		prop("font-variant-numeric", "tabular-nums"),
@@ -100,7 +100,7 @@ func registerSystemSurface() {
 		prop("display", "flex"),
 		prop("align-items", "flex-start"),
 		prop("gap", "0.4rem"),
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("line-height", "1.4"),
 		prop("color", "var(--text-dim)"),
 	)
@@ -116,7 +116,7 @@ func registerSystemSurface() {
 		prop("gap", "0.5rem"),
 	)
 	rule(".rail-foot-about",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-faint)"),
 		prop("text-decoration", "none"),
 		prop("transition", "color 120ms ease"),
@@ -126,7 +126,7 @@ func registerSystemSurface() {
 		prop("text-decoration", "underline"),
 	)
 	rule(".rail-foot .app-version",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-faint)"),
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("letter-spacing", "0.02em"),

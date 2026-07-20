@@ -51,7 +51,7 @@ func registerReportsAnnual() {
 	)
 	rule(".rpta-eyebrow",
 		margin("0"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.14em"),
 		textTransform("uppercase"),
@@ -76,7 +76,7 @@ func registerReportsAnnual() {
 		whiteSpace("nowrap"),
 	)
 	rule(".rpta-verdict-line",
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 		color("var(--text-dim)"),
 		maxWidth("48rem"),
 	)
@@ -94,7 +94,7 @@ func registerReportsAnnual() {
 		borderLeft("2px solid var(--border)"),
 	)
 	rule(".rpta-fig-k",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.08em"),
 		textTransform("uppercase"),
@@ -108,7 +108,7 @@ func registerReportsAnnual() {
 		color("var(--text)"),
 	)
 	rule(".rpta-fig-sub",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 	)
 
 	// ── Toolbar (tabless) ────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ func registerReportsAnnual() {
 		flexWrap("wrap"),
 		padding("0.5rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-card) 92%, transparent)"),
 		prop("backdrop-filter", "blur(6px)"),
 	)
@@ -148,10 +148,10 @@ func registerReportsAnnual() {
 		background("transparent"),
 		fontFamily("inherit"),
 		cursor("pointer"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		color("var(--text-dim)"),
 		textDecoration("none"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		whiteSpace("nowrap"),
 		transition("background 0.12s ease, color 0.12s ease"),
 	)
@@ -162,11 +162,11 @@ func registerReportsAnnual() {
 	rule(".rpta-idx-dot",
 		width("7px"),
 		height("7px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		flexShrink("0"),
 	)
 	rule(".rpta-idx-num",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
@@ -240,14 +240,14 @@ func registerReportsAnnual() {
 		marginTop("0.4rem"),
 	)
 	rule(".rpta-subhead",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		letterSpacing("0.1em"),
 		textTransform("uppercase"),
 		color("var(--text-faint)"),
 	)
 	rule(".rpta-drill",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--accent)"),
 		textDecoration("none"),
 		whiteSpace("nowrap"),
@@ -280,10 +280,10 @@ func registerReportsAnnual() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.1rem 0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px dashed var(--border)"),
 		color("var(--text-dim)"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		whiteSpace("nowrap"),
 		cursor("help"),
@@ -302,14 +302,14 @@ func registerReportsAnnual() {
 	rule(".rpta-fact-bar",
 		position("relative"),
 		height("8px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("color-mix(in srgb, var(--text) 8%, transparent)"),
 	)
 	rule(".rpta-fact-fill",
 		position("absolute"),
 		top("0"), left("0"), bottom("0"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	rule(".rpta-fact-score",
 		fontVariantNumeric("tabular-nums"),
@@ -326,10 +326,10 @@ func registerReportsAnnual() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.3rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--up, #4ea777) 40%, var(--border))"),
 		background("color-mix(in srgb, var(--up, #4ea777) 8%, transparent)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text)"),
 	)
 
@@ -379,7 +379,7 @@ func registerReportsAnnual() {
 		alignItems("center"),
 		gap("1rem"),
 		marginTop("0.5rem"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".rpta-flow-key-item",
@@ -391,7 +391,7 @@ func registerReportsAnnual() {
 		display("inline-block"),
 		width("10px"),
 		height("10px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		flexShrink("0"),
 	)
 	rule(".rpta-flow-key-note",
@@ -434,7 +434,7 @@ func registerReportsAnnual() {
 	)
 	// Histogram scale caption — states what full bar width means.
 	rule(".rpta-hist-scale",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		color("var(--text-faint)"),
 		textAlign("right"),
 		fontStyle("italic"),
@@ -460,7 +460,7 @@ func registerReportsAnnual() {
 	)
 	// Quiet source-page links ("Net worth →") beside metrics.
 	rule(".rpta-src",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-faint)"),
 		textDecoration("none"),
 		whiteSpace("nowrap"),
@@ -478,10 +478,10 @@ func registerReportsAnnual() {
 	rule(".rpta-tag-chip",
 		display("inline-block"),
 		padding("0.05rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-card)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".rpta-tag-delta",
 		fontSize("0.75rem"),
@@ -510,13 +510,13 @@ func registerReportsAnnual() {
 	rule(".rpta-kept-meter",
 		height("3px"),
 		marginTop("0.25rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, var(--border) 60%, transparent)"),
 		overflow("hidden"),
 	)
 	rule(".rpta-kept-fill",
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--up, #4ea777)"),
 	)
 	rule(".rpta-kept-red",
@@ -554,7 +554,7 @@ func registerReportsAnnual() {
 		background("var(--accent)"),
 	)
 	rule(".rpta-wd-day",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		color("var(--text-faint)"),
 	)
 	// Category dots reuse the flow-dot circle at a smaller row scale, inline
@@ -581,9 +581,9 @@ func registerReportsAnnual() {
 		padding("0.3rem 0.7rem"),
 		border("1px solid color-mix(in srgb, var(--accent) 45%, var(--border))"),
 		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		color("var(--text)"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontFamily("inherit"),
 		cursor("pointer"),
 		whiteSpace("nowrap"),
@@ -608,10 +608,10 @@ func registerReportsAnnual() {
 		border("none"),
 		background("transparent"),
 		fontFamily("inherit"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text)"),
 		textAlign("left"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".rpta-hist-btn",
 		cursor("pointer"),
@@ -626,13 +626,13 @@ func registerReportsAnnual() {
 	)
 	rule(".rpta-hist-track",
 		height("14px"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		background("color-mix(in srgb, var(--border) 45%, transparent)"),
 		overflow("hidden"),
 	)
 	rule(".rpta-hist-fill",
 		height("100%"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		prop("opacity", "0.85"),
 	)
 	rule(".rpta-hist-amt",
@@ -673,12 +673,12 @@ func registerReportsAnnual() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".rpta-goal-chip",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.05em"),
 		textTransform("uppercase"),
 		padding("0.1rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 	)
 	rule(".rpta-chip-up",
@@ -700,7 +700,7 @@ func registerReportsAnnual() {
 		position("relative"),
 		height("8px"),
 		marginTop("0.35rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, var(--border) 45%, transparent)"),
 		overflow("hidden"),
 	)
@@ -708,12 +708,12 @@ func registerReportsAnnual() {
 		position("absolute"),
 		inset("0 auto 0 0"),
 		prop("opacity", "0.35"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	rule(".rpta-goal-saved",
 		position("absolute"),
 		inset("0 auto 0 0"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	// Budget adherence strips (§07): twelve month cells per budget.
 	rule(".rpta-bud-rows",
@@ -727,7 +727,7 @@ func registerReportsAnnual() {
 		prop("grid-template-columns", "minmax(9rem, 16rem) 1fr minmax(9rem, auto)"),
 		alignItems("center"),
 		gap("0.75rem"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".rpta-bud-cells",
 		display("flex"),
@@ -762,7 +762,7 @@ func registerReportsAnnual() {
 		fontWeight("700"),
 		letterSpacing("0.07em"),
 		padding("0.1rem 0.4rem"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		background("color-mix(in srgb, var(--down, #d8716f) 14%, transparent)"),
 		color("var(--down, #d8716f)"),
 		marginRight("0.5rem"),
@@ -772,13 +772,13 @@ func registerReportsAnnual() {
 	rule(".rpta-bar-red",
 		height("3px"),
 		marginTop("0.25rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, var(--border) 60%, transparent)"),
 		overflow("hidden"),
 	)
 	rule(".rpta-bar-red-fill",
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--down, #d8716f)"),
 	)
 	rule(".rpta-flow-side",
@@ -792,13 +792,13 @@ func registerReportsAnnual() {
 	rule(".rpta-table",
 		width("100%"),
 		prop("border-collapse", "collapse"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".rpta-table th",
 		textAlign("right"),
 		padding("0.35rem 0.6rem"),
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -864,7 +864,7 @@ func registerReportsAnnual() {
 		borderBottom("1px solid var(--border)"),
 	)
 	rule(".rpta-cat-h, .rpta-cat-h-name",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -914,7 +914,7 @@ func registerReportsAnnual() {
 	rule(".rpta-cat-avg, .rpta-cat-share",
 		fontVariantNumeric("tabular-nums"),
 		textAlign("right"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".rpta-cat-spark",
@@ -923,7 +923,7 @@ func registerReportsAnnual() {
 		color("var(--text-dim)"),
 	)
 	rule(".rpta-cat-delta",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontVariantNumeric("tabular-nums"),
 		textAlign("right"),
 		whiteSpace("nowrap"),
@@ -931,7 +931,7 @@ func registerReportsAnnual() {
 	rule(".rpta-zeroed summary",
 		cursor("pointer"),
 		color("var(--text-dim)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		padding("0.5rem 0"),
 	)
 
@@ -995,7 +995,7 @@ func registerReportsAnnual() {
 		gap("1rem"),
 		padding("0.9rem 1rem"),
 		border("1px solid color-mix(in srgb, var(--accent) 25%, var(--border))"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("color-mix(in srgb, var(--accent) 4%, transparent)"),
 	)
 	rule(".rpta-plan-n",
@@ -1015,14 +1015,14 @@ func registerReportsAnnual() {
 	rule(".rpta-plan-action",
 		fontWeight("600"),
 		color("var(--text)"),
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 	)
 	rule(".rpta-plan-detail",
 		fontSize("0.88rem"),
 		color("var(--text-dim)"),
 	)
 	rule(".rpta-plan-link",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--accent)"),
 		textDecoration("none"),
 		fontWeight("600"),
@@ -1052,7 +1052,7 @@ func registerReportsAnnual() {
 		prop("max-width", "23rem"),
 		prop("padding", "0.65rem 0.8rem"),
 		prop("gap", "0.35rem"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("white-space", "normal"),
 		prop("font-family", "inherit"),
 	)

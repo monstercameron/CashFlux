@@ -36,7 +36,7 @@ func registerTodoPrioSurface() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.4rem"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text-dim)"),

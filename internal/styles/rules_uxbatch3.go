@@ -21,7 +21,7 @@ func registerUxbatch3() {
 	// Tighter than the expanded legend (no reassurance note), sitting right under the bar.
 	rule(".bento-goals .goal-legend-compact",
 		margin("0.35rem 0 0.15rem"),
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		gap("0.15rem 0.8rem"),
 	)
 
@@ -52,7 +52,7 @@ func registerUxbatch3() {
 	rule(".hlt-meter",
 		position("relative"),
 		height("8px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("visible"),
 		background(track),
 		margin("0.5rem 0 0.35rem"),
@@ -62,7 +62,7 @@ func registerUxbatch3() {
 		top("0"),
 		left("0"),
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		transition("width 0.25s ease"),
 	)
 	rule(".hlt-meter-fill.is-good",

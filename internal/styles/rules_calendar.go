@@ -69,7 +69,7 @@ func registerCalendarSurface() {
 		flex("1 1 auto"),
 		textAlign("center"),
 		fontWeight("600"),
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 		letterSpacing("-0.01em"),
 		color("var(--text)"),
 		whiteSpace("nowrap"),
@@ -85,7 +85,7 @@ func registerCalendarSurface() {
 	rule(".uical-weekday",
 		prop("text-transform", "uppercase"),
 		textAlign("center"),
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		letterSpacing("0.08em"),
 		fontWeight("600"),
 		color(faint),
@@ -112,7 +112,7 @@ func registerCalendarSurface() {
 		minHeight("var(--uical-cell-h)"),
 		padding("0.35rem 0.4rem"),
 		border(hair),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
 		color("var(--text)"),
 		textAlign("left"),
@@ -165,7 +165,7 @@ func registerCalendarSurface() {
 
 	// The day number chip and the optional content well beneath it.
 	rule(".uical-daynum",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		lineHeight("1.1"),
 		fontVariantNumeric("tabular-nums"),
@@ -177,7 +177,7 @@ func registerCalendarSurface() {
 		gap("0.15rem"),
 		minWidth("0"),
 		marginTop("auto"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		color(faint),
 	)
 	rule(".uical-daycontent:empty",
@@ -187,10 +187,10 @@ func registerCalendarSurface() {
 	// Compact variant tightens padding + type so a date-picker footprint stays snug.
 	rule(".uical.is-compact .uical-cell",
 		padding("0.2rem 0.25rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".uical.is-compact .uical-daynum",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 	)
 	rule(".uical.is-compact .uical-daycontent",
 		fontSize("0.62rem"),

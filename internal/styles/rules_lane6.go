@@ -64,11 +64,11 @@ func registerLane6Fixes() {
 		alignItems("center"),
 		gap("0.25rem"),
 		padding("0.15rem 0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".chat-privacy-badge:hover",
@@ -76,7 +76,7 @@ func registerLane6Fixes() {
 		color("var(--text)"),
 	)
 	rule(".chat-dock-scope",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		color("var(--text-faint)"),
 	)
 	// The aside close button and the header's Notes trigger exist for the narrow
@@ -144,9 +144,9 @@ func registerLane6Fixes() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		color("var(--text-dim)"),
@@ -172,9 +172,9 @@ func registerLane6Fixes() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		color("var(--text-dim)"),
@@ -272,7 +272,7 @@ func registerLane6Fixes() {
 	// near-opaque card-toned backdrop restores a known background.
 	rule(".goal-card-loader .budget-limit-btn",
 		background("color-mix(in srgb, var(--bg-card) 88%, transparent)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		padding("0 0.3rem"),
 	)
 	// Annual-report sparkline captions render over the chart's gradient wash;

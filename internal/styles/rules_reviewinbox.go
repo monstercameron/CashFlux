@@ -27,7 +27,7 @@ func registerReviewInboxSurface() {
 	)
 	rule(".rvw-progress-track",
 		height("6px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		overflow("hidden"),
 	)
@@ -35,14 +35,14 @@ func registerReviewInboxSurface() {
 		height("100%"),
 		minWidth("4px"), // never render as an invisible sliver at "1 of N"
 		background("var(--accent)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		transition("width .2s ease"),
 	)
 
 	// A quiet cross-link under the progress bar to /rules when ready-made rule
 	// suggestions exist — low-key, one small line, with an inline accent link.
 	rule(".rvw-rules-link",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".rvw-rules-link-btn",
@@ -50,7 +50,7 @@ func registerReviewInboxSurface() {
 		background("transparent"),
 		padding("0"),
 		color("var(--accent)"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		textDecoration("underline"),
@@ -63,7 +63,7 @@ func registerReviewInboxSurface() {
 		gap("0.5rem"),
 		padding("1rem"),
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("var(--bg-card)"),
 	)
 	rule(".rvw-card-top",
@@ -73,12 +73,12 @@ func registerReviewInboxSurface() {
 		gap("0.5rem"),
 	)
 	rule(".rvw-reason",
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.04em"),
 		textTransform("uppercase"),
 		padding("0.1rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".rvw-reason.is-uncat",
@@ -95,7 +95,7 @@ func registerReviewInboxSurface() {
 		whiteSpace("nowrap"),
 	)
 	rule(".rvw-payee",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("700"),
 		color("var(--text)"),
 		overflowWrap("anywhere"),
@@ -103,7 +103,7 @@ func registerReviewInboxSurface() {
 	// The raw bank descriptor, shown small + muted under the cleaned name so the
 	// user still sees the literal string without it dominating the card.
 	rule(".rvw-rawpayee",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		fontFamily("var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"),
 		overflowWrap("anywhere"),
@@ -122,7 +122,7 @@ func registerReviewInboxSurface() {
 	)
 	rule(".rvw-amount.is-income", color("var(--accent)"))
 	rule(".rvw-acct",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 
@@ -133,7 +133,7 @@ func registerReviewInboxSurface() {
 		gap("0.5rem"),
 	)
 	rule(".rvw-assign-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.05em"),
 		textTransform("uppercase"),
@@ -145,11 +145,11 @@ func registerReviewInboxSurface() {
 		alignSelf("flex-start"),
 		gap("0.4rem"),
 		padding("0.35rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--accent) 40%, transparent)"),
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 		color("var(--accent)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background .12s ease"),
@@ -172,11 +172,11 @@ func registerReviewInboxSurface() {
 		alignItems("center"),
 		gap("0.4rem"),
 		padding("0.35rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--accent) 45%, transparent)"),
 		background("transparent"),
 		color("var(--accent)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background .12s ease"),
@@ -189,7 +189,7 @@ func registerReviewInboxSurface() {
 		pointerEvents("none"),
 	)
 	rule(".rvw-ai-err",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--danger)"),
 	)
 
@@ -198,7 +198,7 @@ func registerReviewInboxSurface() {
 		display("flex"),
 		alignItems("center"),
 		gap("0.45rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
 	)
@@ -240,12 +240,12 @@ func registerReviewInboxSurface() {
 		color("var(--accent)"),
 	)
 	rule(".rvw-done-title",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("700"),
 		color("var(--text)"),
 	)
 	rule(".rvw-done-sub",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 		maxWidth("32ch"),
 	)

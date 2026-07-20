@@ -34,6 +34,6 @@ func registerAcctDetails() {
 	rule(".acct-set-institution",
 		prop("align-self", "flex-start"),
 		prop("text-align", "left"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 }

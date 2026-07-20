@@ -34,7 +34,7 @@ func registerAnnualGridSurface() {
 		gap("0.55rem"),
 		padding("0.5rem 0.8rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
 		color("var(--text)"),
 		textAlign("left"),
@@ -64,7 +64,7 @@ func registerAnnualGridSurface() {
 	rule(".budget-annualgrid-toggle-hint",
 		marginLeft("auto"),
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".budget-annualgrid-year",
@@ -86,7 +86,7 @@ func registerAnnualGridSurface() {
 		overflowX("auto"),
 		maxWidth("100%"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		scrollbarWidth("thin"),
 	)
 	rule(".budget-annualgrid-table",
@@ -95,7 +95,7 @@ func registerAnnualGridSurface() {
 		prop("border-spacing", "0"),
 		width("max-content"),
 		minWidth("100%"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 
@@ -108,7 +108,7 @@ func registerAnnualGridSurface() {
 		padding("0.5rem 0.7rem"),
 		textAlign("right"),
 		whiteSpace("nowrap"),
-		fontSize("0.66rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.05em"),
 		textTransform("uppercase"),
@@ -212,7 +212,7 @@ func registerAnnualGridSurface() {
 		color("inherit"),
 		font("inherit"),
 		cursor("pointer"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 	)
 	rule(".budget-annualgrid-cell:hover",
 		background("color-mix(in srgb, var(--accent) 14%, transparent)"),

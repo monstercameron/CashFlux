@@ -25,7 +25,7 @@ func registerGoalStatesWidget() {
 		gap("0.15rem"),
 		padding("0.6rem 0.4rem"),
 		border("1px solid var(--border-subtle)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 		color("var(--text)"),
 		font("inherit"),

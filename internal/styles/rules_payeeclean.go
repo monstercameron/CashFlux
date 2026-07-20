@@ -18,11 +18,11 @@ func registerPayeeCleanSurface() {
 		marginTop("0.25rem"),
 		padding("0.5rem 0.7rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 		color("var(--text)"),
 		fontFamily("var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		overflowWrap("anywhere"),
 	)
 	// The clean-name input fills the row; the AI suggest button trails it.
@@ -54,7 +54,7 @@ func registerPayeeCleanSurface() {
 		display("flex"),
 		flexDirection("column"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
 	rule(".pclean-history-item",
@@ -64,7 +64,7 @@ func registerPayeeCleanSurface() {
 		gap("0.6rem"),
 		padding("0.4rem 0.6rem"),
 		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".pclean-history-list .pclean-history-item:first-child",
 		borderTop("0"),
@@ -78,7 +78,7 @@ func registerPayeeCleanSurface() {
 	)
 	rule(".pclean-history-meta",
 		flexShrink("0"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-faint)"),
 		fontVariantNumeric("tabular-nums"),
 	)

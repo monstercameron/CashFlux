@@ -16,7 +16,7 @@ func registerTxnUpcoming() {
 		color("inherit"),
 		background("none"),
 		border("1px dashed var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		padding("0.6rem 0.85rem"),
 		marginBottom("0.75rem"),
 		cursor("pointer"),
@@ -33,7 +33,7 @@ func registerTxnUpcoming() {
 	)
 	rule(".txn-upcoming-heading",
 		fontWeight("600"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text)"),
 	)
 	rule(".txn-upcoming-rows",
@@ -46,12 +46,12 @@ func registerTxnUpcoming() {
 		alignItems("center"),
 		gap("0.6rem"),
 		opacity("0.72"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".txn-upcoming-badge",
 		flexShrink("0"),
 		padding("0.02rem 0.4rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px dashed var(--border)"),
 		color("var(--text-dim)"),
 		fontSize("0.6rem"),

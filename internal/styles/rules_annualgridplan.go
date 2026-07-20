@@ -42,9 +42,9 @@ func registerAnnualGridPlanSurface() {
 		flexWrap("wrap"),
 		padding("0.4rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".budget-annualgrid-scenario.is-on",
 		borderColor("color-mix(in srgb, var(--accent) 55%, var(--border))"),
@@ -98,7 +98,7 @@ func registerAnnualGridPlanSurface() {
 		alignItems("center"),
 		gap("0.9rem"),
 		flexWrap("wrap"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".budget-annualgrid-legend-item",

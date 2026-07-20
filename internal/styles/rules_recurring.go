@@ -34,7 +34,7 @@ func registerRecurringSurface() {
 		prop("min-width", "14rem"),
 	)
 	rule(".rec-hero-label",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
@@ -53,7 +53,7 @@ func registerRecurringSurface() {
 	// Next-30-days schedule.
 	rule(".rec-up-meta",
 		prop("margin", "0 0 0.6rem"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	rule(".rec-up-list",
 		prop("display", "flex"),
@@ -66,7 +66,7 @@ func registerRecurringSurface() {
 		prop("gap", "0.8rem"),
 		prop("padding", "0.55rem 0.85rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 42%, transparent)"),
 	)
 	rule(".rec-up-row.is-overdue",
@@ -82,7 +82,7 @@ func registerRecurringSurface() {
 		prop("width", "2.6rem"),
 		prop("height", "2.6rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "var(--bg-elev)"),
 		prop("line-height", "1"),
 	)
@@ -122,7 +122,7 @@ func registerRecurringSurface() {
 	)
 	rule(".rec-up-more",
 		prop("margin", "0.25rem 0 0"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 
 	// Small status tags (autopay / auto-post / overdue).
@@ -130,7 +130,7 @@ func registerRecurringSurface() {
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("padding", "0.05rem 0.45rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
 		prop("font-size", "0.64rem"),
 		prop("font-weight", "700"),
@@ -174,11 +174,11 @@ func registerRecurringSurface() {
 		prop("justify-content", "center"),
 		prop("width", "2.4rem"),
 		prop("height", "2.4rem"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 35%, var(--border))"),
 		prop("background", "color-mix(in srgb, var(--accent) 8%, transparent)"),
 		prop("color", "color-mix(in srgb, var(--accent) 60%, var(--text))"),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "700"),
 	)
 	rule(".rec-flow-body",
@@ -199,7 +199,7 @@ func registerRecurringSurface() {
 		prop("font-size", "1rem"),
 	)
 	rule(".rec-flow-meta",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	rule(".rec-flow-share",
 		prop("display", "flex"),
@@ -211,15 +211,15 @@ func registerRecurringSurface() {
 		prop("max-width", "220px"),
 	)
 	rule(".rec-flow-share-label",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 	// The flow's formula-identity chip (recurring_<slug>_monthly).
 	rule(".rec-flow-var",
 		prop("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace"),
-		prop("font-size", "0.66rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("padding", "0.05rem 0.4rem"),
-		prop("border-radius", "6px"),
+		prop("border-radius", "var(--radius-md)"),
 		prop("color", "color-mix(in srgb, var(--accent) 55%, var(--text))"),
 		prop("background", "color-mix(in srgb, var(--accent) 12%, transparent)"),
 	)
@@ -227,7 +227,7 @@ func registerRecurringSurface() {
 	// cards inside the bento (border + radius + elevated tint).
 	rule(".rec-cardrows .row",
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("padding", "0.6rem 0.85rem"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 42%, transparent)"),
 	)
@@ -263,21 +263,21 @@ func registerRecurringSurface() {
 	)
 	rule(".bills-cal-sticky .cal-cell",
 		prop("min-height", "76px"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("padding", "7px 9px"),
 	)
 	rule(".bills-cal-sticky .cal-day",
 		prop("font-size", "0.95rem"),
 	)
 	rule(".bills-cal-sticky .cal-head",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("padding", "4px 0"),
 	)
 	// Hover-linked calendar date: hovering a bill row outlines its due-date cell.
 	rule(".cal-cell.cal-hl",
 		prop("outline", "2px solid var(--accent)"),
 		prop("outline-offset", "-2px"),
-		prop("border-radius", "8px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "color-mix(in srgb, var(--accent) 14%, transparent)"),
 	)
 	rule(".cal-cell",
@@ -303,7 +303,7 @@ func registerRecurringSurface() {
 		prop("gap", "0.6rem"),
 		prop("padding", "0.5rem 0.75rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 42%, transparent)"),
 	)
 	rule(".bills-smart-move.is-suggest",
@@ -328,7 +328,7 @@ func registerRecurringSurface() {
 		prop("max-width", "10rem"),
 	)
 	rule(".bills-smart-delta",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("margin-top", "0.15rem"),
 	)
@@ -346,7 +346,7 @@ func registerRecurringSurface() {
 	rule(".bills-smart-bucket-head",
 		prop("margin-top", "0.6rem"),
 		prop("font-weight", "600"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("border-bottom", "1px solid var(--border)"),
 		prop("padding-bottom", "0.25rem"),
 	)
@@ -369,7 +369,7 @@ func registerRecurringSurface() {
 		prop("flex", "0 0 auto"),
 	)
 	rule(".rec-flow-monthly",
-		prop("font-size", "1.15rem"),
+		prop("font-size", "var(--type-18)"),
 		prop("font-weight", "700"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -390,7 +390,7 @@ func registerRecurringSurface() {
 		prop("gap", "0.8rem"),
 		prop("padding", "0.6rem 0.85rem"),
 		prop("border", "1px dashed color-mix(in srgb, var(--accent) 40%, var(--border))"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("background", "color-mix(in srgb, var(--accent) 4%, transparent)"),
 	)
 	rule(".rec-detected-main",
@@ -440,6 +440,6 @@ func registerRecurringSurface() {
 	)
 	rule(".rec-autopost-hint",
 		prop("margin", "-0.15rem 0 0"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 	)
 }

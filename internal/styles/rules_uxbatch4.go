@@ -20,6 +20,6 @@ func registerUxbatch4() {
 		prop("gap", "0.6rem"),
 		prop("padding", "0.1rem 0 0.55rem 1.5rem"),
 		prop("border-bottom", "none"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 	)
 }

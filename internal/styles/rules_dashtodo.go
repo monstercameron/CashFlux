@@ -35,7 +35,7 @@ func registerDashHeroShrink() {
 	// The greeting is warmth, not the headline — a compound selector so this beats the
 	// utility font-size folded onto the H2 (single-class utilities otherwise win).
 	rule(".home-hero .home-hero-greeting",
-		fontSize("1.2rem"),
+		fontSize("var(--type-20)"),
 	)
 	rule(".home-hero-top",
 		marginBottom("0.3rem"),
@@ -125,7 +125,7 @@ func registerTodoNoteExpand() {
 	// The "N of M done" count under the To-do completion percentage: small, dim, and
 	// tabular so the digits line up beneath the big percent.
 	rule(".todo-done-count",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("margin-top", "0.1rem"),

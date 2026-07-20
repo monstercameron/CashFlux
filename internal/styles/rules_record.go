@@ -24,7 +24,7 @@ func registerRecordSurface() {
 		prop("align-items", "center"),
 		prop("gap", "0.55rem"),
 		prop("margin", "1.1rem 0 0.2rem"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 		prop("font-weight", "600"),
 	)
 	rule(".act-day::before",
@@ -33,7 +33,7 @@ func registerRecordSurface() {
 		prop("width", "3px"),
 		prop("height", "0.9rem"),
 		prop("background", "var(--accent)"),
-		prop("border-radius", "2px"),
+		prop("border-radius", "var(--radius-xs)"),
 	)
 	rule(".act-day:first-child", prop("margin-top", "0.25rem"))
 	// Entry rows carry a quiet action tick on the left edge.
@@ -65,7 +65,7 @@ func registerRecordSurface() {
 		prop("align-items", "baseline"),
 		prop("gap", "0.5rem"),
 		prop("flex-wrap", "wrap"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 	rule(".act-diff-field",
@@ -89,8 +89,8 @@ func registerRecordSurface() {
 		prop("display", "inline-block"),
 		prop("padding", "0.1rem 0.5rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "999px"),
-		prop("font-size", "0.72rem"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--text-dim)"),
 		prop("background", "color-mix(in srgb, var(--accent) 10%, transparent)"),
 		prop("white-space", "nowrap"),

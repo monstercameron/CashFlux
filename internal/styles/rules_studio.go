@@ -45,7 +45,7 @@ func registerStudioSurface() {
 	// sibling tiles used the editorial chrome).
 	rule(".fb-title",
 		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
-		prop("font-size", "1.15rem"),
+		prop("font-size", "var(--type-18)"),
 		prop("font-weight", "600"),
 		prop("border-left", "3px solid var(--accent)"),
 		prop("padding-left", "0.6rem"),
@@ -64,7 +64,7 @@ func registerStudioSurface() {
 		prop("flex", "1"),
 	)
 	rule(".fb-pal-examples",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("opacity", "0.55"),
 		prop("overflow", "hidden"),
 		prop("text-overflow", "ellipsis"),
@@ -89,16 +89,16 @@ func registerStudioSurface() {
 		prop("color", "var(--accent)"),
 	)
 	rule(".fb-pal-caret",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("opacity", "0.6"),
 		prop("width", "1rem"),
 	)
 	rule(".fb-pal-count",
 		prop("margin-left", "auto"),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("padding", "0.05rem 0.5rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("opacity", "0.7"),
 	)
 
@@ -111,7 +111,7 @@ func registerStudioSurface() {
 		prop("color", "var(--accent)"),
 		prop("background", "var(--bg-elev)"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "6px"),
+		prop("border-radius", "var(--radius-md)"),
 		prop("padding", "0.4rem 0.6rem"),
 		prop("margin-top", "0.35rem"),
 		prop("overflow-x", "auto"),
@@ -126,14 +126,14 @@ func registerStudioSurface() {
 	)
 	rule(".stu-mol-edit textarea",
 		prop("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("min-height", "4.5rem"),
 	)
 	rule(".stu-mol-tag",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("padding", "0.05rem 0.5rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("opacity", "0.75"),
 	)
 	rule(".stu-mol-tag.is-custom",

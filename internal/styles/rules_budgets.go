@@ -49,14 +49,14 @@ func registerBudgetsSurface() {
 		border("0"),
 		padding("0"),
 		cursor("pointer"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--accent)"),
 	)
 	rule(".zbb-sources-act:hover", textDecoration("underline"))
 	rule(".zbb-sources-actsep",
 		color("var(--text-faint)"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 	)
 	// The running total row, under the header: the figure the checked rows sum to, plus
 	// how many sources are included.
@@ -80,7 +80,7 @@ func registerBudgetsSurface() {
 		fontWeight("800"),
 		color("var(--accent)"),
 	)
-	rule(".zbb-sources-count", fontSize("0.72rem"))
+	rule(".zbb-sources-count", fontSize("var(--type-12)"))
 	// Cap the height once the list is long, so a household with many income categories
 	// scrolls the ledger instead of stretching the modal past the viewport.
 	rule(".zbb-sources-rows",
@@ -133,7 +133,7 @@ func registerBudgetsSurface() {
 	// A category with no income last month: a plain italic note, not a figure — so it
 	// reads as "nothing here" rather than a source you forgot to include.
 	rule(".zbb-source-none",
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		fontStyle("italic"),
 		fontWeight("400"),
 	)
@@ -152,7 +152,7 @@ func registerBudgetsSurface() {
 	rule(".zbb-sources-empty",
 		margin("0"),
 		padding("0.4rem 0.1rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 
 	// --- zero-based hero: header row + allocation bar + legend --------------------
@@ -185,7 +185,7 @@ func registerBudgetsSurface() {
 		color("var(--text)"),
 	)
 	rule(".zbb-alloc-cap-note",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	// A non-clipping wrapper positions the income marker so its tick can protrude past
@@ -260,11 +260,11 @@ func registerBudgetsSurface() {
 		prop("box-shadow", "0 0 0 1px var(--bg-card)"),
 	)
 	rule(".zbb-legend-label",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".zbb-legend-val",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("700"),
 		color("var(--text)"),
 	)
@@ -292,7 +292,7 @@ func registerBudgetsSurface() {
 	)
 	rule(".zbb-basis-modal-help",
 		margin("0"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		lineHeight("1.45"),
 	)
 
@@ -328,7 +328,7 @@ func registerBudgetsSurface() {
 		gap("0.6rem"),
 		padding("0.45rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
 	)
 	// The variable name is itself a click-to-copy control, monospace + accent so it reads
@@ -337,7 +337,7 @@ func registerBudgetsSurface() {
 		flex("1"),
 		minWidth("0"),
 		prop("font-family", "ui-monospace, SFMono-Regular, Menlo, monospace"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--accent)"),
 		background("transparent"),
 		border("0"),
@@ -368,7 +368,7 @@ func registerBudgetsSurface() {
 		marginTop("0.5rem"),
 		padding("0.65rem 0.7rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--hover)"),
 	)
 	rule(".budget-topup-src",
@@ -395,7 +395,7 @@ func registerBudgetsSurface() {
 		gap("0.9rem"),
 		padding("0.75rem 0.9rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--hover)"),
 	)
 	rule(".budget-add-tmpl-title",
@@ -416,7 +416,7 @@ func registerBudgetsSurface() {
 	// Category-fate + owner-scope hints: quiet one-liners directly under their fields.
 	rule(".budget-cat-fate, .budget-owner-hint",
 		display("block"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		lineHeight("1.35"),
 		marginTop("-0.35rem"),
 	)
@@ -426,7 +426,7 @@ func registerBudgetsSurface() {
 		flexDirection("column"),
 		margin("0.35rem 0"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
 	rule(".budget-tmpl-row",
@@ -463,7 +463,7 @@ func registerBudgetsSurface() {
 		gap("0.6rem"),
 		margin("0.15rem 0"),
 		color("var(--text-dim)"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		textTransform("uppercase"),
 		letterSpacing("0.06em"),
 	)
@@ -486,7 +486,7 @@ func registerBudgetsSurface() {
 		font("inherit"),
 		color("inherit"),
 		cursor("pointer"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		textDecoration("underline"),
 		prop("text-decoration-style", "dotted"),
 		prop("text-decoration-color", "transparent"),
@@ -535,7 +535,7 @@ func registerBudgetsSurface() {
 		gap("0.6rem"),
 		padding("0.5rem 0.7rem"),
 		border("1px dashed var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 
 	// G8: the "Unbudgeted spending" strip — an invitation to budget the categories
@@ -548,7 +548,7 @@ func registerBudgetsSurface() {
 		margin("0.85rem 0 0.35rem"),
 		padding("0.7rem 0.85rem"),
 		border("1px dashed var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".budget-unbudgeted-head",
 		display("flex"),
@@ -572,11 +572,11 @@ func registerBudgetsSurface() {
 		gap("0.55rem"),
 		padding("0.4rem 0.7rem"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		font("inherit"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		cursor("pointer"),
 		transition("border-color 0.12s ease, background 0.12s ease"),
 	)
@@ -626,7 +626,7 @@ func registerBudgetsSurface() {
 		maxHeight("15rem"),
 		overflowY("auto"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		padding("0.2rem 0.35rem"),
 	)
@@ -682,7 +682,7 @@ func registerBudgetsSurface() {
 	// The "Why?" affordance: a quiet, keyboard-reachable dotted-underline note whose
 	// title tooltip explains the FIFO matching. Accent-toned but understated.
 	rule(".budget-agemoney-why",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--accent)"),
 		cursor("help"),
@@ -724,7 +724,7 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-agemoney-explain",
 		marginTop("0.3rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		prop("line-height", "1.4"),
 	)
@@ -738,7 +738,7 @@ func registerBudgetsSurface() {
 		gap("0.6rem"),
 		padding("0.6rem 0.85rem"),
 		margin("0.6rem 0"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		borderLeft("4px solid var(--warn)"),
 		background("color-mix(in srgb, var(--warn) 10%, var(--bg-elev))"),
 	)
@@ -756,7 +756,7 @@ func registerBudgetsSurface() {
 		color("var(--text)"),
 	)
 	rule(".budget-fundshort-body",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		prop("line-height", "1.4"),
 	)
@@ -796,7 +796,7 @@ func registerBudgetsSurface() {
 		padding("0.4rem 0.6rem 0.4rem 0.75rem"),
 		border("1px solid var(--border)"),
 		borderLeft("3px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
 	)
 	rule(".budget-crow.is-over", borderLeftColor("var(--danger)"))
@@ -823,7 +823,7 @@ func registerBudgetsSurface() {
 	rule(".budget-crow-bar",
 		position("relative"),
 		height("8px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		overflow("hidden"),
@@ -838,12 +838,12 @@ func registerBudgetsSurface() {
 		boxShadow("none"),
 	)
 	rule(".budget-crow-amt",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".budget-crow-left",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
@@ -878,7 +878,7 @@ func registerBudgetsSurface() {
 		paddingLeft("1.4rem"),
 	)
 	rule(".budget-strip-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -946,11 +946,11 @@ func registerBudgetsSurface() {
 		padding("0.45rem 0.7rem"),
 		background("color-mix(in srgb, #f59e0b 8%, transparent)"),
 		border("1px solid color-mix(in srgb, #f59e0b 45%, var(--border))"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		color("var(--text)"),
 		cursor("pointer"),
 		font("inherit"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("600"),
 	)
 	rule(".budget-issues-icon", color("#f59e0b"))
@@ -958,11 +958,11 @@ func registerBudgetsSurface() {
 	// The over-assignment "Resolve $X" figure is the rail's call to action.
 	rule(".budget-rail-resolve",
 		padding("0.15rem 0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--danger)"),
 		color("#fff"),
 		fontWeight("700"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -978,7 +978,7 @@ func registerBudgetsSurface() {
 		gap("0.6rem"),
 		padding("0.5rem 0.7rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".budget-issue-main",
@@ -990,10 +990,10 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-issue-title",
 		fontWeight("600"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".budget-issue-body",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	// W6 rows/styling lane: the per-row rollover policy badge (C395) + the calmer

@@ -39,7 +39,7 @@ func registerImportWizard() {
 		color("var(--tier-smartplus)"),
 	)
 	rule(".doc-branch-sub",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 
@@ -57,7 +57,7 @@ func registerImportWizard() {
 		width("100%"),
 		padding("1rem"),
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("var(--bg-card)"),
 		color("var(--text)"),
 		cursor("pointer"),
@@ -95,7 +95,7 @@ func registerImportWizard() {
 		color("var(--text)"),
 	)
 	rule(".doc-type-tile .dt-desc",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		lineHeight("1.35"),
 	)
@@ -135,7 +135,7 @@ func registerImportWizard() {
 	)
 	rule(".doc-form-desc",
 		margin("0"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 		lineHeight("1.45"),
 		maxWidth("62ch"),

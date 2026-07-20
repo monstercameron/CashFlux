@@ -16,12 +16,12 @@ func registerAccountsSurface() {
 		prop("padding", "0.8rem 0.9rem"),
 		prop("margin-bottom", "0.9rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "var(--hover)"),
 	)
 	// The "Currently $X" context sits just under the input; the delta preview under that.
 	rule(".acct-value-now",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	rule(".acct-value-delta",
 		prop("margin", "0.05rem 0 0"),
@@ -40,10 +40,10 @@ func registerAccountsSurface() {
 		prop("margin-top", "0.4rem"),
 		prop("padding", "0.4rem 0.55rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "8px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "transparent"),
 		prop("color", "var(--text-dim)"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("line-height", "1.4"),
 		prop("cursor", "pointer"),
 		prop("transition", "background .15s ease, border-color .15s ease, color .15s ease"),
@@ -87,7 +87,7 @@ func registerAccountsSurface() {
 		prop("padding", "0.35rem 0.15rem 0.3rem"),
 		prop("margin-top", "0.2rem"),
 		prop("border-bottom", "1px solid var(--border)"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 	)
 	rule(".acct-group-name",
 		prop("color", "var(--text)"),
@@ -166,7 +166,7 @@ func registerAccountsSurface() {
 	)
 	// The Details toggle is a quiet link — small, dim, never louder than the meta.
 	rule(".acct-details-toggle",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("white-space", "nowrap"),
 	)
 	// The balance figure: tabular, right-aligned, the row's second anchor after the name.
@@ -174,7 +174,7 @@ func registerAccountsSurface() {
 		prop("text-align", "right"),
 		prop("white-space", "nowrap"),
 		prop("font-variant-numeric", "tabular-nums"),
-		prop("font-size", "1.02rem"),
+		prop("font-size", "var(--type-16)"),
 	)
 	// Actions cluster: compact, never shrinking, so the buttons stay on one tidy line.
 	rule(".acct-row-actions",
@@ -218,7 +218,7 @@ func registerAccountsSurface() {
 		prop("gap", "0.75rem"),
 		prop("padding", "0.9rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "10px"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("background", "var(--bg-elev)"),
 	)
 	rule(".sweep-add-btn",

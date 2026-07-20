@@ -56,7 +56,7 @@ func registerBudgetFlexSurface() {
 		minWidth("0"),
 	)
 	rule(".bflex-kicker-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.09em"),
 		textTransform("uppercase"),
@@ -70,7 +70,7 @@ func registerBudgetFlexSurface() {
 		opacity("0.55"),
 	)
 	rule(".bflex-kicker-period",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("500"),
 		color("var(--text-dim)"),
 	)
@@ -200,7 +200,7 @@ func registerBudgetFlexSurface() {
 	)
 	rule(".bflex-pace.is-over .bflex-pace-dot", background("var(--down, #d8716f)"))
 	rule(".bflex-days",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-faint)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -246,7 +246,7 @@ func registerBudgetFlexSurface() {
 		padding("0.2rem 0"),
 	)
 	rule(".bflex-editor-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -288,7 +288,7 @@ func registerBudgetFlexSurface() {
 		borderBottom("1px solid var(--border)"),
 	)
 	rule(".bflex-ledger-title",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.07em"),
 		textTransform("uppercase"),
@@ -296,7 +296,7 @@ func registerBudgetFlexSurface() {
 		margin("0"),
 	)
 	rule(".bflex-count",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		prop("font-variant-numeric", "tabular-nums"),
@@ -307,7 +307,7 @@ func registerBudgetFlexSurface() {
 		flexDirection("column"),
 	)
 	rule(".bflex-ledger-empty",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		lineHeight("1.45"),
 		color("var(--text-dim)"),
 		margin("0.35rem 0 0.15rem"),
@@ -351,7 +351,7 @@ func registerBudgetFlexSurface() {
 		gap("0.1rem"),
 	)
 	rule(".bflex-row-fig",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("600"),
 		color("var(--text)"),
 		prop("font-variant-numeric", "tabular-nums"),

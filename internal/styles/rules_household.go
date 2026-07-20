@@ -112,7 +112,7 @@ func registerHouseholdSurface() {
 		prop("margin", "0"),
 	)
 	rule(".hh-person-share-pct",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--text-dim)"),
 		prop("font-variant-numeric", "tabular-nums"),
 		prop("min-width", "2.6rem"),

@@ -29,11 +29,11 @@ func registerNotifAsst() {
 		prop("align-items", "center"),
 		prop("gap", "0.3rem"),
 		prop("padding", "0.3rem 0.6rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
 		prop("background", "transparent"),
 		prop("color", "var(--text)"),
-		prop("font-size", "0.78rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("white-space", "nowrap"),
 		prop("transition", "border-color .12s ease, background .12s ease"),
 	)

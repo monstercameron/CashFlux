@@ -32,40 +32,40 @@ package styles
 func registerDpRadius() {
 	// --- Page sections: the largest wrappers. Bring the near-square bento widget
 	// and the over-rounded hero / studio stage onto the shared 12px section radius.
-	rule(".w", borderRadius("12px"))
-	rule(".home-hero", borderRadius("12px"))
-	rule(".studio-stage-wrap", borderRadius("12px"))
+	rule(".w", borderRadius("var(--radius-xl)"))
+	rule(".home-hero", borderRadius("var(--radius-xl)"))
+	rule(".studio-stage-wrap", borderRadius("var(--radius-xl)"))
 
 	// --- Summary cards & stat tiles: all read as the same "panel" role, so all 12px.
 	// .card is already 12px (asserted for durability); .stat was 10px; the surface
 	// card families (investments, debt, strategy, studio types, report summaries)
 	// ranged 10–14px. .rpta-sum-col / .rpta-sum-trend carry the left accent-edge.
-	rule(".card", borderRadius("12px"))
-	rule(".stat", borderRadius("12px"))
-	rule(".inv-card", borderRadius("12px"))
-	rule(".inv-pool-card", borderRadius("12px"))
-	rule(".debt-card", borderRadius("12px"))
-	rule(".debt-stat", borderRadius("12px"))
-	rule(".strat-card", borderRadius("12px"))
-	rule(".studio-type-card", borderRadius("12px"))
-	rule(".rpta-sum-col", borderRadius("12px"))
-	rule(".rpta-sum-trend", borderRadius("12px"))
+	rule(".card", borderRadius("var(--radius-xl)"))
+	rule(".stat", borderRadius("var(--radius-xl)"))
+	rule(".inv-card", borderRadius("var(--radius-xl)"))
+	rule(".inv-pool-card", borderRadius("var(--radius-xl)"))
+	rule(".debt-card", borderRadius("var(--radius-xl)"))
+	rule(".debt-stat", borderRadius("var(--radius-xl)"))
+	rule(".strat-card", borderRadius("var(--radius-xl)"))
+	rule(".studio-type-card", borderRadius("var(--radius-xl)"))
+	rule(".rpta-sum-col", borderRadius("var(--radius-xl)"))
+	rule(".rpta-sum-trend", borderRadius("var(--radius-xl)"))
 
 	// --- Row cards: repeated list items that live INSIDE a section. One step down
 	// from the 12px section to 8px so the nesting reads. Budget & goal category
 	// cards, notifications, saved what-if scenarios, allocation destinations, the
 	// attention-inbox items, and goal allocation rows were 9–14px; unify at 8px.
-	rule(".bento-budgets .budget", borderRadius("8px"))
-	rule(".bento-goals .goal-card", borderRadius("8px"))
-	rule(".notif", borderRadius("8px"))
-	rule(".plan-scenario", borderRadius("8px"))
-	rule(".alloc-dest", borderRadius("8px"))
-	rule(".attention-item", borderRadius("8px"))
-	rule(".goal-alloc-row", borderRadius("8px"))
+	rule(".bento-budgets .budget", borderRadius("var(--radius-lg)"))
+	rule(".bento-goals .goal-card", borderRadius("var(--radius-lg)"))
+	rule(".notif", borderRadius("var(--radius-lg)"))
+	rule(".plan-scenario", borderRadius("var(--radius-lg)"))
+	rule(".alloc-dest", borderRadius("var(--radius-lg)"))
+	rule(".attention-item", borderRadius("var(--radius-lg)"))
+	rule(".goal-alloc-row", borderRadius("var(--radius-lg)"))
 
 	// --- Inputs & buttons: the everyday controls settle at 8px (were 6px), matching
 	// the row-card step so a field or button reads as the same size family as the
 	// row it sits in. Only the corner radius is set here.
-	rule(".btn", borderRadius("8px"))
-	rule(".field", borderRadius("8px"))
+	rule(".btn", borderRadius("var(--radius-lg)"))
+	rule(".field", borderRadius("var(--radius-lg)"))
 }

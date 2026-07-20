@@ -48,7 +48,7 @@ func registerAssistantSurface() {
 		prop("padding", "0.6rem 0.8rem"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "0.75rem"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 	)
 	rule(".asst-key-callout .btn",
 		prop("flex", "0 0 auto"),
@@ -149,7 +149,7 @@ func registerAssistantSurface() {
 		prop("margin-bottom", "0.5rem"),
 	)
 	rule(".asst-ctx-lead",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "600"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
@@ -161,8 +161,8 @@ func registerAssistantSurface() {
 		prop("gap", "0.35rem"),
 		prop("max-width", "100%"),
 		prop("padding", "0.28rem 0.35rem 0.28rem 0.6rem"),
-		prop("border-radius", "999px"),
-		prop("font-size", "0.78rem"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("font-size", "var(--type-12)"),
 		prop("line-height", "1.2"),
 		prop("color", "var(--text)"),
 		prop("background", "color-mix(in srgb, var(--accent) 12%, var(--bg-elev))"),
@@ -185,7 +185,7 @@ func registerAssistantSurface() {
 		prop("justify-content", "center"),
 		prop("width", "1.15rem"),
 		prop("height", "1.15rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "none"),
 		prop("background", "transparent"),
 		prop("color", "var(--text-faint)"),
@@ -210,8 +210,8 @@ func registerAssistantSurface() {
 		prop("align-items", "center"),
 		prop("gap", "0.32rem"),
 		prop("padding", "0.32rem 0.72rem"),
-		prop("border-radius", "999px"),
-		prop("font-size", "0.78rem"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "500"),
 		prop("color", "var(--text)"),
 		prop("background", "var(--bg-elev)"),
@@ -304,7 +304,7 @@ func registerAssistantSurface() {
 		prop("justify-content", "center"),
 		prop("border-radius", "7px"),
 		prop("color", "var(--accent)"),
-		prop("font-size", "0.85rem"),
+		prop("font-size", "var(--type-14)"),
 		prop("margin-top", "0.1rem"),
 		prop("background", "color-mix(in srgb, var(--accent) 15%, transparent)"),
 	)
@@ -340,7 +340,7 @@ func registerAssistantSurface() {
 	)
 	rule(".chat-dock-hint",
 		prop("margin", "0.4rem 0.2rem 0"),
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("letter-spacing", "0.02em"),
 	)
 	rule(".chat-send",
@@ -384,7 +384,7 @@ func registerAssistantSurface() {
 	// Starter prompts as inviting tiles (they render inside the hero).
 	rule(".chip-suggest",
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("padding", "0.6rem 0.9rem"),
 		prop("background", "var(--bg-elev)"),
 		prop("text-align", "left"),
@@ -474,7 +474,7 @@ func registerAssistantSurface() {
 		prop("margin", "0"),
 	)
 	rule(".ask-status",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("letter-spacing", "0.04em"),
 		prop("color", "var(--text)"),
 		prop("opacity", "0.6"),
@@ -502,7 +502,7 @@ func registerAssistantSurface() {
 		prop("padding", "0.7rem 0.85rem"),
 		prop("margin-bottom", "0.9rem"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("background", "color-mix(in srgb, var(--text) 2.5%, transparent)"),
 	)
 	// Each captioned field stacks an uppercase label over its control.
@@ -540,8 +540,8 @@ func registerAssistantSurface() {
 		prop("height", "38px"),
 		prop("min-height", "38px"),
 		prop("padding", "0 1.9rem 0 0.7rem"),
-		prop("border-radius", "8px"),
-		prop("font-size", "0.82rem"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("font-size", "var(--type-13)"),
 		prop("cursor", "pointer"),
 		prop("appearance", "none"),
 		prop("-webkit-appearance", "none"),
@@ -570,7 +570,7 @@ func registerAssistantSurface() {
 		prop("border", "0"),
 		prop("background", "transparent"),
 		prop("color", "var(--text)"),
-		prop("font-size", "0.86rem"),
+		prop("font-size", "var(--type-14)"),
 		prop("font-weight", "500"),
 		prop("cursor", "pointer"),
 	)
@@ -672,7 +672,7 @@ func registerAssistantSurface() {
 		prop("opacity", "0.5"),
 	)
 	rule(".ask-note-count",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "700"),
 		prop("color", "var(--text-faint)"),
 		prop("font-variant-numeric", "tabular-nums"),
@@ -695,7 +695,7 @@ func registerAssistantSurface() {
 		prop("align-items", "center"),
 		prop("gap", "0.25rem"),
 		prop("padding", "0.2rem 0.5rem"),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("font-weight", "600"),
 		prop("border-radius", "7px"),
 		prop("border", "1px solid var(--border)"),
@@ -722,7 +722,7 @@ func registerAssistantSurface() {
 		prop("color", "var(--text)"),
 	)
 	rule(".ask-note-link",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--accent)"),
 		prop("white-space", "nowrap"),
 		prop("background", "none"),
@@ -738,7 +738,7 @@ func registerAssistantSurface() {
 		prop("flex-direction", "column"),
 	)
 	rule(".ask-note-hint",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("color", "var(--text)"),
 		prop("opacity", "0.5"),
 		prop("margin", "0.45rem 0 0"),
@@ -769,7 +769,7 @@ func registerAssistantSurface() {
 		prop("padding-block", "0.4rem"),
 	)
 	rule(".ask-aside .insights-answer",
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("line-height", "1.5"),
 	)
 	rule(".ask-aside .insights-answer.line-clamp-3",
@@ -783,7 +783,7 @@ func registerAssistantSurface() {
 		prop("margin", "0"),
 	)
 	rule(".ask-aside .row-meta",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("opacity", "0.55"),
 	)
 	rule(".ask-aside .btn-link",

@@ -35,11 +35,11 @@ func registerBudgetTargets() {
 		gap("0.15rem"),
 		padding("0.3rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-card)"),
 		color("var(--text)"),
 		cursor("pointer"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".budget-fill-chip:hover",
 		borderColor("var(--accent)"),

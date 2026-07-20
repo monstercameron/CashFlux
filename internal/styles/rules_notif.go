@@ -120,11 +120,11 @@ func registerNotifySurface() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.3rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		transition("border-color .12s ease, color .12s ease"),
 	)
 
@@ -193,7 +193,7 @@ func registerNotifySurface() {
 		alignItems("center"),
 		gap("0.2rem"),
 		marginLeft("auto"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
@@ -230,11 +230,11 @@ func registerNotifySurface() {
 		alignItems("center"),
 		gap("0.3rem"),
 		padding("0.3rem 0.6rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text)"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		whiteSpace("nowrap"),
 	)
 	ruleMedia("(max-width: 640px)", ".notif .notif-actions",

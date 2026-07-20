@@ -32,7 +32,7 @@ func registerGoalHealthTones() {
 	// The diagnostic reason line under the badge — quiet by default (it's supporting
 	// detail), tinted to match the verdict for the two that warn.
 	rule(".goal-pace-reason",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		lineHeight("1.35"),
 		color("var(--text-dim)"),
 		margin("0.15rem 0 0.1rem"),
