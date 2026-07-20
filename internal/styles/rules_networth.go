@@ -550,25 +550,37 @@ func registerNwsSides() {
 	rule(".nws-anno.is-gap",
 		prop("border", "1px solid var(--border)"),
 	)
+	// Ticks are PLACED at their point's position in the plot rather than laid
+	// out as equal boxes. Equal boxes were what turned an all-time axis into a
+	// run of first letters: 37 points sharing a 900px gutter gives each 24px,
+	// and every caption ellipsised to "J". A label that has shrunk to an
+	// initial costs the space of a label and gives none of the information, so
+	// the density is now planned (balancesheet.TimeAxisTicks) and each surviving
+	// label keeps its whole word.
 	rule(".nws-xaxis",
-		prop("display", "flex"),
-		prop("justify-content", "space-between"),
-		prop("padding-left", "3.4rem"),
+		prop("position", "relative"),
+		prop("height", "1.15rem"),
+		prop("margin-left", "3.4rem"),
 		prop("font-size", "var(--type-12, 0.75rem)"),
 		prop("color", "var(--text-dim)"),
 	)
 	rule(".nws-xtick",
-		prop("flex", "1 1 0"),
-		prop("text-align", "center"),
-		prop("min-width", "0"),
-		prop("overflow", "hidden"),
-		prop("text-overflow", "ellipsis"),
+		prop("position", "absolute"),
+		prop("top", "0"),
+		prop("white-space", "nowrap"),
+		prop("transform", "translateX(-50%)"),
 	)
-	rule(".nws-xtick:first-child",
-		prop("text-align", "left"),
+	// The end labels sit inside the plot rather than hanging off it.
+	rule(".nws-xtick.is-first",
+		prop("transform", "none"),
 	)
-	rule(".nws-xtick:last-child",
-		prop("text-align", "right"),
+	rule(".nws-xtick.is-last",
+		prop("transform", "translateX(-100%)"),
+	)
+	// As the pane narrows, the plan's minor ticks go and its major ones stay —
+	// the axis thins instead of colliding.
+	ruleContentMax(contentTwoCol, ".nws-xtick.is-minor",
+		prop("display", "none"),
 	)
 
 	// ── The "?" explainer, matching the number-provenance affordance the Annual
@@ -1050,8 +1062,11 @@ func registerNwsBreakpoints() {
 	ruleContentMax(contentGrid1, ".nws-annos",
 		prop("inset", "0 0 0 2.8rem"),
 	)
-	ruleContentMax(contentGrid1, ".nws-xaxis, .nws-sides-ends",
+	ruleContentMax(contentGrid1, ".nws-sides-ends",
 		prop("padding-left", "2.8rem"),
+	)
+	ruleContentMax(contentGrid1, ".nws-xaxis",
+		prop("margin-left", "2.8rem"),
 	)
 	ruleContentMax(contentGrid1, ".nws-window",
 		prop("margin-left", "0"),

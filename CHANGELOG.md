@@ -23,6 +23,21 @@ and every commit updates this file under `Unreleased`.
   all-time high (stated exactly, once), and material falls from a running high — reported once at
   the trough, from the level they fell from, when the drawdown reaches a tenth of the peak. The
   list drops 32 → 7 for the five-year window.
+- **The Two sides x-axis no longer degenerates into a run of month initials.** The axis drew one
+  caption per point. Across an all-time window that is 32 captions sharing a ~900px gutter — 28px
+  each, every one ellipsised to its first letter — so the axis named no date at all while still
+  costing its full height, and the expanded-sidebar layout made it worse. Two causes: the shared
+  view already thinned its labels to eight, but the chart **re-filled every blank slot** with a
+  bare `Jan`, defeating the thinning entirely; and equal flex boxes meant a surviving label could
+  never be wider than one point's share of the width. Density is now planned by
+  `balancesheet.TimeAxisTicks`, which extends the existing `AxisTicks` idea to the time axis: the
+  finest CALENDAR granularity that fits the pane's label budget wins — months while a year fits,
+  then quarters, half-years, years, and multi-year steps for a decade of records — and it plans the
+  wide and narrow layouts together so the stylesheet drops the minor ticks as the pane shrinks
+  rather than letting them collide. Ticks are now placed at their point's own position in the plot
+  instead of being laid out as boxes, so a label is never squeezed. The five-year axis goes from 32
+  unreadable captions to 11 (`Jul 21 · 2022 · Jul 22 · … · 2026 · Now`), thinning to 7 at ≤1042px
+  content.
 - **The /networth milestone list opens rather than scrolls.** The latest 5 events show, with an
   expander that states the honest total on its face ("Show all 7 milestones"). No silent cap.
 - **The Glance row no longer leaves a hole where the shorter column ends.** With the grid's items

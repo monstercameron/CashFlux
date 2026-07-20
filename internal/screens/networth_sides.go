@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/balancesheet"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -106,6 +107,15 @@ func (s nwsGapScale) y(v float64) float64 {
 }
 
 const nwsSidesW = 1000.0
+
+// nwsXTicksWide / nwsXTicksNarrow are the x-axis label budgets for the widest
+// and narrowest panes the chart renders in. A dated label runs about 50px at
+// this type size, so twelve fill a 1200px plot comfortably and seven fill a
+// 710px one; past that they collide, and a colliding label is not a label.
+const (
+	nwsXTicksWide   = 12
+	nwsXTicksNarrow = 7
+)
 
 // nwsSidesX is the horizontal position of point i of n.
 func nwsSidesX(i, n int) float64 {
@@ -235,17 +245,40 @@ func nwsSides(v nwsView) ui.Node {
 			fmtMoney(money.New(last.LiabilitiesMinor, v.Base))),
 	)
 
-	// X axis: every point dated, not just the two ends.
+	// X axis: dated at a density the pane can actually READ. Every point keeps
+	// its slot so the spacing stays true to the plot, but only the points the
+	// budget affords carry a caption — an all-time window has 37 of them, and
+	// captioning each one turned the axis into a run of first letters that named
+	// no date at all. The narrow-layout budget is planned here too, so the
+	// stylesheet can drop the minor ticks as the pane shrinks without the plan
+	// or the spacing having to change.
+	ats := make([]time.Time, len(pts))
+	for i, p := range pts {
+		ats[i] = p.At
+	}
 	xaxis := []any{css.Class("nws-xaxis"), Attr("data-testid", "nws-xaxis")}
-	for i := range pts {
-		label := ""
-		if i < len(v.Labels) {
-			label = v.Labels[i]
+	for _, t := range balancesheet.TimeAxisTicks(ats, nwsXTicksWide, nwsXTicksNarrow) {
+		label := t.Label
+		cls := "nws-xtick"
+		switch {
+		case t.Index == 0:
+			cls += " is-first"
+		case t.Index == len(pts)-1:
+			cls += " is-last"
+			// The trailing point is "Now", which the shared view already phrases.
+			if t.Index < len(v.Labels) && v.Labels[t.Index] != "" {
+				label = v.Labels[t.Index]
+			}
 		}
-		if label == "" {
-			label = pts[i].At.Format("Jan")
+		if !t.Major {
+			cls += " is-minor"
 		}
-		xaxis = append(xaxis, Span(css.Class("nws-xtick"), label))
+		// Each label is placed at its point's own position in the plot, so the
+		// axis reads against the line rather than against a row of equal boxes
+		// — and a label is never squeezed into one point's share of the width.
+		xaxis = append(xaxis, Span(ClassStr(cls), Attr("data-testid", "nws-xtick"),
+			Style(map[string]string{"left": fmt.Sprintf("%.3f%%", 100*nwsSidesX(t.Index, len(pts))/nwsSidesW)}),
+			label))
 	}
 
 	// The gap MEASURED at both ends, so the story survives even where the wedge

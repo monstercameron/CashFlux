@@ -280,6 +280,98 @@ func TestAxisTicks(t *testing.T) {
 	}
 }
 
+func TestTimeAxisTicks(t *testing.T) {
+	// months builds n monthly cutoffs starting at the given year/month.
+	months := func(y int, m time.Month, n int) []time.Time {
+		out := make([]time.Time, 0, n)
+		for i := 0; i < n; i++ {
+			out = append(out, time.Date(y, m, 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0))
+		}
+		return out
+	}
+
+	t.Run("a five-year run labels years, not months", func(t *testing.T) {
+		ats := months(2021, time.July, 61)
+		got := TimeAxisTicks(ats, 12, 7)
+		if len(got) > 12 {
+			t.Fatalf("TimeAxisTicks gave %d labels for 61 points, budget 12", len(got))
+		}
+		for _, tk := range got {
+			if len(tk.Label) < 3 {
+				t.Fatalf("tick %+v: a label this short is an initial, not a date", tk)
+			}
+		}
+	})
+
+	t.Run("the narrow plan is a subset of the wide one", func(t *testing.T) {
+		ats := months(2021, time.January, 61)
+		got := TimeAxisTicks(ats, 12, 7)
+		major := 0
+		for _, tk := range got {
+			if tk.Major {
+				major++
+			}
+		}
+		if major == 0 || major > 7 {
+			t.Fatalf("TimeAxisTicks marked %d major of %d, want 1..7", major, len(got))
+		}
+		if major > len(got) {
+			t.Fatalf("more major ticks (%d) than ticks (%d)", major, len(got))
+		}
+	})
+
+	t.Run("both ends are always named", func(t *testing.T) {
+		for _, n := range []int{2, 7, 13, 37, 61, 121} {
+			ats := months(2019, time.March, n)
+			got := TimeAxisTicks(ats, 12, 7)
+			if len(got) < 2 || got[0].Index != 0 || got[len(got)-1].Index != n-1 {
+				t.Fatalf("n=%d: TimeAxisTicks = %+v, want the first and last points labelled", n, got)
+			}
+			for _, tk := range got {
+				if tk.Index < 0 || tk.Index >= n {
+					t.Fatalf("n=%d: tick index %d out of range", n, tk.Index)
+				}
+			}
+		}
+	})
+
+	t.Run("no tick crowds an end once the series outgrows the budget", func(t *testing.T) {
+		ats := months(2021, time.January, 37)
+		for _, tk := range TimeAxisTicks(ats, 12, 7) {
+			if tk.Index == 1 || tk.Index == len(ats)-2 {
+				t.Fatalf("tick at %d sits on top of an end label", tk.Index)
+			}
+		}
+	})
+
+	t.Run("a twelve-month window still labels every month", func(t *testing.T) {
+		ats := months(2026, time.January, 12)
+		if got := TimeAxisTicks(ats, 12, 7); len(got) != 12 {
+			t.Fatalf("TimeAxisTicks = %d labels, want all 12 — a year fits", len(got))
+		}
+	})
+
+	t.Run("a one-year window omits the year from each label", func(t *testing.T) {
+		for _, tk := range TimeAxisTicks(months(2026, time.January, 12), 12, 7) {
+			if len(tk.Label) != 3 {
+				t.Fatalf("tick %+v: within one year the label is the month alone", tk)
+			}
+		}
+	})
+
+	t.Run("degenerate inputs do not panic or invent an axis", func(t *testing.T) {
+		if got := TimeAxisTicks(nil, 12, 7); got != nil {
+			t.Fatalf("TimeAxisTicks(nil) = %+v, want nil", got)
+		}
+		if got := TimeAxisTicks(months(2026, time.January, 3), 1, 1); got != nil {
+			t.Fatalf("a budget below two ticks is not an axis, got %+v", got)
+		}
+		if got := TimeAxisTicks(months(2026, time.January, 1), 12, 7); len(got) != 1 {
+			t.Fatalf("TimeAxisTicks of one point = %+v, want that point", got)
+		}
+	})
+}
+
 func TestMilestones(t *testing.T) {
 	pt := func(net int64) Point { return Point{NetMinor: net} }
 

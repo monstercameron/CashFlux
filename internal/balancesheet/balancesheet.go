@@ -296,6 +296,136 @@ func AxisTicks(loMinor, hiMinor int64, want int) []int64 {
 	return out
 }
 
+// TimeTick is one x-axis label decision for the point at Index.
+type TimeTick struct {
+	// Index is the point this label belongs to.
+	Index int
+	// Label is the caption to draw.
+	Label string
+	// Major marks the labels that survive the NARROWEST layout, so a view can
+	// drop the rest as the pane shrinks without recomputing the plan or the
+	// spacing that depends on it.
+	Major bool
+}
+
+// timeGrains is the ladder of calendar granularities, finest first. A date axis
+// must thin on calendar boundaries, never on "every third point" — a reader
+// looking for 2024 finds it under a year label, and finds nothing at all under
+// a run of evenly spaced months starting from an arbitrary offset.
+var timeGrains = []struct {
+	// months is the spacing in calendar months; anchor is the month (1-12) the
+	// spacing is measured from, so quarters land on Jan/Apr/Jul/Oct rather than
+	// wherever the series happens to begin.
+	months int
+	// years is a multi-year spacing; when non-zero, months is ignored.
+	years int
+}{
+	{months: 1}, {months: 3}, {months: 6}, {years: 1}, {years: 2}, {years: 5}, {years: 10},
+}
+
+// TimeAxisTicks decides which of a dated series' points get an x-axis label,
+// for wide and narrow layouts at once.
+//
+// It exists because tick density is COMPUTATION — it depends on the series
+// length and on the pixels available — and the previous /networth axis did it
+// by drawing one caption per point. Across an all-time window that is 37
+// captions in an 900px gutter: each gets ~24px, every one truncates to its
+// first letter, and the axis becomes a run of "J F M A M J J" that names no
+// date at all. An unreadable label is worse than no label, because it still
+// costs the space and now also costs the reader the attempt.
+//
+// wideMax and narrowMax are the label budgets for the widest and narrowest
+// layouts. The finest calendar granularity that fits the budget wins: months
+// while a year fits, then quarters, half-years, years, and multi-year steps for
+// a decade of records. Ticks that also fit narrowMax are marked Major.
+//
+// The first and last points are ALWAYS labelled — a series whose ends are
+// unnamed does not say what it covers — and a calendar tick immediately beside
+// either end is dropped rather than allowed to collide with it.
+func TimeAxisTicks(ats []time.Time, wideMax, narrowMax int) []TimeTick {
+	if len(ats) == 0 || wideMax < 2 {
+		return nil
+	}
+	if len(ats) == 1 {
+		return []TimeTick{{Index: 0, Label: ats[0].Format("Jan 2006"), Major: true}}
+	}
+	multiYear := ats[0].Year() != ats[len(ats)-1].Year()
+	wide := timeGrainFor(ats, wideMax)
+	narrow := timeGrainFor(ats, narrowMax)
+
+	major := map[int]bool{}
+	for _, i := range narrow {
+		major[i] = true
+	}
+	out := make([]TimeTick, 0, len(wide))
+	for _, i := range wide {
+		out = append(out, TimeTick{Index: i, Label: timeTickLabel(ats[i], multiYear), Major: major[i]})
+	}
+	return out
+}
+
+// timeGrainFor picks the finest calendar granularity whose tick count fits max,
+// and returns the point indices it selects, ends included.
+func timeGrainFor(ats []time.Time, max int) []int {
+	last := len(ats) - 1
+	if max < 2 {
+		return []int{0, last}
+	}
+	// One point's share of the width is only too narrow to hold a label when the
+	// series is longer than the budget; below that, every slot is label-width
+	// already and a neighbour of an end collides with nothing.
+	crowded := last > max
+	for _, g := range timeGrains {
+		idx := grainIndices(ats, g.months, g.years, crowded)
+		if len(idx) <= max {
+			return idx
+		}
+	}
+	return []int{0, last}
+}
+
+// grainIndices selects the points landing on a calendar boundary of the given
+// spacing, always including both ends. When the series is crowded it also skips
+// the points immediately beside an end, whose labels would sit on top of them.
+func grainIndices(ats []time.Time, months, years int, crowded bool) []int {
+	last := len(ats) - 1
+	out := []int{0}
+	for i := 1; i < last; i++ {
+		if !onGrain(ats[i], months, years) {
+			continue
+		}
+		if crowded && (i == 1 || i == last-1) {
+			continue
+		}
+		out = append(out, i)
+	}
+	return append(out, last)
+}
+
+// onGrain reports whether t sits on a calendar boundary of the given spacing.
+func onGrain(t time.Time, months, years int) bool {
+	if years > 0 {
+		return t.Month() == time.January && t.Year()%years == 0
+	}
+	if months <= 1 {
+		return true
+	}
+	return (int(t.Month())-1)%months == 0
+}
+
+// timeTickLabel captions one tick: a bare year on a January boundary of a
+// multi-year series (the label a reader is scanning for), otherwise the month,
+// carrying its year only when the series spans more than one.
+func timeTickLabel(t time.Time, multiYear bool) string {
+	if multiYear && t.Month() == time.January {
+		return t.Format("2006")
+	}
+	if multiYear {
+		return t.Format("Jan 06")
+	}
+	return t.Format("Jan")
+}
+
 // Milestone is one genuinely notable event in the net-worth series.
 type Milestone struct {
 	// Kind is one of the MilestoneKind* constants.
