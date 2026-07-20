@@ -52,6 +52,40 @@ Notable decisions/traps:
   `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
   invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
   ("verified locally ✓" vs an honest "no local way to confirm").
+### Review-strip quality: why 63 candidates was mostly noise
+
+Screenshot review: page 1 led with "Meridian Data ~$4,400/mo" (the employer's payroll deposit),
+groceries, fuel, and an insurer already tracked twice. Three independent causes:
+
+1. **Dedupe was matching the wrong string.** `matchExisting` compared the commitment's display LABEL to
+   the cluster signature, so a flow the household named "Mortgage payment" could never recognise its own
+   "MERIDIAN DATA" charges. Fixed in the engine, which is the honest home: `Commitment` now optionally
+   carries the signatures it has ACTUALLY been settling (the caller harvests them from bill-match
+   TxnLinks and BillAccountID-tagged transactions) and an amount+cadence fingerprint for the common case
+   where nothing has been linked yet. Both additive — a zero Commitment behaves exactly as before. The
+   fingerprint tolerance is direction-aware: 5% outbound (the bill matcher's number), 15% inbound,
+   because net pay swings with hours and withholding, and a tight band let the household's ONE paycheck
+   keep resurfacing as a second, undiscovered income.
+2. **The existing classification was unreachable.** `subscriptions.IsEssentialSpend` matches a
+   subscription to its transactions by an EXACT `Desc` comparison — fine for the subscriptions surface,
+   useless for candidates keyed by resolved payee, which is why "Greenfield Market" sailed through a
+   filter that has "grocer" in its phrase list. Rather than change the shared matcher (other surfaces
+   depend on it), the phrase judgment is exported (`IsEssentialName`/`IsLenderName`) and applied at the
+   call site against everything the candidate actually holds: its payee, and the category/payee/desc of
+   its evidence transactions, plus a liability-account check.
+3. **Neither of those catches a restaurant.** The principled signal is amount stability: a commitment is
+   something owed on a schedule; a merchant is somewhere you spend varying amounts. Candidates whose
+   observed spread exceeds 40% of the typical amount are demoted. A STEPPED amount is explicitly not
+   volatile — that is a price rise on the same commitment, which the creep finding already handles.
+
+Everything demoted lands in the Silent tier (the opt-in Smart+ lane), never dropped — an uncertain class
+belongs behind a disclosure, not deleted. Result on the seed: the Smart lane went from 48 to 5, led by
+Xbox Game Pass and an internet provider.
+
+Also traced the "blank evidence line" the review flagged: not a bug in the sentence builder but the
+bounded `max-height` clipping the last card of a page mid-row. Sized the region so a default page of
+five fits whole, and added a guard that refuses to propose a candidate whose evidence would be empty.
+
 ### The dual-bill-identity double-count (blocker)
 
 Screenshot review caught the agenda listing the same obligation twice: "Car payment (Marcus)" (the

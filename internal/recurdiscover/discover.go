@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
 // Discover runs the full deterministic pipeline over the transactions and returns
@@ -24,10 +26,12 @@ func Discover(txns []Txn, existing []Commitment, pins Pins, opts Options) Result
 
 	var res Result
 	for _, c := range clusters {
+		// Evidence is computed up front because dedupe needs it: a commitment can
+		// be recognised by its amount+cadence fingerprint, not just by name.
+		ev, hasEv := buildEvidence(c.Txns, now, opts)
 		// Dedupe first: a cluster matching an existing commitment's matcher is a
 		// set of cycles for that commitment, never a new candidate.
-		if id, ok := matchExisting(c, existing); ok {
-			ev, hasEv := buildEvidence(c.Txns, now, opts)
+		if id, ok := matchExisting(c, ev, hasEv, existing); ok {
 			if !hasEv {
 				// No coherent rhythm/cost, but the identity match still means these
 				// transactions belong to the commitment; report them as cycles with a
@@ -206,12 +210,21 @@ func minimalEvidence(g []Txn) Evidence {
 	}
 }
 
-// matchExisting reports the id of an existing commitment whose matcher covers this
-// cluster (same direction, compatible account, matching identity), if any. The
-// commitment carries a clean display name whose signature has no reference
-// placeholder, so identity is compared on the CORE signature (the non-'#' tokens)
-// to bridge a clean "Spotify" against a cluster canonical of "SPOTIFY #".
-func matchExisting(c SignatureCluster, existing []Commitment) (string, bool) {
+// matchExisting reports the id of an existing commitment whose matcher covers
+// this cluster (same direction, compatible account, matching identity), if any.
+//
+// Identity is established by any of three signals, strongest first:
+//
+//  1. the signatures the commitment is KNOWN to match — derived by the caller
+//     from the transactions already settled/linked to it. This is what makes a
+//     "Mortgage payment" flow recognise its own "MERIDIAN DATA" charges.
+//  2. its display name, compared on the CORE signature (the non-'#' tokens) so a
+//     clean "Spotify" bridges a cluster canonical of "SPOTIFY #".
+//  3. an amount+cadence fingerprint on the same account, for the common case
+//     where nothing has been linked yet.
+//
+// ev/hasEv are the cluster's evidence, needed only by the fingerprint signal.
+func matchExisting(c SignatureCluster, ev Evidence, hasEv bool, existing []Commitment) (string, bool) {
 	cCore := coreSignature(c.Canonical)
 	for _, e := range existing {
 		if e.Direction != c.Direction {
@@ -220,11 +233,51 @@ func matchExisting(c SignatureCluster, existing []Commitment) (string, bool) {
 		if e.AccountID != "" && c.AccountID != "" && e.AccountID != c.AccountID {
 			continue
 		}
-		if coreMatches(coreSignature(Signature(e.Payee)), cCore) {
+		// (1) signatures this commitment has actually been paying.
+		matched := false
+		for _, s := range e.Signatures {
+			if coreMatches(coreSignature(s), cCore) {
+				matched = true
+				break
+			}
+		}
+		// (2) the display name.
+		if !matched && coreMatches(coreSignature(Signature(e.Payee)), cCore) {
+			matched = true
+		}
+		// (3) the amount+cadence fingerprint, only on a shared account.
+		if !matched && hasEv && e.AccountID != "" && e.AccountID == c.AccountID && e.matchesFingerprint(ev) {
+			matched = true
+		}
+		if matched {
 			return e.ID, true
 		}
 	}
 	return "", false
+}
+
+// FromDomainCadence maps a persisted domain cadence onto discovery's richer
+// rhythm so a caller can hand an existing commitment's declared cadence to the
+// dedupe fingerprint. Daily has no discovery equivalent (nothing that frequent is
+// modelled as a commitment) and maps to CadenceUnknown, which disables the
+// fingerprint rather than guessing.
+func FromDomainCadence(c domain.RecurringCadence) Cadence {
+	switch c {
+	case domain.CadenceWeekly:
+		return CadenceWeekly
+	case domain.CadenceBiweekly:
+		return CadenceBiweekly
+	case domain.CadenceSemimonthly:
+		return CadenceSemimonthly
+	case domain.CadenceMonthly:
+		return CadenceMonthly
+	case domain.CadenceQuarterly:
+		return CadenceQuarterly
+	case domain.CadenceYearly:
+		return CadenceAnnual
+	default:
+		return CadenceUnknown
+	}
 }
 
 // coreSignature drops the '#' reference placeholders from a signature, leaving the

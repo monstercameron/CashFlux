@@ -18,9 +18,12 @@ var rhythmKeys = Catalog{
 	"rhythm.tideTiny":      "Add a few recurring items to see the month's shape.",
 	"rhythm.pinch":         "Tightest: %s · %s cushion",
 	"rhythm.pinchNeg":      "Goes negative %s · %s short",
-	"rhythm.statNet":       "Net / mo",
-	"rhythm.statIn":        "In / mo",
-	"rhythm.statOut":       "Out / mo",
+	// The calm state still reports the low point — a pinch flag that fires every
+	// cycle is decoration, so it only appears when the cycle is genuinely tight.
+	"rhythm.pinchCalm": "No tight spots this cycle · lowest %s on %s",
+	"rhythm.statNet":   "Net / mo",
+	"rhythm.statIn":    "In / mo",
+	"rhythm.statOut":   "Out / mo",
 
 	// ── Overdue strip ───────────────────────────────────────────────────────
 	"rhythm.overdueSummary": "%s overdue · %s total",
@@ -41,10 +44,16 @@ var rhythmKeys = Catalog{
 	"rhythm.hideEvidence":     "Hide transactions",
 	"rhythm.lookDeeper":       "Look deeper with Smart+ — about %d tokens, on your OpenAI key",
 	"rhythm.lookDeeperNoKey":  "Add an OpenAI key in Settings to look deeper with Smart+",
-	"rhythm.lookDeeperBusy":   "Looking deeper…",
-	"rhythm.verifiedLocally":  "verified locally",
-	"rhythm.noLocalConfirm":   "no local way to confirm",
-	"rhythm.reviewNone":       "Nothing new to review — every repeating charge we found is already on your plan.",
+	// Disabled state: the button says what it would do, the sentence says why it
+	// can't and where to fix it — never an enabled-looking button beside a
+	// "you need a key" note.
+	"rhythm.lookDeeperLabel":    "Look deeper with Smart+",
+	"rhythm.lookDeeperNeedsKey": "Needs your own OpenAI key — about %d tokens for this scan.",
+	"rhythm.lookDeeperSettings": "Add one in Settings",
+	"rhythm.lookDeeperBusy":     "Looking deeper…",
+	"rhythm.verifiedLocally":    "verified locally",
+	"rhythm.noLocalConfirm":     "no local way to confirm",
+	"rhythm.reviewNone":         "Nothing new to review — every repeating charge we found is already on your plan.",
 
 	// Evidence sentence fragments (composed in order in Go).
 	"rhythm.evPayments":    "%d payments",

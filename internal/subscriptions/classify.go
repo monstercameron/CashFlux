@@ -197,3 +197,19 @@ func containsEssentialPhrase(s string) bool {
 	}
 	return false
 }
+
+// IsEssentialName reports whether a merchant, description, or category name
+// reads as essential household spend (utilities, groceries, fuel, rent,
+// insurance, tax) rather than a discretionary commitment.
+//
+// IsEssentialSpend matches a subscription to its transactions by an EXACT Desc
+// comparison, which suits the subscriptions surface but not callers that key on
+// a resolved PAYEE (the recurring-discovery candidates do). Exporting the phrase
+// judgment lets those callers reuse the same classification against whatever
+// text they actually hold.
+func IsEssentialName(s string) bool { return containsEssentialPhrase(s) }
+
+// IsLenderName reports whether a name reads as a lender or loan payment, using
+// the same phrase list IsLiabilityPayment applies. See IsEssentialName for why
+// the raw judgment is exported.
+func IsLenderName(s string) bool { return containsLenderPhrase(s) }

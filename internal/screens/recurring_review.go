@@ -13,12 +13,14 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -54,6 +56,190 @@ func buildDiscoverTxns(app *appstate.App, rates currency.Rates) []recurdiscover.
 		})
 	}
 	return out
+}
+
+// rhyCommitments describes every existing recurring flow to the discovery engine
+// well enough that it is never re-proposed as a "new" candidate. Matching on the
+// display label alone fails badly — the household calls it "Mortgage payment"
+// while the bank posts "MERIDIAN DATA" — so each commitment also declares:
+//
+//   - the signatures it has ACTUALLY been paying, harvested from the bill-match
+//     TxnLinks and BillAccountID-tagged transactions that settled it; and
+//   - an amount + cadence fingerprint, for the (common) case where nothing has
+//     been linked to it yet.
+func rhyCommitments(app *appstate.App, rates currency.Rates) []recurdiscover.Commitment {
+	payeeOf := map[string]string{}
+	sigsFor := map[string]map[string]bool{}
+	addSig := func(recurringID, payee string) {
+		if recurringID == "" || strings.TrimSpace(payee) == "" {
+			return
+		}
+		sig := recurdiscover.Signature(app.ResolvePayee(payee))
+		if sig == "" {
+			return
+		}
+		if sigsFor[recurringID] == nil {
+			sigsFor[recurringID] = map[string]bool{}
+		}
+		sigsFor[recurringID][sig] = true
+	}
+	for _, t := range app.Transactions() {
+		payeeOf[t.ID] = t.Payee
+		// A transaction tagged as this flow's bill payment is direct evidence of
+		// the payee text the flow settles.
+		if rid, ok := bills.RecurringIDFromAccount(t.BillAccountID); ok {
+			addSig(rid, t.Payee)
+		}
+	}
+	for _, l := range app.TxnLinks() {
+		if l.Kind != domain.TxnLinkBillMatch || l.RecurringID == "" {
+			continue
+		}
+		for _, tid := range l.TxnIDs {
+			addSig(l.RecurringID, payeeOf[tid])
+		}
+	}
+
+	recs := app.Recurring()
+	out := make([]recurdiscover.Commitment, 0, len(recs))
+	for _, r := range recs {
+		dir := recurdiscover.Out
+		if !r.Amount.IsNegative() {
+			dir = recurdiscover.In
+		}
+		var sigs []string
+		for s := range sigsFor[r.ID] {
+			sigs = append(sigs, s)
+		}
+		sort.Strings(sigs) // deterministic input to a deterministic engine
+		amt := r.Amount.Abs()
+		if conv, err := rates.Convert(amt, rates.Base); err == nil {
+			amt = conv
+		}
+		out = append(out, recurdiscover.Commitment{
+			ID: r.ID, Payee: r.Label, AccountID: r.AccountID, Direction: dir,
+			Signatures:  sigs,
+			AmountMinor: amt.Amount,
+			Cadence:     recurdiscover.FromDomainCadence(r.Cadence),
+		})
+	}
+	return out
+}
+
+// rhyDemoteNoise lowers candidates that do not read as household commitments to
+// the Silent tier, so they surface only in the opt-in deeper lane rather than
+// leading the review queue. Nothing is dropped — an uncertain class belongs in
+// Silent, not page 1.
+//
+// Outbound candidates are judged by the subscriptions package's existing
+// classification (liability payments, essential spend like groceries and fuel,
+// and anything already planned). Inbound candidates are only proposed when they
+// read like a genuine paycheck — a pay-like cadence with enough history — so an
+// employer deposit is an income commitment but a one-off refund is not.
+func rhyDemoteNoise(app *appstate.App, cands []recurdiscover.Candidate) []recurdiscover.Candidate {
+	catName := map[string]string{}
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
+	}
+	liability := map[string]bool{}
+	for _, a := range app.Accounts() {
+		if a.Class == domain.ClassLiability || a.Type.IsLiability() {
+			liability[a.ID] = true
+		}
+	}
+	txnByID := map[string]domain.Transaction{}
+	for _, t := range app.Transactions() {
+		txnByID[t.ID] = t
+	}
+	planned := map[string]bool{}
+	for _, r := range app.Recurring() {
+		planned[strings.ToLower(strings.TrimSpace(r.Label))] = true
+	}
+
+	out := make([]recurdiscover.Candidate, 0, len(cands))
+	for _, c := range cands {
+		keep := true
+		switch {
+		case c.Direction == recurdiscover.In:
+			keep = rhyLooksLikePaycheck(c)
+		case planned[strings.ToLower(strings.TrimSpace(c.Payee))]:
+			keep = false
+		case rhyIsEssentialOrLender(c, txnByID, catName, liability):
+			keep = false
+		case rhyAmountTooVariable(c.Evidence):
+			// A commitment is something owed on a schedule, not a merchant visited
+			// regularly. Groceries, restaurants and fuel repeat with a wildly
+			// varying amount; a real bill or subscription does not.
+			keep = false
+		}
+		if !keep {
+			c.Tier = recurdiscover.TierSilent
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// rhyIsEssentialOrLender reuses the subscriptions package's phrase judgment
+// against everything the candidate actually carries — its payee, and the
+// category / payee / description of the transactions that evidence it — so
+// groceries, fuel, utilities, and loan payments never get proposed as new
+// commitments. (IsEssentialSpend itself matches on an exact Desc comparison,
+// which does not fit payee-keyed candidates.)
+func rhyIsEssentialOrLender(c recurdiscover.Candidate, txnByID map[string]domain.Transaction,
+	catName map[string]string, liability map[string]bool) bool {
+	if subscriptions.IsEssentialName(c.Payee) || subscriptions.IsLenderName(c.Payee) {
+		return true
+	}
+	for _, id := range c.Evidence.TxnIDs {
+		t, ok := txnByID[id]
+		if !ok {
+			continue
+		}
+		// Money moving to a liability is a transfer against debt, not a new
+		// subscription.
+		if liability[t.AccountID] {
+			return true
+		}
+		if subscriptions.IsEssentialName(t.Payee) || subscriptions.IsEssentialName(t.Desc) ||
+			subscriptions.IsLenderName(t.Payee) || subscriptions.IsLenderName(t.Desc) {
+			return true
+		}
+		if n := catName[t.CategoryID]; n != "" && (subscriptions.IsEssentialName(n) || subscriptions.IsLenderName(n)) {
+			return true
+		}
+	}
+	return false
+}
+
+// rhyVariableAmountShare is how wide a candidate's observed amount spread may be,
+// as a fraction of its typical amount, before it reads as variable SPENDING
+// rather than a commitment. A subscription is fixed or tightly banded; a weekly
+// grocery run is not.
+const rhyVariableAmountShare = 0.40
+
+// rhyAmountTooVariable reports whether the observed amounts swing too widely for
+// the pattern to be a commitment. A stepped amount (one durable price change) is
+// explicitly NOT volatile — that is a price rise on the same commitment.
+func rhyAmountTooVariable(ev recurdiscover.Evidence) bool {
+	if ev.Amount.Kind != recurdiscover.AmountBanded || ev.Amount.Typical <= 0 {
+		return false
+	}
+	spread := ev.Amount.HighMinor - ev.Amount.LowMinor
+	return float64(spread) > float64(ev.Amount.Typical)*rhyVariableAmountShare
+}
+
+// rhyLooksLikePaycheck reports whether an inbound candidate reads like real
+// income: a pay-like rhythm with at least three sightings. Everything else
+// (refunds, transfers, one-off deposits) belongs in the Silent tier.
+func rhyLooksLikePaycheck(c recurdiscover.Candidate) bool {
+	switch c.Evidence.Cadence {
+	case recurdiscover.CadenceWeekly, recurdiscover.CadenceBiweekly,
+		recurdiscover.CadenceSemimonthly, recurdiscover.CadenceMonthly:
+		return c.Evidence.Count >= 3
+	default:
+		return false
+	}
 }
 
 // loadRecurPins reads the persisted discovery pins as recurdiscover.Pins.
@@ -100,15 +286,8 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	txns := buildDiscoverTxns(app, rates)
-	existing := make([]recurdiscover.Commitment, 0)
-	for _, r := range app.Recurring() {
-		dir := recurdiscover.Out
-		if !r.Amount.IsNegative() {
-			dir = recurdiscover.In
-		}
-		existing = append(existing, recurdiscover.Commitment{ID: r.ID, Payee: r.Label, AccountID: r.AccountID, Direction: dir})
-	}
-	res := recurdiscover.Discover(txns, existing, loadRecurPins(), recurdiscover.Options{Now: now})
+	res := recurdiscover.Discover(txns, rhyCommitments(app, rates), loadRecurPins(), recurdiscover.Options{Now: now})
+	res.Candidates = rhyDemoteNoise(app, res.Candidates)
 
 	// txn date lookup so a confirm can back-claim each evidence transaction as its
 	// own prior cycle.
@@ -119,6 +298,12 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 
 	var groupA, leftovers []recurdiscover.Candidate
 	for _, c := range res.Candidates {
+		// Every candidate must be able to justify itself. A candidate whose
+		// evidence sentence would render empty has nothing to show the user, so it
+		// is never proposed.
+		if rhyEvidenceSentence(c.Evidence, base) == "" {
+			continue
+		}
 		if c.Tier == recurdiscover.TierSilent {
 			leftovers = append(leftovers, c)
 		} else {
@@ -265,6 +450,9 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 
 	// The opt-in footer: token estimate up front; disabled with an explanation
 	// when no key is configured.
+	// ONE coherent state: with a key the control invites the deeper look and
+	// quotes the cost; without one it is visibly disabled and the sentence
+	// explains why, pointing at Settings. Never both at once.
 	var footer ui.Node
 	if !aiOpen.Get() && len(leftovers) > 0 {
 		if hasKey {
@@ -274,10 +462,15 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 					"✦ "+uistate.T("rhythm.lookDeeper", estTokens)),
 			)
 		} else {
-			footer = Div(css.Class("rhy-review-foot"),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("disabled", "true"), Attr("data-testid", "rhy-smartplus-optin"),
-					"✦ "+uistate.T("rhythm.lookDeeper", estTokens)),
-				Span(css.Class("muted"), uistate.T("rhythm.lookDeeperNoKey")),
+			footer = Div(css.Class("rhy-review-foot is-disabled"),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("disabled", "true"), Attr("aria-disabled", "true"),
+					Attr("data-testid", "rhy-smartplus-optin"),
+					"✦ "+uistate.T("rhythm.lookDeeperLabel")),
+				Span(css.Class("muted"),
+					uistate.T("rhythm.lookDeeperNeedsKey", estTokens),
+					" ",
+					A(css.Class("link"), Href(uistate.RoutePath("/settings")), uistate.T("rhythm.lookDeeperSettings")),
+				),
 			)
 		}
 	}

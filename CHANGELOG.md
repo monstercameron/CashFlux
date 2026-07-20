@@ -7,6 +7,26 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The review strip proposed things you already track, and led with the worst of them.** On the sample
+  household it surfaced 63 candidates headed by the employer's payroll deposit, an already-tracked
+  insurer, groceries and fuel. Three causes, all fixed: (1) dedupe matched a commitment's DISPLAY LABEL
+  against the transaction payee, so "Mortgage payment" never recognised its own "MERIDIAN DATA" charges
+  — `recurdiscover.Commitment` now also accepts the signatures it has actually been settling (harvested
+  from bill-match TxnLinks and BillAccountID-tagged transactions) plus an amount+cadence fingerprint,
+  with a looser tolerance inbound because net pay legitimately varies; (2) the subscriptions package's
+  classification was unreachable from payee-keyed candidates (`IsEssentialSpend` matches on an exact
+  `Desc`), so its phrase judgment is now exported as `IsEssentialName`/`IsLenderName` and applied to the
+  candidate's payee AND its evidence transactions' category/payee/description; (3) a new
+  amount-volatility test demotes patterns whose observed spread exceeds 40% of the typical amount — a
+  commitment is something owed on a schedule, not a merchant visited regularly. Nothing is dropped:
+  uncertain classes fall to the Silent tier (the opt-in deeper lane) rather than page 1. On the seed the
+  Smart lane went from 48 candidates to 5, led by real subscriptions.
+- **A review candidate could render with a blank evidence line.** The bounded scroll region clipped the
+  last card of a page mid-row; the region is now sized so a default page fits whole, and any candidate
+  whose evidence sentence would render empty is never proposed.
+- **The Smart+ opt-in contradicted itself** — an enabled-looking button beside "Add an OpenAI key in
+  Settings". With no key it is now one coherent disabled control whose sentence explains why and links
+  to Settings.
 - **The agenda double-counted an obligation that has both a liability statement and a recurring flow.**
   A car loan showed as BOTH "Car payment (Marcus)" (the recurring flow) and "Marcus's Car Loan" (the
   liability account's statement bill) on the same day for the same amount — inflating apparent outflow,

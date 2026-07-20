@@ -241,15 +241,66 @@ type Candidate struct {
 	Evidence   Evidence
 }
 
-// Commitment describes an existing recurring commitment just enough for dedupe:
-// discovery re-derives its signature from Payee and matches a cluster on
-// (signature, account, direction). A matched cluster becomes cycle-matches for
-// the commitment rather than a fresh candidate.
+// Commitment describes an existing recurring commitment well enough for dedupe.
+//
+// Matching on the display Payee alone is not sufficient and was the single
+// biggest source of noise on the review surface: a household names its mortgage
+// flow "Mortgage payment" while the bank posts it as "MERIDIAN DATA", so the
+// already-tracked obligation kept resurfacing as a fresh candidate. So a
+// commitment can additionally declare what it ACTUALLY matches:
+//
+//   - Signatures — the signatures of transactions already settled or linked to
+//     it (bill-match TxnLinks, BillAccountID-tagged transactions). This is the
+//     precise signal: it is literally the payee text this commitment has been
+//     paying.
+//   - AmountMinor + Cadence — a fingerprint for the common case where nothing
+//     has been linked yet. A cluster on the same account, repeating on the same
+//     cadence, for the same amount, is the same obligation.
+//
+// Both are optional and additive; a zero Commitment behaves exactly as before.
 type Commitment struct {
 	ID        string
 	Payee     string
 	AccountID string
 	Direction Direction
+	// Signatures are extra canonical signatures this commitment is known to match
+	// (derived by the caller from its settled/linked transactions).
+	Signatures []string
+	// AmountMinor is the commitment's per-occurrence amount as a POSITIVE
+	// magnitude in the caller's base currency; 0 disables fingerprint matching.
+	AmountMinor int64
+	// Cadence is the commitment's declared repeat rhythm; CadenceUnknown disables
+	// fingerprint matching.
+	Cadence Cadence
+}
+
+// Fingerprint amount tolerances, as a fraction of the commitment's declared
+// amount. Outflow uses the same 5% the bill matcher does — a bill that moves
+// more than that is a different obligation (or a price change worth surfacing).
+// Inflow is deliberately looser: net pay legitimately swings with hours, tax
+// withholding, and bonuses, so a tight band would let a household's ONE paycheck
+// keep resurfacing as a second, "undiscovered" income.
+const (
+	fingerprintToleranceOut = 0.05
+	fingerprintToleranceIn  = 0.15
+)
+
+// matchesFingerprint reports whether evidence for a cluster looks like this
+// commitment's own cycles: same cadence, and an amount within the tolerance for
+// its direction.
+func (c Commitment) matchesFingerprint(ev Evidence) bool {
+	if c.AmountMinor <= 0 || c.Cadence == CadenceUnknown || ev.Cadence != c.Cadence {
+		return false
+	}
+	share := fingerprintToleranceOut
+	if c.Direction == In {
+		share = fingerprintToleranceIn
+	}
+	tol := int64(float64(c.AmountMinor) * share)
+	if tol < 1 {
+		tol = 1
+	}
+	return absInt64(ev.Amount.Typical-c.AmountMinor) <= tol
 }
 
 // Options tunes a discovery run. Now anchors liveness and last-seen reasoning;

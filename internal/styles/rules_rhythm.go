@@ -76,33 +76,36 @@ func registerRhythmTideline() {
 		prop("height", "auto"),
 		prop("overflow", "visible"),
 	)
-	// Income up-ticks carry the accent; outflow down-ticks are a muted line.
+	// Income up-ticks carry the accent; outflow down-ticks are a muted line. Both
+	// need real weight — at 2px/0.7 opacity against the card the band read as
+	// nearly empty, which defeats the whole point of a signature element.
 	rule(".rhy-tick-in",
 		prop("stroke", "var(--accent)"),
-		prop("stroke-width", "2"),
+		prop("stroke-width", "3.5"),
 		prop("stroke-linecap", "round"),
 	)
 	rule(".rhy-tick-in.is-scheduled",
 		prop("stroke-dasharray", "2 2"),
 	)
 	rule(".rhy-tick-out",
-		prop("stroke", "var(--text-dim)"),
-		prop("stroke-width", "2"),
+		prop("stroke", "var(--text)"),
+		prop("stroke-width", "3"),
 		prop("stroke-linecap", "round"),
-		prop("opacity", "0.7"),
+		prop("opacity", "0.55"),
 	)
 	rule(".rhy-tick-out.is-scheduled",
-		prop("opacity", "0.4"),
+		prop("opacity", "0.3"),
 	)
 	rule(".rhy-cushion",
 		prop("fill", "none"),
-		prop("stroke", "var(--text)"),
-		prop("stroke-width", "1.5"),
-		prop("opacity", "0.55"),
+		prop("stroke", "var(--accent)"),
+		prop("stroke-width", "2.5"),
+		prop("stroke-linejoin", "round"),
+		prop("opacity", "0.9"),
 	)
 	rule(".rhy-cushion-area",
 		prop("fill", "var(--accent)"),
-		prop("opacity", "0.06"),
+		prop("opacity", "0.1"),
 	)
 	rule(".rhy-axis",
 		prop("stroke", "var(--border)"),
@@ -149,6 +152,12 @@ func registerRhythmTideline() {
 	rule(".rhy-pinch-note.is-neg",
 		prop("background", "color-mix(in srgb, var(--danger) 14%, transparent)"),
 		prop("border-color", "color-mix(in srgb, var(--danger) 45%, var(--border))"),
+	)
+	// The calm state is quiet chrome, not a warning — no amber, no alarm.
+	rule(".rhy-pinch-note.is-calm",
+		prop("background", "transparent"),
+		prop("border-color", "var(--border)"),
+		prop("color", "var(--text-dim)"),
 	)
 	rule(".rhy-tide-empty",
 		prop("display", "flex"),
@@ -340,9 +349,18 @@ func registerRhythmStrips() {
 	// The paged candidate region is bounded so the review strip can never
 	// dominate the viewport, whatever the page size or how many the detector
 	// found. The pager + opt-in footer sit OUTSIDE this scroll region.
+	// Sized so a DEFAULT page (5 candidates) fits whole — a shorter bound clipped
+	// the last card mid-row, which read as a candidate with a missing evidence
+	// line. Larger page sizes still scroll, so the strip stays bounded.
 	rule(".rhy-review-page",
-		prop("max-height", "30rem"),
+		prop("max-height", "44rem"),
 		prop("overflow-y", "auto"),
+	)
+	// The disabled opt-in reads as one unavailable control, not an enabled button
+	// contradicted by the sentence beside it.
+	rule(".rhy-review-foot.is-disabled .btn[disabled]",
+		prop("opacity", "0.5"),
+		prop("cursor", "not-allowed"),
 	)
 	rule(".rhy-review-foot",
 		prop("margin-top", "0.85rem"),
