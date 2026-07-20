@@ -258,6 +258,34 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		done()
 		reconNav.Navigate(uistate.RoutePath("/transactions"))
 	}))
+	// Bulk "Mark all cleared": flip every uncleared transaction on the account
+	// to cleared in one action, so a statement whose lines are all present is
+	// reconciled without clicking each row. Undoable via the shared undo story
+	// (Ctrl+Z restores the pre-batch snapshot). The uncleared set is collected
+	// first, then mutated, so PutTransaction never reshapes the slice mid-loop.
+	doReconMarkAll := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
+		var pending []domain.Transaction
+		for _, t := range app.Transactions() {
+			if t.AccountID == a.ID && !t.Cleared {
+				pending = append(pending, t)
+			}
+		}
+		if len(pending) == 0 {
+			return
+		}
+		for _, t := range pending {
+			t.Cleared = true
+			if err := app.PutTransaction(t); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+		}
+		uistate.BumpDataRevision()
+		postUndoStory(uistate.T("accounts.reconMarkAllDone", len(pending)))
+	}))
 
 	// ---- edit state ----
 	instInit := a.Institution
@@ -523,8 +551,8 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
 		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app,
-		reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
-			SaveDraft: doReconSaveDraft, Reopen: doReconReopen, HasDraft: hasReconDraft})
+			reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
+				SaveDraft: doReconSaveDraft, Reopen: doReconReopen, MarkAll: doReconMarkAll, HasDraft: hasReconDraft})
 	case uistate.AcctEditModeTransfer:
 		return transferForm(a, app, app.Accounts(), xferFromS, xferToS, xferAmtS, xferDateS, xferDescS, onXferAmt, onXferDate, onXferDesc, doTransfer, cancel)
 	default:
@@ -607,8 +635,8 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 // to investigate, save the half-done session as a draft, and reopen (undo) the
 // most recent recorded reconciliation.
 type reconcileActions struct {
-	Adjust, Force, Investigate, SaveDraft, Reopen ui.Handler
-	HasDraft                                      bool
+	Adjust, Force, Investigate, SaveDraft, Reopen, MarkAll ui.Handler
+	HasDraft                                               bool
 }
 
 // reconcileForm is the reconcile-to-statement editor. Once the difference hits
@@ -662,30 +690,70 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 		))
 	}
 
+	// Bulk "Mark all cleared" preview: what the remaining difference becomes if
+	// every uncleared row is cleared at once — so the button can promise an exact
+	// match or warn about the gap that would still stand.
+	unclearedAmounts := make([]int64, 0, len(unclearedTxns))
+	for _, t := range unclearedTxns {
+		unclearedAmounts = append(unclearedAmounts, t.Amount.Amount)
+	}
+	bulk := reconcile.PreviewBulkClear(curCleared.Amount, stmtMinor, unclearedAmounts)
+	bulkDiffLabel := money.FormatMinor(bulk.Result.DifferenceMinor, dec)
+	if bulk.Result.DifferenceMinor > 0 {
+		bulkDiffLabel = "+" + bulkDiffLabel
+	}
+	remainingCls := "reconcile-remaining"
+	if result.Reconciled {
+		remainingCls += " is-zero"
+	}
+	bulkPreview := uistate.T("accounts.reconMarkAllPreviewGap", bulk.Count, bulkDiffLabel)
+	if bulk.Result.Reconciled {
+		bulkPreview = uistate.T("accounts.reconMarkAllPreviewMatch", bulk.Count)
+	}
+
 	return Div(css.Class("acct-edit-form"), Attr("data-testid", "reconcile-statement-mode"),
 		Div(css.Class("modal-scroll"),
-			If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
-				Style(map[string]string{"margin": "0 0 0.5rem"}),
-				uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
-			If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
-				Style(map[string]string{"margin": "0 0 0.5rem"}),
-				uistate.T("accounts.reconDraftNote"))),
-			labeledField(uistate.T("accounts.statementBalance"),
-				Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
-					Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
-					Placeholder(uistate.T("accounts.statementBalancePh")), Value(stmtBalS.Get()), OnInput(onStmtBal))),
-			labeledField(uistate.T("accounts.reconStmtDate"),
-				Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
-					Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")),
-					Value(stmtDateS.Get()), OnInput(onStmtDate))),
-			Div(Style(map[string]string{"margin": "0.5rem 0"}),
-				Span(Style(map[string]string{"margin-right": "1rem"}), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
-				Span(Attr("data-testid", "reconcile-difference"), uistate.T("accounts.differenceLabel"), diffLabel),
-				If(result.Reconciled, Span(Style(map[string]string{"margin-left": "1rem", "color": "var(--cf-pos)", "font-weight": "bold"}),
-					Attr("data-testid", "reconcile-confirmed"), uistate.T("accounts.reconciledCheck"))),
+			// Sticky math header: the statement inputs and the live remaining-
+			// difference readout stay anchored to the top while the transaction
+			// list scrolls, so the reconciliation math is always in view.
+			Div(css.Class("reconcile-header"), Attr("data-testid", "reconcile-header"),
+				If(hasThrough, P(css.Class("budget-sub"), Attr("data-testid", "reconcile-through"),
+					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					uistate.T("accounts.reconThrough", through.Format("Jan 2, 2006")))),
+				If(acts.HasDraft, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-draft-note"),
+					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					uistate.T("accounts.reconDraftNote"))),
+				labeledField(uistate.T("accounts.statementBalance"),
+					Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
+						Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
+						Placeholder(uistate.T("accounts.statementBalancePh")), Value(stmtBalS.Get()), OnInput(onStmtBal))),
+				labeledField(uistate.T("accounts.reconStmtDate"),
+					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
+						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")),
+						Value(stmtDateS.Get()), OnInput(onStmtDate))),
+				Div(css.Class("reconcile-summary"),
+					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
+					Span(ClassStr(remainingCls), Attr("data-testid", "reconcile-difference"),
+						uistate.T("accounts.reconRemainingLabel"), diffLabel),
+					If(result.Reconciled, Span(css.Class(tw.TextDim), Attr("data-testid", "reconcile-confirmed"),
+						uistate.T("accounts.reconciledCheck"))),
+				),
 			),
+			// Standing copy: what finishing a reconciliation requires. Shown while
+			// the account isn't yet balanced, so the finish path is never a mystery.
+			If(!result.Reconciled, P(css.Class("t-caption", tw.TextDim, "reconcile-explain"),
+				Attr("data-testid", "reconcile-explain"), uistate.T("accounts.reconExplain"))),
+			// Finish path: a prominent, plainly-named action once the difference is
+			// zero. Records the reconciliation (reconciled-through date + history).
 			If(result.Reconciled, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "reconcile-done"),
-				OnClick(onRecord), uistate.T("accounts.reconRecordAction"))),
+				OnClick(onRecord), uistate.T("accounts.reconFinishAction"))),
+			// Bulk action: clear every outstanding row at once, with a preview of the
+			// outcome. Undoable (Ctrl+Z) via the shared undo story.
+			If(len(unclearedTxns) > 0, Div(css.Class("reconcile-markall"), Attr("data-testid", "reconcile-markall"),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "reconcile-markall-btn"),
+					Title(uistate.T("accounts.reconMarkAllTitle")), OnClick(acts.MarkAll), uistate.T("accounts.reconMarkAll")),
+				If(stmtTyped, Span(css.Class("reconcile-markall-preview"), Attr("data-testid", "reconcile-markall-preview"),
+					bulkPreview)))),
 			If(len(unclearedTxns) > 0, Div(Style(map[string]string{"margin-top": "0.75rem"}),
 				P(css.Class("t-caption"), uistate.T("accounts.unclearedHeading")),
 				Div(css.Class("rows"), MapKeyed(unclearedTxns, keyOfTxn, renderTxnRow)))),

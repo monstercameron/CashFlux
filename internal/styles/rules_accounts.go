@@ -233,4 +233,9 @@ func registerAccountsSurface() {
 		prop("border-color", "var(--border)"),
 		prop("box-shadow", "none"),
 	)
+
+	// Guided reconcile-to-statement workflow refinements (sticky math header,
+	// standing explanation, "Mark all cleared" bulk row). Chained here so the
+	// shared install.go Register() list is untouched by this lane.
+	registerReconcileFlow()
 }
