@@ -457,6 +457,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
 			Span(css.Class("budget-crow-amt fig"), barSpent+" / "+fmtMoney(limit)),
 			crowLeft,
+			// C395: in the dense single-line row, show the rollover badge only when the
+			// policy is ON — an accent pill worth the space; a "No rollover" pill on every
+			// compact row would be noise the card view already carries in full.
+			If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 			crowChip,
 			kebabNode,
 		)
@@ -657,6 +661,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				IfElse(lastMonthMode,
 					Span(css.Class("budget-sub"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta+" · "+periodLabel(s.Budget.Period)),
 					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period))),
+				// C395: the rollover policy badge, high in the caption stack so the
+				// carry/no-carry policy is legible at a glance; click opens the math.
+				budgetRolloverBadgeFor(props),
 				// Multi-category budgets: list the tracked categories so the combined total reads clearly.
 				If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
 					uistate.T("budgets.catsTracking", props.TrackedCats))),
@@ -698,6 +705,85 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			)),
 		),
 	)
+}
+
+// budgetRolloverBadgeProps configures the per-row rollover policy badge (C395).
+type budgetRolloverBadgeProps struct {
+	BudgetID     string
+	Rollover     bool   // whether this budget carries unused money into the next period
+	CapPeriods   int    // RolloverCapPeriods; > 0 caps the carried surplus at N× the limit
+	Carry        string // formatted previous-period remaining ("$50.00 left" / "$32.00 over"); "" when none
+	EffectiveCap string // this period's effective cap when it differs from the base limit; "" otherwise
+	CapMath      string // the effective cap's arithmetic ("$200 limit + $50 carried over")
+}
+
+// budgetRolloverBadge renders the small rollover-policy pill on a budget row and,
+// on click, a deterministic carryover-math explainer popover — the project's
+// "no black boxes" rule applied to rollover. The pill states policy at a glance
+// (No rollover / Rolls over / Rolls over · cap N); the popover reconstructs THIS
+// period's carryover from the exact figures the engine produced (last period's
+// surplus/shortfall, the cap rule, and the resulting effective cap with its
+// arithmetic). Its own component so the popover's open-state + dismiss hooks sit
+// at a stable position — never inside the row's caption list.
+func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
+	open := ui.UseState(false)
+	wrapID := "rollover-badge-" + props.BudgetID
+	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+
+	// The glance-level label + tone.
+	var label, toneCls string
+	switch {
+	case !props.Rollover:
+		label, toneCls = uistate.T("budgetsRollover.badgeOff"), " is-off"
+	case props.CapPeriods > 0:
+		label, toneCls = uistate.T("budgetsRollover.badgeCapped", props.CapPeriods), " is-capped"
+	default:
+		label, toneCls = uistate.T("budgetsRollover.badgeOn"), " is-on"
+	}
+
+	// The deterministic breakdown, assembled from the same figures shown on the row.
+	var parts []string
+	if !props.Rollover {
+		parts = append(parts, uistate.T("budgetsRollover.offText"))
+	} else {
+		parts = append(parts, uistate.T("budgetsRollover.onIntro"))
+		if props.Carry != "" {
+			parts = append(parts, uistate.T("budgetsRollover.carryLine", props.Carry))
+		} else {
+			parts = append(parts, uistate.T("budgetsRollover.noCarryLine"))
+		}
+		if props.CapPeriods > 0 {
+			parts = append(parts, uistate.T("budgetsRollover.capLine", props.CapPeriods))
+		}
+		if props.EffectiveCap != "" && props.CapMath != "" {
+			parts = append(parts, uistate.T("budgetsRollover.capThisPeriod", props.EffectiveCap, props.CapMath))
+		}
+	}
+	uiw.SmartTipPortal(open.Get(), wrapID, uistate.T("budgetsRollover.popTitle"), strings.Join(parts, " "))
+
+	aria := uistate.T("budgetsRollover.badgeAria", label)
+	return Span(ClassStr("budget-rollover-badge"+toneCls), Attr("id", wrapID),
+		Button(css.Class("budget-rollover-pill"), Type("button"),
+			Attr("data-testid", "budget-rollover-badge-"+props.BudgetID),
+			Attr("aria-label", aria), Attr("aria-expanded", ariaBool(open.Get())),
+			Title(aria), OnClick(toggle),
+			Span(label),
+		),
+	)
+}
+
+// budgetRolloverBadgeFor builds the rollover badge element for a row from its status
+// and the row props, reading the policy straight off the domain budget.
+func budgetRolloverBadgeFor(props budgetRowProps) ui.Node {
+	return ui.CreateElement(budgetRolloverBadge, budgetRolloverBadgeProps{
+		BudgetID:     props.Status.Budget.ID,
+		Rollover:     props.Status.Budget.Rollover,
+		CapPeriods:   props.Status.Budget.RolloverCapPeriods,
+		Carry:        props.RolloverCarry,
+		EffectiveCap: props.EffectiveCap,
+		CapMath:      props.EffectiveCapMath,
+	})
 }
 
 // budgetTopDriversFor computes the up-to-n largest charges driving a budget's spend

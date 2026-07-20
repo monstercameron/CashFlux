@@ -27,10 +27,20 @@ func registerGenerated() {
 		// clearly subordinate to --text, no longer straining.
 		customProp("--text-dim", "#b6b6be"),
 		customProp("--text-faint", "#9a9aa2"),
+		// --muted aliases the faint tier. It was defined ONLY in the light theme,
+		// so dark-mode var(--muted) resolved to nothing and its two consumers
+		// (chip close glyphs, the nav-alt hint) inherited whatever color cascaded
+		// (UI/UX task #35 — the empty-token landmine class of bug).
+		customProp("--muted", "#9a9aa2"),
 		customProp("--accent", "#2e8b57"),
 		customProp("--accent-dim", "#1f2c24"),
 		customProp("--brand", "#7c83ff"),
 		customProp("--danger", "#d8716f"),
+		// NOT a legacy token (UI/UX task #34 finding): --radius is the THEME
+		// EDITOR's corner-radius knob — internal/theme/theme.go re-emits it per
+		// custom theme (t.Radius). The base default is square; surfaces that
+		// should follow the user's theme use var(--radius), everything else uses
+		// the fixed --radius-xs…xl scale below.
 		customProp("--radius", "0px"),
 		// Z-index scale — one place to reason about stacking order. Higher layer wins.
 		customProp("--z-raised", "5"),     // lifted-in-card fills / figs
@@ -237,7 +247,7 @@ func registerGenerated() {
 	)
 	rule(".boot-word",
 		fontFamily("\"Fraunces\", Georgia, serif"),
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("600"),
 		letterSpacing("0.01em"),
 		color("var(--text)"),
@@ -245,7 +255,7 @@ func registerGenerated() {
 		animation("boot-fade-up var(--motion-narrative, 450ms) var(--ease-enter, ease) forwards"),
 	)
 	rule(".boot-sub",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-faint)"),
 		opacity("0"),
 		animation("boot-fade-up var(--motion-narrative, 450ms) var(--ease-enter, ease) 100ms forwards"),
@@ -308,7 +318,7 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		padding("0.45rem 0.8rem"),
 		fontSize("13px"),
 		textDecoration("none"),
@@ -323,7 +333,7 @@ func registerGenerated() {
 	rule("a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,\n      textarea:focus-visible, [tabindex]:focus-visible, [role=\"button\"]:focus-visible,\n      [role=\"switch\"]:focus-visible, [role=\"radio\"]:focus-visible",
 		outline("2px solid var(--accent)"),
 		outlineOffset("2px"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 	)
 	rule("#app.app-enter",
 		animation("app-settle var(--motion-narrative, 450ms) var(--ease-enter, ease-out) both"),
@@ -673,7 +683,7 @@ func registerGenerated() {
 	)
 	rule(".skeleton",
 		background("var(--bg-elev, rgba(255,255,255,0.04))"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("transparent !important"),
 		pointerEvents("none"),
 	)
@@ -750,9 +760,9 @@ func registerGenerated() {
 		color("#fecaca"),
 		border("1px solid #7f1d1d"),
 		padding("0.75rem 1rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		fontFamily("ui-monospace, monospace"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		whiteSpace("pre-wrap"),
 	)
 	rule(".app",
@@ -816,7 +826,7 @@ func registerGenerated() {
 	rule(".topbar .member-switcher",
 		height("var(--tb-h)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev, transparent)"),
 		color("inherit"),
 		fontSize(".82rem"),
@@ -836,7 +846,7 @@ func registerGenerated() {
 		width("var(--tb-h)"),
 		height("var(--tb-h)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
 		display("inline-flex"),
@@ -855,7 +865,7 @@ func registerGenerated() {
 		alignItems("center"),
 		height("var(--tb-h)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev, transparent)"),
 		overflow("visible"),
 	)
@@ -931,7 +941,7 @@ func registerGenerated() {
 	rule(".period-preset",
 		padding(".3rem .6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("transparent"),
 		color("var(--text-dim)"),
 		fontSize(".78rem"),
@@ -970,7 +980,7 @@ func registerGenerated() {
 	rule(".topbar .tb-actions .icon-btn,\n      .topbar .tb-actions .more-btn,\n      .topbar .tb-actions .notify-btn,\n      .topbar .tb-actions .muzak-btn",
 		width("var(--tb-h)"),
 		height("var(--tb-h)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
@@ -991,7 +1001,7 @@ func registerGenerated() {
 	rule(".topbar .tb-actions .add-wrap:not(.topbar-more)",
 		height("var(--tb-h)"),
 		border("1px solid color-mix(in srgb, var(--accent) 45%, var(--border))"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".topbar .tb-actions .add-btn",
@@ -1052,7 +1062,7 @@ func registerGenerated() {
 		height("1.6rem"),
 		background("var(--accent)"),
 		color("#052e13"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		fontWeight("900"),
 	)
 	rule(".brand-name",
@@ -1072,7 +1082,7 @@ func registerGenerated() {
 		font("inherit"),
 		fontSize("0.9rem"),
 		padding("0.4rem 0.7rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		cursor("pointer"),
 		whiteSpace("nowrap"),
 		transition("background 0.12s, color 0.12s"),
@@ -1145,7 +1155,7 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.6rem"),
 		margin("1.6rem 0 0.6rem"),
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -1425,7 +1435,7 @@ func registerGenerated() {
 	)
 	rule("[data-theme=\"light\"] .add-btn",
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".set-btn.close",
 		background("transparent"),
@@ -1522,7 +1532,7 @@ func registerGenerated() {
 		color("var(--money-negative) !important"),
 	)
 	rule(".hero-stat-sub",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		fontVariantNumeric("tabular-nums"),
 		opacity("0.9"),
@@ -1560,7 +1570,7 @@ func registerGenerated() {
 	rule(".home-hero-date",
 		margin("0.2rem 0 0"),
 		color("var(--text-faint)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		letterSpacing("0.01em"),
 	)
 	rule(".home-hero-main",
@@ -1582,7 +1592,7 @@ func registerGenerated() {
 		gap("0.3rem"),
 		textTransform("uppercase"),
 		letterSpacing("0.09em"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		color("var(--text-faint)"),
 	)
@@ -1604,8 +1614,8 @@ func registerGenerated() {
 		gap("0.3rem"),
 		marginTop("0.2rem"),
 		padding("0.18rem 0.6rem"),
-		borderRadius("999px"),
-		fontSize("0.8rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		fontVariantNumeric("tabular-nums"),
 		background("color-mix(in srgb, currentColor 13%, transparent)"),
@@ -1651,7 +1661,7 @@ func registerGenerated() {
 		fontWeight("600"),
 	)
 	rule(".home-hero-stat-value",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 	)
 	rule(".home-hero-actions",
 		display("flex"),
@@ -1673,7 +1683,7 @@ func registerGenerated() {
 	rule(".hero-quote-mark",
 		flex("none"),
 		color("var(--accent)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		opacity("0.85"),
 	)
 	rule(".hero-quote-text",
@@ -1681,14 +1691,14 @@ func registerGenerated() {
 		minWidth("0"),
 		fontFamily("var(--font-display, \"Fraunces\", serif)"),
 		fontStyle("italic"),
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 		lineHeight("1.4"),
 		color("var(--text)"),
 	)
 	rule(".hero-quote-cite",
 		fontStyle("normal"),
 		fontFamily("var(--font-ui, \"Inter\", sans-serif)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		color("var(--text-faint)"),
 		whiteSpace("nowrap"),
@@ -1711,7 +1721,7 @@ func registerGenerated() {
 	rule(".hero-quote-hint",
 		flex("1"),
 		color("var(--text-faint)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".hero-quote-controls",
 		flex("none"),
@@ -1754,10 +1764,10 @@ func registerGenerated() {
 	rule(".hero-quote-ctx",
 		padding("0.2rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		whiteSpace("nowrap"),
@@ -1781,10 +1791,10 @@ func registerGenerated() {
 		gap("0.45rem"),
 		padding("0.28rem 0.7rem"),
 		border("1px dashed var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("transparent"),
 		color("var(--text-faint)"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		cursor("pointer"),
 		transition("color 0.12s, border-color 0.12s, background 0.12s"),
 	)
@@ -1829,7 +1839,7 @@ func registerGenerated() {
 	)
 	rule(".budget-over-banner",
 		padding("0.6rem 0.85rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		margin("0 0 0.6rem"),
 		background("color-mix(in srgb, var(--danger) 10%, var(--bg-elev))"),
 	)
@@ -1865,7 +1875,7 @@ func registerGenerated() {
 	rule(".empty-cta .empty-icon",
 		color("var(--accent)"),
 		padding("0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		boxSizing("content-box"),
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 	)
@@ -1886,7 +1896,7 @@ func registerGenerated() {
 	rule(".cal-cell",
 		minHeight("46px"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		padding("4px 5px"),
 		position("relative"),
 	)
@@ -1964,12 +1974,12 @@ func registerGenerated() {
 	)
 	rule(".badge",
 		display("inline-block"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		letterSpacing("0.04em"),
 		textTransform("uppercase"),
 		padding("0.2rem 0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	rule(".badge-soon",
 		background("#1e293b"),
@@ -1980,7 +1990,7 @@ func registerGenerated() {
 		background("#0f2a2a"),
 		color("#5eead4"),
 		border("1px solid #134e4a"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		verticalAlign("middle"),
 		marginLeft("0.35rem"),
 	)
@@ -2003,7 +2013,7 @@ func registerGenerated() {
 	)
 	rule(".stat-label",
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		textTransform("uppercase"),
 		letterSpacing("0.05em"),
 	)
@@ -2046,7 +2056,7 @@ func registerGenerated() {
 	rule(".stat-sub",
 		display("block"),
 		marginTop("0.3rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".nw-summary",
 		display("grid"),
@@ -2143,17 +2153,17 @@ func registerGenerated() {
 	)
 	rule(".todo-summary",
 		margin("0 0 0.6rem"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".row-meta",
 		color("var(--text-dim)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".txn-table",
 		width("100%"),
 		borderCollapse("collapse"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".txn-table thead th",
 		textAlign("left"),
@@ -2265,7 +2275,7 @@ func registerGenerated() {
 	)
 	rule(".txn-table .td-tags-inline",
 		color("var(--text-faint)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".txn-table .td-actions .btn-icon",
 		padding("0.2rem 0.35rem"),
@@ -2346,7 +2356,7 @@ func registerGenerated() {
 		gap("0.6rem"),
 		flexWrap("wrap"),
 		padding("0.6rem 0.2rem 0.1rem"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".data-pager.data-pager-top",
 		padding("0.1rem 0.2rem 0.55rem"),
@@ -2454,10 +2464,10 @@ func registerGenerated() {
 		minWidth("1.25rem"),
 		height("1.25rem"),
 		padding("0 0.35rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--accent)"),
 		color("#fff"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -2475,8 +2485,8 @@ func registerGenerated() {
 		padding("0.2rem 0.3rem 0.2rem 0.6rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
-		fontSize("0.82rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".filter-chip .chip-text",
 		lineHeight("1.2"),
@@ -2489,10 +2499,10 @@ func registerGenerated() {
 		height("1.1rem"),
 		padding("0"),
 		border("none"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("transparent"),
 		color("var(--muted)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		lineHeight("1"),
 		cursor("pointer"),
 	)
@@ -2530,7 +2540,7 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		borderRadius("9px"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
@@ -2545,7 +2555,7 @@ func registerGenerated() {
 		background("transparent"),
 		border("0"),
 		color("var(--text)"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("500"),
 		prop("text-transform", "none"),
 		letterSpacing("normal"),
@@ -2562,7 +2572,7 @@ func registerGenerated() {
 		background("transparent"),
 		border("0"),
 		color("var(--text)"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("500"),
 		prop("text-transform", "none"),
 		letterSpacing("normal"),
@@ -2570,7 +2580,7 @@ func registerGenerated() {
 	rule(".filter-inline-panel",
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
@@ -2727,7 +2737,7 @@ func registerGenerated() {
 		minWidth("96px"),
 		minHeight("44px"),
 		padding("var(--btn-py,0.5rem) 1rem"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		fontSize("0.9rem"),
 		display("inline-flex"),
 		alignItems("center"),
@@ -2768,7 +2778,7 @@ func registerGenerated() {
 		minHeight("44px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text)"),
 		font("inherit"),
 	)
@@ -2784,7 +2794,7 @@ func registerGenerated() {
 		padding("0.5rem 0.6rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text)"),
 		font("inherit"),
 		cursor("pointer"),
@@ -2816,7 +2826,7 @@ func registerGenerated() {
 		padding("3px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		cursor("pointer"),
 	)
 	rule(".color-input::-webkit-color-swatch-wrapper",
@@ -2872,7 +2882,7 @@ func registerGenerated() {
 		gap("0.4rem"),
 		padding("0.45rem 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("var(--bg-elev)"),
 	)
 	rule(".cat-map-chip",
@@ -2881,11 +2891,11 @@ func registerGenerated() {
 		color("var(--text)"),
 	)
 	rule(".cat-map-sub",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("500"),
 		color("var(--text-dim)"),
 		padding("0.1rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, var(--text) 6%, transparent)"),
 		border("1px solid color-mix(in srgb, var(--text) 14%, transparent)"),
 	)
@@ -2899,7 +2909,7 @@ func registerGenerated() {
 	rule(".btn",
 		padding("var(--btn-py) var(--btn-px)"),
 		minHeight("44px"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
@@ -2931,7 +2941,7 @@ func registerGenerated() {
 		minHeight("38px"),
 		padding("0.35rem 0.75rem"),
 		gap("0.4rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".btn-tool svg",
 		opacity("0.6"),
@@ -3025,7 +3035,7 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.75rem"),
 		padding("0.7rem 0.9rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		border("1px solid var(--border)"),
@@ -3107,7 +3117,7 @@ func registerGenerated() {
 	rule(".budget-sub",
 		display("block"),
 		color("var(--text-dim)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		marginTop("0.15rem"),
 	)
 	// Zero-based budgeting: the "To Assign" hero, its four-figure breakdown, the
@@ -3119,7 +3129,7 @@ func registerGenerated() {
 		padding("0.9rem 0 0.4rem"),
 	)
 	rule(".zbb-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.06em"),
 		textTransform("uppercase"),
@@ -3185,7 +3195,7 @@ func registerGenerated() {
 		gap("0.2rem"),
 	)
 	rule(".zbb-basis-label, .zbb-basis-sub",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 	)
@@ -3209,12 +3219,12 @@ func registerGenerated() {
 		gap("0.6rem"),
 	)
 	rule(".zbb-savings-title",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 	)
 	rule(".zbb-savings-total",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("800"),
 		color("var(--money-positive)"),
 	)
@@ -3252,7 +3262,7 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 	)
 	rule(".zbb-savings-type",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-faint)"),
 	)
 	rule(".zbb-savings-edit",
@@ -3291,7 +3301,7 @@ func registerGenerated() {
 	)
 	rule(".zbb-savings-goal-time", color("var(--text-dim)"))
 	rule(".zbb-savings-more",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		color("var(--text-faint)"),
 		whiteSpace("nowrap"),
 	)
@@ -3310,11 +3320,11 @@ func registerGenerated() {
 	rule(".zbb-savings-sync",
 		marginLeft("auto"),
 		padding("0.15rem 0.5rem"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 	)
 	rule(".zbb-savings-synced",
 		marginLeft("auto"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("var(--money-positive)"),
 		fontWeight("600"),
 	)
@@ -3358,14 +3368,14 @@ func registerGenerated() {
 		fontSize("0.95rem"),
 	)
 	rule(".zbb-spend .budget-loader-value.is-hero",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 	)
 	rule(".plan-compare-select--compact",
 		maxWidth("220px"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".alloc-list-header",
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		textTransform("uppercase"),
@@ -3386,12 +3396,12 @@ func registerGenerated() {
 	)
 	rule(".cadence-badge",
 		display("inline-block"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		background("var(--bg-elev, rgba(255,255,255,0.04))"),
 		padding("0.05rem 0.35rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		margin("0 0.3rem"),
 		verticalAlign("middle"),
 	)
@@ -3415,7 +3425,7 @@ func registerGenerated() {
 		width("2.5rem"),
 		height("2.5rem"),
 		background("var(--bg-elev, rgba(255,255,255,0.04))"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		color("var(--text-dim)"),
 	)
 	rule(".artifact-list-footer",
@@ -3432,7 +3442,7 @@ func registerGenerated() {
 		gap("0.75rem"),
 		margin("1.25rem 0 0.5rem"),
 		color("var(--text-dim, #9aa0a6)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".doc-section-sep::before, .doc-section-sep::after",
 		content("\"\""),
@@ -3491,7 +3501,7 @@ func registerGenerated() {
 		color("var(--text-faint)"),
 	)
 	rule(".draft-sum-val",
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 		fontWeight("700"),
 		color("var(--text)"),
 	)
@@ -3528,11 +3538,11 @@ func registerGenerated() {
 	rule(".draft-cat-chip",
 		display("inline-flex"),
 		alignItems("center"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		lineHeight("1"),
 		padding("0.2rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
 		border("1px solid var(--border)"),
@@ -3540,11 +3550,11 @@ func registerGenerated() {
 	rule(".draft-cat-add",
 		display("inline-flex"),
 		alignItems("center"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		lineHeight("1"),
 		padding("0.2rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("transparent"),
 		color("var(--text-faint)"),
 		border("1px dashed var(--border)"),
@@ -3575,17 +3585,17 @@ func registerGenerated() {
 		display("inline-block"),
 		background("#b45309"),
 		color("#fff"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		padding("0.05rem 0.4rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".goal-sub",
 		marginTop("0.5rem"),
 	)
 	rule(".goal-sub-dim",
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".budget",
 		minHeight("100px"),
@@ -3616,14 +3626,14 @@ func registerGenerated() {
 		height("8px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		margin("0.45rem 0 0.35rem"),
 	)
 	rule(".bar-fill",
 		height("100%"),
 		background("var(--accent)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		boxShadow("inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 1px rgba(0,0,0,0.14)"),
 	)
 	ruleMedia("(prefers-reduced-motion: no-preference)", ".bar-fill",
@@ -3651,11 +3661,11 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		letterSpacing("0.02em"),
 		padding("0.12rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		whiteSpace("nowrap"),
@@ -3671,7 +3681,7 @@ func registerGenerated() {
 		color("var(--text)"),
 	)
 	rule(".chip-suggest",
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		color("var(--text-dim)"),
@@ -3699,12 +3709,12 @@ func registerGenerated() {
 	)
 	rule(".smart-highlight-row",
 		outline("2px solid var(--accent)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		transition("outline 0.3s ease"),
 	)
 	rule(".btn-sm",
 		padding("0.25rem 0.5rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		minHeight("0"),
 	)
 	rule(".btn-ghost-danger",
@@ -3727,7 +3737,7 @@ func registerGenerated() {
 		minWidth("1.5rem"),
 		height("1.5rem"),
 		padding("0 0.35rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--accent)"),
 		color("#ffffff"),
 		fontSize("0.75rem"),
@@ -3762,11 +3772,11 @@ func registerGenerated() {
 	)
 	rule(".pace-badge",
 		display("inline-block"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.02em"),
 		padding("0.1rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		whiteSpace("nowrap"),
 		lineHeight("1.5"),
 		border("1px solid var(--border)"),
@@ -3810,7 +3820,7 @@ func registerGenerated() {
 	// Goal vision image banner (GL6): a small rounded photo atop the card.
 	rule(".goal-card-photo",
 		marginBottom("0.5rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
 	rule(".goal-card-photo.is-missing",
@@ -3824,12 +3834,12 @@ func registerGenerated() {
 	)
 	rule(".sev-pill",
 		display("inline-block"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		letterSpacing("0.04em"),
 		textTransform("uppercase"),
 		padding("0.1rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		whiteSpace("nowrap"),
 		lineHeight("1.5"),
 		border("1px solid transparent"),
@@ -3867,9 +3877,9 @@ func registerGenerated() {
 		marginBottom("0.6rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		color("var(--text-dim)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		cursor("pointer"),
 		transition("border-color 0.12s ease, background 0.12s ease"),
@@ -3885,9 +3895,9 @@ func registerGenerated() {
 	rule(".smart-peek-badge",
 		minWidth("1.2rem"),
 		padding("0.05rem 0.35rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("color-mix(in srgb, currentColor 16%, transparent)"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		fontVariantNumeric("tabular-nums"),
 		textAlign("center"),
@@ -3976,8 +3986,8 @@ func registerGenerated() {
 	)
 	rule(".notice",
 		padding("0.45rem 0.7rem"),
-		borderRadius("6px"),
-		fontSize("0.85rem"),
+		borderRadius("var(--radius-md)"),
+		fontSize("var(--type-14)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
@@ -3996,13 +4006,13 @@ func registerGenerated() {
 		height("6px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 	)
 	rule(".storage-bar-fill",
 		height("100%"),
 		background("var(--accent)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		boxShadow("inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 1px rgba(0,0,0,0.14)"),
 		transition("width 0.35s ease"),
 	)
@@ -4011,7 +4021,7 @@ func registerGenerated() {
 	)
 	rule(".csv-preview",
 		borderCollapse("collapse"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		width("100%"),
 	)
 	rule(".csv-preview th, .csv-preview td",
@@ -4038,7 +4048,7 @@ func registerGenerated() {
 		border("1px solid transparent"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		lineHeight("1"),
 		minWidth("24px"),
 		minHeight("24px"),
@@ -4109,7 +4119,7 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 		lineHeight("1.4"),
 		padding("0.1rem 0.42rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid transparent"),
 		display("inline-block"),
 		verticalAlign("middle"),
@@ -4146,9 +4156,9 @@ func registerGenerated() {
 		padding("0.1rem 0.3rem"),
 		background("transparent"),
 		border("1px solid transparent"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text-faint)"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		lineHeight("1"),
 		cursor("pointer"),
 		transition("color var(--wonder-dur-fast) ease,\n                    background-color var(--wonder-dur-fast) ease,\n                    border-color var(--wonder-dur-fast) ease"),
@@ -4176,7 +4186,7 @@ func registerGenerated() {
 		borderColor("rgba(185,28,28,0.22)"),
 	)
 	rule("[data-testid=\"members-single-device-note\"]",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-faint)"),
 		paddingLeft("0.6rem"),
 		borderLeft("2px solid var(--border)"),
@@ -4282,14 +4292,14 @@ func registerGenerated() {
 		marginBottom("0.75rem"),
 		background("var(--accent-dim)"),
 		border("1px solid rgba(46,139,87,0.28)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule("[data-theme=\"light\"] .notif-catchup-banner",
 		background("#edf7f1"),
 		borderColor("rgba(46,139,87,0.30)"),
 	)
 	rule(".notif-catchup-label",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		textTransform("uppercase"),
 		letterSpacing("0.06em"),
@@ -4357,7 +4367,7 @@ func registerGenerated() {
 	)
 	rule(".catchup-card-text p",
 		margin("0"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text-dim)"),
 	)
 	rule(".catchup-card-actions",
@@ -4416,6 +4426,7 @@ func registerGenerated() {
 		customProp("--radius-sm", "4px"),
 		customProp("--radius-md", "6px"),
 		customProp("--radius-lg", "8px"),
+		customProp("--radius-xl", "12px"),
 		customProp("--radius-pill", "999px"),
 		customProp("--shadow-1", "0 1px 2px rgba(0,0,0,0.22)"),
 		customProp("--shadow-2", "0 8px 24px rgba(0,0,0,0.28)"),
@@ -4536,7 +4547,7 @@ func registerGenerated() {
 		gap(".5rem"),
 	)
 	rule(".w[data-widget=\"trend\"][data-row-span=\"1\"] .trend-figure",
-		fontSize("1.02rem"),
+		fontSize("var(--type-16)"),
 		minWidth("0"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
@@ -4679,7 +4690,7 @@ func registerGenerated() {
 		width("100%"),
 	)
 	rule(".studio-field-lg",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("600"),
 		padding(".6rem .8rem"),
 	)
@@ -4960,13 +4971,13 @@ func registerGenerated() {
 	)
 	rule(".fb-title",
 		fontFamily("var(--font-display), 'Fraunces', serif"),
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("600"),
 		letterSpacing("-0.01em"),
 		color("var(--text)"),
 	)
 	rule(".fb-sub",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	// Expression is the hero: a wide monospace input with the live result to its right.
@@ -4990,7 +5001,7 @@ func registerGenerated() {
 		minWidth("140px"),
 		maxWidth("48%"),
 		padding("0 1.05rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
 		background("color-mix(in srgb, var(--accent) 9%, transparent)"),
 	)
@@ -5022,7 +5033,7 @@ func registerGenerated() {
 	)
 	rule(".fb-result-err",
 		color("var(--danger)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		whiteSpace("normal"),
 	)
@@ -5033,7 +5044,7 @@ func registerGenerated() {
 		gap("0.4rem"),
 	)
 	rule(".fb-presets-lead",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		marginRight("0.15rem"),
 	)
@@ -5051,7 +5062,7 @@ func registerGenerated() {
 		flexShrink("0"),
 	)
 	rule(".fb-msg",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 	// Palette: dense grid of variable chips, grouped and separated from the workbench by
@@ -5064,7 +5075,7 @@ func registerGenerated() {
 		borderTop("1px solid var(--border)"),
 	)
 	rule(".fb-palette-lead",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".fb-pal-groups",
@@ -5078,7 +5089,7 @@ func registerGenerated() {
 		gap("0.4rem"),
 	)
 	rule(".fb-pal-title",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		textTransform("uppercase"),
 		letterSpacing("0.07em"),
@@ -5108,7 +5119,7 @@ func registerGenerated() {
 		transform("translateY(-1px)"),
 	)
 	rule(".fb-chip-label",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		color("var(--text)"),
 		whiteSpace("nowrap"),
@@ -5117,7 +5128,7 @@ func registerGenerated() {
 		maxWidth("100%"),
 	)
 	rule(".fb-chip-val",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -5191,7 +5202,7 @@ func registerGenerated() {
 		fontSize(".82rem"),
 		padding(".36rem .8rem"),
 		border("1px solid color-mix(in srgb, var(--accent) 22%, var(--border))"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		cursor("pointer"),
@@ -5324,7 +5335,7 @@ func registerGenerated() {
 		gap("0.15rem"),
 	)
 	rule(".inv-hero-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
@@ -5383,10 +5394,10 @@ func registerGenerated() {
 	)
 	rule(".inv-ticker",
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		padding("0.05rem 0.4rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 	)
@@ -5394,8 +5405,8 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.45rem"),
-		borderRadius("999px"),
-		fontSize("0.72rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		border("1px solid var(--border)"),
 		color("var(--text-dim)"),
@@ -5404,7 +5415,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize("0.66rem"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
@@ -5422,7 +5433,7 @@ func registerGenerated() {
 		color("color-mix(in srgb, #f59e0b 70%, var(--text))"),
 	)
 	rule(".inv-meta",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".inv-weight",
 		display("flex"),
@@ -5433,7 +5444,7 @@ func registerGenerated() {
 		position("relative"),
 		flex("1 1 auto"),
 		height("6px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
@@ -5441,11 +5452,11 @@ func registerGenerated() {
 	)
 	rule(".inv-weight-fill",
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 65%, #000), var(--accent))"),
 	)
 	rule(".inv-weight-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".inv-side",
@@ -5461,11 +5472,11 @@ func registerGenerated() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".inv-gain",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".inv-gain-pct",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 	)
 	// Allocation columns.
 	rule(".inv-alloc-cols",
@@ -5474,7 +5485,7 @@ func registerGenerated() {
 		gap("1rem"),
 	)
 	rule(".inv-alloc-title",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
 		marginBottom("0.4rem"),
@@ -5488,7 +5499,7 @@ func registerGenerated() {
 		display("flex"),
 		justifyContent("space-between"),
 		gap("0.5rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		marginBottom("0.15rem"),
 	)
 	rule(".inv-alloc-label",
@@ -5499,14 +5510,14 @@ func registerGenerated() {
 	)
 	rule(".inv-alloc-track",
 		height("8px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 	)
 	rule(".inv-alloc-fill",
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, #000), var(--accent))"),
 	)
 	rule(".inv-add",
@@ -5553,7 +5564,7 @@ func registerGenerated() {
 		borderBottom("1px solid var(--border)"),
 	)
 	rule(".inv-pools-bar-label",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.07em"),
@@ -5564,7 +5575,7 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.5rem"),
 		padding("0.3rem 0.35rem 0.3rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--accent) 35%, var(--border))"),
 		background("color-mix(in srgb, var(--accent) 8%, transparent)"),
 	)
@@ -5575,7 +5586,7 @@ func registerGenerated() {
 	)
 	rule(".inv-pool-chip-name",
 		fontWeight("700"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".inv-pool-chip-val",
 		fontSize("0.75rem"),
@@ -5583,9 +5594,9 @@ func registerGenerated() {
 	)
 	rule(".inv-pool-var",
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		padding("0.05rem 0.4rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("color-mix(in srgb, var(--accent) 55%, var(--text))"),
 		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
 	)
@@ -5608,7 +5619,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.45rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize("0.62rem"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
@@ -5620,11 +5631,11 @@ func registerGenerated() {
 		prop("align-self", "flex-start"),
 		width("auto"),
 		minWidth("8rem"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		padding("0.2rem 0.5rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".inv-pool-grid",
 		display("grid"),
@@ -5662,7 +5673,7 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 	)
 	rule(".inv-pool-count",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 	)
 	rule(".inv-pool-actions",
 		display("inline-flex"),
@@ -5681,7 +5692,7 @@ func registerGenerated() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".inv-pool-delta",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -5692,7 +5703,7 @@ func registerGenerated() {
 		gap("0.6rem"),
 	)
 	rule(".pool-acct-list-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
@@ -5711,7 +5722,7 @@ func registerGenerated() {
 		gap("0.6rem"),
 		width("100%"),
 		padding("0.5rem 0.65rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text)"),
@@ -5733,7 +5744,7 @@ func registerGenerated() {
 		prop("flex", "0 0 auto"),
 		width("1.3rem"),
 		height("1.3rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		border("1px solid var(--border)"),
 		color("var(--bg)"),
 	)
@@ -5834,7 +5845,7 @@ func registerGenerated() {
 		prop("white-space", "nowrap"),
 	)
 	rule(".plan-scenario-meta",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	rule(".plan-scenario-figs",
 		prop("display", "flex"),
@@ -5854,14 +5865,14 @@ func registerGenerated() {
 		prop("line-height", "1.05"),
 	)
 	rule(".plan-scenario-runway",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("gap", "0.25rem"),
 	)
 	rule(".plan-scenario-runway.is-danger",
 		prop("padding", "0.05rem 0.45rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("background", "color-mix(in srgb, var(--danger) 14%, transparent)"),
 	)
 	// Constrain the projected sparkline so it reads as a compact card chart (the AreaChart is a
@@ -5897,7 +5908,7 @@ func registerGenerated() {
 		prop("flex", "1 1 auto"),
 	)
 	rule(".alloc-hero-label",
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
@@ -5954,13 +5965,13 @@ func registerGenerated() {
 		prop("gap", "0.4rem"),
 		prop("margin-top", "0.35rem"),
 		prop("padding", "0.7rem 0.85rem"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 32%, var(--border))"),
 		prop("background", "color-mix(in srgb, var(--accent) 8%, transparent)"),
 	)
 	rule(".alloc-kept",
 		prop("margin", "0.35rem 0 0"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	// Ranked destination cards.
 	rule(".alloc-plan-list",
@@ -5996,7 +6007,7 @@ func registerGenerated() {
 		prop("justify-content", "center"),
 		prop("width", "2.1rem"),
 		prop("height", "2.1rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
 		prop("font-size", "1.1rem"),
 		prop("font-weight", "700"),
@@ -6041,7 +6052,7 @@ func registerGenerated() {
 		prop("color", "color-mix(in srgb, var(--accent) 55%, var(--text))"),
 	)
 	rule(".alloc-dest-score",
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 	rule(".alloc-dest-breakdown",
@@ -6055,9 +6066,9 @@ func registerGenerated() {
 		prop("align-items", "baseline"),
 		prop("gap", "0.25rem"),
 		prop("padding", "0.05rem 0.45rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
-		prop("font-size", "0.72rem"),
+		prop("font-size", "var(--type-12)"),
 	)
 	rule(".alloc-dest-chip-label",
 		prop("text-transform", "uppercase"),
@@ -6072,7 +6083,7 @@ func registerGenerated() {
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("padding", "0.05rem 0.45rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("font-size", "0.66rem"),
 		prop("font-weight", "700"),
 		prop("text-transform", "uppercase"),
@@ -6092,7 +6103,7 @@ func registerGenerated() {
 		prop("gap", "0.4rem"),
 	)
 	rule(".alloc-excluded-label",
-		prop("font-size", "0.68rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.07em"),
@@ -6107,14 +6118,14 @@ func registerGenerated() {
 		prop("align-items", "center"),
 		prop("gap", "0.5rem"),
 		prop("padding", "0.25rem 0.35rem 0.25rem 0.7rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
 		prop("background", "var(--bg-elev)"),
-		prop("font-size", "0.8rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	rule(".alloc-hidden-note, .alloc-apply-hint",
 		prop("margin-top", "0.75rem"),
-		prop("font-size", "0.82rem"),
+		prop("font-size", "var(--type-13)"),
 	)
 	// Advanced weight tuning.
 	rule(".alloc-weights",
@@ -6126,7 +6137,7 @@ func registerGenerated() {
 		prop("border-top", "1px solid var(--border)"),
 	)
 	rule(".alloc-weights-label",
-		prop("font-size", "0.7rem"),
+		prop("font-size", "var(--type-11)"),
 		prop("font-weight", "700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
@@ -6154,7 +6165,7 @@ func registerGenerated() {
 	rule(".alloc-ai-result",
 		prop("margin", "0"),
 		prop("padding", "0.75rem 0.9rem"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("border", "1px solid color-mix(in srgb, var(--accent) 28%, var(--border))"),
 		prop("background", "color-mix(in srgb, var(--accent) 6%, transparent)"),
 		prop("line-height", "1.55"),
@@ -6170,7 +6181,7 @@ func registerGenerated() {
 		prop("flex-direction", "column"),
 		prop("gap", "0.15rem"),
 		prop("padding", "0.6rem 0.8rem"),
-		prop("border-radius", "12px"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 		prop("border", "1px solid var(--border)"),
 	)
@@ -6186,7 +6197,7 @@ func registerGenerated() {
 		prop("align-items", "baseline"),
 		prop("gap", "0.4rem"),
 		prop("padding", "0.35rem 0.7rem"),
-		prop("border-radius", "999px"),
+		prop("border-radius", "var(--radius-pill)"),
 		prop("border", "1px solid var(--border)"),
 		prop("background", "color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 	)
@@ -6220,7 +6231,7 @@ func registerGenerated() {
 		gap("0.15rem"),
 	)
 	rule(".debt-hero-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.08em"),
 	)
@@ -6251,16 +6262,16 @@ func registerGenerated() {
 		minWidth("104px"),
 		padding("0.5rem 0.75rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
 	)
 	rule(".debt-stat-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
 	)
 	rule(".debt-stat-value",
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("700"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -6327,7 +6338,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		width("2.7rem"),
 		height("2.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--accent) 30%, var(--border))"),
 		background("var(--bg)"),
 		fontFamily("var(--font-display, \"Fraunces\", serif)"),
@@ -6359,7 +6370,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize("0.66rem"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
@@ -6392,8 +6403,8 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.45rem"),
-		borderRadius("999px"),
-		fontSize("0.72rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		border("1px solid var(--border)"),
 		color("var(--text-dim)"),
@@ -6411,14 +6422,14 @@ func registerGenerated() {
 	rule(".debt-util-track",
 		position("relative"),
 		height("8px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 	)
 	rule(".debt-util-fill",
 		height("100%"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--accent)"),
 		transition("width 0.25s ease"),
 	)
@@ -6429,11 +6440,11 @@ func registerGenerated() {
 		background("var(--danger)"),
 	)
 	rule(".debt-util-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".debt-meta",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 	)
 	rule(".debt-side",
 		display("flex"),
@@ -6462,7 +6473,7 @@ func registerGenerated() {
 	rule(".bento-debt .card",
 		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		padding("0.95rem 1.1rem"),
 		marginBottom("0"),
 		prop("box-shadow", "none"),
@@ -6492,7 +6503,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.15rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		prop("text-decoration", "none"),
@@ -6619,7 +6630,7 @@ func registerGenerated() {
 	rule(".bento-debt .stat",
 		background("color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
 		border("1px solid var(--border)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		padding("0.7rem 0.9rem"),
 	)
 	rule(".bento-debt .stat-value",
@@ -6638,7 +6649,7 @@ func registerGenerated() {
 	rule(".bento-debt .field",
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".bento-debt .field:focus",
 		borderColor("var(--accent)"),
@@ -6647,18 +6658,18 @@ func registerGenerated() {
 	// Progress / burn-down bars match the utilization meter.
 	rule(".bento-debt .bar",
 		height("10px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 	)
 	rule(".bento-debt .bar-fill",
 		background("var(--accent)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	// Tables: quiet uppercase header, tabular figures, hairline rows.
 	rule(".bento-debt .t-body th",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.05em"),
 		color("var(--text-dim)"),
@@ -6705,8 +6716,8 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.5rem"),
-		borderRadius("999px"),
-		fontSize("0.72rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		fontVariantNumeric("tabular-nums"),
 		border("1px solid var(--border)"),
@@ -6733,7 +6744,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		width("2.75rem"),
 		height("2.75rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
@@ -6774,7 +6785,7 @@ func registerGenerated() {
 		prop("border-bottom", "1px solid var(--border)"),
 	)
 	rule(".debt-jump-label",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.07em"),
@@ -6785,11 +6796,11 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.2rem 0.7rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("color-mix(in srgb, var(--bg-elev) 45%, transparent)"),
 		color("var(--text)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background 0.15s ease, border-color 0.15s ease, color 0.15s ease"),
@@ -6815,7 +6826,7 @@ func registerGenerated() {
 		width("14rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	// Snowball vs avalanche — a clear two-up decision with the winner badged.
 	rule(".strat-compare",
@@ -6843,7 +6854,7 @@ func registerGenerated() {
 		gap("0.5rem"),
 	)
 	rule(".strat-card-name",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.07em"),
@@ -6853,7 +6864,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		padding("0.05rem 0.5rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize("0.62rem"),
 		fontWeight("700"),
 		prop("text-transform", "uppercase"),
@@ -6892,7 +6903,7 @@ func registerGenerated() {
 		prop("margin-top", "0.5rem"),
 	)
 	rule(".strat-order-label",
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		prop("text-transform", "uppercase"),
 		prop("letter-spacing", "0.06em"),
 	)
@@ -6967,7 +6978,7 @@ func registerGenerated() {
 		color("var(--text)"),
 	)
 	rule(".notif-summary-sub",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 	rule(".notif-summary-sevs",
@@ -6981,10 +6992,10 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.4rem"),
 		padding("0.3rem 0.65rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg)"),
 		border("1px solid var(--border)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".notif-sev-dot",
 		width("9px"),
@@ -7015,7 +7026,7 @@ func registerGenerated() {
 		gap("0.45rem"),
 		flexBasis("100%"),
 		marginTop("0.2rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--accent)"),
 	)
 	rule(".notif-catchup-dot",
@@ -7040,7 +7051,7 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		borderLeft("3px solid var(--border-strong)"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		transition("border-color 0.12s ease, opacity 0.12s ease"),
 	)
 	rule(".notif:hover",
@@ -7075,7 +7086,7 @@ func registerGenerated() {
 	rule(".notif-main.is-linked:focus-visible",
 		prop("outline", "2px solid var(--accent)"),
 		prop("outline-offset", "2px"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	// 2026-07-17 audit: read ≠ resolved. A gentler dim for read rows, and a
 	// critical alert keeps nearly full ink even after it's been seen — "read"
@@ -7152,7 +7163,7 @@ func registerGenerated() {
 	)
 	rule(".notif-text",
 		margin("0"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		lineHeight("1.45"),
 		color("var(--text-dim)"),
 		overflowWrap("anywhere"),
@@ -7165,7 +7176,7 @@ func registerGenerated() {
 		color("var(--text-faint)"),
 	)
 	rule(".notif-sev-tag",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.04em"),
 		prop("text-transform", "uppercase"),
@@ -7206,7 +7217,7 @@ func registerGenerated() {
 		color("var(--text)"),
 		cursor("pointer"),
 		padding("0.35rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		display("grid"),
 		placeItems("center"),
 		transition("background 0.12s ease, color 0.12s ease, border-color 0.12s ease"),
@@ -7236,7 +7247,7 @@ func registerGenerated() {
 		gap("0.85rem"),
 		padding("0.8rem 0.5rem"),
 		borderBottom("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		transition("background 0.12s ease"),
 	)
 	rule(".todo-item:last-child",
@@ -7303,7 +7314,7 @@ func registerGenerated() {
 		padding("0"),
 		background("transparent"),
 		border("0"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
 		transition("background 0.12s ease, color 0.12s ease"),
@@ -7417,7 +7428,7 @@ func registerGenerated() {
 	)
 	rule(".todo-due",
 		flex("none"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 		whiteSpace("nowrap"),
@@ -7435,7 +7446,7 @@ func registerGenerated() {
 		flexWrap("wrap"),
 		alignItems("center"),
 		gap("0.4rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 	rule(".todo-sep",
@@ -7463,7 +7474,7 @@ func registerGenerated() {
 		padding("0"),
 		margin("0"),
 		font("inherit"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
 		transition("color 0.12s ease"),
@@ -7497,7 +7508,7 @@ func registerGenerated() {
 		color("var(--text-dim)"),
 		cursor("pointer"),
 		padding("0.35rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		display("grid"),
 		placeItems("center"),
 		transition("background 0.12s ease, color 0.12s ease"),
@@ -7519,7 +7530,7 @@ func registerGenerated() {
 		borderTop("1px solid var(--border)"),
 	)
 	rule(".todo-pager-range",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -7529,7 +7540,7 @@ func registerGenerated() {
 		gap("0.5rem"),
 	)
 	rule(".todo-pager-page",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 		minWidth("6.5rem"),
@@ -7539,9 +7550,9 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		padding("0.35rem 0.7rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text)"),
@@ -7583,7 +7594,7 @@ func registerGenerated() {
 		gap("0.5rem 1rem"),
 	)
 	rule(".std-pager-range",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 		whiteSpace("nowrap"),
@@ -7595,7 +7606,7 @@ func registerGenerated() {
 		flexWrap("wrap"),
 	)
 	rule(".std-pager-size-label",
-		fontSize("0.68rem"),
+		fontSize("var(--type-11)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
@@ -7605,7 +7616,7 @@ func registerGenerated() {
 	rule(".std-pager .pager-size",
 		minHeight("0"),
 		padding("0.2rem 0.5rem"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		borderRadius("7px"),
 		border("1px solid var(--border)"),
@@ -7635,9 +7646,9 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		padding("0.35rem 0.7rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text)"),
@@ -7656,7 +7667,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.35rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 	)
 	rule(".std-pager-jump-input",
@@ -7669,7 +7680,7 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		fontVariantNumeric("tabular-nums"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".std-pager-jump-total",
 		whiteSpace("nowrap"),
@@ -7708,7 +7719,7 @@ func registerGenerated() {
 		color("var(--text-faint)"),
 	)
 	rule(".todo-ctrl-label, .fctrl-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
@@ -7767,7 +7778,7 @@ func registerGenerated() {
 		border("0"),
 		color("var(--text)"),
 		font("inherit"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("500"),
 		cursor("pointer"),
 	)
@@ -7784,7 +7795,7 @@ func registerGenerated() {
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 		color("var(--text-dim)"),
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		cursor("pointer"),
 		transition("border-color 0.12s ease, color 0.12s ease, background 0.12s ease"),
 	)
@@ -7866,7 +7877,7 @@ func registerGenerated() {
 		width("100%"),
 		background("var(--bg)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		prop("outline", "none"),
 		prop("resize", "none"),
 		color("var(--text)"),
@@ -7928,7 +7939,7 @@ func registerGenerated() {
 		flex("1 1 auto"),
 		minWidth("0"),
 		marginRight("0.75rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 		overflow("hidden"),
@@ -7951,7 +7962,7 @@ func registerGenerated() {
 		padding("3px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		width("fit-content"),
 	)
 	// Rail variant: fill the row, segments share the width equally.
@@ -7974,7 +7985,7 @@ func registerGenerated() {
 		color("var(--text-dim)"),
 		borderRadius("7px"),
 		cursor("pointer"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		transition("background 0.12s ease, color 0.12s ease"),
 	)
 	rule(".task-seg-btn:hover",
@@ -8010,7 +8021,7 @@ func registerGenerated() {
 	rule(".task-quick-chip",
 		fontSize("0.76rem"),
 		padding("0.24rem 0.6rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("1px solid var(--border)"),
 		background("transparent"),
 		color("var(--text-dim)"),
@@ -8093,7 +8104,7 @@ func registerGenerated() {
 		overflow("hidden"),
 		height("42px"),
 		margin("0.55rem 0 0.6rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 	)
@@ -8152,7 +8163,7 @@ func registerGenerated() {
 	rule(".bento-goals .goal-card-loader .budget-pct",
 		fontVariantNumeric("tabular-nums"),
 		fontWeight("700"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("color-mix(in srgb, var(--accent) 40%, #ffffff)"),
 		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
 		whiteSpace("nowrap"),
@@ -8194,14 +8205,14 @@ func registerGenerated() {
 		gap("0.5rem"),
 	)
 	rule(".goal-todos-title",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
 		color("var(--text-dim)"),
 	)
 	rule(".goal-todos-count",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		fontVariantNumeric("tabular-nums"),
 	)
@@ -8214,7 +8225,7 @@ func registerGenerated() {
 	)
 	rule(".goal-todos-empty",
 		margin("0"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text-faint)"),
 	)
 	// "+N more" line under a capped (top-3) steps list — a quiet count of the remainder.
@@ -8242,7 +8253,7 @@ func registerGenerated() {
 		gap("0.5rem"),
 	)
 	rule(".goal-plan-title, .goal-pledge-title, .goal-essential-title",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
@@ -8255,7 +8266,7 @@ func registerGenerated() {
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".goal-plan-readout",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text)"),
 		display("flex"),
 		alignItems("center"),
@@ -8272,7 +8283,7 @@ func registerGenerated() {
 	rule(".goal-pledge-bar",
 		display("flex"),
 		height("0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		overflow("hidden"),
 		background("var(--bg-elev)"),
 	)
@@ -8291,12 +8302,12 @@ func registerGenerated() {
 		display("flex"),
 		alignItems("center"),
 		gap("0.4rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".goal-pledge-dot",
 		width("0.6rem"),
 		height("0.6rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		flexShrink("0"),
 	)
 	rule(".goal-pledge-name",
@@ -8305,7 +8316,7 @@ func registerGenerated() {
 	)
 	rule(".goal-essential-body",
 		margin("0"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text)"),
 	)
 	rule(".goal-essential-hint",
@@ -8322,14 +8333,14 @@ func registerGenerated() {
 		overflowY("auto"),
 		padding("0.15rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".goal-link-row",
 		display("flex"),
 		alignItems("center"),
 		gap("0.55rem"),
 		padding("0.35rem 0.4rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		cursor("pointer"),
 	)
 	rule(".goal-link-row:hover",
@@ -8363,7 +8374,7 @@ func registerGenerated() {
 		borderColor("var(--warn, #d8a24a)"),
 	)
 	rule(".goal-alloc-over",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 	)
 	// The uncheck-all affordance sits quietly under the list.
 	rule(".goal-alloc-clear",
@@ -8384,12 +8395,12 @@ func registerGenerated() {
 		whiteSpace("nowrap"),
 	)
 	rule(".goal-alloc-avail",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	// Held-asset tag on non-liquid earmark rows ("Retirement · held asset").
 	rule(".goal-alloc-type",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		whiteSpace("nowrap"),
 	)
 	// Specific enough (0,3,0) to beat the form's ".acct-edit-form .field { width:100% }"
@@ -8424,7 +8435,7 @@ func registerGenerated() {
 		padding("0.6rem 0.7rem"),
 		margin("0 0 0.6rem"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
 		cursor("pointer"),
 	)
@@ -8453,7 +8464,7 @@ func registerGenerated() {
 		margin("0 0 0.7rem"),
 		padding("0.6rem 0.7rem"),
 		border("1px dashed var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".goal-alloc-split-row",
 		display("flex"),
@@ -8519,15 +8530,15 @@ func registerGenerated() {
 		padding("0.15rem"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".goals-tab",
 		padding("0.35rem 0.85rem"),
 		border("0"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background 0.12s ease, color 0.12s ease"),
@@ -8562,7 +8573,7 @@ func registerGenerated() {
 		borderBottom("1px solid color-mix(in srgb, var(--border) 55%, transparent)"),
 	)
 	rule(".ea-exp-head",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		letterSpacing("0.03em"),
 		prop("text-transform", "uppercase"),
 		color("var(--text-dim)"),
@@ -8583,7 +8594,7 @@ func registerGenerated() {
 	rule(".ea-exp-free",
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text-dim)"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 	)
 	rule(".ea-goals",
 		display("flex"),
@@ -8645,7 +8656,7 @@ func registerGenerated() {
 		width("26px"),
 		height("26px"),
 		border("0"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		background("transparent"),
 		color("var(--text-faint)"),
 		cursor("pointer"),
@@ -8701,7 +8712,7 @@ func registerGenerated() {
 		overflow("hidden"),
 		height("40px"),
 		margin("0 0 0.7rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 	)
@@ -8737,7 +8748,7 @@ func registerGenerated() {
 	rule(".contrib-pct",
 		fontVariantNumeric("tabular-nums"),
 		fontWeight("700"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("color-mix(in srgb, var(--accent) 40%, #ffffff)"),
 		prop("text-shadow", "0 1px 3px rgba(0,0,0,0.5)"),
 	)
@@ -8757,11 +8768,11 @@ func registerGenerated() {
 		flex("none"),
 		padding("0.45rem 0.8rem"),
 		border("1px solid color-mix(in srgb, var(--accent) 40%, var(--border))"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 		color("var(--accent)"),
 		fontWeight("600"),
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		whiteSpace("nowrap"),
 		cursor("pointer"),
 		transition("background 0.12s ease, border-color 0.12s ease"),
@@ -8775,7 +8786,7 @@ func registerGenerated() {
 		alignItems("center"),
 		gap("0.5rem"),
 		padding("0.25rem 0.15rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".goal-todo:hover",
 		background("var(--bg)"),
@@ -8801,7 +8812,7 @@ func registerGenerated() {
 		borderColor("var(--accent)"),
 	)
 	rule(".goal-todo-title",
-		fontSize("0.86rem"),
+		fontSize("var(--type-14)"),
 		color("var(--text)"),
 		overflowWrap("anywhere"),
 	)
@@ -8820,7 +8831,7 @@ func registerGenerated() {
 		border("1px dashed var(--border)"),
 		borderRadius("7px"),
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		cursor("pointer"),
 		transition("border-color 0.12s ease, color 0.12s ease"),
 	)
@@ -8889,7 +8900,7 @@ func registerGenerated() {
 	)
 	rule(".budget-loader-label",
 		color("var(--text-dim)"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		textTransform("uppercase"),
 		letterSpacing("0.06em"),
 	)
@@ -8922,7 +8933,7 @@ func registerGenerated() {
 		overflow("hidden"),
 		height("42px"),
 		margin("0.5rem 0 0.6rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
 	)
@@ -8996,7 +9007,7 @@ func registerGenerated() {
 		alignSelf("flex-start"),
 		margin("0.3rem 0 0.1rem"),
 		padding("0.1rem 0.45rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		fontSize("0.6rem"),
 		fontWeight("700"),
 		letterSpacing("0.09em"),
@@ -9110,7 +9121,7 @@ func registerGenerated() {
 		fontSize("0.75rem"),
 		letterSpacing("0.01em"),
 		padding("0.14rem 0.55rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		flexShrink("0"),
 		color("color-mix(in srgb, var(--accent) 45%, #ffffff)"),
 		background("color-mix(in srgb, var(--accent) 26%, transparent)"),
@@ -9130,11 +9141,11 @@ func registerGenerated() {
 		height("16px"),
 		background("color-mix(in srgb, var(--text) 9%, transparent)"),
 		border("0"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		margin("0 0 0.5rem"),
 	)
 	rule(".bento-budgets .bar-fill",
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #000000), var(--accent))"),
 		boxShadow("0 0 12px -1px color-mix(in srgb, var(--accent) 55%, transparent)"),
 	)
@@ -9177,7 +9188,7 @@ func registerGenerated() {
 		flexShrink("1"),
 	)
 	rule(".bento-budgets .budgets-toolbar-label, .bento-goals .budgets-toolbar-label",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
@@ -9295,7 +9306,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		background("#1a1a1d"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		padding("2px"),
 		position("relative"),
 	)
@@ -9345,7 +9356,7 @@ func registerGenerated() {
 		alignItems("center"),
 		background("#1a1a1d"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		padding(".2rem .25rem"),
 	)
 	rule(".rstep",
@@ -9407,7 +9418,7 @@ func registerGenerated() {
 	rule(".rz::before",
 		content("\"\""),
 		position("absolute"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("rgba(212,212,216,.62)"),
 		boxShadow("0 0 0 1px rgba(244,244,245,.12), 0 6px 18px rgba(0,0,0,.28)"),
 	)
@@ -9504,7 +9515,7 @@ func registerGenerated() {
 	)
 	rule("main.cf-scroll::-webkit-scrollbar-thumb",
 		background("#2d2d33"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("3px solid #0e0e0f"),
 		backgroundClip("padding-box"),
 	)
@@ -9553,7 +9564,7 @@ func registerGenerated() {
 		inset("0"),
 		backfaceVisibility("hidden"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		background("#121214"),
 		overflow("hidden"),
 		display("flex"),
@@ -9601,7 +9612,7 @@ func registerGenerated() {
 	)
 	rule(".set-body::-webkit-scrollbar-thumb",
 		background("#2d2d33"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("2px solid #121214"),
 	)
 	// Flush body: the scroll padding is dropped and the single form/body child fills the
@@ -9643,7 +9654,7 @@ func registerGenerated() {
 	)
 	rule(".modal-scroll::-webkit-scrollbar-thumb",
 		background("#2d2d33"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		border("2px solid #121214"),
 	)
 	rule(".modal-foot",
@@ -9689,7 +9700,7 @@ func registerGenerated() {
 	rule(".switch",
 		width("40px"),
 		height("24px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("#34343a"),
 		position("relative"),
 		cursor("pointer"),
@@ -9720,7 +9731,7 @@ func registerGenerated() {
 	rule(".swatch",
 		width("24px"),
 		height("24px"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		cursor("pointer"),
 		border("2px solid transparent"),
 		transition("border-color .12s ease"),
@@ -9736,7 +9747,7 @@ func registerGenerated() {
 		padding(".5rem .6rem"),
 		background("#1a1a1d"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		color("#f4f4f5"),
 		font("inherit"),
 	)
@@ -9752,7 +9763,7 @@ func registerGenerated() {
 		minWidth("96px"),
 		padding("var(--btn-py,0.5rem) 1rem"),
 		minHeight("44px"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		cursor("pointer"),
 		fontSize(".9rem"),
 		display("inline-flex"),
@@ -9797,7 +9808,7 @@ func registerGenerated() {
 	rule(".acct-edit-form.budget-edit .budgetcats-list",
 		maxHeight("184px"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		padding("0.15rem 0.35rem"),
 	)
@@ -9843,7 +9854,7 @@ func registerGenerated() {
 	)
 	rule(".cover-spread-sub",
 		display("block"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		marginTop("0.05rem"),
 	)
@@ -9919,17 +9930,17 @@ func registerGenerated() {
 		background("color-mix(in srgb, var(--accent) 14%, transparent)"),
 	)
 	rule(".cover-fx-preview",
-		fontSize("0.85rem"),
+		fontSize("var(--type-14)"),
 		fontWeight("600"),
 		color("var(--accent)"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".cover-fx-err",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		color("var(--danger)"),
 	)
 	rule(".cover-fx-hint",
-		fontSize("0.74rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	// The ratio-formula toggle carries a small "ratios" label before the ƒx glyph, so it
@@ -9938,7 +9949,7 @@ func registerGenerated() {
 		gap("0.3rem"),
 	)
 	rule(".cover-fx-ratio-label",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		letterSpacing("0.01em"),
 		textTransform("lowercase"),
@@ -9967,7 +9978,7 @@ func registerGenerated() {
 		alignItems("center"),
 		flexWrap("wrap"),
 		gap("0.4rem"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	rule(".entity-var-preview-lead",
@@ -9975,7 +9986,7 @@ func registerGenerated() {
 	)
 	rule(".entity-var-chip",
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		color("var(--accent)"),
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
@@ -9986,7 +9997,7 @@ func registerGenerated() {
 	rule(".entity-var-preview-fields",
 		color("var(--text-faint, var(--text-dim))"),
 		fontFamily("ui-monospace, SFMono-Regular, Menlo, monospace"),
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 	)
 	rule(".cover-src-row",
 		display("flex"),
@@ -9997,7 +10008,7 @@ func registerGenerated() {
 		padding("0.55rem 0.7rem"),
 		border("1px solid var(--border)"),
 		borderLeft("3px solid transparent"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--bg-elev) 40%, transparent)"),
 		transition("background 0.15s ease, border-color 0.15s ease"),
 	)
@@ -10035,7 +10046,7 @@ func registerGenerated() {
 		flexShrink("0"),
 		margin("0"),
 		border("1.5px solid color-mix(in srgb, var(--text) 34%, transparent)"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		background("transparent"),
 		cursor("pointer"),
 		position("relative"),
@@ -10086,7 +10097,7 @@ func registerGenerated() {
 		textOverflow("ellipsis"),
 	)
 	rule(".txnlink-summary-meta",
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 	)
 	rule(".txnlink-summary-amount",
 		fontSize("1.35rem"),
@@ -10108,15 +10119,15 @@ func registerGenerated() {
 		background("color-mix(in srgb, var(--accent) 9%, transparent)"),
 	)
 	rule(".txnlink-preview-label",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		marginRight(".1rem"),
 	)
 	rule(".txnlink-chip",
 		display("inline-flex"),
 		alignItems("center"),
 		padding(".15rem .5rem"),
-		borderRadius("999px"),
-		fontSize("0.8rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		border("1px solid color-mix(in srgb, var(--accent) 40%, transparent)"),
 		background("var(--bg-card)"),
@@ -10153,7 +10164,7 @@ func registerGenerated() {
 		marginTop(".35rem"),
 		padding(".55rem .7rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
 	)
 	// Auto-budget modal: a scrollable list of tunable per-category suggestions, each a
@@ -10204,7 +10215,7 @@ func registerGenerated() {
 		textTransform("uppercase"),
 		letterSpacing(".04em"),
 		padding(".05em .4em"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		border("1px solid var(--border)"),
 	)
 	rule(".autobudget-controls",
@@ -10263,7 +10274,7 @@ func registerGenerated() {
 		alignItems("center"),
 		gap(".6rem"),
 		padding(".4rem .35rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		cursor("pointer"),
 	)
 	rule(".budgetcat-row:hover",
@@ -10289,7 +10300,7 @@ func registerGenerated() {
 		fontWeight("600"),
 	)
 	rule(".cover-src-remain",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-faint, #666)"),
 		fontWeight("400"),
 		whiteSpace("nowrap"),
@@ -10302,7 +10313,7 @@ func registerGenerated() {
 		flexShrink("0"),
 	)
 	rule(".cover-src-ratio-label",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 	)
 	// Keep the native number spinners on the ratio input so it can be stepped with the
@@ -10344,7 +10355,7 @@ func registerGenerated() {
 		color("#f59e0b"),
 	)
 	rule(".cover-src-avail",
-		fontSize("0.72rem"),
+		fontSize("var(--type-12)"),
 		color("#f59e0b"),
 		whiteSpace("nowrap"),
 	)
@@ -10372,7 +10383,7 @@ func registerGenerated() {
 		justifyContent("center"),
 	)
 	rule(".bento [class*=\"rounded-full\"][class*=\"overflow-hidden\"]",
-		borderRadius("2px"),
+		borderRadius("var(--radius-xs)"),
 	)
 	rule("aside.rail nav",
 		scrollbarWidth("none"),
@@ -10421,12 +10432,12 @@ func registerGenerated() {
 	)
 	rule(".nav-alt-hint",
 		marginLeft("auto"),
-		fontSize("0.7rem"),
+		fontSize("var(--type-11)"),
 		lineHeight("1"),
 		color("var(--muted)"),
 		opacity("0.7"),
 		border("1px solid var(--border)"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		padding("1px 4px"),
 	)
 	rule("aside.rail.collapsed .nav-alt-hint",
@@ -10455,7 +10466,7 @@ func registerGenerated() {
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		padding("0.25rem 0.55rem"),
 		fontSize("13px"),
 		lineHeight("1"),
@@ -10602,7 +10613,7 @@ func registerGenerated() {
 		border("none"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		transition("background .12s ease, color .12s ease"),
 	)
 	rule(".add-caret:hover",
@@ -10621,7 +10632,7 @@ func registerGenerated() {
 		minWidth("210px"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		padding("4px"),
 		boxShadow("0 8px 24px rgba(0,0,0,.3)"),
 		display("flex"),
@@ -10648,12 +10659,12 @@ func registerGenerated() {
 	)
 	rule(".smart-tip-pop-title",
 		fontWeight("600"),
-		fontSize("0.82rem"),
+		fontSize("var(--type-13)"),
 		color("var(--text)"),
 	)
 	rule(".smart-tip-pop-text",
 		margin("0.25rem 0 0"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		lineHeight("1.4"),
 		color("var(--text-dim)"),
 	)
@@ -10741,13 +10752,13 @@ func registerGenerated() {
 		padding(".25rem .6rem"),
 		background("#1a1a1d"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		fontSize(".8rem"),
 	)
 	rule(".member-add",
 		padding(".25rem .6rem"),
 		border("1px dashed #3a3a40"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		color("#a6a6ac"),
 		fontSize(".8rem"),
 		cursor("pointer"),
@@ -10771,7 +10782,7 @@ func registerGenerated() {
 		padding(".35rem .5rem"),
 		background("#1a1a1d"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		color("#f4f4f5"),
 		font("inherit"),
 		textAlign("right"),
@@ -10779,7 +10790,7 @@ func registerGenerated() {
 	rule(".data-btn",
 		padding(".45rem .7rem"),
 		border("1px solid #34343a"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 		color("#d6d6da"),
 		background("#1a1a1d"),
 		cursor("pointer"),
@@ -10855,7 +10866,7 @@ func registerGenerated() {
 		// "Start fresh" link keeps the warm accent.
 		background("rgba(211,146,0,0.07)"),
 		border("1px solid color-mix(in srgb, #d39200 45%, var(--border))"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize(".75rem"),
 	)
 	rule("[data-theme=\"light\"] .sample-banner",
@@ -10924,7 +10935,7 @@ func registerGenerated() {
 		background("transparent"),
 		border("0"),
 		padding(".1rem"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		color("#cfa14e"),
 		cursor("pointer"),
 	)
@@ -10947,7 +10958,7 @@ func registerGenerated() {
 		maxWidth("100%"),
 		background("var(--accent-dim, rgba(0,122,255,0.12))"),
 		border("1px solid var(--accent, #007aff)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		fontSize(".8rem"),
 	)
 	rule(".scope-banner-text",
@@ -11107,12 +11118,12 @@ func registerGenerated() {
 		fontSize(".85em"),
 		background("rgba(120,120,130,.16)"),
 		padding(".1em .35em"),
-		borderRadius("4px"),
+		borderRadius("var(--radius-sm)"),
 	)
 	rule(".insights-answer pre",
 		background("rgba(120,120,130,.16)"),
 		padding(".7rem .85rem"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		overflowX("auto"),
 		margin(".6rem 0"),
 	)
@@ -11158,7 +11169,7 @@ func registerGenerated() {
 	// is enough for the eye to land after the jump-scroll.
 	rule(".cf-jump-flash",
 		animation("cf-jump-flash-kf 0.9s var(--ease-exit)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".cf-jump-flash",
 		animation("none"),
@@ -11298,7 +11309,7 @@ func registerGenerated() {
 		display("inline-flex"),
 		alignItems("stretch"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		overflow("hidden"),
 	)
 	rule(".wm-step-btn",
@@ -11368,7 +11379,7 @@ func registerGenerated() {
 		width("28px"),
 		height("28px"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("transparent"),
 		cursor("pointer"),
 		color("inherit"),
@@ -11422,7 +11433,7 @@ func registerGenerated() {
 		height("1.7rem"),
 		padding("0"),
 		border("1px solid var(--border)"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		background("none"),
 		cursor("pointer"),
 	)
@@ -11472,7 +11483,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		minHeight("200px"),
 		padding("1.5rem"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		background("var(--bg,#0e0e10)"),
 		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--text-dim) 22%, transparent) 1px, transparent 1px)"),
 		backgroundSize("16px 16px"),
@@ -11493,7 +11504,7 @@ func registerGenerated() {
 		gap("0"),
 		minHeight("128px"),
 		padding("1.5rem 1rem"),
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 		border("1px solid var(--border)"),
 		background("var(--bg,#0e0e10)"),
 		backgroundImage("radial-gradient(circle, color-mix(in srgb, var(--text-dim) 22%, transparent) 1px, transparent 1px)"),
@@ -11508,7 +11519,7 @@ func registerGenerated() {
 		gap(".15rem"),
 		minWidth("8.5rem"),
 		padding(".7rem .9rem"),
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 		cursor("pointer"),
 		textAlign("left"),
 		color("inherit"),
@@ -11539,7 +11550,7 @@ func registerGenerated() {
 		top("50%"),
 		width("9px"),
 		height("9px"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 		background("var(--bg,#0e0e10)"),
 		border("1.5px solid var(--text-dim)"),
 		transform("translateY(-50%)"),
@@ -11576,7 +11587,7 @@ func registerGenerated() {
 		width("30px"),
 		height("30px"),
 		border("0"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev,#1a1a1d)"),
 		cursor("pointer"),
 		color("var(--accent,#3b82f6)"),
@@ -11612,7 +11623,7 @@ func registerGenerated() {
 		lineHeight("1"),
 		color("#fff"),
 		background("var(--action-danger,#c0392b)"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-pill)"),
 	)
 	rule(".set-range",
 		width("11rem"),
@@ -11702,7 +11713,7 @@ func registerGenerated() {
 		minHeight("44px"),
 		padding(".55rem .8rem"),
 		border("1px solid var(--border)"),
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		font("inherit"),
@@ -11816,7 +11827,7 @@ func registerGenerated() {
 		minWidth("44px"),
 	)
 	ruleMedia("(max-width: 640px)", ".seg-btn",
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 	)
 	ruleMedia("(max-width: 640px)", ".rlabel",
 		minWidth("0"),
@@ -11925,7 +11936,7 @@ func registerGenerated() {
 	rule(".labeled-field .t-caption",
 		whiteSpace("normal"),
 		overflowWrap("break-word"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		color("var(--text-dim)"),
 		lineHeight("1.3"),
 	)
@@ -11955,13 +11966,13 @@ func registerGenerated() {
 		minHeight("clamp(3rem, 6svh, 3.5rem)"),
 	)
 	rule(".card",
-		borderRadius("12px"),
+		borderRadius("var(--radius-xl)"),
 	)
 	rule(".stat",
-		borderRadius("10px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule("[data-density=\"compact\"] .card",
-		borderRadius("8px"),
+		borderRadius("var(--radius-lg)"),
 	)
 	rule(".card-title",
 		fontWeight("600"),
@@ -12000,13 +12011,13 @@ func registerGenerated() {
 		fontSize("13px !important"),
 	)
 	rule("main .t-caption:first-child",
-		fontSize("0.825rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		color("var(--text-dim)"),
 		marginBottom("0.85rem"),
 	)
 	rule(".card .btn[title*=\"Download\"], .card .btn[title*=\"Tax\"]",
-		fontSize("0.78rem"),
+		fontSize("var(--type-12)"),
 		padding("0.2rem 0.55rem"),
 		opacity("0.65"),
 	)
@@ -12141,8 +12152,8 @@ func registerGenerated() {
 	rule(".sync-chip",
 		margin("0 0.75rem 0.4rem"),
 		padding("0.2rem 0.5rem"),
-		borderRadius("999px"),
-		fontSize("0.72rem"),
+		borderRadius("var(--radius-pill)"),
+		fontSize("var(--type-12)"),
 		fontWeight("600"),
 		border("1px solid var(--border)"),
 		background("var(--bg-elev)"),
@@ -12210,13 +12221,13 @@ func registerGenerated() {
 	rule(".cloud-mention",
 		margin("0 0.75rem 0.5rem"),
 		padding("0.15rem 0.25rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".cloud-mention-link",
 		padding("0.3rem 0.45rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text-dim)"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		textDecoration("none"),
 	)
 	rule(".cloud-mention-link:hover",
@@ -12229,7 +12240,7 @@ func registerGenerated() {
 		justifyContent("center"),
 		width("1.5rem"),
 		height("1.5rem"),
-		borderRadius("6px"),
+		borderRadius("var(--radius-md)"),
 		color("var(--text-faint)"),
 		flexShrink("0"),
 	)
@@ -12271,7 +12282,7 @@ func registerGenerated() {
 	)
 	rule(".upsheet-title",
 		fontFamily("var(--font-display),'Fraunces',serif"),
-		fontSize("1.15rem"),
+		fontSize("var(--type-18)"),
 		fontWeight("600"),
 		margin("0 0 0.5rem"),
 	)
@@ -12291,7 +12302,7 @@ func registerGenerated() {
 	rule(".sub-banner",
 		display("block"),
 		padding("0.45rem 1rem"),
-		fontSize("0.8rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("500"),
 		border("0"),
 		borderBottom("1px solid var(--border)"),
