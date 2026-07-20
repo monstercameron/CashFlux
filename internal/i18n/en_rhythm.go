@@ -27,7 +27,9 @@ var rhythmKeys = Catalog{
 	"rhythm.postNow":        "Post now",
 
 	// ── Review strip ────────────────────────────────────────────────────────
-	"rhythm.reviewTitle":      "Waiting for your review",
+	"rhythm.reviewTitle": "Waiting for your review",
+	// The strip header always states the honest total, so paging never hides scale.
+	"rhythm.reviewTitleCount": "Waiting for your review · %d found",
 	"rhythm.reviewNote":       "Repeating charges we found in your history. Confirm the real ones so they join your plan.",
 	"rhythm.smartMark":        "Smart",
 	"rhythm.smartPlusMark":    "Smart+",
@@ -47,7 +49,7 @@ var rhythmKeys = Catalog{
 	// Evidence sentence fragments (composed in order in Go).
 	"rhythm.evPayments":    "%d payments",
 	"rhythm.evAround":      "%s around the %s",
-	"rhythm.evOn":          "%s on the %s",
+	"rhythm.evOn":          "%s on %s",
 	"rhythm.evPostsBy":     "usually posts by the %s",
 	"rhythm.evEvery":       "%s every time",
 	"rhythm.evAbout":       "about %s",
@@ -98,6 +100,7 @@ var rhythmKeys = Catalog{
 	"rhythm.sortNext":     "By next date",
 	"rhythm.sortName":     "By name",
 	"rhythm.sortTrend":    "By trend",
+	"rhythm.shareOfIn":    "%.0f%% of income",
 	"rhythm.perMonth":     "%s / mo",
 	"rhythm.perMonthVar":  "about %s / mo",
 	"rhythm.anchorTitle":  "Linked to %s — open the account",

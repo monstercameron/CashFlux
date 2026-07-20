@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -83,6 +86,13 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	aiLoading := ui.UseState(false)
 	aiErr := ui.UseState("")
 	aiText := ui.UseState("")
+	// Paging state per provenance lane. Confirming/rejecting NEVER resets these —
+	// the page is only clamped (pagination.Clamp), so emptying the last page falls
+	// back to the previous one instead of bouncing the user to page 1.
+	pageA := ui.UseState(1)
+	sizeA := ui.UseState(rhyReviewPageSize)
+	pageB := ui.UseState(1)
+	sizeB := ui.UseState(rhyReviewPageSize)
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -115,6 +125,9 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 			groupA = append(groupA, c)
 		}
 	}
+	// Most valuable first: confidence tier, then monthly cost impact.
+	rhyOrderCandidates(groupA)
+	rhyOrderCandidates(leftovers)
 
 	onConfirm := func(c recurdiscover.Candidate) {
 		mag := c.Evidence.Amount.Typical
@@ -144,8 +157,11 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 
 	var groups []any
 	if len(groupA) > 0 {
-		cands := []any{}
-		for _, c := range groupA {
+		psA := sizeA.Get()
+		curA := pagination.Clamp(pageA.Get(), len(groupA), psA)
+		sA, eA := pagination.Bounds(curA, len(groupA), psA)
+		cands := []any{css.Class("rhy-review-page")}
+		for _, c := range groupA[sA:eA] {
 			cand := c
 			cands = append(cands, ui.CreateElement(rhyReviewCand, rhyReviewCandProps{
 				Cand: cand, Base: base, OnConfirm: onConfirm, OnReject: onReject,
@@ -156,7 +172,15 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 				Span(css.Class("rhy-smark"), uistate.T("rhythm.smartMark")),
 				Span(uistate.T("rhythm.reviewSmartGroup", plural(len(groupA), "repeating charge"))),
 			),
-			Fragment(cands...),
+			Div(cands...),
+			uiw.Pager(uiw.PagerProps{
+				Page: curA, Total: len(groupA), PageSize: psA,
+				PageSizes: []int{5, 10, 25},
+				OnPage:    func(n int) { pageA.Set(n) },
+				// Changing the page size restarts at page 1 (the standard idiom).
+				OnPageSize: func(s int) { sizeA.Set(s); pageA.Set(1) },
+				IDPrefix:   "rhy-review",
+			}),
 		))
 	}
 
@@ -208,17 +232,32 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 			gb = append(gb, P(css.Class("rhy-cand-reason"), Attr("data-testid", "rhy-smartplus-ai"), aiText.Get()))
 		}
 		// Each leftover is re-scored locally; verified ones become confirmable, the
-		// rest carry an honest "no local way to confirm".
-		for _, c := range leftovers {
+		// rest carry an honest "no local way to confirm". Paged in its own lane so
+		// the Smart / Smart+ provenance grouping stays legible.
+		psB := sizeB.Get()
+		curB := pagination.Clamp(pageB.Get(), len(leftovers), psB)
+		sB, eB := pagination.Bounds(curB, len(leftovers), psB)
+		pageItems := []any{css.Class("rhy-review-page")}
+		for _, c := range leftovers[sB:eB] {
 			cand := c
 			v := recurdiscover.Verify(rhyClaimOf(cand), txns, recurdiscover.Options{Now: now})
 			note := uistate.T("rhythm.noLocalConfirm")
 			if v.Verified {
 				note = uistate.T("rhythm.verifiedLocally")
 			}
-			gb = append(gb, ui.CreateElement(rhyReviewCand, rhyReviewCandProps{
+			pageItems = append(pageItems, ui.CreateElement(rhyReviewCand, rhyReviewCandProps{
 				Cand: cand, Base: base, IsPlus: true, Verified: v.Verified, Note: note,
 				OnConfirm: onConfirm, OnReject: onReject,
+			}))
+		}
+		gb = append(gb, Div(pageItems...))
+		if len(leftovers) > 0 {
+			gb = append(gb, uiw.Pager(uiw.PagerProps{
+				Page: curB, Total: len(leftovers), PageSize: psB,
+				PageSizes:  []int{5, 10, 25},
+				OnPage:     func(n int) { pageB.Set(n) },
+				OnPageSize: func(s int) { sizeB.Set(s); pageB.Set(1) },
+				IDPrefix:   "rhy-review-plus",
 			}))
 		}
 		groups = append(groups, Div(gb...))
@@ -252,7 +291,52 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	if footer != nil {
 		secBody = append(secBody, footer)
 	}
-	return rhySection("sec-review", uistate.T("rhythm.reviewTitle"), uistate.T("rhythm.reviewNote"), nil, Fragment(secBody...))
+	// The header states the honest total up front, so paging never hides scale.
+	title := uistate.T("rhythm.reviewTitleCount", len(groupA)+len(leftovers))
+	return rhySection("sec-review", title, uistate.T("rhythm.reviewNote"), nil, Fragment(secBody...))
+}
+
+// rhyReviewPageSize is the default candidates-per-page in the review strip.
+const rhyReviewPageSize = 5
+
+// rhyOrderCandidates puts the most valuable candidates on the first page:
+// strongest confidence tier first, then largest monthly cost impact, with the
+// payee as a deterministic tie-break.
+func rhyOrderCandidates(cs []recurdiscover.Candidate) {
+	sort.SliceStable(cs, func(i, j int) bool {
+		if cs[i].Tier != cs[j].Tier {
+			return cs[i].Tier > cs[j].Tier
+		}
+		mi, mj := rhyMonthlyImpact(cs[i].Evidence), rhyMonthlyImpact(cs[j].Evidence)
+		if mi != mj {
+			return mi > mj
+		}
+		return cs[i].Payee < cs[j].Payee
+	})
+}
+
+// rhyMonthlyImpact normalizes a candidate's typical amount to a per-month figure
+// so cadences are comparable when ranking.
+func rhyMonthlyImpact(ev recurdiscover.Evidence) int64 {
+	a := ev.Amount.Typical
+	switch ev.Cadence {
+	case recurdiscover.CadenceWeekly:
+		return a * 52 / 12
+	case recurdiscover.CadenceBiweekly:
+		return a * 26 / 12
+	case recurdiscover.CadenceSemimonthly:
+		return a * 2
+	case recurdiscover.CadenceEvery4Weeks:
+		return a * 13 / 12
+	case recurdiscover.CadenceQuarterly:
+		return a / 3
+	case recurdiscover.CadenceSemiannual:
+		return a / 6
+	case recurdiscover.CadenceAnnual:
+		return a / 12
+	default: // monthly / unknown
+		return a
+	}
 }
 
 // rhyClaimOf turns a Silent candidate into a re-verification claim.

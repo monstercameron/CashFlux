@@ -52,6 +52,28 @@ Notable decisions/traps:
   `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
   invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
   ("verified locally ✓" vs an honest "no local way to confirm").
+### Review-strip pagination (Cam, same day)
+
+Self-check screenshots exposed the scale problem immediately: the seeded household yields 63
+candidates, so the review strip pushed the agenda and roster off the page. Cam's directive: page it,
+reuse the app's own pagination vocabulary, and never silently truncate.
+
+- Reused `uiw.Pager` (the same control the transactions ledger and to-do board use) rather than
+  inventing a strip-local pager, so it reads native: range, rows-per-page, Prev / Page N of M / Next.
+- Paged each provenance lane independently (Smart with its own count, Smart+ with its own) instead of
+  one pager over a merged list — Smart+ is opt-in, conditionally rendered, and carries different verbs
+  and verification notes, so lane-local paging keeps the trust ladder legible with far less coupling.
+- The strip title now carries the honest total ("Waiting for your review · 63 found") so paging is
+  visibly paging, not truncation.
+- Ordering puts value first: confidence tier, then monthly cost impact (amounts normalized per cadence
+  so a $4,400/mo lease outranks a $2.99/mo app regardless of rhythm).
+- The classic review-queue bug — mutate an item, get bounced to page 1 — is avoided by never resetting
+  the page atom on confirm/reject and instead running `pagination.Clamp` each render, so emptying the
+  last page falls back exactly one page. Covered explicitly in the self-check: reject on page 2, assert
+  the range still reads "6-...".
+- The paged region gets a bounded `max-height` + scroll so the strip can't dominate the viewport at any
+  page size; pager and Smart+ footer sit outside it.
+
 - Screenlint stays at zero hardcoded UI copy — all new strings route through `en_rhythm.go`; ordinal
   suffixes (st/nd/rd/th) stay in code since they're not prose to the ratchet.
 

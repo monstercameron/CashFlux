@@ -337,6 +337,13 @@ func registerRhythmStrips() {
 		prop("padding", "0.12rem 0"),
 		prop("color", "var(--text-dim)"),
 	)
+	// The paged candidate region is bounded so the review strip can never
+	// dominate the viewport, whatever the page size or how many the detector
+	// found. The pager + opt-in footer sit OUTSIDE this scroll region.
+	rule(".rhy-review-page",
+		prop("max-height", "30rem"),
+		prop("overflow-y", "auto"),
+	)
 	rule(".rhy-review-foot",
 		prop("margin-top", "0.85rem"),
 		prop("padding-top", "0.75rem"),

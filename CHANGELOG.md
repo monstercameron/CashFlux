@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **The review strip pages instead of growing without bound.** With a real ledger the detector surfaces
+  far more candidates than the sample data (the seeded household alone yields 63), and an unbounded
+  "Waiting for your review" list swamped the page and buried the agenda and roster beneath it. The strip
+  now uses the app-standard `uiw.Pager` (Prev / Page N of M / Next, rows-per-page, `rhy-review-*` and
+  `rhy-review-plus-*` testids) so it reads as native pagination, with the Smart and Smart+ lanes paged
+  independently so the provenance grouping stays legible. The header states the honest total up front
+  ("Waiting for your review · 63 found") — paging never hides scale. Candidates are ordered most-valuable
+  first (confidence tier, then monthly cost impact), the paged region carries a bounded max height so the
+  strip can never dominate the viewport, and the sort/verb controls plus the Smart+ opt-in footer sit
+  outside the paged region. Confirming or rejecting a candidate keeps the current page (the page is only
+  clamped, so emptying the last page falls back one page instead of bouncing to page 1).
 - **Unified Bills & Recurring surface — one page replaces the Scheduled | Bills | Subscriptions tabs.**
   `/recurring`, `/bills`, and `/subscriptions` now all render the "month's rhythm" surface (the deep
   routes land on the agenda / the roster's Subscriptions lens). The page is a full-width stack built on

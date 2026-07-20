@@ -268,8 +268,14 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 	if props.ShareTotal > 0 {
 		pct = float64(absMonthly(r)) / float64(props.ShareTotal) * 100
 	}
+	// Income is a share of income, not of outflow — saying "of outflow" beside a
+	// paycheck reads as a contradiction.
+	shareKey := "recurring.shareLabel"
+	if !r.Amount.IsNegative() {
+		shareKey = "rhythm.shareOfIn"
+	}
 	spine := Div(css.Class("rhy-spine"),
-		Span(css.Class("rhy-spine-pct"), uistate.T("recurring.shareLabel", pct)),
+		Span(css.Class("rhy-spine-pct"), uistate.T(shareKey, pct)),
 		Div(css.Class("rhy-spine-track"), Div(css.Class("rhy-spine-fill"), Style(map[string]string{"width": pctWidth(pct)}))),
 	)
 
@@ -302,9 +308,10 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 			Div(chips...),
 			Span(css.Class("rhy-claim-meta"), nextLine),
 		),
+		// The cadence already reads on the meta line ("Monthly · next Aug 1"), so the
+		// amount column carries only the normalized figure — no second "Monthly".
 		Div(css.Class("rhy-claim-amt"),
 			Div(ClassStr("rhy-claim-per "+tw.Fold(tw.FontDisplay)+" "+recurAmountTone(money.New(me, props.Base))), perMonth),
-			Span(css.Class("rhy-claim-cad"), recurCadence(r.Cadence)),
 		),
 		uiw.KebabMenu(uiw.KebabMenuProps{
 			ID:           "recurring-menu-" + r.ID,
