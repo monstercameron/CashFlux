@@ -32,6 +32,11 @@ func init() {
 	register("SMART-BL13", bl13StatementClarity)
 }
 
+// labelOpenBills is the shared navigate-action label used by every bills engine,
+// declared once so the copy reads identically everywhere (and is translated in a
+// single place when the bills engines move onto the i18n catalog).
+const labelOpenBills = "Open bills"
+
 const (
 	bl1MinCharges = 3     // need this many charges to predict
 	bl1MinAmount  = 20_00 // ignore trivial billers
@@ -100,7 +105,7 @@ func bl1PredictVariable(in Input) []smart.Insight {
 				in.hmoney(pred) + " (range " + in.hmoney(min) + "–" + in.hmoney(mx) + ").",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(pred)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"}))
 	}
 	return out
 }
@@ -160,7 +165,7 @@ func bl14SeasonalBill(in Input) []smart.Insight {
 				" across the year. Budget for the high end in peak months rather than the average.",
 			Severity: smart.SeverityInfo,
 		}.WithAmount(in.baseMoney(hi)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"}))
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"}))
 	}
 	return out
 }
@@ -191,7 +196,7 @@ func bl10PayAllDue(in Input) []smart.Insight {
 			" are due within " + plural(int64(bl10DueWindow), "day") + ". Review and clear them together.",
 		Severity: smart.SeverityWarn,
 	}.WithAmount(in.baseMoney(total)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
 	return []smart.Insight{ins}
 }
 
@@ -226,7 +231,7 @@ func bl5OptimalPayDate(in Input) []smart.Insight {
 			". Where a biller allows it, shifting payment to just after payday smooths the month.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(beforeTotal)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
 	return []smart.Insight{ins}
 }
 
@@ -262,7 +267,7 @@ func bl15GracePeriod(in Input) []smart.Insight {
 				" after the " + ordinalDay(a.DueDayOfMonth) + " — your effective last-safe-pay date, not just the nominal due date.",
 			Severity: smart.SeverityInfo,
 		}
-		out = append(out, ins.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+		out = append(out, ins.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
 			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 	}
 	return out
@@ -333,7 +338,7 @@ func bl8PaycheckGrouping(in Input) []smart.Insight {
 			" fall before your next paycheck around " + nextPay.Format("Jan 2") + " — make sure they're covered.",
 		Severity: smart.SeverityInfo,
 	}.WithAmount(in.baseMoney(total)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills", Route: "/bills"})
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
 	return []smart.Insight{ins}
 }
 
@@ -382,7 +387,7 @@ func bl4Autopay(in Input) []smart.Insight {
 			Detail: "A payment posted around the " + prevDue.Format("Jan 2") + " due date, so " + a.Name +
 				" appears to be on autopay — no action needed.",
 			Severity: smart.SeverityInfo,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
 			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 	}
 	return out
@@ -420,7 +425,7 @@ func bl13StatementClarity(in Input) []smart.Insight {
 				in.hmoney(monthlyInterest) + "/mo in interest — paying more would cut that down.",
 			Severity: smart.SeverityNudge,
 		}.WithAmount(in.baseMoney(monthlyInterest)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
 				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 	}
 	return out
@@ -468,7 +473,7 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 				" in interest (plus any late fee).",
 			Severity: smart.SeverityWarn,
 		}.WithAmount(in.baseMoney(weekInterest)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
 				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 	}
 	return out
@@ -513,8 +518,14 @@ func bl2CanCover(in Input) []smart.Insight {
 }
 
 // SMART-BL3 — Missed / overdue bill detection. For each liability with a
-// statement due-day, checks whether the most recent due date passed with no
-// payment recorded on that account.
+// statement due-day, checks whether the most recent due date passed without a
+// payment. Crucially it looks past the account link: an autoposted recurring
+// payment or a hand-entered "Car payment" expense lands in a checking account
+// and is never tied back to the loan, so a link-only check cried "missed" over a
+// payment plainly sitting in the ledger — the double-pay trap. When such an
+// unlinked look-alike is found the finding says so (and offers no scary alert)
+// instead of claiming no payment exists; only a genuine no-match is an alert.
+// Every finding carries its own evidence: what was searched and what was found.
 func bl3MissedBill(in Input) []smart.Insight {
 	var out []smart.Insight
 	for _, a := range in.Accounts {
@@ -529,19 +540,44 @@ func bl3MissedBill(in Input) []smart.Insight {
 		if days < missedGraceDays || days > missedWindowDays {
 			continue // not yet overdue, or too old to be actionable
 		}
-		if paymentInWindow(in.Transactions, a.ID, prevDue, in.Now) {
+		expected := abs64(in.toBaseMinor(a.MinPayment.Amount, a.Currency))
+		m := in.matchBillPayment(a, expected, prevDue, in.Now)
+		if m.Linked {
+			continue // a payment posted to the account — nothing was missed
+		}
+		key := "SMART-BL3:" + a.ID + ":" + prevDue.Format("2006-01")
+		if m.Candidate != nil {
+			// A look-alike payment exists but isn't linked to this bill: reframe
+			// from "missed" to "likely already paid — just link it", so the user
+			// is never nudged to pay a debt a second time. This is an info-level
+			// evidence note, not an alert.
+			out = append(out, smart.Insight{
+				Feature: "SMART-BL3",
+				Page:    smart.PageBills,
+				Key:     key,
+				Title:   a.Name + " looks already paid",
+				Detail: "A matching payment of " + in.hmoney(m.CandBase) + " on " +
+					m.Candidate.Date.Format("Jan 2") + " in " + in.accountName(m.Candidate.AccountID) +
+					" isn't linked to this bill, so it read as unpaid. It's almost certainly already handled — link it so you don't pay twice.",
+				Severity: smart.SeverityInfo,
+			}.WithAmount(in.baseMoney(m.CandBase)).
+				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
+					Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 			continue
 		}
+		// Genuinely no matching payment anywhere — the real overdue case. Show the
+		// search that was run so the finding is checkable, not a black box.
 		out = append(out, smart.Insight{
 			Feature: "SMART-BL3",
 			Page:    smart.PageBills,
-			Key:     "SMART-BL3:" + a.ID + ":" + prevDue.Format("2006-01"),
+			Key:     key,
 			Title:   a.Name + " may have been missed",
-			Detail: a.Name + " payment was due " + prevDue.Format("Jan 2") +
-				" but no payment is recorded since. Check whether it was paid.",
+			Detail: a.Name + " payment of about " + in.hmoney(expected) + " was due " +
+				prevDue.Format("Jan 2") + ". No matching payment turned up in any account in the " +
+				plural(int64(days), "day") + " since — check whether it was paid.",
 			Severity: smart.SeverityAlert,
 		}.WithAmount(a.MinPayment.Abs()).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open bills",
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
 				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
 	}
 	return out
@@ -648,12 +684,140 @@ func paymentInWindow(txns []domain.Transaction, accountID string, start, end tim
 		if t.AccountID != accountID && t.TransferAccountID != accountID {
 			continue
 		}
-		if dateutil.DaysBetween(start, t.Date) < 0 || dateutil.DaysBetween(t.Date, end) < 0 {
-			continue
+		if withinDayWindow(t.Date, start, end) {
+			return true
 		}
-		return true
 	}
 	return false
+}
+
+// withinDayWindow reports whether d falls in [start, end] compared at calendar-
+// date granularity (see paymentInWindow for why day-granularity matters).
+func withinDayWindow(d, start, end time.Time) bool {
+	return dateutil.DaysBetween(start, d) >= 0 && dateutil.DaysBetween(d, end) >= 0
+}
+
+// billMatch is the outcome of looking for the payment that settles a liability's
+// due date. Linked means a payment posted to (or transferred to) the account —
+// nothing is missed. Candidate is a look-alike payment sitting in another
+// account (an autoposted recurring bill, a hand-entered "Car payment") that
+// matches the bill by amount, timing, and name but was never linked to it;
+// CandBase is that payment's magnitude in base minor units, for the evidence
+// copy. Both zero means no payment was found at all — a genuine miss.
+type billMatch struct {
+	Linked    bool
+	Candidate *domain.Transaction
+	CandBase  int64
+}
+
+// matchBillPayment looks for the payment that settles account a's due date
+// within [from, to]. A transaction linked to the account is a settled payment.
+// Otherwise it hunts for the unlinked look-alike that caused the false "missed"
+// alerts: an outflow of about the expected amount, dated in the window, whose
+// description shares a distinctive word with the liability's name or lender.
+// Requiring all three (amount, date, name) keeps false matches out — a $620 car
+// payment never binds to a $320 student loan. Deterministic: on ties it prefers
+// the closest amount, then the most recent date.
+func (in Input) matchBillPayment(a domain.Account, expectedBase int64, from, to time.Time) billMatch {
+	if paymentInWindow(in.Transactions, a.ID, from, to) {
+		return billMatch{Linked: true}
+	}
+	acctTokens := billNameTokens(a.Name + " " + a.Lender)
+	if len(acctTokens) == 0 {
+		return billMatch{}
+	}
+	var best domain.Transaction
+	var bestBase, bestDiff int64
+	found := false
+	for _, t := range in.Transactions {
+		if t.AccountID == a.ID || t.TransferAccountID == a.ID {
+			continue // linked payments were handled above
+		}
+		if !t.Amount.IsNegative() {
+			continue // only outflows can be a bill payment
+		}
+		if !withinDayWindow(t.Date, from, to) {
+			continue
+		}
+		candBase := abs64(in.toBaseMinor(t.Amount.Amount, t.Amount.Currency))
+		if !amountsClose(candBase, expectedBase) {
+			continue
+		}
+		if !tokensOverlap(acctTokens, billNameTokens(txnLabel(t))) {
+			continue
+		}
+		diff := abs64(candBase - expectedBase)
+		if !found || diff < bestDiff || (diff == bestDiff && t.Date.After(best.Date)) {
+			tt := t
+			best, bestBase, bestDiff, found = tt, candBase, diff, true
+		}
+	}
+	if !found {
+		return billMatch{}
+	}
+	return billMatch{Candidate: &best, CandBase: bestBase}
+}
+
+// amountsClose reports whether two magnitudes (base minor units) are within a
+// small tolerance — 5% of the expected figure, but never less than $1 — so a
+// variable bill or a rounding wobble still matches while a clearly different
+// amount does not.
+func amountsClose(candidate, expected int64) bool {
+	tol := expected / 20 // 5%
+	if tol < 1_00 {
+		tol = 1_00
+	}
+	return abs64(candidate-expected) <= tol
+}
+
+// billStopWords are words too generic to prove a payment belongs to a specific
+// liability; matching leans on distinctive words (a person's name, "student")
+// plus the amount and date instead.
+var billStopWords = map[string]bool{
+	"loan": true, "payment": true, "auto": true, "card": true, "bill": true,
+	"credit": true, "finance": true, "servicing": true, "autopay": true,
+	"monthly": true, "account": true,
+}
+
+// billNameTokens lowercases text and returns its distinctive word tokens —
+// letters only, at least four long, generic finance words removed — used to tell
+// whether an unlinked payment describes a given liability.
+func billNameTokens(s string) map[string]bool {
+	out := map[string]bool{}
+	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}) {
+		if len(w) >= 4 && !billStopWords[w] {
+			out[w] = true
+		}
+	}
+	return out
+}
+
+// tokensOverlap reports whether the two token sets share at least one word.
+func tokensOverlap(a, b map[string]bool) bool {
+	// Iterate the smaller set for a touch less work.
+	if len(b) < len(a) {
+		a, b = b, a
+	}
+	for w := range a {
+		if b[w] {
+			return true
+		}
+	}
+	return false
+}
+
+// accountName returns the display name of the account with the given id, falling
+// back to the raw id when it isn't found (defensive — the id always resolves for
+// real data).
+func (in Input) accountName(id string) string {
+	for _, a := range in.Accounts {
+		if a.ID == id {
+			return a.Name
+		}
+	}
+	return id
 }
 
 // annualMinor returns the cadence-annualized magnitude of a recurring amount, in
