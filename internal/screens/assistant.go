@@ -293,18 +293,41 @@ func assistantInsightsDataPanel() ui.Node {
 			Span(css.Class("ast-clear-mark"), "✓"),
 			P(css.Class("muted"), uistate.T("assistant.flaggedClear")))
 	} else {
+		// Fold consecutive runs of the same finding kind into one collapsible
+		// summary row when a run is long enough to clutter (detail5). This is a
+		// presentation-layer fold — the detectors are untouched; short runs still
+		// list individually. A folded "expected payments" group also offers a
+		// Review bills action to the recurring surface.
+		gotoSource := func(route string) { nav.Navigate(uistate.RoutePath(route)) }
+		reviewBills := func() { nav.Navigate(uistate.RoutePath("/recurring")) }
 		rows := make([]ui.Node, 0, len(flaggedIns))
-		for _, ins := range flaggedIns {
-			route := "/transactions"
-			if ins.Page == smart.PageAccounts {
-				route = "/accounts"
+		for _, run := range groupInsightRuns(flaggedIns) {
+			if len(run.Items) < flaggedGroupMin {
+				for _, ins := range run.Items {
+					route := "/transactions"
+					if ins.Page == smart.PageAccounts {
+						route = "/accounts"
+					}
+					capturedRoute := route
+					rows = append(rows, ui.CreateElement(SmartAnomalyInsightRow, smartAnomalyInsightRowProps{
+						Insight: ins,
+						Route:   capturedRoute,
+						OnClick: func() { nav.Navigate(uistate.RoutePath(capturedRoute)) },
+					}))
+				}
+				continue
 			}
-			capturedRoute := route
-			rows = append(rows, ui.CreateElement(SmartAnomalyInsightRow, smartAnomalyInsightRowProps{
-				Insight: ins,
-				Route:   capturedRoute,
-				OnClick: func() { nav.Navigate(uistate.RoutePath(capturedRoute)) },
-			}))
+			props := smartAnomalyGroupRowProps{
+				Run:        run,
+				Heading:    flaggedGroupHeading(run.Feature, len(run.Items)),
+				OnNavigate: gotoSource,
+			}
+			if run.Feature == "SMART-T7" { // missing / expected payments → the bills surface
+				props.ReviewLabel = uistate.T("detail5.reviewBills")
+				props.ReviewAria = uistate.T("detail5.reviewBillsAria")
+				props.OnReview = reviewBills
+			}
+			rows = append(rows, ui.CreateElement(SmartAnomalyGroupRow, props))
 		}
 		flaggedBody = Fragment(
 			P(css.Class("muted"), uistate.T("insights.flaggedHint")),

@@ -1357,9 +1357,31 @@ func Insights() ui.Node {
 	// The empty-thread hero: greeting + capabilities + starter tiles (+ the keyless
 	// demo transcript), grouped as one unit. The console is content-height, so a
 	// short thread never strands a void — no bottom/top anchoring needed.
+	// A compact recent-conversations list in the empty body so the sparse chat
+	// space works and returning users can resume a chat without opening the side
+	// rail (detail5). Top 3 from the already-sorted conversation state.
+	recentBlock := Fragment()
+	if len(convs) > 0 {
+		recent := convs
+		if len(recent) > 3 {
+			recent = recent[:3]
+		}
+		recentBlock = Div(css.Class("asst-recent", tw.Mt1), Attr("data-testid", "assistant-recent-convos"),
+			Span(css.Class("asst-recent-label", tw.Text12, tw.FontSemibold, tw.TextFaint), uistate.T("detail5.recentLabel")),
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
+				MapKeyed(recent,
+					func(c domain.Conversation) any { return c.ID },
+					func(c domain.Conversation) ui.Node {
+						return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+					},
+				),
+			),
+		)
+	}
 	heroBlock := Div(css.Class("asst-hero"),
 		agentIntro,
 		chips,
+		recentBlock,
 		// C248: static example Q→A pairs preview the assistant for keyless users.
 		If(noAI, exampleConversationsNode()),
 	)
@@ -2407,6 +2429,146 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 	)
 }
 
+// flaggedGroupMin is the run length at which same-kind findings fold into one
+// collapsible summary row instead of listing individually. A run of two is
+// clearer shown in full; three or more is the "wall of nearly identical rows"
+// the grouping exists to tame (detail5).
+const flaggedGroupMin = 3
+
+// insightRun is a maximal run of consecutive same-feature findings. Runs shorter
+// than flaggedGroupMin render as individual rows; longer runs fold into one
+// SmartAnomalyGroupRow.
+type insightRun struct {
+	Feature string
+	Items   []smart.Insight
+}
+
+// groupInsightRuns folds a findings list into consecutive same-feature runs,
+// preserving order. It is a pure presentation-layer fold — it never re-runs or
+// re-ranks the detectors, only groups what they already produced (the smartengine
+// stays untouched).
+func groupInsightRuns(ins []smart.Insight) []insightRun {
+	var runs []insightRun
+	for _, in := range ins {
+		if n := len(runs); n > 0 && runs[n-1].Feature == in.Feature {
+			runs[n-1].Items = append(runs[n-1].Items, in)
+			continue
+		}
+		runs = append(runs, insightRun{Feature: in.Feature, Items: []smart.Insight{in}})
+	}
+	return runs
+}
+
+// flaggedGroupHeading is the plain-English summary line for a folded run: the
+// kind of finding plus how many there are.
+func flaggedGroupHeading(feature string, n int) string {
+	switch feature {
+	case "SMART-T7": // missing / expected transaction
+		return uistate.T("detail5.groupExpected", n)
+	case "SMART-T2": // duplicate transaction
+		return uistate.T("detail5.groupDuplicate", n)
+	case "SMART-T6": // spending spike
+		return uistate.T("detail5.groupSpike", n)
+	case "SMART-A1": // balance anomaly
+		return uistate.T("detail5.groupBalance", n)
+	}
+	return uistate.T("detail5.groupGeneric", n)
+}
+
+// smartAnomalyGroupRowProps carries a folded run of same-kind findings to its
+// component. OnReview (optional) is the group's primary action — for expected
+// payments it navigates to the recurring/bills surface. OnNavigate opens one
+// item's source page (route passed by the child row).
+type smartAnomalyGroupRowProps struct {
+	Run         insightRun
+	Heading     string
+	ReviewLabel string       // "" = no primary action
+	ReviewAria  string
+	OnReview    func()       // nil unless ReviewLabel is set
+	OnNavigate  func(string) // per-item source navigation
+}
+
+// SmartAnomalyGroupRow renders a collapsed summary of a same-kind run — one
+// headline with the count, an expand toggle, and (optionally) a primary action —
+// that expands to the individual findings. Its own component so the open-state
+// hook sits at a stable position across the list (no On* in loops).
+func SmartAnomalyGroupRow(p smartAnomalyGroupRowProps) ui.Node {
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(func() { open.Set(!open.Get()) })
+	review := ui.UseEvent(func() {
+		if p.OnReview != nil {
+			p.OnReview()
+		}
+	})
+	n := len(p.Run.Items)
+	chev := icon.ChevronRight
+	toggleLabel, toggleAria := uistate.T("detail5.groupExpand"), uistate.T("detail5.groupExpandAria", n)
+	if open.Get() {
+		chev = icon.ChevronDown
+		toggleLabel, toggleAria = uistate.T("detail5.groupCollapse"), uistate.T("detail5.groupCollapseAria", n)
+	}
+
+	actions := []any{css.Class("insight-row-actions"),
+		Button(css.Class("insight-row-btn"), Type("button"),
+			Attr("data-testid", "flag-group-toggle"),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", toggleAria),
+			Title(toggleAria), OnClick(toggle),
+			uiw.Icon(chev, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+			Span(toggleLabel),
+		),
+	}
+	if p.ReviewLabel != "" {
+		actions = append(actions, Button(css.Class("insight-row-btn"), Type("button"),
+			Attr("data-testid", "flag-group-review"), Attr("aria-label", p.ReviewAria),
+			Title(p.ReviewAria), OnClick(review),
+			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+			Span(p.ReviewLabel),
+		))
+	}
+
+	var body ui.Node = Fragment()
+	if open.Get() {
+		rows := make([]ui.Node, 0, n)
+		for _, ins := range p.Run.Items {
+			capturedIns := ins
+			route := "/transactions"
+			if capturedIns.Page == smart.PageAccounts {
+				route = "/accounts"
+			}
+			capturedRoute := route
+			rows = append(rows, ui.CreateElement(SmartAnomalyInsightRow, smartAnomalyInsightRowProps{
+				Insight: capturedIns,
+				Route:   capturedRoute,
+				OnClick: func() { p.OnNavigate(capturedRoute) },
+			}))
+		}
+		body = Div(css.Class("insight-list"), Style(map[string]string{"margin-left": "1.5rem"}), rows)
+	}
+
+	return Div(css.Class(tw.FlexCol), Attr("data-testid", "flag-group"), Attr("data-feature", p.Run.Feature),
+		Div(css.Class("insight-row insight-row-flagged"),
+			Span(ClassStr("insight-dot text-down"), uiw.Icon(icon.AlertTriangle, css.Class(tw.W4, tw.H4))),
+			Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0, tw.WFull),
+				Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), Title(p.Heading), p.Heading),
+				Div(actions...),
+			),
+		),
+		body,
+	)
+}
+
+// insightSourceCue is the small trailing chevron that marks a deterministic
+// insight row as drilling to its source transactions — the same evidence
+// affordance the flagged-activity rows carry, rendered consistently on the
+// category-shift and top-merchant rows (detail5 audit-and-fill). It is a
+// decorative marker (aria-hidden); the row's own aria-label already names the
+// drill target, and the hint rides the title for sighted users.
+func insightSourceCue() ui.Node {
+	return Span(css.Class("insight-src-cue", tw.ShrinkO, tw.TextFaint), Attr("aria-hidden", "true"),
+		Title(uistate.T("detail5.sourceHint")),
+		uiw.Icon(icon.ChevronRight, css.Class(tw.W35, tw.H35)))
+}
+
 // collapsibleNoteProps configures a collapsible aside "margin note" section: a label
 // (with an optional count badge + trailing link) that toggles a body. It starts
 // COLLAPSED so the assistant rail is compact by default and the user expands only what
@@ -2533,7 +2695,8 @@ func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 		Attr("aria-label", uistate.T("insights.highlightDrillAria", a.Category)),
 		OnClick(drill),
 		Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), css.Class(tw.W4, tw.H4))),
-		Span(highlightText(a, props.Base)),
+		Span(css.Class(tw.Flex1, tw.TextLeft), highlightText(a, props.Base)),
+		insightSourceCue(),
 	)
 }
 
@@ -2746,6 +2909,7 @@ func insightsMerchantRow(props insightsMerchantRowProps) ui.Node {
 			Span(css.Class(tw.FontMedium), amtStr),
 			Span(css.Class("muted", tw.Text12, tw.Ml1), txLabel),
 		),
+		insightSourceCue(),
 	)
 }
 
