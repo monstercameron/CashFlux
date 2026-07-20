@@ -157,12 +157,31 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	if fillW < 0 {
 		fillW = 0
 	}
+	// Over budget (2026-07-19, Cam): the track RESCALES so its full width is the
+	// SPENT total — the cap moves left to limit/spent (the fill's 2px right edge is
+	// the cap marker) and a striped overage segment fills rightwards, sized to the
+	// overshoot. The under-cap fill keeps the healthy tone: spending up to the cap
+	// was fine — the overage is the anomaly, and the stripes carry it.
+	capW := fillW
+	var overSeg ui.Node = Fragment()
+	if over && barSpent > 0 {
+		capW = int(spendLimit * 100 / barSpent)
+		if capW < 0 {
+			capW = 0
+		}
+		if capW > 100 {
+			capW = 100
+		}
+		overSeg = Div(css.Class("budget-loader-overage"), Attr("aria-hidden", "true"),
+			Attr("data-testid", "budgets-loader-overage"),
+			Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", capW, 100-capW)))
+	}
 	fillCls := "budget-loader-fill"
 	switch {
-	case over:
-		fillCls += " is-over"
 	case v.LastMonthMode, hist:
 		fillCls += " is-hist" // history is neutral — green/amber are live statements
+	case over:
+		// tone stays the healthy accent under the cap; the overage segment is the signal
 	case fillPct >= 85:
 		fillCls += " is-near"
 	}
@@ -286,10 +305,13 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// consolidation survives around it: no plan-prose cell, no age tile, no attention
 	// tile — just the band, then one quiet sub-row (income received · actions · age).
 	band := Div(ClassStr(loaderCls),
+		// The accessible label reports the TRUE percentage (e.g. 136%) even though
+		// the visual fill caps at the rescaled track.
 		Div(ClassStr(fillCls),
 			Attr("role", "img"),
-			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), fillW)),
-			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
+			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), max(fillPct, 0))),
+			Attr("style", fmt.Sprintf("width:%d%%", capW))),
+		overSeg,
 		Div(css.Class("budget-loader-figs"),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),

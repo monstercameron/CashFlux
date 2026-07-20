@@ -770,6 +770,25 @@ func registerBudgetsSurface() {
 		background("color-mix(in srgb, var(--text) 22%, transparent)"),
 		boxShadow("none"),
 	)
+	// Over-budget overage segment on the summary band (2026-07-19): when spending
+	// passes the cap, the track rescales to SPENT — the cap sits at limit/spent
+	// (the fill's 2px right edge marks it) and this striped segment fills the rest
+	// of the track, sized to the overshoot. The under-cap fill keeps the healthy
+	// accent; the stripes reuse the app's diagonal over-budget hazard idiom
+	// (rules_budgetovercalm.go) in the danger tone.
+	rule(".budget-loader-overage",
+		position("absolute"),
+		top("0"),
+		bottom("0"),
+		zIndex("0"),
+		pointerEvents("none"),
+		prop("background", "repeating-linear-gradient(45deg,"+
+			" color-mix(in srgb, var(--danger) 34%, transparent) 0,"+
+			" color-mix(in srgb, var(--danger) 34%, transparent) 6px,"+
+			" color-mix(in srgb, var(--danger) 12%, transparent) 6px,"+
+			" color-mix(in srgb, var(--danger) 12%, transparent) 12px)"),
+		transition("left var(--motion-data) var(--ease-standard), width var(--motion-data) var(--ease-standard)"),
+	)
 	rule(".budget-loader-fill.is-hist",
 		background("linear-gradient(90deg, color-mix(in srgb, var(--text) 18%, transparent), color-mix(in srgb, var(--text) 9%, transparent))"),
 		borderRight("2px solid color-mix(in srgb, var(--text) 40%, transparent)"),

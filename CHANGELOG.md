@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Budgets summary band shows the overage as a striped section:** when the month passes its cap
+  the track now rescales so its full width is the SPENT total — the cap moves left to limit/spent
+  (the fill's edge marks it), the under-cap portion keeps the healthy green fill (spending up to
+  the cap was fine), and the stretch past it renders as a danger-striped segment sized to the
+  overshoot, using the app's existing diagonal over-budget hazard idiom. The right-hand figure
+  ("Over budget · $X") lands inside the striped zone, labeling it. Assistive tech hears the true
+  percentage (e.g. 124%), not the capped visual width.
+
 ### Fixed
 - **Compact budget rows align into fixed columns:** each compact row is its own grid and its
   amount/left/chip columns were `max-content` — sized by each row's own text — so meters started
