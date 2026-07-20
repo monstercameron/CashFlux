@@ -2129,6 +2129,7 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 	nameOf func(string) string, base string, res period.Resolution, from time.Time, rates currency.Rates) ui.Node {
 
 	scopeCount := len(sc.Institutions) + len(sc.Owners) + len(sc.Types) + len(sc.AccountIDs)
+	scopeChipText := rptaScopeChipText(sc, app.Accounts(), app.Members())
 	scopeLabel := uistate.T("reports.scope")
 	if scopeCount > 0 {
 		scopeLabel = uistate.T("reports.scopeCount", scopeCount)
@@ -2207,6 +2208,13 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 				OnClick(onToggleScope),
 				uiw.Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(scopeLabel)),
+			// At-a-glance summary of what the scope currently narrows to, so the
+			// active filter reads without opening the panel (#8). Hidden when the
+			// report is unscoped (the toggle already says "Scope").
+			If(scopeChipText != "", Span(css.Class(tw.TextFaint, tw.Text12),
+				Attr("data-testid", "reports-scope-active"),
+				Attr("aria-label", uistate.T("reports.scopeActiveAria", scopeChipText)),
+				scopeChipText)),
 			Button(ClassStr(metricsCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("aria-pressed", boolStr(formulasOn)),
 				Attr("data-testid", "reports-toggle-formulas"), Title(uistate.T("reports.metricsTitle")),
 				OnClick(toggleFormulas),
@@ -2372,6 +2380,46 @@ func anyify(nodes []ui.Node) []any {
 // sentence (QA CF-01/UX-03): the selected account names, member names, types,
 // and institutions, comma-joined. Unknown IDs fall back to the raw value so a
 // stale scope is still visible rather than silently blank.
+// rptaScopeChipText renders a compact, dot-separated summary of the ACTIVE
+// report scope for the toolbar chip (#8) — e.g. "Marcus · Checking · 3 accounts".
+// Institutions, owners (by member name), and account types list by name; a long
+// account list collapses to a "%d accounts" count so the chip stays one glance.
+// Empty when the report is unscoped.
+func rptaScopeChipText(s scope.ReportScope, accounts []domain.Account, members []domain.Member) string {
+	var parts []string
+	parts = append(parts, s.Institutions...)
+	memberName := make(map[string]string, len(members))
+	for _, m := range members {
+		memberName[m.ID] = m.Name
+	}
+	for _, id := range s.Owners {
+		if n := memberName[id]; n != "" {
+			parts = append(parts, n)
+		} else {
+			parts = append(parts, id)
+		}
+	}
+	for _, t := range s.Types {
+		parts = append(parts, humanizeType(string(t)))
+	}
+	if n := len(s.AccountIDs); n > 2 {
+		parts = append(parts, uistate.T("reports.scopeAccounts", n))
+	} else if n > 0 {
+		acctName := make(map[string]string, len(accounts))
+		for _, a := range accounts {
+			acctName[a.ID] = a.Name
+		}
+		for _, id := range s.AccountIDs {
+			if nm := acctName[id]; nm != "" {
+				parts = append(parts, nm)
+			} else {
+				parts = append(parts, id)
+			}
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
 func rptaScopeSummary(s scope.ReportScope, accounts []domain.Account, members []domain.Member) string {
 	var parts []string
 	acctName := make(map[string]string, len(accounts))
