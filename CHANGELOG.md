@@ -58,6 +58,16 @@ and every commit updates this file under `Unreleased`.
   (C363/C364) rides in `56035b98`, and C397's files ride in `11cb9fc0`; content verified.
 
 ### Fixed
+- **Black-box UI/UX loop, batch 2 (2026-07-20):** settings writes (theme, alert toggles, quiet
+  hours, digest cadence, …) now issue a coalesced durable persist ~250ms after the change instead
+  of waiting for the ~4s autosave tick — a reload right after changing a setting no longer
+  silently reverts it (verified: Light theme survives a 1.5s reload); light-theme WARNING/CRITICAL
+  severity labels use accessible deep tones (6.5:1, was pale-amber-on-cream); the condensed
+  transactions band (≤966px content) actually forms its two-line card now — its rules lost a
+  specificity fight to the base fixed column widths, which crushed descriptions to "V…"; the
+  Reports full-report section chips got a right-edge fade cue instead of a hard mid-chip clip;
+  the spending-digest select is content-sized to match the quiet-hours inputs; the boot skeleton
+  rail is `15rem` like the real rail so it tracks `--ui-scale` instead of jumping at handoff.
 - **Black-box UI/UX loop, batch 1 (2026-07-19/20):** end-of-page controls (dashboard Resolve,
   Smart Dismiss, alert toggles) clear the floating dev assistant bubble via `:has()`-gated bottom
   clearance (dev-only, production unaffected); the boot skeleton now fades ≤300ms once the app

@@ -25,9 +25,15 @@ import "fmt"
 // contentGrid4) block rules) still governs panes below contentGrid1 (710px):
 // this band's min-width gate excludes them, so those rules keep showing there.
 //
-// Layered via registerDtxPolish (registered last), and the per-column selectors
-// carry higher specificity than the base block rules, so the condensed layout
-// wins inside the band without editing rules_gen.go. Theme tokens only.
+// Layered via registerDtxPolish (registered last). Every selector is scoped to
+// `.bento-ledger` so it outranks the base fixed-column widths
+// (`.bento-ledger .txn-table td:nth-child(n)`, specificity 0-3-1): without that
+// scope the bare `.txn-table tbody tr.row > td` reset (0-2-3) LOST to those
+// nth-child pixel widths, so the "reset to auto" never took — account/category/
+// user kept their full fixed widths on a single flex line and crushed the
+// description to ~150px ("VENMO PAYMENT 1042778120" → "V.."). The `.bento-ledger`
+// prefix lifts these to 0-3-3 / 0-4-3 so the two-line card actually forms. Theme
+// tokens only.
 func registerTxnCondensedLedger() {
 	const (
 		descMin = "7rem"
@@ -39,7 +45,7 @@ func registerTxnCondensedLedger() {
 	// The row becomes a two-line flex card. gen's ruleContentMax(contentGrid4)
 	// already supplies the card border / radius / margin-bottom and hides the
 	// thead; here we only override the interior layout (display, padding, gaps).
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row",
 		display("flex"),
 		flexWrap("wrap"),
 		alignItems("center"),
@@ -51,7 +57,7 @@ func registerTxnCondensedLedger() {
 
 	// Base cell reset for the card: block flex-children with no border/padding of
 	// their own (higher specificity than gen's `.txn-table tbody td`).
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td",
 		display("block"),
 		width("auto"),
 		minWidth("0"),
@@ -62,24 +68,24 @@ func registerTxnCondensedLedger() {
 	// Line 1 — select (col 1, no class), date (col 2, no class), payee, category,
 	// amount. Payee grows (flex 1 1 0) so it fills line one, which forces the
 	// account/member cells to wrap onto line two deterministically.
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td:first-child",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td:first-child",
 		order("0"),
 		flex("0 0 auto"),
 		alignSelf("center"),
 	)
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td:nth-child(2)",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td:nth-child(2)",
 		order("1"),
 		flex("0 0 auto"),
 		fontSize("var(--type-11)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.row-desc-cell",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.row-desc-cell",
 		order("2"),
 		flex("1 1 0"),
 		minWidth(descMin),
 	)
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-cat",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-cat",
 		order("3"),
 		flex("0 1 auto"),
 		fontSize("var(--type-11)"),
@@ -91,7 +97,7 @@ func registerTxnCondensedLedger() {
 	)
 	// Amount sits at the right end of line one; gen turned it left-aligned for the
 	// stacked card, so re-assert the right alignment for the columnar read.
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-amount",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-amount",
 		order("4"),
 		flex("0 0 auto"),
 		textAlign("right"),
@@ -101,7 +107,7 @@ func registerTxnCondensedLedger() {
 
 	// Line 2 — the secondary meta strip: account then member, quiet and
 	// ellipsized so they never widen the card.
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-acct",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-acct",
 		order("5"),
 		flex("0 1 auto"),
 		fontSize("var(--type-11)"),
@@ -111,7 +117,7 @@ func registerTxnCondensedLedger() {
 		textOverflow("ellipsis"),
 		maxWidth("45%"),
 	)
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-user",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-user",
 		order("6"),
 		flex("0 1 auto"),
 		fontSize("var(--type-11)"),
@@ -123,14 +129,14 @@ func registerTxnCondensedLedger() {
 	)
 	// Source is tertiary in a condensed row (the edit modal still carries it);
 	// dropping it is what keeps the card to two lines.
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-source",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-source",
 		display("none"),
 	)
 
 	// The ⋯ actions pin to the right-center of the card instead of consuming a
 	// line. Centered via inset + flex (NOT translateY — a transform here would
 	// make this cell the containing block for the menu's fixed-position sheet).
-	ruleContentBand(contentGrid1, contentGrid4, ".txn-table tbody tr.row > td.td-actions",
+	ruleContentBand(contentGrid1, contentGrid4, ".bento-ledger .txn-table tbody tr.row > td.td-actions",
 		order("7"),
 		position("absolute"),
 		right("0.5rem"),

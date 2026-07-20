@@ -5,8 +5,11 @@
 package uistate
 
 import (
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/debounce"
 )
 
 // This bridge routes app/UI persistence through the SQLite-backed key-value stores
@@ -112,9 +115,29 @@ func SettingKVGet(key string) string {
 func SettingKVSet(key, val string) {
 	if app := appstate.Default; app != nil {
 		_ = app.SetSettingKV(key, val)
+		// A SetSettingKV write only lands in the in-memory SQLite dataset; it reaches
+		// durable storage (IndexedDB) on the 4s autosave tick or on pagehide. A reload
+		// inside that window silently DROPPED the change — the classic "set Light, reload
+		// a second later, boots Dark again" data-loss (and every other settings write:
+		// alert toggles, quiet hours, fonts, language, digest cadence…). Flush an
+		// immediate persist so the write is ISSUED right away and its async IndexedDB
+		// commit has time to land before any quick reload. Debounced (trailing edge) so a
+		// burst — a language-pack seed loop, a theme-editor drag committing several
+		// tokens — coalesces into one full serialize instead of one per write.
+		flushSettingsPersist()
 		return
 	}
 	browserstore.Set(key, val)
+}
+
+// settingsPersistKey names the coalesced settings-flush debounce.
+const settingsPersistKey = "uistate:settings-persist"
+
+// flushSettingsPersist schedules a single durable persist ~250ms after settings
+// writes settle. RequestPersist is a no-op until the app wires the autosave hook,
+// so calling this during very early boot (before startDatasetAutosave) is safe.
+func flushSettingsPersist() {
+	debounce.Call(settingsPersistKey, 250*time.Millisecond, RequestPersist)
 }
 
 func SettingKVDelete(key string) {
