@@ -1,3 +1,95 @@
+## 2026-07-20 — /networth: milestones become pace, and the axis becomes readable
+
+Two findings closed from the 9.2/10 black-box review, plus a redesign that came out of Cam's own
+verdict on the first fix. The arc is worth recording because the interesting failure was not the
+bug — it was that fixing the bug correctly still produced the wrong thing.
+
+**Finding 1: milestones were an event log.** An all-time window produced 32 rows, five of them
+describing one month: "turned positive in May 2022", "passed ($1,000)", "passed ($500)", "passed
+$0", "passed $500". Then it reported net worth falling below $500 in July and turning positive
+again in September, without ever saying it went negative in July.
+
+Reading the generator found two independent defects rather than one volume problem. Thresholds were
+derived PER ADJACENT PAIR from that pair's own magnitude and walked the 1/2/5 ladder down to $1
+steps, so a series spanning -$16,000 to $154,000 fired $500 rungs near zero where $500 means
+nothing. And the integer division placing the first rung, `(lo/step + 1) * step`, truncates toward
+zero — with lo negative that lands the first rung BELOW zero, which is where "passed ($1,000)" came
+from. A negative threshold is not an achievement; climbing out of debt is one story, and the
+first-positive milestone already tells it exactly once. Separately, only the upward zero-crossing
+was ever emitted at all — there was no code path for turning negative — so the narrated recovery
+without the fall was structural, not incidental.
+
+The ladder now comes from the SERIES peak: 1, 2.5 and 5 times each of its top two decades, giving a
+$154k household $10k / $25k / $50k / $100k and nothing below. Two decades is the deliberate middle:
+one would skip the $10,000 a household remembers on the way to $150,000, three would drag $1,000
+steps back into a six-figure story. Added with it: `MilestoneKindNegative` to pair the sign changes,
+the all-time high stated exactly and once, and material falls from a running high — reported once at
+the trough, from the level they fell from, at a tenth-of-peak materiality floor. 32 rows to 7.
+
+Two existing tests encoded the old ladder and were rewritten, not weakened. The $150,000 assertion
+tested a rung the magnitude rule deliberately no longer has (1.5x is not round at any scale), and
+the peak is now stated exactly by the all-time-high milestone, which is strictly better information.
+
+**Then Cam looked at it and said it still looked ugly.** He was right, and the reason is worth
+keeping: filtering 32 rows to 6 leaves a shorter log, and a log was the wrong form. Two things are
+true about this content that a list cannot express. A milestone IS a point on the net-worth line —
+its home is the chart, not a list elsewhere on the page. And the fact worth having is not "passed
+$50,000 in April 2024", which is a receipt, but PACE: that the last leg took eight months and the
+one before took fourteen.
+
+So THE PACE RAIL. The crossings are marked on the plot where they happened, and a one-row rail
+beneath SHARES THE PLOT'S X SCALE. Because x is time, the distance between two rungs IS the time
+between them — the legs visibly shorten as the climb speeds up. That is the whole design: the
+structure carries the reading rather than decorating it, which is the only thing that justifies a
+device like this over plain prose. Nothing is restated; the rail labels the marks above it and the
+marks place the rail's rungs in the record. Forms rejected along the way: a vertical dotted timeline
+(the generated default, and a worse restatement of the chart), trophy or badge cards (the page's own
+rule is that it is not a trophy cabinet, and a badge cannot represent a fall), and a standalone
+proportional-width strip (better, but it duplicates a time axis already sitting 40px above it).
+
+Honesty rules that shaped it: turning positive is the FIRST rung, because it is what every later one
+is measured from. Setbacks are not rungs — a rung is a level reached — but they are marked on the
+chart in a quieter dashed hand and counted in the rail's sentence, so a fall is never dressed as an
+achievement and never dropped either. The projection is drawn from the last year of history, refuses
+to speak past a five-year horizon, and answers "not gaining at your recent pace" rather than
+inventing a date for a household that is flat or falling.
+
+**Finding 2: the all-time x axis was a run of month initials.** The shared view already thinned its
+labels to eight — and the chart RE-FILLED every blank slot with a bare "Jan", defeating the thinning
+completely. Equal flex boxes then meant even a surviving label could not be wider than one point's
+share of the width, so it would have truncated regardless.
+
+Density is now planned in `balancesheet.TimeAxisTicks`, extending the existing `AxisTicks` idea from
+the value axis to the time axis. Three things had to be got right, and only the first was obvious.
+The finest CALENDAR granularity that fits the budget wins — months, quarters, half-years, years,
+multi-year — because thinning on calendar boundaries is the point: a reader looking for 2024 finds
+it under a year label and finds nothing under evenly spaced months from an arbitrary offset. That
+matters concretely: an early version applied the separation rule as a THINNING pass over the finest
+grain and produced "Mar 22, Nov 22", perfectly spaced and naming nothing. Separation is a validity
+test on the grain, not a filter over it. Second, the ends are not on the calendar grid — a series
+beginning in July puts its first January three points in — so the minimum separation is enforced
+across every pair, with the ends winning any conflict. Third, and the one that needed the browser to
+find: the budget was set from the PANE width, and the chart never had the pane's width. Two sides
+shared its section with the composition strips, so the plot measured 420px at a 1440px viewport, not
+1200. Eleven labels at 33px pitch is the same unreadable axis in a different disguise.
+
+Which is how the layout change arrived: Two sides now takes the full width of its section with the
+strips beneath it. Everything measured along time was paying for a 40% plot, and two 100%-bars do
+not need the width that a five-year shape does. The rail is not legible without it — the two changes
+are one change.
+
+**Declined.** User-defined milestone thresholds, suggested by the reviewer: the page has no settings
+idiom of its own (its only control is the period), so it would mean inventing a configuration
+surface for a graphic that now derives its rungs from the household's own magnitude — which is what
+a user-set threshold would mostly be used to approximate.
+
+**Verified.** `go test ./internal/...` green; wasm build clean; 25/25 in `networth.spec.mjs`,
+including the pre-existing paired-column and fits-one-screen guards. New guards: rungs ascend in
+both value and position, a longer leg is a wider one, no rung is negative, a setback is drawn
+distinctly, no axis or rung label overlaps at 1440 / 1202-content / 950, and the expander reveals
+exactly the total it names. Warm SPA mount 88ms median against /budgets at 212ms on the same
+harness — the standing gap is unchanged.
+
 ## 2026-07-20 — /networth: a balance sheet that says why
 
 The old /networth showed state and never once explained causation. Its trend line was a smooth
