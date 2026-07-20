@@ -33,7 +33,9 @@ the unified surface. Found while porting the old specs, so each has a failing-or
   either: after an auto-matched payment settles an occurrence the old page said "ran $2.00 over" /
   "$1.00 under" (TX9) and the new one says nothing. Either render it on the settled agenda row or
   delete both, but do not leave a computed figure with no reader.
-- [ ] **RH3 — `/subscriptions` lands on an empty roster.** ★ A live entry point showing "Nothing here
+- [x] **RH3 — `/subscriptions` lands on an empty roster.** ★ *(fixed 2026-07-20: `bills.LiabilityAnchors`
+  is the one shared anchor computation; `subscriptions.IsSubscriptionCommitment` is the positive
+  subscription claim; lenses are filters, not a partition.)* A live entry point showing "Nothing here
   yet." **Diagnosed: this is a CLASSIFICATION bug, not a preselect bug.** The preselect works — on
   `/subscriptions` the lens button `recurring-tab-subscriptions` carries `aria-pressed="true"` and
   `recurring-tab-scheduled` `"false"` (asserted in `rhythm.spec.mjs`, passing). What matches nothing is

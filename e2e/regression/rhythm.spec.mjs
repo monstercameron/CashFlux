@@ -675,21 +675,17 @@ test.describe("the lineup — roster", () => {
   });
 
   test("the Subscriptions lens shows real subscriptions and their subtotal", async ({ app }) => {
-    // KNOWN REGRESSION (RH3), pending the agreed product fix. The account anchor
-    // means "tied to a liability this payment SETTLES", not the funding account it
-    // posts from — but rosterClass reads domain.Recurring.AccountID, which is the
-    // funding account (appstate.go:2036 builds the auto-posted transaction from
-    // it) and which every seeded flow carries. So "bills" swallows everything,
-    // the Subscriptions lens matches nothing, and /subscriptions — a live entry
-    // point — lands on "Nothing here yet."
+    // RH3, fixed. The account anchor means "tied to a liability this payment
+    // SETTLES", not the funding account it posts from — reading
+    // domain.Recurring.AccountID (the funding account, which every seeded flow
+    // carries) made "bills" swallow everything and left this lens unreachable.
     //
-    // Agreed model: Bills = liability-anchored (bills.Bill.AnchorAccountID, which
-    // the agenda already computes); Subscriptions is NOT the complement but a
-    // genuine lens over free-floating subscription-ish commitments; anything that
-    // is neither (HOA dues, property tax, insurance) appears under All only.
-    // Lenses are filters, not a partition, and the subtotal counts only real
-    // subscriptions.
-    test.fail();
+    // The model this now guards: Bills = liability-anchored
+    // (bills.LiabilityAnchors, the same DedupeObligations pipeline the agenda
+    // runs); Subscriptions is NOT the complement but a genuine lens over
+    // free-floating subscription-ish commitments; anything that is neither (HOA
+    // dues, property tax, insurance) appears under All only. Lenses are filters,
+    // not a partition, and the subtotal counts only real subscriptions.
     await nav(app, "/subscriptions");
     await expect(app.getByTestId("recurring-tab-subscriptions")).toHaveAttribute("aria-pressed", "true");
     await expect(app.getByTestId("rhy-roster-none")).toHaveCount(0);

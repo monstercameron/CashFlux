@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -23,14 +24,28 @@ import (
 )
 
 // rosterClass classifies a flow for the money-based lens.
-func rosterClass(r domain.Recurring) string {
+//
+// The lenses are FILTERS, NOT A PARTITION. "Bills" means anchored to a liability
+// the payment settles — never domain.Recurring.AccountID, which names the funding
+// account an occurrence posts FROM and which nearly every flow carries (reading
+// it as the anchor once made "bills" match everything and left the Subscriptions
+// lens permanently empty). "Subscriptions" is not the complement of that: it is
+// its own claim, made positively by internal/subscriptions.
+//
+// A commitment that is neither — HOA dues, property tax, insurance — belongs to
+// no lens and returns "", so it appears under All only. That is the intended
+// outcome: a lens named Subscriptions that quietly holds the property tax bill
+// would be worse than one that holds nothing.
+func rosterClass(r domain.Recurring, anchored, subscription bool) string {
 	switch {
 	case !r.Amount.IsNegative():
 		return "income"
-	case r.AccountID != "":
+	case anchored:
 		return "bills"
-	default:
+	case subscription:
 		return "subs"
+	default:
+		return ""
 	}
 }
 
@@ -78,12 +93,24 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 		watching[strings.ToLower(strings.TrimSpace(c.SubName))] = true
 	}
 
+	// The Bills lens asks the SAME question the agenda already answers when it
+	// collapses a liability's statement onto the flow that pays it, so it asks it
+	// through the same helper rather than inventing a second definition.
+	anchors := bills.LiabilityAnchors(app.Accounts(), app.Recurring(), now, now.AddDate(0, 0, agendaWindowDays))
+	catName := map[string]string{}
+	for _, c := range app.Categories() {
+		catName[c.ID] = c.Name
+	}
+	confirmedSubs := loadConfirmedSubs()
+
 	// Lens filter.
 	cur := lens.Get()
 	var filtered []domain.Recurring
 	var subsMonthly int64
 	for _, r := range v.Flows {
-		cl := rosterClass(r)
+		_, anchored := anchors[r.ID]
+		isSub := subscriptions.IsSubscriptionCommitment(r.Label, catName[r.CategoryID], confirmedSubs)
+		cl := rosterClass(r, anchored, isSub)
 		if cl == "subs" {
 			subsMonthly += -r.MonthlyEquivalent()
 		}

@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The Subscriptions lens was empty, and `/subscriptions` — a live nav entry point — landed on
+  "Nothing here yet." (RH3)** The roster classified a commitment as account-tied by reading
+  `domain.Recurring.AccountID`, which names the FUNDING account an occurrence posts from and which
+  nearly every flow carries — so the Bills lens swallowed all thirteen seeded commitments and the
+  Subscriptions branch was literally unreachable code. "Account-tied" now means what the page always
+  claimed it meant: anchored to the LIABILITY the payment settles, computed by the same
+  `bills.DedupeObligations` pipeline the agenda already runs, now lifted into `bills.LiabilityAnchors`
+  so the two sections cannot drift into disagreeing about the same flow. Subscriptions is not the
+  complement of that — it is its own positive claim (`subscriptions.IsSubscriptionCommitment`), so a
+  commitment that is neither, like HOA dues or the property-tax installments, appears under All only
+  rather than being filed under a lens whose name would be a lie. The lens now holds the streaming
+  bundle, the shop software and the gym, and its subtotal chip is those rows' own arithmetic.
 - **Detection preferences showed a stale copy of itself.** The modal bumps the data revision when its
   controls change something, but never subscribed to one — so it rendered once on open and then went
   quiet while the surface behind it updated live. Invisible while every control was a toggle showing
