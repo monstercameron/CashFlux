@@ -449,9 +449,14 @@ func registerRhythmAgenda() {
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
 	)
+	// The date track is sized by its own longest value (auto = max-content),
+	// never by a guessed width: "Aug 15, 2026" does not fit in a fixed 4.2rem, and
+	// a nowrap date in a too-small track spills straight into the name beside it
+	// with no gap at all. The name column is the flexible one (minmax(0, 1fr)), so
+	// letting the date take exactly what it needs costs the row nothing.
 	rule(".rhy-ag-row",
 		prop("display", "grid"),
-		prop("grid-template-columns", "4.2rem minmax(0, 1fr) auto auto"),
+		prop("grid-template-columns", "auto minmax(0, 1fr) auto auto"),
 		prop("align-items", "center"),
 		prop("gap", "0.7rem"),
 		prop("padding", "0.4rem 0"),
@@ -728,7 +733,7 @@ func registerRhythmBreakpoints() {
 		prop("display", "none"),
 	)
 	ruleContentMax(contentGrid1, ".rhy-ag-row",
-		prop("grid-template-columns", "3.6rem minmax(0, 1fr) auto"),
+		prop("grid-template-columns", "auto minmax(0, 1fr) auto"),
 		prop("gap", "0.4rem"),
 	)
 	// The trailing verb wraps under on the tightest widths rather than crushing

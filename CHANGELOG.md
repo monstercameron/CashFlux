@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The compact agenda's date ran straight into the item's name.** The date column was a guessed
+  4.2rem (3.6rem when the pane narrows) holding a nowrap full date, so any two-digit day overflowed
+  its track with no gap at all and rendered as "Aug 15, 2026Car payment (Marcus)". The column is now
+  sized by its own longest value (`auto`, i.e. max-content) at both widths — the same fix the
+  transactions ledger needed — so it fits whatever the user's date format produces, in any locale,
+  and the flexible name column beside it absorbs the difference.
 - **The review strip stated three contradictory totals.** Its header said "Waiting for your review · 57
   found", its lane header said "Smart found 6 repeating charges in your history", and its pager said
   "1–5 of 5". The 57 counted Silent-tier candidates that were never shown anywhere, so the headline was
