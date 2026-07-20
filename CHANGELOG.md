@@ -12,7 +12,8 @@ and every commit updates this file under `Unreleased`.
   activity IS the top category's activity no longer tells the same story twice), and the card holds
   a hidden placeholder slot while quiet so the reconciler keeps it above the bento when it appears
   after the settle window (late-mounting from an empty Fragment appends to the page end — the
-  catch-up/resume band shares that pre-existing behavior).
+  catch-up/resume band shares that pre-existing behavior). Large-expense finding labels fall back
+  to the transaction description when the payee is empty (manual entries).
 
 ### Added
 - **"What changed since your last visit" dashboard card (E-DB, the first E1 attribution slice).**
