@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The Glance row no longer leaves a hole where the shorter column ends.** With the grid's items
+  start-aligned, the left "What moved it" card ended at 613px while the right column ran to 816px,
+  leaving ~215px of empty column that the next full-width row could not backfill — the page read as
+  though a block had failed to load. The row now stretches, and the slack goes to the waterfall,
+  which is the page's strongest element and only improves with height (the labels beneath keep their
+  own size — a stretched label is not a more readable one). Verified at 1440x900, 1202x1078 and a
+  stacked 950px, in both themes: the paired columns end within 2px of each other and every vertical
+  gap is exactly one row-gap. `networth.spec.mjs` now guards this — the assertion was checked against
+  the original defect and reproduces it exactly (bridge 613 vs read 816) rather than passing
+  vacuously.
+
 ### Changed
 - **Coverage manifest: /networth's control inventory after the trust/investigate pass.** Adds the
   data-quality disclosure (`nws-dq-btn`, `nws-dq-update`), both graphic explainers

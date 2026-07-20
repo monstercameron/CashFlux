@@ -105,7 +105,30 @@ func registerNwsShell() {
 		prop("display", "grid"),
 		prop("grid-template-columns", "minmax(0, 1.62fr) minmax(19rem, 1fr)"),
 		prop("gap", "0.85rem"),
-		prop("align-items", "start"),
+		// Stretch, NOT start. With start-aligned items the shorter column ended
+		// where its content ended and left a ~215px hole above the next
+		// full-width row — the page read as though a block had failed to load.
+		// Stretching makes the row one deliberate band, and the extra height
+		// goes to the waterfall, which is the page's strongest element and only
+		// gets better with room.
+		prop("align-items", "stretch"),
+	)
+	// A stretched section lays its body out as a column so the graphic inside
+	// can take the slack, rather than the section growing around a fixed-height
+	// chart and reintroducing the hole one level down.
+	rule(".nws-glance > .nws-section",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+	)
+	rule(".nws-glance > .nws-section > .nws-bridge",
+		prop("flex", "1 1 auto"),
+	)
+	// The bars grow into whatever the row gives them; the labels beneath keep
+	// their own size, because they are the graphic's authority and a stretched
+	// label is not more readable.
+	rule(".nws-glance .nws-bridge-svg",
+		prop("flex", "1 1 auto"),
+		prop("min-height", "170px"),
 	)
 	rule(".nws-glance > .nws-wide",
 		prop("grid-column", "1 / -1"),

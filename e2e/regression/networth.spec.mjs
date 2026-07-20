@@ -529,3 +529,74 @@ test("Glance fits one screen at a common desktop viewport", async ({ app }) => {
   expect(box.bridge, "the bridge must be fully above the fold").toBeLessThanOrEqual(box.vh);
   expect(box.read, "the interpretation must be above the fold").toBeLessThanOrEqual(box.vh);
 });
+
+// Dead space is a regression the suite must catch, not something a person
+// notices. The Glance grid once left ~215px of empty column beneath the shorter
+// card, and the page read as though a block had failed to load.
+test("Glance has no dead space between its blocks, at any width or theme", async ({ app }) => {
+  test.setTimeout(180_000);
+  for (const [w, h] of [[1440, 900], [1202, 1078], [950, 900]]) {
+    await app.setViewportSize({ width: w, height: h });
+    for (const mode of ["dark", "light"]) {
+      await setTheme(app, mode);
+      await nav(app, "/networth");
+      await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+      await settle(app);
+
+      const m = await app.evaluate(() => {
+        const grid = document.querySelector(".nws-glance");
+        const cs = getComputedStyle(grid);
+        // A deferred section mounts inside a display:contents slot; measure the
+        // section itself, not the slot.
+        const blocks = [...grid.children]
+          .map((e) => (e.classList.contains("nws-slot") ? e.firstElementChild : e))
+          .filter(Boolean)
+          .map((e) => {
+            const r = e.getBoundingClientRect();
+            return { id: e.id, top: Math.round(r.top), bottom: Math.round(r.bottom) };
+          })
+          .sort((a, b) => a.top - b.top);
+        return {
+          gap: parseFloat(cs.rowGap),
+          columns: cs.gridTemplateColumns.split(" ").length,
+          blocks,
+        };
+      });
+
+      expect(m.blocks.length, "the Glance grid must have its blocks").toBeGreaterThan(1);
+
+      // Group blocks that start on the same grid row, then walk row to row.
+      const rows = [];
+      for (const b of m.blocks) {
+        const row = rows.find((r) => Math.abs(r.top - b.top) <= 2);
+        if (row) row.bottom = Math.max(row.bottom, b.bottom);
+        else rows.push({ top: b.top, bottom: b.bottom, ids: [] });
+        (row ?? rows[rows.length - 1]).ids.push(b.id);
+      }
+
+      const where = `${w}x${h} ${mode}`;
+      // Side-by-side cards must END together: an unequal pair is exactly the
+      // hole this guards against.
+      for (const row of rows) {
+        if (row.ids.length < 2) continue;
+        const sameRow = m.blocks.filter((b) => Math.abs(b.top - row.top) <= 2);
+        const ends = sameRow.map((b) => b.bottom);
+        expect(
+          Math.max(...ends) - Math.min(...ends),
+          `${where}: columns in one row must end together (${sameRow.map((b) => `${b.id}:${b.bottom}`).join(", ")})`,
+        ).toBeLessThanOrEqual(2);
+      }
+
+      // And no vertical hole bigger than the container's own gap allows.
+      for (let i = 1; i < rows.length; i++) {
+        const hole = rows[i].top - rows[i - 1].bottom;
+        expect(
+          hole,
+          `${where}: dead space of ${hole}px above ${rows[i].ids.join("+")} (row gap is ${m.gap}px)`,
+        ).toBeLessThanOrEqual(m.gap * 1.5);
+      }
+    }
+  }
+  await setTheme(app, "dark");
+  await app.setViewportSize({ width: 1440, height: 900 });
+});
