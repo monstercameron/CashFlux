@@ -31,6 +31,19 @@ and every commit updates this file under `Unreleased`.
   with the discovery engine's review strip, and nothing on the surface has read either since. That was
   ~8ms of measured native work per render, before the wasm multiplier, computing something the page
   never showed. Removed. Nothing rendered changes.
+- **Bills & recurring blocked first paint behind the discovery pipeline, and the boot skeleton
+  ghosted over the live page. (RH-PERF4)** The page ran the whole discovery pipeline — signature
+  quarantine, fuzzy clustering, rhythm scoring, cost clustering, confidence — synchronously on the
+  render path, to feed a review strip and a "seems stopped" finding that both sit below the fold. The
+  surface took long enough to mount that the boot overlay was still fading over live content: a
+  doubled title, translucent skeleton panels and the boot tagline bleeding through. The hero, the
+  overdue strip and the agenda — what the page is for — now paint on mount, and the review strip, the
+  roster and the stopped-findings fill in once the page has settled, via the same `useAfterSettle`
+  deferral the rest of the app uses. Both deferred sections mount into a `display:contents` slot that
+  exists from the first paint, so they land in their proper position (rather than being appended after
+  the toolbar, the known late-mount hazard) and add no gap while empty — measured layout shift stays
+  at zero. Route mount: `/recurring` 769ms → 115ms, `/bills` 836ms → 136ms, `/subscriptions` 1029ms →
+  239ms; perf ratings D/D/D (51/49/46) → A/A/B (95/93/82).
 - **"Negotiate" handed over a reminder instead of the script. (RH5)** The point of the feature is the
   talking points — note your rate and tenure, cite a competitor's promo, ask for retention, escalate
   or call back, log the new rate — with the to-do as the follow-up that keeps it from being forgotten.

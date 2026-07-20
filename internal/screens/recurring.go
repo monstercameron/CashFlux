@@ -233,7 +233,14 @@ type rhythmView struct {
 
 // computeRhythm assembles the whole surface model from the store and the pure
 // engine. Deterministic and hook-free.
-func computeRhythm(app *appstate.App, now time.Time) rhythmView {
+//
+// withDiscovery gates the discovery pipeline — the one genuinely expensive stage
+// (a signature quarantine, fuzzy clustering, rhythm scoring and cost clustering
+// over the entire transaction history). Everything it feeds lives below the fold:
+// the review strip and the "seems stopped" findings. On first paint it is skipped
+// so the hero, the overdue strip and the agenda — what the user came for — paint
+// immediately; the caller re-renders with it on once the page has settled.
+func computeRhythm(app *appstate.App, now time.Time, withDiscovery bool) rhythmView {
 	rv := rhythmView{recurView: recurViewOf(app, now), Now: now}
 	base := rv.Base
 	rv.Rates = currency.Rates{Base: base, Rates: app.Settings().FXRates}
@@ -269,10 +276,14 @@ func computeRhythm(app *appstate.App, now time.Time) rhythmView {
 
 	// Discovery: evidence-carrying candidates + the cluster matches that belong to
 	// existing commitments (for the review strip + death detection).
-	rv.Discover = rhyDiscover(app, rv.Rates, now)
+	if withDiscovery {
+		rv.Discover = rhyDiscover(app, rv.Rates, now)
+	}
 
 	// Findings: charged-after-cancel + "seems stopped" (from the cycle matches'
-	// last-seen, so the death check reuses the engine's own rhythm).
+	// last-seen, so the death check reuses the engine's own rhythm). The
+	// charged-after-cancel scan is cheap and stays on the first paint; the stopped
+	// check rides on discovery and so arrives with it.
 	rv.LateCharges, _ = subscriptions.ChargedAfterCancel(app.Transactions(), app.Cancellations(), rv.Rates)
 	for _, cm := range rv.Discover.CycleMatches {
 		if ss, ok := recurdiscover.DetectStopped(cm.CommitmentID, cm.Evidence.Cadence, cm.Evidence.LastSeen, now, 7); ok {
@@ -323,7 +334,12 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 		uistate.BumpDataRevision()
 	}))
 
-	rv := computeRhythm(app, time.Now())
+	// The page's reason to exist — the tideline hero, the overdue strip and the
+	// agenda — paints on mount. The review strip and the roster are below the fold
+	// and the discovery pipeline behind the review strip is the page's single
+	// largest cost, so both wait for the page to settle (~300ms) and then fill in.
+	settled := useAfterSettle("rhythm")
+	rv := computeRhythm(app, time.Now(), settled)
 
 	acts := rhyActions{
 		OnEdit: func(rid string) { edit.Set(rid) },
@@ -390,9 +406,14 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 		ui.CreateElement(paydayPreflightCard),
 		rhyHeroSection(rv, addIncome),
 		rhyOverdueSection(rv, acts),
-		ui.CreateElement(rhyReviewSection, rhyReviewProps{}),
+		// Both deferred sections mount INSIDE a slot that exists from the first
+		// paint. A late-mounting component whose placeholder was an empty Fragment
+		// appends itself to the end of the container, which would land the review
+		// strip below the toolbar; a real (display:contents, so layout-neutral)
+		// element pins the position instead.
+		rhySlot("rhy-review-slot", If(settled, ui.CreateElement(rhyReviewSection, rhyReviewProps{}))),
 		ui.CreateElement(rhyAgendaSection, rhyAgendaProps{Focus: props.Focus, Acts: acts}),
-		ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}),
+		rhySlot("rhy-roster-slot", If(settled, ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}))),
 		rhyFindingsSection(rv, acts),
 		rhyToolbar(rv, postMsg.Get(), showMetrics.Get(), postDue, toggleMetrics, csv),
 		If(showMetrics.Get(), Div(css.Class("rhy-section"),
@@ -413,6 +434,16 @@ type rhyActions struct {
 	OnViewTxns    func(domain.Recurring)
 	OnViewBudget  func(domain.Recurring)
 	OnMarkPaid    func(recurOccurrence)
+}
+
+// rhySlot reserves a deferred section's position in the page stack. It is
+// display:contents, so it adds nothing to the flex column's layout or gaps —
+// while empty it occupies no space, and when its section arrives the section
+// becomes the flex item, exactly as if it had been rendered there all along.
+// Its only job is to exist in the DOM from the first paint so a late mount lands
+// here rather than being appended after the last child.
+func rhySlot(testid string, body ui.Node) ui.Node {
+	return Div(css.Class("rhy-slot"), Attr("data-testid", testid), body)
 }
 
 // rhySection is the from-scratch section chrome: a titled card that fills the

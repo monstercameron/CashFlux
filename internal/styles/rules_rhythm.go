@@ -18,6 +18,13 @@ func registerRhythmSurface() {
 		prop("gap", "1.15rem"),
 		prop("width", "100%"),
 	)
+	// A deferred section's position holder. display:contents keeps it out of the
+	// flex column entirely — an empty slot costs no box and no gap, and a filled
+	// one lets its section be the flex item directly, so the stack looks the same
+	// whether the section has arrived yet or not.
+	rule(".rhy-slot",
+		prop("display", "contents"),
+	)
 	rule(".rhy-section",
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--border)"),
