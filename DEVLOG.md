@@ -1,3 +1,84 @@
+## 2026-07-20 — /networth: a balance sheet that says why
+
+The old /networth showed state and never once explained causation. Its trend line was a smooth
+monotonic curve restating the headline; its "by account" list normalized every bar against a $304k
+condo, so twelve accounts rendered as one bar and eleven stubs, and then capped itself at "+2 more
+accounts"; its ratios were bare percentages ("Liquid share 12% · Debt-to-asset 60%") the reader was
+left to judge alone; and it linked to /accounts twice. The question anyone actually arrives with —
+*why is it up $3,818?* — went unanswered, which matters because "I saved it" and "the condo got
+re-appraised" are two completely different stories the page rendered identically.
+
+Rebuilt from scratch as a balance sheet with two readings, following the Bills & Recurring
+principles and the Reports dual-view conventions.
+
+**The engines came first, and both are pure and natively tested.** `attribution.BuildBridge`
+extends the E1 engine rather than forking it: same `Input`, same half-open window, same
+liability-magnitude convention, but split along the lines a balance sheet is read — money kept,
+market movement, debt paid down, new debt, revaluation — instead of E1's coarse flow-vs-adjustment
+split. Its contract is arithmetic: `Start + Σ legs == End`, asserted over report-excluded activity,
+a liability crossing zero mid-window, archived accounts, and a foreign-currency account. Two
+decisions there are worth recording. Liability activity splits by the SIGN of its net-worth effect
+rather than by adjustment-ness, because that is the split a reader means: a payment against what you
+owe is "paid down" whether it was posted as a payment or as a balance update. And per-account bucket
+sums convert to base ONCE each rather than per transaction, so FX rounding cannot smear across the
+legs — whatever rounding survives lands in the residual, where it is visible.
+
+`internal/balancesheet` is new: `Series` composes each side into buckets at each cutoff, and a test
+pins every point's net to `ledger.NetWorthSeries` to the cent, which is the mechanical guarantee
+that no two surfaces can quote different net worths. `Assess` returns each ratio paired with a band
+(strong / ok / watch / alarm) decided once in the engine instead of re-guessed per screen — the
+reason a ratio can never again ship as a bare number, and the reason only the cash runway and a
+genuinely underwater sheet can reach alarm. Borrowing to own a home is structure, not an emergency.
+
+**Glance and Detail read one `nwsView`.** That is not a style preference; it is why the e2e suite
+can assert the two views agree on the headline figures and have that assertion be meaningful rather
+than a coincidence maintained by hand.
+
+**THE BRIDGE.** The residual is drawn ALWAYS, including at exactly zero, and in a deliberately
+different visual language — outlined and dashed, never a filled leg — so it cannot be misread as one
+of the named causes. A waterfall that quietly folds its remainder into a neighbouring bar is a
+picture, not arithmetic. The geometry decision that made the whole thing simple: the SVG's X axis is
+measured in COLUMNS (column *i* spans x = *i*…*i+1*) with `preserveAspectRatio="none"`, so an HTML
+label grid of `repeat(N, 1fr)` beneath it aligns to the bars exactly, at any width, with no
+measurement and no JavaScript. The bars carry no text, so the stretching costs nothing — and every
+word on the graphic is real HTML, which is what makes it selectable, screen-readable, and
+theme-aware for free. The vertical axis is truncated (baseline = lowest running value, not zero,
+or six legs would be invisible under one 350k bar) and the section says so in words underneath.
+
+**TWO SIDES.** Assets stacked up, liabilities down, net worth through the middle, each side ONE hue
+stepped by alpha — accent for what you own, neutral for what you owe. Composition therefore reads as
+two sides rather than seven unrelated series, and the liability side is not red. Shares are
+normalized within their own side, which is the direct fix for the condo flattening everything.
+
+**Degradation changes form, not size.** Below the single-column pane width the waterfall becomes a
+stacked list of the same legs carrying the same figures. Squeezing eight labelled columns into a
+narrow pane and calling it responsive would have been the easy wrong answer.
+
+Garnishes were matched deliberately rather than approximately, and verified by dumping computed
+styles beside the reference pages: the section container came back byte-identical to /recurring's
+(12px `--radius-xl`, `1px solid var(--border)`, the same three-layer per-theme shadow) and the
+section title identical to both /recurring and /budgets (16px / 600 / 21.6px / -0.16em / Inter).
+Radius is taken from the fixed scale, never from `var(--radius)` — that is the theme-editor knob and
+ships at 0px.
+
+Hero and bridge paint on mount; the mirrored chart, the ratios and Detail's long tables defer behind
+`useAfterSettle`, with the page advertising `data-settled` so tests need not race it. Warm SPA
+mount, first sample discarded: /networth 35-57ms against /budgets' 96-144ms and /reports' 276-816ms.
+
+Two things found on the way out. The bridge's caption read "where you started 6 months and where you
+stand now" — a window LENGTH cannot be substituted into a sentence wanting a point in TIME, so the
+phrasing now has its own key set ("6 months ago", "at the start of this month"). And the coverage
+manifest showed `networth-drill` and `nw-owe-drill` leaving the default view: both still exist, but
+they now live in Detail as section-header drills, which is also the fix for the old page's duplicate
+links. That relocation is covered by a test and acknowledged in a manifest commit of its own.
+
+Not fixed here: /recurring's a11y ratchet fails on `aria-required-parent` (0 → 1). It is another
+lane's — the filter-chip selection-language commit — and /networth is not in that suite at all.
+
+**Next:** the Glance view is 1428px tall on the sample household, so hero + bridge are the
+above-the-fold answer and Two Sides needs a short scroll at 900px. That is honest for four blocks of
+content, but if it should genuinely be one screen, the graphics' heights are the knob.
+
 ## 2026-07-20 — /subscriptions was never slower than /recurring; the Smart layer was
 
 Two things came in as one ticket: a claim that `/subscriptions` mounted ~3 seconds behind

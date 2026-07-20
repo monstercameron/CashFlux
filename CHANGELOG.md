@@ -6,6 +6,37 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **/networth rebuilt from scratch as a balance sheet with two readings.** The page had a smooth
+  trend line that only restated its own headline, a "by account" list where a $304k condo flattened
+  every other bar to a stub, a silent "+2 more accounts" cap, bare ratios the reader had to judge
+  alone, duplicated drill links — and, most of all, no answer at all to the obvious question: *why*
+  is it up? It now ships **Glance** and **Detail** (the Reports Summary | Full report pattern), both
+  reading ONE computation, so no figure can disagree between them; the choice persists in the
+  preserved settings bucket.
+  Two signature graphics carry it. **THE BRIDGE** is a waterfall decomposing the window's movement —
+  started at, money kept, market movement, debt paid down, new debt, revalued, now — over
+  `attribution.BuildBridge`, with the **residual always drawn**, at zero or not, in a deliberately
+  different visual language (outlined and dashed) so it can never be mistaken for a leg. The sample
+  household's read becomes "Up $21,332.82 over 6 months — mostly from paying down debt, which
+  accounts for 99% of the move", which is the distinction the old page rendered identically.
+  **TWO SIDES** replaces the dead trend line with a mirrored area chart: assets stacked upward,
+  liabilities downward, net worth through the middle, each side one hue stepped by alpha so
+  composition reads inside the trend. Both are theme tokens only, and the liability side is
+  deliberately NOT red — a mortgage is structure, not an emergency.
+  Honesty rules throughout: every account is listed with a stated total (the "+N more" cap is gone),
+  each ratio ships with a plain-English reading rather than a bare percentage, and the waterfall
+  discloses its truncated axis floor in words instead of smuggling it. The bars' X axis is measured
+  in COLUMNS so the HTML label grid aligns to them at any width with no measurement — which also
+  makes every word on the graphic real, selectable, screen-readable text. Below the single-column
+  pane width the waterfall changes FORM (the same legs as a stacked list, same figures) rather than
+  clipping. Hero and bridge paint on mount; the mirrored chart, the ratios and Detail's long tables
+  defer via `useAfterSettle`, and the page reports `data-settled`. Warm SPA mount measured at
+  35-57ms against /budgets' 96-144ms. New `networth.spec.mjs` covers the view toggle and its
+  persistence, Glance/Detail figure agreement, the bridge summing to its end value including the
+  residual, the absence of silent caps, ratio interpretation, chip navigation, the preserved
+  testids, and zero horizontal overflow in both themes at three pane widths.
+
 ### Added
 - **A balance sheet that composes, and ratios that interpret themselves.** New pure package
   `internal/balancesheet`: `Series` returns what each SIDE is made of at each cutoff — cash,
