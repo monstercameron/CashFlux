@@ -77,7 +77,8 @@ the unified surface. Found while porting the old specs, so each has a failing-or
   (`txn-marksub-open`) still saves the link durably, but the unified surface has no "last paid" line
   and no drill back to that transaction (the retired `sub-pay-*` rows). The linkage is asserted in
   `rhythm.spec.mjs`; its evidence half is unassertable until the roster row carries it.
-- [ ] **RH5 — "Negotiate" lost its talking points.** The old bills row seeded the task COMPOSER —
+- [x] **RH5 — "Negotiate" lost its talking points.** *(fixed 2026-07-20: the row seeds the task
+  composer with `subscriptions.ChecklistNotes("", NegotiationTips(name))` again.)* The old bills row seeded the task COMPOSER —
   `uistate.SetTaskAddSeed({Title, Notes: subscriptions.ChecklistNotes("", subscriptions.NegotiationTips(name))})`
   then `SetAddTarget("task")` (`bills_screen.go:231`) — so the user got the haggling script, which is
   the whole feature; the to-do is just the follow-up. `rhyAgendaRow`'s handler

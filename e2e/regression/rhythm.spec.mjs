@@ -867,12 +867,10 @@ test.describe("migrated from the three-tab era", () => {
   });
 
   test("bill negotiation hands the user the talking points", async ({ app }) => {
-    // KNOWN REGRESSION (RH5). The old bills row seeded the task COMPOSER with
-    // subscriptions.NegotiationTips — the haggling script is the whole feature,
-    // the to-do is just the follow-up. rhyAgendaRow now calls PutTask directly
-    // with a Title and no Notes, so the user gets a reminder to negotiate and no
-    // idea what to say. Expected-to-fail rather than dropped.
-    test.fail();
+    // RH5, fixed. The haggling script is the whole feature and the to-do is just
+    // the follow-up, so Negotiate seeds the task COMPOSER with
+    // subscriptions.NegotiationTips rather than silently filing a bare
+    // "Negotiate <name>" task the user has no idea how to act on.
     await nav(app, "/bills");
     await app.locator('[data-testid^="rhy-ag-menu-"]').first().click();
     await app.locator('.add-menu:not(.hidden-menu) [data-testid^="bill-negotiate-"]').first().click();

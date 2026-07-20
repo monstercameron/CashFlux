@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **"Negotiate" handed over a reminder instead of the script. (RH5)** The point of the feature is the
+  talking points — note your rate and tenure, cite a competitor's promo, ask for retention, escalate
+  or call back, log the new rate — with the to-do as the follow-up that keeps it from being forgotten.
+  The redesigned row filed a bare "Negotiate Rewards Credit Card" task with empty notes, which
+  delivers the reminder and withholds the thing being reminded about.
+  `subscriptions.NegotiationTips` was still there, unused by that path. Negotiate opens the task
+  composer seeded with the checklist again, so the user reads the script before the task exists.
 - **The budget-fit chip stopped being a control. (RH1)** "Fits Subscriptions · $2.00 left this
   period" is a claim about another screen, and on the old bills row it was one click from the card
   that makes it — a button with an accessible name that deep-linked to `/budgets` and flashed the

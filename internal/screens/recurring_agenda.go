@@ -13,8 +13,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -508,19 +508,18 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		uistate.SetDeepLinkFocus(`[data-testid="budget-card-` + it.Fit.BudgetID + `"]`)
 		nav.Navigate(uistate.RoutePath("/budgets"))
 	}))
+	// Negotiate hands the user the HAGGLING SCRIPT — that is the whole feature, and
+	// the to-do is only the follow-up that keeps it from being forgotten. Creating
+	// a bare "Negotiate Rewards Credit Card" task, as this briefly did, delivers
+	// the reminder and withholds the thing being reminded about. So it opens the
+	// task composer seeded with the talking points, exactly as the retired bills
+	// row did, and the user sees the script before the task exists.
 	negotiate := ui.UseEvent(Prevent(func() {
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		t := domain.Task{
-			ID: id.New(), Title: uistate.T("bills.negotiateTaskTitle", it.Name),
-			Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceNudge,
-		}
-		if err := app.PutTask(t); err == nil {
-			uistate.BumpDataRevision()
-			uistate.PostNotice(uistate.T("bills.negotiate"), false)
-		}
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title: uistate.T("bills.negotiateTaskTitle", it.Name),
+			Notes: subscriptions.ChecklistNotes("", subscriptions.NegotiationTips(it.Name)),
+		})
+		uistate.SetAddTarget("task")
 	}))
 
 	rowCls := "rhy-ag-row"
