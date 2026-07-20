@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Review-candidate testids are slugged.** `rhy-review-confirm-MSFT XBOX GAME PASS #` becomes
+  `rhy-review-confirm-msft-xbox-game-pass` — a raw discovery signature carries spaces and the `#`
+  reference placeholder, which made for awkward test selectors.
+
 ### Fixed
 - **The tideline hero flagged a "tightest point" that was never tight, and the band was barely visible.**
   The pinch reported essentially the whole liquid balance every cycle, so it warned about nothing — a

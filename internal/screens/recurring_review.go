@@ -492,6 +492,26 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 // rhyReviewPageSize is the default candidates-per-page in the review strip.
 const rhyReviewPageSize = 5
 
+// rhySlug turns a candidate signature into a selector-friendly testid suffix:
+// lowercase, non-alphanumerics collapsed to single hyphens, trimmed. A raw
+// signature carries spaces and the '#' reference placeholder ("MSFT XBOX GAME
+// PASS #"), which makes for awkward test selectors.
+func rhySlug(s string) string {
+	var b strings.Builder
+	lastDash := true // suppress a leading hyphen
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			lastDash = false
+		case !lastDash:
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.TrimRight(b.String(), "-")
+}
+
 // rhyOrderCandidates puts the most valuable candidates on the first page:
 // strongest confidence tier first, then largest monthly cost impact, with the
 // payee as a deterministic tie-break.
@@ -595,7 +615,7 @@ func rhyReviewCand(props rhyReviewCandProps) ui.Node {
 		}
 	}))
 
-	sig := recurdiscover.Signature(c.Payee)
+	sig := rhySlug(recurdiscover.Signature(c.Payee))
 	var plusNote ui.Node = Fragment()
 	if props.IsPlus {
 		plusNote = Span(css.Class("rhy-cand-reason"), Style(map[string]string{"margin-left": "0.4rem"}), props.Note)
