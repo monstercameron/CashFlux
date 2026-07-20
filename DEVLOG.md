@@ -26386,3 +26386,17 @@ sparse (280px) and dense (603px) panels with motion/a11y/smoke green (23 passed)
 
 Every fix screenshot-verified live; the honest badge invariant is now count-clicked ==
 count-landed (15 = 15 after the day's feature work grew the sample feed).
+
+## 2026-07-19 — E-series: the intelligence layer becomes cognitive compression
+
+Reviewed the Smart/Smart+ landscape with Cam against the 84-feature catalog, the 9-page
+assessment, and two external idea lists. The synthesis that survived every filter: the
+opportunity is NOT more features — it's cognitive compression. Five reusable engines
+(attribution, unified case queue, contradiction detector, batch resolution, insight
+evidence/impact schema) with per-page surfaces as thin wiring. Key realizations: (a) ~a
+third of the external lists already exists (attention/insights/smartdigest/taskresolve/
+billmatch/recap are proto-engines); (b) many "Smart" ideas were plain backlog or, worse,
+correctness features that must never be opt-in toggles; (c) the copilot/orchestration tier
+stays excluded — the one-shot item-scoped Smart+ rule from 2026-07-15 stands. Backlog
+recorded in TODOS.md (E-series). Next: a Dashboard vertical slice of E1 ("What changed
+since your last visit", top-3 ranked with evidence) as the UX experiment.

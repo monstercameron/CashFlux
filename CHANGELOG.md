@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **E-series backlog — cognitive-compression engines (TODOS.md).** Recorded the agreed intelligence
+  roadmap: five reusable engines (E1 attribution "what changed & why", E2 unified case queue,
+  E3 cross-page contradiction detector, E4 batch resolution, E5 insight evidence/confidence/impact +
+  prepared-action schema) plus thin per-page surfaces (E-DB…E-RP), with the interaction contract
+  (embedded findings, prepared quantified decisions, one-issue-one-finding, 4-block SMART+ template)
+  and acceptance metrics. Copilots/orchestration remain excluded per the 2026-07-15 rule.
 - **W-series batch 1 — W1 surfacing + W6 budgets planning + W10 polish (2026-07-19), 18 tickets
   (C363–C371, C393–C397, C412–C415) via a 6-lane parallel build.** Highlights: Transactions
   toolbar gets a first-class `Rules (N)` entry + per-row "Create rule from this transaction"

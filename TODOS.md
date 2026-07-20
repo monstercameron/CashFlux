@@ -74,6 +74,56 @@ More candidates (brainstormed 2026-07-15 — for review, not yet agreed):
 - [ ] **SM-16 Fee-bleed / dormant-account nudge** (SMART) — a fee-charging account with no activity.
   *(catalog SMART-A10 / A3)*
 
+### E-series — cognitive-compression engines (agreed with Cam, 2026-07-19) ★
+**Thesis:** the intelligence layer is *cognitive compression* — CashFlux continuously notices what the
+user would miss, explains it in seconds, and prepares the safest next action. Not 100 more buttons:
+concise **ranked findings with evidence and one-click resolution**. Five reusable engines, then thin
+per-page surfaces. **Contract every feature must pass:** (1) embedded on the page it concerns (SmartStrip),
+not a destination; (2) prepared decisions — 2–3 quantified choices, changeset-applied, undoable — never
+generic advice; (3) evidence + confidence + $ impact on every finding; (4) one issue = ONE finding across
+Dashboard/Notifications/Insights/Smart/To-do; (5) SMART+ output = the 4-block template (What happened /
+Why / Impact / Best next action) — never open prose. **Acceptance:** daily check ≤20s; any change
+explained ≤30s; review inbox −70%+ via batching; zero duplicate findings; Smart+ always shorter than
+the manual investigation it replaces. Copilots / multi-step orchestration / briefing engines stay OUT
+(2026-07-15 rule; deterministic ranking may get a one-shot RuleCore narration, nothing more).
+
+Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + tests first, per SDLC):
+- [~] **E1 Attribution engine — "what changed, and why."** Decompose any delta (net worth, cash flow,
+  a budget overage, an account balance move) into ranked contributors with evidence txn/account IDs.
+  One engine behind: dashboard change explainer, budget overage drivers, account balance-change
+  explanation, report period-diff. *(Dashboard vertical slice started 2026-07-19 as the UX experiment.)*
+- [ ] **E2 Unified case queue.** Merge related signals (missed-bill + unlinked txn + task + notification)
+  into ONE case with root cause, actionability rank, prepared actions; dedupe across all surfaces; a case
+  whose trigger clears closes itself (extends `taskresolve`). Subsumes: notification root-cause grouping,
+  actionability score, next-actions ranking, self-resolving task closure.
+- [ ] **E3 Contradiction detector.** Cross-page invariant checks, always-on (NOT an opt-in toggle):
+  bill unpaid despite a matching payment; securities ≠ investment balance; report total ≠ dashboard
+  total; spending with no budget category; task open after its linked action occurred; one-sided
+  transfer. Turns the 47%-vs-38% defect class into an enforced invariant.
+- [ ] **E4 Batch resolution.** Compress repeated work into one reviewed changeset: "186 review items
+  resolve under 6 proposed rules — 172 high-confidence, 14 need you. Preview." Subsumes confidence-tiered
+  inbox, bulk transfer/payment matching, rule impact preview, import reconciliation. Target: inbox −70–90%.
+- [ ] **E5 Insight schema + prepared-action primitive.** Evidence links, confidence, $ impact,
+  assumptions, and 2–3 quantified action choices on `smart.Insight`; rendered inline; changeset-backed.
+  Every engine above emits through this.
+
+Per-page surfaces (thin wiring over E1–E5; each also lands in the SMART catalog where opt-in applies):
+- [~] **E-DB Dashboard** — top-3 consequential changes (E1+E2) + persisted "since your last visit"
+  seen-set; SMART+ = one-shot ≤5-line narration of the deterministic top-3 (RuleCore). *(experiment
+  in progress 2026-07-19)*
+- [ ] **E-TX Transactions** — E4 batch cleanup; rule conflict warnings; SMART+ semantic rule creation
+  (one sentence → one previewed rule through E4's impact preview).
+- [ ] **E-AC Accounts** — guided reconciliation path-to-zero (E1); E3 holdings-vs-balance check;
+  SMART+ "why doesn't this reconcile?" over one statement (rides T18).
+- [ ] **E-BG Budgets** — overspend *prediction* + driver clusters (E1); SMART+ explain-this-overage
+  narration (RuleCore over E1; upgrades SM-4).
+- [ ] **E-GL Goals** — combined-feasibility + funding-order check (E2 over G5/waterfall).
+- [ ] **E-TD To-do** — E2 supplies Today's top-3 + auto-closure; SMART+ checklist drafting on one task.
+- [ ] **E-NT Notifications** — E2 cases; smart snooze-until (payday / due date); fatigue governor
+  ("dismissed 12 unread — mute this kind?"); SMART+ explain-this-alert / false-positive critique (SM-7).
+- [ ] **E-RP Reports** — E1 period diff + anomaly/turning-point annotations; E3 metric-conflict flags;
+  SMART+ ask-this-chart grounded in that chart's exact scope + period.
+
 ### Local-first (non-AI) gaps + nice-to-haves (curated 2026-07-15)
 - [ ] **LF-1 Command palette fix + expand** — the Ctrl+K palette exists but has a known crash (theme-toggle
   panic per notes — confirm still open); fix it, then make it a real quick-action/nav launcher (jump to
