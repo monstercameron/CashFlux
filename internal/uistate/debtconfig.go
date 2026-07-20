@@ -67,14 +67,18 @@ func DebtConfigGet() DebtConfig {
 }
 
 // SetDebtConfig persists a debt config override. Passing the zero value clears the
-// override (the next read falls back to the defaults).
+// override (the next read falls back to the defaults). It requests an immediate
+// dataset flush so a tuning change survives a reload that lands within the autosave
+// tick — the debt tuner writes here on every click.
 func SetDebtConfig(cfg DebtConfig) {
 	if cfg == (DebtConfig{}) {
 		kvSet(debtConfigKey, "")
+		RequestPersist()
 		return
 	}
 	if data, err := json.Marshal(cfg); err == nil {
 		kvSet(debtConfigKey, string(data))
+		RequestPersist()
 	}
 }
 

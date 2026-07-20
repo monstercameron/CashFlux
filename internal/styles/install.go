@@ -107,6 +107,7 @@ func Register() {
 	registerDetail6()
 	registerDetail4()
 	registerUxbatch6()
+	registerDebtCoachSurface()
 	inject(Build())
 }
 

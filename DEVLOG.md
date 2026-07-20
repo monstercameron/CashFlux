@@ -18,6 +18,26 @@ single account, so they stay correct without FX; only the portfolio aggregates a
 those come pre-converted from the engine surface. Next: the Watch-outs tile that renders these, the
 interactive strategy tuner, and a teaching panel.
 
+**Then the three tiles, and one seam that made the tuner "real".** The page was already a competent
+read-only dashboard (owed, ladder, snowball-vs-avalanche comparison, burn-down). What it lacked was
+a way to *act*: nothing on the page changed the plan. The tuner fixes that by writing the persisted
+`DebtConfig` — and the reason that lands as interactivity rather than a dead control is that
+`computeDebtView` already keys its memo on `DebtConfigGet()`, and every tile subscribes to the data
+revision. So the tuner's job is just "write config + bump revision", and the ladder re-ranks, the
+summary's debt-free date moves, and the comparison re-runs, all for free. The one real fix: config
+writes went through `kvSet` (autosave-ticker persistence), so a tune-then-reload could lose the
+setting — `SetDebtConfig` now calls `RequestPersist()` to flush immediately. The extra-payment field
+commits on change (not per keystroke) and the ± stepper commits per click, so a full-page recompute
+never fires mid-typing.
+
+The Watch-outs tile is a thin renderer over `debtcoach` — a `switch` on alert kind picks the i18n
+copy and the action link, and a severity-colored left rail reuses the ladder's "how hot" grammar so
+the two tiles read as one system. The teaching panel is native `<details>` so it's accessible with
+no hook state. Screenshotted light + dark, seeded and empty; the empty state correctly shows the
+"understand debt" panel (teaching before you borrow counts) with no Watch-outs or tuner. Copy went
+in `en_debtcoach.go` and CSS in `rules_debt.go`, both new files, to stay off the concurrent-WIP
+`en.go`/`rules_gen.go`; the screenlint hardcoded-copy ratchet stays green.
+
 Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
 keeping and one re-application of a lesson already on the books.
 

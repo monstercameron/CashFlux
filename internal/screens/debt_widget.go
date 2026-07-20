@@ -73,10 +73,17 @@ func DebtPlanner() ui.Node {
 	specs := []domain.WidgetSpec{
 		debtNativeSpec("debt-summary"),
 		debtNativeSpec("debt-toolbar"),
-		debtNativeSpec("debt-list"),
 	}
+	// Watch-outs go high — right under the headline — so anything getting out of
+	// control is the first thing read, before the ladder of individual debts.
 	if hasDebts {
-		specs = append(specs, debtNativeSpec("debt-strategy"))
+		specs = append(specs, debtNativeSpec("debt-alerts"))
+	}
+	specs = append(specs, debtNativeSpec("debt-list"))
+	if hasDebts {
+		// The tuner drives the ladder + summary, so it sits just above the strategy
+		// comparison it feeds.
+		specs = append(specs, debtNativeSpec("debt-tuner"), debtNativeSpec("debt-strategy"))
 		if hasCC {
 			specs = append(specs, debtNativeSpec("debt-credit"))
 		}
@@ -85,6 +92,9 @@ func DebtPlanner() ui.Node {
 		}
 		specs = append(specs, debtNativeSpec("debt-payoff"))
 	}
+	// Teaching is useful with or without debts (learning before you borrow counts),
+	// so the "understand debt" panel always renders, last.
+	specs = append(specs, debtNativeSpec("debt-learn"))
 	if formulasAtom.Get() {
 		specs = append(specs, debtNativeSpec("debt-formula"))
 	}
@@ -115,6 +125,15 @@ func init() {
 	})
 	R("debt-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtListWidget, debtListProps{App: c.App})
+	})
+	R("debt-alerts", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(debtAlertsWidget, debtPanelProps{App: c.App})
+	})
+	R("debt-tuner", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(debtTunerWidget, debtPanelProps{App: c.App})
+	})
+	R("debt-learn", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(debtLearnWidget, debtPanelProps{App: c.App})
 	})
 	R("debt-strategy", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtStrategyWidget, debtPanelProps{App: c.App})

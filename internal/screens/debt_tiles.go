@@ -340,7 +340,9 @@ func debtToolbarWidget(props debtToolbarProps) ui.Node {
 	jumps := []debtJumpProps{{uistate.T("debt.jumpOverview"), "sec-overview"}}
 	if hasDebts {
 		jumps = append(jumps,
+			debtJumpProps{uistate.T("debt.jumpWatchouts"), "sec-watchouts"},
 			debtJumpProps{uistate.T("debt.jumpLadder"), "sec-ladder"},
+			debtJumpProps{uistate.T("debt.jumpTune"), "sec-tuner"},
 			debtJumpProps{uistate.T("debt.jumpStrategy"), "sec-strategy"})
 		if hasCC {
 			jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpCredit"), "sec-credit"})
@@ -350,6 +352,7 @@ func debtToolbarWidget(props debtToolbarProps) ui.Node {
 		}
 		jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpCalculator"), "sec-calculator"})
 	}
+	jumps = append(jumps, debtJumpProps{uistate.T("debt.jumpLearn"), "sec-learn"})
 	var jumpNav ui.Node = Fragment()
 	if len(jumps) > 1 {
 		jumpNav = Div(css.Class("debt-jump"), Attr("aria-label", uistate.T("debt.jumpTo")),

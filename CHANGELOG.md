@@ -15,6 +15,22 @@ and every commit updates this file under `Unreleased`.
   you own, a punishing APR, minimums that are mostly interest, and a decade-plus minimums-only
   payoff. Emits at most one alert per concern (worst offender named, rest counted) so the list
   stays glanceable, and orders most-urgent-first. No `syscall/js`, table-driven tests.
+- **/debt is now an interactive coaching page, not just a read-only dashboard.** Three new tiles
+  join the existing summary/ladder/comparison:
+  - **Watch-outs** — the `debtcoach` alerts rendered as a ranked, severity-railed list (critical
+    red / amber / accent), each with a plain-English "why it matters" and a link to where you'd
+    act on it. When nothing fires it shows a calm all-clear rather than a blank tile. Sits high on
+    the page so anything getting out of control is the first thing you read.
+  - **Tune your plan** — an interactive control surface: a segmented Snowball/Avalanche method
+    picker and an extra-payment stepper (with a "suggested amount" chip). Both persist to the
+    debt config, so the payoff ladder's order, the summary's debt-free date, and the strategy
+    comparison all recompute to match. A live readout shows the resulting debt-free date, time to
+    clear, and total interest, plus what the extra buys versus paying only the minimums.
+  - **Understand debt** — a teaching accordion (native, keyboard- and screen-reader-friendly):
+    snowball vs avalanche, how debt spirals (the minimum-payment trap), why utilization matters,
+    the order to tackle debt, and when consolidating helps.
+  The jump-nav gains Watch-outs / Tune plan / Learn entries. Verified in light and dark, with and
+  without debts.
 
 ## [1.2.9] - 2026-07-20
 
