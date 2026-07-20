@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The overdue strip and the calendar answered "is this bill dealt with?" differently.** The
+  calendar honoured three kinds of evidence (a hand-marked occurrence, a matched transaction, or the
+  flow's schedule having advanced past the date); the strip honoured only the matched transaction. So
+  marking an overdue item paid from the strip itself could leave it sitting in the strip, and the two
+  views could disagree about the same bill on the same day — and a user cannot tell which of two
+  contradicting claims to believe. There is now ONE test (`rhySettled`) behind both. The calendar's
+  amber "missed" tone also gains weight as well as hue, so at cell size an accusation can never be
+  mistaken for a dimmed, settled, or merely-unknown past day.
 - **The Smart+ lane header said "N found by AI" about patterns it had not sent yet.** N has only ever
   counted the leftover patterns the lane sends to the model, and the list is the same before and after
   the round trip — the model returns a written read, not a set of finds, and every row is still

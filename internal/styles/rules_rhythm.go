@@ -581,8 +581,13 @@ func registerRhythmAgenda() {
 	rule(".rhy-cal-item.is-done .rhy-cal-amt",
 		prop("text-decoration", "line-through"),
 	)
+	// Missed is the only past state that makes an accusation, so it must not be
+	// separable from settled/unknown by hue alone — at cell size, a dimmed grey and
+	// an amber are easy to mistake for one another. Weight carries it too.
 	rule(".rhy-cal-item.is-missed",
 		prop("color", "var(--warn)"),
+		prop("opacity", "1"),
+		prop("font-weight", "650"),
 	)
 	// Past, with nothing known about it either way: history, receding. No claim
 	// is made, so no colour is spent.

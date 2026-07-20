@@ -139,11 +139,16 @@ func computeRecurView(app *appstate.App, now time.Time) recurView {
 		d := r.NextDue
 		for i := 0; i < 8 && !d.After(cutoff); i++ {
 			occ := recurOccurrence{R: r, Date: d, Overdue: d.Before(today)}
-			// TX9: surface whether a real transaction has already settled this
-			// occurrence (paid check + variance).
+			// Settled-ness is ONE test, shared with the calendar's past-day states
+			// (rhySettled) — when the strip and the calendar answered this
+			// differently the page contradicted itself about the same bill. It also
+			// closes a real hole here: the strip previously honoured only the
+			// bill-match link, so marking an overdue item paid from this very strip
+			// left it sitting in the strip.
 			if r.Amount.IsNegative() {
+				occ.Paid = rhySettled(app, r, d)
+				// TX9: the variance chip needs the matched transaction specifically.
 				if _, ok := app.BillMatchForOccurrence(r.ID, d); ok {
-					occ.Paid = true
 					if variance, vok := app.BillMatchVariance(r.ID, d, r.Amount.Amount); vok {
 						occ.Variance = variance
 					}

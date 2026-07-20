@@ -128,24 +128,15 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 			it.Negotiable = true
 		}
 		it.Paid = app.OccurrencePaid(b.AccountID, b.DueDate)
-		// A real transaction that settled the occurrence counts as paid just as
-		// much as a hand-marked one — otherwise a month of auto-matched bills
-		// renders as a month of misses.
-		scheduleMovedOn, hasSchedule := false, false
+		hasSchedule := false
 		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
 			hasSchedule = true
-			if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
-				it.Paid = true
-			}
-			// The stored schedule sitting AFTER this occurrence means the flow ran
-			// its course here: the occurrence was posted or paid in the ordinary way
-			// and the flow advanced. It is settled history, not a miss.
-			scheduleMovedOn = b.DueDate.Before(recByID[rid].NextDue)
+			it.Paid = rhySettled(app, recByID[rid], b.DueDate)
 		}
 		it.Past = b.DueDate.Before(today)
 		// A liability statement has no schedule of its own to reason about, so a
 		// past one is never claimed as missed — only shown as history.
-		it.Missed = it.Past && !it.Paid && hasSchedule && !scheduleMovedOn
+		it.Missed = it.Past && !it.Paid && hasSchedule
 		items = append(items, it)
 	}
 
@@ -177,6 +168,36 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].Date.Before(items[j].Date) })
 	return items
+}
+
+// rhySettled is THE test for "this occurrence of this flow is dealt with", used
+// by both the overdue strip and the calendar's past-day states.
+//
+// It has to be one function. The strip and the calendar are two views of the same
+// question, and when they answered it differently the page contradicted itself:
+// the strip said three items were overdue for $127 while the calendar painted a
+// fourth in the same warning tone. A user cannot tell which of two disagreeing
+// claims to believe, so both become worthless.
+//
+// Three kinds of evidence settle an occurrence, and any one is enough:
+//
+//   - the user marked it paid (the durable occurrence record);
+//   - a real transaction matched it (auto-matched bills are paid bills, and a
+//     month of them must not render as a month of misses); or
+//   - the flow's own schedule has advanced past it — NextDue sitting after this
+//     date means the occurrence ran its course and the flow moved on.
+//
+// Everything else is merely unknown, which is NOT a miss. Absence of a payment
+// record is not evidence of a missed payment; most households settle most bills
+// without ever telling the app.
+func rhySettled(app *appstate.App, r domain.Recurring, due time.Time) bool {
+	if app.OccurrencePaid("recurring:"+r.ID, due) {
+		return true
+	}
+	if _, matched := app.BillMatchForOccurrence(r.ID, due); matched {
+		return true
+	}
+	return !r.NextDue.IsZero() && due.Before(r.NextDue)
 }
 
 // rhyRewindCap bounds the backward walk so a flow whose NextDue sits far in the
