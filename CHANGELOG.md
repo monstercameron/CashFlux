@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **The Smart layer's subscription engines compute their shared inputs once per run, not once per
+  engine.** Eleven engines run for `/subscriptions`, and seven of them independently re-derived the
+  same detected-subscription set — a full sweep of the transaction history plus a liability-payment
+  check per detected merchant, seven times over, for one answer. `Input.Subs` had been carrying a doc
+  comment promising exactly this ("passed in so the subscription engines don't re-run detection per
+  feature") since it was introduced, but nothing ever populated or read it; `Run`/`RunPage` now prime
+  it once for any run that includes an engine which needs it. Two engines (SU7's category lookup,
+  SU12's member attribution) additionally re-scanned and re-normalized the whole ledger once per
+  subscription — ~87,000 redundant string allocations to learn 27 facts on the sample dataset — and
+  now index the ledger in a single pass instead. `RunPage(subscriptions)` measured natively over the
+  sample dataset: 15.2ms → 3.3ms, putting it in line with its siblings (bills 2.9ms, budgets 3.9ms).
+  Same engines, same inputs, same insights.
 - **Bills & recurring reports when its deferred sections have arrived.** The page root carries
   `data-settled`, so anything waiting on the surface — the regression suite today — can tell "not here
   yet" apart from "here, with nothing to show". A deferred section may legitimately render nothing (no

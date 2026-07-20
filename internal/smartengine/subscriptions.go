@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 )
@@ -15,7 +16,21 @@ import (
 // debits, lender-named charges) so subscription insights never treat a mortgage or
 // card payment as a cancellable subscription (C161/C151). Mirrors the filter the
 // /subscriptions screen applies to its list + total.
+//
+// The set is the shared input of seven subscription engines, so Run/RunPage
+// detect it once per run and hand it down on Input.Subs. This returns that
+// primed set when it is present, and only detects for itself when an engine is
+// called directly (tests, and any future single-engine caller).
 func realSubs(in Input) ([]subscriptions.Subscription, error) {
+	if in.subsReady || len(in.Subs) > 0 {
+		return in.Subs, nil
+	}
+	return detectRealSubs(in)
+}
+
+// detectRealSubs runs the detection + liability filter itself. Only realSubs and
+// the priming in withDetectedSubs call it.
+func detectRealSubs(in Input) ([]subscriptions.Subscription, error) {
 	subs, err := subscriptions.Detect(in.Transactions, in.Rates, recurringMinCount)
 	if err != nil {
 		return nil, err
@@ -31,15 +46,19 @@ func realSubs(in Input) ([]subscriptions.Subscription, error) {
 }
 
 func init() {
-	register("SMART-SU1", su1CancelCandidates)
+	// registerSubsBacked marks the engines whose bodies call realSubs, so a run
+	// containing any of them detects the subscription set once instead of per
+	// engine. SU3/SU6/SU14/SU15 read the raw ledger directly and stay plain
+	// registers.
+	registerSubsBacked("SMART-SU1", su1CancelCandidates)
 	register("SMART-SU3", su3TrialConversion)
-	register("SMART-SU4", su4AnnualSavings)
+	registerSubsBacked("SMART-SU4", su4AnnualSavings)
 	register("SMART-SU6", su6CostCreep)
-	register("SMART-SU8", su8Forgotten)
-	register("SMART-SU7", su7UsageVsCost)
-	register("SMART-SU9", su9RenewalReminders)
-	register("SMART-SU11", su11Zombie)
-	register("SMART-SU12", su12Attribution)
+	registerSubsBacked("SMART-SU8", su8Forgotten)
+	registerSubsBacked("SMART-SU7", su7UsageVsCost)
+	registerSubsBacked("SMART-SU9", su9RenewalReminders)
+	registerSubsBacked("SMART-SU11", su11Zombie)
+	registerSubsBacked("SMART-SU12", su12Attribution)
 	register("SMART-SU14", su14CancellationTally)
 	register("SMART-SU15", su15Pause)
 }
@@ -123,9 +142,10 @@ func su7UsageVsCost(in Input) []smart.Insight {
 	if err != nil {
 		return nil
 	}
+	catOf := categoriesByMerchant(in.Transactions)
 	var out []smart.Insight
 	for _, s := range subs {
-		cat := categoryForMerchant(in, s.Name)
+		cat := catOf[merchantKey(s.Name)]
 		if cat == "" {
 			continue
 		}
@@ -162,9 +182,10 @@ func su12Attribution(in Input) []smart.Insight {
 	if err != nil {
 		return nil
 	}
+	attributed := merchantsWithMember(in.Transactions)
 	var out []smart.Insight
 	for _, s := range subs {
-		if merchantHasMember(in, s.Name) {
+		if attributed[merchantKey(s.Name)] {
 			continue
 		}
 		out = append(out, smart.Insight{
@@ -181,33 +202,51 @@ func su12Attribution(in Input) []smart.Insight {
 	return out
 }
 
-// categoryForMerchant returns the category id of the most recent transaction
-// matching the merchant name, or "".
-func categoryForMerchant(in Input, name string) string {
-	target := strings.ToLower(strings.TrimSpace(name))
-	var best time.Time
-	cat := ""
-	for _, t := range in.Transactions {
-		if strings.ToLower(strings.TrimSpace(txnLabel(t))) != target || t.CategoryID == "" {
+// merchantKey normalizes a merchant name to the form both merchant indexes key
+// on — the single definition of "the same merchant" for these two engines.
+func merchantKey(name string) string { return strings.ToLower(strings.TrimSpace(name)) }
+
+// categoriesByMerchant maps each merchant to the category of its most recent
+// categorized transaction.
+//
+// It is built in ONE pass over the ledger. The per-merchant question it answers
+// used to be asked with a full re-scan per subscription, each row re-normalized
+// every time — for a household with 27 detected subscriptions over a 3.2k-row
+// history that is ~87,000 redundant string allocations to learn 27 facts.
+func categoriesByMerchant(txns []domain.Transaction) map[string]string {
+	type latest struct {
+		date time.Time
+		cat  string
+	}
+	seen := map[string]latest{}
+	for _, t := range txns {
+		if t.CategoryID == "" {
 			continue
 		}
-		if cat == "" || t.Date.After(best) {
-			best, cat = t.Date, t.CategoryID
+		k := merchantKey(txnLabel(t))
+		if cur, ok := seen[k]; !ok || t.Date.After(cur.date) {
+			seen[k] = latest{date: t.Date, cat: t.CategoryID}
 		}
 	}
-	return cat
+	out := make(map[string]string, len(seen))
+	for k, v := range seen {
+		out[k] = v.cat
+	}
+	return out
 }
 
-// merchantHasMember reports whether any transaction for the merchant carries a
-// member attribution.
-func merchantHasMember(in Input, name string) bool {
-	target := strings.ToLower(strings.TrimSpace(name))
-	for _, t := range in.Transactions {
-		if strings.ToLower(strings.TrimSpace(txnLabel(t))) == target && t.MemberID != "" {
-			return true
+// merchantsWithMember reports, per merchant, whether any of its transactions
+// carries a member attribution — the same one-pass treatment as
+// categoriesByMerchant.
+func merchantsWithMember(txns []domain.Transaction) map[string]bool {
+	out := map[string]bool{}
+	for _, t := range txns {
+		if t.MemberID == "" {
+			continue
 		}
+		out[merchantKey(txnLabel(t))] = true
 	}
-	return false
+	return out
 }
 
 const su9RenewalWindow = 7 // remind this many days before a renewal

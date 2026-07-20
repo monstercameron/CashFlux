@@ -58,9 +58,18 @@ type Input struct {
 	// to the built-in normalizer rule pack.
 	Aliases []domain.PayeeAlias
 
-	// Subs is the detected subscription set (from subscriptions.Detect), passed in
-	// so the subscription engines don't re-run detection per feature.
+	// Subs is the detected subscription set (from subscriptions.Detect, with
+	// liability payments filtered out), so the subscription engines don't re-run
+	// detection per feature. Run/RunPage prime it automatically for any run that
+	// includes an engine which reads it; a caller that already has the set may
+	// populate it directly instead.
 	Subs []subscriptions.Subscription
+
+	// subsReady distinguishes "Subs computed, and the answer is none" from "Subs
+	// not computed yet" — without it a household with no detected subscriptions
+	// would re-run detection for every engine, which is the case the priming
+	// exists for.
+	subsReady bool
 
 	// PaidOccurrences is the set of recurring-occurrence keys (billmatch.Key:
 	// "recurringID|YYYY-MM-DD") that carry a durable bill-match link (TX9) — the
@@ -103,6 +112,48 @@ func register(code string, fn engineFn) {
 	engines[code] = fn
 }
 
+// subsBacked records the engines whose bodies read the detected subscription set
+// (realSubs). A run that includes any of them detects that set ONCE up front
+// instead of once per engine — see Input.withDetectedSubs.
+var subsBacked = map[string]bool{}
+
+// registerSubsBacked wires an engine that reads the detected subscription set.
+func registerSubsBacked(code string, fn engineFn) {
+	register(code, fn)
+	subsBacked[code] = true
+}
+
+// withDetectedSubs primes Input.Subs when any of the codes about to run reads it.
+// Detection is a full sweep of the transaction history plus a liability-payment
+// check per detected merchant, and eight of the subscription engines each asked
+// for it independently — the same answer, recomputed per feature. Engines take
+// Input by value, so priming here hands every one of them the shared result.
+//
+// On a detection error the input is left unprimed: each engine then re-runs and
+// fails exactly as it did before, rather than silently reading an empty set as
+// "no subscriptions".
+func (in Input) withDetectedSubs(codes []string) Input {
+	if in.subsReady || len(in.Subs) > 0 {
+		return in
+	}
+	needed := false
+	for _, c := range codes {
+		if subsBacked[c] {
+			needed = true
+			break
+		}
+	}
+	if !needed {
+		return in
+	}
+	subs, err := detectRealSubs(in)
+	if err != nil {
+		return in
+	}
+	in.Subs, in.subsReady = subs, true
+	return in
+}
+
 // HasEngine reports whether a Free engine is implemented for the given code.
 // Used by tests and the settings UI to distinguish "shipped" from "planned".
 func HasEngine(code string) bool { _, ok := engines[code]; return ok }
@@ -126,7 +177,9 @@ func ImplementedCodes() []string {
 // never slows a core flow until asked for.
 func Run(in Input, s smart.Settings) []smart.Insight {
 	var out []smart.Insight
-	for _, code := range s.ActiveCodes() { // enabled AND not muted
+	codes := s.ActiveCodes() // enabled AND not muted
+	in = in.withDetectedSubs(codes)
+	for _, code := range codes {
 		if fn := engines[code]; fn != nil {
 			out = append(out, fn(in)...)
 		}
@@ -140,11 +193,16 @@ func Run(in Input, s smart.Settings) []smart.Insight {
 // page only computes its own engines.
 func RunPage(in Input, s smart.Settings, page smart.Page) []smart.Insight {
 	var out []smart.Insight
+	var codes []string
 	for _, f := range s.EnabledFeaturesForPage(page) {
 		if s.IsMuted(f.Code) { // a muted feature costs nothing and shows nothing
 			continue
 		}
-		if fn := engines[f.Code]; fn != nil {
+		codes = append(codes, f.Code)
+	}
+	in = in.withDetectedSubs(codes)
+	for _, code := range codes {
+		if fn := engines[code]; fn != nil {
 			out = append(out, fn(in)...)
 		}
 	}

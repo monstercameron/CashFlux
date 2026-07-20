@@ -96,3 +96,48 @@ func TestSU14EmptyNoInsight(t *testing.T) {
 		t.Errorf("no cancellations — want 0, got %d", len(got))
 	}
 }
+
+// Priming the detected-subscription set once per run is a pure sharing of work:
+// the engines must say exactly what they said when each detected the set for
+// itself. This runs the whole subscriptions page both ways and compares the
+// resulting insight keys, so a future engine that starts reading Input.Subs (or a
+// mis-registered subsBacked entry) cannot quietly change what the page reports.
+func TestSubsPrimingPreservesInsights(t *testing.T) {
+	in := baseInput()
+	in.Members = []domain.Member{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}
+	in.Categories = []domain.Category{{ID: "c-fit", Name: "Fitness"}}
+	in.Transactions = append(
+		monthlyCharges("Spotify", -1000, time.June, 5),
+		monthlyCharges("Gym", -4000, time.June, 5)...,
+	)
+	for i := range in.Transactions {
+		if in.Transactions[i].Desc == "Gym" {
+			in.Transactions[i].CategoryID = "c-fit"
+		}
+	}
+	s := smart.Settings{}
+
+	primed := RunPage(in, s, smart.PageSubscriptions)
+
+	// The same run without the priming: dispatch each engine on the raw Input.
+	var raw []smart.Insight
+	for _, f := range s.EnabledFeaturesForPage(smart.PageSubscriptions) {
+		if fn := engines[f.Code]; fn != nil {
+			raw = append(raw, fn(in)...)
+		}
+	}
+	raw = s.Active(raw)
+	smart.SortInsights(raw)
+
+	if len(primed) == 0 {
+		t.Fatal("fixture produced no subscription insights — it cannot guard anything")
+	}
+	if len(primed) != len(raw) {
+		t.Fatalf("primed run produced %d insights, unprimed %d", len(primed), len(raw))
+	}
+	for i := range primed {
+		if primed[i].Key != raw[i].Key {
+			t.Errorf("insight %d: primed %q, unprimed %q", i, primed[i].Key, raw[i].Key)
+		}
+	}
+}
