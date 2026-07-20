@@ -1,3 +1,63 @@
+## 2026-07-20 — Bills & Recurring: five honesty fixes on the new surface
+
+The unified surface shipped, then got looked at properly. Five things it was doing wrong, all of the
+same family: the page was stating things that were not quite true.
+
+**The review strip stated three totals.** "57 found" in the header, "6 repeating charges" in the lane
+header, "1-5 of 5" in the pager. The 57 counted Silent-tier candidates shown nowhere, so it was
+unreachable by construction. Root cause was three separate counts over three separately-derived
+lists; the fix is one split (`rhySplitCandidates`) that everything reads. The interesting decision was
+what to do with the demoted ones. Dropping the number entirely would have been honest and lossy —
+the household really does have 51 more patterns in its history. So they keep their own figure, but
+only because it now has somewhere to go: Detection preferences lists them with the same evidence
+sentence the strip would have shown. Count and route shipped together deliberately; a number you are
+told about and cannot reach is worse than no number.
+
+**A coffee habit was still being proposed as a commitment.** "Blue Bottle Coffee · 121 payments ·
+twice a month · about $7.35" passed every filter — and had to, because every filter was an amount
+test and a coffee costs the same every time. The volatility test can only catch merchants whose
+amounts wobble; the whole point of a habit is that it does not. So the missing judgment was never
+going to be statistical. Two were added: a habitual-spend phrase list (kept SEPARATE from the
+essential-spend list — groceries are a necessity, a night out is not, and `IsEssentialName` is read by
+surfaces that would be lying if it said otherwise), and `recurdiscover.OverFrequent`, which asks
+whether a cluster's charge count is more than its own detected cadence can explain over the span it
+was observed. The rhythm stage always returns SOME cadence, so "7 payments · yearly" needs arithmetic
+rather than a bespoke rule to be seen for what it is. Both demote to Silent; nothing is dropped.
+
+**Candidates were named after the bank's descriptor.** "Msft * Xbox Game Pass 425-6816830". Discovery
+already resolves payees through `payeealias`, so this was the resolver being weak, not the screen
+being wrong — its trailing-reference pattern could not consume a token containing hyphens, and a
+support phone number is the common case. Also taught it the delivery platforms: they bill under the
+RESTAURANT they delivered from, so every takeaway was becoming its own merchant. Resolving them to
+the platform is both the right display name and what makes them cluster honestly — which is how the
+DoorDash candidate reaches the habitual judgment above. The raw descriptor is not lost; it moved to
+the evidence list, which is where a user recognises it from their statement (and which was previously
+listing internal transaction IDs).
+
+**The calendar landed on a nearly-empty month.** Two causes, and the second only became visible after
+fixing the first. It drew only the future, so the three weeks of July that had already happened were
+blank. A calendar that refuses to draw the past is showing a fragment, not a rhythm — so it now
+renders the whole displayed month, with past days carrying what HAPPENED (settled recedes with a
+struck amount; gone-by-unpaid takes amber, since red is reserved). That needed the schedule wound
+backwards, which the store cannot do — it keeps a flow as its NEXT due date — hence
+`domain.RecurringCadence.Prev`, the exact inverse of `Next`. Deliberately not a fixed day count:
+months are not 30 days, and the drift would have put bills on the wrong day. The landing month now
+follows the obligations, but only jumps when this month has nothing left ahead; jumping whenever the
+month merely looks sparse would move the user away from where they expect to be.
+
+**The tideline was too short to have a shape.** Window was today→next-income floored at 14 days, so
+on a fortnightly household the band held one paycheck and almost no outflow. Floor is now a full
+month. The test that proved it also corrected it: 30 is not enough, because the window is half-open
+and opening the page on the 2nd of a 31-day month puts the next 1st exactly one day out of reach. 31
+is the only version of "a full cycle" that is true for every month and every start day. Consequence
+taken knowingly: the pinch can now land after the next paycheck, because it describes the band the
+hero actually draws — a low point visible in the chart that the caption refused to name would be the
+worse failure.
+
+Not done, and worth a ticket: rejecting a candidate writes a suppressed signature with no way back —
+Detection preferences lists the weak signals now but not the suppressed ones, so "Not recurring" is
+still a one-way door.
+
 ## 2026-07-20 — Bills & Recurring redesign: the page layer (unified "rhythm" surface)
 
 Started the UI layer over the now-tested engine (recurdiscover + runway.Tideline). The page replaces
