@@ -273,9 +273,9 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 	openAdd := ui.UseEvent(Prevent(func() { addAtom.Set(true) }))
 	toggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
 
-	formulasLabel := uistate.T("investments.metricsShow")
+	formulasLabel := uistate.T("investments.formulaBuilderShow")
 	if formulasAtom.Get() {
-		formulasLabel = uistate.T("investments.metricsHide")
+		formulasLabel = uistate.T("investments.formulaBuilderHide")
 	}
 	metricsCls := "strip-toggle"
 	if formulasAtom.Get() {
@@ -285,7 +285,7 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 	toolbar := Div(css.Class("filter-strip"),
 		Div(css.Class("filter-strip-controls"),
 			Button(css.Class(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(formulasAtom.Get())),
-				Attr("data-testid", "invest-toggle-formulas"), Title(uistate.T("investments.metricsTitle")),
+				Attr("data-testid", "invest-toggle-formulas"), Title(uistate.T("investments.formulaBuilderTitle")),
 				OnClick(toggleFormulas), Text(formulasLabel)),
 			A(css.Class("btn btn-ghost"), Href(uistate.RoutePath("/accounts")), uistate.T("debt.linkAccounts")),
 		),
@@ -452,8 +452,8 @@ func allocColumn(title string, weights []portfolio.Weight, sym string, dec int, 
 
 func investFormulaWidget(props investPanelProps) ui.Node {
 	body := Div(
-		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.formulaHint")),
-		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("investments.metricsTitle"), ShowSaved: true}),
+		P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.formulaBuilderHint")),
+		ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("investments.formulaBuilderShow"), ShowSaved: true}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-formula", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
