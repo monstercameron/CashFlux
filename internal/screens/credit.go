@@ -410,6 +410,11 @@ func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
 		Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
 			Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(creditBandTone(r.Band))),
 				string(r.Band)),
+			// Name the figure as a CashFlux estimate right at the ring — this embedded
+			// panel carries its full disclaimer only at the very bottom, so the score
+			// otherwise reads as a bureau number until the reader scrolls past it.
+			Div(css.Class("t-caption", tw.TextFaint, tw.Mt1), Attr("data-testid", "credit-estimate-note"),
+				uistate.T("detail6.creditScoreLabel")),
 			Div(css.Class("t-caption", tw.TextDim, tw.Mt1),
 				fmt.Sprintf(uistate.T("credit.aggUtil"), aggLabel)),
 		),

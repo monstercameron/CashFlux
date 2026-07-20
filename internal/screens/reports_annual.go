@@ -430,6 +430,64 @@ func Reports() ui.Node {
 		return nil
 	}, heroSig)
 
+	// Scroll-spy: as the reader moves through the long full-mode document, mark the
+	// section they're in .is-current in the sticky index so orientation never gets
+	// lost (fine-detail review: the index helps navigate but weakly orients). An
+	// IntersectionObserver over the section anchors fires on band crossings; each
+	// fire rescans the anchors' positions and toggles the class directly on the DOM
+	// (no state → a scroll never re-renders the document). Full mode only; the
+	// summary view has no index.
+	ui.UseEffect(func() func() {
+		if summaryMode.Get() {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		ioCtor := js.Global().Get("IntersectionObserver")
+		if !doc.Truthy() || !ioCtor.Truthy() {
+			return nil
+		}
+		secIDs := []string{"rpta-00", "rpta-01", "rpta-02", "rpta-03", "rpta-04", "rpta-05", "rpta-06", "rpta-07", "rpta-08", "rpta-09", "rpta-10"}
+		var secs []js.Value
+		for _, id := range secIDs {
+			if el := doc.Call("getElementById", id); el.Truthy() {
+				secs = append(secs, el)
+			}
+		}
+		if len(secs) == 0 {
+			return nil
+		}
+		apply := func() {
+			// Current = the last section whose heading has scrolled up to (or past)
+			// the band just under the sticky index — the greatest top still ≤ band.
+			const band = 170.0
+			cur := secs[0].Get("id").String()
+			best := -1e18
+			for _, el := range secs {
+				top := el.Call("getBoundingClientRect").Get("top").Float()
+				if top <= band && top > best {
+					best = top
+					cur = el.Get("id").String()
+				}
+			}
+			items := doc.Call("querySelectorAll", `[data-testid="rpta-idx-item"]`)
+			for i := 0; i < items.Get("length").Int(); i++ {
+				it := items.Call("item", i)
+				on := it.Call("getAttribute", "data-section").String() == cur
+				it.Get("classList").Call("toggle", "is-current", on)
+			}
+		}
+		cb := js.FuncOf(func(js.Value, []js.Value) any { apply(); return nil })
+		io := ioCtor.New(cb, map[string]any{"rootMargin": "-150px 0px -55% 0px", "threshold": 0})
+		for _, el := range secs {
+			io.Call("observe", el)
+		}
+		apply()
+		return func() {
+			io.Call("disconnect")
+			cb.Release()
+		}
+	}, "rpta-scrollspy|"+boolStr(summaryMode.Get()))
+
 	// Empty year (and no scope filter to blame): a single CTA, not a page of zeros.
 	if flow.Income == 0 && flow.Expense == 0 && sc.IsAll() {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("reports.empty"), CTALabel: uistate.T("reports.addFirst"), Href: "/transactions"})
@@ -907,10 +965,10 @@ func Reports() ui.Node {
 				rptaSrcLink("nav.netWorth", "/networth"),
 				axisMoney(seriesMax(nwFloat)), axisMoney(seriesMid(nwFloat)), axisMoney(seriesMin(nwFloat)),
 				uiw.AreaChart(uiw.AreaChartProps{Values: nwFloat, Stroke: nwStroke, GradientID: "rpta-nw", Label: uistate.T("dashboard.netWorth"), Labels: monthLabels, ValueLabels: moneyVL(nwFloat)}))),
-			If(len(creditSeries) >= 2, Div(Attr("data-testid", "rpta-credit-chart"), rptaTrendChart(uistate.T("rpta.creditHead"), creditStroke, uistate.T("rpta.legendCredit"),
+			If(len(creditSeries) >= 2, Div(Attr("data-testid", "rpta-credit-chart"), rptaTrendChart(uistate.T("detail6.creditScoreLabel"), creditStroke, uistate.T("rpta.legendCredit"),
 				rptaSrcLink("nav.credit", "/credit"),
 				fmt.Sprintf("%d", int(seriesMax(creditFloat))), fmt.Sprintf("%d", int(seriesMid(creditFloat))), fmt.Sprintf("%d", int(seriesMin(creditFloat))),
-				uiw.AreaChart(uiw.AreaChartProps{Values: creditFloat, Stroke: creditStroke, GradientID: "rpta-credit", Label: uistate.T("rpta.creditHead"), Labels: monthLabels, ValueLabels: pctlessVL(creditFloat)})))),
+				uiw.AreaChart(uiw.AreaChartProps{Values: creditFloat, Stroke: creditStroke, GradientID: "rpta-credit", Label: uistate.T("detail6.creditScoreLabel"), Labels: monthLabels, ValueLabels: pctlessVL(creditFloat)})))),
 		),
 	))
 
@@ -2100,6 +2158,9 @@ func rptaIndex() ui.Node {
 		// Title carries the section name even when the CSS hides the text label at
 		// narrow widths (2026-07-17 audit: the index must stay one compact row).
 		return Button(css.Class("rpta-idx-item"), Type("button"), Attr("data-testid", "rpta-idx-item"),
+			// data-section pairs the item with its section id so the scroll-spy
+			// effect (in Reports) can mark the in-view section .is-current.
+			Attr("data-section", id),
 			Title(uistate.T(key)), OnClick(scrollTo(id)),
 			Span(ClassStr("rpta-idx-dot rpta-dot-"+zone)),
 			Span(css.Class("rpta-idx-num"), num),

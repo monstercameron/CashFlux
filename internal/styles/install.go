@@ -102,6 +102,7 @@ func Register() {
 	registerFlipFit()
 	registerWhatChanged()
 	registerLane3Dashboard()
+	registerDetail6()
 	inject(Build())
 }
 
