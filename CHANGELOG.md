@@ -1,10 +1,23 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
+
+### Added
+- **The net-worth bridge: a window's movement decomposed into legs that sum exactly.**
+  `attribution.BuildBridge` extends the E1 engine with the split a balance sheet is actually read
+  along — money kept, market movement, debt paid down, new debt, revaluation — instead of the coarse
+  flow-vs-adjustment split, and reports whatever those five legs leave unexplained as an explicit
+  residual leg. The contract is arithmetic: `Start + Σ legs == End`, asserted over report-excluded
+  activity, a liability crossing zero mid-window, archived accounts, and a foreign-currency account.
+  Liability activity splits by the SIGN of its net-worth effect rather than by adjustment-ness,
+  because that is the split a reader means: a payment against what you owe is "paid down" whether it
+  was posted as a payment or as a balance update. It shares `Input`, the half-open window, and the
+  liability-magnitude convention with `Compute`, and a test pins the two engines to the same headline
+  delta so the page and the dashboard card can never contradict each other.
 
 ### Changed
 - **The Smart layer's subscription engines compute their shared inputs once per run, not once per
