@@ -29,10 +29,10 @@ import (
 )
 
 type accountRowProps struct {
-	Account    domain.Account
-	Balance    money.Money
-	Cleared    money.Money
-	Stale      bool
+	Account domain.Account
+	Balance money.Money
+	Cleared money.Money
+	Stale   bool
 	// DaysStale is the days since the balance was last confirmed (−1 = never), shown
 	// on the stale badge so the row says HOW stale it is — matching the "it's been N
 	// days" wording of the balance-update notification. Only read when Stale is true.
@@ -43,14 +43,14 @@ type accountRowProps struct {
 	// leads the list, so the warning keeps its prioritising force instead of becoming
 	// wallpaper. Below that threshold it's false and the full badge shows as before.
 	StaleCollapsed bool
-	Members    []domain.Member
-	Accounts   []domain.Account // all non-archived accounts (for Transfer to-picker)
-	Categories []domain.Category
-	OnDelete   func(string)
-	OnArchive  func(domain.Account)
-	OnRefresh  func(domain.Account)
-	OnSave     func(domain.Account)
-	OnView     func(string)
+	Members        []domain.Member
+	Accounts       []domain.Account // all non-archived accounts (for Transfer to-picker)
+	Categories     []domain.Category
+	OnDelete       func(string)
+	OnArchive      func(domain.Account)
+	OnRefresh      func(domain.Account)
+	OnSave         func(domain.Account)
+	OnView         func(string)
 	// OnSetBalance: newBalStr is the typed target; catID is the optional category
 	// to attach to the adjustment transaction (empty = uncategorized).
 	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID string)
