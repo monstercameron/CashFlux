@@ -10,8 +10,10 @@ and every commit updates this file under `Unreleased`.
 - **Budgets summary band shows the overage as a striped section:** when the month passes its cap
   the track now rescales so its full width is the SPENT total — the cap moves left to limit/spent
   (the fill's edge marks it), the under-cap portion keeps the healthy green fill (spending up to
-  the cap was fine), and the stretch past it renders as a danger-striped segment sized to the
-  overshoot, using the app's existing diagonal over-budget hazard idiom. The right-hand figure
+  the cap was fine — pinned to the semantic green `--money-positive` at near-flat alpha so it
+  reads as solidly green as the To-do/Goals bands instead of the base gradient's murky 15%-alpha
+  tail), and the stretch past it renders as a danger-striped segment sized to the overshoot,
+  using the app's existing diagonal over-budget hazard idiom. The right-hand figure
   ("Over budget · $X") lands inside the striped zone, labeling it. Assistive tech hears the true
   percentage (e.g. 124%), not the capped visual width.
 
