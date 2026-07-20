@@ -1,3 +1,30 @@
+## 2026-07-20 — v1.2.8: black-box UI/UX refinement loop (4 sequential fix batches)
+
+Ran a review→fix→re-verify loop over the first nine pages, driven entirely black-box through the
+running app at :8080 (Playwright screenshots + DOM probes, dark+light, collapsed+expanded rail,
+1202/1260/1440 widths), with one sequential Opus fix agent per blemish batch. Twenty fixes across
+four batches; every fix re-verified in-browser against the deployed wasm before the next batch.
+
+Decisions + findings worth remembering:
+- **The most important catch was invisible in screenshots:** settings writes were only durable on
+  the ~4s autosave tick, so changing the theme and reloading within the window silently reverted
+  it. Found by timing a reload 1.5s after the change. Fixed at the shared `SettingKVSet` layer
+  (coalesced ~250ms `RequestPersist`) so every settings surface benefits, not just theme.
+- **Three ledger truncation bugs, one disease:** fixed pixel widths + positional `nth-child`
+  selectors fighting the one flexible column under `table-layout:fixed`. The durable cure was
+  class-based column widths (`td-acct`/`td-cat`/`td-source`/`td-user`, rules_uxbatch6.go)
+  registered last so the cascade wins on source order; the two follow-up truncations (Date,
+  Source) were rebalances inside its fixed-width budget, paid net-neutrally so the Description
+  share never regressed.
+- **The boot skeleton ghosting was two bugs:** the JS MutationObserver dismissal lagged on heavy
+  routes (fixed with an inline `body:has(#app:not(:empty))` CSS fallback + shorter motion token),
+  and the skeleton rail was px while the real rail is rem, so they diverged under `--ui-scale`.
+- Verified fixed-since-the-morning-review items before re-reporting them (investment totals line,
+  slider aria-valuetext, alert-settings IA, missed-payment false positives) — a same-day review
+  doc goes stale fast when lanes are shipping; re-verify, don't re-litigate.
+- Left as product calls, not blemishes: sample-mode background music default, Board's two-column
+  model, bulk task selection, reconcile adjustment-transaction flow.
+
 ## 2026-07-19 — W-series batch 1: six parallel lanes ship W1 + W6 + W10 (18 tickets)
 
 Ran the first implementation tranche of the nine-page 10/10 plan as a 6-lane parallel build

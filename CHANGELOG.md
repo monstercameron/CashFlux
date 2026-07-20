@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-07-20
+
 ### Changed
 - **What-changed card: one issue = one finding + stable fold position.** The attribution engine now
   drops a finding whose evidence set exactly duplicates a higher-ranked one (an account whose only
