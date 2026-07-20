@@ -14,6 +14,76 @@ packages have no `syscall/js` and ship with table-driven tests.
 > Note: C-IDs are unique and continuous (C1–C329); R1-R72 = research/spec. Full evidence + fix
 > detail for each is in the Claude Code task list; these are the durable one-line backlog entries.
 
+### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
+Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
+the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
+
+- [ ] **RH1 — the budget-fit chip no longer drills to its budget.** **Confirmed interactive by
+  design:** the old row built it as a control, not decoration —
+  `Button(ClassStr(cls), Type("button"), Attr("data-testid", "bill-fit-"+id), Attr("aria-label",
+  T("bills.budgetFitAria", …)), Title(…), OnClick(openFit), label)` (`bills_screen.go:792`), which
+  deep-linked to `/budgets` and flashed the receiving card. `rhyAgendaRow` (`recurring_agenda.go:533`)
+  now renders `Span(ClassStr(cls), Attr("data-testid", …), label)` — no handler, and no `aria-label`
+  either, so the chip also lost its accessible name. Repro: `/bills` → click any `bill-fit-*` chip →
+  nothing happens. Fix: restore the Button + `openFit` handler on the agenda row. Guarded by an
+  expected-to-fail test in `e2e/regression/rhythm.spec.mjs` ("the budget-fit chip drills to the budget
+  it names") — fixing this turns that test red for passing, then the marker comes off.
+- [ ] **RH2 — the bill-match variance statement is dead code.** `computeRecurView` still fills
+  `recurOccurrence.Variance` and `recurVarianceText` still exists, but nothing on the surface renders
+  either: after an auto-matched payment settles an occurrence the old page said "ran $2.00 over" /
+  "$1.00 under" (TX9) and the new one says nothing. Either render it on the settled agenda row or
+  delete both, but do not leave a computed figure with no reader.
+- [ ] **RH3 — `/subscriptions` lands on an empty roster.** ★ A live entry point showing "Nothing here
+  yet." **Diagnosed: this is a CLASSIFICATION bug, not a preselect bug.** The preselect works — on
+  `/subscriptions` the lens button `recurring-tab-subscriptions` carries `aria-pressed="true"` and
+  `recurring-tab-scheduled` `"false"` (asserted in `rhythm.spec.mjs`, passing). What matches nothing is
+  the bucket:
+
+  ```go
+  // internal/screens/recurring_roster.go:26
+  func rosterClass(r domain.Recurring) string {
+      switch {
+      case !r.Amount.IsNegative(): return "income"
+      case r.AccountID != "":      return "bills"   // ← every real flow has one
+      default:                     return "subs"
+      }
+  }
+  ```
+
+  `domain.Recurring.AccountID` is the **funding** account the occurrence posts INTO — `appstate.go:2036`
+  builds the auto-posted `domain.Transaction{AccountID: r.AccountID}` from it — not the liability the
+  payment settles. All 13 seeded flows carry one (Joint Checking / Priya's Business Checking), so
+  `"subs"` is unreachable and `rhy-subs-subtotal` (rendered only when the subtotal is non-zero) never
+  appears either. The spec's "Bills (account-tied)" means anchored to a liability/statement account —
+  the notion the agenda already computes as `bills.Bill.AnchorAccountID` via `DedupeObligations`, and
+  which the roster does not consult at all.
+
+  **Product call settled with Cam (2026-07-20) — implement in the page layer:** the account anchor
+  means *tied to a liability the payment settles*, not the funding account it posts from. So the
+  **Bills** lens is liability-anchored — use `bills.Bill.AnchorAccountID`, which `DedupeObligations`
+  already computes — and **Subscriptions is NOT its complement**: it is a genuine lens over
+  free-floating commitments that are subscription-ish by category/detection. Commitments that are
+  neither (HOA dues, property tax, insurance) appear under **All** only. Lenses are FILTERS, not a
+  partition, and the `rhy-subs-subtotal` chip counts only real subscriptions — which keeps the lens
+  honest instead of turning it into a catch-all with a wrong name. Under this rule the seed's Bills
+  lens holds Mortgage payment, both car payments and the student loan.
+  Guarded by an expected-to-fail test in `rhythm.spec.mjs` ("the Subscriptions lens shows real
+  subscriptions and their subtotal"), which asserts the lens is non-empty and that the subtotal chip's
+  monthly figure is its own rows' arithmetic. It stays red until the fix lands.
+- [ ] **RH4 — a subscription payment link has nowhere to show.** The transaction-side flip modal
+  (`txn-marksub-open`) still saves the link durably, but the unified surface has no "last paid" line
+  and no drill back to that transaction (the retired `sub-pay-*` rows). The linkage is asserted in
+  `rhythm.spec.mjs`; its evidence half is unassertable until the roster row carries it.
+- [ ] **RH5 — "Negotiate" lost its talking points.** The old bills row seeded the task COMPOSER —
+  `uistate.SetTaskAddSeed({Title, Notes: subscriptions.ChecklistNotes("", subscriptions.NegotiationTips(name))})`
+  then `SetAddTarget("task")` (`bills_screen.go:231`) — so the user got the haggling script, which is
+  the whole feature; the to-do is just the follow-up. `rhyAgendaRow`'s handler
+  (`recurring_agenda.go:498`) now calls `app.PutTask` directly with a Title and no Notes and no
+  composer, so the user gets "Negotiate Rewards Credit Card" and no idea what to say.
+  `subscriptions.NegotiationTips` is still there, unused by this path. Repro: `/bills` → any agenda
+  row's ⋯ → Negotiate → `/todo` → the task has an empty notes body. Guarded by an expected-to-fail test
+  in `rhythm.spec.mjs` ("bill negotiation hands the user the talking points").
+
 ### Local-first parity — v1.0.43 (shipped) + deferred polish
 Shipped 2026-07-15 (v1.0.43), each built bottom-up with a pure table-tested package and passing the
 adversarial design-critic loop (SHIP): standardized reusable `uiw.Calendar` primitive
