@@ -67,6 +67,10 @@ func (c *rptaFlowColors) hub(label string)     { c.byLabel[label] = c.accent }
 func (c *rptaFlowColors) savings(label string) { c.byLabel[label] = "#4ea777" }
 func (c *rptaFlowColors) rest(label string)    { c.byLabel[label] = "#8a8f98" }
 
+// deficit tones the "Drawn from savings" inflow that appears when the year
+// overspent — the app's negative tone, so the gap ribbon reads as a warning.
+func (c *rptaFlowColors) deficit(label string) { c.byLabel[label] = "#d8716f" }
+
 func (c *rptaFlowColors) category(label string) {
 	c.byLabel[label] = rptaCatPalette[c.catIdx%len(rptaCatPalette)]
 	c.catIdx++

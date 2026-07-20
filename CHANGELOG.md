@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Annual Review "Money flow" silently hid income categories named "Income":** the sankey keys
+  nodes by display label, so a category named exactly like the hub formed a From==To self-loop
+  the layout (correctly) drops — a salary categorized under a category called "Income" vanished
+  from the graphic and its color entry merged with the hub, while the headline income still
+  counted it. Colliding category nodes now render disambiguated ("Income (category)"). Also: the
+  caption's "from N sources" reported the 5-ribbon render cap rather than the real source count.
+- **Overspent years now show the gap in the Money flow graphic:** when spending exceeded income
+  the hub bar silently grew to the expense total (labelled "Income" at a number bigger than
+  income) with nothing explaining the difference. A negative-toned "Drawn from savings" inflow
+  ribbon now feeds the hub so inflow equals outflow and the deficit is visible in the picture,
+  matching the caption's negative savings rate.
+
 ## [1.2.7] - 2026-07-19
 
 ### Changed

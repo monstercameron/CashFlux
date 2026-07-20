@@ -1839,7 +1839,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title:        uistate.T("nav.budgets"),
-		HeaderAction: smartSectionAction(smartSettings),
+		HeaderAction: budgetSmartFeaturesLink(smartSettings),
 		Body:         body,
 	})
 	return uiw.Widget(uiw.WidgetProps{

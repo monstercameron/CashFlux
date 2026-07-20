@@ -1,3 +1,34 @@
+## 2026-07-19 — Annual Review money-flow: the "Income"-category self-loop
+
+Cam's REAL dataset (private — debugged from code + his pasted report numbers, no data shared)
+showed the Annual Review claiming income $22,820.59 while the sankey showed no salary ribbon,
+an "Income $31,125" node equal to the spending total, and his 2× UKG paychecks apparently
+untracked. The in-app assistant guessed date windows and category assignment; both wrong.
+
+Root cause chain, all from one design flaw — the sankey keys nodes by DISPLAY LABEL:
+(1) his salary category is literally named "Income", the same string as the hub node
+(rpta.nodeIncome), so the builder emitted Flow{From:"Income", To:"Income"} — a self-loop that
+LayoutSankey (correctly) drops. The salary was in the headline (IncomeVsExpense doesn't use
+names) but invisible in the graphic. (2) The hub node's value is max(in,out); with the salary
+inflow dropped and the year overspent, the hub rendered as "Income · $31,125" — the EXPENSE
+total wearing the income label. (3) "from 5 sources" printed the 5-ribbon render cap, not the
+actual source count.
+
+Fixes (reports_annual.go + reports_sankey.go + en_rptaflow.go): colliding category nodes render
+as "Income (category)" (both income and spending sides — the color map is label-keyed too, so
+the collision also merged palette entries); a negative-toned "Drawn from savings" inflow ribbon
+now feeds the hub whenever Net()<0 so inflow==outflow and the deficit is IN the picture (the
+mirror of the existing Income→Savings ribbon, which only handled surpluses); the caption counts
+real sources. Verified on sample data (unchanged render) + a forced-deficit run (ribbon appears,
+hub balances at $145,466). The collision path itself needs Cam's real data — his category is the
+only "Income"-named one around.
+
+Data-hygiene note for Cam's numbers (not code): the $15,000 "Zillow Estimate Adjustment" is a
+home-value adjustment riding in spending — it should be ExcludeFromReports (TXC-1) so the
+analytical layer skips it while balances keep it; same review applies to the "Transfers"/
+"Savings" categories if those rows are real account-to-account moves (they should be typed as
+transfers, not categorized spending).
+
 ## 2026-07-19 — /budgets B1 hero + card-view regression fix
 
 Cam reviewed /budgets against the rest of the app (screenshots at 1600px, sample data): four
