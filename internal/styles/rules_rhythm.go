@@ -25,17 +25,34 @@ func registerRhythmSurface() {
 	rule(".rhy-slot",
 		prop("display", "contents"),
 	)
+	// A section is this surface's LARGEST wrapper, so it wears the app's shared
+	// page-section garnish: the fixed 12px --radius-xl step (NOT --radius, which is
+	// the theme-editor knob and ships at 0px — see rules_gen.go's token comment and
+	// rules_dp_radius.go's scale), plus the same two-layer elevation the bento `.w`
+	// widget and `.catchup-card` carry, per theme. Without those a section rendered
+	// square and flat beside every other page's rounded, lifted panels.
 	rule(".rhy-section",
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "var(--radius)"),
+		prop("border-radius", "var(--radius-xl)"),
 		prop("padding", "1.1rem 1.15rem"),
+		prop("box-shadow", "0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),"+
+			" inset 0 1px 0 rgba(255,255,255,0.035)"),
 	)
-	// The hero and the strips read as one field, no card seam between them.
+	rule("[data-theme=\"light\"] .rhy-section",
+		prop("box-shadow", "0 1px 2px rgba(17,24,39,0.05), 0 12px 28px -20px rgba(17,24,39,0.16),"+
+			" inset 0 1px 0 rgba(255,255,255,0.7)"),
+	)
+	// The hero and the strips read as one field, no card seam between them. With no
+	// box there is nothing to lift, so the elevation comes off too.
 	rule(".rhy-section.rhy-flush",
 		prop("padding", "0"),
 		prop("border", "0"),
 		prop("background", "transparent"),
+		prop("box-shadow", "none"),
+	)
+	rule("[data-theme=\"light\"] .rhy-section.rhy-flush",
+		prop("box-shadow", "none"),
 	)
 	rule(".rhy-sec-head",
 		prop("display", "flex"),
@@ -336,13 +353,18 @@ func registerRhythmStrips() {
 		prop("font-style", "italic"),
 		prop("margin", "0.2rem 0 0"),
 	)
+	// A block nested INSIDE a section takes the scale's one-step-down 8px
+	// (--radius-lg) so the nesting reads, and follows the app's reduce-border rule:
+	// an inner object inside an already-bordered, elevated panel drops its own box
+	// and separates with the shared subtle-lift background instead (--bg-elev sits
+	// above --bg-card in both themes).
 	rule(".rhy-ev-list",
 		prop("margin", "0.35rem 0 0"),
 		prop("padding", "0.4rem 0.6rem"),
 		prop("list-style", "none"),
-		prop("background", "var(--bg)"),
-		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "var(--radius)"),
+		prop("background", "color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		prop("border", "0"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("font-size", "var(--type-12)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -373,9 +395,9 @@ func registerRhythmStrips() {
 		prop("list-style", "none"),
 		prop("max-height", "18rem"),
 		prop("overflow-y", "auto"),
-		prop("background", "var(--bg)"),
-		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "var(--radius)"),
+		prop("background", "color-mix(in srgb, var(--bg-elev) 48%, transparent)"),
+		prop("border", "0"),
+		prop("border-radius", "var(--radius-lg)"),
 	)
 	rule(".rhy-weak-list li",
 		prop("display", "flex"),

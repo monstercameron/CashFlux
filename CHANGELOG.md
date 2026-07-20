@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Bills & recurring rendered square, flat panels while every other page rendered rounded, lifted
+  ones. (RH-GARNISH1)** The new surface set its section corners from `var(--radius)`, which is the
+  THEME EDITOR knob and ships at `0px` — so a section rendered with hard 90° corners and no
+  elevation, beside the 12px rounded, two-layer-shadowed panels on Budgets, Goals, Reports and
+  Transactions. The established surfaces never use `--radius` for container rounding; they use the
+  fixed `--radius-xs…xl` scale (`rules_dp_radius.go`: page section / summary card = `--radius-xl`
+  12px, a block nested inside one = `--radius-lg` 8px). `.rhy-section` now takes the 12px section
+  step plus the same per-theme elevation the bento `.w` widget carries, and the nested evidence and
+  weaker-signals lists take the 8px step. Those two also adopt the app's reduce-border rule
+  (`rules_dp_borders.go`): inside an already-bordered, elevated panel an inner block drops its own
+  box and separates with the shared `--bg-elev` subtle-lift instead. `--radius` is untouched and
+  still drives everything the theme editor owns.
 - **Bills & recurring rebuilt the payee-cleanup table once per transaction. (RH-PERF1)** Discovery
   feeds every transaction through `app.ResolvePayee`, and that convenience wrapper constructs a fresh
   `payeealias.Resolver` on each call — which re-queries the alias table from the store. Over the
