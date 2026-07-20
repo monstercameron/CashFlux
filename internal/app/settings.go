@@ -175,6 +175,11 @@ func notifySettings() uic.Node {
 		}),
 		H4(css.Class("set-label"), uistate.T("settings.manageAlerts")),
 		Div(alertChildren...),
+		// C416: quiet hours (suppress browser pop-ups during a DND window) and the
+		// spending-digest cadence — both persisted in RuleConfig and consumed by
+		// runNotifyCatchUp, so they change real behavior (no dead toggles).
+		uic.CreateElement(quietHoursRow),
+		uic.CreateElement(digestCadenceRow),
 	)
 }
 
@@ -198,6 +203,8 @@ func alertLabelKey(ruleID string) string {
 		return "settings.alert.lowBalance"
 	case "default-paycheck":
 		return "settings.alert.paycheckLanded"
+	case "default-unusual":
+		return "settings.alert.unusualCharge"
 	default:
 		return ruleID
 	}
@@ -349,6 +356,114 @@ func musicSettings() uic.Node {
 			Input(Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
 				Attr("aria-label", uistate.T("settings.musicVolume")),
 				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVolCommit)),
+		),
+	)
+}
+
+// minutesToClock formats minutes-since-midnight as a "HH:MM" value for a
+// <input type="time">. Out-of-range input clamps to midnight.
+func minutesToClock(m int) string {
+	if m < 0 || m >= 24*60 {
+		m = 0
+	}
+	pad := func(n int) string {
+		s := strconv.Itoa(n)
+		if n < 10 {
+			return "0" + s
+		}
+		return s
+	}
+	return pad(m/60) + ":" + pad(m%60)
+}
+
+// clockToMinutes parses a "HH:MM" time-input value into minutes since midnight,
+// or -1 when it is malformed / out of range (so the caller ignores it).
+func clockToMinutes(s string) int {
+	parts := strings.SplitN(strings.TrimSpace(s), ":", 2)
+	if len(parts) != 2 {
+		return -1
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return -1
+	}
+	return h*60 + m
+}
+
+// quietHoursRow renders the account-wide do-not-disturb window (C416): a start
+// and end time. During the window the in-app feed still records every alert, but
+// browser pop-ups are suppressed (enforced in runNotifyCatchUp). Equal start/end
+// turns quiet hours off. Its own component so the two time inputs' hooks stay at
+// stable positions; it round-trips the shared RuleConfig so it composes with the
+// per-alert toggles that write the same key.
+func quietHoursRow() uic.Node {
+	cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+	start := uic.UseState(cfg.QuietStartMin)
+	end := uic.UseState(cfg.QuietEndMin)
+	persist := func(s, e int) {
+		c := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		c.QuietStartMin = s
+		c.QuietEndMin = e
+		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(c))
+		uistate.RequestPersist() // Settings KV only reaches IndexedDB on persist (the C2 landmine).
+	}
+	onStart := uic.UseEvent(func(v string) {
+		m := clockToMinutes(v)
+		if m < 0 {
+			return
+		}
+		start.Set(m)
+		persist(m, end.Get())
+	})
+	onEnd := uic.UseEvent(func(v string) {
+		m := clockToMinutes(v)
+		if m < 0 {
+			return
+		}
+		end.Set(m)
+		persist(start.Get(), m)
+	})
+	return Div(Attr("data-testid", "settings-quiet-hours"),
+		H4(css.Class("set-label"), uistate.T("settings.quietHoursTitle")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.quietHoursHint")),
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.quietStart")),
+			Input(css.Class("set-input"), Type("time"), Attr("data-testid", "settings-quiet-start"),
+				Attr("aria-label", uistate.T("settings.quietStart")),
+				Value(minutesToClock(start.Get())), OnChange(onStart)),
+		),
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.quietEnd")),
+			Input(css.Class("set-input"), Type("time"), Attr("data-testid", "settings-quiet-end"),
+				Attr("aria-label", uistate.T("settings.quietEnd")),
+				Value(minutesToClock(end.Get())), OnChange(onEnd)),
+		),
+	)
+}
+
+// digestCadenceRow renders the spending-digest cadence control (C416): weekly or
+// monthly. It drives which period runNotifyCatchUp recaps. Its own component so
+// the select's hook stays at a stable position; it round-trips the shared
+// RuleConfig like the per-alert toggles.
+func digestCadenceRow() uic.Node {
+	cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+	cur := uic.UseState(string(cfg.EffectiveDigestCadence()))
+	onSel := uic.UseEvent(func(e uic.Event) {
+		v := e.GetValue()
+		cur.Set(v)
+		c := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		c.DigestCadence = notify.DigestCadence(v)
+		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(c))
+		uistate.RequestPersist()
+	})
+	return Div(Attr("data-testid", "settings-digest-cadence"),
+		Div(css.Class("toggle-row"),
+			Span(uistate.T("settings.digestCadence")),
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.digestCadence")), OnChange(onSel),
+				Option(Value(string(notify.DigestWeekly)), SelectedIf(cur.Get() == string(notify.DigestWeekly)), uistate.T("settings.digestWeekly")),
+				Option(Value(string(notify.DigestMonthly)), SelectedIf(cur.Get() == string(notify.DigestMonthly)), uistate.T("settings.digestMonthly")),
+			),
 		),
 	)
 }
@@ -1228,8 +1343,9 @@ func globalSettingsForm() uic.Node {
 	case "appearance":
 		// The full appearance surface (mode/motion/accent + theme editor) mounts
 		// as a child component — its hooks are its own, same as the other
-		// pane-embedded components.
-		pane = uic.CreateElement(screens.Appearance)
+		// pane-embedded components. Background music sits here too (#3): it's an
+		// experience setting, not an alert, so it moved out of the Alerts bucket.
+		pane = Div(uic.CreateElement(screens.Appearance), uic.CreateElement(musicSettings))
 	case "alerts":
 		pane = settingsAlertsPane(leftProps)
 	case "ai":

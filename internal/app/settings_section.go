@@ -68,17 +68,18 @@ func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 	)
 }
 
-// settingsAlertsPane renders the Alerts tab: freshness windows, notifications
-// and per-alert toggles, the learning threshold, and music. Pure rendering
-// helper — no hooks of its own (the embedded components own theirs).
+// settingsAlertsPane renders the Alerts tab: freshness windows plus the
+// notifications and per-alert controls. The auto-category suggestion threshold
+// moved to Preferences (it's a transactions-behavior control) and background
+// music moved to Appearance (an experience setting) so Alerts stops being a
+// catch-all bucket (#3). Pure rendering helper — no hooks of its own (the
+// embedded components own theirs).
 func settingsAlertsPane(p settingsLeftProps) uic.Node {
 	return Div(
 		H4(css.Class("set-label"), uistate.T("settings.freshnessTitle")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.freshnessHint")),
 		Div(p.FreshnessRows),
 		uic.CreateElement(notifySettings),
-		uic.CreateElement(learnThresholdRow),
-		uic.CreateElement(musicSettings),
 	)
 }
 
@@ -275,6 +276,11 @@ func settingsPreferencesPane(p settingsRightProps) uic.Node {
 			Attr("data-testid", "idle-cash-benchmark"), Attr("aria-label", uistate.T("settings.idleCashBenchmarkLabel")),
 			Value(idleCashBenchmarkDisplay(p.Pr.IdleCashBenchmarkAPR)), OnInput(p.OnIdleCashBenchmarkAPR)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.idleCashBenchmarkHint")),
+		// Transactions behavior: how many payee→category corrections must accumulate
+		// before Quick-Add offers a suggestion. Moved here from Alerts (#3) — it's a
+		// transactions preference, not an alert.
+		ui.Divider(),
+		uic.CreateElement(learnThresholdRow),
 	)
 }
 
