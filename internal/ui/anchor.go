@@ -148,9 +148,14 @@ func AnchorPopover(isOpen bool, wrapID string) {
 			}
 			cl := menu.Get("classList")
 			// Reset to the natural side first so the rect we measure is the default
-			// position, then flip only the edges that actually overflow.
+			// position, then flip only the edges that actually overflow. The height
+			// clamp from a previous pass is cleared too — measuring a clamped menu
+			// would under-report its natural height and mis-decide the flip.
 			cl.Call("remove", "open-left")
 			cl.Call("remove", "open-up")
+			st := menu.Get("style")
+			st.Set("maxHeight", "")
+			st.Set("overflowY", "")
 			r := menu.Call("getBoundingClientRect")
 			vw := win.Get("innerWidth").Float()
 			vh := win.Get("innerHeight").Float()
@@ -159,6 +164,19 @@ func AnchorPopover(isOpen bool, wrapID string) {
 			}
 			if r.Get("bottom").Float() > vh-margin {
 				cl.Call("add", "open-up")
+			}
+			// Clamp a menu taller than its chosen side to that side's space, so a
+			// large panel (e.g. the Budget-settings popover, UI/UX task #6) scrolls
+			// internally instead of spilling past the viewport edge on short
+			// windows. Fits-either-way menus are untouched.
+			wr := w.Call("getBoundingClientRect")
+			avail := vh - wr.Get("bottom").Float() - margin - 6
+			if cl.Call("contains", "open-up").Bool() {
+				avail = wr.Get("top").Float() - margin - 6
+			}
+			if r.Get("height").Float() > avail && avail > 80 {
+				st.Set("maxHeight", fmt.Sprintf("%.0fpx", avail))
+				st.Set("overflowY", "auto")
 			}
 			return nil
 		})

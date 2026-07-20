@@ -106,9 +106,15 @@ func MoreMenu(props moreMenuProps) uic.Node {
 			// the Smart engine pass keeps running. Each self-hides when it has nothing
 			// to show. (The music toggle moved BACK inline to tb-actions — un/mute is a
 			// one-click reflex action; see TopBar.)
-			Div(css.Class("tb-more-quick", tw.Flex, tw.ItemsCenter, tw.FlexWrap, tw.Gap25),
-				uic.CreateElement(UpdatedStamp),
-				screens.SmartPeekForPath(props.ActivePath),
+			// A caption names the cluster (UI/UX task #25): inside a menu of labeled
+			// rows, the bare stamp + insights chip read as unlabeled icon soup.
+			Div(css.Class("tb-more-quick-wrap"),
+				Span(css.Class("tb-more-quick-label", "t-caption"), Attr("aria-hidden", "true"),
+					uistate.T("topbar.quickClusterLabel")),
+				Div(css.Class("tb-more-quick", tw.Flex, tw.ItemsCenter, tw.FlexWrap, tw.Gap25),
+					uic.CreateElement(UpdatedStamp),
+					screens.SmartPeekForPath(props.ActivePath),
+				),
 			),
 			// Settings leads the menu — the global panel's single entry point now
 			// that the rail's household card no longer opens it.

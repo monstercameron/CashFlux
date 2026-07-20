@@ -715,7 +715,7 @@ func Sidebar(props sidebarProps) uic.Node {
 		// Cloud-sync status chip by the workspace switcher (§7.11) — invisible until
 		// Cloud sync is in use; shows synced/syncing/offline/conflict/error + queue.
 		uic.CreateElement(SyncChip),
-		Nav(css.Class(tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
+		Nav(css.Class("rail-nav", tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			// The single shared active-page indicator (motion spec §4). Positioned
 			// absolutely by positionRailIndicator(); CSS slides top/height between
 			// items over the standard token. Decorative — aria-current on the item
@@ -1149,11 +1149,16 @@ func NotifyBell() uic.Node {
 	// Notification Center), so the badge matches what the user actually sees when
 	// they open it — previously a snoozed-but-unread item inflated the badge.
 	visible := uistate.VisibleFeed(feed, time.Now().Unix())
-	fresh := len(uistate.NewSinceLastSeen(visible, lastSeen))
+	// The badge advertises only the "Needs you" bucket (UI/UX task #24): it
+	// counted the WHOLE feed (17) while the page lands on the Needs-you tab
+	// (14), so the number clicked never matched the number arrived at. Calm
+	// Watching material no longer inflates the bell.
+	needsYou, _ := uistate.PartitionTriage(visible)
+	fresh := len(uistate.NewSinceLastSeen(needsYou, lastSeen))
 	if lastSeen == 0 {
 		// First-ever open: everything is "new"; fall back to unread so a fresh
 		// install still advertises the seeded feed sensibly.
-		fresh = uistate.UnreadNotifyCount(visible)
+		fresh = uistate.UnreadNotifyCount(needsYou)
 	}
 	nav := router.UseNavigate()
 	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/notifications")) })

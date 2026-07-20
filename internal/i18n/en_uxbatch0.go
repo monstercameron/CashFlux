@@ -14,6 +14,9 @@ var uxBatch0Keys = Catalog{
 	// Ellipsis discipline (task #30): the split editor needs further input, so
 	// its opener carries the "…" like its kebab siblings. Overrides en.go.
 	"splitEditor.toggle": "Split into categories…",
+	// Caption over the ⋯ menu's relocated activity-stamp + smart-peek cluster
+	// (task #25) — without it the pair read as unlabeled icon soup.
+	"topbar.quickClusterLabel": "Activity & insights",
 }
 
 func init() {
