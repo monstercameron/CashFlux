@@ -422,10 +422,6 @@ func registerGoalsSurface() {
 	rule(".goal-legend-note",
 		color("var(--text-dim)"),
 	)
-	rule(".goal-legend-note::before",
-		prop("content", "\"—\""),
-		marginRight("0.4rem"),
-	)
 
 	// G8: the one-click quick-fund chip under the card's bar — accent-tinted (it's the
 	// primary planning gesture made instant), compact, self-explaining.

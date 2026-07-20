@@ -45,6 +45,11 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 	smartSettings := uistate.LoadSmartSettings()
 
 	saved := v.SavedTotal
+	setAside := v.SetAsideMin
+	// "Funded so far" is the money working toward goals — saved contributions PLUS
+	// reserved set-asides — with the split shown below so it never contradicts the
+	// per-card saved/set-aside legend (#5).
+	funded := money.New(saved.Amount+setAside.Amount, v.Base)
 	target := v.TargetTotal
 	left := money.New(target.Amount-saved.Amount, v.Base)
 	if left.Amount < 0 {
@@ -67,8 +72,12 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 			Attr("style", fmt.Sprintf("width:%d%%", fillW))),
 		Div(css.Class("budget-loader-figs"),
 			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), uistate.T("goals.savedSoFar")),
-				Div(css.Class("budget-loader-value pos"), fmtMoney(saved)),
+				Div(css.Class("budget-loader-label"), uistate.T("goals.fundedSoFar")),
+				Div(css.Class("budget-loader-value pos"), Attr("data-testid", "goal-summary-funded"), fmtMoney(funded)),
+				// Split the headline into its parts so it reconciles with each card's
+				// saved-vs-set-aside legend (#5).
+				Div(css.Class("budget-loader-sub", tw.TextFaint, tw.Text12), Attr("data-testid", "goal-summary-split"),
+					uistate.T("goals.fundedSplit", fmtMoney(saved), fmtMoney(setAside))),
 			),
 			Div(css.Class("budget-loader-fig"),
 				Div(css.Class("budget-loader-label"), uistate.T("goals.totalTarget")),

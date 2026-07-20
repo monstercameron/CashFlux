@@ -36,7 +36,8 @@ type goalView struct {
 	Missed      []domain.Goal // dated goals whose deadline passed unreached (Classify=missed); longest-missed first
 	Fund        []domain.Goal // sinking funds; alphabetical
 	Achieved    []domain.Goal // archived; alphabetical
-	SavedTotal  money.Money   // Σ saved across active goals (base currency)
+	SavedTotal  money.Money   // Σ saved contributions across active goals (base currency)
+	SetAsideMin money.Money   // Σ reserved set-asides (earmarks) across active goals (base currency)
 	TargetTotal money.Money   // Σ target across active goals (base currency)
 	OverallPct  int           // combined saved/target percent across active goals
 	// Health is the shared pace verdict per goal id (On track / Watch / At risk) plus
@@ -99,6 +100,23 @@ func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
 	inFlight := append(append([]domain.Goal(nil), v.Active...), v.Missed...)
 	v.SavedTotal, v.TargetTotal = goalsvc.Totals(inFlight, rates, base, false)
 	v.OverallPct, _ = goalsvc.OverallProgress(inFlight, false)
+	// Set-aside (earmark) money is reserved, not contributed, so it lives in its
+	// own figure. Allocations are stored in each goal's target currency; convert to
+	// base so the split matches the saved/target headline (GL summary honesty, #5).
+	var setAside int64
+	for _, g := range inFlight {
+		am := g.AllocatedMinor()
+		if am == 0 {
+			continue
+		}
+		m := money.New(am, g.TargetAmount.Currency)
+		if c, err := rates.Convert(m, base); err == nil {
+			setAside += c.Amount
+		} else {
+			setAside += am
+		}
+	}
+	v.SetAsideMin = money.New(setAside, base)
 	v.Health = computeGoalHealth(app, v.All, base, rates, now)
 	return v
 }
