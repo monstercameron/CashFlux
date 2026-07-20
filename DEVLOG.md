@@ -1,3 +1,56 @@
+## 2026-07-20 — Bills & Recurring: the coverage catches up with the surface
+
+The redesign landed and the tests did not follow it. Six regression tests and one standalone script
+still drove /bills and /subscriptions as separate pages, and the surface's own behaviors — the ones
+the last few commits were specifically about — had no test at all. This is the pass that fixes both
+halves.
+
+**What the old tests were really asserting.** The temptation with six red tests aimed at a deleted UI
+is to delete them, and it would have been wrong: none of them was a bad test. "A liability and its
+recurring flow are not double-counted" was pinning a genuine money invariant; it just happened to
+measure it by counting a name's occurrences in the page text, which the merged surface legitimately
+shows twice (once in the agenda, once in the roster). So the assertion moved to what the invariant
+actually says now — one row per due date, plus the anchor chip proving the fold kept the liability's
+identity — and the old site carries a note saying where it went and why. Same for the other five.
+
+**Where the clock had to move.** Three behaviors — the overdue strip, the calendar's missed state, and
+the settle-a-scheduled-charge flow — only EXIST once a seeded due date has gone by, and the suite pins
+FIXED_NOW at 2026-07-01, before all of them. The options were to assert nothing, to hardcode against
+the drifting real clock, or to pin a second instant. `fixtures.mjs` gained `bootAt(page, iso)` and
+those tests boot at 2026-07-22 and say why. The payoff is real: at that instant the strip says "3
+items overdue · $127.00" and the calendar's missed set is exactly those three, which is the trust
+invariant the shared `rhySettled` predicate was written for, and it is now pinned rather than argued
+about.
+
+**Where the seed could not reach.** The dataset yields three Smart candidates — under one page — so
+the paging contract (and specifically "confirm/reject must not bounce you to page 1", the regression
+this was written to guard) could not be exercised on the Smart lane at all. Rather than fake it, the
+paging tests drive the Smart+ lane, which runs through the same `pagination.Clamp`/`Bounds` code path
+with 54 leftovers: reject on page 2, stay on page 2; empty the last page, fall back exactly one. The
+lane needs a key to open, so the test configures one and blocks the model call — which is honest,
+because the lane re-scores every row locally regardless of what the model says.
+
+**Four things the redesign quietly dropped.** Writing the migration surfaced capabilities that went
+missing rather than changed, now RH1-RH4 in TODOS: the budget-fit chip is a `<span>` and no longer
+drills into the budget it names; `recurVarianceText` and `recurOccurrence.Variance` are still computed
+and have no reader, so the "ran $2.00 over" statement after an auto-matched payment is gone;
+`/subscriptions` lands on an empty roster because `rosterClass` treats any funding account as
+"account-tied", and every seeded flow has one; a transaction-to-subscription link still saves but has nowhere on the surface to
+show itself; and "Negotiate" creates a to-do with no talking points, having dropped the composer seed
+that carried the haggling script. Three of them (RH1, RH3, RH5) are kept as expected-to-fail tests
+instead of being deleted or softened, so they stay visible and go red the day each is fixed.
+
+The RH3 one is worth the paragraph. `/subscriptions` landing on "Nothing here yet." looked like a
+broken deep link, and the tempting read was that the lens preselect had stopped applying. It has not —
+the button carries `aria-pressed="true"`. What is broken is the bucket: `rosterClass` asks whether the
+flow has an `AccountID`, but that field is the FUNDING account the occurrence posts into, not the
+liability the payment settles, and every real flow has one. So "account-tied" swallowed the whole
+roster. Cam settled the model rather than have it guessed: Bills is liability-anchored (the agenda
+already computes exactly this as `bills.Bill.AnchorAccountID`), Subscriptions is a genuine lens over
+free-floating subscription-ish commitments rather than the complement, and anything that is neither —
+HOA dues, property tax, insurance — shows under All only. Lenses are filters, not a partition, which
+is what keeps the Subscriptions subtotal from becoming a number about a catch-all.
+
 ## 2026-07-20 — Bills & Recurring: five honesty fixes on the new surface
 
 The unified surface shipped, then got looked at properly. Five things it was doing wrong, all of the
