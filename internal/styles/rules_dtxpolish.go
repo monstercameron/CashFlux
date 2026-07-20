@@ -64,4 +64,9 @@ func registerDtxPolish() {
 	rule(".txn-onepage .std-pager",
 		display("none"),
 	)
+
+	// The condensed middle ledger tier (2026-07-19 review, lane E #1) is chained
+	// here so it layers after the base design system with the same last-registered
+	// priority the rest of this pass relies on.
+	registerTxnCondensedLedger()
 }
