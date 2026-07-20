@@ -1,3 +1,54 @@
+## 2026-07-20 — Bills & Recurring redesign: the engine layer (recurdiscover + runway pinch)
+
+Built the pure-logic foundation for the from-scratch Bills & Recurring surface, bottom-up and
+UI-free, so a later agent can render on top of tested services. Four commits: domain `Paused`
+flag, `recurdiscover` signature clustering, `recurdiscover` rhythm+cost+confidence+orchestration,
+and the `runway.Tideline` pinch helper.
+
+The core is a new deterministic discovery engine, `internal/recurdiscover`, that turns a stream of
+resolved-payee transactions into evidence-carrying candidates with no network/AI call:
+
+- **Signature quarantine + clustering.** Per-transaction reference noise (mixed letter+digit tokens,
+  six-plus-digit runs, vowelless high-entropy runs) collapses to a single `#`, so rotating order/auth
+  ids fold into one signature; clustering is exact-or-fuzzy (0.90 token-set, Levenshtein per token)
+  within the hard keys of account+direction, with an 8-char length floor (so "UBER" never fuzzes into
+  "UBER EATS"), a canonical most-common signature, chronological insertion-order-independent
+  processing, and never/force-merge pins.
+- **Rhythm** telling the two look-alikes apart was the interesting part: biweekly vs semi-monthly and
+  every-4-weeks vs monthly can't be separated on gap alone, so the tie-break is day-of-month *shape* —
+  a constant 14-day gap whose anchor precesses the month is biweekly; two fixed anchor days is
+  semi-monthly; a 28-day gap whose day-of-month drifts earlier is every-4-weeks; a stable day-of-month
+  is monthly. Anchor day + posting window fall out of the same DOM analysis ("posts by the 11th").
+- **Cost** models fixed/banded/stepped, and the key discipline is that a *temporal* level shift is
+  ONE candidate with a creep signal (never split), while two *interleaved* price levels at one
+  signature are two concurrent subscriptions (split into two). Incoherent amounts (Venmo) are rejected
+  outright — no rhythm+cost coherence, no candidate.
+- **Confidence** = rhythm fit × cost stability × count × liveness → Likely/NeedsReview/Silent, with a
+  stopped pattern forced to Silent and inbound stable flows flagged as income (the paycheck the pinch
+  needs). Dedupe runs before proposing: a cluster matching an existing commitment becomes its cycles,
+  and the clean-name↔noisy-signature bridge is a "core signature" compare that drops `#` tokens.
+
+Decisions worth remembering:
+- **Did not add every-4-weeks / semiannual to the domain cadence enum.** They're detected honestly
+  inside recurdiscover, but the domain enum feeds ~24 files of exhaustive switches + i18n label sites +
+  the engineenv variable-surface lock, so adding values there is not "cheap" per the spec's guard.
+  Instead `DomainCadence` maps them to the nearest persistable cadence by inter-arrival gap
+  (every-4-weeks→monthly, semiannual→quarterly) and the true rhythm stays on `Evidence.Cadence` for the
+  confirm flow to surface. Flagged for the UI/state agent: semiannual→quarterly doubles the
+  monthly-equivalent, so a confirm should prefer showing the detected rhythm; adding the enum values is
+  the proper long-term fix.
+- **`domain.Recurring.Paused`** is additive only (json omitempty, plain-struct store path, no
+  migration) with an `Active()` predicate; the pause verb + schedule filtering are UI/state work.
+- **`runway.Tideline`** reuses `Project`/`Events` rather than forking the projection: it sizes the
+  window to the next income event (14–45d, 30d fallback) and reads the pinch straight off the
+  projection's min tracking, so the hero and the forecast can never disagree.
+
+Everything is native table-tested (hash rotation, fuzzy join + short-string guard, pins,
+biweekly/semi-monthly, 4-weekly/monthly, stepped creep, two-cluster split, Venmo rejection, paycheck,
+dedupe-to-cycles, determinism under shuffle, death, verify, pinch degradation + negative). Note: the
+pre-existing `internal/server` wasm build break (grpctunnel API) is unrelated and untouched — it isn't
+in the app's wasm target, which builds clean.
+
 ## 2026-07-20 — v1.2.8: black-box UI/UX refinement loop (4 sequential fix batches)
 
 Ran a review→fix→re-verify loop over the first nine pages, driven entirely black-box through the

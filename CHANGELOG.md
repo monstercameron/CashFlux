@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`runway.Tideline` — pay-cycle pinch/cushion helper for the Bills & Recurring hero.** Given the
+  liquid balance, recurring flows, now, and rates, it sizes the pay-cycle window (now → next income
+  event, floored to 14 days, capped at 45, degrading to a 30-day look-ahead when no income is
+  scheduled), projects the running cushion over that window through the shared Project/Events math
+  (no forked projection), and returns the pinch — the lowest cushion amount, its date, and whether
+  it goes negative. Table-tested including the no-income degradation and negative-pinch cases.
 - **`internal/recurdiscover` stages 2–4 + orchestration — rhythm, cost, confidence, dedupe, death,
   re-verify.** The discovery engine now turns signature clusters into evidence-carrying candidates.
   Rhythm detection scores inter-arrival gaps against eight candidate cadences (weekly … annual) and
