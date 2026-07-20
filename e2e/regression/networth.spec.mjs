@@ -223,3 +223,119 @@ test("both signature graphics render in both themes with no horizontal overflow"
   await setTheme(app, "dark");
   await app.setViewportSize({ width: 1440, height: 900 });
 });
+
+test("Two sides measures the gap, and its endpoints match the history", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  // The graphic's subject is the GAP, so it states the gap at both ends rather
+  // than leaving the reader to eyeball a wedge.
+  const ends = app.locator('[data-testid="nws-gap-ends"] .nws-gap-value');
+  await expect(ends).toHaveCount(2);
+  const gapWas = money(await ends.nth(0).innerText());
+  const gapNow = money(await ends.nth(1).innerText());
+  expect(gapWas).not.toBeNull();
+  expect(gapNow).not.toBeNull();
+
+  // A truncated axis is disclosed in words, the same rule the bridge follows.
+  await expect(app.locator('[data-testid="nws-sides-floor"]')).toBeVisible();
+
+  // Composition is carried by the strips, at exact figures, normalized within
+  // each side — so a $304k holding cannot flatten the other side's bars.
+  await expect(app.locator('[data-testid="nws-strip"]')).toHaveCount(2);
+
+  // The endpoints must equal the first and last net worth in the history table:
+  // the chart and the figures behind it are the same numbers.
+  await detail(app);
+  const rows = app.locator('[data-testid="nws-history-row"]');
+  const n = await rows.count();
+  expect(n).toBeGreaterThanOrEqual(2);
+  expect(money(await rows.nth(0).locator("td").nth(3).innerText())).toBe(gapWas);
+  expect(money(await rows.nth(n - 1).locator("td").nth(3).innerText())).toBe(gapNow);
+
+  // And the gap's growth must equal the bridge's total movement, or the two
+  // signature graphics would be telling different stories about one window.
+  const start = money(await app.locator('[data-testid="nws-leg-row"][data-leg="start"] td').last().innerText());
+  const end = money(await app.locator('[data-testid="nws-detail-bridge-end"]').innerText());
+  expect(gapNow - gapWas).toBe(end - start);
+});
+
+test("Two sides is readable without prior knowledge: axes, region names, values", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  // A dollar axis with real values, including the floor it was scaled to — a
+  // chart that starts somewhere other than zero must say where, ON the scale.
+  const yticks = app.locator('[data-testid="nws-yaxis"] .nws-ytick');
+  expect(await yticks.count()).toBeGreaterThanOrEqual(3);
+  for (const t of await yticks.allInnerTexts()) {
+    expect(t.trim(), "every y tick carries a currency value").toMatch(/[$€£¥]/);
+  }
+  await expect(app.locator('[data-testid="nws-yaxis"] .nws-ytick.is-floor')).toHaveCount(1);
+
+  // A dated x axis with more than just its two ends.
+  const xticks = app.locator('[data-testid="nws-xaxis"] .nws-xtick');
+  expect(await xticks.count()).toBeGreaterThanOrEqual(3);
+
+  // The two halves are NAMED where they sit, each with its current figure, and
+  // the net worth is called out between them.
+  const annos = app.locator('[data-testid="nws-annos"] .nws-anno');
+  await expect(annos).toHaveCount(3);
+  const text = (await annos.allInnerTexts()).join(" | ");
+  expect(text).toMatch(/own/i);
+  expect(text).toMatch(/owe/i);
+  expect(text).toMatch(/net worth/i);
+
+  // The in-chart figures must be the same numbers the hero prints, or the
+  // labels would be decoration rather than a reading of the chart.
+  const heroAssets = money(await app.locator('[data-testid="nws-assets"]').innerText());
+  const heroLiab = money(await app.locator('[data-testid="nws-liabilities"]').innerText());
+  const heroNet = money(await app.locator('[data-testid="nw-hero-value"]').innerText());
+  const annoVals = await annos.locator(".nws-anno-value").allInnerTexts();
+  expect(annoVals.map(money)).toEqual([heroAssets, heroNet, heroLiab]);
+
+  // The labels must not collide even when the two boundaries run close.
+  const tops = await annos.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+  for (let i = 1; i < tops.length; i++) {
+    expect(tops[i] - tops[i - 1], "in-chart labels must stay legibly apart").toBeGreaterThan(20);
+  }
+});
+
+test("both signature graphics carry a keyboard-reachable ? explainer in plain language", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  for (const id of ["nws-explain-bridge", "nws-explain-sides"]) {
+    const btn = app.locator(`[data-testid="${id}-btn"]`);
+    const pop = app.locator(`[data-testid="${id}-pop"]`);
+    await expect(btn).toBeVisible();
+    // Labelled for assistive tech, and announced as opening a dialog.
+    await expect(btn).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(btn).toHaveAttribute("aria-expanded", "false");
+    expect((await btn.getAttribute("aria-label"))?.length ?? 0).toBeGreaterThan(5);
+
+    // Reachable and operable from the keyboard alone.
+    await btn.focus();
+    await expect(btn).toBeFocused();
+    await app.keyboard.press("Enter");
+    await expect(btn).toHaveAttribute("aria-expanded", "true");
+    await expect(pop).toBeVisible();
+
+    // Plain language, and enough of it to actually teach the picture.
+    const body = await pop.innerText();
+    expect(body.length, `${id} must explain the picture`).toBeGreaterThan(120);
+    // It explains what you SEE, not how it is computed.
+    expect(body).not.toMatch(/residual|minor units|attribution|engine|algorithm/i);
+
+    // Escape closes it, per the app's popover convention.
+    await app.keyboard.press("Escape");
+    await expect(btn).toHaveAttribute("aria-expanded", "false");
+  }
+
+  // The Two sides explainer must actually say the thing a layman needs.
+  await app.locator('[data-testid="nws-explain-sides-btn"]').click();
+  const sides = (await app.locator('[data-testid="nws-explain-sides-pop"]').innerText()).toLowerCase();
+  expect(sides).toContain("own");
+  expect(sides).toContain("owe");
+  expect(sides).toContain("net worth");
+});

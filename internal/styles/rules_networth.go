@@ -41,7 +41,7 @@ func registerNwsShell() {
 	rule(".nws",
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
-		prop("gap", "1.15rem"),
+		prop("gap", "0.7rem"),
 		prop("width", "100%"),
 	)
 	// A deferred section's position holder: display:contents costs no box and no
@@ -57,7 +57,7 @@ func registerNwsShell() {
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--border)"),
 		prop("border-radius", "var(--radius-xl)"),
-		prop("padding", "1.1rem 1.15rem"),
+		prop("padding", "0.75rem 1.1rem"),
 		prop("box-shadow", "0 1px 1px rgba(0,0,0,0.20), 0 10px 26px -18px rgba(0,0,0,0.55),"+
 			" inset 0 1px 0 rgba(255,255,255,0.035)"),
 	)
@@ -81,7 +81,7 @@ func registerNwsShell() {
 		prop("justify-content", "space-between"),
 		prop("gap", "0.75rem"),
 		prop("flex-wrap", "wrap"),
-		prop("margin-bottom", "0.6rem"),
+		prop("margin-bottom", "0.35rem"),
 	)
 	// Verbatim the app's shared section-title garnish (the `.card-title` /
 	// `.rhy-sec-title` treatment): sans, 16px, 600, -0.01em, 1.35 leading.
@@ -95,7 +95,7 @@ func registerNwsShell() {
 	rule(".nws-sec-note",
 		prop("color", "var(--text-dim)"),
 		prop("font-size", "var(--type-13)"),
-		prop("margin", "0 0 0.7rem"),
+		prop("margin", "0 0 0.5rem"),
 	)
 
 	// ── Glance | Detail toggle: the same segmented affordance the Reports
@@ -155,7 +155,7 @@ func registerNwsHero() {
 		prop("margin", "0 0 0.25rem"),
 	)
 	rule(".nws-hero-value",
-		prop("font-size", "clamp(2.4rem, 5.2vw, 3.6rem)"),
+		prop("font-size", "clamp(2.1rem, 4.4vw, 3rem)"),
 		prop("font-weight", "600"),
 		prop("line-height", "1.05"),
 		prop("letter-spacing", "-0.02em"),
@@ -169,7 +169,7 @@ func registerNwsHero() {
 		prop("display", "inline-flex"),
 		prop("align-items", "center"),
 		prop("gap", "0.35rem"),
-		prop("margin-top", "0.45rem"),
+		prop("margin-top", "0.3rem"),
 		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("color", "var(--text-dim)"),
@@ -279,7 +279,10 @@ func registerNwsBridge() {
 	rule(".nws-bridge-svg",
 		prop("display", "block"),
 		prop("width", "100%"),
-		prop("height", "210px"),
+		// 190px is the floor that keeps a small leg visible as a bar without
+		// crowding the label grid beneath it; the labels are the graphic's
+		// authority and are never compressed to buy height.
+		prop("height", "170px"),
 		prop("overflow", "visible"),
 	)
 	rule(".nws-bar-up",
@@ -386,46 +389,257 @@ func registerNwsBridge() {
 	)
 }
 
-// registerNwsSides emits signature graphic #2: the mirrored composition chart.
+// registerNwsSides emits signature graphic #2: the gap between the two
+// boundaries, plus the composition strips that carry "what shape" now that the
+// chart carries only "how it moved".
 func registerNwsSides() {
+	// Chart and strips are two panels of one section: "how it moved" beside
+	// "what shape it is". Side by side they cost one panel's height instead of
+	// two, which is what keeps the whole Glance view inside a single screen.
 	rule(".nws-sides",
+		prop("display", "grid"),
+		prop("grid-template-columns", "minmax(0, 1.85fr) minmax(15rem, 1fr)"),
+		prop("gap", "0.6rem 1.5rem"),
+		prop("align-items", "start"),
+		prop("min-width", "0"),
+	)
+	// The plot is a positioned frame: the SVG draws the shapes, and every WORD on
+	// the graphic is real HTML laid over it at an exact computed percentage. That
+	// keeps type crisp under the stretched viewBox, keeps it themeable and
+	// selectable, and puts the axis and region names in the accessibility tree —
+	// the same reasoning THE BRIDGE's label grid follows.
+	rule(".nws-plot",
+		prop("position", "relative"),
+		prop("padding-left", "3.4rem"),
+	)
+	rule(".nws-yaxis",
+		prop("position", "absolute"),
+		prop("inset", "0 auto 0 0"),
+		prop("width", "3.1rem"),
+	)
+	rule(".nws-ytick",
+		prop("position", "absolute"),
+		prop("right", "0"),
+		prop("transform", "translateY(-50%)"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("color", "var(--text-dim)"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("white-space", "nowrap"),
+	)
+	// The floor tick is the scale's starting point rather than a gridline, so it
+	// is toned back — present and readable, but not competing with the round
+	// values above it.
+	rule(".nws-ytick.is-floor",
+		prop("opacity", "0.7"),
+		prop("font-style", "italic"),
+	)
+	rule(".nws-grid",
+		prop("stroke", "var(--border)"),
+		prop("stroke-width", "1"),
+		prop("stroke-dasharray", "3 4"),
+	)
+	// The two halves NAMED where they sit, so the reader never decodes which is
+	// which from a caption.
+	rule(".nws-annos",
+		prop("position", "absolute"),
+		prop("inset", "0 0 0 3.4rem"),
+		prop("pointer-events", "none"),
+	)
+	rule(".nws-anno",
+		prop("position", "absolute"),
+		prop("right", "0.4rem"),
+		prop("transform", "translateY(-50%)"),
 		prop("display", "flex"),
 		prop("flex-direction", "column"),
-		prop("gap", "0.6rem"),
+		prop("align-items", "flex-end"),
+		prop("gap", "0.02rem"),
+		prop("padding", "0.15rem 0.4rem"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "color-mix(in srgb, var(--bg-card) 86%, transparent)"),
+		prop("line-height", "1.2"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".nws-anno-label",
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".nws-anno-value",
+		prop("font-size", "var(--type-13)"),
+		prop("font-weight", "600"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".nws-anno.is-assets .nws-anno-value",
+		prop("color", "var(--accent)"),
+	)
+	rule(".nws-anno.is-gap",
+		prop("border", "1px solid var(--border)"),
+	)
+	rule(".nws-xaxis",
+		prop("display", "flex"),
+		prop("justify-content", "space-between"),
+		prop("padding-left", "3.4rem"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".nws-xtick",
+		prop("flex", "1 1 0"),
+		prop("text-align", "center"),
+		prop("min-width", "0"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+	)
+	rule(".nws-xtick:first-child",
+		prop("text-align", "left"),
+	)
+	rule(".nws-xtick:last-child",
+		prop("text-align", "right"),
+	)
+
+	// ── The "?" explainer, matching the number-provenance affordance the Annual
+	// Review masthead figures already use.
+	rule(".nws-explain",
+		prop("display", "inline-flex"),
+		prop("position", "relative"),
+	)
+	rule(".nws-explain-btn",
+		prop("appearance", "none"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("justify-content", "center"),
+		prop("width", "1.3rem"),
+		prop("height", "1.3rem"),
+		prop("padding", "0"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "999px"),
+		prop("background", "var(--bg)"),
+		prop("color", "var(--text-dim)"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("font-weight", "600"),
+		prop("line-height", "1"),
+		prop("cursor", "pointer"),
+	)
+	rule(".nws-explain-btn:hover",
+		prop("color", "var(--text)"),
+		prop("border-color", "var(--text-dim)"),
+	)
+	rule(".nws-explain-pop",
+		prop("width", "min(23rem, 78vw)"),
+		prop("padding", "0.75rem 0.85rem"),
+		prop("white-space", "normal"),
+	)
+	rule(".nws-explain-title",
+		prop("font-weight", "600"),
+		prop("margin-bottom", "0.35rem"),
+	)
+	rule(".nws-explain-line",
+		prop("margin", "0 0 0.45rem"),
+		prop("font-size", "var(--type-13)"),
+		prop("line-height", "1.5"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".nws-explain-line:last-child",
+		prop("margin-bottom", "0"),
+	)
+	rule(".nws-sides-plot",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.4rem"),
 		prop("min-width", "0"),
 	)
 	rule(".nws-sides-svg",
 		prop("display", "block"),
 		prop("width", "100%"),
-		prop("height", "280px"),
+		prop("height", "158px"),
 		prop("overflow", "visible"),
 	)
-	// Asset bands: one hue (the theme accent) stepped by alpha, most liquid the
-	// most solid — so composition reads as ONE side, not four unrelated series.
-	rule(".nws-band-a0", prop("fill", "var(--accent)"), prop("opacity", "0.92"))
-	rule(".nws-band-a1", prop("fill", "var(--accent)"), prop("opacity", "0.66"))
-	rule(".nws-band-a2", prop("fill", "var(--accent)"), prop("opacity", "0.42"))
-	rule(".nws-band-a3", prop("fill", "var(--accent)"), prop("opacity", "0.24"))
-	// Liability bands: neutral, stepped the same way. Structural, not alarming.
-	rule(".nws-band-l0", prop("fill", "var(--text)"), prop("opacity", "0.42"))
-	rule(".nws-band-l1", prop("fill", "var(--text)"), prop("opacity", "0.28"))
-	rule(".nws-band-l2", prop("fill", "var(--text)"), prop("opacity", "0.16"))
-	rule(".nws-sides-net",
-		prop("fill", "none"),
-		prop("stroke", "var(--text)"),
-		prop("stroke-width", "2"),
+	// The gap IS the net worth, so it is the only filled region on the chart —
+	// and it is toned by MEANING: the accent while you own more than you owe,
+	// the danger colour only if the two boundaries cross.
+	rule(".nws-gap",
+		prop("fill", "var(--accent)"),
+		prop("opacity", "0.21"),
+	)
+	rule(".nws-gap.is-underwater",
+		prop("fill", "var(--danger)"),
+		prop("opacity", "0.22"),
+	)
+	rule(".nws-line-assets",
+		prop("stroke", "var(--accent)"),
+		prop("stroke-width", "2.5"),
 		prop("stroke-linejoin", "round"),
 		prop("stroke-linecap", "round"),
 	)
-	rule(".nws-sides-zero",
-		prop("stroke", "var(--border)"),
-		prop("stroke-width", "1"),
+	rule(".nws-line-liab",
+		prop("stroke", "var(--text)"),
+		prop("stroke-width", "2"),
+		prop("opacity", "0.68"),
+		prop("stroke-linejoin", "round"),
+		prop("stroke-linecap", "round"),
 	)
-	rule(".nws-sides-legend",
+	// The gap MEASURED at both ends: even where the wedge is subtle, the story
+	// still arrives as two figures the reader can subtract.
+	rule(".nws-sides-ends",
+		prop("display", "flex"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+		prop("padding-left", "3.4rem"),
+	)
+	rule(".nws-gap-value",
+		prop("font-size", "var(--type-13)"),
+		prop("font-weight", "600"),
+		prop("letter-spacing", "-0.01em"),
+	)
+
+	// ── Composition strips: what each side is made of, now.
+	rule(".nws-strips",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.85rem"),
+		prop("min-width", "0"),
+	)
+	rule(".nws-strip",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.35rem"),
+		prop("min-width", "0"),
+	)
+	rule(".nws-strip-head",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.4rem"),
+		prop("font-size", "var(--type-13)"),
+	)
+	rule(".nws-strip-swatch",
+		prop("width", "0.55rem"),
+		prop("height", "0.55rem"),
+		prop("border-radius", "2px"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".nws-strip-title",
+		prop("font-weight", "600"),
+	)
+	rule(".nws-strip-total",
+		prop("margin-left", "auto"),
+		prop("color", "var(--text-dim)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	// One bar, segments sized by their share of THEIR OWN side.
+	rule(".nws-strip-bar",
+		prop("display", "flex"),
+		prop("height", "0.6rem"),
+		prop("border-radius", "999px"),
+		prop("overflow", "hidden"),
+		prop("background", "var(--border)"),
+	)
+	rule(".nws-strip-seg",
+		prop("height", "100%"),
+		prop("min-width", "2px"),
+	)
+	rule(".nws-strip-key",
 		prop("display", "flex"),
 		prop("flex-wrap", "wrap"),
-		prop("gap", "0.35rem 1rem"),
-		prop("font-size", "var(--type-13)"),
+		prop("gap", "0.15rem 0.7rem"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
 		prop("color", "var(--text-dim)"),
 	)
 	rule(".nws-legend-item",
@@ -434,27 +648,39 @@ func registerNwsSides() {
 		prop("gap", "0.35rem"),
 	)
 	rule(".nws-legend-dot",
-		prop("width", "0.6rem"),
-		prop("height", "0.6rem"),
-		prop("border-radius", "3px"),
+		prop("width", "0.55rem"),
+		prop("height", "0.55rem"),
+		prop("border-radius", "2px"),
 		prop("flex", "0 0 auto"),
 	)
-	// Legend swatches mirror the band fills exactly, one modifier per stacking
-	// position — same hue, same alpha step, so the key cannot drift from the
-	// chart it explains.
-	rule(".nws-legend-dot.is-a0", prop("background", "var(--accent)"), prop("opacity", "0.92"))
-	rule(".nws-legend-dot.is-a1", prop("background", "var(--accent)"), prop("opacity", "0.66"))
-	rule(".nws-legend-dot.is-a2", prop("background", "var(--accent)"), prop("opacity", "0.42"))
-	rule(".nws-legend-dot.is-a3", prop("background", "var(--accent)"), prop("opacity", "0.24"))
-	rule(".nws-legend-dot.is-l0", prop("background", "var(--text)"), prop("opacity", "0.42"))
-	rule(".nws-legend-dot.is-l1", prop("background", "var(--text)"), prop("opacity", "0.28"))
-	rule(".nws-legend-dot.is-l2", prop("background", "var(--text)"), prop("opacity", "0.16"))
-	rule(".nws-sides-axis",
-		prop("display", "flex"),
-		prop("justify-content", "space-between"),
-		prop("font-size", "var(--type-12, 0.75rem)"),
-		prop("color", "var(--text-dim)"),
-	)
+	// One hue per side, stepped by alpha, so a side reads as ONE thing made of
+	// parts rather than as several unrelated series. Shared by the strip
+	// segments, their key dots and the strip swatches.
+	registerNwsTones(".nws-strip-seg", ".nws-legend-dot", ".nws-strip-swatch")
+}
+
+// registerNwsTones emits the shared side/position swatch backgrounds for every
+// element that carries them, so the key, the bar and the heading can never
+// drift apart.
+func registerNwsTones(selectors ...string) {
+	steps := []struct {
+		mod   string
+		color string
+		alpha string
+	}{
+		{"is-a0", "var(--accent)", "1"},
+		{"is-a1", "var(--accent)", "0.6"},
+		{"is-a2", "var(--accent)", "0.32"},
+		{"is-a3", "var(--accent)", "0.18"},
+		{"is-l0", "var(--text)", "0.62"},
+		{"is-l1", "var(--text)", "0.36"},
+		{"is-l2", "var(--text)", "0.18"},
+	}
+	for _, sel := range selectors {
+		for _, st := range steps {
+			rule(sel+"."+st.mod, prop("background", st.color), prop("opacity", st.alpha))
+		}
+	}
 }
 
 // registerNwsDetail emits the Detail view: the numbered section chips and the
@@ -596,8 +822,20 @@ func registerNwsBreakpoints() {
 	ruleContentMax(contentGrid1, ".nws-bridge-stack",
 		prop("display", "flex"),
 	)
+	ruleContentMax(contentGrid4, ".nws-sides",
+		prop("grid-template-columns", "1fr"),
+	)
 	ruleContentMax(contentGrid1, ".nws-sides-svg",
-		prop("height", "210px"),
+		prop("height", "150px"),
+	)
+	ruleContentMax(contentGrid1, ".nws-plot",
+		prop("padding-left", "2.8rem"),
+	)
+	ruleContentMax(contentGrid1, ".nws-annos",
+		prop("inset", "0 0 0 2.8rem"),
+	)
+	ruleContentMax(contentGrid1, ".nws-xaxis, .nws-sides-ends",
+		prop("padding-left", "2.8rem"),
 	)
 	ruleContentMax(contentGrid1, ".nws-window",
 		prop("margin-left", "0"),

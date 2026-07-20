@@ -18,26 +18,30 @@ import (
 
 // TWO SIDES — signature graphic #2.
 //
-// A mirrored area chart: assets stacked UPWARD from the zero line, liabilities
-// stacked DOWNWARD, and the net-worth line running through the middle. It
-// replaces a smooth trend line that only restated the headline figure. The
-// story a household actually has is the shape of the GAP — whether it widens
-// because the top is rising or because the bottom is shrinking, and which part
-// of each side is doing it.
+// Two boundary lines — what you own on top, what you owe beneath — with the
+// space between them shaded. That space IS your net worth, so the graphic's
+// whole subject is the GAP: whether it is widening, and whether that is because
+// the top is rising or the bottom is falling.
 //
-// Both sides are drawn in ONE hue each, stepped by alpha: the theme accent for
-// what you own, a neutral for what you owe. Composition therefore reads as two
-// sides rather than seven unrelated series, and — deliberately — the liability
-// side is NOT red. A mortgage is structure, not an emergency; red stays
-// reserved for a genuinely negative net worth and alarm-band ratios.
-
-// nwsBandClass returns the fill class for a bucket at stacking position i.
-func nwsBandClass(asset bool, i int) string {
-	if asset {
-		return fmt.Sprintf("nws-band-a%d", i)
-	}
-	return fmt.Sprintf("nws-band-l%d", i)
-}
+// This is the second design. The first stacked both sides at full magnitude
+// around a zero line, and on a real household it rendered as a solid block: a
+// $304,000 property holding is 79% of the asset side and essentially constant,
+// so it set the Y scale and flattened every series that actually moves. That is
+// precisely the pathology the old page had — a chart restating a number instead
+// of showing a shape — just wearing a different form. The fix is the one THE
+// BRIDGE already uses: floor the axis to the band the data really occupies, and
+// disclose the floor in words rather than smuggling it.
+//
+// Composition did not survive that truncation (you cannot stack from zero on an
+// axis that starts at $231,000), and it should not have: a constant slab
+// carries no information in a change-over-time graphic. So "how big and what
+// shape" is separated from "how it moved" — composition moves to the strips
+// below, where each side is shown at exact figures and exact shares, now. Each
+// graphic then does one job well instead of two badly.
+//
+// Only the gap is toned, and it is toned by MEANING: the accent while you own
+// more than you owe, the danger colour only if the lines cross and the
+// household is genuinely underwater. Debt on its own is never painted as alarm.
 
 // nwsBucketLabel names a composition bucket.
 func nwsBucketLabel(b balancesheet.Bucket) string {
@@ -58,37 +62,46 @@ func nwsBucketLabel(b balancesheet.Bucket) string {
 	return uistate.T("nw.bucketMortgage")
 }
 
-// nwsSidesScale maps a signed figure into the 0..100 viewBox with the zero line
-// wherever the two sides' extents put it — the asset side gets the room it
-// needs above, the liability side the room it needs below, so neither is
-// squeezed to a sliver by the other.
-type nwsSidesScale struct{ hi, lo float64 } // hi = headroom above 0, lo = below
-
-func newNwsSidesScale(pts []balancesheet.Point) nwsSidesScale {
-	var maxA, maxL int64
-	for _, p := range pts {
-		if p.AssetsMinor > maxA {
-			maxA = p.AssetsMinor
-		}
-		if p.LiabilitiesMinor > maxL {
-			maxL = p.LiabilitiesMinor
-		}
+// nwsToneClass is the shared swatch modifier for stacking position i of a side.
+// The composition strip segments and their key dots both use it, so a key can
+// never drift from the strip it explains.
+func nwsToneClass(asset bool, i int) string {
+	if asset {
+		return fmt.Sprintf("is-a%d", i)
 	}
-	hi, lo := float64(maxA)*1.08, float64(maxL)*1.08
-	if hi <= 0 {
-		hi = 1
-	}
-	if lo <= 0 {
-		// A debt-free household still needs a sliver below the line, or the zero
-		// axis would sit flush on the floor and read as a cropped chart.
-		lo = hi * 0.08
-	}
-	return nwsSidesScale{hi: hi, lo: lo}
+	return fmt.Sprintf("is-l%d", i)
 }
 
-// y maps a signed minor amount (positive = asset side) to the viewBox.
-func (s nwsSidesScale) y(v float64) float64 {
-	span := s.hi + s.lo
+// nwsGapScale maps a figure into the 0..100 viewBox across the band the two
+// boundaries actually occupy — NOT from zero. A shared scale is what keeps the
+// gap readable as a real quantity; flooring it is what keeps the movement
+// visible at all.
+type nwsGapScale struct{ lo, hi float64 }
+
+func newNwsGapScale(pts []balancesheet.Point) nwsGapScale {
+	lo, hi := float64(pts[0].LiabilitiesMinor), float64(pts[0].AssetsMinor)
+	for _, p := range pts {
+		for _, v := range []float64{float64(p.AssetsMinor), float64(p.LiabilitiesMinor)} {
+			if v < lo {
+				lo = v
+			}
+			if v > hi {
+				hi = v
+			}
+		}
+	}
+	pad := (hi - lo) * 0.06
+	if pad <= 0 {
+		pad = absFloat(hi)*0.1 + 1
+	}
+	return nwsGapScale{lo: lo - pad, hi: hi + pad}
+}
+
+func (s nwsGapScale) y(v float64) float64 {
+	span := s.hi - s.lo
+	if span <= 0 {
+		return 50
+	}
 	return 100 * (s.hi - v) / span
 }
 
@@ -102,9 +115,18 @@ func nwsSidesX(i, n int) float64 {
 	return nwsSidesW * float64(i) / float64(n-1)
 }
 
-// nwsBandPath builds one stacked band's closed polygon: the upper cumulative
-// edge left-to-right, then the lower cumulative edge back again.
-func nwsBandPath(lower, upper []float64, s nwsSidesScale) string {
+// nwsLinePoints builds a polyline point list for one boundary.
+func nwsLinePoints(vals []int64, s nwsGapScale) string {
+	out := make([]string, 0, len(vals))
+	for i, v := range vals {
+		out = append(out, fmt.Sprintf("%.2f,%.3f", nwsSidesX(i, len(vals)), s.y(float64(v))))
+	}
+	return strings.Join(out, " ")
+}
+
+// nwsGapPath closes the region between the two boundaries: the upper edge left
+// to right, the lower edge back again.
+func nwsGapPath(upper, lower []int64, s nwsGapScale) string {
 	n := len(upper)
 	if n < 2 {
 		return ""
@@ -115,26 +137,41 @@ func nwsBandPath(lower, upper []float64, s nwsSidesScale) string {
 		if i == 0 {
 			cmd = "M"
 		}
-		fmt.Fprintf(&b, "%s%.2f %.3f ", cmd, nwsSidesX(i, n), s.y(upper[i]))
+		fmt.Fprintf(&b, "%s%.2f %.3f ", cmd, nwsSidesX(i, n), s.y(float64(upper[i])))
 	}
 	for i := n - 1; i >= 0; i-- {
-		fmt.Fprintf(&b, "L%.2f %.3f ", nwsSidesX(i, n), s.y(lower[i]))
+		fmt.Fprintf(&b, "L%.2f %.3f ", nwsSidesX(i, n), s.y(float64(lower[i])))
 	}
 	b.WriteString("Z")
 	return b.String()
 }
 
-// nwsSides renders the mirrored composition chart plus its legend, its month
-// axis, and the text equivalent beneath (every band's current figure and share
-// of its own side).
+// nwsSides renders the labelled gap chart — dollar axis, dated axis, the two
+// regions named where they sit, and the net worth called out at the right end —
+// plus the composition strips for both sides.
 func nwsSides(v nwsView) ui.Node {
 	pts := v.Points
 	if len(pts) < 2 {
 		return P(css.Class("empty"), Attr("data-testid", "nws-sides-empty"), uistate.T("nws.sidesEmpty"))
 	}
-	scale := newNwsSidesScale(pts)
-	n := len(pts)
+	scale := newNwsGapScale(pts)
+	assets := make([]int64, len(pts))
+	liabs := make([]int64, len(pts))
+	for i, p := range pts {
+		assets[i], liabs[i] = p.AssetsMinor, p.LiabilitiesMinor
+	}
+	first, last := pts[0], pts[len(pts)-1]
 
+	// The gap is toned by meaning, not by the presence of debt.
+	gapCls := "nws-gap"
+	if last.NetMinor < 0 {
+		gapCls += " is-underwater"
+	}
+
+	// Gridlines at round dollar values. The axis SHOWS the floor it was given —
+	// a truncated scale the reader can read off is honest; one they cannot is
+	// the thing charts get accused of.
+	ticks := balancesheet.AxisTicks(int64(scale.lo), int64(scale.hi), 4)
 	kids := []any{
 		css.Class("nws-sides-svg"),
 		Attr("viewBox", fmt.Sprintf("0 0 %.0f 100", nwsSidesW)),
@@ -142,120 +179,181 @@ func nwsSides(v nwsView) ui.Node {
 		Attr("role", "img"),
 		Attr("data-testid", "nws-sides-svg"),
 		Attr("aria-label", uistate.T("nws.sidesAria",
-			fmtMoney(money.New(v.Latest().AssetsMinor, v.Base)),
-			fmtMoney(money.New(v.Latest().LiabilitiesMinor, v.Base)),
-			fmtMoney(money.New(v.Latest().NetMinor, v.Base)))),
+			fmtMoney(money.New(last.AssetsMinor, v.Base)),
+			fmtMoney(money.New(last.LiabilitiesMinor, v.Base)),
+			fmtMoney(money.New(first.NetMinor, v.Base)),
+			fmtMoney(money.New(last.NetMinor, v.Base)))),
+	}
+	for _, t := range ticks {
+		y := scale.y(float64(t))
+		kids = append(kids, Line(css.Class("nws-grid"),
+			Attr("vector-effect", "non-scaling-stroke"),
+			Attr("x1", "0"), Attr("x2", fmt.Sprintf("%.0f", nwsSidesW)),
+			Attr("y1", fmt.Sprintf("%.3f", y)), Attr("y2", fmt.Sprintf("%.3f", y))))
+	}
+	kids = append(kids,
+		Path(ClassStr(gapCls), Attr("d", nwsGapPath(assets, liabs, scale))),
+		Polyline(css.Class("nws-line-assets"), Attr("fill", "none"),
+			Attr("vector-effect", "non-scaling-stroke"),
+			Attr("points", nwsLinePoints(assets, scale))),
+		Polyline(css.Class("nws-line-liab"), Attr("fill", "none"),
+			Attr("vector-effect", "non-scaling-stroke"),
+			Attr("points", nwsLinePoints(liabs, scale))),
+	)
+
+	// Y axis: the tick values as real HTML in the gutter, so they stay crisp
+	// under the stretched viewBox and are readable by assistive tech.
+	yaxis := []any{css.Class("nws-yaxis"), Attr("data-testid", "nws-yaxis"), Attr("aria-hidden", "true")}
+	for _, t := range ticks {
+		yaxis = append(yaxis, Span(css.Class("nws-ytick"),
+			Style(map[string]string{"top": fmt.Sprintf("%.3f%%", scale.y(float64(t)))}),
+			fmtMoneyCompact(money.New(t, v.Base))))
+	}
+	// The floor gets its own tick at the bottom edge. The gridlines above it are
+	// round numbers because those are what a person reads off an axis, but the
+	// scale's actual starting point must be ON the scale — a chart that begins
+	// somewhere other than zero has to say where, in the place the reader is
+	// already looking, not only in a note underneath.
+	yaxis = append(yaxis, Span(css.Class("nws-ytick", "is-floor"),
+		Style(map[string]string{"top": "100%"}),
+		fmtMoneyCompact(money.New(int64(scale.lo), v.Base))))
+
+	// The two regions NAMED where they sit, each with its current figure, and
+	// the net worth called out between them: the reader should not have to
+	// decode a caption to learn which half is which.
+	tops := nwsSpreadLabels([]float64{
+		scale.y(float64(last.AssetsMinor)),
+		(scale.y(float64(last.AssetsMinor)) + scale.y(float64(last.LiabilitiesMinor))) / 2,
+		scale.y(float64(last.LiabilitiesMinor)),
+	})
+	anno := Div(css.Class("nws-annos"), Attr("data-testid", "nws-annos"),
+		nwsAnno("is-assets", tops[0], uistate.T("nws.stripOwn"),
+			fmtMoney(money.New(last.AssetsMinor, v.Base))),
+		nwsAnno("is-gap", tops[1], uistate.T("nws.annoNet"),
+			fmtMoney(money.New(last.NetMinor, v.Base))),
+		nwsAnno("is-liab", tops[2], uistate.T("nws.stripOwe"),
+			fmtMoney(money.New(last.LiabilitiesMinor, v.Base))),
+	)
+
+	// X axis: every point dated, not just the two ends.
+	xaxis := []any{css.Class("nws-xaxis"), Attr("data-testid", "nws-xaxis")}
+	for i := range pts {
+		label := ""
+		if i < len(v.Labels) {
+			label = v.Labels[i]
+		}
+		if label == "" {
+			label = pts[i].At.Format("Jan")
+		}
+		xaxis = append(xaxis, Span(css.Class("nws-xtick"), label))
 	}
 
-	// Asset bands stack upward from zero, most liquid first (so cash sits on the
-	// line and the least spendable holdings sit furthest out).
-	cum := make([]float64, n)
-	for bi, bucket := range balancesheet.AssetBuckets {
-		lower := append([]float64(nil), cum...)
-		empty := true
-		for i, p := range pts {
-			if amt := p.Assets[bucket]; amt != 0 {
-				empty = false
-				cum[i] += float64(amt)
-			}
-		}
-		if empty {
-			continue
-		}
-		if d := nwsBandPath(lower, cum, scale); d != "" {
-			kids = append(kids, Path(css.Class(nwsBandClass(true, bi)), Attr("d", d)))
-		}
-	}
-	// Liability bands stack downward, most urgent first.
-	for i := range cum {
-		cum[i] = 0
-	}
-	for bi, bucket := range balancesheet.LiabilityBuckets {
-		lower := append([]float64(nil), cum...)
-		empty := true
-		for i, p := range pts {
-			if amt := p.Liabilities[bucket]; amt != 0 {
-				empty = false
-				cum[i] -= float64(amt)
-			}
-		}
-		if empty {
-			continue
-		}
-		if d := nwsBandPath(lower, cum, scale); d != "" {
-			kids = append(kids, Path(css.Class(nwsBandClass(false, bi)), Attr("d", d)))
-		}
-	}
+	// The gap MEASURED at both ends, so the story survives even where the wedge
+	// is subtle: this is what it was, this is what it is now.
+	ends := Div(css.Class("nws-sides-ends"), Attr("data-testid", "nws-gap-ends"),
+		Span(css.Class("nws-gap-value"), uistate.T("nws.gapWas",
+			fmtMoney(money.New(first.NetMinor, v.Base)))),
+		Span(css.Class("nws-gap-value"), uistate.T("nws.gapNow",
+			fmtMoney(money.New(last.NetMinor, v.Base)))),
+	)
 
-	// The zero line, then the net-worth line on top — the figure the page is
-	// named after runs straight through the middle of what makes it.
-	zeroY := scale.y(0)
-	kids = append(kids, Line(css.Class("nws-sides-zero"),
-		Attr("vector-effect", "non-scaling-stroke"),
-		Attr("x1", "0"), Attr("x2", fmt.Sprintf("%.0f", nwsSidesW)),
-		Attr("y1", fmt.Sprintf("%.3f", zeroY)), Attr("y2", fmt.Sprintf("%.3f", zeroY)),
-	))
-	netPts := make([]string, 0, n)
-	for i, p := range pts {
-		netPts = append(netPts, fmt.Sprintf("%.2f,%.3f", nwsSidesX(i, n), scale.y(float64(p.NetMinor))))
-	}
-	kids = append(kids, Polyline(css.Class("nws-sides-net"),
-		Attr("vector-effect", "non-scaling-stroke"),
-		Attr("points", strings.Join(netPts, " ")), Attr("fill", "none")))
-
-	// Month axis: the first caption and the last, so the window is stated without
-	// crowding the chart with ticks it does not need.
-	axis := Fragment()
-	if len(v.Labels) >= 2 {
-		axis = Div(css.Class("nws-sides-axis"),
-			Span(v.Labels[0]),
-			Span(v.Labels[len(v.Labels)-1]),
-		)
-	}
-
-	latest := v.Latest()
-	legend := []any{css.Class("nws-sides-legend"), Attr("data-testid", "nws-sides-legend")}
-	legend = append(legend, nwsLegendItems(balancesheet.AssetBuckets, latest.Assets, latest.AssetsMinor, true, v.Base)...)
-	legend = append(legend, nwsLegendItems(balancesheet.LiabilityBuckets, latest.Liabilities, latest.LiabilitiesMinor, false, v.Base)...)
-	legend = append(legend, Span(css.Class("nws-legend-item"),
-		Span(css.Class("nws-legend-dot"), Style(map[string]string{"background": "var(--text)"})),
-		Span(uistate.T("nws.legendNet"))))
-
+	// The chart answers "how it moved"; the strips answer "what shape it is".
+	// They sit SIDE BY SIDE at full width — two questions, two panels, one
+	// screen — and stack only when the pane is too narrow to hold both.
 	return Div(css.Class("nws-sides"),
-		Svg(kids...),
-		axis,
-		Div(legend...),
+		Div(css.Class("nws-sides-plot"),
+			Div(css.Class("nws-plot"),
+				Svg(kids...),
+				Div(yaxis...),
+				anno,
+			),
+			Div(xaxis...),
+			ends,
+			// A truncated axis is disclosed in words as well as shown on the
+			// scale — the same rule THE BRIDGE follows.
+			P(css.Class("nws-sec-note"), Style(map[string]string{"margin": "0"}),
+				Attr("data-testid", "nws-sides-floor"),
+				uistate.T("nws.sidesFloor", fmtMoney(money.New(int64(scale.lo), v.Base)))),
+		),
+		Div(css.Class("nws-strips"),
+			nwsStrip(true, uistate.T("nws.stripOwn"), balancesheet.AssetBuckets,
+				last.Assets, last.AssetsMinor, v.Base),
+			nwsStrip(false, uistate.T("nws.stripOwe"), balancesheet.LiabilityBuckets,
+				last.Liabilities, last.LiabilitiesMinor, v.Base),
+		),
 	)
 }
 
-// nwsLegendItems builds one side's legend entries, each carrying its current
-// figure and its share of ITS OWN side — which is the whole point of
-// normalizing within a side: a $304k condo must not reduce every other holding
-// to an unreadable stub.
-func nwsLegendItems(order []balancesheet.Bucket, amounts map[balancesheet.Bucket]int64, sideTotal int64, asset bool, base string) []any {
-	out := make([]any, 0, len(order))
+// nwsAnno renders one in-chart region label: what this part of the picture is,
+// and what it currently amounts to.
+func nwsAnno(mod string, topPct float64, label, value string) ui.Node {
+	return Div(ClassStr("nws-anno "+mod), Style(map[string]string{"top": fmt.Sprintf("%.3f%%", topPct)}),
+		Span(css.Class("nws-anno-label"), label),
+		Span(css.Class("nws-anno-value"), value),
+	)
+}
+
+// nwsSpreadLabels keeps the three in-chart labels from landing on top of each
+// other when the two boundaries run close together (a household near breakeven),
+// preserving their order and staying inside the plot. Positions are in percent.
+func nwsSpreadLabels(tops []float64) []float64 {
+	const minGap, lo, hi = 17.0, 4.0, 96.0
+	out := append([]float64(nil), tops...)
+	for i := range out {
+		if out[i] < lo {
+			out[i] = lo
+		}
+		if i > 0 && out[i] < out[i-1]+minGap {
+			out[i] = out[i-1] + minGap
+		}
+	}
+	// Pushing down may have run the last one off the bottom; walk back up.
+	for i := len(out) - 1; i >= 0; i-- {
+		if out[i] > hi {
+			out[i] = hi
+		}
+		if i < len(out)-1 && out[i] > out[i+1]-minGap {
+			out[i] = out[i+1] - minGap
+		}
+	}
+	return out
+}
+
+// nwsStrip renders one side's composition as a 100% bar with its key beneath:
+// what the side is made of, right now, at exact figures. Shares are of THIS
+// side only — which is the direct fix for a $304k property holding reducing
+// every other bar on the page to a stub.
+func nwsStrip(asset bool, title string, order []balancesheet.Bucket, amounts map[balancesheet.Bucket]int64, total int64, base string) ui.Node {
+	segs := []any{css.Class("nws-strip-bar")}
+	keys := []any{css.Class("nws-strip-key")}
 	for i, b := range order {
 		amt := amounts[b]
 		if amt == 0 {
 			continue
 		}
 		share := int64(0)
-		if sideTotal > 0 {
-			share = amt * 100 / sideTotal
+		if total > 0 {
+			share = amt * 100 / total
 		}
-		out = append(out, Span(css.Class("nws-legend-item"),
-			Span(ClassStr("nws-legend-dot is-"+nwsLegendTone(asset, i))),
+		tone := nwsToneClass(asset, i)
+		segs = append(segs, Div(ClassStr("nws-strip-seg "+tone),
+			Attr("title", fmt.Sprintf("%s · %s", nwsBucketLabel(b), fmtMoney(money.New(amt, base)))),
+			Style(map[string]string{"width": fmt.Sprintf("%d%%", share)})))
+		keys = append(keys, Span(css.Class("nws-legend-item"),
+			Span(ClassStr("nws-legend-dot "+tone)),
 			Span(uistate.T("nws.legendEntry", nwsBucketLabel(b), fmtMoney(money.New(amt, base)), share)),
 		))
 	}
-	return out
-}
-
-// nwsLegendTone maps a stacking position to its legend swatch modifier, mirroring
-// the band fills exactly.
-func nwsLegendTone(asset bool, i int) string {
-	if asset {
-		return fmt.Sprintf("a%d", i)
+	if total == 0 {
+		return Fragment()
 	}
-	return fmt.Sprintf("l%d", i)
+	return Div(css.Class("nws-strip"), Attr("data-testid", "nws-strip"),
+		Div(css.Class("nws-strip-head"),
+			Span(ClassStr("nws-strip-swatch "+nwsToneClass(asset, 0))),
+			Span(css.Class("nws-strip-title"), title),
+			Span(css.Class("nws-strip-total"), fmtMoney(money.New(total, base))),
+		),
+		Div(segs...),
+		Div(keys...),
+	)
 }

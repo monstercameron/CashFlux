@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -86,4 +88,33 @@ func titleCaseWords(s string) string {
 		words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
 	}
 	return strings.Join(words, " ")
+}
+
+// fmtMoneyCompact renders a money value short enough to sit on a chart axis:
+// "$250k", "$1.2M", "$840". Axis gridlines need magnitude at a glance, and a
+// full "$250,000.00" on every tick crowds the plot it is supposed to explain.
+// Display-only, and never used where an exact figure is the point — the labels
+// beside the chart carry those in full.
+func fmtMoneyCompact(m money.Money) string {
+	sym := currency.Symbol(m.Currency)
+	major := float64(m.Amount) / math.Pow(10, float64(currency.Decimals(m.Currency)))
+	sign := ""
+	if major < 0 {
+		sign, major = "−", -major
+	}
+	switch {
+	case major >= 1_000_000:
+		return sign + sym + trimZero(major/1_000_000) + "M"
+	case major >= 1_000:
+		return sign + sym + trimZero(major/1_000) + "k"
+	default:
+		return sign + sym + strconv.FormatFloat(major, 'f', -1, 64)
+	}
+}
+
+// trimZero formats a scaled figure with one decimal, dropping a trailing ".0"
+// so an axis reads "$250k" rather than "$250.0k".
+func trimZero(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 1, 64)
+	return strings.TrimSuffix(s, ".0")
 }

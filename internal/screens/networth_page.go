@@ -365,9 +365,9 @@ func NetWorth() ui.Node {
 	// ── Glance ───────────────────────────────────────────────────────────────
 	glance := Fragment(
 		nwsSection("sec-nw-bridge", uistate.T("nws.bridgeTitle"),
-			uistate.T("nws.bridgeNote", nwsWindowAgo(v.Months)), nil, nwsBridge(v), false),
+			uistate.T("nws.bridgeNote", nwsWindowAgo(v.Months)), nwsBridgeExplain(), nwsBridge(v), false),
 		nwsSlot(If(settled, nwsSection("sec-nw-sides", uistate.T("nws.sidesTitle"),
-			uistate.T("nws.sidesNote"), nil, nwsSides(v), false))),
+			uistate.T("nws.sidesNote"), nwsSidesExplain(), nwsSides(v), false))),
 		nwsSlot(If(settled, nwsSection("sec-nw-read", uistate.T("nws.readTitle"), "", nil, Fragment(
 			P(ClassStr("nws-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "nw-takeaway"), nwsTakeaway(v)),
 			Div(Style(map[string]string{"margin-top": "0.9rem"}), nwsRatioCards(v)),

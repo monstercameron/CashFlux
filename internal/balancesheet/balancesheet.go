@@ -22,6 +22,7 @@ package balancesheet
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -255,4 +256,41 @@ func bandForRunway(tenths int64) Band {
 	default:
 		return BandAlarm
 	}
+}
+
+// AxisTicks returns "nice" round tick values spanning [loMinor, hiMinor], for a
+// chart axis that must be READABLE rather than merely correct. want is the
+// approximate number of ticks desired; the result may hold one or two fewer or
+// more, because a round step matters more than an exact count — $220,000 is a
+// number a person can read off an axis, $222,420.95 is not.
+//
+// It lives here, with the data it labels, because choosing a step is
+// computation and view code does no computation. Values outside the range are
+// never returned, so an axis can never claim to show a gridline it hasn't got.
+func AxisTicks(loMinor, hiMinor int64, want int) []int64 {
+	if hiMinor <= loMinor || want < 2 {
+		return nil
+	}
+	span := float64(hiMinor - loMinor)
+	raw := span / float64(want-1)
+	mag := math.Pow(10, math.Floor(math.Log10(raw)))
+	// The multipliers a reader recognizes as round at any magnitude. Take the
+	// LARGEST round step that still fits inside the ideal spacing: rounding the
+	// step up instead would routinely overshoot the band and leave a chart with
+	// one lonely gridline, which is worse than a slightly denser axis.
+	step := mag
+	for _, m := range []float64{1, 2, 2.5, 5, 10} {
+		if mag*m <= raw {
+			step = mag * m
+		}
+	}
+	if step <= 0 {
+		return nil
+	}
+	first := math.Ceil(float64(loMinor)/step) * step
+	out := make([]int64, 0, want+1)
+	for v := first; v <= float64(hiMinor)+0.5; v += step {
+		out = append(out, int64(math.Round(v)))
+	}
+	return out
 }

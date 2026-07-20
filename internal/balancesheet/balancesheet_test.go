@@ -216,3 +216,66 @@ func TestAssess(t *testing.T) {
 		})
 	}
 }
+
+func TestAxisTicks(t *testing.T) {
+	tests := []struct {
+		name       string
+		lo, hi     int64
+		want       int
+		wantTicks  []int64
+		wantNoneOK bool
+	}{
+		{
+			// The real /networth case: a floored axis over a $222k–$394k band.
+			// The reader must get round numbers, not the raw floor.
+			name: "a large money band rounds to readable steps",
+			lo:   22242095, hi: 39396600, want: 4,
+			wantTicks: []int64{25000000, 30000000, 35000000},
+		},
+		{
+			name: "a small band steps down a magnitude",
+			lo:   0, hi: 1000, want: 3,
+			wantTicks: []int64{0, 500, 1000},
+		},
+		{
+			name: "an inverted range yields nothing rather than nonsense",
+			lo:   500, hi: 100, want: 4,
+			wantNoneOK: true,
+		},
+		{
+			name: "a zero-width range yields nothing",
+			lo:   100, hi: 100, want: 4,
+			wantNoneOK: true,
+		},
+		{
+			name: "fewer than two ticks is not an axis",
+			lo:   0, hi: 100, want: 1,
+			wantNoneOK: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AxisTicks(tc.lo, tc.hi, tc.want)
+			if tc.wantNoneOK {
+				if len(got) != 0 {
+					t.Fatalf("AxisTicks = %v, want none", got)
+				}
+				return
+			}
+			if len(got) != len(tc.wantTicks) {
+				t.Fatalf("AxisTicks = %v, want %v", got, tc.wantTicks)
+			}
+			for i := range got {
+				if got[i] != tc.wantTicks[i] {
+					t.Fatalf("AxisTicks = %v, want %v", got, tc.wantTicks)
+				}
+			}
+			// A tick outside the range would be a gridline the chart cannot draw.
+			for _, v := range got {
+				if v < tc.lo || v > tc.hi {
+					t.Fatalf("tick %d outside [%d, %d]", v, tc.lo, tc.hi)
+				}
+			}
+		})
+	}
+}

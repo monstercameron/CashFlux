@@ -26,7 +26,7 @@ var netWorthRedesignKeys = Catalog{
 
 	// ── THE BRIDGE
 	"nws.bridgeTitle": "What moved it",
-	"nws.bridgeNote":  "Every step between where you stood %s and where you stand now. The steps add up exactly — including the part we can't attribute.",
+	"nws.bridgeNote":  "Every step from where you stood %s to where you stand now — including the part we can't attribute.",
 	"nws.bridgeAria":  "Waterfall chart decomposing the change in net worth from %s to %s.",
 	"nws.bridgeFloor": "Bars are measured from %s, not from zero, so the steps stay readable.",
 	"nws.legStart":    "Started at",
@@ -47,11 +47,26 @@ var netWorthRedesignKeys = Catalog{
 
 	// ── TWO SIDES
 	"nws.sidesTitle":  "Two sides",
-	"nws.sidesNote":   "What you own stacked upward, what you owe stacked downward, and your net worth running between them. The gap is the story.",
-	"nws.sidesAria":   "Mirrored area chart: assets %s above the line, liabilities %s below, net worth %s through the middle.",
+	"nws.sidesNote":   "What you own on top, what you owe beneath — the space between them is your net worth.",
+	"nws.sidesAria":   "Chart of two boundaries: assets %s on top, liabilities %s beneath, with the gap between them — your net worth — going from %s to %s.",
+	"nws.sidesFloor":  "The scale starts at %s, not zero, so the movement in both sides stays visible.",
 	"nws.sidesEmpty":  "Not enough history yet to draw the two sides — check back after another month.",
+	"nws.annoNet":     "Net worth",
+	"nws.gapWas":      "Gap was %s",
+	"nws.gapNow":      "Gap is %s",
+	"nws.stripOwn":    "What you own",
+	"nws.stripOwe":    "What you owe",
 	"nws.legendEntry": "%s %s (%d%%)",
-	"nws.legendNet":   "Net worth",
+
+	// ── The "?" explainers. Plain language: what the picture shows and how to
+	// read it, never how it is computed.
+	"nws.explainAria":    "How to read the %s chart",
+	"nws.explainBridge1": "This walks from what you were worth at the start of the period to what you're worth now, one cause at a time.",
+	"nws.explainBridge2": "Green steps pushed your net worth up, grey steps pulled it down. The taller the step, the bigger its part in the change.",
+	"nws.explainBridge3": "The steps add up exactly to the final figure — including \"Unexplained\", which is whatever we couldn't confidently put down to one cause. We show it rather than quietly folding it into a neighbour.",
+	"nws.explainSides1":  "The top line is everything you own. The bottom line is everything you owe. The shaded space between them is your net worth.",
+	"nws.explainSides2":  "So when the gap grows, you're getting wealthier — whether that's because the top line rose, the bottom line fell, or both.",
+	"nws.explainSides3":  "The scale starts near your lowest figure rather than at zero, so small month-to-month movements are still visible. The dollar labels down the left tell you where you actually are.",
 
 	// ── The read: takeaway + ratios
 	"nws.readTitle":     "What it means",

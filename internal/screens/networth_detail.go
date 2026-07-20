@@ -190,7 +190,7 @@ func nwsChangedSection(v nwsView) ui.Node {
 		moverBody,
 	)
 	return nwsDetailSection("nws-01", "01", uistate.T("nws.secChanged"),
-		uistate.T("nws.secChangedNote", nwsWindowLabel(v.Months)), nil, body)
+		uistate.T("nws.secChangedNote", nwsWindowLabel(v.Months)), nwsBridgeExplain(), body)
 }
 
 // nwsSideSection renders §02 / §03: a side's composition followed by EVERY
@@ -335,7 +335,7 @@ func nwsHistorySection(v nwsView) ui.Node {
 		),
 	)
 	return nwsDetailSection("nws-04", "04", uistate.T("nws.secHistory"),
-		uistate.T("nws.secHistoryNote"), nil, body)
+		uistate.T("nws.secHistoryNote"), nwsSidesExplain(), body)
 }
 
 // nwsHealthSection (05) restates every ratio with its definition alongside its
