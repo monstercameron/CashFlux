@@ -26,6 +26,7 @@ and Playwright starts the static server (`serve.mjs`) itself on port 8099 — yo
 |------|--------|
 | `smoke.spec.mjs` | every route loads with on-topic content + no app errors, both themes |
 | `interactions.spec.mjs` | real user actions (add a to-do, Settings tabs) assert their result |
+| `rhythm.spec.mjs` | the unified Bills & recurring surface (`/recurring`, `/bills`, `/subscriptions`): hero, overdue strip, review paging, agenda + calendar, roster |
 | `coverage.spec.mjs` | **ratchet** — the set of interactive controls per route can't drift; new/removed controls fail until acknowledged |
 | `invariants.spec.mjs` | theme tokens defined in both themes; no route scrolls the body horizontally |
 | `a11y.spec.mjs` | **ratchet** — axe (WCAG 2 A/AA) structural violations can't regress past the baseline |

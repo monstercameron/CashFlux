@@ -68,6 +68,16 @@ export const ROUTES = [
 // boot loads the shell at / and waits for the app's own readiness signal — the
 // deterministic replacement for the old fixed 5.5s seed sleep.
 export async function boot(page) {
+  return bootAt(page, FIXED_NOW);
+}
+
+// bootAt is boot with an explicit wall-clock instant. Almost everything wants
+// FIXED_NOW; a few behaviors only EXIST at another point on the calendar — the
+// overdue strip needs a seeded due date to have gone by, and the calendar's
+// missed-day state needs the same — and pinning a second instant is honest where
+// hardcoding "3 items are overdue" against the drifting real clock would not be.
+// Callers state why they moved the clock.
+export async function bootAt(page, isoNow) {
   // Neutralize the browser View Transitions API for tests: the router wraps route
   // changes in document.startViewTransition, and machine-speed navigation aborts
   // an in-flight transition ("Transition was aborted…"), which surfaces as an
@@ -91,7 +101,7 @@ export async function boot(page) {
   // Pin the wall clock BEFORE the app boots so the Go/wasm time.Now() the seed
   // reads is deterministic across machines and run dates. setFixedTime pins
   // Date.now() only — real timers keep running, so the app boots normally.
-  await page.clock.setFixedTime(new Date(FIXED_NOW));
+  await page.clock.setFixedTime(new Date(isoNow));
   await page.goto("/");
   await expect(page.locator("#app")).toBeAttached();
   await page.waitForFunction(

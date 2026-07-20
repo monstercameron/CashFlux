@@ -85,6 +85,20 @@ and every commit updates this file under `Unreleased`.
   next paging is unchanged.
 
 ### Added
+- **An end-to-end suite for the unified Bills & recurring surface** (`e2e/regression/rhythm.spec.mjs`).
+  The redesign replaced three tabbed pages with one surface on three routes, and the coverage that
+  survived was aimed at pages that no longer exist. The new suite asserts the behaviors that were
+  specified and the bugs that were really fixed, not the DOM: one surface on `/recurring`, `/bills`
+  and `/subscriptions` with no tab control left on it; the hero's net/in/out being the roster's own
+  arithmetic to the cent; the overdue strip existing only when something IS overdue, its headline
+  agreeing with its rows, and Mark-paid emptying it; the calendar's missed set being EXACTLY the
+  strip's items (the trust invariant behind the shared `rhySettled`); the review strip's three counts
+  stating one number, paging that survives a judgment, and "Not recurring" having a way back;
+  discovery quality (nothing already tracked, no habitual spend, cleaned merchant names, an evidence
+  sentence on every candidate); the agenda's month headings and its persisted view toggle; and the
+  formula variable the kebab offers being the one the engine exposes. Two behaviors only exist once
+  seeded due dates have gone by, so `fixtures.mjs` gains `bootAt(page, iso)` and those tests state why
+  they moved the clock.
 - **`domain.RecurringCadence.Prev`** — the exact inverse of `Next`. A schedule is stored as its NEXT
   due date, which is all a forward agenda needs and nothing a calendar does: rendering a month that has
   already happened means winding the schedule backwards, and stepping back by a fixed day count would
