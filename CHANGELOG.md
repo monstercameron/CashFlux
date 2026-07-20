@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **`internal/debtcoach` — a pure debt-health rule engine.** Given a snapshot of someone's
+  debts (per-account balance/APR/minimum/limit plus FX-converted portfolio aggregates), it decides
+  which watch-outs apply and how urgent each is, returning a ranked list of typed `Alert`s. Rules
+  cover the ways debt gets out of control: a card past its limit, a minimum payment that can't
+  outrun the interest (so the balance never falls), high/warn credit utilization, owing more than
+  you own, a punishing APR, minimums that are mostly interest, and a decade-plus minimums-only
+  payoff. Emits at most one alert per concern (worst offender named, rest counted) so the list
+  stays glanceable, and orders most-urgent-first. No `syscall/js`, table-driven tests.
+
 ## [1.2.9] - 2026-07-20
 
 ### Fixed

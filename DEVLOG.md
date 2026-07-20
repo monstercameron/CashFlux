@@ -1,4 +1,22 @@
-## 2026-07-20 — /networth: one offset with three consumers, and percentages that add up
+## 2026-07-20 — /debt: a debt-health rule engine, then an interactive coaching page
+
+Reworking /debt from a competent read-only dashboard into a tool that teaches, warns, and lets you
+tune the plan. Building it bottom-up, so it starts with judgement in a pure package rather than
+`if`-branches in view code.
+
+**`internal/debtcoach` owns the "is this out of control?" read.** The page already showed the
+figures (owed, utilization, APR, debt-free date) — what it couldn't do was say which of those
+figures is a problem and how urgent. That's a judgement, and judgement belongs in tested Go, not in
+the tile. `debtcoach.Evaluate` takes the snapshot and returns a ranked `[]Alert`; every threshold
+is either passed in (the utilization bands come straight from the user's `DebtConfig`, so the alert
+and the meter agree by construction) or a single named constant. Two design calls worth recording:
+(1) **at most one alert per concern** — the worst offender is named and the rest counted, because a
+wall of red is as useless as no red; (2) **per-debt suppression** — a card that's both over its
+limit and underwater shows only the louder over-limit line, since one critical per debt is what a
+person can act on. Per-account rules (over-limit, underwater, high-APR) compare figures inside a
+single account, so they stay correct without FX; only the portfolio aggregates are converted, and
+those come pre-converted from the engine surface. Next: the Watch-outs tile that renders these, the
+interactive strategy tuner, and a teaching panel.
 
 Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
 keeping and one re-application of a lesson already on the books.
