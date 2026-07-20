@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.2.9] - 2026-07-20
+
 ### Fixed
 - **/networth's Detail navigator no longer hides behind the global header, and the scroll-spy no
   longer loses your place.** One bug with two faces: the section navigator was sticky at `top: 4px`
