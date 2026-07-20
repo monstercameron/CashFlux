@@ -593,11 +593,20 @@ func registerNwsSides() {
 	// climb speeds up. Everything here stays quiet so that geometry is the one
 	// thing the eye reads.
 	rule(".nws-pace",
-		prop("margin", "0.55rem 0 0 3.4rem"),
+		prop("margin", "0.55rem 0 0.5rem 3.4rem"),
 	)
+	// A rung that lands close to its neighbour steps down to a second row
+	// instead of dropping its date. The row is only paid for when one is
+	// actually used, so a well-spread rail costs Glance nothing extra.
 	rule(".nws-pace-track",
 		prop("position", "relative"),
 		prop("height", "2.35rem"),
+	)
+	rule(".nws-pace-track.is-two-row",
+		prop("height", "3.6rem"),
+	)
+	rule(".nws-pace-rung.is-low",
+		prop("top", "1.25rem"),
 	)
 	// A leg is the time it took, drawn as the space it occupied.
 	rule(".nws-pace-leg",
@@ -653,9 +662,6 @@ func registerNwsSides() {
 	rule(".nws-pace-when",
 		prop("font-size", "var(--type-11, 0.6875rem)"),
 		prop("color", "var(--text-dim)"),
-	)
-	rule(".nws-pace-rung.is-tight .nws-pace-when",
-		prop("display", "none"),
 	)
 	rule(".nws-pace-foot",
 		prop("display", "flex"),

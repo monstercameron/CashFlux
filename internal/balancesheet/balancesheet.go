@@ -758,37 +758,40 @@ func projectNext(pts []Point) PaceNext {
 		return PaceNext{Stalled: true}
 	}
 
-	var peak int64
-	for _, p := range pts {
-		if p.NetMinor > peak {
-			peak = p.NetMinor
-		}
-	}
-	target := nextRungAbove(now, peak)
+	target := nextRoundAbove(now)
 	if target <= 0 {
 		return PaceNext{}
 	}
-	away := int((target-now+perMonth-1)/perMonth) // round up: the month it lands in
+	away := int((target - now + perMonth - 1) / perMonth) // round up: the month it lands in
 	if away > paceMaxProjection {
 		return PaceNext{}
 	}
 	return PaceNext{ValueMinor: target, Months: away, OK: true}
 }
 
-// nextRungAbove is the first ladder rung strictly above now. The ladder is the
-// milestone ladder, extended one decade so a household already standing at its
-// own peak still has somewhere to be heading.
-func nextRungAbove(now, peak int64) int64 {
-	ref := peak
-	if now > ref {
-		ref = now
+// nextRoundAbove is the next figure to be heading for: the next multiple of
+// HALF the current decade. At $151,000 that is $200,000; at $49,000 it is
+// $50,000; at $99,000 it is $100,000.
+//
+// This is deliberately a DIFFERENT rule from the historical ladder, because the
+// two have different jobs. The historical ladder is a record, so it is sparse
+// on purpose — a rung every 1, 2.5 or 5 times a decade is what stops the list
+// becoming the event log this page already had once. A forward target is not a
+// record; it is the next figure a person would actually name. Reusing the
+// record's ladder made the answer at $151,000 "next $250k", which skips the
+// $200,000 anyone in that position would say out loud and puts the target 65%
+// and two years away. Sparse is right for looking back and wrong for looking
+// forward.
+func nextRoundAbove(now int64) int64 {
+	if now <= 0 {
+		return 0
 	}
-	for _, v := range milestoneLadder(ref * 10) {
-		if v > now {
-			return v
-		}
+	decade := math.Pow(10, math.Floor(math.Log10(float64(now))))
+	step := int64(decade / 2)
+	if step <= 0 {
+		return 0
 	}
-	return 0
+	return (now/step + 1) * step
 }
 
 // monthsBetween counts whole calendar months from a to b, never negative.

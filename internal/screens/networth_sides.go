@@ -360,6 +360,26 @@ func nwsSides(v nwsView) ui.Node {
 // label.
 const nwsPaceGapMinPct = 11.0
 
+// nwsPaceRungMinPct is how close two rungs may sit before the second drops to
+// the rail's lower row.
+//
+// A dated rung block measures about 45px. The rail is NOT a fixed width across
+// layouts — it runs ~630px at a 1440px viewport but only ~390px at 1202, where
+// the expanded sidebar takes its share and the strips have not yet stacked — so
+// the same block is 7% of the rail at one width and 11.5% at another. The
+// threshold is set for the NARROWEST rail, because a percentage tuned to the
+// widest one overlaps everywhere else; measuring only at 1440 is exactly how
+// the first version shipped with colliding labels.
+//
+// Staggering is what lets EVERY rung keep its date. The first version hid the
+// date of any rung that sat too close to its neighbour, which produced "$0 Sep
+// 22 · $10k · $25k · $50k May 24" — some rungs dated, some not, with no rule a
+// reader could infer. That reads as a rendering fault, not a density decision.
+// Two rows cost one line of height and make the rail uniform: every rung says
+// the same three things, and closeness is expressed by the row, which is
+// legible as a deliberate choice at any width.
+const nwsPaceRungMinPct = 12.0
+
 // nwsPaceRail renders the progress rail: the round figures reached, placed at
 // the moment they were reached, with each leg's duration written in the gap it
 // took.
@@ -370,7 +390,12 @@ func nwsPaceRail(v nwsView, pace balancesheet.Pace) ui.Node {
 	}
 	xPct := func(i int) float64 { return 100 * nwsSidesX(i, n) / nwsSidesW }
 
-	track := []any{css.Class("nws-pace-track"), Attr("data-testid", "nws-pace-track")}
+	// The last position used on each of the rail's two rows, so a rung can pick
+	// the row where it has room. Starts far left of the rail so the first rung
+	// always takes the upper row.
+	lastRowX := [2]float64{-1000, -1000}
+	staggered := false
+	var track []any
 	for i, r := range pace.Rungs {
 		// The leg: drawn from the previous rung to this one. Its WIDTH is the
 		// months it took, because the axis is time.
@@ -391,11 +416,18 @@ func nwsPaceRail(v nwsView, pace balancesheet.Pace) ui.Node {
 			track = append(track, Div(leg...))
 		}
 		// Two rungs close in time sit close on the rail — that IS the reading,
-		// so they are never pushed apart. What gives way is the date beneath
-		// them, which is the least of the three things a rung says.
+		// so they are never pushed apart along the axis. A rung that would
+		// crowd the row it wants drops to the other one, which costs no
+		// information and keeps every rung saying the same three things.
+		x := xPct(r.AtIndex)
+		row := 0
+		if x-lastRowX[0] < nwsPaceRungMinPct && x-lastRowX[1] >= nwsPaceRungMinPct {
+			row = 1
+		}
+		lastRowX[row] = x
 		cls := "nws-pace-rung"
-		if i > 0 && xPct(r.AtIndex)-xPct(pace.Rungs[i-1].AtIndex) < nwsPaceGapMinPct {
-			cls += " is-tight"
+		if row == 1 {
+			cls, staggered = cls+" is-low", true
 		}
 		track = append(track, Span(ClassStr(cls),
 			Attr("data-testid", "nws-pace-rung"),
@@ -420,8 +452,16 @@ func nwsPaceRail(v nwsView, pace balancesheet.Pace) ui.Node {
 			uistate.T("nws.paceStalled"))
 	}
 
+	// The second row is only paid for when a rung actually uses it, so a rail
+	// whose rungs are comfortably spread costs Glance nothing extra in height.
+	trackCls := "nws-pace-track"
+	if staggered {
+		trackCls += " is-two-row"
+	}
+	head := []any{ClassStr(trackCls), Attr("data-testid", "nws-pace-track")}
+
 	return Div(css.Class("nws-pace"), Attr("data-testid", "nws-pace"),
-		Div(track...),
+		Div(append(head, track...)...),
 		Div(css.Class("nws-pace-foot"),
 			P(css.Class("nws-pace-read"), Attr("data-testid", "nws-pace-read"),
 				nwsPaceSentence(v, pace)),

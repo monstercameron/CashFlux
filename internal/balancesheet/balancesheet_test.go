@@ -345,6 +345,43 @@ func TestBuildPace(t *testing.T) {
 		}
 	})
 
+	t.Run("the next target is the figure a person would name", func(t *testing.T) {
+		// The forward target follows its OWN rule, not the historical ladder:
+		// the next multiple of half the current decade. Reusing the record's
+		// sparse 1/2.5/5 ladder answered "$250k" at $151k, skipping the $200k
+		// anyone in that position would say out loud.
+		for _, tc := range []struct{ now, want int64 }{
+			{15117047, 20000000},   // $151,170 -> $200k, not $250k
+			{4900000, 5000000},     // $49,000  -> $50k
+			{9900000, 10000000},    // $99,000  -> $100k
+			{1200000, 1500000},     // $12,000  -> $15k
+			{25000000, 30000000},   // $250,000 -> $300k
+			{151000000, 200000000}, // $1.51M -> $2M
+		} {
+			if got := nextRoundAbove(tc.now); got != tc.want {
+				t.Fatalf("nextRoundAbove(%d) = %d, want %d", tc.now, got, tc.want)
+			}
+		}
+		if got := nextRoundAbove(0); got != 0 {
+			t.Fatalf("nextRoundAbove(0) = %d, want none", got)
+		}
+	})
+
+	t.Run("the next target is always ahead and never absurdly far", func(t *testing.T) {
+		// Every reachable position must get a target that is genuinely above it
+		// and within reach of the scale it sits at — no rung 65% away.
+		for now := int64(50000); now < 500000000; now = now * 3 / 2 {
+			got := nextRoundAbove(now)
+			if got <= now {
+				t.Fatalf("nextRoundAbove(%d) = %d, must be ahead", now, got)
+			}
+			if float64(got-now) > float64(now)*0.55 {
+				t.Fatalf("nextRoundAbove(%d) = %d is %.0f%% away — too far to be the next thing you'd name",
+					now, got, 100*float64(got-now)/float64(now))
+			}
+		}
+	})
+
 	t.Run("a stalled household gets no invented date", func(t *testing.T) {
 		flat := climb(5000000, 0, 40)
 		if n := BuildPace(flat).Next; n.OK || !n.Stalled {

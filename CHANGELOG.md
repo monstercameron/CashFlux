@@ -7,6 +7,23 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **/networth's History table mixed two date formats in one column.** The When column read
+  `Jul 21 · Sep 2021 · Nov 2021 · Jan 2022 · Mar 22 · …` — the cells borrowed the CHART's thinned
+  axis captions ("Jan 06" for a multi-year window) and fell back to a different format wherever a
+  caption had been thinned to blank. A table cell has no width pressure and must not inherit an
+  axis's density compromises, so the table now sets its own format and holds it for every row.
+- **/networth pace rungs now all carry their date.** The first version hid the date of any rung
+  sitting close to its neighbour, producing `$0 Sep 22 · $10k · $25k · $50k May 24` — some dated,
+  some not, with no rule a reader could infer, which is indistinguishable from a rendering fault.
+  Closeness is now expressed by the ROW: a crowded rung steps down to a second row and keeps
+  everything it says. The row is only paid for in height when one is actually used.
+- **/networth's next target is now the figure a person would name.** The projection reused the
+  historical 1/2.5/5 ladder, which at ~$151k answered "Next $250k: about 25 months" — skipping the
+  $200k anyone in that position would say out loud, and putting the target 65% and over two years
+  away. The forward target follows its own rule (the next multiple of half the current decade),
+  because the two have different jobs: the historical ladder is a record and is sparse on purpose,
+  while a forward target is the next thing you would actually name. Now "Next $200k: about 12
+  months at your recent pace".
 - **/networth milestones now scale with the size of the household, and no longer congratulate
   selectively.** An all-time window produced **32 rows**, five of them for a single month —
   "turned positive in May 2022", "passed ($1,000)", "passed ($500)", "passed $0", "passed $500" —
@@ -39,6 +56,15 @@ and every commit updates this file under `Unreleased`.
   unreadable captions to 11 (`Jul 21 · 2022 · Jul 22 · … · 2026 · Now`), thinning to 7 at ≤1042px
   content.
 ### Added
+- **/networth History leads with the graph; the numbers fold behind an expander.** A ~30-row
+  month-by-month table sat beneath the chart and dominated by sheer length, so the chart read as a
+  header and the table as the content. The graph is now the presentation and the table is its
+  precision layer, behind "Show the numbers · N months" with the honest total on the control. It is
+  collapsed, **not deleted** — it is what lets a reader take an exact figure off the page and it is
+  the chart's companion text; a chart-only section would trade a real precision and accessibility
+  virtue for tidiness. The control is keyboard-reachable with `aria-expanded`/`aria-controls`, the
+  table carries a screen-reader caption and scoped column headers, and the chart keeps its own
+  `aria-label` summary whether the table is open or shut.
 - **THE PACE RAIL replaces /networth's milestone list.** Filtering the 32-row list down to six
   left a shorter log; the form was wrong, not the length. Two things are true about this content
   and they decided the shape: a milestone IS a point on the net-worth line, so its home is the
