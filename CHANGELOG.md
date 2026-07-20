@@ -7,6 +7,65 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **/networth's Detail navigator no longer hides behind the global header, and the scroll-spy no
+  longer loses your place.** One bug with two faces: the section navigator was sticky at `top: 4px`
+  with `z-index: 3` against a sticky ~102px header at `z-index: 20`, so it parked underneath and
+  vanished while scrolling; and the spy's "which section am I in" band was a 170px literal that knew
+  nothing about the header, so it reported "03 What you owe" while History filled the screen. Four
+  numbers had to agree and had no way to (4px sticky, 88px scroll-margin, 170px band, −150px
+  observer margin). They are now **one measured value with three consumers**: the header and the
+  navigator are measured from the DOM and published as `--nws-header` / `--nws-navstack`, which
+  drive the navigator's sticky offset, the landing position of a jumped-to section, and the spy's
+  band — the last three being literally the same number rather than three that approximately match.
+  Measured rather than hardcoded because the header folds to two rows and the navigator wraps at
+  narrow widths; re-measured on resize and on view change, since the navigator only exists in
+  Detail. The navigator now sits at `z-index: 10` (above the document it indexes, below the header
+  it hangs from) and the active chip carries `aria-current="location"`. Verified at 1440 / 1202 /
+  950: navigator below the header, section landing clear of both, spy correct at all three.
+- **/networth composition percentages now add to exactly 100.** The asset side totalled 99% and the
+  liability side 98%, because each share was truncated independently. On a page that draws an
+  "unexplained" bar so its waterfall reconciles to the cent, a column that visibly fails to reach
+  100 undoes precisely the trust that bar buys. Shares now go through
+  `balancesheet.Shares`, which uses the **largest-remainder** method: whole numbers kept (no false
+  precision from a decimal place), leftover points given to the parts that lost most to rounding,
+  ties broken by position so the result is stable across renders. A set that is *not* a whole is
+  never normalised into one. Applied to both Detail tables and the chart legend.
+- **/networth period prose is grammatical again.** "$4,678.21 over This month" and "Up
+  $169,788.68 over All time" dropped the period control's *caption* into a sentence slot that
+  wanted a *phrase* — the same class of defect already fixed once here, where a window length was
+  interpolated into a point-in-time slot. Fixed the same way: `nwsWindowSpan` gives each period its
+  own wording carrying its own preposition ("this month", "over the last 6 months", "since your
+  records began"). Every sentence that names the period was checked, not just the two reported —
+  the delta, its tooltip, all four takeaway variants and the "What changed" section note; the
+  bridge note's "when your records begin" also became "began".
+
+### Added
+- **/networth's projection now shows its working.** "Next $200k: about 12 months at your recent
+  pace" was static text. It now carries the page's existing `?` affordance, disclosing the lookback
+  that defines "recent pace", the average monthly change it assumes, that the average includes
+  valuation and FX movement converted to base currency, and that it is one straight-line scenario
+  rather than a forecast. The engine carries `PerMonthMinor` / `LookbackMonths` on every outcome,
+  including the ones that decline to project — a reader is owed the working whether or not there is
+  an answer.
+- **A key for the pace rail's durations.** "14 mo" between two markers was unexplained; the Two
+  sides `?` popover now says what the dots, the numbers between them and the dashed setback marks
+  mean.
+
+### Changed
+- **/networth's freshness disclosure is a ranked table, not nine sentences.** Nine stale accounts
+  rendered as nine near-identical full sentences. They are data, so they are now rows (Account /
+  Last confirmed / Age) ranked oldest first, scrolling inside their own box. The note about the
+  dominant property valuation stays **prose** — that one carries a judgement, and judgement is what
+  earns a sentence.
+- **"Update balances" replaced by an action that knows which nine.** The old link dropped the reader
+  on the full accounts list to hunt for the stale ones. The popover now offers "Confirm all N as
+  current", which runs the app's **existing** guided mark-all prompt (it names the accounts,
+  previews the blast radius, lands as one undoable batch, and is shared with the accounts toolbar so
+  the two cannot drift), alongside a secondary link for the other intent — opening accounts to edit
+  a figure rather than confirm it.
+- **"Net-worth metrics" is now "Build a custom metric"**, which says where the control goes.
+
+### Fixed
 - **/networth's History table mixed two date formats in one column.** The When column read
   `Jul 21 · Sep 2021 · Nov 2021 · Jan 2022 · Mar 22 · …` — the cells borrowed the CHART's thinned
   axis captions ("Jan 06" for a multi-year window) and fell back to a different format wherever a

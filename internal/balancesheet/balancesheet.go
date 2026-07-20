@@ -296,6 +296,57 @@ func AxisTicks(loMinor, hiMinor int64, want int) []int64 {
 	return out
 }
 
+// Shares turns an exhaustive set of parts into whole percentages that sum to
+// EXACTLY 100, by the largest-remainder method: every part gets its floor, and
+// the leftover points go to the parts that lost the most to rounding.
+//
+// Plain truncation is what a column of percentages usually does, and on this
+// page it produced an asset side totalling 99% and a liability side totalling
+// 98%. That is a small error and a large problem: this is a page that draws an
+// "unexplained" bar so its waterfall reconciles to the cent, and a column that
+// visibly fails to reach 100 undoes exactly the trust that bar buys. Largest
+// remainder keeps the figures whole — no false precision from a decimal place —
+// while making them add up.
+//
+// Parts that are zero stay zero, so a caller may skip them without breaking the
+// total. If the parts do not sum to total, no normalisation is invented: each
+// share is simply its own rounded fraction, because a set that is not a whole
+// cannot honestly be made to look like one.
+func Shares(parts []int64, total int64) []int64 {
+	out := make([]int64, len(parts))
+	if total <= 0 {
+		return out
+	}
+	var sum, given int64
+	for _, p := range parts {
+		sum += p
+	}
+	type rem struct {
+		i int
+		r int64
+	}
+	rems := make([]rem, 0, len(parts))
+	for i, p := range parts {
+		if p == 0 {
+			continue
+		}
+		out[i] = p * 100 / total
+		given += out[i]
+		rems = append(rems, rem{i: i, r: p * 100 % total})
+	}
+	if sum != total {
+		return out
+	}
+	// Hand out the remaining points, biggest rounding loss first; ties go to the
+	// earlier part so the result is stable across renders.
+	sort.SliceStable(rems, func(a, b int) bool { return rems[a].r > rems[b].r })
+	for k := 0; given < 100 && k < len(rems); k++ {
+		out[rems[k].i]++
+		given++
+	}
+	return out
+}
+
 // TimeTick is one x-axis label decision for the point at Index.
 type TimeTick struct {
 	// Index is the point this label belongs to.
@@ -670,6 +721,12 @@ type PaceNext struct {
 	// Stalled is true when the recent trend is flat or downward, so the answer
 	// is "not at this pace" rather than a date.
 	Stalled bool
+	// PerMonthMinor and LookbackMonths are the METHOD: the average monthly
+	// change the projection assumes, and the span it was averaged over. A
+	// forward-looking figure is the one number on this page that is not a fact,
+	// so the surface can show its working rather than asking to be trusted.
+	PerMonthMinor  int64
+	LookbackMonths int
 }
 
 // Pace is the reading of the net-worth series as PROGRESS rather than as a list
@@ -754,19 +811,24 @@ func projectNext(pts []Point) PaceNext {
 		return PaceNext{}
 	}
 	perMonth := (now - pts[from].NetMinor) / int64(months)
+	// The method travels with every outcome, including the ones that decline to
+	// project — a reader is owed the working whether or not there is an answer.
+	method := PaceNext{PerMonthMinor: perMonth, LookbackMonths: months}
 	if perMonth <= 0 {
-		return PaceNext{Stalled: true}
+		method.Stalled = true
+		return method
 	}
 
 	target := nextRoundAbove(now)
 	if target <= 0 {
-		return PaceNext{}
+		return method
 	}
 	away := int((target - now + perMonth - 1) / perMonth) // round up: the month it lands in
 	if away > paceMaxProjection {
-		return PaceNext{}
+		return method
 	}
-	return PaceNext{ValueMinor: target, Months: away, OK: true}
+	method.ValueMinor, method.Months, method.OK = target, away, true
+	return method
 }
 
 // nextRoundAbove is the next figure to be heading for: the next multiple of

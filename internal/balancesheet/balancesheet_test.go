@@ -287,6 +287,88 @@ const (
 	nwsAxisNarrowMax = 5
 )
 
+func TestShares(t *testing.T) {
+	sum := func(xs []int64) int64 {
+		var t int64
+		for _, x := range xs {
+			t += x
+		}
+		return t
+	}
+
+	t.Run("an exhaustive split always sums to exactly 100", func(t *testing.T) {
+		cases := [][]int64{
+			// The reported defect: assets came to 99%, liabilities to 98%.
+			{4929165, 3149000, 30400000},
+			{1105118, 6684000, 15372000},
+			{1, 1, 1},
+			{1, 1, 1, 1, 1, 1, 1},
+			{33, 33, 34},
+			{999999, 1},
+			{5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5},
+		}
+		for _, parts := range cases {
+			got := Shares(parts, sum(parts))
+			if s := sum(got); s != 100 {
+				t.Fatalf("Shares(%v) = %v, sums to %d, want exactly 100", parts, got, s)
+			}
+			for i, g := range got {
+				if g < 0 {
+					t.Fatalf("Shares(%v) = %v: a negative share", parts, got)
+				}
+				if parts[i] == 0 && g != 0 {
+					t.Fatalf("Shares(%v) = %v: a zero part took a share", parts, got)
+				}
+			}
+		}
+	})
+
+	t.Run("each share stays within a point of its true fraction", func(t *testing.T) {
+		parts := []int64{4929165, 3149000, 30400000}
+		total := sum(parts)
+		for i, g := range Shares(parts, total) {
+			exact := float64(parts[i]) * 100 / float64(total)
+			if d := float64(g) - exact; d > 1 || d < -1 {
+				t.Fatalf("share %d = %d, true %.2f — rounding must never move a figure by more than a point", i, g, exact)
+			}
+		}
+	})
+
+	t.Run("zero parts and empty sets do not invent a total", func(t *testing.T) {
+		if got := Shares(nil, 100); len(got) != 0 {
+			t.Fatalf("Shares(nil) = %v, want empty", got)
+		}
+		if got := Shares([]int64{5, 5}, 0); sum(got) != 0 {
+			t.Fatalf("Shares with no total = %v, want zeros", got)
+		}
+		if got := Shares([]int64{0, 0, 0}, 0); sum(got) != 0 {
+			t.Fatalf("Shares of nothing = %v, want zeros", got)
+		}
+	})
+
+	t.Run("a partial set is not normalised into a false whole", func(t *testing.T) {
+		// Parts that are only half the total must read as ~50%, never be
+		// stretched to 100 — that would be the opposite dishonesty.
+		got := Shares([]int64{25, 25}, 100)
+		if s := sum(got); s != 50 {
+			t.Fatalf("Shares(half a set) = %v, sums to %d, want 50", got, s)
+		}
+	})
+
+	t.Run("the result is stable across identical calls", func(t *testing.T) {
+		parts := []int64{7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 2}
+		first := Shares(parts, sum(parts))
+		for i := 0; i < 5; i++ {
+			next := Shares(parts, sum(parts))
+			for j := range first {
+				if first[j] != next[j] {
+					t.Fatalf("Shares is not deterministic: %v vs %v", first, next)
+				}
+			}
+		}
+	})
+}
+
 func TestBuildPace(t *testing.T) {
 	// climb builds a monthly series rising by perMonth from start.
 	climb := func(start, perMonth int64, n int) []Point {

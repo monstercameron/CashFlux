@@ -441,15 +441,27 @@ func nwsPaceRail(v nwsView, pace balancesheet.Pace) ui.Node {
 	// The projection sits OFF the track, because it is not in the record. It is
 	// stated as an extrapolation from recent pace and never as a date the
 	// household will arrive on; a flat or falling trend says so instead.
+	// A projection is the one figure on this page that is not a fact, so it
+	// carries the page's own "?" affordance and shows its working: the lookback
+	// that defines "recent pace", the average monthly change it assumes, what is
+	// counted in that average, and that it is a straight line rather than a
+	// promise.
+	explain := nwsPaceExplain(
+		fmtMoney(money.New(pace.Next.PerMonthMinor, v.Base)),
+		uistate.T("nws.paceLookback", pace.Next.LookbackMonths))
 	var ahead ui.Node = Fragment()
 	switch {
 	case pace.Next.OK:
-		ahead = Span(css.Class("nws-pace-next"), Attr("data-testid", "nws-pace-next"),
-			uistate.T("nws.paceNext",
-				fmtMoneyCompact(money.New(pace.Next.ValueMinor, v.Base)), pace.Next.Months))
+		ahead = Span(css.Class("nws-pace-ahead"),
+			Span(css.Class("nws-pace-next"), Attr("data-testid", "nws-pace-next"),
+				uistate.T("nws.paceNext",
+					fmtMoneyCompact(money.New(pace.Next.ValueMinor, v.Base)), pace.Next.Months)),
+			explain)
 	case pace.Next.Stalled:
-		ahead = Span(css.Class("nws-pace-next", "is-stalled"), Attr("data-testid", "nws-pace-next"),
-			uistate.T("nws.paceStalled"))
+		ahead = Span(css.Class("nws-pace-ahead"),
+			Span(css.Class("nws-pace-next", "is-stalled"), Attr("data-testid", "nws-pace-next"),
+				uistate.T("nws.paceStalled")),
+			explain)
 	}
 
 	// The second row is only paid for when a rung actually uses it, so a rail
@@ -588,15 +600,18 @@ func nwsSpreadLabels(tops []float64) []float64 {
 func nwsStrip(asset bool, title string, order []balancesheet.Bucket, amounts map[balancesheet.Bucket]int64, total int64, base string) ui.Node {
 	segs := []any{css.Class("nws-strip-bar")}
 	keys := []any{css.Class("nws-strip-key")}
+	// Largest-remainder shares, so the key's percentages add to exactly 100.
+	parts := make([]int64, len(order))
+	for i, b := range order {
+		parts[i] = amounts[b]
+	}
+	shares := balancesheet.Shares(parts, total)
 	for i, b := range order {
 		amt := amounts[b]
 		if amt == 0 {
 			continue
 		}
-		share := int64(0)
-		if total > 0 {
-			share = amt * 100 / total
-		}
+		share := shares[i]
 		tone := nwsToneClass(asset, i)
 		segs = append(segs, Div(ClassStr("nws-strip-seg "+tone),
 			Attr("title", fmt.Sprintf("%s · %s", nwsBucketLabel(b), fmtMoney(money.New(amt, base)))),
