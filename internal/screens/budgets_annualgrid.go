@@ -165,6 +165,14 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 		header,
 		Div(css.Class("budget-annualgrid-head"), yearControls, scenarioBar),
 		annualGridLegend(fromMonth <= 11, scOn),
+		// Top-anchored scroll cue (E3): the wide 12-month matrix overflows a narrow
+		// (expanded-sidebar) pane, and the only scrollbar is at the very bottom of a
+		// tall grid — easy to miss. This quiet hint above the frame signals "there's
+		// more to the right"; CSS hides it once the pane is wide enough to fit the
+		// whole year (rules_qpassEannual.go). aria-hidden: a screen reader already
+		// reaches every cell, so this is a sighted-only nudge.
+		Div(css.Class("budget-annualgrid-scrollcue"), Attr("aria-hidden", "true"),
+			Span(uistate.T("budgets.annualGridScrollCue"))),
 		// Horizontal scroll lives INSIDE the card so the page body never scrolls sideways
 		// (the .budget-annualgrid-scroll frame owns overflow-x + max-width).
 		Div(css.Class("budget-annualgrid-scroll"),

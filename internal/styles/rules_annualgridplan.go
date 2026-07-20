@@ -126,4 +126,9 @@ func registerAnnualGridPlanSurface() {
 	rule(".budget-annualgrid-swatch.is-under",
 		background("color-mix(in srgb, var(--warn, #e6a23c) 40%, transparent)"),
 	)
+
+	// Overflow-fit pass (2026-07-19 review, lane E #3): compact cells + a
+	// top-anchored scroll cue for the wide 12-month matrix. Chained here so it
+	// layers after the base grid rules it refines.
+	registerAnnualGridFit()
 }
