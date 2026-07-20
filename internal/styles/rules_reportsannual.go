@@ -136,8 +136,12 @@ func registerReportsAnnual() {
 		padding("0.5rem 0.6rem"),
 		border("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
-		background("color-mix(in srgb, var(--bg-card) 92%, transparent)"),
-		prop("backdrop-filter", "blur(6px)"),
+		// Opaque shelf (UI/UX task #9): at 92% + blur, section content scrolling
+		// beneath (Sankey ribbon labels) read straight through the bar as a
+		// double-exposure. Solid card surface + a soft drop shadow keeps the
+		// floating look while nothing bleeds through.
+		background("var(--bg-card)"),
+		boxShadow("var(--shadow-1)"),
 	)
 	rule(".rpta-idx-item",
 		display("inline-flex"),
