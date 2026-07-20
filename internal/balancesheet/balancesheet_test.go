@@ -280,6 +280,13 @@ func TestAxisTicks(t *testing.T) {
 	}
 }
 
+// The budgets /networth actually passes. Tested with the real values, because
+// an axis that is only readable at a budget the app never uses is not tested.
+const (
+	nwsAxisWideMax   = 8
+	nwsAxisNarrowMax = 5
+)
+
 func TestTimeAxisTicks(t *testing.T) {
 	// months builds n monthly cutoffs starting at the given year/month.
 	months := func(y int, m time.Month, n int) []time.Time {
@@ -292,7 +299,7 @@ func TestTimeAxisTicks(t *testing.T) {
 
 	t.Run("a five-year run labels years, not months", func(t *testing.T) {
 		ats := months(2021, time.July, 61)
-		got := TimeAxisTicks(ats, 12, 7)
+		got := TimeAxisTicks(ats, nwsAxisWideMax, nwsAxisNarrowMax)
 		if len(got) > 12 {
 			t.Fatalf("TimeAxisTicks gave %d labels for 61 points, budget 12", len(got))
 		}
@@ -301,11 +308,23 @@ func TestTimeAxisTicks(t *testing.T) {
 				t.Fatalf("tick %+v: a label this short is an initial, not a date", tk)
 			}
 		}
+		// And it must thin to YEAR boundaries, which is what a reader scans a
+		// multi-year axis for — not to every third month from an arbitrary
+		// starting offset, which names nothing.
+		years := 0
+		for _, tk := range got {
+			if len(tk.Label) == 4 && tk.Label[0] == '2' {
+				years++
+			}
+		}
+		if years < 3 {
+			t.Fatalf("TimeAxisTicks = %+v, want year boundaries across a five-year run", got)
+		}
 	})
 
 	t.Run("the narrow plan is a subset of the wide one", func(t *testing.T) {
 		ats := months(2021, time.January, 61)
-		got := TimeAxisTicks(ats, 12, 7)
+		got := TimeAxisTicks(ats, nwsAxisWideMax, nwsAxisNarrowMax)
 		major := 0
 		for _, tk := range got {
 			if tk.Major {
@@ -323,7 +342,7 @@ func TestTimeAxisTicks(t *testing.T) {
 	t.Run("both ends are always named", func(t *testing.T) {
 		for _, n := range []int{2, 7, 13, 37, 61, 121} {
 			ats := months(2019, time.March, n)
-			got := TimeAxisTicks(ats, 12, 7)
+			got := TimeAxisTicks(ats, nwsAxisWideMax, nwsAxisNarrowMax)
 			if len(got) < 2 || got[0].Index != 0 || got[len(got)-1].Index != n-1 {
 				t.Fatalf("n=%d: TimeAxisTicks = %+v, want the first and last points labelled", n, got)
 			}
@@ -337,7 +356,7 @@ func TestTimeAxisTicks(t *testing.T) {
 
 	t.Run("no tick crowds an end once the series outgrows the budget", func(t *testing.T) {
 		ats := months(2021, time.January, 37)
-		for _, tk := range TimeAxisTicks(ats, 12, 7) {
+		for _, tk := range TimeAxisTicks(ats, nwsAxisWideMax, nwsAxisNarrowMax) {
 			if tk.Index == 1 || tk.Index == len(ats)-2 {
 				t.Fatalf("tick at %d sits on top of an end label", tk.Index)
 			}
@@ -346,13 +365,13 @@ func TestTimeAxisTicks(t *testing.T) {
 
 	t.Run("a twelve-month window still labels every month", func(t *testing.T) {
 		ats := months(2026, time.January, 12)
-		if got := TimeAxisTicks(ats, 12, 7); len(got) != 12 {
+		if got := TimeAxisTicks(ats, nwsAxisWideMax, nwsAxisNarrowMax); len(got) != 12 {
 			t.Fatalf("TimeAxisTicks = %d labels, want all 12 — a year fits", len(got))
 		}
 	})
 
 	t.Run("a one-year window omits the year from each label", func(t *testing.T) {
-		for _, tk := range TimeAxisTicks(months(2026, time.January, 12), 12, 7) {
+		for _, tk := range TimeAxisTicks(months(2026, time.January, 12), nwsAxisWideMax, nwsAxisNarrowMax) {
 			if len(tk.Label) != 3 {
 				t.Fatalf("tick %+v: within one year the label is the month alone", tk)
 			}
@@ -360,13 +379,13 @@ func TestTimeAxisTicks(t *testing.T) {
 	})
 
 	t.Run("degenerate inputs do not panic or invent an axis", func(t *testing.T) {
-		if got := TimeAxisTicks(nil, 12, 7); got != nil {
+		if got := TimeAxisTicks(nil, nwsAxisWideMax, nwsAxisNarrowMax); got != nil {
 			t.Fatalf("TimeAxisTicks(nil) = %+v, want nil", got)
 		}
 		if got := TimeAxisTicks(months(2026, time.January, 3), 1, 1); got != nil {
 			t.Fatalf("a budget below two ticks is not an axis, got %+v", got)
 		}
-		if got := TimeAxisTicks(months(2026, time.January, 1), 12, 7); len(got) != 1 {
+		if got := TimeAxisTicks(months(2026, time.January, 1), nwsAxisWideMax, nwsAxisNarrowMax); len(got) != 1 {
 			t.Fatalf("TimeAxisTicks of one point = %+v, want that point", got)
 		}
 	})

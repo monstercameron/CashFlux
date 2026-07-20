@@ -486,8 +486,131 @@ test("History records the round figures crossed, in both directions", async ({ a
   // Either it lists crossings or it says plainly there were none.
   expect((await items.count()) > 0 || (await none.count()) > 0).toBe(true);
   for (const line of await items.allInnerTexts()) {
-    expect(line).toMatch(/passed|fell back below|turned positive/i);
+    expect(line).toMatch(/passed|fell back below|fell from|turned positive|turned negative|highest so far/i);
   }
+});
+
+// Selects the all-time period, which is the window every density and volume
+// rule below is actually about — the defaults are short enough to hide both.
+async function allTime(app) {
+  await app.locator(".nws-window button", { hasText: "All time" }).first().click();
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+}
+
+async function sixMonths(app) {
+  await app.locator(".nws-window button", { hasText: "6 months" }).first().click();
+}
+
+test("all-time milestones stay a record, not an event log", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await allTime(app);
+  await detail(app);
+
+  const items = app.locator('[data-testid="nws-milestone"]');
+  const more = app.locator('[data-testid="nws-milestones-more"]');
+
+  // Collapsed by default to the latest few. This is the regression guard for
+  // the 32-row list a five-year window used to produce.
+  const shown = await items.count();
+  expect(shown, "the collapsed list shows only the latest few events").toBeLessThanOrEqual(5);
+
+  // The expander states the honest total on its face — no silent cap.
+  let total = shown;
+  if (await more.count()) {
+    const label = await more.innerText();
+    const n = Number((label.match(/\d+/) || [])[0]);
+    expect(n, "the expander must name the real total").toBeGreaterThanOrEqual(shown);
+    await more.click();
+    total = await items.count();
+    expect(total, "opening must reveal exactly the total it promised").toBe(n);
+  }
+
+  // The whole point of scaling thresholds: a five-year run is a readable list.
+  expect(total, "an all-time window must not read as an event log").toBeLessThanOrEqual(12);
+
+  const lines = await items.allInnerTexts();
+
+  // No "passed" milestone for a negative threshold. Crossing -$1,000 upward is
+  // not an achievement; it is part of the one story the first-positive
+  // milestone already tells.
+  for (const line of lines) {
+    if (!/passed|fell back below/i.test(line)) continue;
+    expect(line, `a negative threshold is not a milestone: ${line}`).not.toMatch(/[(−-]\s*[$€£¥]/);
+  }
+
+  // No two rows may describe the same month with the same round figure — the
+  // old generator emitted five rows for a single month.
+  const seen = new Set();
+  for (const line of lines) {
+    expect(seen.has(line), `duplicate milestone row: ${line}`).toBe(false);
+    seen.add(line);
+  }
+
+  // Transitions are PAIRED: a page that narrates the recovery must narrate the
+  // fall. If it says net worth turned positive more than once, it went negative
+  // in between, and it has to say so.
+  const positives = lines.filter((l) => /turned positive/i.test(l)).length;
+  const negatives = lines.filter((l) => /turned negative/i.test(l)).length;
+  if (positives > 1) {
+    expect(negatives, "a second recovery implies a fall that must be reported").toBeGreaterThanOrEqual(positives - 1);
+  }
+
+  await sixMonths(app);
+});
+
+test("the all-time x axis stays readable at every pane width, in both themes", async ({ app }) => {
+  for (const theme of ["dark", "light"]) {
+    await setTheme(app, theme);
+    for (const [w, h] of [[1440, 900], [1202, 1078], [968, 900]]) {
+      await app.setViewportSize({ width: w, height: h });
+      await nav(app, "/networth");
+      await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+      await allTime(app);
+
+      const ticks = app.locator('[data-testid="nws-xaxis"] [data-testid="nws-xtick"]:visible');
+      const labels = (await ticks.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+      const where = `${theme} @ ${w}`;
+
+      // An axis still has to say what it covers.
+      expect(labels.length, `${where}: an axis needs more than its ends`).toBeGreaterThanOrEqual(3);
+      // ...but never a run so dense it can only render initials. This is the
+      // regression guard for the 32-caption all-time axis.
+      expect(labels.length, `${where}: too many ticks to read`).toBeLessThanOrEqual(8);
+
+      // No label may have degenerated to a letter or two — the exact failure
+      // the reviewer saw. Every caption must name a real date.
+      for (const l of labels) {
+        expect(l.length, `${where}: "${l}" is an initial, not a date`).toBeGreaterThanOrEqual(3);
+        expect(l, `${where}: "${l}" is not a date`).toMatch(/^(\d{4}|[A-Z][a-z]{2}( \d{2})?|Now)$/);
+      }
+
+      // And no two labels may overlap, which is what the density budget buys.
+      const boxes = await ticks.evaluateAll((els) =>
+        els
+          .filter((e) => e.offsetParent !== null && e.innerText.trim())
+          .map((e) => {
+            const r = e.getBoundingClientRect();
+            return [r.left, r.right];
+          })
+          .sort((a, b) => a[0] - b[0]),
+      );
+      for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i][0], `${where}: axis labels overlap`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
+      }
+
+      // The axis must not push the page sideways at any width.
+      const overflow = await app.evaluate(() => {
+        const m = document.querySelector("main") || document.body;
+        return m.scrollWidth - m.clientWidth;
+      });
+      expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
+
+      await sixMonths(app);
+    }
+  }
+  await setTheme(app, "dark");
+  await app.setViewportSize({ width: 1440, height: 900 });
 });
 
 test("Detail keeps its place: jumps land on the title and the index tracks it", async ({ app }) => {

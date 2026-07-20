@@ -350,6 +350,12 @@ func TimeAxisTicks(ats []time.Time, wideMax, narrowMax int) []TimeTick {
 		return []TimeTick{{Index: 0, Label: ats[0].Format("Jan 2006"), Major: true}}
 	}
 	multiYear := ats[0].Year() != ats[len(ats)-1].Year()
+	// The budget is stated in DATED labels ("Jul 21", "2024"). A series inside
+	// one year captions itself with the month alone, which is little more than
+	// half as wide, so the same gutter holds half again as many — budgeting a
+	// twelve-month window as though its labels were dated would thin an axis
+	// that fits comfortably.
+	wideMax, narrowMax = shortLabelBudget(wideMax, multiYear), shortLabelBudget(narrowMax, multiYear)
 	wide := timeGrainFor(ats, wideMax)
 	narrow := timeGrainFor(ats, narrowMax)
 
@@ -364,6 +370,15 @@ func TimeAxisTicks(ats []time.Time, wideMax, narrowMax int) []TimeTick {
 	return out
 }
 
+// shortLabelBudget widens a dated-label budget by half for a series captioned
+// with bare month names.
+func shortLabelBudget(max int, multiYear bool) int {
+	if multiYear {
+		return max
+	}
+	return max * 3 / 2
+}
+
 // timeGrainFor picks the finest calendar granularity whose tick count fits max,
 // and returns the point indices it selects, ends included.
 func timeGrainFor(ats []time.Time, max int) []int {
@@ -371,35 +386,69 @@ func timeGrainFor(ats []time.Time, max int) []int {
 	if max < 2 {
 		return []int{0, last}
 	}
-	// One point's share of the width is only too narrow to hold a label when the
-	// series is longer than the budget; below that, every slot is label-width
-	// already and a neighbour of an end collides with nothing.
-	crowded := last > max
+	// A label needs about the width the budget allots it, so two ticks closer
+	// together than the series length divided by the budget cannot both be
+	// drawn. Calendar boundaries are evenly spaced among themselves, but the
+	// ENDS are not on the grid — a series beginning in July puts its first
+	// January three points in — so the rule is enforced across every pair.
+	minSep := (last + max - 1) / max
 	for _, g := range timeGrains {
-		idx := grainIndices(ats, g.months, g.years, crowded)
-		if len(idx) <= max {
+		idx := grainIndices(ats, g.months, g.years)
+		// The grain must be coarse enough IN ITS OWN RIGHT. Thinning a fine
+		// grain down to fit would put labels on arbitrary months ("Mar 22, Nov
+		// 22") — evenly spaced and naming nothing a reader is looking for. A
+		// grain either reads as a calendar or it is the wrong grain.
+		if !spacedBy(idx, minSep) {
+			continue
+		}
+		if idx = trimEnds(idx, minSep, last); len(idx) <= max {
 			return idx
 		}
 	}
 	return []int{0, last}
 }
 
+// spacedBy reports whether every INTERIOR pair is at least minSep apart. The
+// ends sit off the calendar grid, so they are excluded here and handled by
+// trimEnds.
+func spacedBy(idx []int, minSep int) bool {
+	for i := 2; i < len(idx)-1; i++ {
+		if idx[i]-idx[i-1] < minSep {
+			return false
+		}
+	}
+	return true
+}
+
 // grainIndices selects the points landing on a calendar boundary of the given
-// spacing, always including both ends. When the series is crowded it also skips
-// the points immediately beside an end, whose labels would sit on top of them.
-func grainIndices(ats []time.Time, months, years int, crowded bool) []int {
+// spacing, always including both ends.
+func grainIndices(ats []time.Time, months, years int) []int {
 	last := len(ats) - 1
 	out := []int{0}
 	for i := 1; i < last; i++ {
-		if !onGrain(ats[i], months, years) {
-			continue
+		if onGrain(ats[i], months, years) {
+			out = append(out, i)
 		}
-		if crowded && (i == 1 || i == last-1) {
-			continue
-		}
-		out = append(out, i)
 	}
 	return append(out, last)
+}
+
+// trimEnds drops calendar ticks that crowd either end. Both ends are kept
+// whatever happens — a series whose ends are unnamed does not say what it
+// covers — so a tick too close to one loses to it. A series beginning in July
+// puts its first January three points in, which is exactly this case.
+func trimEnds(idx []int, minSep, last int) []int {
+	if minSep <= 1 || len(idx) < 3 {
+		return idx
+	}
+	out := append([]int(nil), idx...)
+	for len(out) > 2 && out[1]-out[0] < minSep {
+		out = append(out[:1], out[2:]...)
+	}
+	for len(out) > 2 && last-out[len(out)-2] < minSep {
+		out = append(out[:len(out)-2], last)
+	}
+	return out
 }
 
 // onGrain reports whether t sits on a calendar boundary of the given spacing.

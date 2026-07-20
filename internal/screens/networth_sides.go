@@ -108,13 +108,18 @@ func (s nwsGapScale) y(v float64) float64 {
 
 const nwsSidesW = 1000.0
 
-// nwsXTicksWide / nwsXTicksNarrow are the x-axis label budgets for the widest
-// and narrowest panes the chart renders in. A dated label runs about 50px at
-// this type size, so twelve fill a 1200px plot comfortably and seven fill a
-// 710px one; past that they collide, and a colliding label is not a label.
+// nwsXTicksWide / nwsXTicksNarrow are the x-axis label budgets, in DATED
+// labels, for the widest and narrowest panes the chart renders in.
+//
+// They are small because the plot is much narrower than the pane: it shares the
+// section with the composition strips, so at a 1440px viewport the plot measures
+// about 420px, not 1200. A dated label runs ~36px at this type size, so eight
+// is what fits with air between them and five is what fits once the strips are
+// still beside it in a narrowed pane. Budgeting off the PANE width was the
+// mistake worth naming here — the chart never had the pane's width.
 const (
-	nwsXTicksWide   = 12
-	nwsXTicksNarrow = 7
+	nwsXTicksWide   = 8
+	nwsXTicksNarrow = 5
 )
 
 // nwsSidesX is the horizontal position of point i of n.
