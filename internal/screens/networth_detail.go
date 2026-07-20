@@ -448,10 +448,59 @@ func nwsHealthSection(v nwsView) ui.Node {
 		uistate.T("nws.secHealthNote"), nil, Fragment(nwsRatioCards(v), defs))
 }
 
-// nwsMilestones lists the round figures net worth crossed over the window. It
-// reports crossings in BOTH directions: a page that only ever congratulates is
-// a trophy cabinet, not a record of what happened.
+// nwsMilestoneRecent is how many of the most recent events show before the list
+// asks to be opened. Five is enough to carry the shape of the last year or two
+// without the section turning into a scroll of its own — and every one of them
+// is a sentence, so a longer default reads as a log rather than a record.
+const nwsMilestoneRecent = 5
+
+// nwsMilestoneLine phrases one event. Each kind gets its OWN sentence, because
+// "passed $100,000" and "fell to $80,000 from a high of $100,000" are different
+// facts and flattening them into one template is how the list stopped being
+// readable in the first place.
+func nwsMilestoneLine(m balancesheet.Milestone, v nwsView, when string) string {
+	amt := func(minor int64) string { return fmtMoney(money.New(minor, v.Base)) }
+	switch m.Kind {
+	case balancesheet.MilestoneKindPositive:
+		return uistate.T("nws.milestonePos", when)
+	case balancesheet.MilestoneKindNegative:
+		return uistate.T("nws.milestoneNeg", when)
+	case balancesheet.MilestoneKindHigh:
+		return uistate.T("nws.milestoneHigh", amt(m.ValueMinor), when)
+	case balancesheet.MilestoneKindReversal:
+		return uistate.T("nws.milestoneReversal", amt(m.FromMinor), amt(m.ValueMinor), when)
+	case balancesheet.MilestoneKindThreshold:
+		if m.Up {
+			return uistate.T("nws.milestoneUp", amt(m.ValueMinor), when)
+		}
+		return uistate.T("nws.milestoneDown", amt(m.ValueMinor), when)
+	}
+	return ""
+}
+
+// nwsMilestones lists what actually happened to net worth over the window: the
+// round figures it passed, its high, its falls, and every crossing of zero in
+// BOTH directions — a page that only ever congratulates is a trophy cabinet,
+// not a record of what happened.
+//
+// The most recent few show by default and the rest sit behind an expander that
+// states the honest total. That is a disclosure, not a cap: "+2 more" is banned
+// on this page, but so is thirty-two rows of a five-year run, which reads as an
+// event log and costs the section the trust it is here to earn.
 func nwsMilestones(v nwsView) ui.Node {
+	return ui.CreateElement(nwsMilestoneList, nwsMilestoneListProps{View: v})
+}
+
+// nwsMilestoneListProps carries the shared view into the expander component.
+type nwsMilestoneListProps struct{ View nwsView }
+
+// nwsMilestoneList owns the open/closed hook, so the toggle sits at a stable
+// call-site rather than inside a section builder.
+func nwsMilestoneList(p nwsMilestoneListProps) ui.Node {
+	v := p.View
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+
 	ms := balancesheet.Milestones(v.Points)
 	whenOf := func(i int) string {
 		if i < len(v.Points) {
@@ -459,22 +508,22 @@ func nwsMilestones(v nwsView) ui.Node {
 		}
 		return ""
 	}
-	items := make([]ui.Node, 0, len(ms))
-	for _, m := range ms {
-		var line string
-		switch {
-		case m.Kind == balancesheet.MilestoneKindPositive:
-			line = uistate.T("nws.milestonePos", whenOf(m.AtIndex))
-		case m.Up:
-			line = uistate.T("nws.milestoneUp", fmtMoney(money.New(m.ValueMinor, v.Base)), whenOf(m.AtIndex))
-		default:
-			line = uistate.T("nws.milestoneDown", fmtMoney(money.New(m.ValueMinor, v.Base)), whenOf(m.AtIndex))
-		}
+	shown := ms
+	if !open.Get() && len(ms) > nwsMilestoneRecent {
+		shown = ms[len(ms)-nwsMilestoneRecent:]
+	}
+	items := make([]ui.Node, 0, len(shown))
+	for _, m := range shown {
 		cls := "nws-milestone"
 		if !m.Up {
 			cls += " is-down"
 		}
-		items = append(items, Li(ClassStr(cls), Attr("data-testid", "nws-milestone"), line))
+		items = append(items, Li(ClassStr(cls), Attr("data-testid", "nws-milestone"),
+			nwsMilestoneLine(m, v, whenOf(m.AtIndex))))
+	}
+	label := uistate.T("nws.milestonesShowAll", len(ms))
+	if open.Get() {
+		label = uistate.T("nws.milestonesShowRecent", nwsMilestoneRecent)
 	}
 	return Div(css.Class("nws-milestones"),
 		H3(css.Class("nws-sec-title"), Style(map[string]string{"margin": "0.9rem 0 0.4rem"}),
@@ -482,5 +531,10 @@ func nwsMilestones(v nwsView) ui.Node {
 		IfElse(len(items) == 0,
 			P(css.Class("nws-sec-note"), Attr("data-testid", "nws-milestones-none"), uistate.T("nws.milestonesNone")),
 			Ul(css.Class("nws-milestone-list"), items)),
+		If(len(ms) > nwsMilestoneRecent,
+			Button(css.Class("nws-milestones-more"), Type("button"),
+				Attr("data-testid", "nws-milestones-more"),
+				Attr("aria-expanded", boolStr(open.Get())),
+				OnClick(toggle), label)),
 	)
 }

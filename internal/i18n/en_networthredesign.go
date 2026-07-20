@@ -150,11 +150,16 @@ var netWorthRedesignKeys = Catalog{
 	"nws.readDebtAlarm":  "You owe more than most of what you own.",
 
 	// ── Milestones
-	"nws.milestonesTitle": "Milestones",
-	"nws.milestoneUp":     "Passed %s in %s.",
-	"nws.milestoneDown":   "Fell back below %s in %s.",
-	"nws.milestonePos":    "Net worth turned positive in %s.",
-	"nws.milestonesNone":  "No round figures were crossed over this period.",
+	"nws.milestonesTitle":      "Milestones",
+	"nws.milestoneUp":          "Passed %s in %s.",
+	"nws.milestoneDown":        "Fell back below %s in %s.",
+	"nws.milestonePos":         "Net worth turned positive in %s.",
+	"nws.milestoneNeg":         "Net worth turned negative in %s.",
+	"nws.milestoneHigh":        "Reached its highest so far, %s, in %s.",
+	"nws.milestoneReversal":    "Fell from %s to %s by %s.",
+	"nws.milestonesNone":       "No round figures were crossed over this period.",
+	"nws.milestonesShowAll":    "Show all %d milestones",
+	"nws.milestonesShowRecent": "Show only the latest %d",
 	"nws.winAll":          "All time",
 	"nws.agoAll":          "when your records begin",
 

@@ -954,6 +954,24 @@ func registerNwsDetail() {
 		prop("border-left-color", "var(--border)"),
 		prop("color", "var(--text-dim)"),
 	)
+	// The expander states the honest total on its face, so the collapsed list is
+	// a disclosure rather than a cap.
+	rule(".nws-milestones-more",
+		prop("margin-top", "0.5rem"),
+		prop("padding", "0.25rem 0.7rem"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text-dim)"),
+		prop("background", "var(--bg-card)"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "999px"),
+		prop("cursor", "pointer"),
+		prop("transition", "color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".nws-milestones-more:hover",
+		prop("color", "var(--text)"),
+		prop("border-color", "var(--accent)"),
+	)
 
 	// A wide table scrolls inside its own box; the page never scrolls sideways.
 	rule(".nws-scroll",
