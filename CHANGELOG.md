@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`internal/recurdiscover` stages 2–4 + orchestration — rhythm, cost, confidence, dedupe, death,
+  re-verify.** The discovery engine now turns signature clusters into evidence-carrying candidates.
+  Rhythm detection scores inter-arrival gaps against eight candidate cadences (weekly … annual) and
+  correctly separates the two look-alikes — biweekly (constant ~14-day gap, anchor precesses) vs
+  semi-monthly (two fixed anchor days) and every-4-weeks (28-day, day-of-month drifts) vs monthly
+  (stable day-of-month) — and infers an anchor day + posting window. Cost modelling classifies fixed
+  / banded (median ± MAD) / stepped (exactly one durable price change, emitted as a creep signal on
+  the SAME candidate — never a split), splits a same-signature cluster holding two concurrent
+  subscriptions into two candidates, and rejects incoherent noise (the Venmo-payment case yields
+  nothing). Confidence combines rhythm fit × cost stability × occurrence count × liveness into a
+  Likely / NeedsReview / Silent tier, flags a stable inbound flow as an income (paycheck) candidate,
+  and honours the evidence floor (3 for monthly-or-faster, 2 for semiannual/annual). `Discover` dedupes
+  a cluster matching an existing commitment's matcher into that commitment's cycle-matches (core-token
+  identity bridges a clean "Netflix" to a noisy "NETFLIX #"), honours suppressed-signature pins, and is
+  deterministic under shuffled input. `DetectStopped` flags an active commitment that has missed two or
+  more consecutive expectations; `Verify` re-scores a claimed (e.g. Smart+/AI) pattern locally so it can
+  be marked "verified locally" or honestly unconfirmed. `DomainCadence` maps the two enum-less cadences
+  (every-4-weeks → monthly, semiannual → quarterly) to the nearest persistable domain cadence, keeping
+  the true rhythm on the evidence.
 - **`internal/recurdiscover` stage 1 — signature clustering (Bills & Recurring redesign engine).**
   New pure package that quarantines per-transaction reference noise (mixed letter+digit tokens,
   six-plus-digit runs, vowelless high-entropy runs → a single `#`) so rotating order/auth ids
