@@ -52,6 +52,17 @@ Notable decisions/traps:
   `EstTokens` idiom) and is disabled with an explanation when no OpenAI key/backend is configured; on
   invoke it sends only the leftover signatures and re-verifies each locally with `recurdiscover.Verify`
   ("verified locally ✓" vs an honest "no local way to confirm").
+### Calendar view: amounts, not dots
+
+The first self-check screenshot showed the CALENDAR view was still the old bills dot-grid — a coloured
+dot with a count, amounts only in the tooltip. The spec is explicit ("real amounts on days, not bare
+dots; income vs outflow visually distinct in-cell"), so the reuse was too cheap. Rebuilt the cells:
+`bills.MonthCalendar` still supplies the tested date scaffolding (pass it no bills, take the weeks), and
+the cells are ours, filled from a day-bucketed map of the same merged agenda the compact list renders —
+so the two views genuinely are two views of one dataset. Income takes the accent, outflow stays muted,
+three amounts per cell then "+N more". Also refactored `buildAgenda` into `buildAgendaRange` so the
+calendar can page to an arbitrary month instead of being stuck inside the 45-day pay-cycle window.
+
 ### Review-strip pagination (Cam, same day)
 
 Self-check screenshots exposed the scale problem immediately: the seeded household yields 63

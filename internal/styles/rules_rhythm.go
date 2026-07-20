@@ -445,6 +445,45 @@ func registerRhythmAgenda() {
 	rule("[data-density=\"compact\"] .rhy-ag-row",
 		prop("padding", "0.25rem 0"),
 	)
+	// CALENDAR view: the same agenda data as a month grid, carrying REAL amounts
+	// on the days (never bare dots) with income distinguished by the accent.
+	rule(".rhy-cal-cell",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("align-items", "flex-start"),
+		prop("gap", "0.1rem"),
+		prop("min-height", "4.4rem"),
+		prop("padding", "0.25rem 0.3rem"),
+		prop("overflow", "hidden"),
+	)
+	rule(".rhy-cal-day",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-dim)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".rhy-cal-cell.today .rhy-cal-day",
+		prop("color", "var(--text)"),
+		prop("font-weight", "700"),
+	)
+	rule(".rhy-cal-amt",
+		prop("display", "block"),
+		prop("max-width", "100%"),
+		prop("font-size", "var(--type-11)"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("color", "var(--text-dim)"),
+		prop("white-space", "nowrap"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+	)
+	rule(".rhy-cal-amt.is-in",
+		prop("color", "var(--accent)"),
+		prop("font-weight", "600"),
+	)
+	rule(".rhy-cal-more",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-dim)"),
+		prop("opacity", "0.8"),
+	)
 	rule(".rhy-ag-fit",
 		prop("font-size", "var(--type-11)"),
 		prop("color", "var(--text-dim)"),

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **The agenda's CALENDAR view shows real amounts on the days, not bare dots.** The month grid now
+  renders the SAME merged agenda data as the compact list — each day carries its actual amounts (up to
+  three, then "+N more"), with income in the accent and outflow muted so the two read apart at a glance,
+  and the day cells keep the prev/today/next paging (`cal-prev`/`cal-next`/`cal-today`). Previously it
+  reused the bills dot-grid, which conveyed only a count. The tested `bills.MonthCalendar` still supplies
+  the date scaffolding (weeks, in/out-of-month), so no calendar math was reimplemented.
 - **The review strip pages instead of growing without bound.** With a real ledger the detector surfaces
   far more candidates than the sample data (the seeded household alone yields 63), and an unbounded
   "Waiting for your review" list swamped the page and buried the agenda and roster beneath it. The strip

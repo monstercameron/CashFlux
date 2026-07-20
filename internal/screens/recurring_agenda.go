@@ -46,11 +46,19 @@ type agendaItem struct {
 }
 
 // buildAgenda merges the forward bill occurrences (recurring-derived + liability
-// statement) with the income paychecks into one date-sorted agenda.
+// statement) with the income paychecks into one date-sorted agenda over the
+// standard pay-cycle window.
 func buildAgenda(app *appstate.App, now time.Time, base string) []agendaItem {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return buildAgendaRange(app, now, today.AddDate(0, 0, agendaWindowDays), base)
+}
+
+// buildAgendaRange is buildAgenda over an explicit horizon — the calendar view
+// pages to arbitrary months, so it needs the same merged model out to the end of
+// whatever month is displayed.
+func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []agendaItem {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	until := today.AddDate(0, 0, agendaWindowDays)
 
 	recByID := map[string]domain.Recurring{}
 	for _, r := range app.Recurring() {
@@ -195,13 +203,19 @@ func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll
 	return list
 }
 
-// rhyAgendaCalendar renders the month-grid view, reusing the bills calendar
-// chrome (keeps the cal-prev/cal-next/cal-today testids).
+// rhyAgendaCalendar renders the month-grid view of the SAME agenda data as the
+// compact list — real amounts on the days, not bare dots, with income visually
+// distinct from outflow. It keeps the cal-prev/cal-next/cal-today testids.
 func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string, calPrev, calNext, calToday any) ui.Node {
 	pr := uistate.LoadPrefs()
 	disp := dateutil.AddMonths(dateutil.MonthStart(now), offset)
 	monthEnd := dateutil.AddMonths(disp, 1)
-	calBills := bills.OccurrencesWithin(app.Accounts(), app.Recurring(), now, monthEnd.AddDate(0, 0, 1))
+	// Bucket the merged agenda (bills + income) by calendar day.
+	byDay := map[string][]agendaItem{}
+	for _, it := range buildAgendaRange(app, now, monthEnd.AddDate(0, 0, 1), base) {
+		k := it.Date.Format("2006-01-02")
+		byDay[k] = append(byDay[k], it)
+	}
 	nav := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap1),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "cal-prev"),
 			Attr("aria-label", uistate.T("bills.calPrev")), Title(uistate.T("bills.calPrev")), OnClick(calPrev), "◀"),
@@ -210,12 +224,54 @@ func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "cal-next"),
 			Attr("aria-label", uistate.T("bills.calNext")), Title(uistate.T("bills.calNext")), OnClick(calNext), "▶"),
 	)
-	empty := map[string]int{}
+	// MonthCalendar supplies the tested date scaffolding (weeks, in/out-of-month);
+	// the cells are ours so they can carry amounts.
+	grid := bills.MonthCalendar(nil, disp.Year(), disp.Month(), pr.WeekStartWeekday())
 	return Fragment(
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
 			Span(css.Class("rhy-sec-note"), Style(map[string]string{"margin": "0"}), monthLabel(disp)), nav),
-		billsCalendar(bills.MonthCalendar(calBills, disp.Year(), disp.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, empty, empty),
+		rhyCalendarGrid(grid, pr.WeekStartWeekday(), now, byDay),
 	)
+}
+
+// rhyCalendarGrid draws the month grid with the day's real amounts in-cell.
+// Display-only (no hooks), so it is safe inside the day loop.
+func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, byDay map[string][]agendaItem) ui.Node {
+	todayKey := now.Format("2006-01-02")
+	args := []any{css.Class("cal-grid rhy-cal")}
+	for i := 0; i < 7; i++ {
+		wd := time.Weekday((int(weekStart) + i) % 7)
+		args = append(args, Div(css.Class("cal-head"), wd.String()[:3]))
+	}
+	for _, week := range grid {
+		for _, day := range week {
+			key := day.Date.Format("2006-01-02")
+			cls := "cal-cell rhy-cal-cell"
+			if !day.InMonth {
+				cls += " out"
+			}
+			if key == todayKey {
+				cls += " today"
+			}
+			cell := []any{ClassStr(cls), Attr("data-testid", "rhy-cal-"+key),
+				Span(css.Class("rhy-cal-day"), day.Date.Format("2"))}
+			items := byDay[key]
+			const maxChips = 3
+			for i, it := range items {
+				if i >= maxChips {
+					cell = append(cell, Span(css.Class("rhy-cal-more"), uistate.T("rhythm.calMore", len(items)-maxChips)))
+					break
+				}
+				chip := "rhy-cal-amt"
+				if it.Income {
+					chip += " is-in"
+				}
+				cell = append(cell, Span(ClassStr(chip), Title(it.Name), fmtMoney(it.Amount)))
+			}
+			args = append(args, Div(cell...))
+		}
+	}
+	return Div(args...)
 }
 
 // rhyAgendaRowProps drives one compact agenda row.

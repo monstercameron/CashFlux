@@ -77,6 +77,7 @@ var rhythmKeys = Catalog{
 	"rhythm.viewCalendar": "Calendar",
 	"rhythm.showAll":      "Show all %d",
 	"rhythm.showFewer":    "Show fewer",
+	"rhythm.calMore":      "+%d more",
 
 	// Posting-mode badges.
 	"rhythm.modeAuto":       "Auto",
