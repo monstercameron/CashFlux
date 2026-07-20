@@ -19,6 +19,13 @@ and every commit updates this file under `Unreleased`.
   (`rules_dp_borders.go`): inside an already-bordered, elevated panel an inner block drops its own
   box and separates with the shared `--bg-elev` subtle-lift instead. `--radius` is untouched and
   still drives everything the theme editor owns.
+- **A selected roster lens on Bills & recurring looked like a primary action. (RH-GARNISH3)** The
+  selected lens filled solid accent-green — the treatment the app reserves for the ONE beneficial
+  primary action per region (`rules_dp_color.go`), on a control that performs no action at all. It
+  now speaks the shared filter-chip dialect from `rules_dp_controls.go`, identical to the
+  notification-triage pills: a subtle accent tint, accent ink tuned for contrast on that tint, and a
+  2px inset accent marker rail. The 1px resting border becomes transparent rather than disappearing,
+  so selecting a lens still shifts nothing.
 - **Bills & recurring set its own type weights instead of the app's. (RH-GARNISH2)** Three readouts
   on the surface sat a half-step off the shared scale, which is enough to read as a different
   heading level page-to-page: the section title was 650 where the app's shared section-title garnish

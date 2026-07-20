@@ -674,10 +674,18 @@ func registerRhythmRoster() {
 		prop("font-size", "var(--type-12)"),
 		prop("cursor", "pointer"),
 	)
+	// A lens is a FILTER CHIP, and the app reserves a solid accent fill for the one
+	// beneficial primary action per region (rules_dp_color.go). So the selected lens
+	// speaks the shared filter-chip dialect from rules_dp_controls.go — the same one
+	// the notification triage and to-do view chips use: a subtle accent tint, accent
+	// ink tuned for contrast on that tint, and a 2px inset accent marker rail
+	// standing in for a check. Selection stays unmistakable without a green button
+	// appearing where no action lives.
 	rule(".rhy-lens.is-on",
-		prop("background", "var(--accent)"),
-		prop("border-color", "var(--accent)"),
-		prop("color", "var(--accent-fg)"),
+		prop("background", "color-mix(in srgb, var(--accent) 14%, transparent)"),
+		prop("border-color", "transparent"),
+		prop("color", "var(--accent-ink, var(--accent))"),
+		prop("box-shadow", "inset 2px 0 0 var(--accent)"),
 	)
 	rule(".rhy-lens-sub",
 		prop("margin-left", "auto"),
