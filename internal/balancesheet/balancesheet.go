@@ -647,6 +647,159 @@ func milestoneReversals(pts []Point) []Milestone {
 	return out
 }
 
+// PaceRung is one round figure reached, and how long the climb to it took.
+type PaceRung struct {
+	// ValueMinor is the figure reached; AtIndex is where in the series.
+	ValueMinor int64
+	AtIndex    int
+	// Months is the time since the previous rung — the number the whole
+	// graphic exists to show. Zero on the first rung, which had no previous.
+	Months int
+}
+
+// PaceNext is the extrapolation to the next round figure. It is a projection
+// from recent pace and nothing more, which is why it carries its own OK and
+// Stalled flags instead of always producing a date: a household whose recent
+// trend is flat or falling has no honest arrival month, and inventing one would
+// be the page's first promise.
+type PaceNext struct {
+	ValueMinor int64
+	Months     int
+	// OK is true only when a figure and a month count can both be stated.
+	OK bool
+	// Stalled is true when the recent trend is flat or downward, so the answer
+	// is "not at this pace" rather than a date.
+	Stalled bool
+}
+
+// Pace is the reading of the net-worth series as PROGRESS rather than as a list
+// of events: which round figures were reached, how long each leg took, and what
+// the next one would be at the recent rate.
+//
+// The insight a household wants is not "passed $50,000 in April 2024" — that is
+// a receipt. It is that the last leg took eight months and the one before it
+// took fourteen. So the legs, not the events, are the content.
+type Pace struct {
+	// Rungs are the figures reached, in order.
+	Rungs []PaceRung
+	// Next is the extrapolation past the last rung.
+	Next PaceNext
+	// Marks are everything worth marking on the chart, including the setbacks
+	// that are not rungs — the record stays truthful about falls even though a
+	// fall is not progress.
+	Marks []Milestone
+}
+
+// paceRecentMonths is how much history the projection is drawn from. A year is
+// long enough not to be moved by one unusual month and short enough to describe
+// what the household is doing NOW rather than what it did in 2022.
+const paceRecentMonths = 12
+
+// paceMaxProjection caps how far ahead a projection will speak. Beyond a few
+// years the extrapolation says more about the arithmetic than about the
+// household, so it declines to answer instead.
+const paceMaxProjection = 60
+
+// BuildPace reads the series as progress. pts must be in cutoff order.
+func BuildPace(pts []Point) Pace {
+	var p Pace
+	if len(pts) < 2 {
+		return p
+	}
+	p.Marks = Milestones(pts)
+
+	// Only levels REACHED are rungs: falling back below one is a setback, which
+	// the marks already carry. Turning positive counts — it is the rung every
+	// later one is measured from, and without it the rail would begin partway
+	// up a climb with no account of how the household got there.
+	var prev *PaceRung
+	for _, m := range p.Marks {
+		if m.Kind == MilestoneKindPositive && len(p.Rungs) == 0 {
+			p.Rungs = append(p.Rungs, PaceRung{ValueMinor: 0, AtIndex: m.AtIndex})
+			prev = &p.Rungs[0]
+			continue
+		}
+		if m.Kind != MilestoneKindThreshold || !m.Up {
+			continue
+		}
+		r := PaceRung{ValueMinor: m.ValueMinor, AtIndex: m.AtIndex}
+		if prev != nil {
+			r.Months = monthsBetween(pts[prev.AtIndex].At, pts[m.AtIndex].At)
+		}
+		p.Rungs = append(p.Rungs, r)
+		prev = &p.Rungs[len(p.Rungs)-1]
+	}
+	p.Next = projectNext(pts)
+	return p
+}
+
+// projectNext extrapolates the next rung from recent pace.
+func projectNext(pts []Point) PaceNext {
+	last := len(pts) - 1
+	now := pts[last].NetMinor
+	if now <= 0 {
+		return PaceNext{}
+	}
+	// Recent pace: the change over the last year of the series, per month.
+	from := 0
+	for i := last; i >= 0; i-- {
+		if monthsBetween(pts[i].At, pts[last].At) <= paceRecentMonths {
+			from = i
+			continue
+		}
+		break
+	}
+	months := monthsBetween(pts[from].At, pts[last].At)
+	if months <= 0 {
+		return PaceNext{}
+	}
+	perMonth := (now - pts[from].NetMinor) / int64(months)
+	if perMonth <= 0 {
+		return PaceNext{Stalled: true}
+	}
+
+	var peak int64
+	for _, p := range pts {
+		if p.NetMinor > peak {
+			peak = p.NetMinor
+		}
+	}
+	target := nextRungAbove(now, peak)
+	if target <= 0 {
+		return PaceNext{}
+	}
+	away := int((target-now+perMonth-1)/perMonth) // round up: the month it lands in
+	if away > paceMaxProjection {
+		return PaceNext{}
+	}
+	return PaceNext{ValueMinor: target, Months: away, OK: true}
+}
+
+// nextRungAbove is the first ladder rung strictly above now. The ladder is the
+// milestone ladder, extended one decade so a household already standing at its
+// own peak still has somewhere to be heading.
+func nextRungAbove(now, peak int64) int64 {
+	ref := peak
+	if now > ref {
+		ref = now
+	}
+	for _, v := range milestoneLadder(ref * 10) {
+		if v > now {
+			return v
+		}
+	}
+	return 0
+}
+
+// monthsBetween counts whole calendar months from a to b, never negative.
+func monthsBetween(a, b time.Time) int {
+	m := (b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
+	if m < 0 {
+		return 0
+	}
+	return m
+}
+
 func containsInt64(s []int64, v int64) bool {
 	for _, x := range s {
 		if x == v {

@@ -158,8 +158,18 @@ var netWorthRedesignKeys = Catalog{
 	"nws.milestoneHigh":        "Reached its highest so far, %s, in %s.",
 	"nws.milestoneReversal":    "Fell from %s to %s by %s.",
 	"nws.milestonesNone":       "No round figures were crossed over this period.",
+	// ── The pace rail. Every line states what happened or what a projection
+	// assumes; none of it advises, congratulates, or promises a date.
+	"nws.paceMonths":  "%d mo",
+	"nws.paceNext":    "Next %s: about %d months at your recent pace",
+	"nws.paceStalled": "Not gaining at your recent pace",
+	"nws.paceSummary": "%s to %s took %d months.",
+	"nws.paceFallOnce": "It fell back once along the way.",
+	"nws.paceFalls":    "It fell back %d times along the way.",
+	"nws.paceNone":    "No round figures reached over this period.",
+
 	"nws.milestonesShowAll":    "Show all %d milestones",
-	"nws.milestonesShowRecent": "Show only the latest %d",
+	"nws.milestonesHide":      "Hide the full list",
 	"nws.winAll":          "All time",
 	"nws.agoAll":          "when your records begin",
 

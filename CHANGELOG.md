@@ -38,8 +38,27 @@ and every commit updates this file under `Unreleased`.
   instead of being laid out as boxes, so a label is never squeezed. The five-year axis goes from 32
   unreadable captions to 11 (`Jul 21 · 2022 · Jul 22 · … · 2026 · Now`), thinning to 7 at ≤1042px
   content.
-- **The /networth milestone list opens rather than scrolls.** The latest 5 events show, with an
-  expander that states the honest total on its face ("Show all 7 milestones"). No silent cap.
+### Added
+- **THE PACE RAIL replaces /networth's milestone list.** Filtering the 32-row list down to six
+  left a shorter log; the form was wrong, not the length. Two things are true about this content
+  and they decided the shape: a milestone IS a point on the net-worth line, so its home is the
+  chart rather than a list elsewhere on the page; and the fact worth having is not "passed $50,000
+  in April 2024" — a receipt — but PACE, that the last leg took eight months and the one before it
+  took fourteen. So the crossings are now **marked on the plot where they happened** (setbacks in a
+  quieter, dashed hand, so the record stays truthful without dressing a fall as an achievement),
+  and a one-row rail beneath the plot **shares the plot's x scale**. Because x is time, the
+  distance between two rungs IS the time between them: the legs visibly shorten as the climb
+  speeds up, so the structure carries the reading instead of decorating it. Each rung shows the
+  figure reached and when; each leg writes the months it took. A dashed chip states the next rung
+  as an extrapolation from recent pace — never a promised date, and a flat or falling trend says
+  "not gaining at your recent pace" instead of inventing one. The rail doubles as the chart's text
+  equivalent and names the falls the rungs cannot carry. The full list survives in Detail behind a
+  closed expander that states the honest total.
+- **Two sides now gets the full width of its section**, with the composition strips beneath it
+  rather than beside it. The plot had about 40% of the section — roughly 420px at a 1440px
+  viewport — and everything measured along time was paying for it: the date axis had 50px a label
+  and the pace rail's rungs collided outright. Two 100%-bars do not need the width; a five-year
+  shape does.
 - **The Glance row no longer leaves a hole where the shorter column ends.** With the grid's items
   start-aligned, the left "What moved it" card ended at 613px while the right column ran to 816px,
   leaving ~215px of empty column that the next full-width row could not backfill — the page read as

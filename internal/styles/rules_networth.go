@@ -472,11 +472,16 @@ func registerNwsSides() {
 	// Chart and strips are two panels of one section: "how it moved" beside
 	// "what shape it is". Side by side they cost one panel's height instead of
 	// two, which is what keeps the whole Glance view inside a single screen.
+	// The plot gets the WHOLE width and the strips sit beneath it, side by side.
+	// They used to share a row, which left the chart about 40% of its section —
+	// roughly 420px at a 1440px viewport. Everything measured along time was
+	// paying for that: eight date labels had 50px each, and the pace rail's
+	// rungs collided outright. A graphic whose subject is a five-year shape
+	// needs the width; two 100%-bars do not.
 	rule(".nws-sides",
-		prop("display", "grid"),
-		prop("grid-template-columns", "minmax(0, 1.85fr) minmax(15rem, 1fr)"),
-		prop("gap", "0.6rem 1.5rem"),
-		prop("align-items", "start"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "1.1rem"),
 		prop("min-width", "0"),
 	)
 	// The plot is a positioned frame: the SVG draws the shapes, and every WORD on
@@ -583,6 +588,121 @@ func registerNwsSides() {
 		prop("display", "none"),
 	)
 
+	// ── THE PACE RAIL. It shares the plot's x scale, so the distance between
+	// two rungs IS the time between them and the legs visibly shorten as the
+	// climb speeds up. Everything here stays quiet so that geometry is the one
+	// thing the eye reads.
+	rule(".nws-pace",
+		prop("margin", "0.55rem 0 0 3.4rem"),
+	)
+	rule(".nws-pace-track",
+		prop("position", "relative"),
+		prop("height", "2.35rem"),
+	)
+	// A leg is the time it took, drawn as the space it occupied.
+	rule(".nws-pace-leg",
+		prop("position", "absolute"),
+		prop("top", "0.32rem"),
+		prop("height", "2px"),
+		prop("background", "var(--accent)"),
+		prop("opacity", "0.35"),
+		prop("border-radius", "999px"),
+	)
+	rule(".nws-pace-legtime",
+		prop("position", "absolute"),
+		prop("left", "50%"),
+		prop("top", "-0.62rem"),
+		prop("transform", "translateX(-50%)"),
+		prop("padding", "0 0.3rem"),
+		prop("background", "var(--bg-card)"),
+		prop("font-size", "var(--type-11, 0.6875rem)"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("color", "var(--text-dim)"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".nws-pace-rung",
+		prop("position", "absolute"),
+		prop("top", "0"),
+		prop("transform", "translateX(-50%)"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("align-items", "center"),
+		prop("gap", "0.1rem"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".nws-pace-rung:first-of-type",
+		prop("transform", "none"),
+		prop("align-items", "flex-start"),
+	)
+	rule(".nws-pace-rung:last-of-type",
+		prop("transform", "translateX(-100%)"),
+		prop("align-items", "flex-end"),
+	)
+	rule(".nws-pace-dot",
+		prop("width", "7px"),
+		prop("height", "7px"),
+		prop("border-radius", "999px"),
+		prop("background", "var(--accent)"),
+	)
+	rule(".nws-pace-value",
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("font-weight", "600"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("color", "var(--text)"),
+	)
+	rule(".nws-pace-when",
+		prop("font-size", "var(--type-11, 0.6875rem)"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".nws-pace-rung.is-tight .nws-pace-when",
+		prop("display", "none"),
+	)
+	rule(".nws-pace-foot",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "baseline"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.4rem"),
+		prop("margin-top", "0.15rem"),
+	)
+	rule(".nws-pace-read",
+		prop("margin", "0"),
+		prop("font-size", "var(--type-12, 0.75rem)"),
+		prop("color", "var(--text-dim)"),
+	)
+	// The projection sits OFF the track and wears a dashed edge, because it is
+	// an extrapolation and not part of the record.
+	rule(".nws-pace-next",
+		prop("padding", "0.12rem 0.55rem"),
+		prop("font-size", "var(--type-11, 0.6875rem)"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text-dim)"),
+		prop("border", "1px dashed var(--border)"),
+		prop("border-radius", "999px"),
+		prop("white-space", "nowrap"),
+	)
+	ruleContentMax(contentGrid1, ".nws-pace",
+		prop("margin-left", "2.8rem"),
+	)
+
+	// ── The crossings, marked on the plot where they happened.
+	rule(".nws-mark",
+		prop("stroke", "var(--accent)"),
+		prop("stroke-width", "1"),
+		prop("opacity", "0.5"),
+	)
+	rule(".nws-mark-cap",
+		prop("fill", "var(--accent)"),
+		prop("stroke", "none"),
+	)
+	// A setback is recorded in the same place, in a quieter hand — the record
+	// stays truthful without painting a fall as an achievement.
+	rule(".nws-mark.is-down",
+		prop("stroke", "var(--text-dim)"),
+		prop("stroke-dasharray", "3 3"),
+		prop("opacity", "0.55"),
+	)
+
 	// ── The "?" explainer, matching the number-provenance affordance the Annual
 	// Review masthead figures already use.
 	rule(".nws-explain",
@@ -680,9 +800,10 @@ func registerNwsSides() {
 
 	// ── Composition strips: what each side is made of, now.
 	rule(".nws-strips",
-		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("gap", "0.85rem"),
+		prop("display", "grid"),
+		prop("grid-template-columns", "repeat(2, minmax(0, 1fr))"),
+		prop("gap", "0.85rem 1.5rem"),
+		prop("align-items", "start"),
 		prop("min-width", "0"),
 	)
 	rule(".nws-strip",
@@ -1050,7 +1171,7 @@ func registerNwsBreakpoints() {
 	ruleContentMax(nwsGlanceStack, ".nws-glance",
 		prop("grid-template-columns", "1fr"),
 	)
-	ruleContentMax(contentGrid4, ".nws-sides",
+	ruleContentMax(contentGrid4, ".nws-strips",
 		prop("grid-template-columns", "1fr"),
 	)
 	ruleContentMax(contentGrid1, ".nws-sides-svg",

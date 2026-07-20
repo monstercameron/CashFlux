@@ -448,12 +448,6 @@ func nwsHealthSection(v nwsView) ui.Node {
 		uistate.T("nws.secHealthNote"), nil, Fragment(nwsRatioCards(v), defs))
 }
 
-// nwsMilestoneRecent is how many of the most recent events show before the list
-// asks to be opened. Five is enough to carry the shape of the last year or two
-// without the section turning into a scroll of its own — and every one of them
-// is a sentence, so a longer default reads as a log rather than a record.
-const nwsMilestoneRecent = 5
-
 // nwsMilestoneLine phrases one event. Each kind gets its OWN sentence, because
 // "passed $100,000" and "fell to $80,000 from a high of $100,000" are different
 // facts and flattening them into one template is how the list stopped being
@@ -508,9 +502,14 @@ func nwsMilestoneList(p nwsMilestoneListProps) ui.Node {
 		}
 		return ""
 	}
-	shown := ms
-	if !open.Get() && len(ms) > nwsMilestoneRecent {
-		shown = ms[len(ms)-nwsMilestoneRecent:]
+	// Closed by default. THE PACE RAIL above the chart is now the milestone
+	// treatment — it marks each crossing where it happened and shows how long
+	// each leg took, which is the reading a household wants. This list is here
+	// for completeness only, so it opens on request and never as the default
+	// presentation.
+	shown := []balancesheet.Milestone(nil)
+	if open.Get() {
+		shown = ms
 	}
 	items := make([]ui.Node, 0, len(shown))
 	for _, m := range shown {
@@ -523,18 +522,16 @@ func nwsMilestoneList(p nwsMilestoneListProps) ui.Node {
 	}
 	label := uistate.T("nws.milestonesShowAll", len(ms))
 	if open.Get() {
-		label = uistate.T("nws.milestonesShowRecent", nwsMilestoneRecent)
+		label = uistate.T("nws.milestonesHide")
 	}
 	return Div(css.Class("nws-milestones"),
-		H3(css.Class("nws-sec-title"), Style(map[string]string{"margin": "0.9rem 0 0.4rem"}),
-			uistate.T("nws.milestonesTitle")),
-		IfElse(len(items) == 0,
+		IfElse(len(ms) == 0,
 			P(css.Class("nws-sec-note"), Attr("data-testid", "nws-milestones-none"), uistate.T("nws.milestonesNone")),
-			Ul(css.Class("nws-milestone-list"), items)),
-		If(len(ms) > nwsMilestoneRecent,
 			Button(css.Class("nws-milestones-more"), Type("button"),
 				Attr("data-testid", "nws-milestones-more"),
 				Attr("aria-expanded", boolStr(open.Get())),
 				OnClick(toggle), label)),
+		If(len(items) > 0, Ul(css.Class("nws-milestone-list"),
+			Style(map[string]string{"margin-top": "0.5rem"}), items)),
 	)
 }

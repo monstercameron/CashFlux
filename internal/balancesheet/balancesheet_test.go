@@ -287,6 +287,103 @@ const (
 	nwsAxisNarrowMax = 5
 )
 
+func TestBuildPace(t *testing.T) {
+	// climb builds a monthly series rising by perMonth from start.
+	climb := func(start, perMonth int64, n int) []Point {
+		out := make([]Point, 0, n)
+		at := time.Date(2021, 7, 1, 0, 0, 0, 0, time.UTC)
+		for i := 0; i < n; i++ {
+			out = append(out, Point{At: at.AddDate(0, i, 0), NetMinor: start + int64(i)*perMonth})
+		}
+		return out
+	}
+
+	t.Run("rungs carry the months each leg took", func(t *testing.T) {
+		p := BuildPace(climb(-1600000, 280000, 61))
+		if len(p.Rungs) < 3 {
+			t.Fatalf("Pace = %+v, want several rungs across a five-year climb", p.Rungs)
+		}
+		if p.Rungs[0].Months != 0 {
+			t.Fatalf("the first rung has no previous leg, got %d months", p.Rungs[0].Months)
+		}
+		for _, r := range p.Rungs[1:] {
+			if r.Months <= 0 {
+				t.Fatalf("rung %+v: a leg must carry the time it took", r)
+			}
+		}
+		// Rungs ascend in both value and time — that is what makes the gaps
+		// between them readable as pace.
+		for i := 1; i < len(p.Rungs); i++ {
+			if p.Rungs[i].ValueMinor <= p.Rungs[i-1].ValueMinor || p.Rungs[i].AtIndex <= p.Rungs[i-1].AtIndex {
+				t.Fatalf("rungs out of order: %+v", p.Rungs)
+			}
+		}
+	})
+
+	t.Run("a rung is never a setback", func(t *testing.T) {
+		pts := append(climb(0, 500000, 40), Point{
+			At: time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC), NetMinor: 100000,
+		})
+		for _, r := range BuildPace(pts).Rungs {
+			if r.ValueMinor < 0 {
+				t.Fatalf("rung %+v: a rung is a level reached, never a fall", r)
+			}
+		}
+	})
+
+	t.Run("the projection is a rung ahead, at the recent rate", func(t *testing.T) {
+		p := BuildPace(climb(0, 500000, 61))
+		if !p.Next.OK {
+			t.Fatalf("Next = %+v, want a projection from a steady climb", p.Next)
+		}
+		last := p.Rungs[len(p.Rungs)-1]
+		if p.Next.ValueMinor <= last.ValueMinor {
+			t.Fatalf("Next %+v must be ahead of the last rung %+v", p.Next, last)
+		}
+		if p.Next.Months <= 0 || p.Next.Months > 60 {
+			t.Fatalf("Next = %+v, want a months figure inside the honest horizon", p.Next)
+		}
+	})
+
+	t.Run("a stalled household gets no invented date", func(t *testing.T) {
+		flat := climb(5000000, 0, 40)
+		if n := BuildPace(flat).Next; n.OK || !n.Stalled {
+			t.Fatalf("Next = %+v, want stalled and no projection", n)
+		}
+		falling := climb(9000000, -50000, 40)
+		if n := BuildPace(falling).Next; n.OK {
+			t.Fatalf("Next = %+v, a falling trend has no arrival month", n)
+		}
+	})
+
+	t.Run("a crawl declines to project rather than promising a decade", func(t *testing.T) {
+		// $1/month against a $100k gap is arithmetic, not a forecast.
+		if n := BuildPace(climb(9000000, 100, 40)).Next; n.OK {
+			t.Fatalf("Next = %+v, want no claim beyond the honest horizon", n)
+		}
+	})
+
+	t.Run("setbacks stay in the marks even though they are not rungs", func(t *testing.T) {
+		pts := append(climb(0, 400000, 30), climb(11600000, -600000, 8)...)
+		p := BuildPace(pts)
+		setback := false
+		for _, m := range p.Marks {
+			if m.Kind == MilestoneKindReversal || (m.Kind == MilestoneKindThreshold && !m.Up) {
+				setback = true
+			}
+		}
+		if !setback {
+			t.Fatal("Marks must keep the falls — the chart record is not a trophy cabinet")
+		}
+	})
+
+	t.Run("too little history yields nothing rather than a guess", func(t *testing.T) {
+		if p := BuildPace([]Point{{NetMinor: 100}}); len(p.Rungs) != 0 || p.Next.OK {
+			t.Fatalf("Pace = %+v, want nothing from a single point", p)
+		}
+	})
+}
+
 func TestTimeAxisTicks(t *testing.T) {
 	// months builds n monthly cutoffs starting at the given year/month.
 	months := func(y int, m time.Month, n int) []time.Time {

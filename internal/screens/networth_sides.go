@@ -206,6 +206,7 @@ func nwsSides(v nwsView) ui.Node {
 			Attr("x1", "0"), Attr("x2", fmt.Sprintf("%.0f", nwsSidesW)),
 			Attr("y1", fmt.Sprintf("%.3f", y)), Attr("y2", fmt.Sprintf("%.3f", y))))
 	}
+	pace := balancesheet.BuildPace(pts)
 	kids = append(kids,
 		Path(ClassStr(gapCls), Attr("d", nwsGapPath(assets, liabs, scale))),
 		Polyline(css.Class("nws-line-assets"), Attr("fill", "none"),
@@ -215,6 +216,9 @@ func nwsSides(v nwsView) ui.Node {
 			Attr("vector-effect", "non-scaling-stroke"),
 			Attr("points", nwsLinePoints(liabs, scale))),
 	)
+	// The crossings, marked where they actually happened, over the gap they
+	// happened in.
+	kids = append(kids, nwsMarkNodes(pts, pace.Marks, scale)...)
 
 	// Y axis: the tick values as real HTML in the gutter, so they stay crisp
 	// under the stretched viewBox and are readable by assistive tech.
@@ -306,6 +310,9 @@ func nwsSides(v nwsView) ui.Node {
 				anno,
 			),
 			Div(xaxis...),
+			// The rail shares the plot's x scale, so it must sit inside the
+			// same box: a rung is directly beneath the mark it names.
+			nwsPaceRail(v, pace),
 			ends,
 			// A truncated axis is disclosed in words as well as shown on the
 			// scale — the same rule THE BRIDGE follows.
@@ -320,6 +327,183 @@ func nwsSides(v nwsView) ui.Node {
 				last.Liabilities, last.LiabilitiesMinor, v.Base),
 		),
 	)
+}
+
+// THE PACE RAIL — the milestone treatment.
+//
+// The list this replaces was a log: thirty-two rows of "passed $500 in May
+// 2022", each a receipt for something the chart had already drawn. Filtering it
+// to six rows left a shorter log. The form was wrong, not the length.
+//
+// What is actually true about this content decided the shape:
+//
+//  1. A milestone IS a point on the net-worth line. Its home is the chart, not
+//     a list somewhere else on the page — so the crossings are MARKED on the
+//     plot, at the moment they happened, and the standalone list is deleted.
+//  2. The interesting fact is not "$50,000 in April 2024" but PACE: fourteen
+//     months for that leg, eight for the next. Acceleration is the reading a
+//     household wants and no list gives it.
+//
+// So the rail sits directly beneath the plot and SHARES ITS X SCALE. Because x
+// is time, the distance between two rungs IS the time between them: the legs
+// visibly shorten as the climb speeds up. The structure carries the information
+// rather than decorating it, which is the only thing that justifies a device
+// like this over plain prose. Nothing is restated — the rail labels the marks
+// above it, and the marks place the rail's rungs in the record.
+//
+// It is one row tall, so Glance stays glanceable, and it doubles as the chart's
+// text equivalent: every mark it labels is readable as words.
+
+// nwsPaceGapMinPct is how much of the rail's width a leg needs before its
+// duration is written inside it. Below that the gap still SHOWS the time — that
+// is the encoding — but the words would collide, and a collided label is not a
+// label.
+const nwsPaceGapMinPct = 11.0
+
+// nwsPaceRail renders the progress rail: the round figures reached, placed at
+// the moment they were reached, with each leg's duration written in the gap it
+// took.
+func nwsPaceRail(v nwsView, pace balancesheet.Pace) ui.Node {
+	n := len(v.Points)
+	if n < 2 || len(pace.Rungs) == 0 {
+		return Fragment()
+	}
+	xPct := func(i int) float64 { return 100 * nwsSidesX(i, n) / nwsSidesW }
+
+	track := []any{css.Class("nws-pace-track"), Attr("data-testid", "nws-pace-track")}
+	for i, r := range pace.Rungs {
+		// The leg: drawn from the previous rung to this one. Its WIDTH is the
+		// months it took, because the axis is time.
+		if i > 0 {
+			from, to := xPct(pace.Rungs[i-1].AtIndex), xPct(r.AtIndex)
+			leg := []any{
+				css.Class("nws-pace-leg"),
+				Attr("data-testid", "nws-pace-leg"),
+				Style(map[string]string{
+					"left":  fmt.Sprintf("%.3f%%", from),
+					"width": fmt.Sprintf("%.3f%%", to-from),
+				}),
+			}
+			if to-from >= nwsPaceGapMinPct {
+				leg = append(leg, Span(css.Class("nws-pace-legtime"),
+					uistate.T("nws.paceMonths", r.Months)))
+			}
+			track = append(track, Div(leg...))
+		}
+		// Two rungs close in time sit close on the rail — that IS the reading,
+		// so they are never pushed apart. What gives way is the date beneath
+		// them, which is the least of the three things a rung says.
+		cls := "nws-pace-rung"
+		if i > 0 && xPct(r.AtIndex)-xPct(pace.Rungs[i-1].AtIndex) < nwsPaceGapMinPct {
+			cls += " is-tight"
+		}
+		track = append(track, Span(ClassStr(cls),
+			Attr("data-testid", "nws-pace-rung"),
+			Style(map[string]string{"left": fmt.Sprintf("%.3f%%", xPct(r.AtIndex))}),
+			Span(css.Class("nws-pace-dot"), Attr("aria-hidden", "true")),
+			Span(css.Class("nws-pace-value"), fmtMoneyCompact(money.New(r.ValueMinor, v.Base))),
+			Span(css.Class("nws-pace-when"), v.Points[r.AtIndex].At.Format("Jan 06")),
+		))
+	}
+
+	// The projection sits OFF the track, because it is not in the record. It is
+	// stated as an extrapolation from recent pace and never as a date the
+	// household will arrive on; a flat or falling trend says so instead.
+	var ahead ui.Node = Fragment()
+	switch {
+	case pace.Next.OK:
+		ahead = Span(css.Class("nws-pace-next"), Attr("data-testid", "nws-pace-next"),
+			uistate.T("nws.paceNext",
+				fmtMoneyCompact(money.New(pace.Next.ValueMinor, v.Base)), pace.Next.Months))
+	case pace.Next.Stalled:
+		ahead = Span(css.Class("nws-pace-next", "is-stalled"), Attr("data-testid", "nws-pace-next"),
+			uistate.T("nws.paceStalled"))
+	}
+
+	return Div(css.Class("nws-pace"), Attr("data-testid", "nws-pace"),
+		Div(track...),
+		Div(css.Class("nws-pace-foot"),
+			P(css.Class("nws-pace-read"), Attr("data-testid", "nws-pace-read"),
+				nwsPaceSentence(v, pace)),
+			ahead,
+		),
+	)
+}
+
+// nwsPaceSentence is the rail in words: the chart's text equivalent, and the
+// honest record of the setbacks the rungs cannot carry.
+func nwsPaceSentence(v nwsView, pace balancesheet.Pace) string {
+	parts := make([]string, 0, 3)
+	if len(pace.Rungs) > 1 {
+		first, last := pace.Rungs[0], pace.Rungs[len(pace.Rungs)-1]
+		total := 0
+		for _, r := range pace.Rungs[1:] {
+			total += r.Months
+		}
+		parts = append(parts, uistate.T("nws.paceSummary",
+			fmtMoneyCompact(money.New(first.ValueMinor, v.Base)),
+			fmtMoneyCompact(money.New(last.ValueMinor, v.Base)),
+			total))
+	}
+	// Setbacks are named, not omitted. A rail that only counts rungs would be
+	// the trophy cabinet the page exists to avoid.
+	falls := 0
+	for _, m := range pace.Marks {
+		switch m.Kind {
+		case balancesheet.MilestoneKindReversal, balancesheet.MilestoneKindNegative:
+			falls++
+		case balancesheet.MilestoneKindThreshold:
+			if !m.Up {
+				falls++
+			}
+		}
+	}
+	switch {
+	case falls == 1:
+		parts = append(parts, uistate.T("nws.paceFallOnce"))
+	case falls > 1:
+		parts = append(parts, uistate.T("nws.paceFalls", falls))
+	}
+	if len(parts) == 0 {
+		return uistate.T("nws.paceNone")
+	}
+	return strings.Join(parts, " ")
+}
+
+// nwsMarkNodes are the crossings drawn ON the plot, at the x they happened: a
+// hairline through the gap with a cap at the top. A setback's line is drawn
+// untinted and dashed, so the record shows the falls without dressing them as
+// achievements.
+func nwsMarkNodes(pts []balancesheet.Point, marks []balancesheet.Milestone, s nwsGapScale) []any {
+	out := make([]any, 0, len(marks)*2)
+	for _, m := range marks {
+		if m.AtIndex <= 0 || m.AtIndex >= len(pts) {
+			continue
+		}
+		p := pts[m.AtIndex]
+		x := nwsSidesX(m.AtIndex, len(pts))
+		up := m.Up && m.Kind != balancesheet.MilestoneKindReversal
+		cls := "nws-mark"
+		if !up {
+			cls += " is-down"
+		}
+		top, bottom := s.y(float64(p.AssetsMinor)), s.y(float64(p.LiabilitiesMinor))
+		out = append(out, Line(ClassStr(cls),
+			Attr("vector-effect", "non-scaling-stroke"),
+			Attr("x1", fmt.Sprintf("%.2f", x)), Attr("x2", fmt.Sprintf("%.2f", x)),
+			Attr("y1", fmt.Sprintf("%.3f", top)), Attr("y2", fmt.Sprintf("%.3f", bottom))))
+		if up {
+			// The cap sits at the MIDDLE of the gap, because the gap is the net
+			// worth the milestone is about. On the assets line it would read as
+			// something having happened to what you own.
+			out = append(out, Circle(css.Class("nws-mark-cap"),
+				Attr("vector-effect", "non-scaling-stroke"),
+				Attr("cx", fmt.Sprintf("%.2f", x)),
+				Attr("cy", fmt.Sprintf("%.3f", (top+bottom)/2)),
+				Attr("r", "4")))
+		}
+	}
+	return out
 }
 
 // nwsAnno renders one in-chart region label: what this part of the picture is,

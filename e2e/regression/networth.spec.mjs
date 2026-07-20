@@ -483,8 +483,20 @@ test("History records the round figures crossed, in both directions", async ({ a
   await detail(app);
   const items = app.locator('[data-testid="nws-milestone"]');
   const none = app.locator('[data-testid="nws-milestones-none"]');
-  // Either it lists crossings or it says plainly there were none.
-  expect((await items.count()) > 0 || (await none.count()) > 0).toBe(true);
+  const more = app.locator('[data-testid="nws-milestones-more"]');
+
+  // The full list is completeness, not the default presentation — THE PACE RAIL
+  // is. So it is closed until asked for, and never a silent cap: the control
+  // states the real total on its face.
+  expect(await items.count(), "the full list must not be the default").toBe(0);
+  if (await none.count()) return;
+
+  const label = await more.innerText();
+  const promised = Number((label.match(/\d+/) || [])[0]);
+  expect(promised, "the expander must name the real total").toBeGreaterThan(0);
+  await more.click();
+  expect(await items.count(), "opening reveals exactly the total promised").toBe(promised);
+
   for (const line of await items.allInnerTexts()) {
     expect(line).toMatch(/passed|fell back below|fell from|turned positive|turned negative|highest so far/i);
   }
@@ -501,62 +513,136 @@ async function sixMonths(app) {
   await app.locator(".nws-window button", { hasText: "6 months" }).first().click();
 }
 
-test("all-time milestones stay a record, not an event log", async ({ app }) => {
+test("the pace rail reads as progress, not as a log", async ({ app }) => {
   await nav(app, "/networth");
   await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
   await allTime(app);
-  await detail(app);
 
-  const items = app.locator('[data-testid="nws-milestone"]');
-  const more = app.locator('[data-testid="nws-milestones-more"]');
+  const rail = app.locator('[data-testid="nws-pace"]').first();
+  await expect(rail, "the milestone treatment is the rail, on the chart").toBeVisible();
 
-  // Collapsed by default to the latest few. This is the regression guard for
-  // the 32-row list a five-year window used to produce.
-  const shown = await items.count();
-  expect(shown, "the collapsed list shows only the latest few events").toBeLessThanOrEqual(5);
+  const rungs = rail.locator('[data-testid="nws-pace-rung"]');
+  const n = await rungs.count();
+  expect(n, "a five-year climb reaches several round figures").toBeGreaterThanOrEqual(3);
+  expect(n, "the rail is a ladder, not a log").toBeLessThanOrEqual(8);
 
-  // The expander states the honest total on its face — no silent cap.
-  let total = shown;
-  if (await more.count()) {
-    const label = await more.innerText();
-    const n = Number((label.match(/\d+/) || [])[0]);
-    expect(n, "the expander must name the real total").toBeGreaterThanOrEqual(shown);
-    await more.click();
-    total = await items.count();
-    expect(total, "opening must reveal exactly the total it promised").toBe(n);
+  // Every rung is a round figure REACHED. A negative one is not a milestone.
+  for (const t of await rungs.locator(".nws-pace-value").allInnerTexts()) {
+    expect(t, `a negative rung is not an achievement: ${t}`).not.toMatch(/[−-]|^\(/);
   }
 
-  // The whole point of scaling thresholds: a five-year run is a readable list.
-  expect(total, "an all-time window must not read as an event log").toBeLessThanOrEqual(12);
-
-  const lines = await items.allInnerTexts();
-
-  // No "passed" milestone for a negative threshold. Crossing -$1,000 upward is
-  // not an achievement; it is part of the one story the first-positive
-  // milestone already tells.
-  for (const line of lines) {
-    if (!/passed|fell back below/i.test(line)) continue;
-    expect(line, `a negative threshold is not a milestone: ${line}`).not.toMatch(/[(−-]\s*[$€£¥]/);
+  // The rungs ascend left to right in BOTH value and position — that pairing is
+  // what lets the gaps between them be read as time.
+  const geo = await rungs.evaluateAll((els) =>
+    els.map((e) => ({
+      x: e.getBoundingClientRect().left,
+      v: Number((e.querySelector(".nws-pace-value")?.innerText || "").replace(/[^0-9.]/g, "")) *
+        ((e.querySelector(".nws-pace-value")?.innerText || "").includes("M") ? 1000 : 1),
+    })),
+  );
+  for (let i = 1; i < geo.length; i++) {
+    expect(geo[i].x, "rungs must run left to right in time").toBeGreaterThan(geo[i - 1].x);
+    expect(geo[i].v, "rungs must climb in value").toBeGreaterThan(geo[i - 1].v);
   }
 
-  // No two rows may describe the same month with the same round figure — the
-  // old generator emitted five rows for a single month.
-  const seen = new Set();
-  for (const line of lines) {
-    expect(seen.has(line), `duplicate milestone row: ${line}`).toBe(false);
-    seen.add(line);
+  // The legs carry the months they took — the whole reason the rail exists.
+  const legs = rail.locator('[data-testid="nws-pace-leg"]');
+  expect(await legs.count(), "each climb between rungs is drawn as a leg").toBe(n - 1);
+  const times = (await legs.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+  expect(times.length, "at least some legs state their duration").toBeGreaterThan(0);
+  for (const t of times) expect(t).toMatch(/^\d+ mo$/);
+
+  // A leg's WIDTH is its duration, so a longer leg must be a wider one.
+  const legGeo = await legs.evaluateAll((els) =>
+    els.map((e) => ({
+      w: e.getBoundingClientRect().width,
+      mo: Number((e.innerText.match(/\d+/) || [0])[0]),
+    })).filter((l) => l.mo > 0),
+  );
+  for (let i = 1; i < legGeo.length; i++) {
+    const [a, b] = [legGeo[i - 1], legGeo[i]];
+    if (a.mo === b.mo) continue;
+    const longerIsWider = a.mo > b.mo ? a.w > b.w : b.w > a.w;
+    expect(longerIsWider, "the gap between rungs must encode the time it took").toBe(true);
   }
 
-  // Transitions are PAIRED: a page that narrates the recovery must narrate the
-  // fall. If it says net worth turned positive more than once, it went negative
-  // in between, and it has to say so.
-  const positives = lines.filter((l) => /turned positive/i.test(l)).length;
-  const negatives = lines.filter((l) => /turned negative/i.test(l)).length;
-  if (positives > 1) {
-    expect(negatives, "a second recovery implies a fall that must be reported").toBeGreaterThanOrEqual(positives - 1);
+  // The projection is framed as an extrapolation, never as a promised date, and
+  // a household that is not gaining is told that instead.
+  const next = rail.locator('[data-testid="nws-pace-next"]');
+  if (await next.count()) {
+    const t = await next.innerText();
+    expect(t).toMatch(/at your recent pace|not gaining/i);
+    expect(t, "a projection must not promise").not.toMatch(/will|guarantee/i);
+  }
+
+  // The rail is the chart's text equivalent, and it keeps the falls.
+  const read = await rail.locator('[data-testid="nws-pace-read"]').innerText();
+  expect(read.trim().length).toBeGreaterThan(10);
+  expect(read, "copy must not instruct or advise").not.toMatch(/you should|try to|consider /i);
+
+  await sixMonths(app);
+});
+
+test("the crossings are marked on the chart where they happened", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await allTime(app);
+
+  const marks = app.locator('[data-testid="nws-sides-svg"] .nws-mark');
+  expect(await marks.count(), "a milestone is a point on the line, so it is drawn there").toBeGreaterThan(0);
+
+  // A setback is marked in the same place in a quieter hand — the record is not
+  // a trophy cabinet. When one exists it must be visually distinct.
+  const downs = app.locator('[data-testid="nws-sides-svg"] .nws-mark.is-down');
+  if (await downs.count()) {
+    const dash = await downs.first().evaluate((e) => getComputedStyle(e).strokeDasharray);
+    expect(dash, "a setback must not look like an achievement").not.toBe("none");
+  }
+
+  // Each mark stands on the chart's own x scale, so it must sit inside the plot.
+  const svg = await app.locator('[data-testid="nws-sides-svg"]').boundingBox();
+  const boxes = await marks.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+  for (const x of boxes) {
+    expect(x).toBeGreaterThanOrEqual(svg.x - 1);
+    expect(x).toBeLessThanOrEqual(svg.x + svg.width + 1);
   }
 
   await sixMonths(app);
+});
+
+test("the pace rail survives every pane width and theme", async ({ app }) => {
+  for (const theme of ["dark", "light"]) {
+    await setTheme(app, theme);
+    for (const [w, h] of [[1440, 900], [1202, 1078], [950, 900]]) {
+      await app.setViewportSize({ width: w, height: h });
+      await nav(app, "/networth");
+      await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+      await allTime(app);
+      const where = `${theme} @ ${w}`;
+
+      const rail = app.locator('[data-testid="nws-pace"]').first();
+      await expect(rail, where).toBeVisible();
+
+      // No rung label may overlap its neighbour, at any width. Where two
+      // crossings fall close together the date gives way, not the figure.
+      const boxes = await rail.locator('[data-testid="nws-pace-rung"] .nws-pace-value').evaluateAll((els) =>
+        els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.right]; }).sort((a, b) => a[0] - b[0]),
+      );
+      for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i][0], `${where}: rung labels overlap`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
+      }
+
+      const overflow = await app.evaluate(() => {
+        const m = document.querySelector("main") || document.body;
+        return m.scrollWidth - m.clientWidth;
+      });
+      expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
+
+      await sixMonths(app);
+    }
+  }
+  await setTheme(app, "dark");
+  await app.setViewportSize({ width: 1440, height: 900 });
 });
 
 test("the all-time x axis stays readable at every pane width, in both themes", async ({ app }) => {
