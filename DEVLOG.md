@@ -1,3 +1,98 @@
+## 2026-07-20 — /subscriptions was never slower than /recurring; the Smart layer was
+
+Two things came in as one ticket: a claim that `/subscriptions` mounted ~3 seconds behind
+`/recurring` despite rendering the identical surface, and RH-PERSIST1, a real settings data-loss
+race left filed-but-unfixed by the previous pass.
+
+**The 3-second number was a measurement artifact, and finding that out was the whole first hour.**
+The handed-over figures were cold navigations: /budgets 2531ms, /recurring 2940ms, /subscriptions
+5882ms. Before touching code I rebuilt the measurement two ways. Cold navigation with a persistent
+profile and a fresh page per sample, first round discarded, four samples per route:
+
+    /budgets 4176ms   /recurring 4198ms   /bills 4192ms   /subscriptions 4207ms
+
+All four identical, because a cold navigation is dominated by downloading and compiling a 95MB wasm
+binary and has almost nothing to do with which route rendered afterwards. The reported spread was
+first-visit ordering: in a single-pass measurement the first route sampled pays the warm-up for
+everything after it, and the numbers move by thousands of milliseconds depending on the order the
+routes were visited. A 3-second gap and a ±50ms noise estimate in the same report should have been
+the tell that the two numbers came from different regimes.
+
+**Warm SPA route mount — the metric the previous pass used — shows the real gap, and it is ~180ms:**
+
+    /budgets 127ms   /recurring 127ms   /bills 143ms   /subscriptions 311ms
+
+That is worth chasing and it is exactly the effect the previous agent noticed and set aside as
+"~100ms, probably noise". It was not noise; it was consistent across six samples and it had a single
+cause.
+
+**The cause was not the surface.** All three routes render `RhythmSurface`; the deep-link focus only
+preselects the roster's Subscriptions lens, and the roster is already deferred. The asymmetry is one
+level up: `stripPageForPath` gives `/budgets`, `/bills` and `/subscriptions` a Smart strip and gives
+`/recurring` none. So the honest comparison is not "the same page, three ways" — it is "two of these
+routes run a Smart page pass and one does not", and the question is why the subscriptions pass costs
+what it costs. Natively, over the sample dataset:
+
+    RunPage(subscriptions)  15.22 ms
+    RunPage(bills)           2.67 ms
+    RunPage(budgets)         3.95 ms
+
+Note also that this pass runs TWICE per render — once for the top bar's peek trigger (which needs
+only a count and a severity) and once for the in-page strip. Halving that was on the table as a third
+commit and turned out not to be needed.
+
+**Two findings, and the first one is a lesson about doc comments.** `smartengine.Input` has a `Subs`
+field carrying the comment "the detected subscription set, passed in so the subscription engines
+don't re-run detection per feature". Nothing populated it. Nothing read it. It had been sitting there
+describing a fix that was never wired, while seven of the eleven subscription engines each opened by
+calling `realSubs` — `subscriptions.Detect` over the whole history, then a liability-payment check per
+detected merchant — for the same answer, seven times. A field whose doc comment promises an
+optimization is not evidence the optimization exists; it is a good place to check whether it does.
+`Run`/`RunPage` now prime it once for any run containing an engine that needs it. Engines take
+`Input` by value, so priming before the dispatch loop hands every one of them the shared result. On a
+detection error the input is left unprimed, so each engine fails exactly as it did before rather than
+silently reading an empty set as "no subscriptions" — the difference between "I don't know" and
+"none" matters more here than the microseconds.
+
+*Second: two engines asked a per-merchant question by re-scanning the entire ledger per subscription.*
+SU7 ("what category is this merchant in") and SU12 ("is any charge for this merchant attributed to a
+member") both looped every transaction for every detected subscription, re-lowercasing and re-trimming
+each row every time — 27 subscriptions × 3,227 rows, ~87,000 string allocations to learn 27 facts.
+Both now index the ledger in one pass. This is the same shape as the payee-resolver finding in the
+previous arc, and it is worth naming as a pattern on this codebase: a helper that reads `Input` and
+returns one merchant's answer looks perfectly reasonable at the call site and is quadratic at the
+loop.
+
+    RunPage(subscriptions)  15.22 ms -> 3.33 ms
+
+Warm SPA mount after, median of six: /budgets 136ms, /recurring 119ms, /bills 126ms, /subscriptions
+150ms. The gap went from 184ms to 31ms, and the 31ms that remain are the Smart strip that /recurring
+does not have — a product difference, not a defect. The planned third commit (sharing one page pass
+between the peek and the strip) was dropped: the target was met, and deduplicating a pass that now
+costs 3.3ms would be optimizing something no measurement is asking about.
+
+**RH-PERSIST1: the filed fix direction was the wrong one, and measuring said so.** The ticket proposed
+flushing pending persists on `pagehide`. I reproduced the bug first — toggle COMPACT | CALENDAR, wait
+50ms, reload, read the toggle back: the preference survived 1 run in 3. Waiting 400ms instead: 3 of 3.
+That locates the loss squarely in the 250ms debounce window.
+
+What the proposed fix misses is that `pagehide` *already* saved the whole dataset, and the settings
+write was already in that dataset — and it still lost. An IndexedDB transaction opened while the page
+is unloading is not promised to commit, so a teardown flush cannot be the guarantee; it can only be a
+safety net. The guarantee has to be that the write is durable *before* the user can reload, which
+means persisting on the leading edge. The debounce is kept for the reason it exists (a language-pack
+seed loop or a theme-editor drag must not pay one full serialize per write) but the trailing flush now
+fires only if writes continued past the leading persist: a burst costs two serializes, a lone write
+costs one. The teardown flush went in as well, honestly labelled as the net rather than the promise.
+After: 4/4 at a 50ms gap, 4/4 with no gap at all.
+
+The previous pass's wait-out workaround came out of `rhythm.spec`, so the test now reloads immediately
+and guards the durability instead of avoiding it — the whole point of fixing this was to stop the test
+lying about what the app promises. `budgets.spec` was named in the ticket as sitting on the same race;
+it has 5 failures, but they are identical with and without this change (verified by stashing), they
+belong to another lane's in-flight budgets work, and the density test fails on its FIRST assertion —
+the initial toggle state — before it ever reaches a reload. Left alone.
+
 ## 2026-07-20 — Bills & recurring: the redesign was blocking first paint on the discovery engine
 
 The unified surface took ~800-1000ms to mount where comparable pages take ~140ms, and it took long
