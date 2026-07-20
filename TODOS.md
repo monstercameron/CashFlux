@@ -124,6 +124,55 @@ Per-page surfaces (thin wiring over E1–E5; each also lands in the SMART catalo
 - [ ] **E-RP Reports** — E1 period diff + anomaly/turning-point annotations; E3 metric-conflict flags;
   SMART+ ask-this-chart grounded in that chart's exact scope + period.
 
+E-series candidates (2026-07-19 brainstorm — for later review, NOT yet agreed; granular ideas that
+survived the duplicate/scope filters but didn't make the engine cut):
+- [ ] **EC-1 Recap driver callout** (SMART, Dashboard) — month-vs-typical anomaly on the recap:
+  "net $412 below typical — biggest driver: Groceries (+$310)." Thin E1 surface on `recap`.
+- [ ] **EC-2 Explain this number** (SMART+, Dashboard) — ✨ on any headline stat → one-shot narration
+  of the existing deterministic breakdown (RuleCore). Dashboard sibling of E-RP ask-this-chart.
+- [ ] **EC-3 Split-template suggestion** (SMART, Transactions) — merchants you historically split
+  (Costco pattern) get a pre-offered split at creation. Extends SM-3.
+- [ ] **EC-4 Stale-uncleared watch** (SMART, Transactions) — flag entries uncleared past that
+  account's typical clearing window; feeds reconciliation.
+- [ ] **EC-5 What is this charge?** (SMART+, Transactions) — one cryptic row → "this is likely X"
+  from model merchant knowledge. Explains an unknown; distinct from SM-1 rename.
+- [ ] **EC-6 Effective-rate detector** (SMART, Accounts) — realized APY/interest cost per account
+  from its own postings; flag when a "high-yield" account isn't. Sharpens SMART-A4.
+- [ ] **EC-7 Transfer memory prefill** (SMART, Accounts) — repeated cross-currency corridor →
+  prefill FX rate + fee from last time (rides ReceivedMinor/FeeMinor).
+- [ ] **EC-8 Credit-utilization threshold watch** (SMART, Accounts) — per-liability 30/50/90% bands;
+  check overlap with credithealth's internals first.
+- [ ] **EC-9 Close-out preview** (SMART, Budgets) — before committing period close-out: rolls over
+  $X, carried debt $Y, next month's caps become Z.
+- [ ] **EC-10 Cadence mismatch detector** (SMART, Budgets) — monthly budget whose spend posts
+  quarterly/annually → suggest cadence change or sinking fund (bridges SMART-BL9).
+- [ ] **EC-11 Future-month readiness score** (SMART, Budgets) — missing income, upcoming annual
+  expenses, unfunded categories for next month. Rides `budgetplan`.
+- [ ] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding
+  this now delays Vacation ~2 months." Per-action sibling of E-GL's feasibility check.
+- [ ] **EC-13 Round-up accelerator estimate** (SMART, Goals) — "at current round-up rate this goal
+  finishes ~7 weeks sooner."
+- [ ] **EC-14 Recurrence + assignee suggestions** (SMART, To-do) — completed monthly 3× → offer
+  recurrence; suggest the member who historically does this task type.
+- [ ] **EC-15 AI spend meter** (SMART, Assistant) — running actual AI spend by feature/month with
+  pace-vs-cap warning; the transparency view over `smart/cap.go`.
+- [ ] **EC-16 Suggested questions** (SMART, Assistant) — deterministically seeded Ask starters from
+  current data state ("3 over-budgets — ask what changed").
+- [ ] **EC-17 Narrate this section** (SMART+, Reports) — per-section one-shot summary with exact
+  scope/period threaded in; completes the deferred per-section Ask-AI scope threading.
+- [ ] **EC-18 Plan → to-dos** (SMART+, Reports) — extract the annual review's plan section into
+  concrete tasks via changeset review.
+- [ ] **EC-19 Severity rewriting** (SMART+, Notifications) — one-shot calm-human-language rewrite of
+  raw detector copy (RuleCore; batchable at digest time).
+- [ ] **EC-20 Trust/freshness status** (SMART, Dashboard + Reports) — how much of this page is fresh,
+  reconciled, stale, or estimated; rides `freshness` + reconcile state. (Correctness-adjacent: if it
+  ever gates a number, it graduates out of opt-in into core.)
+- [ ] **EC-21 Report comparison builder + saved templates** (plain backlog, Reports) — period-vs-period /
+  member-vs-household composer; monthly-review / tax / debt-progress templates. Not intelligence —
+  ordinary feature work, listed here so it isn't lost.
+- [ ] **EC-22 Board waiting/blocked lanes + bulk task ops + reminder escalation** (plain backlog,
+  To-do) — same: ordinary product work extracted from the intelligence lists.
+
 ### Local-first (non-AI) gaps + nice-to-haves (curated 2026-07-15)
 - [ ] **LF-1 Command palette fix + expand** — the Ctrl+K palette exists but has a known crash (theme-toggle
   panic per notes — confirm still open); fix it, then make it a real quick-action/nav launcher (jump to
