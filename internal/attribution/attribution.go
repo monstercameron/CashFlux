@@ -263,7 +263,14 @@ func Compute(in Input) (Report, error) {
 		if err != nil {
 			return Report{}, fmt.Errorf("attribution: txn %s: %w", t.ID, err)
 		}
-		ev := evTxn{id: t.ID, amountMinor: conv.Amount, payee: t.Payee, accountID: t.AccountID}
+		// Display label: payee when present, else the description — manual
+		// entries often carry only Desc ("Car payment"), and a large-expense
+		// finding with a blank subject reads broken.
+		label := t.Payee
+		if label == "" {
+			label = t.Desc
+		}
+		ev := evTxn{id: t.ID, amountMinor: conv.Amount, payee: label, accountID: t.AccountID}
 		switch {
 		case t.IsIncome():
 			rep.IncomeMinor += conv.Amount

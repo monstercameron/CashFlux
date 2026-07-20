@@ -221,10 +221,12 @@ func TestComputeEvidenceDedupe(t *testing.T) {
 	// One account whose only window activity is two car payments in one
 	// category: the account and category findings cite the same evidence set,
 	// so only the higher-ranked account finding survives.
+	big := txn("t1", "a1", 15, -62000, "", "auto") // payee-less manual entry
+	big.Desc = "Car payment"
 	in := Input{
 		Accounts: []domain.Account{asset("a1", "Joint Checking")},
 		Txns: []domain.Transaction{
-			txn("t1", "a1", 15, -62000, "Car payment", "auto"),
+			big,
 			txn("t2", "a1", 17, -48000, "Car payment", "auto"),
 		},
 		Rates: rates(), Since: since, Until: until, TopN: 10,
@@ -242,6 +244,9 @@ func TestComputeEvidenceDedupe(t *testing.T) {
 			haveCategory = true
 		case KindLargeTxn:
 			haveLarge = true // distinct evidence ([t1] vs [t1 t2]) — survives
+			if it.Payee != "Car payment" {
+				t.Fatalf("large-txn label should fall back to Desc: %+v", it)
+			}
 		}
 	}
 	if !haveAccount || haveCategory || !haveLarge {
