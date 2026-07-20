@@ -515,285 +515,313 @@ async function sixMonths(app) {
 }
 
 test("the pace rail reads as progress, not as a log", async ({ app }) => {
-  await nav(app, "/networth");
-  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-  await allTime(app);
+  try {
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await allTime(app);
 
-  const rail = app.locator('[data-testid="nws-pace"]').first();
-  await expect(rail, "the milestone treatment is the rail, on the chart").toBeVisible();
+    const rail = app.locator('[data-testid="nws-pace"]').first();
+    await expect(rail, "the milestone treatment is the rail, on the chart").toBeVisible();
 
-  const rungs = rail.locator('[data-testid="nws-pace-rung"]');
-  const n = await rungs.count();
-  expect(n, "a five-year climb reaches several round figures").toBeGreaterThanOrEqual(3);
-  expect(n, "the rail is a ladder, not a log").toBeLessThanOrEqual(8);
+    const rungs = rail.locator('[data-testid="nws-pace-rung"]');
+    const n = await rungs.count();
+    expect(n, "a five-year climb reaches several round figures").toBeGreaterThanOrEqual(3);
+    expect(n, "the rail is a ladder, not a log").toBeLessThanOrEqual(8);
 
-  // Every rung is a round figure REACHED. A negative one is not a milestone.
-  for (const t of await rungs.locator(".nws-pace-value").allInnerTexts()) {
-    expect(t, `a negative rung is not an achievement: ${t}`).not.toMatch(/[−-]|^\(/);
-  }
-
-  // The rungs ascend left to right in BOTH value and position — that pairing is
-  // what lets the gaps between them be read as time.
-  const geo = await rungs.evaluateAll((els) =>
-    els.map((e) => ({
-      x: e.getBoundingClientRect().left,
-      v: Number((e.querySelector(".nws-pace-value")?.innerText || "").replace(/[^0-9.]/g, "")) *
-        ((e.querySelector(".nws-pace-value")?.innerText || "").includes("M") ? 1000 : 1),
-    })),
-  );
-  for (let i = 1; i < geo.length; i++) {
-    expect(geo[i].x, "rungs must run left to right in time").toBeGreaterThan(geo[i - 1].x);
-    expect(geo[i].v, "rungs must climb in value").toBeGreaterThan(geo[i - 1].v);
-  }
-
-  // The legs carry the months they took — the whole reason the rail exists.
-  const legs = rail.locator('[data-testid="nws-pace-leg"]');
-  expect(await legs.count(), "each climb between rungs is drawn as a leg").toBe(n - 1);
-  const times = (await legs.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
-  expect(times.length, "at least some legs state their duration").toBeGreaterThan(0);
-  for (const t of times) expect(t).toMatch(/^\d+ mo$/);
-
-  // A leg's WIDTH is its duration, so a longer leg must be a wider one.
-  const legGeo = await legs.evaluateAll((els) =>
-    els.map((e) => ({
-      w: e.getBoundingClientRect().width,
-      mo: Number((e.innerText.match(/\d+/) || [0])[0]),
-    })).filter((l) => l.mo > 0),
-  );
-  for (let i = 1; i < legGeo.length; i++) {
-    const [a, b] = [legGeo[i - 1], legGeo[i]];
-    if (a.mo === b.mo) continue;
-    const longerIsWider = a.mo > b.mo ? a.w > b.w : b.w > a.w;
-    expect(longerIsWider, "the gap between rungs must encode the time it took").toBe(true);
-  }
-
-  // The projection is framed as an extrapolation, never as a promised date, and
-  // a household that is not gaining is told that instead.
-  const next = rail.locator('[data-testid="nws-pace-next"]');
-  if (await next.count()) {
-    const t = await next.innerText();
-    expect(t).toMatch(/at your recent pace|not gaining/i);
-    expect(t, "a projection must not promise").not.toMatch(/will|guarantee/i);
-
-    // The target must be the next figure a person would NAME, not the next rung
-    // on the sparse historical ladder. At ~$151k that is $200k; answering
-    // "$250k" put the target 65% and two years away.
-    const target = Number((t.match(/\$([\d.]+)k/) || [0, 0])[1]) * 1000 ||
-      Number((t.match(/\$([\d.]+)M/) || [0, 0])[1]) * 1000000;
-    if (target) {
-      const now = Math.abs(money(await app.locator('[data-testid="nw-hero-value"]').innerText())) / 100;
-      expect(target, "the next target must be ahead of where you stand").toBeGreaterThan(now);
-      expect((target - now) / now, "a target this far off is not the next thing you'd name").toBeLessThanOrEqual(0.6);
+    // Every rung is a round figure REACHED. A negative one is not a milestone.
+    for (const t of await rungs.locator(".nws-pace-value").allInnerTexts()) {
+      expect(t, `a negative rung is not an achievement: ${t}`).not.toMatch(/[−-]|^\(/);
     }
+
+    // The rungs ascend left to right in BOTH value and position — that pairing is
+    // what lets the gaps between them be read as time.
+    const geo = await rungs.evaluateAll((els) =>
+      els.map((e) => ({
+        x: e.getBoundingClientRect().left,
+        v: Number((e.querySelector(".nws-pace-value")?.innerText || "").replace(/[^0-9.]/g, "")) *
+          ((e.querySelector(".nws-pace-value")?.innerText || "").includes("M") ? 1000 : 1),
+      })),
+    );
+    for (let i = 1; i < geo.length; i++) {
+      expect(geo[i].x, "rungs must run left to right in time").toBeGreaterThan(geo[i - 1].x);
+      expect(geo[i].v, "rungs must climb in value").toBeGreaterThan(geo[i - 1].v);
+    }
+
+    // The legs carry the months they took — the whole reason the rail exists.
+    const legs = rail.locator('[data-testid="nws-pace-leg"]');
+    expect(await legs.count(), "each climb between rungs is drawn as a leg").toBe(n - 1);
+    const times = (await legs.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+    expect(times.length, "at least some legs state their duration").toBeGreaterThan(0);
+    for (const t of times) expect(t).toMatch(/^\d+ mo$/);
+
+    // A leg's WIDTH is its duration, so a longer leg must be a wider one.
+    const legGeo = await legs.evaluateAll((els) =>
+      els.map((e) => ({
+        w: e.getBoundingClientRect().width,
+        mo: Number((e.innerText.match(/\d+/) || [0])[0]),
+      })).filter((l) => l.mo > 0),
+    );
+    for (let i = 1; i < legGeo.length; i++) {
+      const [a, b] = [legGeo[i - 1], legGeo[i]];
+      if (a.mo === b.mo) continue;
+      const longerIsWider = a.mo > b.mo ? a.w > b.w : b.w > a.w;
+      expect(longerIsWider, "the gap between rungs must encode the time it took").toBe(true);
+    }
+
+    // The projection is framed as an extrapolation, never as a promised date, and
+    // a household that is not gaining is told that instead.
+    const next = rail.locator('[data-testid="nws-pace-next"]');
+    if (await next.count()) {
+      const t = await next.innerText();
+      expect(t).toMatch(/at your recent pace|not gaining/i);
+      expect(t, "a projection must not promise").not.toMatch(/will|guarantee/i);
+
+      // The target must be the next figure a person would NAME, not the next rung
+      // on the sparse historical ladder. At ~$151k that is $200k; answering
+      // "$250k" put the target 65% and two years away.
+      const target = Number((t.match(/\$([\d.]+)k/) || [0, 0])[1]) * 1000 ||
+        Number((t.match(/\$([\d.]+)M/) || [0, 0])[1]) * 1000000;
+      if (target) {
+        const now = Math.abs(money(await app.locator('[data-testid="nw-hero-value"]').innerText())) / 100;
+        expect(target, "the next target must be ahead of where you stand").toBeGreaterThan(now);
+        expect((target - now) / now, "a target this far off is not the next thing you'd name").toBeLessThanOrEqual(0.6);
+      }
+    }
+
+    // The rail is the chart's text equivalent, and it keeps the falls.
+    const read = await rail.locator('[data-testid="nws-pace-read"]').innerText();
+    expect(read.trim().length).toBeGreaterThan(10);
+    expect(read, "copy must not instruct or advise").not.toMatch(/you should|try to|consider /i);
+  } finally {
+    await sixMonths(app);
   }
-
-  // The rail is the chart's text equivalent, and it keeps the falls.
-  const read = await rail.locator('[data-testid="nws-pace-read"]').innerText();
-  expect(read.trim().length).toBeGreaterThan(10);
-  expect(read, "copy must not instruct or advise").not.toMatch(/you should|try to|consider /i);
-
-  await sixMonths(app);
 });
 
 test("the crossings are marked on the chart where they happened", async ({ app }) => {
-  await nav(app, "/networth");
-  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-  await allTime(app);
+  try {
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await allTime(app);
 
-  const marks = app.locator('[data-testid="nws-sides-svg"] .nws-mark');
-  expect(await marks.count(), "a milestone is a point on the line, so it is drawn there").toBeGreaterThan(0);
+    const marks = app.locator('[data-testid="nws-sides-svg"] .nws-mark');
+    expect(await marks.count(), "a milestone is a point on the line, so it is drawn there").toBeGreaterThan(0);
 
-  // A setback is marked in the same place in a quieter hand — the record is not
-  // a trophy cabinet. When one exists it must be visually distinct.
-  const downs = app.locator('[data-testid="nws-sides-svg"] .nws-mark.is-down');
-  if (await downs.count()) {
-    const dash = await downs.first().evaluate((e) => getComputedStyle(e).strokeDasharray);
-    expect(dash, "a setback must not look like an achievement").not.toBe("none");
+    // A setback is marked in the same place in a quieter hand — the record is not
+    // a trophy cabinet. When one exists it must be visually distinct.
+    const downs = app.locator('[data-testid="nws-sides-svg"] .nws-mark.is-down');
+    if (await downs.count()) {
+      const dash = await downs.first().evaluate((e) => getComputedStyle(e).strokeDasharray);
+      expect(dash, "a setback must not look like an achievement").not.toBe("none");
+    }
+
+    // Each mark stands on the chart's own x scale, so it must sit inside the plot.
+    const svg = await app.locator('[data-testid="nws-sides-svg"]').boundingBox();
+    const boxes = await marks.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+    for (const x of boxes) {
+      expect(x).toBeGreaterThanOrEqual(svg.x - 1);
+      expect(x).toBeLessThanOrEqual(svg.x + svg.width + 1);
+    }
+  } finally {
+    await sixMonths(app);
   }
-
-  // Each mark stands on the chart's own x scale, so it must sit inside the plot.
-  const svg = await app.locator('[data-testid="nws-sides-svg"]').boundingBox();
-  const boxes = await marks.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
-  for (const x of boxes) {
-    expect(x).toBeGreaterThanOrEqual(svg.x - 1);
-    expect(x).toBeLessThanOrEqual(svg.x + svg.width + 1);
-  }
-
-  await sixMonths(app);
 });
 
 test("the pace rail survives every pane width and theme", async ({ app }) => {
-  for (const theme of ["dark", "light"]) {
-    await setTheme(app, theme);
-    for (const [w, h] of [[1440, 900], [1202, 1078], [950, 900]]) {
-      await app.setViewportSize({ width: w, height: h });
-      await nav(app, "/networth");
-      await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-      await allTime(app);
-      const where = `${theme} @ ${w}`;
+  // This sweep mutates PERSISTED state -- theme and the selected period --
+  // and the fixture reuses one page across the tests in a worker, so a
+  // failure that skipped the restore leaked All-time and a light theme into
+  // whatever ran next. Restoring in a finally is what makes the failure
+  // local to the test that caused it.
+  try {
+    for (const theme of ["dark", "light"]) {
+      await setTheme(app, theme);
+      for (const [w, h] of [[1440, 900], [1202, 1078], [950, 900]]) {
+        await app.setViewportSize({ width: w, height: h });
+        await nav(app, "/networth");
+        await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+        await allTime(app);
+        const where = `${theme} @ ${w}`;
 
-      const rail = app.locator('[data-testid="nws-pace"]').first();
-      await expect(rail, where).toBeVisible();
+        const rail = app.locator('[data-testid="nws-pace"]').first();
+        await expect(rail, where).toBeVisible();
 
-      // EVERY rung carries its date. The first pass hid the date of any rung
-      // sitting close to its neighbour, which produced some rungs dated and
-      // some not with no rule a reader could infer -- indistinguishable from a
-      // rendering fault. Closeness is expressed by the ROW instead.
-      const rungs = rail.locator('[data-testid="nws-pace-rung"]');
-      const dated = await rungs.evaluateAll((els) =>
-        els.map((e) => ({
-          value: (e.querySelector(".nws-pace-value")?.innerText || "").trim(),
-          when: (e.querySelector(".nws-pace-when")?.innerText || "").trim(),
-          low: e.className.includes("is-low"),
-          box: (() => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top]; })(),
-        })),
-      );
-      for (const r of dated) {
-        expect(r.value, `${where}: a rung must state its figure`).toBeTruthy();
-        expect(r.when, `${where}: rung ${r.value} is missing its date`).toMatch(/^[A-Z][a-z]{2} \d{2}$/);
-      }
-
-      // No two rungs SHARING A ROW may overlap. Rungs on different rows may sit
-      // above one another -- that is what the second row is for.
-      for (const row of [false, true]) {
-        const boxes = dated.filter((r) => r.low === row).map((r) => r.box).sort((a, b) => a[0] - b[0]);
-        for (let i = 1; i < boxes.length; i++) {
-          expect(boxes[i][0], `${where}: rung labels overlap on the same row`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
+        // EVERY rung carries its date. The first pass hid the date of any rung
+        // sitting close to its neighbour, which produced some rungs dated and
+        // some not with no rule a reader could infer -- indistinguishable from a
+        // rendering fault. Closeness is expressed by the ROW instead.
+        const rungs = rail.locator('[data-testid="nws-pace-rung"]');
+        const dated = await rungs.evaluateAll((els) =>
+          els.map((e) => ({
+            value: (e.querySelector(".nws-pace-value")?.innerText || "").trim(),
+            when: (e.querySelector(".nws-pace-when")?.innerText || "").trim(),
+            low: e.className.includes("is-low"),
+            box: (() => { const r = e.getBoundingClientRect(); return [r.left, r.right, r.top]; })(),
+          })),
+        );
+        for (const r of dated) {
+          expect(r.value, `${where}: a rung must state its figure`).toBeTruthy();
+          expect(r.when, `${where}: rung ${r.value} is missing its date`).toMatch(/^[A-Z][a-z]{2} \d{2}$/);
         }
-      }
 
-      // The projection chip must not crowd the row beneath it. It sits under a
-      // border, so a few pixels of clearance reads as a collision.
-      const chip = rail.locator('[data-testid="nws-pace-next"]');
-      if (await chip.count()) {
-        const gap = await app.evaluate(() => {
-          const c = document.querySelector('[data-testid="nws-pace-next"]').getBoundingClientRect();
-          const e = document.querySelector('[data-testid="nws-gap-ends"]').getBoundingClientRect();
-          return Math.round(e.top - c.bottom);
+        // No two rungs SHARING A ROW may overlap. Rungs on different rows may sit
+        // above one another -- that is what the second row is for.
+        for (const row of [false, true]) {
+          const boxes = dated.filter((r) => r.low === row).map((r) => r.box).sort((a, b) => a[0] - b[0]);
+          for (let i = 1; i < boxes.length; i++) {
+            expect(boxes[i][0], `${where}: rung labels overlap on the same row`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
+          }
+        }
+
+        // The projection chip must not crowd the row beneath it. It sits under a
+        // border, so a few pixels of clearance reads as a collision.
+        const chip = rail.locator('[data-testid="nws-pace-next"]');
+        if (await chip.count()) {
+          const gap = await app.evaluate(() => {
+            const c = document.querySelector('[data-testid="nws-pace-next"]').getBoundingClientRect();
+            const e = document.querySelector('[data-testid="nws-gap-ends"]').getBoundingClientRect();
+            return Math.round(e.top - c.bottom);
+          });
+          expect(gap, `${where}: the projection chip crowds the row beneath it`).toBeGreaterThanOrEqual(8);
+        }
+
+        const overflow = await app.evaluate(() => {
+          const m = document.querySelector("main") || document.body;
+          return m.scrollWidth - m.clientWidth;
         });
-        expect(gap, `${where}: the projection chip crowds the row beneath it`).toBeGreaterThanOrEqual(8);
+        expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
+
+        await sixMonths(app);
       }
-
-      const overflow = await app.evaluate(() => {
-        const m = document.querySelector("main") || document.body;
-        return m.scrollWidth - m.clientWidth;
-      });
-      expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
-
-      await sixMonths(app);
     }
+  } finally {
+    await setTheme(app, "dark");
+    await app.setViewportSize({ width: 1440, height: 900 });
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await sixMonths(app);
   }
-  await setTheme(app, "dark");
-  await app.setViewportSize({ width: 1440, height: 900 });
 });
 
 test("the all-time x axis stays readable at every pane width, in both themes", async ({ app }) => {
-  for (const theme of ["dark", "light"]) {
-    await setTheme(app, theme);
-    for (const [w, h] of [[1440, 900], [1202, 1078], [968, 900]]) {
-      await app.setViewportSize({ width: w, height: h });
-      await nav(app, "/networth");
-      await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-      await allTime(app);
+  // This sweep mutates PERSISTED state -- theme and the selected period --
+  // and the fixture reuses one page across the tests in a worker, so a
+  // failure that skipped the restore leaked All-time and a light theme into
+  // whatever ran next. Restoring in a finally is what makes the failure
+  // local to the test that caused it.
+  try {
+    for (const theme of ["dark", "light"]) {
+      await setTheme(app, theme);
+      for (const [w, h] of [[1440, 900], [1202, 1078], [968, 900]]) {
+        await app.setViewportSize({ width: w, height: h });
+        await nav(app, "/networth");
+        await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+        await allTime(app);
 
-      const ticks = app.locator('[data-testid="nws-xaxis"] [data-testid="nws-xtick"]:visible');
-      const labels = (await ticks.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
-      const where = `${theme} @ ${w}`;
+        const ticks = app.locator('[data-testid="nws-xaxis"] [data-testid="nws-xtick"]:visible');
+        const labels = (await ticks.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+        const where = `${theme} @ ${w}`;
 
-      // An axis still has to say what it covers.
-      expect(labels.length, `${where}: an axis needs more than its ends`).toBeGreaterThanOrEqual(3);
-      // ...but never a run so dense it can only render initials. This is the
-      // regression guard for the 32-caption all-time axis.
-      expect(labels.length, `${where}: too many ticks to read`).toBeLessThanOrEqual(8);
+        // An axis still has to say what it covers.
+        expect(labels.length, `${where}: an axis needs more than its ends`).toBeGreaterThanOrEqual(3);
+        // ...but never a run so dense it can only render initials. This is the
+        // regression guard for the 32-caption all-time axis.
+        expect(labels.length, `${where}: too many ticks to read`).toBeLessThanOrEqual(8);
 
-      // No label may have degenerated to a letter or two — the exact failure
-      // the reviewer saw. Every caption must name a real date.
-      for (const l of labels) {
-        expect(l.length, `${where}: "${l}" is an initial, not a date`).toBeGreaterThanOrEqual(3);
-        expect(l, `${where}: "${l}" is not a date`).toMatch(/^(\d{4}|[A-Z][a-z]{2}( \d{2})?|Now)$/);
+        // No label may have degenerated to a letter or two — the exact failure
+        // the reviewer saw. Every caption must name a real date.
+        for (const l of labels) {
+          expect(l.length, `${where}: "${l}" is an initial, not a date`).toBeGreaterThanOrEqual(3);
+          expect(l, `${where}: "${l}" is not a date`).toMatch(/^(\d{4}|[A-Z][a-z]{2}( \d{2})?|Now)$/);
+        }
+
+        // And no two labels may overlap, which is what the density budget buys.
+        const boxes = await ticks.evaluateAll((els) =>
+          els
+            .filter((e) => e.offsetParent !== null && e.innerText.trim())
+            .map((e) => {
+              const r = e.getBoundingClientRect();
+              return [r.left, r.right];
+            })
+            .sort((a, b) => a[0] - b[0]),
+        );
+        for (let i = 1; i < boxes.length; i++) {
+          expect(boxes[i][0], `${where}: axis labels overlap`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
+        }
+
+        // The axis must not push the page sideways at any width.
+        const overflow = await app.evaluate(() => {
+          const m = document.querySelector("main") || document.body;
+          return m.scrollWidth - m.clientWidth;
+        });
+        expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
+
+        await sixMonths(app);
       }
-
-      // And no two labels may overlap, which is what the density budget buys.
-      const boxes = await ticks.evaluateAll((els) =>
-        els
-          .filter((e) => e.offsetParent !== null && e.innerText.trim())
-          .map((e) => {
-            const r = e.getBoundingClientRect();
-            return [r.left, r.right];
-          })
-          .sort((a, b) => a[0] - b[0]),
-      );
-      for (let i = 1; i < boxes.length; i++) {
-        expect(boxes[i][0], `${where}: axis labels overlap`).toBeGreaterThanOrEqual(boxes[i - 1][1] - 0.5);
-      }
-
-      // The axis must not push the page sideways at any width.
-      const overflow = await app.evaluate(() => {
-        const m = document.querySelector("main") || document.body;
-        return m.scrollWidth - m.clientWidth;
-      });
-      expect(overflow, `${where}: horizontal overflow`).toBeLessThanOrEqual(1);
-
-      await sixMonths(app);
     }
+  } finally {
+    await setTheme(app, "dark");
+    await app.setViewportSize({ width: 1440, height: 900 });
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await sixMonths(app);
   }
-  await setTheme(app, "dark");
-  await app.setViewportSize({ width: 1440, height: 900 });
 });
 
 test("History leads with the graph and keeps the numbers reachable", async ({ app }) => {
-  await nav(app, "/networth");
-  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
-  await allTime(app);
-  await detail(app);
+  try {
+    await nav(app, "/networth");
+    await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+    await allTime(app);
+    await detail(app);
 
-  const section = app.locator("#nws-04");
-  const toggle = section.locator('[data-testid="nws-history-toggle"]');
-  const table = section.locator('[data-testid="nws-history-table"]');
+    const section = app.locator("#nws-04");
+    const toggle = section.locator('[data-testid="nws-history-toggle"]');
+    const table = section.locator('[data-testid="nws-history-table"]');
 
-  // The graph is the presentation. A thirty-row table beneath a chart makes the
-  // chart read as a header and the table as the content.
-  await expect(table, "the table must not be the default presentation").toHaveCount(0);
-  await expect(section.locator('[data-testid="nws-sides-svg"]'), "the chart carries the section").toBeVisible();
+    // The graph is the presentation. A thirty-row table beneath a chart makes the
+    // chart read as a header and the table as the content.
+    await expect(table, "the table must not be the default presentation").toHaveCount(0);
+    await expect(section.locator('[data-testid="nws-sides-svg"]'), "the chart carries the section").toBeVisible();
 
-  // The chart must be able to stand on its own: a value scale, a dated axis,
-  // its floor disclosed, the two sides named with figures, and a text
-  // equivalent for anything that cannot be read off it.
-  expect(await section.locator('[data-testid="nws-yaxis"] .nws-ytick').count()).toBeGreaterThanOrEqual(3);
-  expect(await section.locator('[data-testid="nws-xaxis"] [data-testid="nws-xtick"]').count()).toBeGreaterThanOrEqual(3);
-  await expect(section.locator('[data-testid="nws-sides-floor"]')).toBeVisible();
-  await expect(section.locator('[data-testid="nws-annos"] .nws-anno')).toHaveCount(3);
-  const aria = await section.locator('[data-testid="nws-sides-svg"]').getAttribute("aria-label");
-  expect(aria, "the chart keeps its accessible summary whether or not the table is open").toBeTruthy();
-  expect(aria.length).toBeGreaterThan(20);
+    // The chart must be able to stand on its own: a value scale, a dated axis,
+    // its floor disclosed, the two sides named with figures, and a text
+    // equivalent for anything that cannot be read off it.
+    expect(await section.locator('[data-testid="nws-yaxis"] .nws-ytick').count()).toBeGreaterThanOrEqual(3);
+    expect(await section.locator('[data-testid="nws-xaxis"] [data-testid="nws-xtick"]').count()).toBeGreaterThanOrEqual(3);
+    await expect(section.locator('[data-testid="nws-sides-floor"]')).toBeVisible();
+    await expect(section.locator('[data-testid="nws-annos"] .nws-anno')).toHaveCount(3);
+    const aria = await section.locator('[data-testid="nws-sides-svg"]').getAttribute("aria-label");
+    expect(aria, "the chart keeps its accessible summary whether or not the table is open").toBeTruthy();
+    expect(aria.length).toBeGreaterThan(20);
 
-  // Folded, not hidden: the control is keyboard-reachable, states the honest
-  // total, and says what it controls.
-  await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  const label = await toggle.innerText();
-  expect(label, "the control must state the real total").toMatch(/\d+/);
-  await toggle.focus();
-  await expect(toggle).toBeFocused();
-  await app.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(table).toBeVisible();
+    // Folded, not hidden: the control is keyboard-reachable, states the honest
+    // total, and says what it controls.
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const label = await toggle.innerText();
+    expect(label, "the control must state the real total").toMatch(/\d+/);
+    await toggle.focus();
+    await expect(toggle).toBeFocused();
+    await app.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(table).toBeVisible();
 
-  const promised = Number((label.match(/\d+/) || [])[0]);
-  const rows = section.locator('[data-testid="nws-history-row"]');
-  expect(await rows.count(), "opening reveals exactly the total promised").toBe(promised);
+    const promised = Number((label.match(/\d+/) || [])[0]);
+    const rows = section.locator('[data-testid="nws-history-row"]');
+    expect(await rows.count(), "opening reveals exactly the total promised").toBe(promised);
 
-  // ONE date format down the whole column. The cells used to borrow the chart's
-  // thinned axis captions and fall back to a different format wherever one was
-  // blank, mixing "Jul 21" and "Sep 2021" in the same column.
-  const whens = await rows.locator("td").nth(0).allInnerTexts();
-  const shapes = new Set(whens.map((t) => t.trim().replace(/[A-Za-z]+/g, "M").replace(/\d+/g, (d) => "D".repeat(d.length))));
-  expect(shapes.size, `the When column mixes date formats: ${[...shapes].join(" | ")}`).toBe(1);
-  for (const t of whens) {
-    expect(t.trim(), `"${t}" is not a full month and year`).toMatch(/^[A-Z][a-z]{2} \d{4}$/);
+    // ONE date format down the whole column. The cells used to borrow the chart's
+    // thinned axis captions and fall back to a different format wherever one was
+    // blank, mixing "Jul 21" and "Sep 2021" in the same column.
+    const whens = await rows.locator("td").nth(0).allInnerTexts();
+    const shapes = new Set(whens.map((t) => t.trim().replace(/[A-Za-z]+/g, "M").replace(/\d+/g, (d) => "D".repeat(d.length))));
+    expect(shapes.size, `the When column mixes date formats: ${[...shapes].join(" | ")}`).toBe(1);
+    for (const t of whens) {
+      expect(t.trim(), `"${t}" is not a full month and year`).toMatch(/^[A-Z][a-z]{2} \d{4}$/);
+    }
+  } finally {
+    await sixMonths(app);
   }
-
-  await sixMonths(app);
 });
 
 test("Detail keeps its place: jumps land on the title and the index tracks it", async ({ app }) => {
