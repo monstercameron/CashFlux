@@ -87,6 +87,110 @@ func nwsIndex(onGlance ui.Handler) ui.Node {
 	)
 }
 
+// THE HEADER OFFSET — one number, three consumers.
+//
+// The global top bar is sticky at top 0 and about 101px tall (more when it
+// folds to two rows at narrow widths). Everything that positions against the
+// document's top edge has to clear it, and three separate places were doing
+// that with three different literals: the index parked itself at top 4px (so
+// it sat UNDER the header and vanished while scrolling), sections used an 88px
+// scroll-margin, and the scroll-spy used a 170px band. Three numbers that must
+// agree and had no way to.
+//
+// So it is measured once, from the header itself rather than hardcoded, and
+// published as a CSS variable the stylesheet and the spy both read. The header
+// changes height at narrow widths, which is exactly why measuring beats a
+// constant.
+
+// The two published measurements. --nws-header is the sticky header alone,
+// which is what the index hangs below. --nws-navstack is header + index + a
+// little air: the line a section's title must clear, which is therefore ALSO
+// where a jumped-to section lands and ALSO where the scroll-spy's band sits.
+// Those last three are one number by construction rather than by agreement —
+// when the band was merely "about right" it read 144 against a landing offset
+// of 160, so a section you had just jumped to was not yet reported as current.
+const (
+	nwsNavOffsetVar = "--nws-header"
+	nwsNavStackVar  = "--nws-navstack"
+	// nwsNavSlack is the gap between the index and the title it must not cover.
+	nwsNavSlack = 14.0
+)
+
+// nwsNavStack is the offset every "top of the document" measurement uses.
+func nwsNavStack() float64 { return nwsHeaderHeight() + nwsIndexHeight() + nwsNavSlack }
+
+// nwsHeaderHeight measures the sticky global header, falling back to a sane
+// desktop value if it cannot be found.
+func nwsHeaderHeight() float64 {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return 101
+	}
+	el := doc.Call("querySelector", ".topbar")
+	if !el.Truthy() {
+		return 101
+	}
+	h := el.Call("getBoundingClientRect").Get("height").Float()
+	if h <= 0 {
+		return 101
+	}
+	return h
+}
+
+// nwsIndexHeight measures the sticky section index, which sits directly under
+// the header and shares responsibility for how far down the "current" band
+// starts. It wraps to two rows at narrow widths, so it is measured too.
+func nwsIndexHeight() float64 {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return 48
+	}
+	el := doc.Call("querySelector", ".nws-index")
+	if !el.Truthy() {
+		return 48
+	}
+	h := el.Call("getBoundingClientRect").Get("height").Float()
+	if h <= 0 {
+		return 48
+	}
+	return h
+}
+
+// nwsWriteNavVars publishes the current measurements. Called from the effect
+// below and again from the scroll-spy, because the index is part of the sum and
+// the index does not exist until Detail is on screen — measuring only at mount
+// meant publishing a fallback and never correcting it.
+func nwsWriteNavVars() {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	st := doc.Get("documentElement").Get("style")
+	st.Call("setProperty", nwsNavOffsetVar, fmt.Sprintf("%.0fpx", nwsHeaderHeight()))
+	st.Call("setProperty", nwsNavStackVar, fmt.Sprintf("%.0fpx", nwsNavStack()))
+}
+
+// nwsPublishNavOffset writes the measured offsets onto the document root and
+// keeps them current as the window resizes. `view` is a dependency so switching
+// between Glance and Detail re-measures: the index only exists in Detail, and it
+// is part of the sum.
+func nwsPublishNavOffset(view string) {
+	ui.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		win := js.Global().Get("window")
+		if !doc.Truthy() || !win.Truthy() {
+			return nil
+		}
+		nwsWriteNavVars()
+		cb := js.FuncOf(func(js.Value, []js.Value) any { nwsWriteNavVars(); return nil })
+		win.Call("addEventListener", "resize", cb)
+		return func() {
+			win.Call("removeEventListener", "resize", cb)
+			cb.Release()
+		}
+	}, []any{view})
+}
+
 // nwsScrollSpy marks the section the reader is currently inside, so a long
 // document never loses its place. It toggles the class directly on the DOM
 // rather than through state, so scrolling never re-renders the document. Detail
@@ -111,9 +215,18 @@ func nwsScrollSpy(active bool) {
 			return nil
 		}
 		apply := func() {
+			// Re-publish before reading: a wrapped index or a folded header
+			// changes the sum, and the spy is the one thing that runs on every
+			// layout change.
+			nwsWriteNavVars()
 			// Current = the last section whose heading has reached the band just
-			// under the sticky index: the greatest top still above it.
-			const band = 170.0
+			// under the sticky index: the greatest top still above it. The band
+			// is the MEASURED header plus the index that sits below it, not a
+			// literal — a fixed 170 reported "What you owe" while History filled
+			// the screen, because it did not know how tall the header was.
+			// The SAME number a jumped-to section lands on, plus a pixel of
+			// tolerance for sub-pixel scroll positions.
+			band := nwsNavStack() + 1
 			cur := secs[0].Get("id").String()
 			best := -1e18
 			for _, el := range secs {
@@ -127,6 +240,14 @@ func nwsScrollSpy(active bool) {
 				it := items.Call("item", i)
 				on := it.Call("getAttribute", "data-section").String() == cur
 				it.Get("classList").Call("toggle", "is-current", on)
+				// Where you are is announced, not only tinted: a reader on a
+				// screen reader gets the same "you are here" the sighted
+				// reader gets from the highlight.
+				if on {
+					it.Call("setAttribute", "aria-current", "location")
+				} else {
+					it.Call("removeAttribute", "aria-current")
+				}
 			}
 		}
 		cb := js.FuncOf(func(js.Value, []js.Value) any { apply(); return nil })
@@ -271,7 +392,7 @@ func nwsChangedSection(v nwsView) ui.Node {
 		moverBody,
 	)
 	return nwsDetailSection("nws-01", "01", uistate.T("nws.secChanged"),
-		uistate.T("nws.secChangedNote", nwsWindowLabel(v.Months)), nwsBridgeExplain(), body)
+		uistate.T("nws.secChangedNote", nwsWindowSpan(v.Months)), nwsBridgeExplain(), body)
 }
 
 // nwsSideSection renders §02 / §03: a side's composition followed by EVERY
@@ -299,16 +420,21 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 		amounts = p.Assets
 	}
 
+	// Largest-remainder shares on both tables below, so each column of
+	// percentages adds to exactly 100 rather than to 98 or 99.
+	compParts := make([]int64, len(order))
+	for i, bkt := range order {
+		compParts[i] = amounts[bkt]
+	}
+	compShares := balancesheet.Shares(compParts, total)
+
 	compRows := []any{}
-	for _, bkt := range order {
+	for i, bkt := range order {
 		amt := amounts[bkt]
 		if amt == 0 {
 			continue
 		}
-		share := int64(0)
-		if total > 0 {
-			share = amt * 100 / total
-		}
+		share := compShares[i]
 		compRows = append(compRows, Tr(Attr("data-testid", "nws-comp-row"),
 			Td(nwsBucketLabel(bkt)),
 			Td(nwsShareBar(share, asset)),
@@ -317,12 +443,15 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 		))
 	}
 
+	acctParts := make([]int64, len(rows))
+	for i, r := range rows {
+		acctParts[i] = r.SideMinor
+	}
+	acctShares := balancesheet.Shares(acctParts, total)
+
 	acctRows := []any{}
-	for _, r := range rows {
-		share := int64(0)
-		if total > 0 {
-			share = r.SideMinor * 100 / total
-		}
+	for i, r := range rows {
+		share := acctShares[i]
 		row := r
 		acctRows = append(acctRows, ui.CreateElement(nwsDrillRow, nwsDrillRowProps{
 			TestID: "nw-acct-row", DataKey: "data-account", DataVal: row.Acct.ID,

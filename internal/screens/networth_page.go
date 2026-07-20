@@ -52,6 +52,28 @@ func nwsWindowLabel(months int) string {
 	return uistate.T("nws.winMonths", months)
 }
 
+// nwsWindowSpan phrases the window as a PHRASE that fits inside a sentence,
+// which is a different job from naming it on a button.
+//
+// The period control is captioned "This month" / "6 months" / "All time",
+// because that is how you label a choice. Dropping those captions into a
+// sentence slot produced "$4,678.21 over This month" and "Up $169,788.68 over
+// All time" — the same defect already fixed once on this page, where a window
+// LENGTH was interpolated into a point-in-time slot ("6 months ago"). A label
+// is not a phrase, and no generic template makes it one, so each period gets
+// its own wording and carries its own preposition.
+func nwsWindowSpan(months int) string {
+	switch months {
+	case nwsAllTime:
+		return uistate.T("nws.spanAll")
+	case 1:
+		return uistate.T("nws.spanMonth")
+	case 24:
+		return uistate.T("nws.spanYears")
+	}
+	return uistate.T("nws.spanMonths", months)
+}
+
 // nwsWindowAgo phrases the window's far edge as a point in time, so a sentence
 // can say "where you stood 6 months ago" rather than "where you stood 6 months".
 func nwsWindowAgo(months int) string {
@@ -158,7 +180,7 @@ func nwsRatioCards(v nwsView) ui.Node {
 func nwsTakeaway(v nwsView) string {
 	b := v.Bridge
 	delta := b.DeltaMinor()
-	window := nwsWindowLabel(v.Months)
+	window := nwsWindowSpan(v.Months)
 	if delta == 0 {
 		return uistate.T("nws.takeFlat", fmtMoney(money.New(b.EndMinor, v.Base)), window)
 	}
@@ -297,9 +319,8 @@ func nwsHero(v nwsView) ui.Node {
 			arrow, tone = "▼", ""
 		}
 		deltaNode = Span(ClassStr("nws-hero-delta"+tone), Attr("data-testid", "nw-delta"),
-			Attr("title", uistate.T("nws.deltaTitle", nwsWindowLabel(v.Months))),
-			arrow+" "+fmtMoney(money.New(absMinor(delta), v.Base))+" "+
-				uistate.T("nws.deltaOver", nwsWindowLabel(v.Months)))
+			Attr("title", uistate.T("nws.deltaTitle", nwsWindowSpan(v.Months))),
+			arrow+" "+fmtMoney(money.New(absMinor(delta), v.Base))+" "+nwsWindowSpan(v.Months))
 	}
 
 	// Exclusions are disclosed, never silently folded into the figure.
@@ -317,7 +338,7 @@ func nwsHero(v nwsView) ui.Node {
 	return nwsSection("", "", "", nil, Div(css.Class("nws-hero"),
 		Div(
 			ui.CreateElement(nwsQuality, nwsQualityProps{
-				Q: nwsAssessQuality(v), Base: v.Base,
+				Q: nwsAssessQuality(v), Base: v.Base, App: appstate.Default,
 				AsOfLine: uistate.T("nw.asOf", uistate.LoadPrefs().FormatDate(v.Now)) + " ",
 			}),
 			Div(ClassStr(valCls), Attr("data-countup", ""), Attr("data-testid", "nw-hero-value"),
@@ -376,6 +397,7 @@ func NetWorth() ui.Node {
 	// route has settled, so mount never blocks on the history math.
 	settled := useAfterSettle("networth")
 	// The scroll-spy runs only in Detail, and its hook stays unconditional.
+	nwsPublishNavOffset(view.Get())
 	nwsScrollSpy(view.Get() == uistate.NetWorthViewDetail)
 
 	if len(app.Accounts()) == 0 {

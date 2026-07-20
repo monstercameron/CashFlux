@@ -678,6 +678,32 @@ func registerNwsSides() {
 	)
 	// The projection sits OFF the track and wears a dashed edge, because it is
 	// an extrapolation and not part of the record.
+	// The stale-account table inside the disclosure popover. Nine accounts are
+	// data, so they are ranked rows rather than nine near-identical sentences;
+	// it scrolls inside its own box past a handful so the popover cannot grow
+	// taller than the screen.
+	rule(".nws-dq-scroll",
+		prop("max-height", "11rem"),
+		prop("overflow-y", "auto"),
+		prop("margin", "0.15rem 0 0.35rem"),
+	)
+	rule(".nws-dq-table",
+		prop("font-size", "var(--type-12, 0.75rem)"),
+	)
+	rule(".nws-dq-table th, .nws-dq-table td",
+		prop("padding", "0.22rem 0.5rem 0.22rem 0"),
+	)
+	rule(".nws-dq-actions",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.4rem"),
+		prop("margin-top", "0.2rem"),
+	)
+	rule(".nws-pace-ahead",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.3rem"),
+	)
 	rule(".nws-pace-next",
 		prop("padding", "0.12rem 0.55rem"),
 		prop("font-size", "var(--type-11, 0.6875rem)"),
@@ -827,7 +853,7 @@ func registerNwsSides() {
 	rule(".nws-strip-swatch",
 		prop("width", "0.55rem"),
 		prop("height", "0.55rem"),
-		prop("border-radius", "2px"),
+		prop("border-radius", "var(--radius-xs)"),
 		prop("flex", "0 0 auto"),
 	)
 	rule(".nws-strip-title",
@@ -865,7 +891,7 @@ func registerNwsSides() {
 	rule(".nws-legend-dot",
 		prop("width", "0.55rem"),
 		prop("height", "0.55rem"),
-		prop("border-radius", "2px"),
+		prop("border-radius", "var(--radius-xs)"),
 		prop("flex", "0 0 auto"),
 	)
 	// One hue per side, stepped by alpha, so a side reads as ONE thing made of
@@ -904,16 +930,23 @@ func registerNwsDetail() {
 	// A jumped-to section lands clear of the app header AND the sticky index
 	// above it. Without this the reader arrives mid-chart with no section title
 	// on screen, which is exactly the moment they most need one.
+	// One measured number, three consumers. --nws-header carries the global top
+	// bar's real height (networth_detail.go measures it and republishes on
+	// resize, because the bar folds to two rows at narrow widths). A section
+	// must land below the bar AND below the index that sticks under it; the
+	// index must stick below the bar; the scroll-spy's band is the same sum.
+	// Three literals that had to agree — 4px, 88px, 170px — could not.
 	rule(".nws-section[id]",
-		prop("scroll-margin-top", "5.5rem"),
+		prop("scroll-margin-top", "var(--nws-navstack, 160px)"),
 	)
 	rule(".nws-index",
 		prop("display", "flex"),
 		prop("flex-wrap", "wrap"),
 		prop("gap", "0.35rem"),
 		prop("position", "sticky"),
-		prop("top", "0.25rem"),
-		prop("z-index", "3"),
+		prop("top", "calc(var(--nws-header, 101px) + 0.35rem)"),
+		// Above the document it indexes, below the header it hangs from.
+		prop("z-index", "10"),
 		prop("padding", "0.35rem"),
 		prop("background", "var(--bg-card)"),
 		prop("border", "1px solid var(--border)"),
@@ -933,10 +966,6 @@ func registerNwsDetail() {
 		prop("cursor", "pointer"),
 	)
 	rule(".nws-idx:hover",
-		prop("color", "var(--text)"),
-		prop("background", "var(--bg)"),
-	)
-	rule(".nws-idx.is-current",
 		prop("color", "var(--text)"),
 		prop("background", "var(--bg)"),
 	)
