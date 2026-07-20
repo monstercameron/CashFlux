@@ -1,3 +1,49 @@
+## 2026-07-20 — Bills & recurring: three capabilities the redesign dropped, put back
+
+The migration pass that rewrote this surface's coverage also catalogued what the redesign had
+quietly lost (RH1-RH5) and left three of them as expected-to-fail tests rather than deleting them.
+This is the pass that turns those three red.
+
+**RH3 was the interesting one, because it was a product question wearing a bug costume.** The roster
+called a commitment "account-tied" when `domain.Recurring.AccountID` was non-empty. That field is
+the FUNDING account an occurrence posts from — every real flow has one — so the Bills lens matched
+all thirteen seeded commitments and the Subscriptions branch below it was unreachable code. The
+symptom was that /subscriptions, a live nav entry point, landed on "Nothing here yet."
+
+The tempting one-line fix is to swap the branches: subs = everything that is not a bill. That would
+have filed the property-tax installments and the home-insurance premium under Subscriptions, which
+is a worse failure than an empty lens — an empty lens tells you nothing, a mislabelled lens tells
+you something false. So the ruling Cam and I settled on is that the lenses are FILTERS, NOT A
+PARTITION. Bills is liability-anchored, and Subscriptions makes its own positive claim. Anything
+that is neither shows under All only, and that is the intended outcome, not a gap.
+
+Both judgments moved into the pure layer. `bills.LiabilityAnchors` runs exactly the
+`DedupeObligations` pipeline the agenda already runs — the agenda was learning the anchor as a side
+effect of collapsing a statement bill onto the flow that pays it, and the roster needed the same
+answer to the same question. Asking it twice in two places is precisely how a page ends up calling a
+flow account-tied in one section and free-floating in the next.
+`subscriptions.IsSubscriptionCommitment` is the positive claim: not a lender, not essential spend,
+not a habitual merchant, AND subscription-shaped by name, category, or a confirmed detection. On the
+sample household that yields Bills = mortgage + both car payments + the student loan, Subscriptions
+= streaming bundle + shop software + gym (27.00/mo), and All-only = HOA dues, both property-tax
+installments, both insurance policies.
+
+**RH1 and RH5 were the same mistake in two costumes: a capability rendered as a picture of itself.**
+The budget-fit chip became a `<span>`, which lost the handler and the accessible name in one stroke.
+Negotiate called PutTask directly, which delivered the reminder and withheld the haggling script the
+reminder is about. Both are restored to the shapes the retired bills row had — a labelled button, and
+the seeded task composer.
+
+**Two tests had to be driven through the fixed flows, and it is worth saying why that is not
+weakening them.** Both had been written against the broken behavior: one asserted a to-do appeared
+the instant Negotiate was clicked, which was only true while the row filed tasks behind the user's
+back; the other looked for `.budget.deeplink-flash`, which never renders on the sample household
+because ten budgets auto-seed the compact list, so the flash was landing on `.budget-crow` all along.
+Same claims, reached through the flows that exist. rhythm.spec.mjs: 54 passed, 1 skipped, 0 failed.
+
+RH2 (the variance statement with no reader) and RH4 (nowhere to show a subscription payment link)
+remain open.
+
 ## 2026-07-20 — Bills & Recurring: the coverage catches up with the surface
 
 The redesign landed and the tests did not follow it. Six regression tests and one standalone script
