@@ -855,8 +855,9 @@ func Dashboard() ui.Node {
 	tiles = append(tiles, css.Class("bento no-touch-chrome"))
 	// #76: outside explicit edit-layout mode the grips and resize handles are
 	// hidden (CSS keys on this attribute) and pointer drag is off (widget shell).
+	layoutEditing := uistate.UseLayoutEdit().Get()
 	layoutEditAttr := "off"
-	if uistate.UseLayoutEdit().Get() {
+	if layoutEditing {
 		layoutEditAttr = "on"
 	}
 	tiles = append(tiles, Attr("data-layout-edit", layoutEditAttr))
@@ -1032,6 +1033,12 @@ func Dashboard() ui.Node {
 		ui.CreateElement(dashResumeCard),
 		// C319: the "Customize" entry point now lives in the top bar (DashCustomizeButton),
 		// grouped with the other page actions, instead of a floating bar above the bento.
+		// One standing hint at the top of edit-layout mode: the ~76 per-tile drag/resize
+		// controls otherwise carry no single explanation. Quiet, non-redesigning — shown
+		// only while editing and only when there's a grid to arrange.
+		If(layoutEditing && (len(accounts) > 0 || len(txns) > 0),
+			Div(css.Class("dash-edit-hint"), Attr("data-testid", "dash-edit-hint"), Attr("role", "note"),
+				uistate.T("dashboard.editLayoutHint"))),
 		// C8: on a genuinely empty workspace (no accounts and no transactions) the
 		// bento KPI grid is just a wall of $0 tiles with no hierarchy — suppress it
 		// and let the welcome hero + onboarding checklist own the empty state. The

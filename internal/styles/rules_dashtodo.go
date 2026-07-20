@@ -20,6 +20,8 @@ func registerDashTodo() {
 	registerDashHeroShrink()
 	registerDashWidgetTone()
 	registerTodoNoteExpand()
+	// 2026-07-19 detail-polish lane 1: attention-title wrap + edit-layout hint.
+	registerDetail1Dash()
 }
 
 // registerDashHeroShrink trims the net-worth hero further. Each earlier pass
