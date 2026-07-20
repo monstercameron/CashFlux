@@ -37,4 +37,55 @@ func registerBudgetOverCalm() {
 			" color-mix(in srgb, #000 26%, transparent) 2px,"+
 			" transparent 2px, transparent 5px)"),
 	)
+
+	// --- Graded by overage magnitude (detail-lane 3) --------------------------------
+	// The flat-fill + thin-cap treatment above is the MODERATE baseline (10–24% over).
+	// A MILD overspend (<10% over) reads softer — the danger tone is pulled toward the
+	// card surface and the overflow marker narrows — so a $3-over category doesn't shout
+	// as loudly as a $300-over one. A SEVERE overrun (>=25% over) reads heavier — a
+	// deeper danger tone and a wider, denser marker. The tier class (over-mild /
+	// over-severe, from budgeting.OverTier) adds one class over the base `.over`
+	// selector, so these win on specificity (0,5,0 vs 0,4,0) without order games.
+	// Theme tokens only (--danger, --bg-card): both themes read.
+
+	// MILD: soften the fill toward the card surface.
+	rule(".bento-budgets .budget-card-loader .bar-fill.over.over-mild,\n  .bento-budgets .budget-crow-bar .bar-fill.over.over-mild",
+		background("color-mix(in srgb, var(--danger) 68%, var(--bg-card))"),
+	)
+	// MILD marker: thinner (7px) and a lighter hatch, so the overshoot cue is present
+	// but quiet.
+	rule(".bento-budgets .budget-card-loader .bar-fill.over.over-mild::after,\n  .bento-budgets .budget-crow-bar .bar-fill.over.over-mild::after",
+		width("7px"),
+		prop("background", "repeating-linear-gradient(45deg,"+
+			" color-mix(in srgb, #000 16%, transparent) 0,"+
+			" color-mix(in srgb, #000 16%, transparent) 2px,"+
+			" transparent 2px, transparent 6px)"),
+	)
+
+	// SEVERE: a deeper danger tone (mix a little black into --danger so it reads as the
+	// heaviest state in both light and dark).
+	rule(".bento-budgets .budget-card-loader .bar-fill.over.over-severe,\n  .bento-budgets .budget-crow-bar .bar-fill.over.over-severe",
+		background("color-mix(in srgb, var(--danger) 88%, #000)"),
+	)
+	// SEVERE marker: wider (18px) and a denser hatch — the loudest overshoot cue.
+	rule(".bento-budgets .budget-card-loader .bar-fill.over.over-severe::after,\n  .bento-budgets .budget-crow-bar .bar-fill.over.over-severe::after",
+		width("18px"),
+		prop("background", "repeating-linear-gradient(45deg,"+
+			" color-mix(in srgb, #000 34%, transparent) 0,"+
+			" color-mix(in srgb, #000 34%, transparent) 2px,"+
+			" transparent 2px, transparent 4px)"),
+	)
+
+	// --- "Cover…" / "Top up…" must never truncate (detail-lane 3) --------------------
+	// The card-footer money-move buttons carry short labels that were being clipped in
+	// tighter layouts. Pin them to their content size so the label always fits: they
+	// never shrink and never wrap mid-label, and min-width:fit-content guards against
+	// any flex/grid context that would otherwise collapse them below the text. The
+	// action row already wraps (flex-wrap), so a button that can't fit alongside its
+	// neighbours drops to the next line WHOLE rather than losing its label.
+	rule(".bento-budgets .budget-actions .btn",
+		prop("flex", "0 0 auto"),
+		prop("min-width", "fit-content"),
+		whiteSpace("nowrap"),
+	)
 }

@@ -1600,12 +1600,19 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 				Option(Value(uistate.BudgetSortName), SelectedIf(sortVal == uistate.BudgetSortName), uistate.T("budgets.sortName")),
 			),
 		),
-		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-			Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
-			Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
-			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T(budgetDensityLabelKey(densityAtom.Get())))),
 	)
+	// Detail-lane 3: the compact-list toggle is surfaced as a DIRECT toolbar control
+	// (below) so full cards — which show only one or two categories at a time — can be
+	// swapped for the scannable list in one click, instead of hunting inside the
+	// Budget-settings popover. Same atom + persisted pref; the button always names (via
+	// its label + tooltip) the layout a click switches TO, and reports its state through
+	// aria-pressed.
+	densityToggleBtn := Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
+		Attr("aria-label", uistate.T("budgets.densityToolbarAria")),
+		Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
+		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(uistate.T(budgetDensityLabelKey(densityAtom.Get()))))
 	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeSettings),
 		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionTools")),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
@@ -1652,6 +1659,9 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 					toolsSection,
 				),
 			),
+			// Density toggle, surfaced directly beside the settings popover (only useful
+			// once there are budgets to lay out).
+			If(hasBudgets, densityToggleBtn),
 			If(hasBudgets, Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "budgets-add"), Title(uistate.T("budgets.add")), OnClick(addBudget),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),

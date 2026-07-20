@@ -249,6 +249,17 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	if width > 100 {
 		width = 100
 	}
+	// Grade the over-budget treatment by HOW FAR past the cap the row is, so a small
+	// overspend doesn't wear the same full-severity red as a large overrun (a mild bar
+	// gets a softer tone + thinner overflow marker; a severe one, the heaviest). The
+	// tier reads off the displayed percent (this-month, or last-month's in that overlay)
+	// and only attaches when the fill is actually over — the style layer
+	// (rules_budgetovercalm.go) does the rest.
+	if strings.Contains(fillClass, "over") {
+		if tc := budgeting.ClassifyOverage(barPct).Class(); tc != "" {
+			fillClass += " " + tc
+		}
+	}
 
 	// Show "name · category" only when they add information (see budgetTitle).
 	title := budgetTitle(s.Budget.Name, props.Category)
