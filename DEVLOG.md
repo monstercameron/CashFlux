@@ -1,3 +1,77 @@
+## 2026-07-20 — /networth: the rail's last three, and History led by its graph
+
+Final pass on the redesign. Four items, and three of them are the same lesson wearing different
+clothes: a density compromise is only correct at the width it was measured at, and a compromise
+that leaks out of the graphic that needed it becomes a defect somewhere else.
+
+**Rung dates were inconsistent.** The rail read `$0 Sep 22 · $10k · $25k · $50k May 24 · $100k Jul
+25` — some rungs dated, some not, with no rule a reader could infer. That is indistinguishable from
+a rendering fault, and it *was* one: the first version hid the date of any rung within 11% of its
+neighbour, and 11% was simply wrong. Measured in the browser, a dated block is ~45px against a
+630px rail, so the dates would have fit at ~7%.
+
+The fix was not to retune the hidden threshold. Any threshold that silently removes information
+produces the same class of complaint, because the reader cannot see the rule. Closeness is now
+expressed by the ROW: a crowded rung steps down to a second row and keeps everything it says, so
+every rung states the same three things at every width. The second row is only paid for in height
+when one is actually used, so a well-spread rail costs Glance nothing extra.
+
+**And the threshold that picks the row is set for the NARROWEST rail, not the widest.** This is the
+part worth keeping. The rail is ~630px at a 1440px viewport but only ~390px at 1202, where the
+sidebar takes its share and the strips have not yet stacked — so the same 45px block is 7% of the
+rail at one width and 11.5% at another. I calibrated at 1440, shipped 8%, and the new guard caught
+real overlapping labels at 1202. That is the *second* time in this effort that a percentage tuned
+at one width failed at another; the x-axis budget failed the same way, for the same reason, three
+commits earlier. The rule to remember: when a layout constant is a percentage but the constraint is
+pixels, derive it from the smallest box the thing renders in, and assert it at every width.
+
+**The next target was drawn from the wrong ladder.** At ~$151k the projection said "Next $250k:
+about 25 months", skipping the $200k anyone in that position would say out loud and putting the
+target 65% and two years away. The cause was reuse: the forward target borrowed the historical
+milestone ladder. But the two have different jobs. The historical ladder is a RECORD, and it is
+sparse on purpose — sparseness is exactly what stopped it being the 32-row event log this page
+started with. A forward target is not a record; it is the next figure a person would name. Sparse
+is right for looking back and wrong for looking forward, so the forward target now has its own rule
+(the next multiple of half the current decade) and answers "Next $200k: about 12 months". Reusing a
+rule because it exists, rather than because the job is the same, is what produced this.
+
+**The projection chip did not overlap.** Flagged as unverified and asked to be measured rather than
+assumed. Measured at all three widths in both themes: the chip cleared the row beneath it by 6px
+every time. Real, but tight under a bordered pill, so it now clears by 14px with a guard holding it
+above 8. Worth recording that the flag was right to be raised as unverified — the measurement cost
+one probe and settled it either way.
+
+**History was led by its table.** Cam: "the long list of months looks ugly, why isn't it a graph of
+some sorts?" It already was a graph — with a ~30-row month-by-month table beneath it. Length decides
+hierarchy: a thirty-row table under a chart makes the chart read as a header and the table as the
+content, which is backwards for a section called History. The graph is now the presentation and the
+table its precision layer, behind "Show the numbers · N months" with the honest total on the
+control.
+
+Collapsed, deliberately NOT deleted. The external reviewer had credited this page for semantic
+tables behind its visualizations rather than chart-only information, and that is a real virtue: the
+table is what lets a reader take an exact figure off the page and it is the chart's companion text.
+Removing it would have traded precision and accessibility for tidiness. So the control is
+keyboard-reachable with `aria-expanded`/`aria-controls`, the table gained a screen-reader caption
+and scoped column headers, and the chart keeps its own `aria-label` summary either way. The guard
+asserts the chart can actually carry the section — value scale, dated axis, disclosed floor, both
+sides named with figures, gap measured at both ends — rather than trusting the claim.
+
+**The date-format bug was the leak.** The When column read `Jul 21 · Sep 2021 · Nov 2021 · Jan 2022
+· Mar 22 · May 2022`. The cells borrowed the CHART's labels — thinned axis captions in "Jan 06"
+format — and fell back to `Jan 2006` wherever a caption had been thinned to blank. So a table
+inherited an axis's density compromise, in a place with no width pressure to justify it. The table
+sets its own format now. Same lesson as the rungs: a compromise made for one box does not travel.
+
+**Declined again.** Point-level interrogation of the chart. The page's existing in-place
+investigation idiom is the drill affordance on figures, and the honest answer here is that the
+table *is* the interrogation — one click away, exact rather than approximate, and now the section's
+explicit second layer. Adding hover tooltips would invent a third language for the same job.
+
+**Verified.** `go test ./internal/...` green; wasm build clean; `networth.spec.mjs` green with new
+guards for every-rung-dated, same-row non-overlap, chip clearance ≥8px, the forward target being
+ahead and within 60% of where you stand, the History hierarchy, and one date format down the whole
+When column.
 ## 2026-07-20 — /networth: milestones become pace, and the axis becomes readable
 
 Two findings closed from the 9.2/10 black-box review, plus a redesign that came out of Cam's own
