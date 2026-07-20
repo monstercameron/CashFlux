@@ -393,37 +393,72 @@ func nwsShareBar(share int64, asset bool) ui.Node {
 // nwsHistorySection (04) is the window month by month: the mirrored chart
 // again, then the figures behind it.
 func nwsHistorySection(v nwsView) ui.Node {
-	rows := make([]any, 0, len(v.Points))
-	for i, p := range v.Points {
-		label := ""
-		if i < len(v.Labels) {
-			label = v.Labels[i]
-		}
-		if label == "" {
-			label = p.At.Format("Jan 2006")
-		}
-		rows = append(rows, Tr(Attr("data-testid", "nws-history-row"),
-			Td(label),
-			nwsMoneyCell(p.AssetsMinor, v.Base),
-			nwsMoneyCell(p.LiabilitiesMinor, v.Base),
-			nwsMoneyCell(p.NetMinor, v.Base),
-		))
-	}
 	body := Fragment(
 		nwsSides(v),
 		nwsMilestones(v),
-		Div(css.Class("nws-scroll"), Style(map[string]string{"margin-top": "0.9rem"}),
-			Table(css.Class("nws-table"), Attr("data-testid", "nws-history-table"),
-				Thead(Tr(Th(uistate.T("nws.colWhen")),
-					Th(css.Class("nws-num"), uistate.T("accounts.assets")),
-					Th(css.Class("nws-num"), uistate.T("dashboard.liabilities")),
-					Th(css.Class("nws-num"), uistate.T("dashboard.netWorth")))),
-				Tbody(rows...),
-			),
-		),
+		ui.CreateElement(nwsHistoryTable, nwsHistoryTableProps{View: v}),
 	)
 	return nwsDetailSection("nws-04", "04", uistate.T("nws.secHistory"),
 		uistate.T("nws.secHistoryNote"), nwsSidesExplain(), body)
+}
+
+// nwsHistoryTableProps carries the shared view into the table expander.
+type nwsHistoryTableProps struct{ View nwsView }
+
+// nwsHistoryTable is the month-by-month figures, behind an expander.
+//
+// The GRAPH is the presentation of this section and the table is its precision
+// layer. It used to be the other way round by sheer length: a thirty-row table
+// beneath a chart makes the chart read as a header and the table as the
+// content, which is not what a history section is for.
+//
+// The table is collapsed, NOT deleted. It is what lets a reader take an exact
+// figure off the page and it is the chart's companion text — a chart-only
+// section would trade a real precision and accessibility virtue for tidiness.
+// The control states the honest total, so nothing is hidden, only folded.
+func nwsHistoryTable(p nwsHistoryTableProps) ui.Node {
+	v := p.View
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+
+	label := uistate.T("nws.historyShow", len(v.Points))
+	if open.Get() {
+		label = uistate.T("nws.historyHide")
+	}
+	rows := make([]any, 0, len(v.Points))
+	if open.Get() {
+		for _, pt := range v.Points {
+			// The table sets its OWN date format. It used to borrow the chart's
+			// thinned axis captions and fall back to a different format wherever
+			// one was blank, which mixed "Jul 21" and "Sep 2021" down the same
+			// column. A cell has no width pressure and must not inherit an
+			// axis's density compromises.
+			rows = append(rows, Tr(Attr("data-testid", "nws-history-row"),
+				Td(pt.At.Format("Jan 2006")),
+				nwsMoneyCell(pt.AssetsMinor, v.Base),
+				nwsMoneyCell(pt.LiabilitiesMinor, v.Base),
+				nwsMoneyCell(pt.NetMinor, v.Base),
+			))
+		}
+	}
+	return Div(css.Class("nws-history"), Style(map[string]string{"margin-top": "0.9rem"}),
+		Button(css.Class("nws-milestones-more"), Type("button"),
+			Attr("data-testid", "nws-history-toggle"),
+			Attr("aria-expanded", boolStr(open.Get())),
+			Attr("aria-controls", "nws-history-table"),
+			OnClick(toggle), label),
+		If(open.Get(), Div(css.Class("nws-scroll"), Style(map[string]string{"margin-top": "0.55rem"}),
+			Table(css.Class("nws-table"), Attr("id", "nws-history-table"),
+				Attr("data-testid", "nws-history-table"),
+				Caption(css.Class("sr-only"), uistate.T("nws.historyCaption")),
+				Thead(Tr(Th(Attr("scope", "col"), uistate.T("nws.colWhen")),
+					Th(css.Class("nws-num"), Attr("scope", "col"), uistate.T("accounts.assets")),
+					Th(css.Class("nws-num"), Attr("scope", "col"), uistate.T("dashboard.liabilities")),
+					Th(css.Class("nws-num"), Attr("scope", "col"), uistate.T("dashboard.netWorth")))),
+				Tbody(rows...),
+			),
+		)),
+	)
 }
 
 // nwsHealthSection (05) restates every ratio with its definition alongside its

@@ -168,6 +168,10 @@ var netWorthRedesignKeys = Catalog{
 	"nws.paceFalls":    "It fell back %d times along the way.",
 	"nws.paceNone":    "No round figures reached over this period.",
 
+	"nws.historyShow":    "Show the numbers · %d months",
+	"nws.historyHide":    "Hide the numbers",
+	"nws.historyCaption": "Net worth month by month: what you own, what you owe, and the difference.",
+
 	"nws.milestonesShowAll":    "Show all %d milestones",
 	"nws.milestonesHide":      "Hide the full list",
 	"nws.winAll":          "All time",
