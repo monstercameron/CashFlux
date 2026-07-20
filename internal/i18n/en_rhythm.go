@@ -94,6 +94,7 @@ var rhythmKeys = Catalog{
 	"rhythm.showFewer":    "Show fewer",
 	"rhythm.calMore":      "+%d more",
 	"rhythm.calMissed":    "This one went by without being paid",
+	"rhythm.calPast":      "Already gone by",
 
 	// Posting-mode badges.
 	"rhythm.modeAuto":       "Auto",

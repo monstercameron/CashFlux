@@ -551,6 +551,11 @@ func registerRhythmAgenda() {
 	rule(".rhy-cal-item.is-missed",
 		prop("color", "var(--warn)"),
 	)
+	// Past, with nothing known about it either way: history, receding. No claim
+	// is made, so no colour is spent.
+	rule(".rhy-cal-item.is-past",
+		prop("opacity", "0.6"),
+	)
 	rule(".rhy-cal-item.is-in",
 		prop("color", "var(--accent)"),
 		prop("font-weight", "600"),

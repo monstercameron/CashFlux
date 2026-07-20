@@ -48,6 +48,14 @@ type agendaItem struct {
 	// renders whole months, and a month whose first three weeks are blank because
 	// they already happened reads as a broken calendar rather than a settled one.
 	Past bool
+	// Missed marks a past occurrence the app can actually SHOW went unpaid: no
+	// settlement evidence, and the flow's own schedule never advanced past it.
+	//
+	// It is deliberately narrower than "past and not known paid". Absence of a
+	// payment record is not evidence of a missed payment — most households settle
+	// most bills without ever telling the app — so a past day with nothing known
+	// about it recedes quietly instead of accusing.
+	Missed bool
 	// AnchorAccountID is the liability account this row settles when the row is a
 	// merged obligation (the statement bill folded into its recurring flow), so
 	// the single row keeps the account identity's capabilities.
@@ -123,14 +131,21 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 		// A real transaction that settled the occurrence counts as paid just as
 		// much as a hand-marked one — otherwise a month of auto-matched bills
 		// renders as a month of misses.
-		if !it.Paid {
-			if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
-				if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
-					it.Paid = true
-				}
+		scheduleMovedOn, hasSchedule := false, false
+		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
+			hasSchedule = true
+			if _, matched := app.BillMatchForOccurrence(rid, b.DueDate); matched {
+				it.Paid = true
 			}
+			// The stored schedule sitting AFTER this occurrence means the flow ran
+			// its course here: the occurrence was posted or paid in the ordinary way
+			// and the flow advanced. It is settled history, not a miss.
+			scheduleMovedOn = b.DueDate.Before(recByID[rid].NextDue)
 		}
 		it.Past = b.DueDate.Before(today)
+		// A liability statement has no schedule of its own to reason about, so a
+		// past one is never claimed as missed — only shown as history.
+		it.Missed = it.Past && !it.Paid && hasSchedule && !scheduleMovedOn
 		items = append(items, it)
 	}
 
@@ -385,16 +400,23 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 				// WHAT is due; CSS truncates it when the cell is narrow.
 				chip := "rhy-cal-item"
 				tip := it.Name + " · " + fmtMoney(it.Amount)
-				switch {
-				case it.Income:
+				// A day that has gone by says what HAPPENED, not what was due — but
+				// only as far as the app actually knows. Settled, genuinely missed,
+				// and simply-in-the-past are three different claims and read as three
+				// different things.
+				if it.Income {
 					chip += " is-in"
+				}
+				switch {
 				case it.Past && it.Paid:
-					// A day that has gone by says what HAPPENED, not what was due.
 					chip += " is-done"
 					tip += " · " + uistate.T("bills.paidBadge")
-				case it.Past:
+				case it.Missed:
 					chip += " is-missed"
 					tip += " · " + uistate.T("rhythm.calMissed")
+				case it.Past:
+					chip += " is-past"
+					tip += " · " + uistate.T("rhythm.calPast")
 				}
 				cell = append(cell, Div(ClassStr(chip), Title(tip),
 					Span(css.Class("rhy-cal-name"), it.Name),

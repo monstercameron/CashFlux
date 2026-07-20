@@ -21,8 +21,13 @@ and every commit updates this file under `Unreleased`.
   trailing edge — it read as broken, and was strictly worse than the compact list it is supposed to be
   a peer of. Two causes. (1) The calendar only ever drew the FUTURE, so days that had already gone by
   were empty; it now renders the whole displayed month (plus the grid's edge days), and past days carry
-  what actually happened — settled obligations recede with a struck amount, ones that went by unpaid
-  take the amber warning tone. Auto-matched bills count as settled, not missed. (2) It always opened on
+  what actually happened — as far as the app actually knows. Three distinct states, because they are
+  three distinct claims: settled (payment recorded, or an auto-matched transaction, or the flow's own
+  schedule advanced past it) recedes with a struck amount; genuinely missed (a flow whose schedule is
+  still stuck at that date) takes the amber warning tone; and a past day with nothing known about it
+  just recedes, making no claim at all. Absence of a payment record is not evidence of a missed
+  payment — most households settle most bills without telling the app — so the calendar does not
+  accuse. (2) It always opened on
   today's month; it now opens on the month containing the next obligation when this month has nothing
   left ahead — and only then, since the current month is where a user expects to land. Prev / today /
   next paging is unchanged.
