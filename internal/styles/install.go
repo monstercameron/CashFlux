@@ -99,6 +99,7 @@ func Register() {
 	registerAcctDetails()
 	registerUxbatch3()
 	registerUxbatch4()
+	registerFlipFit()
 	registerLane3Dashboard()
 	inject(Build())
 }

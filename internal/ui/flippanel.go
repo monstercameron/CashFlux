@@ -336,8 +336,19 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	// and the visible title can never drift apart. The id is derived from the
 	// title (only one flip modal is ever open at a time).
 	titleID := "flip-title-" + slugifyTitle(props.Title)
+	// Height is a MAXIMUM, not a fixed size (UI/UX task #31): the wrap sizes to
+	// its content and stops at min(Height, 86vh), so a sparse panel (Compare
+	// goals, Cover overages) hugs its content instead of floating in a tall
+	// empty shell, while dense panels clamp and scroll exactly as before. The
+	// back face is the in-flow face (rules: .flip-back position:relative) so
+	// auto height has real content to size against.
 	return Div(ClassStr(backdropCls),
-		Div(css.Class("flip-wrap"), Style(map[string]string{"width": width, "height": height}),
+		Div(css.Class("flip-wrap"), Style(map[string]string{
+			"width":      width,
+			"height":     "auto",
+			"min-height": "280px",
+			"max-height": "min(" + height + ", 86vh)",
+		}),
 			Attr("role", "dialog"), Attr("aria-modal", "true"), Attr("aria-labelledby", titleID),
 			Div(ClassStr(innerCls),
 				// Front face — a neutral card briefly seen during the flip. It is
