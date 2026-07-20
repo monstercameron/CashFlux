@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`rhy-` style vocabulary for the unified Bills & Recurring surface.** A from-scratch design system
+  (`internal/styles/rules_rhythm.go`, registered in `install.go`) for the "month's rhythm" page — NOT
+  the bento tile kit: a full-width vertical stack of sections. It styles the tideline hero (SVG band
+  with accent income up-ticks, muted outflow down-ticks, a cushion line, and an amber/red pinch flag),
+  the compact stat rail, the overdue/review/findings strips, posting-mode + Smart/Smart+ evidence
+  badges, the up-next agenda's dense compact rows, and the lineup roster's weight-first claim rows with
+  a %-of-outflow spine, lenses, anchor/creep chips, and a watching-after-cancellation tail. Theme
+  tokens only (--text/--text-dim/--border/--bg-card/--bg/--accent; --danger/--warn reserved for overdue
+  and a negative pinch; --radius untouched); pane-based breakpoints via `ruleContentMax` stack the hero,
+  agenda, and roster at 966/710. The CALENDAR agenda view reuses the existing `.cal-grid` chrome.
 - **`runway.Tideline` — pay-cycle pinch/cushion helper for the Bills & Recurring hero.** Given the
   liquid balance, recurring flows, now, and rates, it sizes the pay-cycle window (now → next income
   event, floored to 14 days, capped at 45, degrading to a 30-day look-ahead when no income is

@@ -1,3 +1,24 @@
+## 2026-07-20 — Bills & Recurring redesign: the page layer (unified "rhythm" surface)
+
+Started the UI layer over the now-tested engine (recurdiscover + runway.Tideline). The page replaces
+the old Scheduled | Bills | Subscriptions tabs with ONE unified surface — "the month's rhythm" — and
+/recurring, /bills, /subscriptions all land on it.
+
+First commit is the from-scratch style vocabulary, `rhy-` (internal/styles/rules_rhythm.go). It is
+deliberately not the bento tile kit: a full-width vertical stack of sections. Decisions:
+- The tideline hero is a two-column grid (SVG band + a stat rail) that collapses to stacked at the 966
+  content-width threshold, with the stat rail flipping from a vertical column to a horizontal wrap.
+- Red is reserved. Income up-ticks are `var(--accent)`, outflow down-ticks are muted `var(--text-dim)`;
+  the pinch flag is amber (`--warn`) and only turns red (`--danger`) when the projected cushion goes
+  negative. The overdue strip is the only other place `--danger` appears.
+- `color-mix()` gives the tinted strip/flag backgrounds without inventing new tokens, so the surface
+  reads correctly in both themes off the same `--accent`/`--warn`/`--danger` values.
+- The CALENDAR agenda view will reuse the existing `.cal-grid` bills chrome rather than reinventing a
+  month grid, so only the dense COMPACT list needed new row rules.
+
+Next: the i18n keys, then the screen rewrite (tideline hero, overdue/review/findings strips, up-next
+agenda with the compact|calendar toggle, and the weight-first lineup roster).
+
 ## 2026-07-20 — Bills & Recurring redesign: the engine layer (recurdiscover + runway pinch)
 
 Built the pure-logic foundation for the from-scratch Bills & Recurring surface, bottom-up and

@@ -34,6 +34,7 @@ func Register() {
 	registerHouseholdSurface()
 	registerCategoriesSurface()
 	registerRulesSurface()
+	registerRhythmSurface()
 	registerVaultSurface()
 	registerRecordSurface()
 	registerSystemSurface()
