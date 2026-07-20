@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/ai"
 )
 
 // phrase describes how one op Kind reads in the receipt: a past-tense action and
@@ -138,17 +140,24 @@ func (t *Tally) ActionPhrases() []string {
 }
 
 // CostPhrase returns the plain-English cost line ("~$0.04, 1,240 tokens"), or ""
-// when nothing has been spent/used yet. Honesty rules (UX-09): a sub-cent total
-// keeps four decimals instead of collapsing to a false "$0.00", and tokens spent
-// on a model with no known pricing say "cost unavailable" rather than implying
-// the turn was free.
+// when nothing has been spent/used yet. Honesty rules (UX-09): the dollar figure
+// runs through the shared ai.FormatCostUSD so a sub-cent spend never collapses to
+// a false "$0.00" (it reads "<$0.001" or "$0.004"), and tokens spent on a model
+// with no known pricing say "cost unavailable" rather than implying the turn was
+// free. Every assistant cost display formats through the one path.
 func (t *Tally) CostPhrase() string {
 	if t.Tokens <= 0 && !t.HasCost {
 		return ""
 	}
 	parts := make([]string, 0, 2)
 	if t.HasCost {
-		parts = append(parts, "~"+formatUSD(t.CostUSD))
+		c := ai.FormatCostUSD(t.CostUSD)
+		// "<$0.001" already reads as an upper bound; leave the "~" off it.
+		if strings.HasPrefix(c, "<") {
+			parts = append(parts, c)
+		} else {
+			parts = append(parts, "~"+c)
+		}
 	}
 	if t.Tokens > 0 {
 		parts = append(parts, groupThousands(t.Tokens)+" tokens")
@@ -157,19 +166,6 @@ func (t *Tally) CostPhrase() string {
 		parts = append(parts, "cost unavailable")
 	}
 	return strings.Join(parts, ", ")
-}
-
-// formatUSD renders a dollar estimate without lying at the edges: zero-or-less
-// is "$0.00", sub-cent amounts keep four decimals, the rest use two.
-func formatUSD(v float64) string {
-	switch {
-	case v <= 0:
-		return "$0.00"
-	case v < 0.01:
-		return fmt.Sprintf("$%.4f", v)
-	default:
-		return "$" + strconv2f(v)
-	}
 }
 
 // Summary renders the full one-line cumulative receipt, e.g.
@@ -194,10 +190,6 @@ func (t *Tally) Summary() string {
 	}
 	return b.String()
 }
-
-// strconv2f formats a dollar amount to two decimals without importing strconv
-// gymnastics at call sites.
-func strconv2f(v float64) string { return fmt.Sprintf("%.2f", v) }
 
 // groupThousands renders a non-negative int with comma thousands separators.
 func groupThousands(n int) string {

@@ -76,8 +76,16 @@ func TestTokensOnlyNoCost(t *testing.T) {
 func TestSubCentCostKeepsPrecision(t *testing.T) {
 	tally := NewTally()
 	tally.AddCost(1240, 0.0004, true)
-	// UX-09: a sub-cent spend must not collapse to a false "$0.00".
-	if cp := tally.CostPhrase(); cp != "~$0.0004, 1,240 tokens" {
-		t.Fatalf("CostPhrase = %q, want %q", cp, "~$0.0004, 1,240 tokens")
+	// UX-09 / QPASS-D: a sub-cent spend must not collapse to a false "$0.00". The
+	// shared ai.FormatCostUSD renders a spend below a tenth of a cent as an honest
+	// upper bound "<$0.001" (no "~" prefix — it already reads as approximate).
+	if cp := tally.CostPhrase(); cp != "<$0.001, 1,240 tokens" {
+		t.Fatalf("CostPhrase = %q, want %q", cp, "<$0.001, 1,240 tokens")
+	}
+	// A sub-cent-but-visible spend keeps three decimals and the "~".
+	tally2 := NewTally()
+	tally2.AddCost(1240, 0.004, true)
+	if cp := tally2.CostPhrase(); cp != "~$0.004, 1,240 tokens" {
+		t.Fatalf("CostPhrase = %q, want %q", cp, "~$0.004, 1,240 tokens")
 	}
 }
