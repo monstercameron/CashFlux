@@ -23,6 +23,7 @@ package balancesheet
 import (
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -293,4 +294,96 @@ func AxisTicks(loMinor, hiMinor int64, want int) []int64 {
 		out = append(out, int64(math.Round(v)))
 	}
 	return out
+}
+
+// Milestone is a threshold the net worth crossed inside the window.
+type Milestone struct {
+	// Kind is "positive" (net worth became positive for the first time in the
+	// window) or "threshold" (a round figure was passed).
+	Kind string
+	// AtIndex is the point at which the crossing was first observed, and
+	// ValueMinor is the figure crossed.
+	AtIndex    int
+	ValueMinor int64
+	// Up is false when the crossing went the other way. A milestone passed
+	// downward is still a fact about the window, and hiding it would make the
+	// list a trophy cabinet rather than a record.
+	Up bool
+}
+
+// MilestoneKindPositive / MilestoneKindThreshold name the two kinds.
+const (
+	MilestoneKindPositive  = "positive"
+	MilestoneKindThreshold = "threshold"
+)
+
+// Milestones reports the round figures net worth crossed across the series, in
+// the order they were crossed. Thresholds are the same "nice" numbers an axis
+// uses (1, 2 or 5 times a power of ten), so a milestone is a figure a person
+// would actually mention out loud rather than an arbitrary internal step.
+//
+// Crossings in BOTH directions are reported: a page that only ever congratulates
+// is not a record of what happened.
+func Milestones(pts []Point) []Milestone {
+	if len(pts) < 2 {
+		return nil
+	}
+	var out []Milestone
+	for i := 1; i < len(pts); i++ {
+		prev, cur := pts[i-1].NetMinor, pts[i].NetMinor
+		if prev < 0 && cur >= 0 {
+			out = append(out, Milestone{Kind: MilestoneKindPositive, AtIndex: i, ValueMinor: 0, Up: true})
+		}
+		lo, hi, up := prev, cur, true
+		if lo > hi {
+			lo, hi, up = hi, lo, false
+		}
+		for _, t := range niceThresholds(lo, hi) {
+			out = append(out, Milestone{Kind: MilestoneKindThreshold, AtIndex: i, ValueMinor: t, Up: up})
+		}
+	}
+	return out
+}
+
+// niceThresholds returns the round figures crossed in (lo, hi]. It walks the
+// 1/2/5 ladder from the largest step downward and returns the crossings of the
+// FIRST step that produces any — so a window reports the most significant round
+// figure it passed ($150,000) rather than every lesser one it also passed
+// ($140,000, $135,000). A milestone list that fires on every small step is not
+// a milestone list.
+func niceThresholds(lo, hi int64) []int64 {
+	if hi <= lo || hi <= 0 {
+		return nil
+	}
+	// Candidate steps from the magnitude of the range's top down to whole units.
+	top := math.Floor(math.Log10(float64(hi)))
+	for e := top; e >= 2; e-- {
+		mag := math.Pow(10, e)
+		for _, m := range []float64{5, 2, 1} {
+			step := int64(mag * m)
+			if step <= 0 {
+				continue
+			}
+			var out []int64
+			for v := (lo/step + 1) * step; v <= hi; v += step {
+				if v > lo {
+					out = append(out, v)
+				}
+			}
+			if len(out) > 0 {
+				sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+				return out
+			}
+		}
+	}
+	return nil
+}
+
+func containsInt64(s []int64, v int64) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }

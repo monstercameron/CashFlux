@@ -6,6 +6,40 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **/networth discloses what its figure rests on.** An expandable line beside the as-of date, quiet
+  by default and tinted only when something needs attention: accounts counted, each overdue account
+  NAMED with how long it has been (a count says something is wrong without saying what to fix), the
+  oldest hand-entered valuation, and — the one that matters here — that it is ~79% of everything
+  owned, so the headline leans on it. It reuses `freshness.IsStale` and `ledger.BalanceProvenance`
+  rather than inventing second opinions. The FX line names the SOURCE of the rates and explicitly
+  does not claim a freshness the app cannot substantiate (settings store rates but not when they
+  were captured); a test asserts no fabricated timestamp appears.
+- **Numbers can be investigated in place.** Every account and mover row opens to its opening and
+  closing balance, the split between money that moved through the account and balance asserted by
+  hand, where the balance came from and when it was last confirmed — then links aimed at that
+  account, including the ledger pre-filtered to it over the window on screen. Keyboard-operable;
+  rows render as their own `tbody` so the table stays valid HTML.
+- **Bridge legs open to the accounts behind them.** "Debt paid down +$21,295" becomes Mortgage
+  $8,880, Rewards Card $5,315, and three loans behind them, straight from the engine's contributor
+  lists; a test asserts they sum to their leg. The residual opens to an explanation of why it has
+  none.
+- **An all-time period scope** (thinned to a readable number of points over a long history) and
+  **milestones** in Detail — the round figures net worth crossed, reported in BOTH directions,
+  because a page that only congratulates is a trophy cabinet rather than a record.
+
+### Fixed
+- **The takeaway no longer overclaims its cause.** It read "mostly from paying down debt, which
+  accounts for 99% of the move" — computed against the NET change, while two other legs of ~$6,700
+  each were cancelling out, so the sentence implied they were negligible when they were not. The
+  share is now of GROSS movement: "The biggest single cause was paying down debt, which was 61% of
+  everything that moved."
+- **Ratio readings state what they measure instead of giving advice.** The liquid share no longer
+  offers "fine if it's a home" (a judgment the page has no basis for), debt-to-assets no longer
+  asserts what is "normal for a household that owns property", and the cash runway no longer names
+  the number "worth fixing first" — it now says plainly that it is measured against average spending
+  over the last three months. Tests assert the readings do not instruct.
+
 ### Fixed
 - **Glance is one screen again: the interpretation now sits beside the evidence.** At a 1202x1078
   viewport "What it means" and its three health cards fell below the fold, so a reader met three

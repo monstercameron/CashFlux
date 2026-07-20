@@ -279,3 +279,72 @@ func TestAxisTicks(t *testing.T) {
 		})
 	}
 }
+
+func TestMilestones(t *testing.T) {
+	pt := func(net int64) Point { return Point{NetMinor: net} }
+
+	t.Run("a round figure crossed upward is reported", func(t *testing.T) {
+		// The sample household: $131,837.65 -> $153,170.47 crosses $150,000.
+		ms := Milestones([]Point{pt(13183765), pt(15317047)})
+		found := false
+		for _, m := range ms {
+			if m.Kind == MilestoneKindThreshold && m.ValueMinor == 15000000 && m.Up {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("Milestones = %+v, want the $150,000 crossing", ms)
+		}
+	})
+
+	t.Run("becoming positive is its own milestone", func(t *testing.T) {
+		ms := Milestones([]Point{pt(-5000), pt(12000)})
+		found := false
+		for _, m := range ms {
+			if m.Kind == MilestoneKindPositive && m.Up {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("Milestones = %+v, want a first-positive milestone", ms)
+		}
+	})
+
+	t.Run("a crossing the other way is reported too, not hidden", func(t *testing.T) {
+		ms := Milestones([]Point{pt(15317047), pt(13183765)})
+		if len(ms) == 0 {
+			t.Fatal("a downward crossing must still be reported — this is a record, not a trophy cabinet")
+		}
+		for _, m := range ms {
+			if m.Up {
+				t.Fatalf("Milestones = %+v, want every crossing marked downward", ms)
+			}
+		}
+	})
+
+	t.Run("a flat series has no milestones", func(t *testing.T) {
+		if ms := Milestones([]Point{pt(15317047), pt(15317047)}); len(ms) != 0 {
+			t.Fatalf("Milestones = %+v, want none", ms)
+		}
+	})
+
+	t.Run("too short to have crossed anything", func(t *testing.T) {
+		if ms := Milestones([]Point{pt(100)}); ms != nil {
+			t.Fatalf("Milestones = %+v, want nil", ms)
+		}
+	})
+
+	t.Run("no duplicate thresholds from overlapping ladder steps", func(t *testing.T) {
+		ms := Milestones([]Point{pt(0), pt(100000000)})
+		seen := map[int64]bool{}
+		for _, m := range ms {
+			if m.Kind != MilestoneKindThreshold {
+				continue
+			}
+			if seen[m.ValueMinor] {
+				t.Fatalf("threshold %d reported twice in %+v", m.ValueMinor, ms)
+			}
+			seen[m.ValueMinor] = true
+		}
+	})
+}

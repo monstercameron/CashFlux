@@ -41,6 +41,8 @@ import (
 // nwsWindowLabel names a window length the way a person would say it.
 func nwsWindowLabel(months int) string {
 	switch months {
+	case nwsAllTime:
+		return uistate.T("nws.winAll")
 	case 1:
 		return uistate.T("nws.winMonth")
 	case 24:
@@ -53,6 +55,8 @@ func nwsWindowLabel(months int) string {
 // can say "where you stood 6 months ago" rather than "where you stood 6 months".
 func nwsWindowAgo(months int) string {
 	switch months {
+	case nwsAllTime:
+		return uistate.T("nws.agoAll")
 	case 1:
 		return uistate.T("nws.agoMonth")
 	case 24:
@@ -175,7 +179,19 @@ func nwsTakeaway(v nwsView) string {
 	if topAbs == 0 {
 		return uistate.T(dir+"Plain", mag, window)
 	}
-	share := topAbs * 100 / nwsAtLeastOne(absMinor(delta))
+	// The share is of everything that MOVED, not of the net change. Against the
+	// net change a leg can read as "99% of the move" while two other legs of
+	// £6,700 each quietly cancel out — arithmetically true and materially
+	// misleading, because it implies the others were negligible when they were
+	// not. Gross movement is the honest denominator for "how much of what
+	// happened was this".
+	var gross int64
+	for _, k := range attribution.BridgeLegOrder {
+		if k != attribution.LegResidual {
+			gross += absMinor(b.Leg(k))
+		}
+	}
+	share := topAbs * 100 / nwsAtLeastOne(gross)
 	return uistate.T(dir, mag, window, nwsLegCause(top), share)
 }
 
@@ -281,7 +297,10 @@ func nwsHero(v nwsView) ui.Node {
 
 	return nwsSection("", "", "", nil, Div(css.Class("nws-hero"),
 		Div(
-			P(css.Class("nws-hero-eyebrow"), uistate.T("nw.asOf", uistate.LoadPrefs().FormatDate(v.Now))),
+			ui.CreateElement(nwsQuality, nwsQualityProps{
+				Q: nwsAssessQuality(v), Base: v.Base,
+				AsOfLine: uistate.T("nw.asOf", uistate.LoadPrefs().FormatDate(v.Now)) + " ",
+			}),
 			Div(ClassStr(valCls), Attr("data-countup", ""), Attr("data-testid", "nw-hero-value"),
 				fmtMoney(money.New(p.NetMinor, v.Base))),
 			deltaNode,

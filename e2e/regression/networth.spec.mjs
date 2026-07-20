@@ -339,3 +339,193 @@ test("both signature graphics carry a keyboard-reachable ? explainer in plain la
   expect(sides).toContain("owe");
   expect(sides).toContain("net worth");
 });
+
+test("the figure discloses what it rests on, and names what needs updating", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  const btn = app.locator('[data-testid="nws-dq-btn"]');
+  await expect(btn).toBeVisible();
+  // The trigger carries the headline, so the common case needs no click.
+  expect(await btn.innerText()).toMatch(/\d+\s+accounts/i);
+  await expect(btn).toHaveAttribute("aria-haspopup", "dialog");
+
+  await btn.click();
+  const pop = app.locator('[data-testid="nws-dq-pop"]');
+  await expect(pop).toBeVisible();
+  const body = await pop.innerText();
+
+  // Overdue accounts are NAMED, not merely counted: a count tells the reader
+  // something is wrong without telling them what to fix.
+  const stale = app.locator('[data-testid="nws-dq-stale"]');
+  const staleCount = await stale.count();
+  const claimed = Number((await btn.innerText()).match(/(\d+)\s+need/i)?.[1] ?? 0);
+  expect(staleCount).toBe(claimed);
+  for (const line of await stale.allInnerTexts()) {
+    expect(line.length, "each overdue account states which one and how long").toBeGreaterThan(20);
+  }
+
+  // The figure's biggest dependency is disclosed where it exists.
+  if (await app.locator('[data-testid="nws-dq-manual"]').count()) {
+    expect(body).toMatch(/hand-entered/i);
+  }
+  // FX is described by SOURCE, never by a freshness the app cannot substantiate.
+  if (await app.locator('[data-testid="nws-dq-fx"]').count()) {
+    const fx = await app.locator('[data-testid="nws-dq-fx"]').innerText();
+    expect(fx).toMatch(/saved in your settings/i);
+    expect(fx, "must not claim an FX timestamp the app does not store").not.toMatch(/updated (on|at)\s+\w+\s+\d/i);
+  }
+  await expect(app.locator('[data-testid="nws-dq-update"]')).toBeVisible();
+});
+
+test("a number can be investigated in place, without leaving the page", async ({ app }) => {
+  await nav(app, "/networth");
+  await detail(app);
+
+  // A bridge leg opens to the accounts that produced it, and they sum to it.
+  const legToggle = app.locator('[data-leg="debtPaidDown"] [data-testid="nws-leg-row-toggle"]').first();
+  if (await legToggle.count()) {
+    const legAmount = money(await app.locator('[data-leg="debtPaidDown"] td').last().innerText());
+    await expect(legToggle).toHaveAttribute("aria-expanded", "false");
+    await legToggle.click();
+    await expect(legToggle).toHaveAttribute("aria-expanded", "true");
+    const contributors = app.locator('[data-testid="nws-leg-contributor"]');
+    expect(await contributors.count()).toBeGreaterThan(0);
+    let sum = 0;
+    for (const c of await contributors.locator(".nws-fact-v").allInnerTexts()) sum += money(c);
+    expect(sum, "a leg's contributors must sum to the leg").toBe(legAmount);
+  }
+
+  // An account row opens to the facts behind its movement, from the keyboard.
+  const mover = app.locator('[data-testid="nws-mover-row-toggle"]').first();
+  await mover.focus();
+  await expect(mover).toBeFocused();
+  await app.keyboard.press("Enter");
+  const panel = app.locator('[data-testid="nws-mover-row-panel"]').first();
+  await expect(panel).toBeVisible();
+  const facts = await panel.innerText();
+  // The split that answers "why did this move", and the balance's own provenance.
+  expect(facts).toMatch(/balance at the start/i);
+  expect(facts).toMatch(/balance now/i);
+  expect(facts).toMatch(/balance comes from/i);
+  expect(facts).toMatch(/last confirmed/i);
+  // And routes aimed at THIS account rather than the account list.
+  await expect(panel.locator('[data-testid="nws-drill-ledger"]')).toBeVisible();
+});
+
+test("the takeaway does not overclaim its cause", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  const take = await app.locator('[data-testid="nw-takeaway"]').innerText();
+
+  // The quoted share must be of everything that MOVED, not of the net change:
+  // against the net change a leg can read as "99% of the move" while other legs
+  // of thousands quietly cancel out — true, and materially misleading.
+  const pct = Number(take.match(/(\d+)%/)?.[1] ?? 0);
+  if (pct > 0) {
+    await detail(app);
+    let gross = 0;
+    let biggest = 0;
+    const rows = app.locator('[data-testid="nws-leg-row"]');
+    for (let i = 0; i < (await rows.count()); i++) {
+      const leg = await rows.nth(i).getAttribute("data-leg");
+      if (leg === "start" || leg === "end" || leg === "residual") continue;
+      const mag = Math.abs(money(await rows.nth(i).locator("td").last().innerText()));
+      gross += mag;
+      if (mag > biggest) biggest = mag;
+    }
+    expect(gross).toBeGreaterThan(0);
+    expect(pct, "the share must be the biggest leg over GROSS movement").toBe(
+      Math.floor((biggest * 100) / gross),
+    );
+  }
+
+  // And it must read as an observation, not as instruction.
+  expect(take, "the takeaway states what happened, it does not advise").not.toMatch(
+    /you should|make sure|try to|worth fixing|consider /i,
+  );
+});
+
+test("the ratio readings state what they measure without giving advice", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  for (const id of ["nws-ratio-liquid", "nws-ratio-runway", "nws-ratio-debt"]) {
+    const read = await app.locator(`[data-testid="${id}"] .nws-ratio-read`).innerText();
+    expect(read, `${id} must not instruct`).not.toMatch(/you should|worth fixing first|make sure|don't worry/i);
+  }
+  // The runway says what it is measured against: a derived figure that sounds
+  // certain is exactly the overclaim this audit was about.
+  const runway = await app.locator('[data-testid="nws-ratio-runway"] .nws-ratio-read').innerText();
+  expect(runway).toMatch(/three months|no spending history/i);
+});
+
+test("the period scope reaches all time and survives navigation", async ({ app }) => {
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+
+  const allTime = app.locator(".nws-window button", { hasText: "All time" }).first();
+  await expect(allTime).toBeVisible();
+  await allTime.click();
+  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/all time/i);
+
+  // Leaving and returning must keep the frame of reference.
+  await nav(app, "/budgets");
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await expect(app.locator('[data-testid="nw-delta"]')).toContainText(/all time/i);
+
+  // Restore, so the suite leaves no sticky frame behind.
+  await app.locator(".nws-window button", { hasText: "6 months" }).first().click();
+});
+
+test("History records the round figures crossed, in both directions", async ({ app }) => {
+  await nav(app, "/networth");
+  await detail(app);
+  const items = app.locator('[data-testid="nws-milestone"]');
+  const none = app.locator('[data-testid="nws-milestones-none"]');
+  // Either it lists crossings or it says plainly there were none.
+  expect((await items.count()) > 0 || (await none.count()) > 0).toBe(true);
+  for (const line of await items.allInnerTexts()) {
+    expect(line).toMatch(/passed|fell back below|turned positive/i);
+  }
+});
+
+test("Detail keeps its place: jumps land on the title and the index tracks it", async ({ app }) => {
+  await app.setViewportSize({ width: 1202, height: 1078 });
+  await nav(app, "/networth");
+  await detail(app);
+
+  await app.locator('[data-testid="nws-idx-04"]').click();
+  await expect(app.locator("#nws-04")).toBeInViewport({ ratio: 0.05, timeout: 10_000 });
+  // The heading must clear the fixed header, not hide behind it.
+  const titleTop = await app.evaluate(() =>
+    document.querySelector("#nws-04 .nws-sec-title").getBoundingClientRect().top);
+  expect(titleTop, "a jumped-to section must land its title in view").toBeGreaterThan(60);
+
+  // The index says where the reader is.
+  await expect
+    .poll(() => app.evaluate(() => document.querySelector(".nws-idx.is-current")?.getAttribute("data-section")))
+    .toBe("nws-04");
+
+  // And offers a way back without hunting for a control that has scrolled away.
+  await expect(app.locator('[data-testid="nws-idx-top"]')).toBeVisible();
+  await app.locator('[data-testid="nws-idx-glance"]').click();
+  await expect(app.locator('[data-testid="nws-view-glance"]')).toHaveAttribute("aria-pressed", "true");
+});
+
+test("Glance fits one screen at a common desktop viewport", async ({ app }) => {
+  await app.setViewportSize({ width: 1202, height: 1078 });
+  await nav(app, "/networth");
+  await app.waitForFunction(() => document.querySelector('.nws[data-settled="true"]') !== null, null, { timeout: 30_000 });
+  await settle(app);
+
+  // Current position, main cause and the health interpretation must all be
+  // readable without scrolling — that is what "Glance" claims.
+  const box = await app.evaluate(() => {
+    const r = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().bottom) : null; };
+    return { vh: window.innerHeight, hero: r(".nws-hero"), bridge: r("#sec-nw-bridge"), read: r("#sec-nw-read") };
+  });
+  expect(box.hero).toBeLessThanOrEqual(box.vh);
+  expect(box.bridge, "the bridge must be fully above the fold").toBeLessThanOrEqual(box.vh);
+  expect(box.read, "the interpretation must be above the fold").toBeLessThanOrEqual(box.vh);
+});

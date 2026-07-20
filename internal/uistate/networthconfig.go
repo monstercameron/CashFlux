@@ -11,13 +11,14 @@ const netWorthConfigKey = "cashflux:networth:config"
 // netWorthWindows are the valid analysis windows (months), used to sanitize a
 // persisted value. One month is "this month so far"; the rest are trailing
 // calendar-month windows.
-var netWorthWindows = map[int]bool{1: true, 6: true, 12: true, 24: true}
+var netWorthWindows = map[int]bool{0: true, 1: true, 6: true, 12: true, 24: true}
 
 // NetWorthConfig is the persisted net-worth-page reading posture: how many
 // calendar months the bridge decomposes and the mirrored chart spans.
 // Persisting it means /networth reopens on the window the user was studying.
 type NetWorthConfig struct {
-	// TrendMonths is the analysis window: 1, 6, 12 or 24 months. The name is
+	// TrendMonths is the analysis window: 0 (all time), 1, 6, 12 or 24 months.
+	// The name is
 	// kept from the trend-only era so an already-persisted value still loads.
 	TrendMonths int `json:"trendMonths"`
 }

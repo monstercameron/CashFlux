@@ -177,6 +177,32 @@ func registerNwsHero() {
 		prop("font-size", "var(--type-13)"),
 		prop("margin", "0 0 0.25rem"),
 	)
+	// The data-quality trigger reads as part of the as-of line, not as a badge
+	// competing with it — quiet by default, and only tinted when something
+	// actually needs the reader's attention.
+	rule(".nws-dq",
+		prop("display", "inline-flex"),
+		prop("position", "relative"),
+	)
+	rule(".nws-dq-btn",
+		prop("appearance", "none"),
+		prop("background", "transparent"),
+		prop("border", "0"),
+		prop("border-bottom", "1px dotted var(--border)"),
+		prop("padding", "0"),
+		prop("color", "var(--text-dim)"),
+		prop("font-size", "inherit"),
+		prop("font-family", "inherit"),
+		prop("cursor", "pointer"),
+	)
+	rule(".nws-dq-btn:hover",
+		prop("color", "var(--text)"),
+		prop("border-bottom-color", "var(--text-dim)"),
+	)
+	rule(".nws-dq-btn.is-attention",
+		prop("color", "var(--warn, #cfa14e)"),
+		prop("border-bottom-color", "var(--warn, #cfa14e)"),
+	)
 	rule(".nws-hero-value",
 		prop("font-size", "clamp(2.1rem, 4.4vw, 3rem)"),
 		prop("font-weight", "600"),
@@ -818,6 +844,94 @@ func registerNwsDetail() {
 		prop("font-weight", "600"),
 		prop("border-top", "1px solid var(--border)"),
 	)
+	// ── Rows that open in place. The toggle is the row's own first cell, so the
+	// whole name is the target rather than a separate icon the reader must aim at.
+	rule(".nws-drill-toggle",
+		prop("appearance", "none"),
+		prop("background", "transparent"),
+		prop("border", "0"),
+		prop("padding", "0"),
+		prop("margin", "0"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.4rem"),
+		prop("color", "inherit"),
+		prop("font", "inherit"),
+		prop("text-align", "left"),
+		prop("cursor", "pointer"),
+	)
+	rule(".nws-drill-toggle:hover",
+		prop("color", "var(--accent)"),
+	)
+	rule(".nws-drill-caret",
+		prop("display", "inline-block"),
+		prop("color", "var(--text-dim)"),
+		prop("transition", "transform var(--motion-fast, 120ms) var(--ease-standard, ease)"),
+	)
+	rule(".nws-drill-toggle.is-open .nws-drill-caret",
+		prop("transform", "rotate(90deg)"),
+	)
+	rule(".nws-drill-panel-row td",
+		prop("background", "var(--bg)"),
+		prop("padding", "0"),
+	)
+	rule(".nws-drill-panel",
+		prop("padding", "0.7rem 0.85rem"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.6rem"),
+	)
+	rule(".nws-drill-note",
+		prop("margin", "0"),
+		prop("color", "var(--text-dim)"),
+		prop("font-size", "var(--type-13)"),
+	)
+	rule(".nws-facts",
+		prop("display", "grid"),
+		prop("grid-template-columns", "repeat(auto-fit, minmax(13rem, 1fr))"),
+		prop("gap", "0.3rem 1.2rem"),
+	)
+	rule(".nws-fact",
+		prop("display", "flex"),
+		prop("justify-content", "space-between"),
+		prop("gap", "0.75rem"),
+		prop("padding", "0.2rem 0"),
+		prop("border-bottom", "1px solid var(--border)"),
+		prop("font-size", "var(--type-13)"),
+	)
+	rule(".nws-fact-k",
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".nws-fact-v",
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".nws-drill-actions",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.5rem"),
+	)
+
+	rule(".nws-milestone-list",
+		prop("list-style", "none"),
+		prop("margin", "0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.3rem"),
+	)
+	rule(".nws-milestone",
+		prop("font-size", "var(--type-13)"),
+		prop("padding-left", "0.75rem"),
+		prop("border-left", "2px solid var(--accent)"),
+	)
+	// A milestone lost is stated in the same voice, only untinted — the record
+	// is not a trophy cabinet.
+	rule(".nws-milestone.is-down",
+		prop("border-left-color", "var(--border)"),
+		prop("color", "var(--text-dim)"),
+	)
+
 	// A wide table scrolls inside its own box; the page never scrolls sideways.
 	rule(".nws-scroll",
 		prop("overflow-x", "auto"),

@@ -211,22 +211,27 @@ func nwsChangedSection(v nwsView) ui.Node {
 		if amt == 0 && k != attribution.LegResidual {
 			continue
 		}
-		rows = append(rows, Tr(Attr("data-testid", "nws-leg-row"), Attr("data-leg", string(k)),
-			Td(Div(nwsLegLabel(k)),
-				Div(css.Class("nws-sec-note"), Style(map[string]string{"margin": "0"}), nwsLegExplain(k))),
-			nwsSignedCell(amt, v.Base),
-		))
+		rows = append(rows, ui.CreateElement(nwsDrillRow, nwsDrillRowProps{
+			TestID: "nws-leg-row", DataKey: "data-leg", DataVal: string(k),
+			Label: nwsLegLabel(k), Span: 2,
+			Cells: []ui.Node{
+				Fragment(Div(nwsLegLabel(k)),
+					Div(css.Class("nws-sec-note"), Style(map[string]string{"margin": "0"}), nwsLegExplain(k))),
+				nwsSignedCell(amt, v.Base),
+			},
+			Panel: nwsLegPanel(k, v),
+		}))
 	}
 	legTable := Div(css.Class("nws-scroll"),
 		Table(css.Class("nws-table"), Attr("data-testid", "nws-bridge-table"),
 			Thead(Tr(Th(uistate.T("nws.colLeg")), Th(css.Class("nws-num"), uistate.T("nws.colEffect")))),
-			Tbody(append([]any{
-				Tr(Attr("data-testid", "nws-leg-row"), Attr("data-leg", "start"),
-					Td(uistate.T("nws.legStart")), nwsMoneyCell(b.StartMinor, v.Base)),
-			}, append(rows, Tr(css.Class("nws-total"), Attr("data-testid", "nws-leg-row"), Attr("data-leg", "end"),
+			Tbody(Tr(Attr("data-testid", "nws-leg-row"), Attr("data-leg", "start"),
+				Td(uistate.T("nws.legStart")), nwsMoneyCell(b.StartMinor, v.Base))),
+			Fragment(rows...),
+			Tbody(Tr(css.Class("nws-total"), Attr("data-testid", "nws-leg-row"), Attr("data-leg", "end"),
 				Td(uistate.T("nws.legEnd")),
 				Td(css.Class("nws-num"), Attr("data-testid", "nws-detail-bridge-end"),
-					fmtMoney(money.New(b.EndMinor, v.Base)))))...)...),
+					fmtMoney(money.New(b.EndMinor, v.Base))))),
 		),
 	)
 
@@ -237,17 +242,23 @@ func nwsChangedSection(v nwsView) ui.Node {
 	} else {
 		mrows := make([]any, 0, len(movers))
 		for _, m := range movers {
-			mrows = append(mrows, Tr(Attr("data-testid", "nws-mover-row"),
-				Td(m.Acct.Name),
-				Td(selectorTypeLabel(m.Acct.Type)),
-				nwsSignedCell(m.MoveMinor, v.Base),
-			))
+			row := m
+			mrows = append(mrows, ui.CreateElement(nwsDrillRow, nwsDrillRowProps{
+				TestID: "nws-mover-row", DataKey: "data-account", DataVal: row.Acct.ID,
+				Label: row.Acct.Name, Span: 3,
+				Cells: []ui.Node{
+					Text(row.Acct.Name),
+					Td(selectorTypeLabel(row.Acct.Type)),
+					nwsSignedCell(row.MoveMinor, v.Base),
+				},
+				Panel: nwsAccountPanel(row, v),
+			}))
 		}
 		moverBody = Div(css.Class("nws-scroll"),
 			Table(css.Class("nws-table"), Attr("data-testid", "nws-movers-table"),
 				Thead(Tr(Th(uistate.T("nws.colAccount")), Th(uistate.T("nws.colKind")),
 					Th(css.Class("nws-num"), uistate.T("nws.colMoved")))),
-				Tbody(mrows...),
+				Fragment(mrows...),
 			),
 		)
 	}
@@ -312,13 +323,19 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 		if total > 0 {
 			share = r.SideMinor * 100 / total
 		}
-		acctRows = append(acctRows, Tr(Attr("data-testid", "nw-acct-row"),
-			Td(r.Acct.Name),
-			Td(selectorTypeLabel(r.Acct.Type)),
-			Td(nwsShareBar(share, asset)),
-			nwsMoneyCell(r.SideMinor, v.Base),
-			nwsSignedCell(r.MoveMinor, v.Base),
-		))
+		row := r
+		acctRows = append(acctRows, ui.CreateElement(nwsDrillRow, nwsDrillRowProps{
+			TestID: "nw-acct-row", DataKey: "data-account", DataVal: row.Acct.ID,
+			Label: row.Acct.Name, Span: 5,
+			Cells: []ui.Node{
+				Text(row.Acct.Name),
+				Td(selectorTypeLabel(row.Acct.Type)),
+				Td(nwsShareBar(share, asset)),
+				nwsMoneyCell(row.SideMinor, v.Base),
+				nwsSignedCell(row.MoveMinor, v.Base),
+			},
+			Panel: nwsAccountPanel(row, v),
+		}))
 	}
 
 	var action ui.Node
@@ -354,7 +371,7 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 					Thead(Tr(Th(uistate.T("nws.colAccount")), Th(uistate.T("nws.colKind")), Th(""),
 						Th(css.Class("nws-num"), uistate.T("nws.colAmount")),
 						Th(css.Class("nws-num"), uistate.T("nws.colMoved")))),
-					Tbody(acctRows...),
+					Fragment(acctRows...),
 				),
 			),
 		)
@@ -394,6 +411,7 @@ func nwsHistorySection(v nwsView) ui.Node {
 	}
 	body := Fragment(
 		nwsSides(v),
+		nwsMilestones(v),
 		Div(css.Class("nws-scroll"), Style(map[string]string{"margin-top": "0.9rem"}),
 			Table(css.Class("nws-table"), Attr("data-testid", "nws-history-table"),
 				Thead(Tr(Th(uistate.T("nws.colWhen")),
@@ -428,4 +446,41 @@ func nwsHealthSection(v nwsView) ui.Node {
 	)
 	return nwsDetailSection("nws-05", "05", uistate.T("nws.secHealth"),
 		uistate.T("nws.secHealthNote"), nil, Fragment(nwsRatioCards(v), defs))
+}
+
+// nwsMilestones lists the round figures net worth crossed over the window. It
+// reports crossings in BOTH directions: a page that only ever congratulates is
+// a trophy cabinet, not a record of what happened.
+func nwsMilestones(v nwsView) ui.Node {
+	ms := balancesheet.Milestones(v.Points)
+	whenOf := func(i int) string {
+		if i < len(v.Points) {
+			return v.Points[i].At.Format("January 2006")
+		}
+		return ""
+	}
+	items := make([]ui.Node, 0, len(ms))
+	for _, m := range ms {
+		var line string
+		switch {
+		case m.Kind == balancesheet.MilestoneKindPositive:
+			line = uistate.T("nws.milestonePos", whenOf(m.AtIndex))
+		case m.Up:
+			line = uistate.T("nws.milestoneUp", fmtMoney(money.New(m.ValueMinor, v.Base)), whenOf(m.AtIndex))
+		default:
+			line = uistate.T("nws.milestoneDown", fmtMoney(money.New(m.ValueMinor, v.Base)), whenOf(m.AtIndex))
+		}
+		cls := "nws-milestone"
+		if !m.Up {
+			cls += " is-down"
+		}
+		items = append(items, Li(ClassStr(cls), Attr("data-testid", "nws-milestone"), line))
+	}
+	return Div(css.Class("nws-milestones"),
+		H3(css.Class("nws-sec-title"), Style(map[string]string{"margin": "0.9rem 0 0.4rem"}),
+			uistate.T("nws.milestonesTitle")),
+		IfElse(len(items) == 0,
+			P(css.Class("nws-sec-note"), Attr("data-testid", "nws-milestones-none"), uistate.T("nws.milestonesNone")),
+			Ul(css.Class("nws-milestone-list"), items)),
+	)
 }

@@ -37,7 +37,20 @@ type nwsAcctRow struct {
 	SideMinor int64
 	// MoveMinor is the account's signed net-worth contribution over the window.
 	MoveMinor int64
-	Bucket    balancesheet.Bucket
+	// StartMinor / EndMinor are the account's own balance at each end of the
+	// window, so a drilldown can show what it opened and closed at rather than
+	// only how far it travelled.
+	StartMinor, EndMinor int64
+	// FlowMinor / AdjMinor split MoveMinor into money that actually moved
+	// through the account and balance the household simply asserted — the
+	// difference between "you earned this" and "you re-valued this", which is
+	// the single most useful thing a reader can learn about one account.
+	FlowMinor, AdjMinor int64
+	// AsOf is when this balance was last confirmed (zero = never), and Manual
+	// says it was last set by hand rather than derived from transactions.
+	AsOf   time.Time
+	Manual bool
+	Bucket balancesheet.Bucket
 }
 
 // nwsView is everything both views render, computed once per render.
@@ -45,6 +58,9 @@ type nwsView struct {
 	Base string
 	Dec  int
 	Now  time.Time
+	// Rates is the FX table every figure here passed through, kept so a
+	// disclosure can describe the conversion without rebuilding it.
+	Rates currency.Rates
 
 	// Months is the selected window length in calendar months (1 = this month).
 	Months       int
@@ -114,8 +130,13 @@ func (v nwsView) Movers() []nwsAcctRow {
 	return out
 }
 
-// nwsWindowMonths are the selectable window lengths, shortest first.
-var nwsWindowMonths = []int{1, 6, 12, 24}
+// nwsWindowMonths are the selectable window lengths, shortest first. Zero is
+// "all time": the window opens at the household's earliest record rather than a
+// fixed number of months back.
+var nwsWindowMonths = []int{1, 6, 12, 24, 0}
+
+// nwsAllTime is the sentinel window length meaning "since your records begin".
+const nwsAllTime = 0
 
 // computeNwsView builds the shared model for a window of `months` calendar
 // months ending now. The window is half-open [Since, Until) in the app's
@@ -129,9 +150,13 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	v := nwsView{Base: base, Dec: currency.Decimals(base), Now: now, Months: months}
+	v := nwsView{Base: base, Dec: currency.Decimals(base), Now: now, Months: months, Rates: rates}
 	curMonth := dateutil.MonthStart(now)
-	v.Since = dateutil.AddMonths(curMonth, -(months - 1))
+	if months == nwsAllTime {
+		v.Since = dateutil.MonthStart(nwsEarliestRecord(accounts, txns, now))
+	} else {
+		v.Since = dateutil.AddMonths(curMonth, -(months - 1))
+	}
 	// Until is tomorrow so "strictly before the cutoff" includes everything
 	// posted today — the hero must not lag the ledger by a day.
 	v.Until = dateutil.DayStart(now).AddDate(0, 0, 1)
@@ -146,13 +171,23 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 	})
 
 	// Composition series: one point per month boundary in the window, plus today.
-	cutoffs := make([]time.Time, 0, months+2)
-	for k := 0; k <= months-1; k++ {
+	// An all-time window is thinned to a sane number of points — a household with
+	// ten years of records does not need 120 of them to see a shape.
+	span := months
+	if span == nwsAllTime {
+		span = nwsMonthsBetween(v.Since, curMonth) + 1
+	}
+	step := 1
+	if span > 36 {
+		step = (span + 35) / 36
+	}
+	cutoffs := make([]time.Time, 0, span/step+2)
+	for k := 0; k <= span-1; k += step {
 		cutoffs = append(cutoffs, dateutil.AddMonths(v.Since, k))
 	}
 	cutoffs = append(cutoffs, v.Until)
 	v.Points, _ = balancesheet.Series(accounts, txns, cutoffs, rates)
-	v.Labels = nwsLabels(cutoffs, months)
+	v.Labels = nwsLabels(cutoffs, span)
 
 	// Per-account standing and movement over the same window.
 	for _, a := range accounts {
@@ -167,9 +202,13 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 		if err != nil {
 			continue // already disclosed by NetWorthExplained
 		}
-		row := nwsAcctRow{Acct: a, BalanceMinor: conv.Amount, Bucket: balancesheet.BucketOf(a)}
+		row := nwsAcctRow{Acct: a, BalanceMinor: conv.Amount, Bucket: balancesheet.BucketOf(a), AsOf: a.BalanceAsOf}
 		row.SideMinor = absMinor(conv.Amount)
-		row.MoveMinor = nwsAccountMove(a, txns, rates, base, v.Since, v.Until)
+		row.MoveMinor, row.StartMinor, row.EndMinor, row.FlowMinor, row.AdjMinor =
+			nwsAccountWindow(a, txns, rates, base, v.Since, v.Until, isAdj)
+		if kind, _ := ledger.BalanceProvenance(a.ID, txns, isAdj); kind == ledger.ProvenanceAdjusted || kind == ledger.ProvenanceOpening {
+			row.Manual = true
+		}
 		v.Accounts = append(v.Accounts, row)
 	}
 	sort.SliceStable(v.Accounts, func(i, j int) bool {
@@ -183,11 +222,37 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 	return v
 }
 
-// nwsAccountMove is one account's signed net-worth contribution across the
-// window, in the canonical convention: an asset contributes its balance delta,
-// a liability contributes minus the change in what is owed.
-func nwsAccountMove(a domain.Account, txns []domain.Transaction, rates currency.Rates, base string, since, until time.Time) int64 {
+// nwsEarliestRecord is the oldest date the household has any record of: the
+// first transaction, or today when there are none.
+func nwsEarliestRecord(accounts []domain.Account, txns []domain.Transaction, now time.Time) time.Time {
+	earliest := now
+	for _, t := range txns {
+		if !t.Date.IsZero() && t.Date.Before(earliest) {
+			earliest = t.Date
+		}
+	}
+	return earliest
+}
+
+// nwsMonthsBetween counts whole calendar months from a to b (never negative).
+func nwsMonthsBetween(a, b time.Time) int {
+	m := int(b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
+	if m < 0 {
+		return 0
+	}
+	return m
+}
+
+// nwsAccountWindow reads one account across the window: its signed net-worth
+// contribution, its own balance at each end, and the split between money that
+// moved through it and balance that was asserted by hand. All in the canonical
+// convention — an asset contributes its balance delta, a liability contributes
+// minus the change in what is owed — so these agree with the bridge to the cent.
+func nwsAccountWindow(a domain.Account, txns []domain.Transaction, rates currency.Rates, base string,
+	since, until time.Time, isAdj func(domain.Transaction) bool) (move, start, end, flow, adj int64) {
+
 	balSince, balUntil := a.OpeningBalance.Amount, a.OpeningBalance.Amount
+	var flowAcct, adjAcct int64
 	for _, t := range txns {
 		if t.AccountID != a.ID {
 			continue
@@ -198,16 +263,31 @@ func nwsAccountMove(a domain.Account, txns []domain.Transaction, rates currency.
 		if t.Date.Before(until) {
 			balUntil += t.Amount.Amount
 		}
+		if !dateutil.InRange(t.Date, since, until) {
+			continue
+		}
+		if isAdj(t) {
+			adjAcct += t.Amount.Amount
+		} else {
+			flowAcct += t.Amount.Amount
+		}
 	}
+	factor := int64(1)
 	delta := balUntil - balSince
 	if a.Class == domain.ClassLiability {
 		delta = -(absMinor(balUntil) - absMinor(balSince))
+		if !(balSince < 0 || (balSince == 0 && balUntil < 0)) {
+			factor = -1
+		}
 	}
-	conv, err := rates.Convert(money.New(delta, a.Currency), base)
-	if err != nil {
-		return 0
+	conv := func(minor int64) int64 {
+		c, err := rates.Convert(money.New(minor, a.Currency), base)
+		if err != nil {
+			return 0
+		}
+		return c.Amount
 	}
-	return conv.Amount
+	return conv(delta), conv(balSince), conv(balUntil), conv(factor * flowAcct), conv(factor * adjAcct)
 }
 
 // nwsTypicalMonthlyExpense averages spending over the last three COMPLETE
