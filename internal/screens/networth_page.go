@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -219,6 +220,24 @@ func nwsAtLeastOne(v int64) int64 {
 	return v
 }
 
+// nwsWindowBtnProps drives one period option.
+type nwsWindowBtnProps struct {
+	Months   int
+	Selected string
+	OnSelect func(string)
+}
+
+// nwsWindowBtn is one period option. Its own component so the click hook sits at
+// a stable call-site per option rather than inside a loop.
+func nwsWindowBtn(p nwsWindowBtnProps) ui.Node {
+	val := strconv.Itoa(p.Months)
+	on := p.Selected == val
+	click := ui.UseEvent(Prevent(func() { p.OnSelect(val) }))
+	return Button(ClassStr("nws-view"+If2(on, " is-on", "")), Type("button"),
+		Attr("data-testid", "nws-win-"+val), Attr("aria-pressed", boolStr(on)),
+		OnClick(click), nwsWindowLabel(p.Months))
+}
+
 // nwsSection is the page's section chrome: a titled card filling the content
 // column. flush drops the card frame for the hero, which draws its own field.
 func nwsSection(id, title, note string, action, body ui.Node, flush bool) ui.Node {
@@ -371,10 +390,6 @@ func NetWorth() ui.Node {
 	fmt.Sscanf(window.Get(), "%d", &months)
 	v := computeNwsView(app, months, time.Now())
 
-	windowOpts := make([]uiw.SegOption, 0, len(nwsWindowMonths))
-	for _, m := range nwsWindowMonths {
-		windowOpts = append(windowOpts, uiw.SegOption{Value: fmt.Sprintf("%d", m), Label: nwsWindowLabel(m)})
-	}
 	isGlance := view.Get() == uistate.NetWorthViewGlance
 	toggle := Div(css.Class("nws-views"),
 		Div(css.Class("nws-viewset"), Attr("role", "group"), Attr("aria-label", uistate.T("nws.viewAria")),
@@ -385,12 +400,18 @@ func NetWorth() ui.Node {
 				Attr("data-testid", "nws-view-detail"), Attr("aria-pressed", boolStr(!isGlance)),
 				Title(uistate.T("nws.viewDetailTitle")), OnClick(onDetail), uistate.T("nws.viewDetail")),
 		),
-		Div(css.Class("nws-window"), uiw.Segmented(uiw.SegmentedProps{
-			Label:    uistate.T("nws.windowLabel"),
-			Selected: window.Get(),
-			OnSelect: setWindow,
-			Options:  windowOpts,
-		})),
+		// The period control is built from the page's own buttons rather than the
+		// shared Segmented: every control on this page needs a data-testid for the
+		// coverage ratchet, and adding testids inside the shared component would
+		// change the control inventory of every other route that uses it.
+		Div(css.Class("nws-window", "nws-viewset"), Attr("role", "group"),
+			Attr("aria-label", uistate.T("nws.windowLabel")),
+			ui.CreateElement(nwsWindowBtn, nwsWindowBtnProps{Months: nwsWindowMonths[0], Selected: window.Get(), OnSelect: setWindow}),
+			ui.CreateElement(nwsWindowBtn, nwsWindowBtnProps{Months: nwsWindowMonths[1], Selected: window.Get(), OnSelect: setWindow}),
+			ui.CreateElement(nwsWindowBtn, nwsWindowBtnProps{Months: nwsWindowMonths[2], Selected: window.Get(), OnSelect: setWindow}),
+			ui.CreateElement(nwsWindowBtn, nwsWindowBtnProps{Months: nwsWindowMonths[3], Selected: window.Get(), OnSelect: setWindow}),
+			ui.CreateElement(nwsWindowBtn, nwsWindowBtnProps{Months: nwsWindowMonths[4], Selected: window.Get(), OnSelect: setWindow}),
+		),
 	)
 
 	// ── Glance ───────────────────────────────────────────────────────────────

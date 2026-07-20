@@ -1142,8 +1142,13 @@
       "nw-accounts-link",
       "nw-debt-link",
       "nw-toggle-*",
+      "nws-dq-btn",
+      "nws-dq-update",
+      "nws-explain-bridge-btn",
+      "nws-explain-sides-btn",
       "nws-view-detail",
       "nws-view-glance",
+      "nws-win-*",
       "profile-switch-btn",
       "sample-dismiss",
       "sample-start-fresh",
@@ -1152,7 +1157,7 @@
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 19
+    "untestided": 15
   },
   "/health": {
     "testids": [

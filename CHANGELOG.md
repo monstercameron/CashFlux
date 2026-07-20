@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Coverage manifest: /networth's control inventory after the trust/investigate pass.** Adds the
+  data-quality disclosure (`nws-dq-btn`, `nws-dq-update`), both graphic explainers
+  (`nws-explain-bridge-btn`, `nws-explain-sides-btn`) and the period control (`nws-win-*`), each
+  covered by `networth.spec.mjs`. The untestable-control count **drops 19 → 15**: adding the
+  all-time period option would have raised it, because the shared `Segmented` renders buttons
+  without testids — rather than weaken the ratchet or add testids inside a shared component (which
+  would change the inventory of every other route using it), the period control is now built from
+  the page's own labelled buttons. Hand-edited and scoped to the `/networth` entry alone.
+
 ### Added
 - **/networth discloses what its figure rests on.** An expandable line beside the as-of date, quiet
   by default and tinted only when something needs attention: accounts counted, each overdue account
