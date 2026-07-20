@@ -27,11 +27,15 @@ func ImportPanelHost() uic.Node {
 		Title:  uistate.T("transactions.importBtn"),
 		Width:  "900px",
 		Height: "660px",
-		// Standard pinned footer: Cancel dismisses; Save natively submits the panel's
-		// hidden form (ImportModalFormID), whose handler commits the ready import
+		// Standard pinned footer: Cancel dismisses; the primary natively submits the
+		// panel's hidden form (ImportModalFormID), whose handler commits the ready import
 		// (reviewed draft or pasted CSV) and closes. FormID mode doesn't auto-close, so
-		// the commit runs first and a failed commit keeps the modal open.
-		FormID:  screens.ImportModalFormID,
+		// the commit runs first and a failed commit keeps the modal open. Labeled "Done"
+		// rather than "Save": across the wizard the primary commits-what's-ready-and-
+		// closes (nothing to "save" while the user is still choosing an import method),
+		// and each source form carries its own explicit Import action.
+		FormID:    screens.ImportModalFormID,
+		SaveLabel: uistate.T("action.done"),
 		OnClose: func() { open.Set(false) },
 		Back:    uic.CreateElement(screens.ImportPanelBody, struct{}{}),
 	})
