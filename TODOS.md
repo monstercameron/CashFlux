@@ -18,7 +18,14 @@ packages have no `syscall/js` and ship with table-driven tests.
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
 
-- [ ] **RH-PERSIST1 — a preference set and then reloaded within ~250ms is silently lost.**
+- [x] **RH-PERSIST1 — a preference set and then reloaded within ~250ms is silently lost.** *(fixed
+  2026-07-20: `flushSettingsPersist` is leading-edge with a trailing catch-up, so the first write of a
+  burst is durable at once and a burst still coalesces; `pagehide`/`visibilitychange` additionally run
+  any persist left pending. Measured on the COMPACT | CALENDAR toggle with a 50ms gap: 1/3 survived
+  before, 4/4 after, and 4/4 with no gap at all. `rhythm.spec`'s wait-out workaround is removed, so the
+  test now guards the durability rather than avoiding it. Of the two directions below, the leading edge
+  is what closes the window — a write issued during `pagehide` is not promised to commit, which is why
+  the teardown flush is a safety net and not the guarantee.)*
   `SettingKVSet` writes to the in-memory dataset immediately but reaches IndexedDB through a 250ms
   *debounced* persist, so a reload inside that window drops the write. Reproduced on the agenda's
   COMPACT | CALENDAR toggle: pick Calendar, reload straight away, and you are back on Compact with no

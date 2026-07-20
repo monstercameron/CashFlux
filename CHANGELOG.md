@@ -30,6 +30,19 @@ and every commit updates this file under `Unreleased`.
   inventory is unchanged — deferral scaffolding is not a control.
 
 ### Fixed
+- **A preference changed and then reloaded a moment later was silently lost. (RH-PERSIST1)** Every
+  `SettingKVSet` write — theme, density, the agenda's COMPACT | CALENDAR choice, alert settings, quiet
+  hours, digest cadence — landed in the in-memory dataset at once but only reached IndexedDB through a
+  250ms *debounced* persist. Reload inside that window and the app came back with the old value and no
+  error. Measured on the COMPACT | CALENDAR toggle with a 50ms gap between the click and the reload:
+  the preference survived 1 run in 3. The persist is now leading-edge with a trailing catch-up, so the
+  single write a user actually makes is durable the instant it is made, while a burst (a language-pack
+  seed loop, a theme-editor drag) still coalesces — two full serializes per burst rather than one per
+  write. `pagehide` and `visibilitychange` additionally run any persist left pending, as a safety net
+  for a burst caught mid-coalesce; that is deliberately not the guarantee, because an IndexedDB
+  transaction opened while the page is unloading is not promised to commit. After: 4/4 at a 50ms gap
+  and 4/4 with no gap at all. `rhythm.spec`'s wait-out workaround is removed, so the test guards the
+  durability instead of avoiding it.
 - **Bills & recurring rendered square, flat panels while every other page rendered rounded, lifted
   ones. (RH-GARNISH1)** The new surface set its section corners from `var(--radius)`, which is the
   THEME EDITOR knob and ships at `0px` — so a section rendered with hard 90° corners and no

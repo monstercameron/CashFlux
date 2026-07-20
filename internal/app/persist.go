@@ -405,7 +405,15 @@ func startDatasetAutosave() {
 	// unexported closure — used to flush a freshly loaded sample before a fast
 	// reload can race the ticker and lose it (C2).
 	uistate.CapturePersistNow(resaveDataset)
-	cb := js.FuncOf(func(js.Value, []js.Value) any { save(); return nil })
+	// Teardown: run any settings persist still coalescing in its debounce window
+	// before the dataset save, so nothing is left pending on a page that is about
+	// to stop existing. RH-PERSIST1's primary guarantee is the leading-edge persist
+	// in uistate.flushSettingsPersist — this is the burst safety net.
+	cb := js.FuncOf(func(js.Value, []js.Value) any {
+		uistate.FlushPendingSettingsPersist()
+		save()
+		return nil
+	})
 	js.Global().Call("addEventListener", "pagehide", cb)
 	js.Global().Call("addEventListener", "visibilitychange", cb)
 	// Persist once immediately so a freshly seeded/imported dataset reaches the

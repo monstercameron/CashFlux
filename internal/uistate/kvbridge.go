@@ -123,7 +123,7 @@ func SettingKVSet(key, val string) {
 		// immediate persist so the write is ISSUED right away and its async IndexedDB
 		// commit has time to land before any quick reload. Debounced (trailing edge) so a
 		// burst — a language-pack seed loop, a theme-editor drag committing several
-		// tokens — coalesces into one full serialize instead of one per write.
+		// tokens — coalesces one full serialize per burst instead of one per write.
 		flushSettingsPersist()
 		return
 	}
@@ -133,11 +133,65 @@ func SettingKVSet(key, val string) {
 // settingsPersistKey names the coalesced settings-flush debounce.
 const settingsPersistKey = "uistate:settings-persist"
 
-// flushSettingsPersist schedules a single durable persist ~250ms after settings
-// writes settle. RequestPersist is a no-op until the app wires the autosave hook,
-// so calling this during very early boot (before startDatasetAutosave) is safe.
+// settingsPersistWindow is how long a burst of settings writes coalesces for.
+const settingsPersistWindow = 250 * time.Millisecond
+
+// moreSinceLeadingPersist records whether further settings writes arrived after
+// the leading-edge persist of the current burst, so the trailing flush is paid
+// for only when it has something new to write.
+var moreSinceLeadingPersist bool
+
+// flushSettingsPersist makes a settings write durable.
+//
+// It is LEADING edge with a trailing catch-up. A trailing-only debounce left a
+// real data-loss window (RH-PERSIST1): the write landed in the in-memory dataset
+// at once but did not reach IndexedDB for 250ms, so a user who changed a
+// preference and reloaded within a quarter-second silently got the old value
+// back — measured at 2 losses in 3 attempts with a 50ms gap. Persisting on the
+// FIRST write of a burst closes that window: the single write a user actually
+// makes is durable immediately.
+//
+// The debounce is kept for what it was for — a language-pack seed loop or a
+// theme-editor drag committing many tokens should not pay one full serialize per
+// write — but now only fires when writes continued past the leading persist, so
+// a burst costs two serializes rather than one per write, and a lone write costs
+// exactly one.
+//
+// RequestPersist is a no-op until the app wires the autosave hook, so calling
+// this during very early boot (before startDatasetAutosave) is safe.
 func flushSettingsPersist() {
-	debounce.Call(settingsPersistKey, 250*time.Millisecond, RequestPersist)
+	if debounce.Pending(settingsPersistKey) {
+		// Mid-burst: the leading persist already ran; note that it is now stale and
+		// extend the quiet window.
+		moreSinceLeadingPersist = true
+		debounce.Call(settingsPersistKey, settingsPersistWindow, trailingSettingsPersist)
+		return
+	}
+	moreSinceLeadingPersist = false
+	RequestPersist()
+	debounce.Call(settingsPersistKey, settingsPersistWindow, trailingSettingsPersist)
+}
+
+// trailingSettingsPersist writes the tail of a burst, and nothing at all when the
+// leading-edge persist already covered every write.
+func trailingSettingsPersist() {
+	if moreSinceLeadingPersist {
+		moreSinceLeadingPersist = false
+		RequestPersist()
+	}
+}
+
+// FlushPendingSettingsPersist runs a still-pending settings persist NOW. The app
+// calls it from the page-teardown handlers (pagehide, and visibilitychange once
+// the page is hidden) so a burst caught mid-coalesce is not lost to the reload.
+//
+// It is a safety net, not the primary guarantee: an IndexedDB transaction opened
+// while the page is unloading is not promised to commit, which is why
+// flushSettingsPersist persists on the leading edge instead of relying on this.
+func FlushPendingSettingsPersist() {
+	if debounce.Flush(settingsPersistKey) {
+		trailingSettingsPersist()
+	}
 }
 
 func SettingKVDelete(key string) {
