@@ -58,6 +58,12 @@ and every commit updates this file under `Unreleased`.
   (C363/C364) rides in `56035b98`, and C397's files ride in `11cb9fc0`; content verified.
 
 ### Fixed
+- **Black-box UI/UX loop, batch 4 (2026-07-20):** reconcile-to-statement speaks the app's money
+  dialect — "Remaining difference" renders signed/grouped/symboled ("−$26,711.50", was
+  "-26711.50" beside "$26,711.50") and the uncleared list uses accounting format ("($620.00)" /
+  "$807.45", was bare floats); the wide-band Date column fits "Jul 17, 2026" again and Source
+  fits "Recurring" — both paid for net-neutrally out of the ellipsis-tolerant Account/Category
+  widths so the Description share is untouched.
 - **Black-box UI/UX loop, batch 3 (2026-07-20):** the wide transactions-table band
   (~966–1042px content) sizes its secondary columns by stable `td-*` classes instead of
   positional `nth-child` fixed pixels — the greedy fixed widths over-subscribed the

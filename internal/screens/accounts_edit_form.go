@@ -653,7 +653,10 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 	stmtTyped := strings.TrimSpace(stmtBalS.Get()) != ""
 	stmtMinor, _ := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
 	result := reconcile.Diff(curCleared.Amount, stmtMinor)
-	diffLabel := money.FormatMinor(result.DifferenceMinor, dec)
+	sym := currency.Symbol(a.Currency)
+	// Signed, symboled, thousands-grouped — matches the cleared-balance figure it
+	// sits beside ("+$40.50" / "−$26,711.50"), not a bare "-26711.50".
+	diffLabel := fmtSignedMoney(result.DifferenceMinor, sym, dec)
 	if result.DifferenceMinor > 0 {
 		diffLabel = "+" + diffLabel
 	}
@@ -698,7 +701,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 		unclearedAmounts = append(unclearedAmounts, t.Amount.Amount)
 	}
 	bulk := reconcile.PreviewBulkClear(curCleared.Amount, stmtMinor, unclearedAmounts)
-	bulkDiffLabel := money.FormatMinor(bulk.Result.DifferenceMinor, dec)
+	bulkDiffLabel := fmtSignedMoney(bulk.Result.DifferenceMinor, sym, dec)
 	if bulk.Result.DifferenceMinor > 0 {
 		bulkDiffLabel = "+" + bulkDiffLabel
 	}

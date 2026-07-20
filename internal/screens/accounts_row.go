@@ -627,14 +627,15 @@ type reconcileTxnRowProps struct {
 // and exposes a "Mark cleared" button whose label doubles as a status badge.
 func ReconcileTxnRow(props reconcileTxnRowProps) ui.Node {
 	t := props.Txn
-	dec := currency.Decimals(props.Currency)
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t) }))
 	return Div(css.Class("row"), Attr("data-testid", "reconcile-txn-row"), Attr("data-id", t.ID),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), t.Desc),
 			Span(css.Class("row-meta"), t.Date.Format("2006-01-02")),
 		),
-		Span(ClassStr("fig "+amountClass(t.Amount)), money.FormatMinor(t.Amount.Amount, dec)),
+		// Standard accounting figure — "$807.45" / "($620.00)" — to match the rest
+		// of the app, not a bare "807.45" / "-620.00".
+		Span(ClassStr("fig "+amountClass(t.Amount)), fmtMoney(t.Amount)),
 		Button(css.Class("btn"), Type("button"),
 			Attr("data-testid", "reconcile-txn-clear-btn"),
 			Title(uistate.T("accounts.markClearedTitle")),
