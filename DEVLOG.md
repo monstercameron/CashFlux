@@ -1,3 +1,67 @@
+## 2026-07-20 — /networth: one offset with three consumers, and percentages that add up
+
+Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
+keeping and one re-application of a lesson already on the books.
+
+**The Medium was four numbers that had to agree and could not.** The section navigator was sticky
+at `top: 4px`, `z-index: 3`, under a sticky header ~102px tall at `z-index: 20` — so it parked
+underneath the header and vanished as soon as you scrolled. The scroll-spy was the same bug wearing
+different clothes: its "which section am I in" band was a 170px literal that knew nothing about the
+header, so it reported "03 What you owe" while History filled the screen. Counting properly there
+were four constants in play — the 4px sticky offset, an 88px `scroll-margin-top`, the 170px band,
+and a −150px observer `rootMargin` — each independently invented, none aware of the others.
+
+The fix is the general form of the rule this effort already wrote down about percentages: **when
+several places must agree about a measurement, they must consume one value, not several literals
+that happen to be close.** The header and the navigator are now measured from the DOM and published
+as `--nws-header` and `--nws-navstack`; the navigator's sticky offset, the landing position of a
+jumped-to section, and the spy's band are all derived from them, the last three being the *same*
+number by construction. Measured rather than hardcoded because the header folds to two rows and the
+navigator wraps at narrow widths.
+
+Two things only the browser could have told me. First, the publisher initially ran once on mount —
+in Glance, where the navigator does not exist — so it published a fallback and never corrected it;
+at 1202 that put sections *underneath* the navigator. It now re-measures on view change and on
+every spy pass. Second, even after unifying, the spy still lagged at 1440: the band came to 144
+against a landing offset of 160, so a section you had just jumped to was not yet "current". Both
+were caught by probing real geometry at three widths rather than reasoning about it — the same
+method that caught the axis and rail thresholds earlier in this effort, and the third time it has
+paid for itself.
+
+**Percentages that don't reach 100 are a trust bug, not a rounding bug.** The asset side totalled
+99% and the liability side 98% from independent truncation. That is arithmetically minor and
+editorially serious on *this* page specifically: the whole design draws an "unexplained" bar so the
+waterfall reconciles to the cent, and a visible column that fails to reach 100 spends exactly the
+credibility that bar buys. `balancesheet.Shares` now does largest-remainder — whole numbers kept, so
+no false precision from a decimal place; leftover points to the parts that lost most to rounding;
+ties by position so renders are stable. It deliberately refuses to normalise a set that is not a
+whole, because stretching a half-set to 100 would be the opposite dishonesty.
+
+**The period-prose bug was a repeat, and I fixed it the way the first one was fixed.** "over This
+month" / "over All time" interpolated the period control's *caption* — a button label — into a
+sentence slot that wanted a phrase. This page had already been through this once, when a window
+*length* was dropped into a point-in-time slot ("6 months ago"). The answer both times is per-period
+wording rather than a generic template, so `nwsWindowSpan` now gives each period its own phrase
+carrying its own preposition. I checked every sentence that names the period rather than the two
+reported: the delta, its tooltip, all four takeaway variants, the "What changed" note, and the
+bridge note's tense ("when your records begin" → "began").
+
+**On the Lows I chose reuse over building.** The freshness popover's nine near-identical sentences
+became a ranked table (they are data), while the note about the dominant property valuation stayed
+prose (it carries a judgement, and judgement is what earns a sentence). And "Update balances", which
+dropped the reader on the full accounts list to hunt for the nine, now runs the app's **existing**
+guided mark-all prompt — it already names the accounts, previews the blast radius, lands as one
+undoable batch, and is shared with the accounts toolbar, so the two cannot drift. The secondary link
+survives for the other intent: editing a figure rather than confirming it. Two intents, two actions;
+the old single generic link served neither.
+
+**Declined:** nothing outright, but the projection's "range beats a point estimate when history is
+volatile" suggestion was answered by disclosure rather than by a new statistic. The engine already
+refuses to speak past five years and says "not gaining at your recent pace" when the trend is flat
+or down; the `?` popover now states the lookback, the monthly average, what that average includes,
+and that it is one straight-line scenario. Adding a confidence band would mean inventing a
+volatility model for a household with 60 monthly points, and a band drawn from that would look more
+authoritative than it is — which is the failure mode this page exists to avoid.
 ## 2026-07-20 — /networth: the rail's last three, and History led by its graph
 
 Final pass on the redesign. Four items, and three of them are the same lesson wearing different
