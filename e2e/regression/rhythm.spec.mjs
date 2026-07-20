@@ -861,8 +861,17 @@ test.describe("migrated from the three-tab era", () => {
     const item = app.locator('.add-menu:not(.hidden-menu) [data-testid^="bill-negotiate-"]').first();
     await expect(item).toBeVisible();
     await item.click();
-    // It still tracks the follow-up as a real to-do.
+    // It still tracks the follow-up as a real to-do — via the composer, which is
+    // where the talking points are handed over (RH5). The click opens the seeded
+    // composer; submitting it is what files the task, so the flow is driven to
+    // its end rather than asserting on a task the user never agreed to.
+    await app.getByTestId("task-add-submit").click();
     await nav(app, "/todo");
+    // The seeded household already has 45 tasks and the list pages at 20, so the
+    // new one is not necessarily on page 1 — searched for rather than scrolled to,
+    // which is what a user would do and what makes the assertion about the task
+    // existing rather than about where it sorted.
+    await app.getByTestId("todo-search").fill("Negotiate");
     await expect(app.locator("#main")).toContainText(/negotiat/i, { timeout: 20_000 });
   });
 
@@ -900,7 +909,13 @@ test.describe("migrated from the three-tab era", () => {
     await expect(chip).toBeVisible({ timeout: 20_000 });
     await chip.click();
     await expect(app).toHaveURL(/\/budgets/, { timeout: 10_000 });
-    await expect(app.locator(".budget.deeplink-flash").first()).toBeVisible({ timeout: 10_000 });
+    // The receiving budget flashes. Matched by its testid rather than by `.budget`:
+    // the sample household has ten budgets, so /budgets auto-seeds its COMPACT list
+    // (`.budget-crow`) and the full `.budget` card never renders — a selector that
+    // silently depends on which density the page happened to pick is testing the
+    // wrong thing. Both densities carry budget-card-<id>, which is also exactly
+    // what the deep-link focus targets.
+    await expect(app.locator('[data-testid^="budget-card-"].deeplink-flash').first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("linking a transaction to a subscription persists on the transaction", async ({ app }) => {
