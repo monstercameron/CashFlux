@@ -5,12 +5,13 @@ import { test, expect, nav } from "./fixtures.mjs";
 test.describe("notifications: snooze horizons + undo dismiss", () => {
   test("snoozing for a week hides the alert; dismissing offers Undo that restores it", async ({ app }) => {
     await nav(app, "/notifications");
-    // Each row now carries ONE primary action plus a ••• overflow that holds the
-    // snooze horizons, alert settings, and dismiss. Open the first row's overflow.
-    const ovfBtn = app.locator('[data-testid^="notif-ovf-"]').first();
-    const sid = (await ovfBtn.getAttribute("data-testid")).replace("notif-ovf-", "");
-    await ovfBtn.scrollIntoViewIfNeeded();
-    await ovfBtn.click();
+    // Snooze got promoted out of the ••• overflow to a dedicated clock control
+    // (W1/C369): each row carries the primary action, the clock (snooze horizons),
+    // and a ••• that keeps alert settings + dismiss. Open the first row's clock.
+    const snzBtn = app.locator('[data-testid^="notif-snooze-"]').first();
+    const sid = (await snzBtn.getAttribute("data-testid")).replace("notif-snooze-", "");
+    await snzBtn.scrollIntoViewIfNeeded();
+    await snzBtn.click();
     const weekOpt = app.getByTestId(`notif-snooze1w-${sid}`);
     await expect(weekOpt).toBeVisible();
     await expect(app.getByTestId(`notif-snooze1d-${sid}`)).toBeVisible();
