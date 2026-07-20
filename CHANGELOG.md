@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Bills & recurring rebuilt the payee-cleanup table once per transaction. (RH-PERF1)** Discovery
+  feeds every transaction through `app.ResolvePayee`, and that convenience wrapper constructs a fresh
+  `payeealias.Resolver` on each call — which re-queries the alias table from the store. Over the
+  sample dataset's 3,227 transactions that is 3,227 store round-trips to answer a question whose
+  answer never changes mid-render, and `PayeeResolver`'s own doc comment already said to build one
+  resolver when resolving many payees. `buildDiscoverTxns` and `rhyCommitments` now build it once per
+  sweep: 11.7ms → 3.2ms measured natively, and `buildDiscoverTxns` runs three times per render of the
+  surface. Pure cost removal — the resolved names, and so every candidate, are identical.
 - **"Negotiate" handed over a reminder instead of the script. (RH5)** The point of the feature is the
   talking points — note your rate and tenure, cite a competitor's promo, ask for retention, escalate
   or call back, log the new rate — with the to-do as the follow-up that keeps it from being forgotten.
