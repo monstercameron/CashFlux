@@ -56,3 +56,42 @@ func PreviewDelta(currentMinor int64, targetMinor int64) DeltaPreview {
 		NeedsAdjustment: adj != 0,
 	}
 }
+
+// BulkClear describes the effect of marking a batch of currently-uncleared
+// transactions cleared, evaluated against a statement balance. It powers the
+// reconcile flow's "Mark all cleared" preview: how many rows would flip, their
+// combined amount, the cleared balance that would result, and whether that
+// leaves the account reconciled — so the header can promise "this will match the
+// statement exactly" or warn about the gap that would remain.
+type BulkClear struct {
+	// Count is how many transactions would flip from uncleared to cleared.
+	Count int
+	// SumMinor is the combined signed amount of those transactions in minor
+	// units. Clearing a transaction moves its amount into the cleared balance.
+	SumMinor int64
+	// ProjectedClearedMinor is the cleared balance after all Count transactions
+	// are marked cleared (the current cleared balance plus SumMinor).
+	ProjectedClearedMinor int64
+	// Result is the reconciliation outcome (difference + reconciled flag)
+	// measured between the projected cleared balance and the statement balance.
+	Result Result
+}
+
+// PreviewBulkClear computes what "Mark all cleared" would do: clearing every
+// amount in unclearedAmounts on top of the current clearedMinor balance, then
+// re-measuring against statementMinor. All values are in the same currency's
+// minor units. It mutates nothing; the caller uses it to preview the outcome
+// before committing the batch.
+func PreviewBulkClear(clearedMinor int64, statementMinor int64, unclearedAmounts []int64) BulkClear {
+	var sum int64
+	for _, a := range unclearedAmounts {
+		sum += a
+	}
+	projected := clearedMinor + sum
+	return BulkClear{
+		Count:                 len(unclearedAmounts),
+		SumMinor:              sum,
+		ProjectedClearedMinor: projected,
+		Result:                Diff(projected, statementMinor),
+	}
+}

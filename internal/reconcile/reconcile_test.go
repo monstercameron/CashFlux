@@ -75,6 +75,98 @@ func TestPreviewDelta(t *testing.T) {
 	}
 }
 
+func TestPreviewBulkClear(t *testing.T) {
+	tests := []struct {
+		name             string
+		clearedMinor     int64
+		statementMinor   int64
+		unclearedAmounts []int64
+		wantCount        int
+		wantSum          int64
+		wantProjected    int64
+		wantDifference   int64
+		wantReconciled   bool
+	}{
+		{
+			name:           "clearing all closes the gap exactly",
+			clearedMinor:   71000,
+			statementMinor: 111500,
+			// two outstanding deposits totalling the +$405 gap.
+			unclearedAmounts: []int64{30000, 10500},
+			wantCount:        2,
+			wantSum:          40500,
+			wantProjected:    111500,
+			wantDifference:   0,
+			wantReconciled:   true,
+		},
+		{
+			name:             "clearing all still leaves a difference",
+			clearedMinor:     71000,
+			statementMinor:   120000,
+			unclearedAmounts: []int64{30000, 10500},
+			wantCount:        2,
+			wantSum:          40500,
+			wantProjected:    111500,
+			wantDifference:   8500,
+			wantReconciled:   false,
+		},
+		{
+			name:             "nothing uncleared — already matches",
+			clearedMinor:     150000,
+			statementMinor:   150000,
+			unclearedAmounts: nil,
+			wantCount:        0,
+			wantSum:          0,
+			wantProjected:    150000,
+			wantDifference:   0,
+			wantReconciled:   true,
+		},
+		{
+			name:             "outstanding withdrawals reduce the cleared balance",
+			clearedMinor:     200000,
+			statementMinor:   185000,
+			unclearedAmounts: []int64{-10000, -5000},
+			wantCount:        2,
+			wantSum:          -15000,
+			wantProjected:    185000,
+			wantDifference:   0,
+			wantReconciled:   true,
+		},
+		{
+			name:             "mixed signs net to the statement",
+			clearedMinor:     50000,
+			statementMinor:   62500,
+			unclearedAmounts: []int64{20000, -7500},
+			wantCount:        2,
+			wantSum:          12500,
+			wantProjected:    62500,
+			wantDifference:   0,
+			wantReconciled:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := PreviewBulkClear(tc.clearedMinor, tc.statementMinor, tc.unclearedAmounts)
+			if got.Count != tc.wantCount {
+				t.Errorf("Count = %d; want %d", got.Count, tc.wantCount)
+			}
+			if got.SumMinor != tc.wantSum {
+				t.Errorf("SumMinor = %d; want %d", got.SumMinor, tc.wantSum)
+			}
+			if got.ProjectedClearedMinor != tc.wantProjected {
+				t.Errorf("ProjectedClearedMinor = %d; want %d", got.ProjectedClearedMinor, tc.wantProjected)
+			}
+			if got.Result.DifferenceMinor != tc.wantDifference {
+				t.Errorf("Result.DifferenceMinor = %d; want %d", got.Result.DifferenceMinor, tc.wantDifference)
+			}
+			if got.Result.Reconciled != tc.wantReconciled {
+				t.Errorf("Result.Reconciled = %v; want %v", got.Result.Reconciled, tc.wantReconciled)
+			}
+		})
+	}
+}
+
 func TestDiff(t *testing.T) {
 	tests := []struct {
 		name           string
