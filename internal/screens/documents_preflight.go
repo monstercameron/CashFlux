@@ -200,8 +200,11 @@ func receiptMatchRow(p receiptMatchRowProps) ui.Node {
 
 // importHistorySection lists the most recent import runs (newest first, capped
 // at five) with their full result and — while the run's pre-import checkpoint
-// is still in the #55 ring — a one-click roll-back for that exact import.
-func importHistorySection(docs []domain.Document, accounts []domain.Account, onRollback func(domain.Document)) ui.Node {
+// is still in the #55 ring — a one-click roll-back for that exact import. When a
+// run's snapshot has aged out of the ring its Roll back is gone, so the section
+// hint is honest about that and offers the always-available fallback: a link to
+// the Activity timeline (onViewActivity) where any import can still be reviewed.
+func importHistorySection(docs []domain.Document, accounts []domain.Account, onRollback func(domain.Document), onViewActivity ui.Handler) ui.Node {
 	// Newest first by upload time (store order isn't chronological — the
 	// sample dataset seeds history rows with past dates).
 	sorted := append([]domain.Document(nil), docs...)
@@ -226,8 +229,11 @@ func importHistorySection(docs []domain.Document, accounts []domain.Account, onR
 	}
 	return Div(css.Class(tw.Mt3), Attr("data-testid", "import-history"),
 		P(css.Class("t-caption"), uistate.T("documents.historyHeading")),
-		P(css.Class("muted", tw.Text12), uistate.T("documents.historyHint")),
+		P(css.Class("muted", tw.Text12), uistate.T("documents.historyHintHonest")),
 		Div(css.Class("rows"), MapKeyed(sorted, keyOf, render)),
+		A(css.Class("btn-link", tw.Text12), Href(uistate.RoutePath("/activity")),
+			Attr("data-testid", "import-history-activity"), OnClick(onViewActivity),
+			uistate.T("documents.historyActivityLink")),
 	)
 }
 

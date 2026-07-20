@@ -287,6 +287,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		importModalOpen.Set(false)
 		nav.Navigate(uistate.RoutePath("/artifacts"))
 	}))
+	// #57 honesty: the recent-imports fallback link — when a run's safety snapshot
+	// has aged out of the checkpoint ring so its per-run Roll back is gone, the
+	// history still points to the Activity timeline where the change can be reviewed.
+	goActivity := ui.UseEvent(Prevent(func() {
+		importModalOpen.Set(false)
+		nav.Navigate(uistate.RoutePath("/activity"))
+	}))
 
 	// C74 — import-map wizard state: populated when statement auto-map fails or
 	// the user explicitly opens the wizard. wizardHeader holds the parsed column
@@ -1427,7 +1434,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			),
 			// #57: recent import runs with their full results and per-run
 			// roll-back (while the pre-import checkpoint is still in the ring).
-			importHistorySection(app.Documents(), accounts, rollbackImport),
+			importHistorySection(app.Documents(), accounts, rollbackImport, goActivity),
 		)),
 
 		// STAGE 2 — "Review & import": the shared editable draft table + spend summary,
