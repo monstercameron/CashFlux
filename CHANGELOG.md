@@ -7,6 +7,24 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **/networth milestones now scale with the size of the household, and no longer congratulate
+  selectively.** An all-time window produced **32 rows**, five of them for a single month —
+  "turned positive in May 2022", "passed ($1,000)", "passed ($500)", "passed $0", "passed $500" —
+  and then narrated net worth recovering in September 2022 without ever saying it had gone
+  negative in July. Two real defects, not one volume problem. First, the ladder was derived
+  per-adjacent-pair from that pair's own magnitude and walked down to $1 steps, so a range running
+  −$16,000 → $154,000 fired $500 rungs near zero; the integer division that placed the first rung
+  truncates toward zero, which is what emitted **negative** thresholds — climbing out of debt is
+  one story, already told exactly once by the first-positive milestone, not four achievements.
+  The ladder is now derived from the SERIES peak: 1, 2.5 and 5 times each of its top two decades
+  (for a $154k peak: $10k / $25k / $50k / $100k), and no rung at or below zero exists at any scale.
+  Second, only the upward zero-crossing was ever emitted; `MilestoneKindNegative` now pairs it, so
+  a fall can never be dropped from a story that reports the recovery. Added alongside: the
+  all-time high (stated exactly, once), and material falls from a running high — reported once at
+  the trough, from the level they fell from, when the drawdown reaches a tenth of the peak. The
+  list drops 32 → 7 for the five-year window.
+- **The /networth milestone list opens rather than scrolls.** The latest 5 events show, with an
+  expander that states the honest total on its face ("Show all 7 milestones"). No silent cap.
 - **The Glance row no longer leaves a hole where the shorter column ends.** With the grid's items
   start-aligned, the left "What moved it" card ended at 613px while the right column ran to 816px,
   leaving ~215px of empty column that the next full-width row could not backfill — the page read as

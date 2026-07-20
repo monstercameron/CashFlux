@@ -284,16 +284,123 @@ func TestMilestones(t *testing.T) {
 	pt := func(net int64) Point { return Point{NetMinor: net} }
 
 	t.Run("a round figure crossed upward is reported", func(t *testing.T) {
-		// The sample household: $131,837.65 -> $153,170.47 crosses $150,000.
-		ms := Milestones([]Point{pt(13183765), pt(15317047)})
+		// The sample household topping out at $153,170.47: the ladder for that
+		// peak is $10k / $25k / $50k / $100k, so climbing from $90,000 passes
+		// $100,000. It does NOT report $150,000 — 1.5x is not a rung, and the
+		// peak itself is stated exactly by the all-time-high milestone.
+		ms := Milestones([]Point{pt(9000000), pt(15317047)})
 		found := false
 		for _, m := range ms {
-			if m.Kind == MilestoneKindThreshold && m.ValueMinor == 15000000 && m.Up {
+			if m.Kind == MilestoneKindThreshold && m.ValueMinor == 10000000 && m.Up {
 				found = true
 			}
 		}
 		if !found {
-			t.Fatalf("Milestones = %+v, want the $150,000 crossing", ms)
+			t.Fatalf("Milestones = %+v, want the $100,000 crossing", ms)
+		}
+	})
+
+	t.Run("thresholds scale with the series peak, not with a fixed ladder", func(t *testing.T) {
+		// The reviewer's case: a run from -$16,000 to $154,000. The old ladder
+		// fired on $500 steps near zero and produced five rows for one month.
+		ms := Milestones([]Point{pt(-1600000), pt(70000), pt(1200000), pt(15400000)})
+		for _, m := range ms {
+			if m.Kind != MilestoneKindThreshold {
+				continue
+			}
+			if m.ValueMinor <= 0 {
+				t.Fatalf("Milestones = %+v: a negative threshold (%d) is not an achievement", ms, m.ValueMinor)
+			}
+			if m.ValueMinor < 1000000 {
+				t.Fatalf("Milestones = %+v: $%d is noise beside a $154,000 peak", ms, m.ValueMinor/100)
+			}
+		}
+	})
+
+	t.Run("no threshold rung at or below zero at any scale", func(t *testing.T) {
+		for _, peak := range []int64{500, 90000, 1234567, 987654321} {
+			for _, v := range milestoneLadder(peak) {
+				if v <= 0 {
+					t.Fatalf("milestoneLadder(%d) = %v, contains a non-positive rung", peak, milestoneLadder(peak))
+				}
+			}
+		}
+	})
+
+	t.Run("turning negative is reported, not only the recovery", func(t *testing.T) {
+		// The exact failure the reviewer caught: a page that narrates going
+		// back up without ever saying it went down.
+		ms := Milestones([]Point{pt(500000), pt(-200000), pt(300000)})
+		var down, up bool
+		for _, m := range ms {
+			switch m.Kind {
+			case MilestoneKindNegative:
+				down = true
+			case MilestoneKindPositive:
+				up = true
+			}
+		}
+		if !down || !up {
+			t.Fatalf("Milestones = %+v, want BOTH the fall below zero and the recovery", ms)
+		}
+	})
+
+	t.Run("the all-time high is reported once", func(t *testing.T) {
+		ms := Milestones([]Point{pt(100000), pt(900000), pt(1500000), pt(1200000)})
+		n, at := 0, -1
+		for _, m := range ms {
+			if m.Kind == MilestoneKindHigh {
+				n, at = n+1, m.AtIndex
+			}
+		}
+		if n != 1 || at != 2 {
+			t.Fatalf("Milestones = %+v, want exactly one high at index 2, got %d at %d", ms, n, at)
+		}
+	})
+
+	t.Run("a material fall from a high is one row at the trough", func(t *testing.T) {
+		ms := Milestones([]Point{pt(10000000), pt(9800000), pt(8000000), pt(9000000)})
+		n := 0
+		for _, m := range ms {
+			if m.Kind != MilestoneKindReversal {
+				continue
+			}
+			n++
+			if m.AtIndex != 2 || m.ValueMinor != 8000000 || m.FromMinor != 10000000 {
+				t.Fatalf("reversal = %+v, want the trough (idx 2, $80,000) measured from $100,000", m)
+			}
+			if m.Up {
+				t.Fatal("a reversal is not an achievement")
+			}
+		}
+		if n != 1 {
+			t.Fatalf("Milestones = %+v, want exactly one reversal, got %d", ms, n)
+		}
+	})
+
+	t.Run("a small wobble is not a reversal", func(t *testing.T) {
+		ms := Milestones([]Point{pt(10000000), pt(9800000), pt(10100000)})
+		for _, m := range ms {
+			if m.Kind == MilestoneKindReversal {
+				t.Fatalf("Milestones = %+v: a 2%% dip is noise, not a milestone", ms)
+			}
+		}
+	})
+
+	t.Run("an all-time window stays a list a person would read", func(t *testing.T) {
+		// Five years of monthly points climbing -$16,000 -> $154,000 with a
+		// dip. The old generator produced 32 rows for this shape.
+		pts := make([]Point, 0, 61)
+		for i := 0; i < 61; i++ {
+			v := int64(-1600000 + i*283333)
+			if i >= 30 && i < 34 {
+				v -= 1500000
+			}
+			pts = append(pts, pt(v))
+		}
+		ms := Milestones(pts)
+		if len(ms) > 10 {
+			t.Fatalf("Milestones produced %d rows for a 5-year series — that is an event log, not milestones", len(ms))
 		}
 	})
 

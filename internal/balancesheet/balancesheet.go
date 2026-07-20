@@ -296,87 +296,176 @@ func AxisTicks(loMinor, hiMinor int64, want int) []int64 {
 	return out
 }
 
-// Milestone is a threshold the net worth crossed inside the window.
+// Milestone is one genuinely notable event in the net-worth series.
 type Milestone struct {
-	// Kind is "positive" (net worth became positive for the first time in the
-	// window) or "threshold" (a round figure was passed).
+	// Kind is one of the MilestoneKind* constants.
 	Kind string
-	// AtIndex is the point at which the crossing was first observed, and
-	// ValueMinor is the figure crossed.
-	AtIndex    int
+	// AtIndex is the point at which the event was first observed.
+	AtIndex int
+	// ValueMinor is the figure the event is about: the threshold for a
+	// threshold crossing, the peak for a high, the trough for a reversal, and
+	// zero for a sign change.
 	ValueMinor int64
-	// Up is false when the crossing went the other way. A milestone passed
-	// downward is still a fact about the window, and hiding it would make the
-	// list a trophy cabinet rather than a record.
+	// FromMinor is the level the move started from. Meaningful for a reversal
+	// (the high it fell from); zero otherwise.
+	FromMinor int64
+	// Up is false when the event is a setback. A setback is still a fact about
+	// the window, and hiding it would make the list a trophy cabinet rather
+	// than a record — so the sign changes are reported as a PAIR: a series that
+	// reports turning positive must also report turning negative.
 	Up bool
 }
 
-// MilestoneKindPositive / MilestoneKindThreshold name the two kinds.
+// The kinds of event the milestone list reports.
 const (
-	MilestoneKindPositive  = "positive"
+	// MilestoneKindPositive is net worth crossing zero upward.
+	MilestoneKindPositive = "positive"
+	// MilestoneKindNegative is net worth crossing zero downward. It exists so
+	// that a recovery can never be narrated without the fall that preceded it.
+	MilestoneKindNegative = "negative"
+	// MilestoneKindThreshold is a round figure passed, in either direction.
 	MilestoneKindThreshold = "threshold"
+	// MilestoneKindHigh is the highest net worth in the whole series.
+	MilestoneKindHigh = "high"
+	// MilestoneKindReversal is a material fall from a running high.
+	MilestoneKindReversal = "reversal"
 )
 
-// Milestones reports the round figures net worth crossed across the series, in
-// the order they were crossed. Thresholds are the same "nice" numbers an axis
-// uses (1, 2 or 5 times a power of ten), so a milestone is a figure a person
-// would actually mention out loud rather than an arbitrary internal step.
+// reversalPctOfPeak is how far net worth must fall from a running high before
+// the fall is an event rather than noise. A tenth of everything you have is a
+// figure a household notices; a 2% wobble is not a milestone.
+const reversalPctOfPeak = 10
+
+// Milestones reports what actually happened to net worth across the series, in
+// the order it happened: the first time it turned positive (and every time it
+// turned negative), the round figures it passed, its all-time high, and every
+// material fall from a high.
 //
-// Crossings in BOTH directions are reported: a page that only ever congratulates
-// is not a record of what happened.
+// The thresholds SCALE WITH MAGNITUDE. This is the whole difference between a
+// milestone list and an event log. A fixed ladder applied across a range from
+// -$16,000 to $154,000 fires on $500 steps down near zero, where $500 means
+// nothing, and produces five rows for one afternoon — "turned positive",
+// "passed $0", "passed $500" — while saying nothing a person would repeat out
+// loud. So the ladder is derived from the series' own peak: round figures at 1,
+// 2.5 and 5 times each of the top two decades of that peak, which for a
+// household topping out near $154,000 is $10k, $25k, $50k and $100k.
+//
+// Negative thresholds are never reported. Climbing from -$1,600 to $700 is ONE
+// story — getting out of debt — and it is already told, exactly once, by the
+// first-positive milestone. "Passed -$1,000" is not an achievement, and a list
+// that says so is not one a reader will trust.
 func Milestones(pts []Point) []Milestone {
 	if len(pts) < 2 {
 		return nil
 	}
+	var peak int64
+	for _, p := range pts {
+		if p.NetMinor > peak {
+			peak = p.NetMinor
+		}
+	}
+	ladder := milestoneLadder(peak)
+
 	var out []Milestone
 	for i := 1; i < len(pts); i++ {
 		prev, cur := pts[i-1].NetMinor, pts[i].NetMinor
-		if prev < 0 && cur >= 0 {
-			out = append(out, Milestone{Kind: MilestoneKindPositive, AtIndex: i, ValueMinor: 0, Up: true})
+		switch {
+		case prev < 0 && cur >= 0:
+			out = append(out, Milestone{Kind: MilestoneKindPositive, AtIndex: i, Up: true})
+		case prev >= 0 && cur < 0:
+			out = append(out, Milestone{Kind: MilestoneKindNegative, AtIndex: i})
 		}
 		lo, hi, up := prev, cur, true
 		if lo > hi {
 			lo, hi, up = hi, lo, false
 		}
-		for _, t := range niceThresholds(lo, hi) {
-			out = append(out, Milestone{Kind: MilestoneKindThreshold, AtIndex: i, ValueMinor: t, Up: up})
+		for _, t := range ladder {
+			if t > lo && t <= hi {
+				out = append(out, Milestone{Kind: MilestoneKindThreshold, AtIndex: i, ValueMinor: t, Up: up})
+			}
 		}
 	}
+	out = append(out, milestoneReversals(pts)...)
+	if hi, at := seriesPeak(pts); at > 0 && hi > 0 {
+		out = append(out, Milestone{Kind: MilestoneKindHigh, AtIndex: at, ValueMinor: hi, Up: true})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].AtIndex < out[j].AtIndex })
 	return out
 }
 
-// niceThresholds returns the round figures crossed in (lo, hi]. It walks the
-// 1/2/5 ladder from the largest step downward and returns the crossings of the
-// FIRST step that produces any — so a window reports the most significant round
-// figure it passed ($150,000) rather than every lesser one it also passed
-// ($140,000, $135,000). A milestone list that fires on every small step is not
-// a milestone list.
-func niceThresholds(lo, hi int64) []int64 {
-	if hi <= lo || hi <= 0 {
+// milestoneLadder is the set of round figures worth reporting for a series that
+// peaked at peakMinor: 1, 2.5 and 5 times each of the top two decades. Two
+// decades is what keeps the list proportionate — one decade alone would skip
+// the $10,000 a household remembers on its way to $150,000, and three would
+// drag $1,000 steps back into a six-figure story.
+//
+// Nothing at or below zero is ever a rung.
+func milestoneLadder(peakMinor int64) []int64 {
+	if peakMinor <= 0 {
 		return nil
 	}
-	// Candidate steps from the magnitude of the range's top down to whole units.
-	top := math.Floor(math.Log10(float64(hi)))
-	for e := top; e >= 2; e-- {
+	top := math.Floor(math.Log10(float64(peakMinor)))
+	var out []int64
+	for e := top - 1; e <= top; e++ {
+		if e < 0 {
+			continue
+		}
 		mag := math.Pow(10, e)
-		for _, m := range []float64{5, 2, 1} {
-			step := int64(mag * m)
-			if step <= 0 {
-				continue
-			}
-			var out []int64
-			for v := (lo/step + 1) * step; v <= hi; v += step {
-				if v > lo {
-					out = append(out, v)
-				}
-			}
-			if len(out) > 0 {
-				sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-				return out
+		for _, m := range []float64{1, 2.5, 5} {
+			v := int64(math.Round(mag * m))
+			if v > 0 && v <= peakMinor && !containsInt64(out, v) {
+				out = append(out, v)
 			}
 		}
 	}
-	return nil
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// seriesPeak returns the highest net worth in the series and where it happened.
+// A peak at the very first point is not an event that occurred inside the
+// window, so it reports index 0 and the caller drops it.
+func seriesPeak(pts []Point) (int64, int) {
+	hi, at := pts[0].NetMinor, 0
+	for i, p := range pts {
+		if p.NetMinor > hi {
+			hi, at = p.NetMinor, i
+		}
+	}
+	return hi, at
+}
+
+// milestoneReversals finds each episode where net worth fell materially from a
+// running high, and reports it once, at the bottom of the fall. Reporting every
+// down month would restore the event log; reporting only the recoveries would
+// restore the trophy cabinet. The trough is the honest single row: this is how
+// far it fell, and from what.
+func milestoneReversals(pts []Point) []Milestone {
+	var out []Milestone
+	peak, troughIdx := pts[0].NetMinor, -1
+	trough := peak
+	flush := func() {
+		if troughIdx >= 0 && peak > 0 && (peak-trough)*100 >= peak*reversalPctOfPeak {
+			out = append(out, Milestone{
+				Kind: MilestoneKindReversal, AtIndex: troughIdx,
+				ValueMinor: trough, FromMinor: peak,
+			})
+		}
+		troughIdx = -1
+	}
+	for i := 1; i < len(pts); i++ {
+		v := pts[i].NetMinor
+		if v > peak {
+			flush()
+			peak, trough = v, v
+			continue
+		}
+		if troughIdx < 0 || v < trough {
+			trough, troughIdx = v, i
+		}
+	}
+	flush()
+	return out
 }
 
 func containsInt64(s []int64, v int64) bool {
