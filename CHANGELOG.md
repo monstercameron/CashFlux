@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The budget-fit chip stopped being a control. (RH1)** "Fits Subscriptions · $2.00 left this
+  period" is a claim about another screen, and on the old bills row it was one click from the card
+  that makes it — a button with an accessible name that deep-linked to `/budgets` and flashed the
+  receiving budget. The redesigned agenda row rendered it as a bare `<span>`, so it lost the handler
+  and its accessible name in the same stroke: nothing happened on click, and a screen reader read a
+  loose sentence with no control attached. It is a labelled, keyboard-reachable button again, landing
+  on the same budget with the same flash.
 - **The Subscriptions lens was empty, and `/subscriptions` — a live nav entry point — landed on
   "Nothing here yet." (RH3)** The roster classified a commitment as account-tied by reading
   `domain.Recurring.AccountID`, which names the FUNDING account an occurrence posts from and which

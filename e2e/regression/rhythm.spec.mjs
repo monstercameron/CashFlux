@@ -893,12 +893,10 @@ test.describe("migrated from the three-tab era", () => {
   });
 
   test("the budget-fit chip drills to the budget it names", async ({ app }) => {
-    // KNOWN REGRESSION (see DEVLOG / TODOS): the redesigned agenda row renders the
-    // fit chip as a plain <span>, so the deep-link into the budget it names — with
-    // the receiving card flashing — was lost. Marked expected-to-fail rather than
-    // deleted or weakened: the day the chip becomes a control again, this test
-    // goes red for passing and the marker comes off.
-    test.fail();
+    // RH1, fixed. The redesigned agenda row briefly rendered the fit chip as a
+    // plain <span>, losing both the deep-link into the budget it names — with the
+    // receiving card flashing — and the chip's accessible name. The chip is a
+    // control again, so this guards that it stays one.
     await nav(app, "/bills");
     const chip = app.locator('[data-testid^="bill-fit-"]').first();
     await expect(chip).toBeVisible({ timeout: 20_000 });

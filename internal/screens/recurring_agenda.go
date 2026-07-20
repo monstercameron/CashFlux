@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -495,6 +496,18 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 	}))
+	// The budget-fit chip is a CONTROL, not a caption: "this fits Groceries" is a
+	// claim about another screen, and the chip is one click from the card that
+	// makes it (reusing the notification deep-link focus machinery, so the
+	// receiving budget flashes on arrival).
+	nav := router.UseNavigate()
+	openFit := ui.UseEvent(Prevent(func() {
+		if it.Fit == nil {
+			return
+		}
+		uistate.SetDeepLinkFocus(`[data-testid="budget-card-` + it.Fit.BudgetID + `"]`)
+		nav.Navigate(uistate.RoutePath("/budgets"))
+	}))
 	negotiate := ui.UseEvent(Prevent(func() {
 		app := appstate.Default
 		if app == nil {
@@ -530,7 +543,11 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 			cls = "pill bill-fit bill-fit-over"
 			label = uistate.T("bills.budgetOver", it.Fit.Amount, it.Fit.BudgetName)
 		}
-		fitNode = Span(ClassStr(cls), Attr("data-testid", "bill-fit-"+it.AccountID), label)
+		fitNode = Button(ClassStr(cls), Type("button"),
+			Attr("data-testid", "bill-fit-"+it.AccountID),
+			Attr("aria-label", uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
+			Title(uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
+			OnClick(openFit), label)
 	}
 
 	var kebab ui.Node = Fragment()

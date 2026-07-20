@@ -18,7 +18,8 @@ packages have no `syscall/js` and ship with table-driven tests.
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
 
-- [ ] **RH1 — the budget-fit chip no longer drills to its budget.** **Confirmed interactive by
+- [x] **RH1 — the budget-fit chip no longer drills to its budget.** *(fixed 2026-07-20: the chip is a
+  labelled button on `rhyAgendaRow` again, deep-linking to `/budgets` with the receiving card flashing.)* **Confirmed interactive by
   design:** the old row built it as a control, not decoration —
   `Button(ClassStr(cls), Type("button"), Attr("data-testid", "bill-fit-"+id), Attr("aria-label",
   T("bills.budgetFitAria", …)), Title(…), OnClick(openFit), label)` (`bills_screen.go:792`), which
