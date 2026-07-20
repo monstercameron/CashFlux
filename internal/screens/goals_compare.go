@@ -101,8 +101,23 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 
 	var table ui.Node = P(css.Class("muted"), Attr("data-testid", "goal-compare-empty"),
 		uistate.T("goalcompare.empty"))
+	var verdict ui.Node = Fragment()
 	if okA && okB {
 		sa, sb := computeGoalCompareStats(ga, now), computeGoalCompareStats(gb, now)
+		// One honest verdict sentence above the table, derived only from the figures the
+		// table shows (projected landings + monthly plans). The monthly gap is compared
+		// only when both goals share a currency (a cross-currency gap is meaningless).
+		cin := goaltrajectory.CompareInput{
+			AProjected: sa.projected, AReachable: sa.reachable,
+			BProjected: sb.projected, BReachable: sb.reachable,
+		}
+		if sa.hasMonthly && sb.hasMonthly && sa.monthly.Currency == sb.monthly.Currency {
+			cin.AMonthlyMinor, cin.BMonthlyMinor, cin.MonthlyKnown = sa.monthly.Amount, sb.monthly.Amount, true
+		}
+		if cmp := goaltrajectory.Compare(cin); cmp.Meaningful() {
+			verdict = P(css.Class("goal-compare-verdict"), Attr("data-testid", "goal-compare-verdict"),
+				goalCompareVerdict(cmp, ga.Name, gb.Name, sa.monthly.Currency))
+		}
 		dash := uistate.T("goalcompare.none")
 		fmtDate := func(t time.Time, ok bool) string {
 			if !ok || t.IsZero() {
@@ -154,7 +169,59 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 							TestID: "goal-compare-b", OnChange: func(v string) { bS.Set(v) },
 							AriaLabel: uistate.T("goalcompare.goalB")}))),
 			),
+			verdict,
 			table,
 		),
 	)
+}
+
+// goalCompareVerdict renders the one-sentence Compare verdict from the computed
+// Comparison. Every branch draws only on figures already shown in the table, so the
+// sentence can never disagree with the rows. gapCurrency formats the monthly gap (both
+// goals share it whenever a monthly gap exists).
+func goalCompareVerdict(c goaltrajectory.Comparison, aName, bName, gapCurrency string) string {
+	nameOf := func(s goaltrajectory.CompareSide) string {
+		if s == goaltrajectory.SideA {
+			return aName
+		}
+		return bName
+	}
+	otherOf := func(s goaltrajectory.CompareSide) string {
+		if s == goaltrajectory.SideA {
+			return bName
+		}
+		return aName
+	}
+	dur := func(n int) string {
+		if n == 1 {
+			return uistate.T("goalcompare.vMonthsOne")
+		}
+		return uistate.T("goalcompare.vMonths", n)
+	}
+	gap := ""
+	if c.Costlier != goaltrajectory.SideNone {
+		gap = fmtMoney(money.New(c.MonthlyGapMinor, gapCurrency))
+	}
+
+	switch {
+	case c.Sooner != goaltrajectory.SideNone:
+		sooner, other, d := nameOf(c.Sooner), otherOf(c.Sooner), dur(c.MonthsApart)
+		switch {
+		case c.Costlier == c.Sooner:
+			// The faster goal is also the more expensive — a trade-off.
+			return uistate.T("goalcompare.vLeadSoonerCostMore", sooner, d, other, gap)
+		case c.Costlier != goaltrajectory.SideNone:
+			// The faster goal is the cheaper one — a clean win.
+			return uistate.T("goalcompare.vLeadSoonerCostLess", sooner, d, other, gap)
+		default:
+			return uistate.T("goalcompare.vLeadSoonerOnly", sooner, d, other)
+		}
+	case c.SameTiming:
+		if c.Costlier != goaltrajectory.SideNone {
+			return uistate.T("goalcompare.vLeadSameCost", aName, bName, nameOf(c.Costlier), gap)
+		}
+		return uistate.T("goalcompare.vLeadSameOnly", aName, bName)
+	default: // only the monthly plans are comparable
+		return uistate.T("goalcompare.vLeadCostOnly", nameOf(c.Costlier), gap, otherOf(c.Costlier))
+	}
 }
