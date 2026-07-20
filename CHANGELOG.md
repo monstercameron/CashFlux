@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **`domain.Recurring.Paused` — additive suspend flag (Bills & Recurring redesign, engine layer).**
+  A recurring can now be temporarily paused: it keeps its definition and history but reads as
+  inactive to scheduling/forecasting consumers via the new `Recurring.Active()` predicate. The flag
+  is `omitempty` and JSON round-trips through the plain-struct store path — no migration, existing
+  recurrings load with it off. UI/state wiring (pause verb, filtering) is deferred to the surface
+  build.
+
 ## [1.2.8] - 2026-07-20
 
 ### Changed

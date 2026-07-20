@@ -442,7 +442,20 @@ type Recurring struct {
 	// recurring is deleted or the flag is cleared. Additive; existing recurrings load
 	// with it off. JSON round-trips; no store migration needed.
 	SmoothIntoBudgets bool `json:"smoothIntoBudgets,omitempty"`
+	// Paused marks a recurring the household has temporarily suspended: it keeps
+	// its definition and history but is skipped by scheduling, forecasting, and
+	// auto-post while paused (the lineup renders it quietly, "keeps watching").
+	// Additive and view-neutral — existing recurrings load with it off, and the
+	// flag JSON round-trips through the plain-struct store path with no migration.
+	// Consumers that must ignore paused items filter on this field; the domain
+	// type itself stays inert so nothing silently changes behaviour on load.
+	Paused bool `json:"paused,omitempty"`
 }
+
+// Active reports whether this recurring participates in scheduling and
+// forecasting — true unless it has been paused. It is the single predicate
+// callers use so "skip paused items" reads the same everywhere.
+func (r Recurring) Active() bool { return !r.Paused }
 
 // Smooths reports whether this recurring participates in sinking-fund smoothing:
 // the opt-in flag is set AND the cadence is one that benefits from smoothing
