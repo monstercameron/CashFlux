@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A balance sheet that composes, and ratios that interpret themselves.** New pure package
+  `internal/balancesheet`: `Series` returns what each SIDE is made of at each cutoff — cash,
+  invested, property, other on the asset side; credit, loans, mortgage on the liability side — so
+  composition can be read *inside* a trend rather than as a separate pie, and a test pins every
+  point's net to `ledger.NetWorthSeries` to the cent so no surface can disagree with another.
+  `BucketOf` is now the single definition of those bands. `Assess` returns the liquid share,
+  debt-to-asset and cash runway each paired with a BAND (strong / ok / watch / alarm) decided once
+  here instead of re-guessed per surface, so a ratio is never printed as a bare number the reader
+  must judge alone — and only the runway and genuinely underwater debt can reach `alarm`, because
+  borrowing to own a home is structure, not an emergency. A ratio with no denominator reports
+  `OK: false` rather than a fake 0%.
+
+### Added
 - **The net-worth bridge: a window's movement decomposed into legs that sum exactly.**
   `attribution.BuildBridge` extends the E1 engine with the split a balance sheet is actually read
   along — money kept, market movement, debt paid down, new debt, revaluation — instead of the coarse

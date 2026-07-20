@@ -1,0 +1,258 @@
+// SPDX-License-Identifier: MIT
+
+// Package balancesheet turns accounts and transactions into the two things a
+// household balance sheet is actually read for: what the two SIDES are made of
+// over time, and what the standard ratios mean in plain terms.
+//
+// It exists because "net worth" as a single line hides both stories. A number
+// that rises identically whether you saved it or whether a condo was
+// re-appraised is not an answer, and a bare "12% liquid" is a number the reader
+// is left to judge alone. So this package returns composition — cash, invested,
+// property on the asset side; credit, loans, mortgage on the liability side —
+// as a series, and returns each ratio paired with a BAND the caller phrases.
+//
+// Conventions match the rest of the app exactly so no surface can disagree with
+// another: a balance "as of" a cutoff counts transactions STRICTLY BEFORE it
+// (ledger.NetWorthSeries), liabilities contribute the magnitude of their balance
+// (ledger.NetWorth), archived accounts are excluded, and every figure is in
+// base-currency minor units.
+//
+// Pure Go, no syscall/js; unit-tested on native Go.
+package balancesheet
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
+
+// Bucket is one composition band of the balance sheet. The asset buckets and
+// the liability buckets are deliberately separate value sets so a caller can
+// never accidentally stack a mortgage on top of cash.
+type Bucket string
+
+const (
+	// BucketCash is everyday, spendable money: checking, debit, savings, cash.
+	BucketCash Bucket = "cash"
+	// BucketInvested is market-exposed holdings: investment, retirement, crypto.
+	BucketInvested Bucket = "invested"
+	// BucketProperty is property and vehicles — real, but not spendable.
+	BucketProperty Bucket = "property"
+	// BucketOtherAsset is every other asset type.
+	BucketOtherAsset Bucket = "otherAsset"
+
+	// BucketCredit is revolving debt: credit cards and lines of credit.
+	BucketCredit Bucket = "credit"
+	// BucketLoans is instalment debt: loans and personal loans.
+	BucketLoans Bucket = "loans"
+	// BucketMortgage is mortgage debt.
+	BucketMortgage Bucket = "mortgage"
+)
+
+// AssetBuckets is the canonical stacking order of the asset side, most liquid
+// first — so the mirrored chart reads outward from spendable to fixed.
+var AssetBuckets = []Bucket{BucketCash, BucketInvested, BucketProperty, BucketOtherAsset}
+
+// LiabilityBuckets is the canonical stacking order of the liability side, most
+// urgent first.
+var LiabilityBuckets = []Bucket{BucketCredit, BucketLoans, BucketMortgage}
+
+// BucketOf classifies an account into its composition bucket. It is the SINGLE
+// definition of these bands: the page, the chart and the networth_* engine
+// variables all bucket through here, so a figure can never mean one thing in
+// the chart and another in a formula.
+func BucketOf(a domain.Account) Bucket {
+	if a.Class == domain.ClassLiability {
+		switch a.Type {
+		case domain.TypeCreditCard, domain.TypeLineOfCredit:
+			return BucketCredit
+		case domain.TypeMortgage:
+			return BucketMortgage
+		default:
+			return BucketLoans
+		}
+	}
+	switch a.Type {
+	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings, domain.TypeCash:
+		return BucketCash
+	case domain.TypeInvestment, domain.TypeRetirement, domain.TypeCrypto:
+		return BucketInvested
+	case domain.TypeProperty, domain.TypeVehicle:
+		return BucketProperty
+	}
+	return BucketOtherAsset
+}
+
+// Point is the balance sheet as of one cutoff.
+type Point struct {
+	// At is the cutoff this point describes (transactions strictly before it).
+	At time.Time
+	// Assets / Liabilities hold every bucket in the corresponding canonical
+	// order, including zeros, so a chart can rely on the shape. Liability
+	// amounts are POSITIVE magnitudes ("what you owe"), never negative — the
+	// mirrored chart draws them downward itself.
+	Assets      map[Bucket]int64
+	Liabilities map[Bucket]int64
+	// AssetsMinor / LiabilitiesMinor are the side totals; NetMinor is
+	// AssetsMinor - LiabilitiesMinor, matching ledger.NetWorth exactly.
+	AssetsMinor, LiabilitiesMinor, NetMinor int64
+}
+
+// Series returns the composed balance sheet at each cutoff, in cutoff order.
+// Every point's NetMinor agrees with ledger.NetWorthSeries for the same cutoff.
+func Series(accounts []domain.Account, txns []domain.Transaction, cutoffs []time.Time, rates currency.Rates) ([]Point, error) {
+	base := rates.Base
+	out := make([]Point, 0, len(cutoffs))
+	for _, at := range cutoffs {
+		p := Point{At: at, Assets: map[Bucket]int64{}, Liabilities: map[Bucket]int64{}}
+		for _, b := range AssetBuckets {
+			p.Assets[b] = 0
+		}
+		for _, b := range LiabilityBuckets {
+			p.Liabilities[b] = 0
+		}
+		for _, a := range accounts {
+			if a.Archived {
+				continue
+			}
+			bal := a.OpeningBalance.Amount
+			for _, t := range txns {
+				if t.AccountID == a.ID && t.Date.Before(at) {
+					bal += t.Amount.Amount
+				}
+			}
+			conv, err := rates.Convert(money.New(bal, a.Currency), base)
+			if err != nil {
+				return nil, fmt.Errorf("balancesheet: account %s: %w", a.ID, err)
+			}
+			bucket := BucketOf(a)
+			if a.Class == domain.ClassLiability {
+				mag := conv.Amount
+				if mag < 0 {
+					mag = -mag
+				}
+				p.Liabilities[bucket] += mag
+				p.LiabilitiesMinor += mag
+				continue
+			}
+			p.Assets[bucket] += conv.Amount
+			p.AssetsMinor += conv.Amount
+		}
+		p.NetMinor = p.AssetsMinor - p.LiabilitiesMinor
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// Band is the interpretation of a ratio: what the number MEANS, decided once
+// here rather than re-guessed by each surface. The caller turns a band into a
+// sentence; only BandAlarm ever earns an alarm tone, because debt on its own is
+// structure, not an emergency.
+type Band string
+
+const (
+	// BandStrong is comfortably healthy.
+	BandStrong Band = "strong"
+	// BandOK is normal and unremarkable.
+	BandOK Band = "ok"
+	// BandWatch is worth attention but not urgent.
+	BandWatch Band = "watch"
+	// BandAlarm is genuine trouble — the only band that may be painted red.
+	BandAlarm Band = "alarm"
+)
+
+// Ratio is one balance-sheet ratio with everything needed to state it honestly:
+// the value, whether it could be computed at all, and its band.
+type Ratio struct {
+	// Pct is the ratio as whole percent. Meaningful only when OK.
+	Pct int64
+	// OK is false when the ratio has no denominator (no assets, no expense
+	// history) — the caller must then say so rather than print a fake 0%.
+	OK   bool
+	Band Band
+}
+
+// Health bundles the three ratios the net-worth page interprets.
+type Health struct {
+	// LiquidShare is spendable cash as a share of total assets.
+	LiquidShare Ratio
+	// DebtToAsset is what you owe as a share of what you own.
+	DebtToAsset Ratio
+	// RunwayTenths is how many months of typical spending the cash covers, in
+	// TENTHS of a month (15 = 1.5 months), with its own band. Tenths keep the
+	// figure integer-only end to end.
+	RunwayTenths int64
+	RunwayOK     bool
+	RunwayBand   Band
+	// NetNegative is true when liabilities exceed assets — the one balance-sheet
+	// state that is unambiguously alarming.
+	NetNegative bool
+}
+
+// Assess computes the interpreted ratios. cashMinor is the spendable (BucketCash)
+// total; monthlyExpenseMinor is typical monthly spending (0 when unknown).
+func Assess(assetsMinor, liabilitiesMinor, cashMinor, monthlyExpenseMinor int64) Health {
+	var h Health
+	h.NetNegative = liabilitiesMinor > assetsMinor
+
+	if assetsMinor > 0 {
+		pct := cashMinor * 100 / assetsMinor
+		h.LiquidShare = Ratio{Pct: pct, OK: true, Band: bandForLiquid(pct)}
+
+		dta := liabilitiesMinor * 100 / assetsMinor
+		h.DebtToAsset = Ratio{Pct: dta, OK: true, Band: bandForDebt(dta)}
+	}
+
+	if monthlyExpenseMinor > 0 && cashMinor >= 0 {
+		tenths := cashMinor * 10 / monthlyExpenseMinor
+		h.RunwayTenths, h.RunwayOK, h.RunwayBand = tenths, true, bandForRunway(tenths)
+	}
+	return h
+}
+
+// bandForLiquid reads the liquid share. A low share is not automatically bad —
+// it is normal for a household whose wealth sits in a home — so it never
+// reaches alarm on its own; the runway band is what says whether it hurts.
+func bandForLiquid(pct int64) Band {
+	switch {
+	case pct >= 40:
+		return BandStrong
+	case pct >= 15:
+		return BandOK
+	default:
+		return BandWatch
+	}
+}
+
+// bandForDebt reads debt against assets. Borrowing to own a home is structure;
+// only owing more than about four-fifths of what you own is real danger.
+func bandForDebt(pct int64) Band {
+	switch {
+	case pct <= 30:
+		return BandStrong
+	case pct <= 60:
+		return BandOK
+	case pct <= 80:
+		return BandWatch
+	default:
+		return BandAlarm
+	}
+}
+
+// bandForRunway reads months of spending held in cash — the ratio that can
+// genuinely hurt, so it is the one allowed to reach alarm.
+func bandForRunway(tenths int64) Band {
+	switch {
+	case tenths >= 60:
+		return BandStrong
+	case tenths >= 30:
+		return BandOK
+	case tenths >= 10:
+		return BandWatch
+	default:
+		return BandAlarm
+	}
+}
