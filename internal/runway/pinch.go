@@ -15,15 +15,34 @@ import (
 // yields a readable cushion curve, and capped so a distant (or missing) paycheck
 // does not stretch the projection indefinitely. With no income scheduled the
 // window degrades to a plain 30-day look-ahead.
+//
+// The floor is a FULL CYCLE, not a fortnight. The hero's whole claim is that it
+// shows the household's rhythm, and a rhythm needs at least one complete turn of
+// the dominant cadence to be visible: household commitments are overwhelmingly
+// monthly, so a 14-day band routinely contained one paycheck and almost no
+// outflow, and read as an empty chart.
+//
+// The floor is 31 days rather than 30 because the projection window is
+// half-open: opening the page on the 2nd of a 31-day month puts the next 1st
+// exactly 30 days out, which a 30-day window excludes by one day. 31 guarantees
+// every day-of-month falls inside the band whatever month it is and whatever day
+// the page is opened on — which is the only version of "a full cycle" that is
+// actually true.
 const (
-	minPinchWindowDays      = 14
+	minPinchWindowDays      = 31
 	maxPinchWindowDays      = 45
 	fallbackPinchWindowDays = 30
 )
 
 // Pinch is the tightest point of the projected cushion over a pay cycle — the
-// lowest available cash between now and the next income event. Amounts are
-// integer minor units in the base currency.
+// lowest available cash anywhere in the projected window. Amounts are integer
+// minor units in the base currency.
+//
+// The window is anchored on the next income event but floored to a full month
+// (see minPinchWindowDays), so on a short pay cycle the pinch may land AFTER
+// that paycheck. That is deliberate: the flag has to describe the band the hero
+// actually draws, and a low point visible in the chart that the caption refused
+// to name would be worse than a caption that reaches a few days further.
 type Pinch struct {
 	// AmountMinor is the lowest projected cushion over the window.
 	AmountMinor int64

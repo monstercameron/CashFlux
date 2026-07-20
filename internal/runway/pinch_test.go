@@ -36,7 +36,7 @@ func TestTideline(t *testing.T) {
 				mkRec("rent", -50000, domain.CadenceMonthly, from.AddDate(0, 0, 5)),
 				mkRec("pay", 250000, domain.CadenceBiweekly, from.AddDate(0, 0, 14)),
 			},
-			wantWindow:     14,
+			wantWindow:     minPinchWindowDays,
 			wantHasIncome:  true,
 			wantNextIncome: 14,
 			wantPinchNeg:   false,
@@ -56,7 +56,7 @@ func TestTideline(t *testing.T) {
 				mkRec("car", -80000, domain.CadenceMonthly, from.AddDate(0, 0, 5)),
 				mkRec("pay", 200000, domain.CadenceBiweekly, from.AddDate(0, 0, 14)),
 			},
-			wantWindow:     14,
+			wantWindow:     minPinchWindowDays,
 			wantHasIncome:  true,
 			wantNextIncome: 14,
 			wantPinchNeg:   true,
@@ -86,7 +86,7 @@ func TestTideline(t *testing.T) {
 			recs: []domain.Recurring{
 				mkRec("pay", 120000, domain.CadenceWeekly, from.AddDate(0, 0, 3)),
 			},
-			wantWindow:     minPinchWindowDays, // income day 3 floored to 14
+			wantWindow:     minPinchWindowDays, // income day 3 floored to a full cycle
 			wantHasIncome:  true,
 			wantNextIncome: 3,
 			wantPinchNeg:   false,
@@ -124,4 +124,55 @@ func TestTideline(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTidelineWindowHoldsAFullCycle locks the reason the floor is a month rather
+// than a fortnight: the hero claims to show the household's rhythm, and a rhythm
+// needs one complete turn of the dominant cadence to exist. Household
+// commitments are overwhelmingly monthly, so whatever day of the month the page
+// is opened on — and however soon the next paycheck lands — the window must
+// still contain every monthly obligation at least once.
+func TestTidelineWindowHoldsAFullCycle(t *testing.T) {
+	base := currency.Rates{Base: "USD"}
+	// A paycheck two days out would previously have produced a 14-day band, which
+	// on a monthly household contains a paycheck and very little else.
+	for day := 1; day <= 28; day++ {
+		from := time.Date(2026, 7, day, 9, 0, 0, 0, time.UTC)
+		recs := []domain.Recurring{
+			mkRec("rent", -120000, domain.CadenceMonthly, nextDayOfMonth(from, 1)),
+			mkRec("streaming", -1599, domain.CadenceMonthly, nextDayOfMonth(from, 12)),
+			mkRec("pay", 250000, domain.CadenceBiweekly, from.AddDate(0, 0, 2)),
+		}
+		pc, err := Tideline(500000, recs, from, base)
+		if err != nil {
+			t.Fatalf("Tideline(from=%v): %v", from, err)
+		}
+		if pc.WindowDays < minPinchWindowDays {
+			t.Fatalf("from %v: window = %d days, want at least a full cycle (%d)", from, pc.WindowDays, minPinchWindowDays)
+		}
+		// Every monthly commitment must fall inside the drawn band.
+		events, err := Events(recs, from, pc.WindowDays, base)
+		if err != nil {
+			t.Fatalf("Events: %v", err)
+		}
+		seen := map[string]bool{}
+		for _, e := range events {
+			seen[e.Label] = true
+		}
+		for _, label := range []string{"rent", "streaming", "pay"} {
+			if !seen[label] {
+				t.Errorf("from %v: %q never appears in the %d-day band", from, label, pc.WindowDays)
+			}
+		}
+	}
+}
+
+// nextDayOfMonth returns the next occurrence of day-of-month dom on or after
+// from — the NextDue a monthly commitment actually carries in the store.
+func nextDayOfMonth(from time.Time, dom int) time.Time {
+	d := time.Date(from.Year(), from.Month(), dom, 0, 0, 0, 0, from.Location())
+	if d.Before(time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())) {
+		d = d.AddDate(0, 1, 0)
+	}
+	return d
 }

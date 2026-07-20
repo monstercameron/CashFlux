@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The tideline hero's window was too short to show a rhythm.** It ran from today to the next income
+  event, floored at 14 days — so on a household paid fortnightly the band was a two-week strip holding
+  one paycheck and almost no outflow, and read as an empty chart. The floor is now a full month (31
+  days, not 30: the window is half-open, so opening the page on the 2nd of a 31-day month put the next
+  1st exactly one day out of reach), which guarantees every monthly commitment appears in the band
+  whatever day it is opened on. The pinch now describes the whole drawn band rather than only the
+  stretch before the next paycheck — a low point visible in the chart that the caption refused to name
+  would be worse. The calm-vs-alarm logic is unchanged: flagged only when negative, below the
+  household's keep-floor, or a drawdown of a quarter or more.
 - **A coffee habit was still being proposed as a commitment.** "Blue Bottle Coffee · 121 payments ·
   twice a month · about $7.35" survived every filter, because every filter was an amount test and the
   amount IS consistent — that is what a coffee costs. Two judgments were missing and are now made.
