@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -25,6 +26,51 @@ import (
 )
 
 type investPanelProps struct{ App *appstate.App }
+
+// investHasReconcile reports whether there is a securities-vs-account-balance
+// relationship worth spelling out — i.e. some tracked securities exist. With no
+// tracked securities there are not two competing "investment value" figures to
+// reconcile, so the reconciliation copy is suppressed.
+func investHasReconcile(v investView) bool {
+	return v.Reconcile.SecuritiesMinor != 0
+}
+
+// investReconcileLine builds the one-line reconciliation equation shared by the
+// /investments hero and the accounts investment banner: tracked securities plus
+// cash & untracked balance equals the investment-account total that net worth uses.
+// When recorded balances lag the holdings' market value it states that honestly
+// instead of showing a negative "cash & untracked" figure.
+func investReconcileLine(v investView) string {
+	r := v.Reconcile
+	sec := fmtSignedMoney(r.SecuritiesMinor, v.Sym, v.Dec)
+	total := fmtSignedMoney(r.AccountsTotalMinor, v.Sym, v.Dec)
+	if r.BalanceBehind {
+		return uistate.T("investments.reconcileBehindLine", sec, total, fmtSignedMoney(-r.UntrackedMinor, v.Sym, v.Dec))
+	}
+	return uistate.T("investments.reconcileLine", sec, fmtSignedMoney(r.UntrackedMinor, v.Sym, v.Dec), total)
+}
+
+// investReconcileTitle builds the per-account reconciliation breakdown surfaced as
+// the hover/title popover on the reconciliation line, one line per account.
+func investReconcileTitle(v investView) string {
+	lines := make([]string, 0, len(v.Reconcile.Accounts)+1)
+	lines = append(lines, uistate.T("investments.reconcileTitle"))
+	for _, a := range v.Reconcile.Accounts {
+		name := a.Name
+		if name == "" {
+			name = uistate.T("investments.reconcileUnnamed")
+		}
+		if a.BalanceBehind {
+			lines = append(lines, uistate.T("investments.reconcileAcctBehind",
+				name, fmtSignedMoney(a.SecuritiesMinor, v.Sym, v.Dec), fmtSignedMoney(-a.UntrackedMinor, v.Sym, v.Dec)))
+			continue
+		}
+		lines = append(lines, uistate.T("investments.reconcileAcctLine",
+			name, fmtSignedMoney(a.SecuritiesMinor, v.Sym, v.Dec),
+			fmtSignedMoney(a.UntrackedMinor, v.Sym, v.Dec), fmtSignedMoney(a.BalanceMinor, v.Sym, v.Dec)))
+	}
+	return strings.Join(lines, "\n")
+}
 
 // --- invest-summary --------------------------------------------------------------
 
@@ -57,10 +103,18 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 			Div(css.Class("inv-hero-label", tw.TextDim), uistate.T("investments.portfolioValue")),
 			Div(css.Class("inv-hero-value", tw.FontDisplay), Attr("data-testid", "invest-total"),
 				fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec)),
-			P(css.Class("inv-hero-sub", tw.TextDim),
-				uistate.T("investments.splitLine",
-					fmtSignedMoney(v.SecSummary.TotalValueMinor, v.Sym, v.Dec),
-					fmtSignedMoney(v.TradValueMinor, v.Sym, v.Dec))),
+			If(investHasReconcile(v),
+				Fragment(
+					P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-reconcile"),
+						Title(investReconcileTitle(v)), investReconcileLine(v)),
+					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.05rem 0 0"}),
+						uistate.T("investments.reconcileNetWorthNote")),
+				)),
+			If(!investHasReconcile(v),
+				P(css.Class("inv-hero-sub", tw.TextDim),
+					uistate.T("investments.splitLine",
+						fmtSignedMoney(v.SecSummary.TotalValueMinor, v.Sym, v.Dec),
+						fmtSignedMoney(v.TradValueMinor, v.Sym, v.Dec)))),
 			investOwnerLink("/networth", uistate.T("debt.linkNetWorth")),
 		),
 		chips,
@@ -200,7 +254,10 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	_ = valueLabels
 
 	body := investSection("sec-growth", uistate.T("investments.growthTitle"), Fragment(),
-		Div(css.Class("inv-growth"), head, chart))
+		Div(css.Class("inv-growth"), head,
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-growth-caption"),
+				Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.growthCaption")),
+			chart))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-growth", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

@@ -126,6 +126,9 @@ type investView struct {
 	AllocClass      []portfolio.Weight
 	AllocType       []portfolio.Weight
 	HasAny          bool // any investment account exists at all
+	// Reconcile explains the tracked-securities value against the investment-account
+	// balances that feed net worth: securities + cash&untracked = accounts total.
+	Reconcile portfolio.Reconciliation
 }
 
 // investViewCache memoizes computeInvestView by store revision — the investments
@@ -162,15 +165,20 @@ func computeInvestViewRaw(app *appstate.App) investView {
 	}
 
 	acctSet := map[string]bool{}
+	acctBalByID := map[string]int64{}
 	for _, a := range accts {
 		acctSet[a.ID] = true
+		// Every investment account's own ledger balance (FX-converted to base) — the
+		// figure that feeds net worth. Traditional accounts are valued by it directly;
+		// securities-tracked accounts use it only for the reconciliation below.
+		bal, _ := ledger.Balance(a, txns)
+		cv := bal.Amount
+		if c, err := rates.Convert(bal, base); err == nil {
+			cv = c.Amount
+		}
+		acctBalByID[a.ID] = cv
 		if len(byAccount[a.ID]) == 0 {
-			// Traditional: valued by the account's own balance (FX-converted to base).
-			bal, _ := ledger.Balance(a, txns)
-			cv := bal.Amount
-			if c, err := rates.Convert(bal, base); err == nil {
-				cv = c.Amount
-			}
+			// Traditional: valued by the account's own balance.
 			v.BalByID[a.ID] = cv
 			v.TradValueMinor += cv
 			v.Traditional = append(v.Traditional, a)
@@ -188,6 +196,21 @@ func computeInvestViewRaw(app *appstate.App) investView {
 	v.AllocClass = portfolio.AllocationByAssetClass(ph)
 	v.AllocType = portfolio.AllocationBySecurityType(ph)
 	v.TotalValueMinor = v.SecSummary.TotalValueMinor + v.TradValueMinor
+
+	// Reconciliation: for each investment account, the market value of its tracked
+	// securities versus its own ledger balance. The gap (cash & untracked balance)
+	// is what separates the securities value from the account total net worth uses.
+	recAccts := make([]portfolio.AccountValue, 0, len(accts))
+	for _, a := range accts {
+		var secVal int64
+		for _, h := range byAccount[a.ID] {
+			secVal += portfolio.HoldingValueMinor(portfolio.FromDomain(h))
+		}
+		recAccts = append(recAccts, portfolio.AccountValue{
+			AccountID: a.ID, Name: a.Name, BalanceMinor: acctBalByID[a.ID], SecuritiesMinor: secVal,
+		})
+	}
+	v.Reconcile = portfolio.Reconcile(recAccts)
 
 	sort.SliceStable(v.Securities, func(i, j int) bool {
 		return portfolio.HoldingValueMinor(portfolio.FromDomain(v.Securities[i])) >

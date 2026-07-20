@@ -1337,6 +1337,14 @@ func acctInvestmentsBanner(app *appstate.App, onOpen ui.Handler) ui.Node {
 			Title(uistate.T("accountsInvest.openTitle")), OnClick(onOpen),
 			Span(uistate.T("accountsInvest.open")),
 			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W3, tw.H3))),
+		// Reconciliation sub-caption (wraps to its own full-width line): spells out how the
+		// tracked-securities value relates to the investment-account total, so this banner's
+		// figure can't be mistaken for a second, conflicting "investment value".
+		If(investHasReconcile(v),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-invest-reconcile"),
+				Title(investReconcileTitle(v)),
+				Style(map[string]string{"width": "100%", "flex-basis": "100%", "margin": "0.15rem 0 0"}),
+				investReconcileLine(v))),
 	)
 }
 
