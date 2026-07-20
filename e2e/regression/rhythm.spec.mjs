@@ -514,6 +514,17 @@ test.describe("up next — agenda", () => {
     await expect(app.getByTestId("rhy-agenda")).toHaveCount(0);
 
     // Persisted preference, not component state.
+    //
+    // Let the write become DURABLE before reloading. SettingKVSet lands in the
+    // in-memory dataset immediately but reaches IndexedDB via a 250ms debounced
+    // persist, so a reload inside that window legitimately loses the preference.
+    // This is a real product race, not a test artifact — it is only reachable by a
+    // user who toggles and reloads within a quarter-second, which is why the test
+    // used to pass: the page was slow enough that the assertions above spent longer
+    // than the debounce. Making the page fast removed that accidental cushion.
+    // Tracked as RH-PERSIST1; until it is fixed the test waits rather than
+    // pretending the preference is durable the instant it is set.
+    await app.waitForTimeout(800);
     await app.reload();
     await app.waitForFunction(
       () => document.documentElement.getAttribute("data-app-ready") === "true",

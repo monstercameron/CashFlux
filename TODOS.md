@@ -18,6 +18,20 @@ packages have no `syscall/js` and ship with table-driven tests.
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
 
+- [ ] **RH-PERSIST1 — a preference set and then reloaded within ~250ms is silently lost.**
+  `SettingKVSet` writes to the in-memory dataset immediately but reaches IndexedDB through a 250ms
+  *debounced* persist, so a reload inside that window drops the write. Reproduced on the agenda's
+  COMPACT | CALENDAR toggle: pick Calendar, reload straight away, and you are back on Compact with no
+  error. Not specific to that toggle — every `SettingKVSet` caller shares the window, and
+  `budgets.spec`'s density-persistence test sits on the same race.
+  It surfaced during the first-paint work (RH-PERF1-4): the page used to be slow enough that the
+  assertions between the click and the reload outlasted the debounce, so the test passed by accident.
+  Making the page fast removed the cushion and the test began failing honestly. `rhythm.spec` waits
+  out the window for now, with a comment pointing here.
+  Fix direction: on `pagehide`/`beforeunload` flush any pending debounced persist synchronously, or
+  have `SettingKVSet` issue a leading-edge persist for single writes and keep the debounce only for
+  bursts. Worth an eye on whether the async IndexedDB commit itself needs awaiting on unload.
+
 - [x] **RH1 — the budget-fit chip no longer drills to its budget.** *(fixed 2026-07-20: the chip is a
   labelled button on `rhyAgendaRow` again, deep-linking to `/budgets` with the receiving card flashing.)* **Confirmed interactive by
   design:** the old row built it as a control, not decoration —
