@@ -83,11 +83,13 @@ func TestComputeFlowAndRanking(t *testing.T) {
 	if cat.CategoryID != "groceries" || cat.AmountMinor != -20000 || cat.TxnIDs[0] != "t2" {
 		t.Fatalf("category: %+v", cat)
 	}
-	// t1 (150000) is 6x spending: not an expense, so KindLargeTxn keys on t2:
-	// 20000/25000 = 80% ≥ 30%.
-	lg := find(t, rep.Items, KindLargeTxn)
-	if lg.TxnIDs[0] != "t2" || lg.Payee != "Kroger" {
-		t.Fatalf("large txn: %+v", lg)
+	// t2 qualifies as a large expense (80% ≥ 30% of spending) but cites the
+	// exact evidence the category finding already told — the evidence dedupe
+	// keeps only the higher-ranked category row (one issue, one finding).
+	for _, it := range rep.Items {
+		if it.Kind == KindLargeTxn {
+			t.Fatalf("large txn should be deduped into the category finding: %+v", it)
+		}
 	}
 	// Kroger seen pre-window; ACME is income-side (not a new-payee signal);
 	// Chevron is the one genuinely new merchant paid.
@@ -212,6 +214,39 @@ func TestComputeEmptyWindow(t *testing.T) {
 	}
 	if len(rep.Items) != 0 || rep.TxnCount != 0 || rep.NetDeltaMinor != 0 {
 		t.Fatalf("expected quiet report: %+v", rep)
+	}
+}
+
+func TestComputeEvidenceDedupe(t *testing.T) {
+	// One account whose only window activity is two car payments in one
+	// category: the account and category findings cite the same evidence set,
+	// so only the higher-ranked account finding survives.
+	in := Input{
+		Accounts: []domain.Account{asset("a1", "Joint Checking")},
+		Txns: []domain.Transaction{
+			txn("t1", "a1", 15, -62000, "Car payment", "auto"),
+			txn("t2", "a1", 17, -48000, "Car payment", "auto"),
+		},
+		Rates: rates(), Since: since, Until: until, TopN: 10,
+	}
+	rep, err := Compute(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var haveAccount, haveCategory, haveLarge bool
+	for _, it := range rep.Items {
+		switch it.Kind {
+		case KindAccount:
+			haveAccount = true
+		case KindCategory:
+			haveCategory = true
+		case KindLargeTxn:
+			haveLarge = true // distinct evidence ([t1] vs [t1 t2]) — survives
+		}
+	}
+	if !haveAccount || haveCategory || !haveLarge {
+		t.Fatalf("dedupe: account=%v category=%v large=%v items=%+v",
+			haveAccount, haveCategory, haveLarge, rep.Items)
 	}
 }
 

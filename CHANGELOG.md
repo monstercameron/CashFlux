@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **What-changed card: one issue = one finding + stable fold position.** The attribution engine now
+  drops a finding whose evidence set exactly duplicates a higher-ranked one (an account whose only
+  activity IS the top category's activity no longer tells the same story twice), and the card holds
+  a hidden placeholder slot while quiet so the reconciler keeps it above the bento when it appears
+  after the settle window (late-mounting from an empty Fragment appends to the page end — the
+  catch-up/resume band shares that pre-existing behavior).
+
 ### Added
 - **"What changed since your last visit" dashboard card (E-DB, the first E1 attribution slice).**
   New pure `internal/attribution` engine decomposes the window since the persisted visit baseline

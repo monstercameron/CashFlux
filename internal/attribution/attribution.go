@@ -394,6 +394,28 @@ func Compute(in Input) (Report, error) {
 			return firstID(rest[i]) < firstID(rest[j])
 		})
 	}
+	// One issue = one finding: when two findings cite exactly the same evidence
+	// set they are the same story wearing different labels (e.g. one account's
+	// only activity IS the top category's activity) — keep the higher-ranked
+	// one. Evidence-free findings (the headline) always stay.
+	seen := map[string]bool{}
+	deduped := items[:0]
+	for _, it := range items {
+		sig := ""
+		if len(it.TxnIDs) > 0 {
+			ids := append([]string(nil), it.TxnIDs...)
+			sort.Strings(ids)
+			sig = strings.Join(ids, "|")
+		}
+		if sig != "" && seen[sig] {
+			continue
+		}
+		if sig != "" {
+			seen[sig] = true
+		}
+		deduped = append(deduped, it)
+	}
+	items = deduped
 	if len(items) > topN {
 		items = items[:topN]
 	}

@@ -100,6 +100,15 @@ var wcMemo struct {
 	rep attribution.Report
 }
 
+// wcPlaceholder holds the card's DOM slot while it has nothing to say. A
+// stable hidden element (not an empty Fragment) so the reconciler keeps the
+// card's position above the bento when it appears after the settle window —
+// late-mounting from nothing appends to the end of the page instead.
+func wcPlaceholder() ui.Node {
+	return Div(css.Class("wc-slot"), Attr("data-testid", "dash-whatchanged-slot"),
+		Attr("aria-hidden", "true"), Style(map[string]string{"display": "none"}))
+}
+
 // dashWhatChangedCard assembles the card. Hooks sit above every early return.
 func dashWhatChangedCard() ui.Node {
 	app := appstate.Default
@@ -113,7 +122,7 @@ func dashWhatChangedCard() ui.Node {
 	}, "once")
 
 	if app == nil || !settled || baseline <= 0 {
-		return Fragment()
+		return wcPlaceholder()
 	}
 
 	settings := app.Settings()
@@ -135,13 +144,13 @@ func dashWhatChangedCard() ui.Node {
 		})
 		if err != nil {
 			slog.Warn("what-changed: attribution failed", "err", err)
-			return Fragment()
+			return wcPlaceholder()
 		}
 		wcMemo.key, wcMemo.rep = key, rep
 	}
 	rep := wcMemo.rep
 	if len(rep.Items) == 0 {
-		return Fragment()
+		return wcPlaceholder()
 	}
 
 	txnByID := map[string]domain.Transaction{}

@@ -26415,3 +26415,16 @@ of "since two minutes ago", and "Got it" is an explicit catch-up. Card follows t
 catch-up chrome, evidence lines are static text (no hooks in loops), all copy through i18n.
 Deploy is currently blocked on another lane's in-flight compile errors (accounts_tiles.go,
 documents.go) — committed via selective staging; will deploy when the tree builds.
+
+## 2026-07-19 — What-changed card: dedupe + placement findings
+
+Screenshot verification against the sample dataset surfaced two things. (1) All three
+findings described the same two car payments — added an evidence-set dedupe to the engine
+(identical TxnID sets = one story, keep the higher-ranked row). (2) The card rendered BELOW
+the bento despite mounting above it in source: components that first render an empty
+Fragment and mount late (post-useAfterSettle) get APPENDED by the reconciler instead of
+inserted at their source position — the catch-up/resume band has the same behavior today
+(resume card measured at y≈2885, below the 2096px bento). Worked around for this card with
+a persistent hidden placeholder div that pins the slot; the family-wide reconciler
+insertion-order issue + the band placement question are logged for a follow-up (candidate
+framework fix in GWC, or slot placeholders for the whole band).
