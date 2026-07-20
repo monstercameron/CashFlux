@@ -454,7 +454,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	chipLabel := func(af txnfilter.ActiveFilter) string {
 		switch af.Field {
 		case txnfilter.FieldText:
-			return uistate.T("transactions.chipSearch", af.Value)
+			// A text filter — whether just typed or carried in from earlier work —
+			// reads as an intentional, one-click-clearable "Filtering: …" chip so a
+			// retained search never looks like a stray leftover (detail-lane 2 #3).
+			return uistate.T("transactions.chipFiltering", af.Value)
 		case txnfilter.FieldAccount:
 			return uistate.T("transactions.chipAccount", accName[af.Value])
 		case txnfilter.FieldCategory:

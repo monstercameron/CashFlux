@@ -12,6 +12,11 @@ var detail2Keys = Catalog{
 	// no longer promises it unconditionally, and names the always-available fallback.
 	"documents.historyHintHonest": "Each run's full result. Roll back restores your data to just before an import while its safety snapshot is still saved — otherwise undo right after importing with Ctrl+Z.",
 	"documents.historyActivityLink": "Review changes in Activity",
+
+	// Retained-search chip (finding #3): a text filter carried in from earlier work
+	// reads as an intentional, one-click-clearable state rather than a stray search.
+	// %s = the retained query text.
+	"transactions.chipFiltering": "Filtering: \"%s\"",
 }
 
 func init() {
