@@ -4,6 +4,37 @@ Final pass on the redesign. Four items, and three of them are the same lesson we
 clothes: a density compromise is only correct at the width it was measured at, and a compromise
 that leaks out of the graphic that needed it becomes a defect somewhere else.
 
+### Three rules worth carrying off this page
+
+These came out of the whole /networth effort and are not specific to it. Written down because two
+of the three were rediscovered twice inside a single session.
+
+**1. A percentage calibrated at one width is a latent bug at every other width.** It happened twice
+here. The x-axis label budget was derived from the PANE, but the chart never had the pane's width —
+Two sides shared its section with the composition strips, so the plot was 420px at a 1440px
+viewport, not 1200. Three commits later the pace rail's stagger threshold was tuned at 1440, where
+the rail is ~630px, and shipped overlapping labels at a 1202 viewport, where the sidebar takes its
+share and the rail is only ~390px. The same 45px block is 7% of the rail at one width and 11.5% at
+another. **Rule: derive the budget from the actual plot rather than its container, size it against
+the NARROWEST rendering, and assert it at every width in the guard.** A percentage is a ratio to
+something — always name the something, and measure it in a browser rather than reasoning about it.
+
+**2. Any threshold that silently drops information reproduces the complaint it was meant to fix**,
+because the reader cannot see the rule. The rail hid the date of any rung too close to its
+neighbour, which produced some rungs dated and some not — indistinguishable from a rendering fault,
+and duly reported as one. Retuning the number would have moved the boundary, not removed the class
+of bug. **Rule: prefer a layout that KEEPS everything and expresses the constraint structurally —
+wrap to a second row, reflow, stagger — over a threshold that deletes.** The reader can see a
+second row and infer why it exists; they cannot see an absent label.
+
+**3. A table must not inherit a chart axis's density compromises.** History's When column read
+`Jul 21 · Sep 2021 · Nov 2021 · Jan 2022 · Mar 22` because the cells borrowed the chart's thinned
+axis captions and fell back to a different format wherever one had been thinned to blank. An axis
+abbreviates because it is fighting for pixels; a table cell has no such pressure and no licence to
+inherit the compromise. **Rule: a shared data structure may be shared, but its PRESENTATION
+decisions belong to each surface.** Where two surfaces render the same series, give each its own
+formatter and let the engine hand over values, not captions.
+
 **Rung dates were inconsistent.** The rail read `$0 Sep 22 · $10k · $25k · $50k May 24 · $100k Jul
 25` — some rungs dated, some not, with no rule a reader could infer. That is indistinguishable from
 a rendering fault, and it *was* one: the first version hid the date of any rung within 11% of its
