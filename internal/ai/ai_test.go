@@ -71,6 +71,24 @@ func TestFormatCostUSD(t *testing.T) {
 	}
 }
 
+func TestFormatTokens(t *testing.T) {
+	cases := map[int]string{
+		0:       "0",
+		42:      "42",
+		999:     "999",
+		1000:    "1,000",
+		8166:    "8,166",
+		8578:    "8,578",
+		1234567: "1,234,567",
+		-5:      "-5",
+	}
+	for n, want := range cases {
+		if got := FormatTokens(n); got != want {
+			t.Errorf("FormatTokens(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
 func TestErrorMessage(t *testing.T) {
 	quotaBody := []byte(`{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}`)
 	rateBody := []byte(`{"error":{"message":"Rate limit reached for requests"}}`)

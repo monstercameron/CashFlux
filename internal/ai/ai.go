@@ -223,6 +223,31 @@ func FormatCostUSD(cost float64) string {
 	}
 }
 
+// FormatTokens renders a token count with comma thousands separators
+// ("8166" → "8,166"), so the long counts in the per-message usage line stay
+// readable. A negative count (never expected) prints plainly.
+func FormatTokens(n int) string {
+	if n < 0 {
+		return fmt.Sprintf("%d", n)
+	}
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	pre := len(s) % 3
+	if pre > 0 {
+		b.WriteString(s[:pre])
+	}
+	for i := pre; i < len(s); i += 3 {
+		if b.Len() > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
+}
+
 // MaxRetries is how many times a transient OpenAI failure is retried before
 // giving up (so up to MaxRetries+1 total attempts).
 const MaxRetries = 3
