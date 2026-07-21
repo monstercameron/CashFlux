@@ -50,7 +50,8 @@ type Alert struct {
 	Severity Severity //
 	Subject  string   // the debt this is about, or "" for portfolio-wide
 	Pct      float64  // a percentage the copy needs (utilization, APR, share…)
-	Amount   int64    // a money figure in base minor units the copy needs
+	Amount   int64    // a money figure the copy needs, in minor units of Currency
+	Currency string   // currency of Amount; "" means the portfolio base currency
 	Months   int      // a duration the copy needs
 	Count    int      // how many debts match, when more than the named one
 }
@@ -65,6 +66,7 @@ type DebtLine struct {
 	MinPayment int64   // required monthly minimum, minor units
 	Limit      int64   // credit limit, minor units; 0 when not a line of credit
 	Revolving  bool    // true for credit cards / lines of credit
+	Currency   string  // ISO code of this debt's amounts (for per-debt money copy)
 }
 
 // Input is the full debt snapshot. The aggregate figures are already FX-converted
@@ -121,10 +123,19 @@ func Evaluate(in Input) []Alert {
 		out = append(out, Alert{Kind: "over-limit", Severity: Critical, Subject: worst.Name, Pct: util, Count: n})
 	}
 
+	// A debt with no minimum on file at all: its payoff can't be planned, and a blank
+	// minimum must NOT be reported as "smaller than the interest" (that reads as a bad
+	// payment when the truth is missing data). Report it as missing, with the monthly
+	// interest to beat, in the debt's own currency.
+	if worst := worstMissingMin(in.Debts); worst != nil && !hasSubject(out, worst.Name) {
+		mi := int64(math.Round(float64(worst.Balance) * worst.AprPercent / 1200.0))
+		out = append(out, Alert{Kind: "min-missing", Severity: Critical, Subject: worst.Name, Amount: mi, Currency: worst.Currency})
+	}
+
 	// A minimum payment that can't outrun the interest — the balance grows every
 	// month no matter how long you pay. This is the definition of out of control.
-	// Suppressed when the same debt is already flagged over its limit (that's the
-	// louder, more immediate concern — one critical per debt keeps the list clean).
+	// Suppressed when the same debt is already flagged over its limit or as missing a
+	// minimum (that's the louder concern — one critical per debt keeps the list clean).
 	if worst, n := worstUnderwater(in.Debts); worst != nil && !hasSubject(out, worst.Name) {
 		out = append(out, Alert{Kind: "min-underwater", Severity: Critical, Subject: worst.Name, Pct: worst.AprPercent, Count: n})
 	}
@@ -187,15 +198,34 @@ func worstOverLimit(debts []DebtLine) (*DebtLine, int) {
 	return worst, count
 }
 
-// worstUnderwater returns the debt whose minimum can't cover its monthly interest
-// (so the balance never falls), preferring the largest such balance, plus the
-// count of underwater debts.
+// worstMissingMin returns the largest interest-bearing debt that has NO minimum
+// payment recorded (so its payoff can't be planned), or nil when none apply. A
+// missing minimum is a data-quality problem distinct from a minimum that's merely
+// too small, so it gets its own message rather than being lumped in as underwater.
+func worstMissingMin(debts []DebtLine) *DebtLine {
+	var worst *DebtLine
+	for i := range debts {
+		d := &debts[i]
+		if d.Balance <= 0 || d.AprPercent <= 0 || d.MinPayment > 0 {
+			continue
+		}
+		if worst == nil || d.Balance > worst.Balance {
+			worst = d
+		}
+	}
+	return worst
+}
+
+// worstUnderwater returns the debt whose (recorded, positive) minimum can't cover
+// its monthly interest (so the balance never falls), preferring the largest such
+// balance, plus the count of underwater debts. Debts with no recorded minimum are
+// handled by worstMissingMin, not here.
 func worstUnderwater(debts []DebtLine) (*DebtLine, int) {
 	var worst *DebtLine
 	count := 0
 	for i := range debts {
 		d := &debts[i]
-		if d.Balance <= 0 || d.AprPercent <= 0 {
+		if d.Balance <= 0 || d.AprPercent <= 0 || d.MinPayment <= 0 {
 			continue
 		}
 		monthlyInterest := int64(math.Round(float64(d.Balance) * d.AprPercent / 1200.0))
@@ -252,13 +282,14 @@ func hasKind(alerts []Alert, kind string) bool {
 // deterministically (and read in a sensible order).
 var ruleOrder = map[string]int{
 	"over-limit":       0,
-	"min-underwater":   1,
-	"utilization-high": 2,
-	"utilization-warn": 3,
-	"debt-over-assets": 4,
-	"high-apr":         5,
-	"interest-heavy":   6,
-	"slow-payoff":      7,
+	"min-missing":      1,
+	"min-underwater":   2,
+	"utilization-high": 3,
+	"utilization-warn": 4,
+	"debt-over-assets": 5,
+	"high-apr":         6,
+	"interest-heavy":   7,
+	"slow-payoff":      8,
 }
 
 // sortAlerts orders alerts by descending severity, then by the stable rule order.

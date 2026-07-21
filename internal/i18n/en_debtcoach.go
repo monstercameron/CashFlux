@@ -18,6 +18,21 @@ var debtCoachKeys = Catalog{
 	"debt.jumpTune":      "Tune plan",
 	"debt.jumpLearn":     "Learn",
 
+	// --- Overrides of en.go keys (merged after it), to close review findings without
+	// touching the concurrent-WIP catalog ---
+	// The toolbar toggle reveals the FormulaBuilder, not the visible plan strip — name
+	// it for what it does so it isn't read as "hide the summary".
+	"debt.metricsShow":  "Formulas",
+	"debt.metricsHide":  "Hide formulas",
+	"debt.metricsTitle": "Build formulas over your debts — owed, APR, utilization, minimums",
+	// The strategy panel lists the order debts FINISH (a small debt clears first on its
+	// own payment), which differs from the ladder's attack order — label it honestly.
+	"debt.payoffOrderLabel": "Projected completion order",
+	// This chip sums every liability's minimum, including any excluded mortgage — say so.
+	"debt.minPaymentsMonthly": "All minimums / mo",
+	// The comparison runs over the debts in the plan (a mortgage may be excluded).
+	"planning.debtStrategyHint": "Compares the snowball (smallest balance first) and avalanche (highest APR first) methods across the accounts in your payoff plan, using their balances, rates, and minimum payments.",
+
 	// Sticky plan-summary bar.
 	"debt.planbar.aria":   "Your current payoff plan",
 	"debt.planbar.method": "Method",
@@ -50,6 +65,12 @@ var debtCoachKeys = Catalog{
 	"debt.alert.underwater.body": "%s's minimum payment is smaller than the interest it charges, so " +
 		"the balance climbs every month no matter how long you pay. Raise the payment or move the " +
 		"balance somewhere cheaper — nothing else will stop it.",
+
+	// A debt with no recorded minimum: don't imply a minimum "too small" — say the data
+	// is missing and give the number to beat. %s = subject, %s = monthly interest.
+	"debt.alert.noMin.title": "No minimum payment recorded",
+	"debt.alert.noMin.body": "%s has no minimum payment on file, so its payoff can't be planned. It's " +
+		"accruing about %s in interest a month — record a payment above that to keep the balance from growing.",
 
 	"debt.alert.utilHigh.title": "Your cards are nearly maxed",
 	"debt.alert.utilHigh.body": "You're using %s%% of your total card limit. That's a heavy drag on " +
@@ -96,6 +117,11 @@ var debtCoachKeys = Catalog{
 	"debt.viewAria":         "View %s transactions",
 	"debt.editAria":         "Edit %s",
 	"debt.payoffToggleAria": "Include %s in the payoff plan",
+	// Per-account names for the loan simulator + credit-limit controls (they otherwise
+	// read as a wall of identical "Term" / "Extra per month" / "Edit limit").
+	"debt.loanTermAria":    "%s remaining term (months)",
+	"debt.loanExtraAria":   "%s extra payment per month",
+	"debt.creditLimitAria": "Edit %s credit limit",
 
 	// Loan summary: distinguish the modeled amortization payment from the recorded
 	// contractual minimum, so the two figures aren't read as disagreeing facts.

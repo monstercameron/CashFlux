@@ -71,6 +71,25 @@ mount+resize effect (same approach as `--nws-header`) and offsetting the bar's `
 measures 108 and sits flush below the header. Deliberately NOT a draggable Widget — the tile
 transform would have broken `position: sticky` outright.
 
+**Recheck came back 9.1 — six smaller items, one of which taught a specificity lesson.** The anchor
+offset looked like a one-line CSS fix (add `scroll-margin-top`), and my first attempt used
+`.bento-debt [id^="sec-"]` — which computed to 20px, not the 174px I set. The cause: an existing
+ID-list rule in rules_gen.go (`#sec-strategy, …` at 1.25rem, specificity 1,0,0) beat my attribute
+selector (0,2,0), and it also predated the sticky bar and didn't list the new sections. Fix: match
+its specificity with the same ID list in rules_debt.go, which — because this surface registers last —
+wins on cascade order and covers every section with the measured `calc(var(--debt-header) + 4.5rem)`.
+Verified: computed 174px, jumped heading lands at 168px (clear of the header + bar).
+
+The missing-minimum finding was the subtle one: a card with no recorded minimum was being reported as
+"balance is growing" because a blank minimum reads as zero, and zero ≤ interest. That's true but
+misleading — the real problem is missing data. `debtcoach` now splits `worstMissingMin` from
+`worstUnderwater` and emits a distinct "No minimum payment recorded" alert carrying the monthly
+interest in the debt's OWN currency (added `Alert.Currency` + `DebtLine.Currency`, so €8.87 reads as
+euros, not dollars). Rounding: `ledger.Utilization` truncated (17.83%→17), while the ladder's
+engine-derived percent rounded (→18); made the shared helper round so every surface agrees — the
+existing table tests used round-number cases, so nothing broke. The rest were copy/label and
+per-account aria-label fixes.
+
 Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
 keeping and one re-application of a lesson already on the books.
 

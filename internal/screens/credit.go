@@ -296,7 +296,7 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSa
 	// open full-width input carried the same weight as the read-only data). The
 	// c211 flow is intact — open the disclosure, edit, blur.
 	limitEditor := Details(css.Class("hlt-curve"),
-		Summary(uistate.T("credit.editLimit")),
+		Summary(Attr("aria-label", uistate.T("debt.creditLimitAria", cu.Name)), uistate.T("credit.editLimit")),
 		ui.CreateElement(creditLimitEditor, creditLimitEditorProps{
 			AccountID: cu.AccountID, Currency: acctCur, LimitMinor: cu.LimitMinor, OnSave: onSaveLimit,
 		}),

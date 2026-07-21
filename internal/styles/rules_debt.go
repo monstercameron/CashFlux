@@ -14,6 +14,15 @@ package styles
 // Chained from install.go's Register(). The band colors (danger / #f59e0b amber /
 // accent) match the debt-card rails in rules_gen.go on purpose.
 func registerDebtCoachSurface() {
+	// Jump-nav targets must land BELOW the fixed header AND the sticky plan bar, not
+	// behind them. An ID-list rule in rules_gen.go set only 1.25rem (pre-plan-bar, and
+	// missing the new sections); this equal-specificity ID rule is emitted later (this
+	// surface registers last), so it wins and covers every section with the measured
+	// header height plus the plan bar's height and gaps.
+	rule("#sec-overview, #sec-watchouts, #sec-ladder, #sec-tuner, #sec-strategy, #sec-credit, #sec-loans, #sec-calculator, #sec-learn",
+		prop("scroll-margin-top", "calc(var(--debt-header, 101px) + 4.5rem)"),
+	)
+
 	// Sticky plan-summary bar — pinned below the header so the active plan stays in
 	// view down the long page. Solid background so scrolled tiles never show through;
 	// z-index below the app topbar (which is 5). grid-column spans the whole bento.

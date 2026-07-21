@@ -52,6 +52,7 @@ func coachAlerts(app *appstate.App) []debtcoach.Alert {
 			MinPayment: ac.MinPayment.Amount,
 			Limit:      ac.CreditLimit.Amount,
 			Revolving:  ac.CreditLimit.Amount > 0,
+			Currency:   owed.Currency,
 		})
 	}
 	debts := baseDebts(app, v.Base)
@@ -146,7 +147,13 @@ func debtAlertRow(a debtcoach.Alert, base string) ui.Node {
 // alertCopy maps an alert kind to its headline and explanation, formatting the
 // numeric fields the copy needs. All wording lives in the i18n catalog.
 func alertCopy(a debtcoach.Alert, base string) (title, text string) {
-	amt := func() string { return fmtMoney(money.New(a.Amount, base)) }
+	// Per-debt money (e.g. a card's monthly interest) is in the debt's own currency;
+	// portfolio figures fall back to the base. Format with whichever the alert carries.
+	cur := base
+	if a.Currency != "" {
+		cur = a.Currency
+	}
+	amt := func() string { return fmtMoney(money.New(a.Amount, cur)) }
 	more := ""
 	if a.Count > 1 {
 		more = " " + uistate.T("debt.alerts.more", a.Count-1)
@@ -155,6 +162,9 @@ func alertCopy(a debtcoach.Alert, base string) (title, text string) {
 	case "over-limit":
 		return uistate.T("debt.alert.overLimit.title"),
 			uistate.T("debt.alert.overLimit.body", a.Subject, a.Pct) + more
+	case "min-missing":
+		return uistate.T("debt.alert.noMin.title"),
+			uistate.T("debt.alert.noMin.body", a.Subject, amt())
 	case "min-underwater":
 		return uistate.T("debt.alert.underwater.title"),
 			uistate.T("debt.alert.underwater.body", a.Subject) + more
@@ -184,6 +194,8 @@ func alertCopy(a debtcoach.Alert, base string) (title, text string) {
 // fix is right here on the page (e.g. the slow-payoff nudge points at the tuner).
 func alertAction(a debtcoach.Alert) ui.Node {
 	switch a.Kind {
+	case "min-missing":
+		return debtOwnerLink("/accounts", uistate.T("debt.linkAccounts"))
 	case "over-limit", "utilization-high", "utilization-warn":
 		return debtOwnerLink("/accounts", uistate.T("debt.linkCards"))
 	case "min-underwater", "interest-heavy":

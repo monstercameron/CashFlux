@@ -79,6 +79,15 @@ func TestEvaluate(t *testing.T) {
 			want: []string{"min-underwater", "interest-heavy"},
 		},
 		{
+			name: "no recorded minimum is a data-quality alert, not underwater",
+			in: Input{
+				// A card owing money at a real rate but with no minimum on file.
+				Debts:       []DebtLine{{Name: "Travel Card", Balance: 53500, AprPercent: 19.9, MinPayment: 0, Currency: "EUR"}},
+				WarnUtilPct: warn, HighUtilPct: high,
+			},
+			want: []string{"min-missing"},
+		},
+		{
 			name: "high APR on an otherwise-fine debt",
 			in: Input{
 				Debts:            []DebtLine{loan("Payday", 100000, 40000, 30)},

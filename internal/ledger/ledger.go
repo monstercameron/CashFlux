@@ -10,6 +10,7 @@ package ledger
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -309,7 +310,10 @@ func Utilization(balance, limit int64) (pct int, ok bool) {
 	if owed < 0 {
 		owed = -owed
 	}
-	return int(owed * 100 / limit), true
+	// Round to the nearest whole percent (not truncate) so every surface that shows
+	// utilization agrees — 17.83% reads as 18% here and in the payoff ladder, which
+	// derives its percent from the engine's rounded float.
+	return int(math.Round(float64(owed) * 100 / float64(limit))), true
 }
 
 // PercentChange returns the whole-percent change from prev to curr (both in the

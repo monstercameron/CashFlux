@@ -185,7 +185,7 @@ func loanCard(props loanCardProps) ui.Node {
 			Placeholder(uistate.T("loans.termPlaceholder")),
 			Value(termS.Get()),
 			OnInput(onTerm),
-			Attr("aria-label", uistate.T("loans.termLabel")),
+			Attr("aria-label", uistate.T("debt.loanTermAria", a.Name)),
 		),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.termMonthsSuffix")),
 	)
@@ -233,7 +233,7 @@ func loanCard(props loanCardProps) ui.Node {
 			Placeholder(fmt.Sprintf(uistate.T("loans.extraPlaceholder"), sym)),
 			Value(extraS.Get()),
 			OnInput(onExtra),
-			Attr("aria-label", uistate.T("loans.extraLabel")),
+			Attr("aria-label", uistate.T("debt.loanExtraAria", a.Name)),
 		),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.extraPerMonth")),
 	)

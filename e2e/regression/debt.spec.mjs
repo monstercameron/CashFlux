@@ -177,4 +177,27 @@ test.describe("debt: jump navigation", () => {
     await expect(app.getByTestId("debt-jump-sec-tuner")).toBeVisible();
     await expect(app.getByTestId("debt-jump-sec-learn")).toBeVisible();
   });
+
+  test("jumped section lands below the fixed header + plan bar", async ({ app }) => {
+    await nav(app, "/debt");
+    await app.getByTestId("debt-jump-sec-strategy").click();
+    await app.waitForTimeout(900);
+    // Measure the scroll anchor itself (its scroll-margin-top is what positions it).
+    const top = await app.locator("#sec-strategy").first()
+      .evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    // Must clear the header (~101px) + sticky plan bar, not tuck behind them at ~20px.
+    expect(top).toBeGreaterThan(120);
+  });
+});
+
+test.describe("debt: missing-minimum data quality", () => {
+  test("a card with no recorded minimum reads as missing data, not underwater", async ({ app }) => {
+    await nav(app, "/debt");
+    // The sample Travel Card (EUR) has no minimum on file.
+    const noMin = app.getByTestId("debt-alert-min-missing");
+    await expect(noMin).toBeVisible();
+    await expect(noMin).toContainText(/no minimum payment/i);
+    // And it must NOT be the "balance is growing" (underwater) framing for that card.
+    await expect(app.getByTestId("debt-alert-min-underwater")).toHaveCount(0);
+  });
 });

@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **/debt recheck refinements (9.1→ toward 10).**
+  - **Jump-nav anchors clear the fixed UI.** Section jumps landed with the heading tucked behind the
+    header + sticky plan bar (a stale `1.25rem` anchor offset that also missed the new sections). All
+    debt section anchors now use `scroll-margin-top: calc(var(--debt-header) + 4.5rem)`, measured, so
+    a jumped heading lands fully below the header and the plan bar.
+  - **A missing minimum reads as missing data, not a bad payment.** A card with no recorded minimum
+    used to trigger the "balance is growing" warning (blank treated as zero). It now gets its own
+    "No minimum payment recorded" alert that names the monthly interest to beat, in the card's own
+    currency (e.g. €8.87).
+  - **Utilization rounds consistently.** `ledger.Utilization` now rounds to the nearest percent
+    instead of truncating, so a card reads the same (18%, not 17% vs 18%) in the payoff ladder and
+    the credit-health panel.
+  - **Copy/labels:** the strategy panel's "Payoff order" → "Projected completion order" (it lists
+    when debts *finish*, which differs from the ladder's attack order); the "Debt metrics" toggle →
+    "Formulas" (it reveals the formula builder, not the visible summary strip); "Minimums / mo" →
+    "All minimums / mo" (it includes an excluded mortgage); the strategy blurb now says "across the
+    accounts in your payoff plan" rather than "your liability accounts."
+  - **Accessibility:** per-account names on the loan simulator's term and extra-payment inputs and
+    the credit-limit editors (previously six identical "Term" / "Extra per month" / "Edit limit").
 - **/debt now agrees with itself about the plan (review remediation, three High defects).**
   - **One canonical extra-payment.** The strategy comparison kept its own local extra-payment
     input, independent of the tuner's, so the two could show contradictory plans (the page said
