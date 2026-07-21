@@ -38,6 +38,27 @@ no hook state. Screenshotted light + dark, seeded and empty; the empty state cor
 in `en_debtcoach.go` and CSS in `rules_debt.go`, both new files, to stay off the concurrent-WIP
 `en.go`/`rules_gen.go`; the screenlint hardcoded-copy ratchet stays green.
 
+**Remediating an 8.3/10 review — the three Highs were one root cause wearing three hats.** A design
+review found the page "visibly disagreeing with itself" about the plan: which debts are included,
+which to pay first, and which extra-payment scenario is active. All three trace to state that wasn't
+canonical. (1) The strategy comparison carried its *own* extra-payment input, independent of the
+tuner's — so the two showed different plans under copy that promised they'd match. Fix: both now
+read/write the single `DebtConfig.DefaultExtraMinor`, and on /debt the comparison's field is hidden
+(the tuner owns it) rather than duplicated. (2) The ladder ranked by *clear* order, so avalanche
+showed a non-APR ladder — a tiny low-rate debt clears first on its minimum alone and grabbed rank 1.
+The honest answer is *attack* order, so I added `payoff.FocusOrder` (APR-desc for avalanche,
+balance-asc for snowball, tested) and ranked from that; "Pay first" is now correct. (3) The hero
+paired the full $231k liability total with a debt-free date that excludes the mortgage. Now the
+summary computes `PlanOwed` (sum of included debts, distinct from `TotalOwed`) and says "Plan clears
+$77,891 by …" with the excluded amount named. Lesson (again): when several surfaces must agree about
+a number, they consume one value, not each keep their own.
+
+The mediums were smaller but real trust bugs: the credit panel formatted a EUR card's native amount
+with the *base* currency symbol (used `baseCur` where the account's own `acctCur` was right); the
+payoff calculator let a typed negative balance short-circuit `Project` into "0 months / $0" (range
+guard added — `min="0"` doesn't stop keyboard/paste); "0% APR" + an appended " APR" read "0% APR
+APR"; and eight identical "Edit"/"Transactions" buttons got per-account aria-labels.
+
 Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
 keeping and one re-application of a lesson already on the books.
 

@@ -64,6 +64,11 @@ func PayoffCalculatorPanel(_ PayoffCalculatorPanelProps) ui.Node {
 		switch {
 		case errB != nil || errP != nil || errA != nil:
 			resultBody = P(css.Class("err"), Attr("role", "alert"), uistate.T("planning.invalidNumbers"))
+		case bal <= 0 || pay <= 0 || apr < 0:
+			// The number inputs carry min="0", but a typed/pasted negative still reaches
+			// here — a negative balance would short-circuit Project into a bogus "0
+			// months, $0" result. Reject the range explicitly instead.
+			resultBody = P(css.Class("err"), Attr("role", "alert"), uistate.T("debt.calcRangeError"))
 		default:
 			if r, ok := payoff.Project(bal, apr, pay); ok {
 				extraNote := Fragment()

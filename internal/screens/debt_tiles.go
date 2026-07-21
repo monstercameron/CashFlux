@@ -110,8 +110,9 @@ type debtView struct {
 	RankByID  map[string]int
 	InPayByID map[string]bool
 	Defs      []customfields.Def
-	TotalOwed money.Money
-	DebtFree  string // projection date ("January 2026"), or ""
+	TotalOwed money.Money // every non-archived liability (base)
+	PlanOwed  money.Money // only the debts included in the payoff plan (base)
+	DebtFree  string      // projection date ("January 2026"), or ""
 	HasCC     bool
 	HasLoans  bool
 }
@@ -208,24 +209,32 @@ func computeDebtViewRaw(app *appstate.App) debtView {
 		v.Liabs = append(v.Liabs, ac)
 	}
 
-	// Payoff order (avalanche/snowball per config) → per-debt rank. Built from the same
-	// AggregateDebts the strategy panel uses, so the ladder matches the plan.
+	// Payoff order = the strategy's ATTACK order (avalanche = highest APR first,
+	// snowball = smallest balance first), so the ladder answers "pay this first"
+	// honestly — NOT the order debts happen to clear (a tiny low-rate debt clears
+	// first on its minimum alone, which made an avalanche ladder look unsorted).
+	// AggregateDebts already filters to the debts the user includes in the plan, so
+	// their sum is the plan's scope (distinct from TotalOwed, which counts every
+	// liability including an excluded mortgage).
 	debts, _ := payoff.AggregateDebts(app.Accounts(), txns, base, rates)
-	if plan, ok := payoff.BuildPlan(debts, cfg.DefaultExtraMinor, strategyFromConfig(cfg)); ok {
-		rankByName := map[string]int{}
-		for i, name := range plan.Order {
-			if _, seen := rankByName[name]; !seen {
-				rankByName[name] = i + 1
-			}
+	var includedOwed int64
+	for _, d := range debts {
+		includedOwed += d.Balance
+	}
+	v.PlanOwed = money.New(includedOwed, base)
+	rankByName := map[string]int{}
+	for i, name := range payoff.FocusOrder(debts, strategyFromConfig(cfg)) {
+		if _, seen := rankByName[name]; !seen {
+			rankByName[name] = i + 1
 		}
-		for i := range v.Liabs {
-			if r, ok := rankByName[v.Liabs[i].Name]; ok {
-				v.RankByID[v.Liabs[i].ID] = r
-			}
+	}
+	for i := range v.Liabs {
+		if r, ok := rankByName[v.Liabs[i].Name]; ok {
+			v.RankByID[v.Liabs[i].ID] = r
 		}
-		if plan.Months >= 0 && len(debts) > 0 {
-			v.DebtFree = payoff.DebtFreeMonth(time.Now(), plan.Months).Format("January 2006")
-		}
+	}
+	if plan, ok := payoff.BuildPlan(debts, cfg.DefaultExtraMinor, strategyFromConfig(cfg)); ok && plan.Months >= 0 && len(debts) > 0 {
+		v.DebtFree = payoff.DebtFreeMonth(time.Now(), plan.Months).Format("January 2006")
 	}
 
 	// Order the ladder: in-plan debts by ascending payoff rank, then everything else by
@@ -259,9 +268,24 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 		return Fragment()
 	}
 
+	// The debt-free date is the plan's date, and the plan covers only the included
+	// debts. When something is excluded (a mortgage, by default), pairing the full
+	// total with that date reads as "all of it clears by then" — so say the scope
+	// out loud: what the plan clears, and how much sits outside it.
 	var freeLine ui.Node = Fragment()
 	if v.DebtFree != "" {
-		freeLine = P(css.Class("debt-hero-sub", tw.FontDisplay), uistate.T("debt.debtFreeBy", v.DebtFree))
+		excluded := v.TotalOwed.Amount - v.PlanOwed.Amount
+		if excluded > 0 {
+			freeLine = Fragment(
+				P(css.Class("debt-hero-sub", tw.FontDisplay), Attr("data-testid", "debt-plan-scope"),
+					uistate.T("debt.planClearsBy", fmtMoney(v.PlanOwed), v.DebtFree)),
+				P(css.Class("debt-hero-note", tw.TextDim),
+					uistate.T("debt.planExcludes", fmtMoney(money.New(excluded, v.Base)))),
+			)
+		} else {
+			freeLine = P(css.Class("debt-hero-sub", tw.FontDisplay), Attr("data-testid", "debt-plan-scope"),
+				uistate.T("debt.debtFreeBy", v.DebtFree))
+		}
 	}
 
 	// Ratio chips read straight off the engine surface (credit_utilization &
@@ -463,7 +487,7 @@ func debtListWidget(props debtListProps) ui.Node {
 func debtStrategyWidget(props debtPanelProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-strategy", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(Attr("id", "sec-strategy"), ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{})),
+		Body: Div(Attr("id", "sec-strategy"), ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{HideExtraInput: true})),
 	})
 }
 

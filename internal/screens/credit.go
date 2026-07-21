@@ -188,12 +188,16 @@ func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSa
 	if owed < 0 {
 		owed = -owed
 	}
-	dec := currency.Decimals(baseCur)
-	sym := currency.Symbol(baseCur)
+	// A card's balance and limit are in its OWN currency — format with the account's
+	// symbol/decimals, not the household base (a EUR card must read €, not $). The
+	// utilization percent is currency-independent, so no conversion is needed here.
+	dec := currency.Decimals(acctCur)
+	sym := currency.Symbol(acctCur)
 
 	balStr := sym + fmtMinorAmount(owed, dec)
 	limitStr := sym + fmtMinorAmount(cu.LimitMinor, dec)
 	_ = base
+	_ = baseCur
 
 	// Utilization label.
 	var utilLabel string

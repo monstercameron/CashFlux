@@ -6,6 +6,28 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **/debt now agrees with itself about the plan (review remediation, three High defects).**
+  - **One canonical extra-payment.** The strategy comparison kept its own local extra-payment
+    input, independent of the tuner's, so the two could show contradictory plans (the page said
+    they "all update to match" — they didn't). Both now read and write the single
+    `DebtConfig.DefaultExtraMinor`, so the ladder, hero, tuner, and comparison always agree. On
+    /debt the comparison's redundant field is hidden (the tuner owns it) with a note pointing there;
+    /planning keeps its own field.
+  - **The ladder honours the chosen method.** It ranked debts by the order they happen to *clear*,
+    so an avalanche plan showed a non-APR order (a tiny low-rate debt clears first on its minimum).
+    New `payoff.FocusOrder` ranks by the strategy's *attack* order — highest APR first for avalanche,
+    smallest balance first for snowball — so "Pay first" is now the debt you should actually attack.
+  - **Total owed vs plan scope.** The hero paired the full liability total with a debt-free date that
+    excludes the mortgage, reading as "all of it clears by then." It now says what the plan clears
+    ("Plan clears $77,891 by September 2031") and names the excluded amount separately.
+- **/debt medium defects:** a EUR card's balance/limit in the credit-health panel formatted with the
+  household `$` symbol instead of `€` (used the base currency's symbol for a native-currency amount);
+  the payoff calculator accepted typed negative inputs (a negative balance short-circuited to a bogus
+  "0 months / $0" — now range-guarded); a no-rate loan showed "0% APR APR" (double word); per-row
+  Edit / Transactions / include-in-plan buttons had duplicate accessible names (now "Edit Rewards
+  Card", "View Mortgage transactions", etc.); and one overconfident credit-score claim was softened.
+
 ### Added
 - **`internal/debtcoach` — a pure debt-health rule engine.** Given a snapshot of someone's
   debts (per-account balance/APR/minimum/limit plus FX-converted portfolio aggregates), it decides

@@ -151,8 +151,9 @@ func loanCard(props loanCardProps) ui.Node {
 		typeBadge = uistate.T("loans.typeLoan")
 	}
 
-	// APR display.
-	aprLabel := fmt.Sprintf("%.2f%%", apr)
+	// APR display — self-contained (includes the "APR" word) so the "0% APR" no-rate
+	// label doesn't get a second "APR" appended below.
+	aprLabel := fmt.Sprintf("%.2f%% APR", apr)
 	if apr == 0 {
 		aprLabel = uistate.T("loans.noApr")
 	}
@@ -165,7 +166,7 @@ func loanCard(props loanCardProps) ui.Node {
 			Div(ClassStr("t-body "+tw.Fold(tw.FontMedium)), a.Name),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Span(css.Class("badge", "t-caption"), typeBadge),
-				Span(css.Class("t-caption", tw.TextDim), aprLabel+" APR"),
+				Span(css.Class("t-caption", tw.TextDim), aprLabel),
 			),
 		),
 		Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" text-down"), fmtMoney(balance)),

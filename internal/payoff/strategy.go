@@ -2,7 +2,10 @@
 
 package payoff
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 // Debt is one liability in a multi-debt payoff plan. Balance is the positive
 // amount owed and MinPayment the required monthly minimum, both in minor units;
@@ -167,6 +170,43 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 		}
 	}
 	return Plan{Months: months, TotalInterest: totalInterest, TotalPaid: totalPaid, Order: order, ClearedMonths: clearedMonths, Schedule: schedule}, true
+}
+
+// FocusOrder returns the debt names in the order the strategy attacks them — the
+// order that answers "which do I pay first?" and drives the payoff ladder. This is
+// deliberately NOT the order debts happen to clear (a tiny low-rate debt can clear
+// first on its minimum alone), which would make an avalanche ladder look unsorted.
+//
+// Avalanche attacks the highest APR first (ties → the smaller balance, so a quick
+// win breaks the tie); snowball attacks the smallest balance first (ties → the
+// higher APR). Debts with a non-positive balance are dropped. The input slice is
+// not mutated.
+func FocusOrder(debts []Debt, strategy Strategy) []string {
+	ordered := make([]Debt, 0, len(debts))
+	for _, d := range debts {
+		if d.Balance > 0 {
+			ordered = append(ordered, d)
+		}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
+		if strategy == Avalanche {
+			if a.AprPercent != b.AprPercent {
+				return a.AprPercent > b.AprPercent
+			}
+			return a.Balance < b.Balance
+		}
+		// Snowball.
+		if a.Balance != b.Balance {
+			return a.Balance < b.Balance
+		}
+		return a.AprPercent > b.AprPercent
+	})
+	names := make([]string, len(ordered))
+	for i, d := range ordered {
+		names[i] = d.Name
+	}
+	return names
 }
 
 // focusIndex returns the index of the active debt the strategy targets next, or

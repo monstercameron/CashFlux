@@ -18,6 +18,15 @@ var debtCoachKeys = Catalog{
 	"debt.jumpTune":      "Tune plan",
 	"debt.jumpLearn":     "Learn",
 
+	// Plan scope in the hero. The debt-free date is the PLAN's date (included debts
+	// only), so when a debt is excluded we name what the plan clears and what's left
+	// out rather than pairing the full total with the date. %s = planned balance,
+	// %s = date. Overrides the older "…at current minimums" copy, which was wrong
+	// once the plan can carry an extra payment.
+	"debt.debtFreeBy":   "Debt-free by %s.",
+	"debt.planClearsBy": "Plan clears %s by %s",
+	"debt.planExcludes": "Excludes %s not in the plan — see the ladder below.",
+
 	// --- Watch-outs tile ---
 	"debt.alerts.title":         "Watch-outs",
 	"debt.alerts.more":          "+ %d more like this", // %d = count of other matching debts
@@ -41,7 +50,7 @@ var debtCoachKeys = Catalog{
 
 	"debt.alert.utilWarn.title": "Card use is creeping up",
 	"debt.alert.utilWarn.body": "You're using %s%% of your total card limit. Keeping it under 30%% " +
-		"protects your credit score, so this is a good place to aim spare cash.",
+		"is easier on your credit score, so this is a good place to aim spare cash.",
 
 	"debt.alert.overAssets.title": "You owe more than you own",
 	"debt.alert.overAssets.body": "Your debts come to %s%% of what you own. It's survivable, but " +
@@ -74,6 +83,19 @@ var debtCoachKeys = Catalog{
 	"debt.tuner.timeToFree":   "Time to clear",
 	"debt.tuner.impact":       "That's %s sooner and saves %s in interest versus paying only the minimums.",
 	"debt.tuner.addExtraHint": "Add even a small extra payment to see how much time and interest it saves.",
+
+	// Per-row accessible names — so a screen reader hears "Edit Rewards Card", not
+	// one of eight identical "Edit" buttons. %s = account name.
+	"debt.viewAria":         "View %s transactions",
+	"debt.editAria":         "Edit %s",
+	"debt.payoffToggleAria": "Include %s in the payoff plan",
+
+	// Calculator range guard (inputs have min=0 but a typed negative still arrives).
+	"debt.calcRangeError": "Enter a balance and payment above zero, and an APR of 0 or more.",
+
+	// Shown in the strategy comparison on /debt in place of its own extra-payment
+	// field (the tuner owns that control). %s = the current extra amount.
+	"debt.compareAtNote": "Comparing both methods at %s extra per month — set it in Tune your plan above.",
 
 	// --- Teaching accordion ---
 	"debt.learn.title": "Understand debt",

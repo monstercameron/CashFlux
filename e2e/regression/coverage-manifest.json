@@ -778,13 +778,12 @@
       "profile-switch-btn",
       "sample-dismiss",
       "sample-start-fresh",
-      "strat-extra",
       "theme-toggle",
       "topbar-*",
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 30
+    "untestided": 29
   },
   "/investments": {
     "testids": [

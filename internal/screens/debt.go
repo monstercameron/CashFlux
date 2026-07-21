@@ -24,8 +24,12 @@ import (
 )
 
 // DebtStrategyPanelProps configures a DebtStrategyPanel.
-// No external props are required; the panel reads appstate.Default directly.
-type DebtStrategyPanelProps struct{}
+type DebtStrategyPanelProps struct {
+	// HideExtraInput drops the panel's own extra-payment field. On /debt the tuner
+	// tile owns that control (both write the same canonical DebtConfig value), so a
+	// second input here would be redundant; /planning has no tuner and keeps it.
+	HideExtraInput bool
+}
 
 // DebtStrategyPanel renders the snowball-vs-avalanche debt-payoff block as a
 // registered component so it can be shared between /planning and /debt without
@@ -33,18 +37,39 @@ type DebtStrategyPanelProps struct{}
 // declared unconditionally at the top; the component owns its own revision
 // counter and extra-payment input state so mutations stay isolated to this panel.
 func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
-	// All hooks must be declared unconditionally — even when app is nil.
-	rev := ui.UseState(0)
-	dsExtra := ui.UseState("")
-	onDsExtra := ui.UseEvent(func(v string) { dsExtra.Set(v) })
-
-	app := appstate.Default
+	// Base currency (no hooks) — the extra-payment handler below needs its decimals.
 	base := "USD"
-	if app != nil {
-		if b := app.Settings().BaseCurrency; b != "" {
+	if a := appstate.Default; a != nil {
+		if b := a.Settings().BaseCurrency; b != "" {
 			base = b
 		}
 	}
+	dec := currency.Decimals(base)
+
+	// All hooks must be declared unconditionally — even when app is nil.
+	rev := ui.UseState(0)
+	// Subscribe to the shared data revision so the comparison redraws when the /debt
+	// tuner changes the plan (they share one canonical extra-payment value).
+	_ = uistate.UseDataRevision().Get()
+	// The extra monthly payment is the ONE canonical value in DebtConfig — the same
+	// figure the /debt tuner writes and the ladder + hero read — so this comparison
+	// never disagrees with the rest of the page about which scenario is active.
+	// Committed on change (not per keystroke) to avoid a full-page recompute mid-type.
+	onExtra := ui.UseEvent(func(v string) {
+		minor, err := money.ParseMinor(strings.TrimSpace(v), dec)
+		if err != nil {
+			return
+		}
+		if minor < 0 {
+			minor = 0
+		}
+		c := uistate.DebtConfigGet()
+		c.DefaultExtraMinor = minor
+		uistate.SetDebtConfig(c)
+		uistate.BumpDataRevision()
+	})
+
+	app := appstate.Default
 	if app == nil {
 		return Fragment()
 	}
@@ -104,7 +129,7 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 	case len(debts) == 0:
 		body = P(css.Class("empty"), uistate.T("planning.debtStrategyEmpty"))
 	default:
-		extra, _ := money.ParseMinor(strings.TrimSpace(dsExtra.Get()), currency.Decimals(base))
+		extra := uistate.DebtConfigGet().DefaultExtraMinor
 		if extra < 0 {
 			extra = 0
 		}
@@ -221,16 +246,25 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		Attrs: []any{Attr("id", "debt")},
 		Body: Fragment(
 			P(css.Class("muted"), uistate.T("planning.debtStrategyHint")),
-			// The one control that drives the whole comparison: an optional extra monthly
-			// payment, with a one-click "sensible amount" suggestion beside it (shown only
-			// while the field is empty, so the plans can be made to diverge in one tap).
-			Div(css.Class("strat-extra"),
-				labeledField(uistate.T("planning.debtStrategyExtra", base),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("data-testid", "strat-extra"), Value(dsExtra.Get()), Step("0.01"), OnInput(onDsExtra))),
-				If(strings.TrimSpace(dsExtra.Get()) == "" && len(debts) > 1 && payoff.SuggestedExtra(debts) > 0,
-					Button(css.Class("btn strat-try"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
-						OnClick(func() { dsExtra.Set(money.FormatMinor(payoff.SuggestedExtra(debts), currency.Decimals(base))) }),
-						uistate.T("debt.tryExtra", fmtMoney(money.New(payoff.SuggestedExtra(debts), base))))),
+			// The extra monthly payment — the SAME canonical value the tuner sets. Editing
+			// it here updates the tuner, ladder, and hero too. Committed on change so a
+			// full-page recompute doesn't fire on every keystroke. On /debt the tuner owns
+			// this control, so the field is hidden and a note points at it instead.
+			IfElse(props.HideExtraInput,
+				P(css.Class("budget-sub"), Attr("data-testid", "strat-extra-note"),
+					uistate.T("debt.compareAtNote", fmtMoney(money.New(uistate.DebtConfigGet().DefaultExtraMinor, base)))),
+				Div(css.Class("strat-extra"),
+					labeledField(uistate.T("planning.debtStrategyExtra", base),
+						Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("data-testid", "strat-extra"), Value(money.FormatMinor(uistate.DebtConfigGet().DefaultExtraMinor, dec)), Step("0.01"), OnChange(onExtra))),
+					If(uistate.DebtConfigGet().DefaultExtraMinor == 0 && len(debts) > 1 && payoff.SuggestedExtra(debts) > 0,
+						Button(css.Class("btn strat-try"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
+							OnClick(func() {
+								c := uistate.DebtConfigGet()
+								c.DefaultExtraMinor = payoff.SuggestedExtra(debts)
+								uistate.SetDebtConfig(c)
+								uistate.BumpDataRevision()
+							}),
+							uistate.T("debt.tryExtra", fmtMoney(money.New(payoff.SuggestedExtra(debts), base)))))),
 			),
 			body,
 			rateWarn,

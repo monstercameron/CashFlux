@@ -77,6 +77,21 @@ test.describe("debt: strategy tuner", () => {
     await expect(app.getByTestId("debt-tuner-impact")).toHaveCount(0);
   });
 
+  test("the ladder honors the chosen method (pay-first differs by strategy)", async ({ app }) => {
+    await nav(app, "/debt");
+    await app.getByTestId("debt-tuner-avalanche").click();
+    await app.waitForTimeout(400);
+    const avalFirst = await app.locator(".debt-card.is-focus .debt-name").first().innerText();
+    await app.getByTestId("debt-tuner-snowball").click();
+    await app.waitForTimeout(400);
+    const snowFirst = await app.locator(".debt-card.is-focus .debt-name").first().innerText();
+    // On the multi-debt seed, highest-APR (avalanche) and smallest-balance (snowball)
+    // are different debts — so the "pay first" focus must change with the method.
+    expect(avalFirst).not.toBe("");
+    expect(snowFirst).not.toBe("");
+    expect(avalFirst).not.toBe(snowFirst);
+  });
+
   test("switching method recomputes the plan (avalanche costs no more interest)", async ({ app }) => {
     await nav(app, "/debt");
     // Give the plan an extra so both methods clear and the totals are comparable.
@@ -97,6 +112,17 @@ test.describe("debt: strategy tuner", () => {
     // And the two strategies genuinely differ on this multi-debt seed — proof the
     // page recomputed, not just re-labelled.
     expect(snowText).not.toBe(avalText);
+  });
+});
+
+test.describe("debt: plan scope", () => {
+  test("hero states the plan's included scope when a debt is excluded", async ({ app }) => {
+    await nav(app, "/debt");
+    // The sample seed excludes a mortgage from the plan, so the hero must show the
+    // plan's included balance and date, not pair the full total with the date.
+    const scope = app.getByTestId("debt-plan-scope");
+    await expect(scope).toBeVisible();
+    await expect(scope).toContainText(/plan clears/i);
   });
 });
 
