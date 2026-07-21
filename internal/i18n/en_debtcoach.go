@@ -97,6 +97,11 @@ var debtCoachKeys = Catalog{
 	"debt.editAria":         "Edit %s",
 	"debt.payoffToggleAria": "Include %s in the payoff plan",
 
+	// Loan summary: distinguish the modeled amortization payment from the recorded
+	// contractual minimum, so the two figures aren't read as disagreeing facts.
+	"debt.loanModeledPayment": "Modeled payment",
+	"debt.loanRecordedMin":    "Recorded min: %s",
+
 	// Calculator range guard (inputs have min=0 but a typed negative still arrives).
 	"debt.calcRangeError": "Enter a balance and payment above zero, and an APR of 0 or more.",
 

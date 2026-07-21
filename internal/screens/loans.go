@@ -195,8 +195,13 @@ func loanCard(props loanCardProps) ui.Node {
 	if len(baseRows) > 0 {
 		summaryNode = Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap3, tw.Mb3),
 			Div(css.Class("stat"),
-				Div(css.Class("stat-label"), uistate.T("loans.monthlyPayment")),
+				// This is a MODELED payment (from the balance, APR, and the term set
+				// above) — not necessarily the contractual minimum. Label it as such and
+				// show the recorded minimum beside it so the two aren't confused (review).
+				Div(css.Class("stat-label"), uistate.T("debt.loanModeledPayment")),
 				Div(ClassStr("stat-value text-up"), fmtMoney(baseMonthlyPayment)),
+				If(a.MinPayment.Amount > 0 && a.MinPayment.Amount != baseMonthlyPayment,
+					Div(css.Class("t-caption", tw.TextDim), uistate.T("debt.loanRecordedMin", fmtMoney(a.MinPayment.Amount)))),
 			),
 			Div(css.Class("stat"),
 				Div(css.Class("stat-label"), uistate.T("loans.totalInterest")),

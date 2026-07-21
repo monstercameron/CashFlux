@@ -27,6 +27,10 @@ and every commit updates this file under `Unreleased`.
   "0 months / $0" — now range-guarded); a no-rate loan showed "0% APR APR" (double word); per-row
   Edit / Transactions / include-in-plan buttons had duplicate accessible names (now "Edit Rewards
   Card", "View Mortgage transactions", etc.); and one overconfident credit-score claim was softened.
+- **/debt loan summary distinguishes modeled from recorded payments.** The loan section's "Monthly
+  payment" was a *modeled* amortization figure (from balance, APR, and the term set above) that could
+  differ from the recorded contractual minimum with no indication which was which. It's now labelled
+  "Modeled payment" and shows "Recorded min: $X" beside it when the two differ.
 
 ### Added
 - **/debt: a sticky plan-summary bar and a debt-specific Add flow (review refinements).**
