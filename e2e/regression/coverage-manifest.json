@@ -1171,6 +1171,7 @@
     "testids": [
       "add-menu-caret",
       "add-transaction-btn",
+      "debt-link-/recurring",
       "health-step",
       "health-toggle-*",
       "help-button",
@@ -1183,12 +1184,15 @@
       "profile-switch-btn",
       "sample-dismiss",
       "sample-start-fresh",
+      "stress-chip-drop-*",
+      "stress-chip-rate-*",
+      "stress-chip-sur-*",
       "theme-toggle",
       "topbar-*",
       "topbar-more",
       "topbar-updated"
     ],
-    "untestided": 16
+    "untestided": 15
   },
   "/assistant": {
     "testids": [
