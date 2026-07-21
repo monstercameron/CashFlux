@@ -14,6 +14,21 @@ is already `reports.TrimTargets` (recent-avg vs median), and the what-changed at
 existing `attribution` engine — no point re-deriving either. Next: the page itself — a resilience
 runway hero, an interactive stress-test tile, a benchmarked vitals grid, and the leaks read.
 
+**The page, additive rather than a teardown.** The existing six-factor score, the factor tiles, the
+steps and the history are all good — the gap was analysis, not presentation — so the redesign ADDS
+three things and keeps the rest (the user's call: "impl both sets, then reduce"). The hero gains a
+resilience runway co-headline. A new "What if something goes wrong?" tile is the interactive what-if
+surface: pay-cut / surprise-bill / rate-hike shocks as chip presets, each recomputing a plain-English
+outcome from the `resilience` engine live (no persisted state — local `UseState`, chips as their own
+hook-owning components so the fixed sets don't trip the no-hooks-in-loops rule). A "Where the money
+leaks" tile shows the recurring load (honestly framed as *commitments*, not "subscriptions" — the
+sample's 67% share is mostly the mortgage, and calling that a leak would be a lie) plus spending creep
+from `reports.TrimTargets`. The history takeaway now narrates the streak. Copy in en_healthanalysis.go,
+CSS in rules_healthx.go, both new files off the contended catalogs. One bug caught in the probe: a
+one-`%s` string called with two args printed `%!(EXTRA …)` — fixed by giving the runway lead the
+buffer amount it deserved. Verified light + dark, zero console errors. Trimming to come once the
+user sees the whole thing.
+
 ## 2026-07-20 — /debt: a debt-health rule engine, then an interactive coaching page
 
 Reworking /debt from a competent read-only dashboard into a tool that teaches, warns, and lets you

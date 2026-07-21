@@ -17,6 +17,17 @@ and every commit updates this file under `Unreleased`.
     (Category "creep" reuses the existing `reports.TrimTargets`.)
   - `internal/vitals` — a score-series trend classifier: net direction, current unbroken streak,
     best/worst/latest, and recovery inflection, so the page can say "up three months running."
+- **/health does far more analysis.** On top of the existing six-factor score, the page now carries:
+  - **A resilience runway** co-headline in the hero — how long your cash covers everything with no
+    income ("Resilient for 10 mo").
+  - **"What if something goes wrong?"** — an interactive stress-test tile: pick a pay cut, a surprise
+    bill, or a card-rate hike and read the concrete outcome (when you'd go cash-negative, how much
+    lands on the cards and the new interest, the extra cost of a rate hike), recomputed live.
+  - **"Where the money leaks"** — the total recurring commitment load (share of income + the biggest
+    few) and spending "creep" (categories running above their own usual, with the monthly saving),
+    reusing `reports.TrimTargets`.
+  - **A trend-narrated history** — "up/slipping N months running" and recovery-after-a-dip, via the
+    new `vitals` classifier, instead of only a first-vs-last delta.
 
 ### Fixed
 - **/debt recheck refinements (9.1→ toward 10).**

@@ -12,9 +12,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
+	"github.com/monstercameron/CashFlux/internal/resilience"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/vitals"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v4/router"
@@ -490,6 +492,11 @@ func HealthScreen() ui.Node {
 	month := now.Format("2006-01")
 	in := liveHealthInputs(app, now)
 	r := healthscore.Evaluate(in)
+	resIn := liveResilienceInput(app, now)
+	baseCur := app.Settings().BaseCurrency
+	if baseCur == "" {
+		baseCur = "USD"
+	}
 	trend := uistate.UseHealthTrend().Get()
 	prior, hasPrior := uistate.PriorHealthScore(trend, month)
 
@@ -521,6 +528,12 @@ func HealthScreen() ui.Node {
 				Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
 					Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(r.Band))), string(r.Band)),
 					healthDeltaLine(r.Score, prior, hasPrior),
+					// Resilience co-headline: how long the buffer covers everything with no
+					// income — the forward-looking answer to "am I okay if something goes wrong?"
+					If(resIn.MonthlySpend > 0,
+						Div(ClassStr("t-caption "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass("text-dim")),
+							Attr("data-testid", "health-runway-hero"), Style(map[string]string{"margin-top": "6px"}),
+							uistate.T("healthx.runwayHero", fmtMonthsHuman(int(resilience.RunwayMonths(resIn)+0.0001))))),
 					If(r.NegativeCashFlow,
 						Div(ClassStr("t-caption "+tw.ColorClass("text-down")), Style(map[string]string{"margin-top": "6px"}),
 							uistate.T("health.deficitWarning"))),
@@ -538,6 +551,11 @@ func HealthScreen() ui.Node {
 	// ── Factor tiles (span 2, three rows). ───────────────────────────────────────
 	var tiles []ui.Node
 	tiles = append(tiles, hero)
+	// Stress tests up top (after the hero): the forward-looking "what if something
+	// goes wrong" battery, interactive. A component so its own state hooks are isolated.
+	if r.Band != healthscore.BandNoData {
+		tiles = append(tiles, ui.CreateElement(healthStressTile, healthStressProps{In: resIn, Base: baseCur}))
+	}
 	for _, f := range r.Factors {
 		route := healthStepRoute(f.Key)
 		fill, tick, hasMeter := healthFactorMeter(f.Key, in)
@@ -551,6 +569,11 @@ func HealthScreen() ui.Node {
 					}
 				},
 			})))
+	}
+
+	// ── Money leaks: recurring load + spending creep (backward-looking analysis). ─
+	if r.Band != healthscore.BandNoData {
+		tiles = append(tiles, ui.CreateElement(healthLeaksTile, healthLeaksProps{App: app}))
 	}
 
 	// ── Focus-next steps (drill rows) + the privacy note. ───────────────────────
@@ -586,11 +609,25 @@ func HealthScreen() ui.Node {
 			}
 			valueLabels[i] = fmt.Sprintf("%d · %s", s.Score, s.Band)
 		}
-		delta := trend[len(trend)-1].Score - trend[0].Score
-		takeaway := uistate.T("health.historyFlat", trend[len(trend)-1].Score)
-		if delta > 0 {
+		// Narrate the series (direction + current streak + recovery), not just the
+		// first-vs-last delta — "up three months running" reads truer than "+4 overall".
+		scores := make([]int, len(trend))
+		for i, s := range trend {
+			scores[i] = s.Score
+		}
+		tr := vitals.Classify(scores)
+		delta := tr.Delta
+		takeaway := uistate.T("health.historyFlat", tr.Latest)
+		switch {
+		case tr.InflectedUp:
+			takeaway = uistate.T("healthx.historyRecover", tr.StreakLen, tr.Latest)
+		case tr.StreakDir == vitals.Rising && tr.StreakLen >= 2:
+			takeaway = uistate.T("healthx.historyStreakUp", tr.StreakLen, tr.Latest)
+		case tr.StreakDir == vitals.Falling && tr.StreakLen >= 2:
+			takeaway = uistate.T("healthx.historyStreakDown", tr.StreakLen, tr.Latest)
+		case delta > 0:
 			takeaway = uistate.T("health.historyUp", delta, len(trend))
-		} else if delta < 0 {
+		case delta < 0:
 			takeaway = uistate.T("health.historyDown", -delta, len(trend))
 		}
 		tiles = append(tiles, hltTile("hlt-history", "1 / span 4",
