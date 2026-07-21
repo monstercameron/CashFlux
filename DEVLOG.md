@@ -1,3 +1,19 @@
+## 2026-07-20 — /health: from one score to a resilience + analysis surface
+
+Reworking /health, which was an honest but static six-factor score. The brief: "way more analysis"
+— specifically a mix of forward-looking what-if stress tests and backward-looking analytics
+(trends, leaks, benchmarking). Building bottom-up, so the judgement lives in pure engines first.
+
+Three new pure packages, each tested: `resilience` runs the stress battery (runway with no income,
+income-cut surplus + months-to-negative, surprise-expense pushed-to-cards + interest, rate-hike
+interest) over a monthly cash-flow snapshot; `moneyleaks` rolls recurring charges into one
+subscription-load figure (total, share of income, heavy flag, biggest few); `vitals` classifies a
+score series (direction, current streak, recovery inflection) so the history reads as a narrative,
+not just a first-vs-last delta. Deliberately reused rather than rebuilt: category spending "creep"
+is already `reports.TrimTargets` (recent-avg vs median), and the what-changed attribution is the
+existing `attribution` engine — no point re-deriving either. Next: the page itself — a resilience
+runway hero, an interactive stress-test tile, a benchmarked vitals grid, and the leaks read.
+
 ## 2026-07-20 — /debt: a debt-health rule engine, then an interactive coaching page
 
 Reworking /debt from a competent read-only dashboard into a tool that teaches, warns, and lets you

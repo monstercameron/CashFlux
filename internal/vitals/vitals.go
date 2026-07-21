@@ -142,13 +142,13 @@ type Result struct {
 	PayoffTone        Tone
 
 	// ── Revolving credit ──
-	HasCards            bool
-	CardBalanceMinor    int64
-	CardLimitMinor      int64
-	CardAvailableMinor  int64 // limit − balance, floored at 0
-	UtilizationPct      int   // balance as % of limit, clamped 0–100; 0 when no limit
-	HasUtilization      bool  // a positive limit exists to measure against
-	UtilizationTone     Tone
+	HasCards           bool
+	CardBalanceMinor   int64
+	CardLimitMinor     int64
+	CardAvailableMinor int64 // limit − balance, floored at 0
+	UtilizationPct     int   // balance as % of limit, clamped 0–100; 0 when no limit
+	HasUtilization     bool  // a positive limit exists to measure against
+	UtilizationTone    Tone
 }
 
 // Judgment thresholds. Each is the published target its metric's meter ticks at.

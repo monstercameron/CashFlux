@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Analysis engines for the /health redesign (pure, tested).**
+  - `internal/resilience` — a what-if stress-test engine: runway months with no income, the effect
+    of a sustained income cut (new surplus, whether it goes cash-negative and when), a surprise
+    one-off expense (buffer after, shortfall pushed to cards, extra interest), and a card-rate hike
+    (extra monthly/annual interest).
+  - `internal/moneyleaks` — subscription-load analysis: total monthly/annual cost, count, share of
+    income, and the largest few, flagging when subscriptions cross a heavy share of income.
+    (Category "creep" reuses the existing `reports.TrimTargets`.)
+  - `internal/vitals` — a score-series trend classifier: net direction, current unbroken streak,
+    best/worst/latest, and recovery inflection, so the page can say "up three months running."
+
 ### Fixed
 - **/debt recheck refinements (9.1→ toward 10).**
   - **Jump-nav anchors clear the fixed UI.** Section jumps landed with the heading tucked behind the
