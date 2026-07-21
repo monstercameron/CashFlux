@@ -14,6 +14,146 @@ packages have no `syscall/js` and ship with table-driven tests.
 > Note: C-IDs are unique and continuous (C1–C329); R1-R72 = research/spec. Full evidence + fix
 > detail for each is in the Claude Code task list; these are the durable one-line backlog entries.
 
+### WF-series — closed-loop workflows & competitive parity (product review, 2026-07-21) ★
+Strategic direction from two 2026-07-21 reviews (a closed-loop-workflow audit + a competitive
+benchmark vs Monarch / YNAB / Copilot / Simplifi / Rocket Money / Lunch Money / Empower). **Thesis:
+CashFlux no longer needs more dashboards — it needs closed loops (detect → explain → act → confirm),
+data-quality visibility, and cross-page action previews.** Everything below runs **local-first in the
+browser**; SMART+ items may optionally use the user's own OpenAI key (BYO, cost-capped) and must do
+all arithmetic deterministically with citations, never let the model do the math. Every proposed
+mutation requires a preview + explicit confirm. Build bottom-up per the SDLC rule.
+
+> Overlap note: some of this extends work already started — the E-series "What changed" card (E1
+> shipped), the review-inbox surface (`registerReviewInboxSurface`), recurring/subscriptions, the
+> per-page what-if tools (debt tuner, health stress tests), and the allocate/optimizer primitives.
+> Prefer EXTENDING those over new parallel surfaces. Dedupe against SM-*, XC/TX/BG/GL/AC/AG, and the
+> SMART catalog before starting a ticket.
+
+**Recommended build order:** WF1 inbox → WF7 rules workbench + WF-AUDIT → WF8 watchlists + recurring
+lifecycle (WF12) + saved views (WF16) → flexible budgets (WF17) + auto-assign → cash-flow calendar
+(WF9) + goal-funded spending (WF18) → month close (WF3) + snapshots + data-quality center (WF4) →
+scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF20) + NL scenarios (WF21).
+
+**Closed-loop core**
+- [ ] **WF1 — Unified Review Inbox.** ★ One queue for everything needing attention across the app:
+  uncategorized/low-confidence/new-merchant txns, suspected duplicates & unmatched transfers, missing
+  APR/minimum/limit/due-day/term, stale balances, budget overruns, unusual spend, changed recurring
+  charges, missing expected bills, goals/plans falling behind, reconciliation discrepancies, rule
+  conflicts. Each row: **Fix · Correct · Snooze · Dismiss · Create task**, plus bulk actions. This is
+  the single biggest quality-of-life win — it ends "patrol every page manually." (Extend the existing
+  review-inbox surface into an all-signal queue; each signal type is a pure detector with tests.)
+- [ ] **WF2 — Cross-page Scenario Lab.** ★ Save & compare named scenarios (Baseline, lose 20% income,
+  +$500/mo to debt, cancel selected subs, +5% savings, buy a home/car, cash→investments, retire a debt
+  and redirect its payment). ONE scenario updates cash runway, low-balance dates, budgets, debt-free
+  date + interest, goal completion, net-worth projection, and Health — together — with NO real-data
+  change until **Apply plan**. Competitors ship isolated calculators; a single coherent model is the
+  leapfrog.
+- [ ] **WF3 — Guided Monthly Close.** A deliberate end-of-month flow: resolve dupes/uncategorized →
+  reconcile balances → confirm recurring → review budget variances → review income/savings → explain
+  net-worth movement → check goals & debt → set next-month adjustments → save a **read-only monthly
+  snapshot**. Produces a concise "June is complete" report and preserves what the user knew then.
+- [ ] **WF4 — Financial Data-Quality Center.** ★ A dedicated trust surface scoring the reliability of
+  the app's own conclusions: missing APR/min/limit/term/due-day, stale balances, unmatched transfers,
+  inconsistent currencies, accounts excluded from plans, estimated-vs-recorded values, calculation
+  assumptions, last-update date, confidence. Every calculated insight traceable to its inputs. No
+  competitor exposes the reliability of its own numbers — this strengthens every other feature.
+- [ ] **WF5 — Deterministic "What changed?" engine.** ★ Every major number answers "why is this
+  different from last month?" with evidence: net worth (investments +$X, debt −$Y, cash −$Z), health
+  (utilization up, savings down = −4), Dining (six extra restaurant buys), debt-free date (a minimum
+  changed), safe-to-spend (three future bills added). Fully local. Generalize E1's attribution engine
+  to sit beside every metric; classify each change as timing / behavior / categorization and whether
+  it repeats.
+- [ ] **WF6 — Universal Action Preview.** ★ Before applying any recommendation, show its system-wide
+  consequences, e.g. *"Pay $2,000 to Rewards Card → utilization 59%→48%, health 74→77, runway
+  11.0→10.6 mo, debt-free 3 mo earlier, interest saved $X, goal funding unchanged."* Then **Apply ·
+  Adjust · Save as scenario**. The connective tissue that makes recommendations feel smart.
+
+**Workflow accelerators**
+- [ ] **WF7 — Rules Workbench.** ★ Before saving a categorization rule: preview every historical txn it
+  would match, flag false-positive risk, detect overlap/contradiction with existing rules, reorder
+  priority, apply retrospectively within a chosen period or future-only, explain which rule changed
+  each field, and **undo** a bulk application. Match on amount ranges, account, member, tags, notes,
+  recurring status; support split & transfer actions (Lunch Money is the benchmark). SMART+ can draft
+  rules from corrected txns; matching stays deterministic + local.
+- [ ] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
+  category/payee/tag/member with optional targets, near-/over-limit signals, average comparison, and
+  drill to contributing txns (e.g. "Amazon excl. groceries", "all discretionary subs", "fees &
+  interest", "cash withdrawals"). (Simplifi benchmark.)
+- [ ] **WF9 — Projected-balance cash-flow calendar.** Day-by-day account calendar: expected income,
+  bills/subs, debt payments, goal contributions, projected closing balance, earliest shortfall, min
+  balance, days-at-risk, safe-to-spend by date. **Drag a planned payment to another date** and the
+  forecast updates locally; trace every movement to its source. Beat Simplifi by wiring each date
+  change to debt payoff, budget health, goals, and Health.
+- [ ] **WF10 — Explainable allocation optimizer.** One place to compare spare-cash destinations
+  (emergency reserve, high-interest debt, upcoming annual bill, goals, underfunded budgets,
+  investments) under constraints (keep N months cash, never miss minimums, hit a goal by date, keep
+  utilization <30%, prefer guaranteed interest savings, keep a spending reserve). Show marginal
+  benefit + assumptions per destination; lock a destination and rerun. (Extend the allocate engine.)
+- [ ] **WF11 — Transaction relationship graph.** Auto-connect transfers, card payments, refunds↔
+  purchases, reimbursements, split purchases, duplicate imports, receipt↔payment, recurring series —
+  to prevent double-counting and make unusual activity legible.
+- [ ] **WF12 — Recurring-charge lifecycle.** Turn recurring into a full workflow: suggested-awaiting-
+  review, missing expected payment, amount/date changed, duplicate/overlapping subs, annualized cost,
+  renewal/trial-ending notice, cancellation intent + checklist + reference number, "expect one final
+  charge", and **post-cancellation monitoring using later imports** to confirm the charge stopped.
+  Local analysis only — never claim to have contacted the merchant. (Rocket Money's useful half.)
+- [ ] **WF13 — Customizable dashboard & saved views.** Reorder/hide cards, compact vs analytical card
+  variants, pin saved reports/watchlists/accounts, change comparison periods, save filtered txn views,
+  per-member/household dashboard emphasis.
+
+**Budgets & goals connective tissue**
+- [ ] **WF17 — Flexible budget targets.** Weekly/biweekly/semimonthly/monthly/custom periods; "set
+  aside another" vs "refill up to"; target dates & funding deadlines; per-category rollover (±);
+  starting balances; last-month / 3-mo-avg presets; fixed/flexible/non-monthly types; **snooze a
+  target** without deleting; priority-+due-date auto-assign; clear available-cash vs planned-income
+  split. (YNAB + Lunch Money + Monarch benchmarks.)
+- [ ] **WF18 — Goal-funded spending bridge.** When money saved for a goal is spent, the budget treats
+  it as *funded* spending, not overspend: link goal→account/virtual allocation, link a purchase to the
+  goal, reduce the goal balance, raise that purchase's funded budget availability, preserve the
+  ordinary-vs-planned distinction. (Copilot benchmark.)
+
+**Trust & recoverability**
+- [ ] **WF-AUDIT — Full history & audit trail.** ★ For important values (balances, ownership, rules,
+  budgets, plan membership, APRs, recurring charges): previous→new value, date, who, source
+  (imported/manual/calculated), related txn/adjustment, and **undo where safe**.
+- [ ] **WF-BACKUP — Backup, restore & snapshots.** Local-first makes this core, not a checkbox:
+  complete encrypted backup, versioned snapshots, restore preview, CSV/JSON selective import/export,
+  conflict handling, backup-health indicator, undo recent bulk ops.
+
+**SMART (deterministic / local statistics)**
+- [ ] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three
+  purchases explain 82% of it, two materially larger than your usual." Let the user classify:
+  one-time / expected / wrong category / new normal / investigate.
+- [ ] **WF-SM2 — Behavioral pattern detection.** Surface patterns users miss: spend rises after
+  payday; weekend delivery accelerating; savings dips in irregular-income months; a card paid just
+  after interest posts; a category blows its budget in the final week; sub increases offsetting debt
+  progress; "small" purchases collectively > large ones.
+- [ ] **WF-SM3 — Next-best-action ranking.** Rank actions by monthly impact, one-time impact, effort,
+  reversibility, urgency, and confidence — and show *why* one outranks another.
+- [ ] **WF-SM4 — Local financial memory.** Remember decisions: "this merchant is always groceries",
+  "don't flag this annual payment", "keep ≥$15k liquid", "Priya owns this", "intentionally over budget
+  in travel months", "never recommend selling retirement". Prevents repeated corrections; personalizes
+  recommendations.
+
+**SMART+ (opt-in, BYO OpenAI key — interpret & explain only; app does the arithmetic + preview/confirm)**
+- [ ] **WF-SP1 — Explain-my-finances conversationally.** "Why did safe-to-spend fall?" / "What changed
+  since Friday?" / "Can I add $300 to vacation?" / "Which 3 changes improve health fastest?" — model
+  retrieves local facts, deterministic engine computes, answers cite CashFlux data.
+- [ ] **WF-SP2 — Receipt & statement understanding (vision).** Extract receipt lines/tax/tip/merchant/
+  account; read statement balances & dates; suggest splits & categories; compare imported statement
+  totals vs CashFlux; spot subs & price changes. Always a review screen before saving.
+- [ ] **WF-SP3 — Personalized monthly-review narrative.** Short, evidence-linked: what improved /
+  worsened / was unusual / intentional, highest-value next action, what to watch — every sentence
+  linking to the txn/category/account/calculation.
+- [ ] **WF-SP4 — Natural-language scenario builder.** "Keep six months cash, pay off both cards,
+  preserve the vacation goal, invest the rest" → explicit constraints → proposed allocation →
+  approval before anything applies. (Feeds WF2 + WF10.)
+
+**Non-goals (without third-party services — do NOT promise; label freshness/limits honestly):**
+automatic bank/institution sync, live credit scores/bureau monitoring, bill negotiation, merchant-side
+subscription cancellation, real-time brokerage/rewards pricing, automatic money transfers, tax filing /
+live payroll. Manual import + statement parsing may approximate parts, clearly labelled as such.
+
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
