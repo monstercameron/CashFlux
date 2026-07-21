@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-21
+
 ### Fixed
 - **/health refinement pass (8.8 review).** A "Why this score" contribution bar now fills the hero —
   a single 0–100 bar segmented by each factor's actual points (score × weight), coloured by strength,
