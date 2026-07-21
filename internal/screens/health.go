@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/resilience"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -434,10 +435,13 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
 			targetLine,
 		),
+		// Name the measurement window on the factors that average it, so this "Savings
+		// rate" isn't confused with the current-period savings_rate formula (review #3).
+		If(f.Key == "savings", P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "hf-period-"+f.Key), uistate.T("healthx.savingsPeriod"))),
 		meterNode,
 		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
 		Details(css.Class("hlt-curve"),
-			Summary(uistate.T("health.curveSummary")),
+			Summary(Attr("aria-label", uistate.T("healthx.curveAria", f.Label)), uistate.T("health.curveSummary")),
 			// Composition: plain-language formula, then the actual equation — a live
 			// molecule for the molecule-backed factors, else the on-device composition
 			// over atoms — so "= atoms" is visible, not just an opaque variable name.
@@ -487,6 +491,14 @@ func HealthScreen() ui.Node {
 
 	showFormulas := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+	// When the metrics workspace is revealed it mounts at the bottom of a long page —
+	// scroll it into view so the toggle visibly does something (review finding #1).
+	ui.UseEffect(func() func() {
+		if showFormulas.Get() {
+			smoothScrollToSection("sec-health-formulas")
+		}
+		return nil
+	}, showFormulas.Get())
 
 	now := time.Now()
 	month := now.Format("2006-01")
@@ -539,6 +551,9 @@ func HealthScreen() ui.Node {
 							uistate.T("health.deficitWarning"))),
 				),
 			),
+			// "Why this score?" — the per-factor point contributions as one segmented
+			// bar, so the number is explained without opening the six disclosures.
+			healthContribBar(r),
 			// The score IS a formula: the live molecule folds behind a quiet
 			// disclosure so the hero stays glanceable, one click from the audit.
 			If(scoreFormula != "", Details(css.Class("hlt-formula"), Attr("data-testid", "health-formula"),
@@ -642,7 +657,7 @@ func HealthScreen() ui.Node {
 
 	// ── Opt-in metrics tile: the score's variables in the FormulaBuilder. ────────
 	if showFormulas.Get() {
-		tiles = append(tiles, hltTile("hlt-formula-builder", "1 / span 4", Fragment(
+		tiles = append(tiles, hltTile("hlt-formula-builder", "1 / span 4", Div(Attr("id", "sec-health-formulas"),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("health.formulaHint")),
 			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("health.metricsShow"), Initial: "health_score", ShowSaved: true}),
 		)))
@@ -667,7 +682,7 @@ func healthStepRoute(key string) string {
 	case "utilization":
 		return "/credit" // pay down card balances
 	case "nw-trend":
-		return "/accounts" // net worth composes from accounts
+		return "/networth" // the dedicated net-worth page (assets vs liabilities over time)
 	default:
 		return ""
 	}
@@ -692,10 +707,15 @@ func healthStepRow(p healthStepRowProps) ui.Node {
 	if p.Route == "" {
 		return Div(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1), body)
 	}
-	return Button(css.Class("row", tw.Flex, tw.FlexCol, tw.Gap1, tw.TextLeft, tw.WFull, tw.HoverBgHover),
+	// A clickable step: lay the text beside a chevron so it reads as an action, not a
+	// static note (review finding #8).
+	return Button(css.Class("row", "hlt-step-row", tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap3, tw.TextLeft, tw.WFull, tw.HoverBgHover),
 		Type("button"), Attr("data-testid", "health-step"),
 		Attr("aria-label", uistate.T("health.stepOpen", p.Factor)),
-		OnClick(open), body)
+		OnClick(open),
+		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), body),
+		uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
+	)
 }
 
 // healthBandForScore mirrors the model's banding for per-factor tone (the model

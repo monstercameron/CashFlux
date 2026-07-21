@@ -57,6 +57,61 @@ func registerHealthAnalysis() {
 		color("var(--text-dim)"),
 	)
 
+	// --- Hero "why this score" contribution breakdown ---
+	rule(".hlt-contrib",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+		prop("margin-top", "0.75rem"),
+	)
+	rule(".hlt-contrib-bar",
+		display("flex"),
+		width("100%"),
+		height("0.7rem"),
+		borderRadius("999px"),
+		overflow("hidden"),
+		background("color-mix(in srgb, var(--bg-elev) 60%, transparent)"),
+		border("1px solid var(--border)"),
+	)
+	rule(".hlt-contrib-seg",
+		height("100%"),
+	)
+	rule(".hlt-contrib-seg + .hlt-contrib-seg",
+		prop("border-left", "1px solid color-mix(in srgb, var(--bg) 40%, transparent)"),
+	)
+	rule(".hlt-contrib-seg.is-good, .hlt-contrib-dot.is-good",
+		background("var(--accent)"),
+	)
+	rule(".hlt-contrib-seg.is-warn, .hlt-contrib-dot.is-warn",
+		background("#f59e0b"),
+	)
+	rule(".hlt-contrib-seg.is-bad, .hlt-contrib-dot.is-bad",
+		background("var(--danger)"),
+	)
+	rule(".hlt-contrib-legend",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.35rem 0.9rem"),
+	)
+	rule(".hlt-contrib-key",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.3rem"),
+		fontSize("var(--type-12)"),
+	)
+	rule(".hlt-contrib-dot",
+		width("0.55rem"),
+		height("0.55rem"),
+		borderRadius("50%"),
+		prop("flex", "0 0 auto"),
+	)
+	rule(".hlt-contrib-name",
+		color("var(--text-dim)"),
+	)
+	rule(".hlt-contrib-pts",
+		fontVariantNumeric("tabular-nums"),
+	)
+
 	// --- Money-leaks tile ---
 	rule(".hlt-leak-block",
 		display("flex"),
@@ -77,12 +132,22 @@ func registerHealthAnalysis() {
 	)
 	rule(".hlt-creep-row",
 		display("flex"),
-		alignItems("baseline"),
-		justifyContent("space-between"),
+		alignItems("center"),
 		flexWrap("wrap"),
 		gap("0.5rem"),
-		padding("0.4rem 0"),
+		padding("0.5rem 0.4rem"),
 		prop("border-top", "1px solid var(--border)"),
+		background("transparent"),
+		borderRadius("8px"),
+		cursor("pointer"),
+	)
+	// The chevron drifts right on hover to signal the row drills in.
+	rule(".hlt-creep-chev",
+		prop("margin-left", "0.2rem"),
+		transition("transform 0.16s ease"),
+	)
+	rule(".hlt-creep-row:hover .hlt-creep-chev, .hlt-step-row:hover svg",
+		transform("translateX(2px)"),
 	)
 	rule(".hlt-creep-name",
 		color("var(--text)"),

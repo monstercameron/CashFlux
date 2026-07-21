@@ -12,15 +12,19 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/healthscore"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/moneyleaks"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/resilience"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
 	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v4/router"
 	"github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
@@ -90,6 +94,66 @@ func liveResilienceInput(app *appstate.App, now time.Time) resilience.Input {
 	}
 }
 
+// --- Hero: "why this score" contribution breakdown ------------------------------
+
+// contribTone maps a factor score to the contribution-bar segment class.
+func contribTone(score int) string {
+	switch {
+	case score >= 60:
+		return "is-good"
+	case score >= 40:
+		return "is-warn"
+	default:
+		return "is-bad"
+	}
+}
+
+// healthContribBar answers "why this number?" at a glance: a single 0–100 bar
+// segmented by each applicable factor's actual points contributed (its score ×
+// its weight), coloured by how strong that factor is, with the empty tail showing
+// the points still on the table. It fills the hero's spare space so the score is
+// legible without opening the six disclosures.
+func healthContribBar(r healthscore.Result) ui.Node {
+	if r.Band == healthscore.BandNoData {
+		return Fragment()
+	}
+	type seg struct {
+		label string
+		pts   int
+		tone  string
+	}
+	var segs []seg
+	for _, f := range r.Factors {
+		if !f.Applicable {
+			continue
+		}
+		pts := int(float64(f.Score)*f.Weight + 0.5)
+		if pts <= 0 {
+			continue
+		}
+		segs = append(segs, seg{f.Label, pts, contribTone(f.Score)})
+	}
+	if len(segs) == 0 {
+		return Fragment()
+	}
+	bars := make([]ui.Node, 0, len(segs))
+	legend := make([]ui.Node, 0, len(segs))
+	for _, s := range segs {
+		bars = append(bars, Div(ClassStr("hlt-contrib-seg "+s.tone),
+			Attr("title", fmt.Sprintf("%s +%d", s.label, s.pts)),
+			Style(map[string]string{"width": fmt.Sprintf("%d%%", s.pts)})))
+		legend = append(legend, Span(css.Class("hlt-contrib-key"),
+			Span(ClassStr("hlt-contrib-dot "+s.tone), Attr("aria-hidden", "true")),
+			Span(css.Class("hlt-contrib-name"), s.label),
+			Span(css.Class("hlt-contrib-pts", tw.TextDim), fmt.Sprintf("+%d", s.pts))))
+	}
+	return Div(css.Class("hlt-contrib"),
+		Span(css.Class("hlt-detail-label"), uistate.T("healthx.whyScore")),
+		Div(withNodes([]any{css.Class("hlt-contrib-bar"), Attr("role", "img"), Attr("aria-label", uistate.T("healthx.whyScoreAria", r.Score))}, bars)...),
+		Div(withNodes([]any{css.Class("hlt-contrib-legend")}, legend)...),
+	)
+}
+
 // --- Stress-test tile -----------------------------------------------------------
 
 type healthStressProps struct {
@@ -101,6 +165,7 @@ type healthStressProps struct {
 // component so the per-chip OnClick hook sits at a stable position.
 type healthChipProps struct {
 	Label  string
+	Aria   string // full accessible name (the bare "10%" doesn't say which shock)
 	Active bool
 	Key    string
 	OnPick func()
@@ -112,8 +177,13 @@ func healthStressChip(p healthChipProps) ui.Node {
 	if p.Active {
 		cls += " is-active"
 	}
-	return Button(ClassStr(cls), Type("button"), Attr("aria-pressed", ariaBool(p.Active)),
-		Attr("data-testid", "stress-chip-"+p.Key), OnClick(on), p.Label)
+	args := []any{ClassStr(cls), Type("button"), Attr("aria-pressed", ariaBool(p.Active)),
+		Attr("data-testid", "stress-chip-"+p.Key), OnClick(on)}
+	if p.Aria != "" {
+		args = append(args, Attr("aria-label", p.Aria))
+	}
+	args = append(args, p.Label)
+	return Button(args...)
 }
 
 // healthStressTile is the interactive what-if surface: pick a shock (a pay cut, a
@@ -144,7 +214,8 @@ func healthStressTile(props healthStressProps) ui.Node {
 	for _, p := range dropPcts {
 		v := p
 		dropChips = append(dropChips, ui.CreateElement(healthStressChip, healthChipProps{
-			Label: fmt.Sprintf("%d%%", v), Active: incomeDrop.Get() == v, Key: fmt.Sprintf("drop-%d", v),
+			Label: fmt.Sprintf("%d%%", v), Aria: uistate.T("healthx.dropAria", v),
+			Active: incomeDrop.Get() == v, Key: fmt.Sprintf("drop-%d", v),
 			OnPick: func() { incomeDrop.Set(v) },
 		}))
 	}
@@ -156,14 +227,20 @@ func healthStressTile(props healthStressProps) ui.Node {
 		dropOut = uistate.T("healthx.dropOk", drop.DropPct, fmtB(drop.NewSurplus))
 	}
 
-	// Surprise expense.
+	// Surprise expense. A final "over the buffer" preset (a hair more than the liquid
+	// cash) guarantees the scary branch is reachable — otherwise a large buffer makes
+	// every fixed preset land on the same reassuring outcome (review finding #6).
 	surprisePresets := []int64{500 * unit, 1000 * unit, 2500 * unit, 5000 * unit}
+	if over := in.LiquidCash + in.MonthlySpend; over > 5000*unit {
+		surprisePresets = append(surprisePresets, over)
+	}
 	surChips := make([]ui.Node, 0, len(surprisePresets))
 	for i, amt := range surprisePresets {
 		idx := i
 		a := amt
 		surChips = append(surChips, ui.CreateElement(healthStressChip, healthChipProps{
-			Label: fmtB(a), Active: surpriseSel.Get() == idx, Key: fmt.Sprintf("sur-%d", idx),
+			Label: fmtB(a), Aria: uistate.T("healthx.surpriseAria", fmtB(a)),
+			Active: surpriseSel.Get() == idx, Key: fmt.Sprintf("sur-%d", idx),
 			OnPick: func() { surpriseSel.Set(idx) },
 		}))
 	}
@@ -185,7 +262,8 @@ func healthStressTile(props healthStressProps) ui.Node {
 	for _, p := range ratePresets {
 		v := p
 		rateChips = append(rateChips, ui.CreateElement(healthStressChip, healthChipProps{
-			Label: fmt.Sprintf("+%d", v), Active: ratePts.Get() == v, Key: fmt.Sprintf("rate-%d", v),
+			Label: fmt.Sprintf("+%d", v), Aria: uistate.T("healthx.rateAria", v),
+			Active: ratePts.Get() == v, Key: fmt.Sprintf("rate-%d", v),
 			OnPick: func() { ratePts.Set(v) },
 		}))
 	}
@@ -228,6 +306,15 @@ type healthLeaksProps struct{ App *appstate.App }
 // read off the user's own data; nothing here is a hardcoded budget.
 func healthLeaksTile(props healthLeaksProps) ui.Node {
 	app := props.App
+	nav := router.UseNavigate()
+	txFilter := uistate.UseTxFilter()
+	// Drill a creep category to its contributing transactions (review finding #4).
+	openCat := func(catID string) {
+		f := uistate.TxFilter{Category: catID}.Normalize()
+		txFilter.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -289,14 +376,13 @@ func healthLeaksTile(props healthLeaksProps) ui.Node {
 	if len(targets) > 0 {
 		rows := make([]ui.Node, 0, len(targets))
 		for _, t := range targets {
-			name := budgetCategoryName(app, t.CategoryID)
-			rows = append(rows, Div(css.Class("hlt-creep-row"),
-				Span(css.Class("hlt-creep-name", tw.Fold(tw.FontMedium)), name),
-				Span(css.Class("t-caption", tw.TextDim),
-					uistate.T("healthx.creepDetail", fmtB(t.RecentAvgMinor), fmtB(t.MedianMinor))),
-				Span(ClassStr("hlt-creep-save "+tw.ColorClass("text-down")),
-					uistate.T("healthx.creepSave", fmtB(t.MonthlySaveMinor))),
-			))
+			cid := t.CategoryID
+			rows = append(rows, ui.CreateElement(healthCreepRow, healthCreepRowProps{
+				Name:   budgetCategoryName(app, cid),
+				Detail: uistate.T("healthx.creepDetail", fmtB(t.RecentAvgMinor), fmtB(t.MedianMinor)),
+				Save:   uistate.T("healthx.creepSave", fmtB(t.MonthlySaveMinor)),
+				OnOpen: func() { openCat(cid) },
+			}))
 		}
 		creepNode = Fragment(withNodes(nil, rows)...)
 	}
@@ -315,6 +401,27 @@ func healthLeaksTile(props healthLeaksProps) ui.Node {
 	return hltTile("hlt-leaks", "1 / span 4",
 		hltSection("sec-health-leaks", uistate.T("healthx.leaksTitle"),
 			debtOwnerLink("/recurring", uistate.T("healthx.manageRecurring")), body))
+}
+
+// healthCreepRowProps drives one spending-creep row; its own component so the
+// per-row drill hook sits at a stable position (rows render in a loop).
+type healthCreepRowProps struct {
+	Name, Detail, Save string
+	OnOpen             func()
+}
+
+// healthCreepRow renders a creep finding as a button that drills to the category's
+// contributing transactions — turning the insight into an action (review finding #4).
+func healthCreepRow(p healthCreepRowProps) ui.Node {
+	open := ui.UseEvent(Prevent(func() { p.OnOpen() }))
+	return Button(css.Class("hlt-creep-row", tw.WFull, tw.TextLeft, tw.HoverBgHover), Type("button"),
+		Attr("data-testid", "health-creep-row"),
+		Attr("aria-label", uistate.T("healthx.creepAria", p.Name)), OnClick(open),
+		Span(css.Class("hlt-creep-name", tw.Fold(tw.FontMedium)), p.Name),
+		Span(css.Class("t-caption", tw.TextDim), p.Detail),
+		Span(ClassStr("hlt-creep-save "+tw.ColorClass("text-down")), p.Save),
+		uiw.Icon(icon.ChevronRight, css.Class("hlt-creep-chev", tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
+	)
 }
 
 // withNodes appends a []ui.Node onto a head []any so it can be spread into an

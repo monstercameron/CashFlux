@@ -6,6 +6,23 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **/health refinement pass (8.8 review).** A "Why this score" contribution bar now fills the hero —
+  a single 0–100 bar segmented by each factor's actual points (score × weight), coloured by strength,
+  with the empty tail showing the points still on the table (Savings +25, Emergency +25, Debt +1,
+  Budget +10, Credit +3, Trend +10 = 74). Spending-creep rows are now buttons that drill to the
+  category's transactions. Revealing the metrics workspace scrolls it into view (it mounted offscreen
+  at the page bottom). The score disclosure no longer claims you can "re-weight your own score" by
+  editing the formula (editing the molecule builds a personal variable; it doesn't change the
+  Go-computed score) — it now agrees with the Formulas workspace. The savings factor names its
+  three-month averaging window so it isn't confused with the current-period savings_rate formula. A
+  surprise-bill preset that exceeds the buffer was added so the card-borrowing outcome is reachable.
+  Net-worth "act on this" now opens /networth (not /accounts). Accessibility: per-factor scoring
+  disclosures ("How Savings rate is measured and scored"), stress chips ("Model a 20% pay cut"), and
+  creep rows ("Review Dining transactions") get distinct accessible names; focus-next steps gained a
+  chevron so they read as clickable.
+
+
 ### Added
 - **Analysis engines for the /health redesign (pure, tested).**
   - `internal/resilience` — a what-if stress-test engine: runway months with no income, the effect

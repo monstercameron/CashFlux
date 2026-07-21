@@ -19,7 +19,7 @@ var healthSurfaceKeys = Catalog{
 	"health.exampleLabel":   "Example",
 	"health.molNote":        "a live molecule — you can edit it under Formulas",
 	"health.derivedNote":    "computed on your device — a live variable you can use in formulas, but not an editable molecule",
-	"health.formulaNote":    "Every piece is a variable you can use anywhere, and you can even re-weight your own score by editing health_score under Formulas.",
+	"health.formulaNote":    "Every piece is a variable you can use anywhere. Want a different blend? Build your own version under Formulas — it won't change this official score.",
 	"health.formulaHint":    "The score and its six factors are live health_* engine variables — drop any of them into a formula or a dashboard widget.",
 	"health.notApplicable":  "Not applicable to you — this factor is left out and the others carry its weight.",
 	"health.act":            "Act on this",

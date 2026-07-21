@@ -48,6 +48,25 @@ var healthAnalysisKeys = Catalog{
 	"healthx.historyStreakUp":   "Up %d months running — now %d.",
 	"healthx.historyStreakDown": "Slipping %d months running — now %d.",
 	"healthx.historyRecover":    "Recovering — up %d months after a dip, now %d.",
+
+	// Hero "why this score" contribution breakdown.
+	"healthx.whyScore":     "Why this score",
+	"healthx.whyScoreAria": "Score of %d, broken down by each factor's point contribution", // %d = score
+
+	// Accessible names for the stress chips (the bare "10%" / "$500" / "+5" don't say
+	// which shock). %d / %s = the shock size.
+	"healthx.dropAria":     "Model a %d%% pay cut",
+	"healthx.surpriseAria": "Model a %s surprise bill",
+	"healthx.rateAria":     "Model a %d-point card rate increase",
+
+	// Savings factor: name the averaging window so it isn't read as the current-period
+	// savings_rate formula of the same name.
+	"healthx.savingsPeriod": "Averaged over the last 3 full months",
+
+	// Accessible name for each factor's scoring disclosure. %s = factor label.
+	"healthx.curveAria": "How %s is measured and scored",
+	// Accessible name for a clickable spending-creep row. %s = category name.
+	"healthx.creepAria": "Review %s transactions",
 }
 
 func init() {

@@ -44,4 +44,38 @@ test.describe("health: money leaks", () => {
     await expect(leaks).toContainText(/\/ mo/i);
     await expect(leaks).toContainText(/spending creep/i);
   });
+
+  test("a spending-creep row drills to that category's transactions", async ({ app }) => {
+    await nav(app, "/health");
+    const row = app.getByTestId("health-creep-row").first();
+    await expect(row).toBeVisible();
+    await row.click();
+    // Landed on the transactions screen (the drill destination).
+    await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
+  });
+});
+
+test.describe("health: score contribution breakdown", () => {
+  test("the hero shows a per-factor contribution bar summing under the score", async ({ app }) => {
+    await nav(app, "/health");
+    await expect(app.locator(".hlt-contrib")).toBeVisible();
+    // Six factors are applicable on the seed, so six segments and six legend keys.
+    expect(await app.locator(".hlt-contrib-seg").count()).toBe(6);
+    await expect(app.locator(".hlt-contrib-legend")).toContainText(/savings rate/i);
+  });
+});
+
+test.describe("health: metrics workspace", () => {
+  test("revealing the metrics workspace scrolls it into view", async ({ app }) => {
+    await nav(app, "/health");
+    const scroller = () => app.evaluate(() => {
+      const m = document.querySelector("#main") || document.scrollingElement;
+      return m.scrollTop;
+    });
+    const before = await scroller();
+    await app.getByTestId("health-toggle-formulas").click();
+    await app.waitForTimeout(700);
+    expect(await scroller()).toBeGreaterThan(before + 100);
+    await expect(app.locator("#sec-health-formulas")).toBeVisible();
+  });
 });

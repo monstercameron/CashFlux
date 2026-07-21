@@ -29,6 +29,23 @@ one-`%s` string called with two args printed `%!(EXTRA …)` — fixed by giving
 buffer amount it deserved. Verified light + dark, zero console errors. Trimming to come once the
 user sees the whole thing.
 
+**Refinement pass (review came back 8.8).** All Medium/Low. The standout add is the reviewer's own
+suggestion: a "Why this score" contribution bar in the hero's empty space — one 0–100 bar segmented
+by each factor's actual points (score × weight), red where the factor is weak, with the empty tail =
+points left on the table. It sums to the number (25+25+1+10+3+10 = 74) so the score is explained
+without opening six disclosures. Spending-creep rows became drill buttons to the category's
+transactions (the insight now leads somewhere). Two traps worth noting: (1) the "Health metrics"
+toggle mounted the formula workspace at the page bottom, offscreen — same "does nothing" feel as the
+old debt toggle; fixed with a UseEffect that smooth-scrolls to it when revealed. (2) I first put the
+`health.formulaNote` copy override in en_healthanalysis.go, but i18n init() merges run in filename
+order and en_health**surface**.go sorts AFTER en_health**analysis**.go, so its init clobbered the
+override — the fix had to go in the source file. (The debt trick worked only because it overrode a
+key defined in en.go's package-var map, which initializes before any init().) The score-edit copy was
+genuinely contradictory: the hero said "re-weight your own score," the workspace said saved formulas
+change nothing — and the workspace is right, because the ring is Go-computed and editing the
+`health_score` molecule only changes the engine variable. Rest were aria names, a nw-trend route, a
+savings-window label, an over-buffer stress preset, and step chevrons.
+
 ## 2026-07-20 — /debt: a debt-health rule engine, then an interactive coaching page
 
 Reworking /debt from a competent read-only dashboard into a tool that teaches, warns, and lets you
