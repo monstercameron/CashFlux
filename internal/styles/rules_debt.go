@@ -14,6 +14,48 @@ package styles
 // Chained from install.go's Register(). The band colors (danger / #f59e0b amber /
 // accent) match the debt-card rails in rules_gen.go on purpose.
 func registerDebtCoachSurface() {
+	// Sticky plan-summary bar — pinned below the header so the active plan stays in
+	// view down the long page. Solid background so scrolled tiles never show through;
+	// z-index below the app topbar (which is 5). grid-column spans the whole bento.
+	rule(".debt-planbar",
+		position("sticky"),
+		// Sit flush below the measured sticky header (published by the tile) plus a
+		// small gap; fall back to a sane desktop value before the measure lands.
+		prop("top", "calc(var(--debt-header, 101px) + 0.4rem)"),
+		zIndex("4"),
+		prop("grid-column", "1 / -1"),
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("1.75rem"),
+		padding("0.6rem 1.1rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		background("var(--bg-card)"),
+		boxShadow("0 6px 18px -8px rgba(0,0,0,0.45)"),
+	)
+	rule(".debt-planbar-item",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.05rem"),
+	)
+	rule(".debt-planbar-label",
+		fontSize("var(--type-11)"),
+		prop("text-transform", "uppercase"),
+		letterSpacing("0.06em"),
+	)
+	rule(".debt-planbar-value",
+		fontSize("1.05rem"),
+		fontWeight("650"),
+		fontVariantNumeric("tabular-nums"),
+	)
+
+	// The plan-scope note under the hero debt-free line (e.g. "excludes $153,720").
+	rule(".debt-hero-note",
+		fontSize("0.82rem"),
+		prop("margin", "0.1rem 0 0"),
+	)
+
 	// --- Watch-outs: severity-railed alert cards ---
 	rule(".debt-alerts",
 		display("flex"),

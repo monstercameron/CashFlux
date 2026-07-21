@@ -140,6 +140,36 @@ test.describe("debt: teaching accordion", () => {
   });
 });
 
+test.describe("debt: sticky plan bar", () => {
+  test("summarizes the active plan and stays pinned below the header", async ({ app }) => {
+    await nav(app, "/debt");
+    const bar = app.getByTestId("debt-planbar");
+    await expect(bar).toBeVisible();
+    await expect(bar).toContainText(/in plan/i);
+    await expect(bar).toContainText(/debt-free/i);
+    // Scroll the page and confirm the bar stays near the top (sticky), clear of the
+    // header rather than parked at y=0 behind it.
+    await app.evaluate(() => { const m = document.querySelector("#main") || document.scrollingElement; (m.scrollTo ? m : window).scrollTo(0, 1500); });
+    await app.waitForTimeout(300);
+    const top = await bar.evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    expect(top).toBeGreaterThan(40); // below the header, not hidden at the very top
+    expect(top).toBeLessThan(260); // still pinned near the top, not scrolled away
+  });
+});
+
+test.describe("debt: add debt", () => {
+  test("opens a liability, not a checking asset", async ({ app }) => {
+    await nav(app, "/debt");
+    await app.getByTestId("debt-add").click();
+    // The modal is titled "Add debt" and shows the debt-specific fields immediately
+    // (a checking asset would show none of these).
+    const modal = app.locator(".flip-panel, [role=dialog]").first();
+    await expect(modal).toContainText(/add debt/i);
+    await expect(modal).toContainText(/interest apr/i);
+    await expect(modal).toContainText(/minimum payment/i);
+  });
+});
+
 test.describe("debt: jump navigation", () => {
   test("offers the new sections", async ({ app }) => {
     await nav(app, "/debt");

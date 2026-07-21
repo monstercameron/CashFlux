@@ -30,6 +30,11 @@ type AccountAddFormProps struct {
 	// close the modal. On a validation error the form stays open and OnDone is
 	// not called.
 	OnDone func()
+	// PrefillLiability seeds the type as a credit card (a liability) instead of a
+	// checking account, so opening this from the Debt page's "Add debt" lands on a
+	// debt with the APR / limit / minimum / due-day fields already showing — not a
+	// checking account someone adds as an asset by accident.
+	PrefillLiability bool
 }
 
 // AccountAddForm is the standalone add-an-account form. It owns all its state
@@ -80,7 +85,11 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	ev := useEntityVarField(accountVarKind, name, "")
 	curr := ui.UseState(baseCur)
 	amount := ui.UseState("0")
-	accType := ui.UseState(string(domain.TypeChecking))
+	defaultType := string(domain.TypeChecking)
+	if props.PrefillLiability {
+		defaultType = string(domain.TypeCreditCard)
+	}
+	accType := ui.UseState(defaultType)
 	// asLiab: for an "Other"-type account (no natural class), an explicit "count as a
 	// liability (debt)" override so the net-worth/debt formulas include it.
 	asLiab := ui.UseState(false)

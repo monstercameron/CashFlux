@@ -66,6 +66,19 @@ func AddHost() uic.Node {
 			OnClose:   close,
 			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close}),
 		})
+	case "debt":
+		// Add debt: the same account form, pre-set to a liability (credit card) so the
+		// Debt page's "Add debt" never silently creates a checking asset — the APR /
+		// limit / minimum / due-day fields show immediately. Debt-specific title.
+		return uiw.FlipPanel(uiw.FlipPanelProps{
+			Title:     uistate.T("debt.addDebt"),
+			Width:     uiw.FlipMediumW,
+			Height:    uiw.FlipMediumH,
+			FormID:    "account-add-form",
+			SaveLabel: uistate.T("debt.addDebt"),
+			OnClose:   close,
+			Back:      uic.CreateElement(screens.AccountAddForm, screens.AccountAddFormProps{OnDone: close, PrefillLiability: true}),
+		})
 	case "budget":
 		// NoFooter + FlushBody: the form owns its own Cancel + Add budget bar, pinned to
 		// the bottom so it never scrolls off; no separate Close footer, no dead space.

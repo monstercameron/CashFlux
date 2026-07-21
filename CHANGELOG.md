@@ -29,6 +29,15 @@ and every commit updates this file under `Unreleased`.
   Card", "View Mortgage transactions", etc.); and one overconfident credit-score claim was softened.
 
 ### Added
+- **/debt: a sticky plan-summary bar and a debt-specific Add flow (review refinements).**
+  - A compact bar (method · extra/month · in-plan balance · debt-free date) now stays pinned
+    below the header as you scroll the long page, so the active plan is always in view. Its top
+    offset is measured from the real header height (published to `--debt-header`, re-measured on
+    resize) rather than hardcoded, so it never parks behind a header that grew a banner row.
+  - "Add debt" now opens a debt (credit card) with the APR / limit / minimum / due-day fields
+    already showing and an "amount you owe" opening-balance label — instead of the generic
+    "Add account" dialog that defaulted to a Checking asset. New addTarget "debt" reuses the
+    account form with a `PrefillLiability` seed; /planning and the top-bar +Add are unchanged.
 - **`internal/debtcoach` — a pure debt-health rule engine.** Given a snapshot of someone's
   debts (per-account balance/APR/minimum/limit plus FX-converted portfolio aggregates), it decides
   which watch-outs apply and how urgent each is, returning a ranked list of typed `Alert`s. Rules

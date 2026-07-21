@@ -74,10 +74,11 @@ func DebtPlanner() ui.Node {
 		debtNativeSpec("debt-summary"),
 		debtNativeSpec("debt-toolbar"),
 	}
-	// Watch-outs go high — right under the headline — so anything getting out of
-	// control is the first thing read, before the ladder of individual debts.
+	// The sticky plan bar and Watch-outs go high — right under the headline — so the
+	// active plan stays in view and anything getting out of control reads first,
+	// before the ladder of individual debts.
 	if hasDebts {
-		specs = append(specs, debtNativeSpec("debt-alerts"))
+		specs = append(specs, debtNativeSpec("debt-planbar"), debtNativeSpec("debt-alerts"))
 	}
 	specs = append(specs, debtNativeSpec("debt-list"))
 	if hasDebts {
@@ -125,6 +126,9 @@ func init() {
 	})
 	R("debt-list", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtListWidget, debtListProps{App: c.App})
+	})
+	R("debt-planbar", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(debtPlanBarWidget, debtPanelProps{App: c.App})
 	})
 	R("debt-alerts", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtAlertsWidget, debtPanelProps{App: c.App})

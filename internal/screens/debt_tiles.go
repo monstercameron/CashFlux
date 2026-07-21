@@ -334,7 +334,7 @@ func debtToolbarWidget(props debtToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	formulasAtom := uistate.UseDebtShowFormulas()
 	onToggleFormulas := ui.UseEvent(Prevent(func() { formulasAtom.Set(!formulasAtom.Get()) }))
-	addDebt := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("account") }))
+	addDebt := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("debt") }))
 
 	formulasLabel := uistate.T("debt.metricsShow")
 	if formulasAtom.Get() {

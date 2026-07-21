@@ -59,6 +59,18 @@ payoff calculator let a typed negative balance short-circuit `Project` into "0 m
 guard added — `min="0"` doesn't stop keyboard/paste); "0% APR" + an appended " APR" read "0% APR
 APR"; and eight identical "Edit"/"Transactions" buttons got per-account aria-labels.
 
+**Two UX refinements, and a re-run of the measured-offset lesson.** The reviewer wanted persistent
+orientation on a ~7,900px page and a debt-specific Add flow. The Add flow was easy: a new addTarget
+"debt" reuses the account form with a `PrefillLiability` seed that defaults the type to a credit card,
+so the APR/limit/minimum/due fields show at once and nobody creates a checking asset from the Debt
+page by accident. The sticky plan-summary bar re-taught the /networth lesson the hard way: shipped
+with `top: 0.5rem` it measured `getBoundingClientRect().top === 8` — i.e. parked *behind* the ~101px
+header stack (topbar + sample banner), invisible. A hardcoded top can't win here because the banner
+comes and goes. Fixed by publishing the measured `.topbar` height to `--debt-header` from a small
+mount+resize effect (same approach as `--nws-header`) and offsetting the bar's `top` from it; it now
+measures 108 and sits flush below the header. Deliberately NOT a draggable Widget — the tile
+transform would have broken `position: sticky` outright.
+
 Recheck 2 came back 9.4/10 with one Medium and seven Lows. Closing them produced one lesson worth
 keeping and one re-application of a lesson already on the books.
 

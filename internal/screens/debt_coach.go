@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -191,6 +192,78 @@ func alertAction(a debtcoach.Alert) ui.Node {
 		return debtOwnerLink("/networth", uistate.T("debt.linkNetWorth"))
 	}
 	return Fragment()
+}
+
+// --- debt-planbar: the sticky at-a-glance plan summary --------------------------
+
+// debtPlanBarWidget is a compact strip that stays pinned below the header as you
+// scroll this long page, so the active plan is always in view: which method, how
+// much extra, what's in the plan, and the debt-free date. It reads the same
+// canonical DebtConfig + view as everything else, so it never disagrees. Rendered
+// as a plain sticky element (not a draggable Widget, whose transform would break
+// position: sticky).
+func debtPlanBarWidget(props debtPanelProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	// Publish the measured header height so the bar sticks flush below it (the sticky
+	// global header + sample banner vary in height — a hardcoded top would tuck under
+	// them; see the /networth measured-offset lesson).
+	publishDebtHeaderOffset()
+	v := computeDebtView(props.App)
+	if len(v.Liabs) == 0 {
+		return Fragment()
+	}
+	method := uistate.T("planning.avalanche")
+	if v.Cfg.DefaultStrategy == "snowball" {
+		method = uistate.T("planning.snowball")
+	}
+	free := v.DebtFree
+	if free == "" {
+		free = "—"
+	}
+	item := func(label, val string) ui.Node {
+		return Div(css.Class("debt-planbar-item"),
+			Span(css.Class("debt-planbar-label", tw.TextDim), label),
+			Span(css.Class("debt-planbar-value", tw.FontDisplay), val))
+	}
+	return Div(css.Class("debt-planbar"), Attr("data-testid", "debt-planbar"), Attr("aria-label", uistate.T("debt.planbar.aria")),
+		item(uistate.T("debt.planbar.method"), method),
+		item(uistate.T("debt.planbar.extra"), fmtMoney(money.New(v.Cfg.DefaultExtraMinor, v.Base))),
+		item(uistate.T("debt.planbar.inPlan"), fmtMoney(v.PlanOwed)),
+		item(uistate.T("debt.planbar.free"), free),
+	)
+}
+
+// debtHeaderVar is the CSS custom property the sticky plan bar's `top` reads — the
+// measured height of the global sticky header (topbar + any banner).
+const debtHeaderVar = "--debt-header"
+
+// publishDebtHeaderOffset measures the sticky header and writes its height to
+// --debt-header on the document root, re-measuring on resize. Mirrors the proven
+// /networth approach so the plan bar never parks behind the header.
+func publishDebtHeaderOffset() {
+	ui.UseEffect(func() func() {
+		doc := js.Global().Get("document")
+		win := js.Global().Get("window")
+		if !doc.Truthy() || !win.Truthy() {
+			return nil
+		}
+		write := func() {
+			h := 101.0
+			if el := doc.Call("querySelector", ".topbar"); el.Truthy() {
+				if v := el.Call("getBoundingClientRect").Get("height").Float(); v > 0 {
+					h = v
+				}
+			}
+			doc.Get("documentElement").Get("style").Call("setProperty", debtHeaderVar, fmt.Sprintf("%.0fpx", h))
+		}
+		write()
+		cb := js.FuncOf(func(js.Value, []js.Value) any { write(); return nil })
+		win.Call("addEventListener", "resize", cb)
+		return func() {
+			win.Call("removeEventListener", "resize", cb)
+			cb.Release()
+		}
+	}, []any{"debt-planbar"})
 }
 
 // --- debt-tuner: the interactive strategy tuner ---------------------------------

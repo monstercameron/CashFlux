@@ -18,6 +18,13 @@ var debtCoachKeys = Catalog{
 	"debt.jumpTune":      "Tune plan",
 	"debt.jumpLearn":     "Learn",
 
+	// Sticky plan-summary bar.
+	"debt.planbar.aria":   "Your current payoff plan",
+	"debt.planbar.method": "Method",
+	"debt.planbar.extra":  "Extra / mo",
+	"debt.planbar.inPlan": "In plan",
+	"debt.planbar.free":   "Debt-free",
+
 	// Plan scope in the hero. The debt-free date is the PLAN's date (included debts
 	// only), so when a debt is excluded we name what the plan clears and what's left
 	// out rather than pairing the full total with the date. %s = planned balance,
