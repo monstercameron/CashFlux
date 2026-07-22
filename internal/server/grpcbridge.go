@@ -7,14 +7,59 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
+
+// syncTransferLog records each sync RPC that crosses the wire so an operator can confirm transfers
+// happen and, for a workspace push, see the payload size and whether it arrived as client-side
+// ciphertext (a cryptobox envelope) or as plaintext JSON. It writes to stderr in the same key="value"
+// style as the tunnel's own logs.
+var syncTransferLog = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+// atRest classifies a pushed dataset: a cryptobox envelope means the server stores ciphertext only
+// (zero-knowledge); anything else is readable by the server.
+func atRest(dataset []byte) string {
+	if len(dataset) == 0 {
+		return "none"
+	}
+	if cryptobox.IsEnvelope(dataset) {
+		return "ciphertext(encrypted)"
+	}
+	return "PLAINTEXT(not-encrypted)"
+}
+
+// syncTransferInterceptor logs every sync RPC after it runs: the method, the authenticated user, and
+// — for PutWorkspace — the workspace, byte count, and encryption status of the dataset.
+func syncTransferInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		start := time.Now()
+		resp, err := handler(ctx, req)
+		attrs := []any{"event", "sync_transfer", "method", info.FullMethod, "dur_ms", time.Since(start).Milliseconds()}
+		if u, ok := AuthUserFromContext(ctx); ok {
+			attrs = append(attrs, "user", u.ID)
+		}
+		if pr, ok := req.(backendrpc.PutWorkspaceRequest); ok {
+			attrs = append(attrs, "workspace", pr.Workspace.ID, "dataset_bytes", len(pr.Dataset), "at_rest", atRest(pr.Dataset))
+		}
+		if err != nil {
+			attrs = append(attrs, "error", err.Error())
+			syncTransferLog.Error("sync rpc", attrs...)
+		} else {
+			syncTransferLog.Info("sync rpc", attrs...)
+		}
+		return resp, err
+	}
+}
 
 func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	var store *Store
@@ -56,7 +101,7 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		store = stores[0]
 	}
 	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
 		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             20 * time.Second,

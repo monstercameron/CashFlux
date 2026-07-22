@@ -110,6 +110,10 @@ func SyncPage() uic.Node {
 		p.ServerToken = strings.TrimSpace(v)
 		persist(p)
 	})
+	// Enabling a passcode lock is what turns on zero-knowledge (E2E) sync: the dataset is encrypted
+	// on-device before upload, so the server only ever holds ciphertext. Offered right on the sync
+	// page so the user can make that privacy decision here.
+	onEnablePasscode := uic.UseEvent(func() { setPasscodeFlow() })
 	onTest := uic.UseEvent(func() {
 		testBackendConnection(serverURL.Get(), serverToken.Get(), func(discovery backendauth.Discovery) {
 			discovery = discovery.Normalize()
@@ -174,6 +178,21 @@ func SyncPage() uic.Node {
 
 		// What syncs — the honest disclosure, always visible.
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.whatSyncs")),
+
+		// Privacy / end-to-end encryption status — always visible so the user can make the
+		// zero-knowledge decision. When a passcode lock is on, the dataset is encrypted on-device
+		// before upload (server stores ciphertext only); when it's off, the server stores readable
+		// JSON, and we offer the one-tap way to turn the passcode on.
+		Div(css.Class("card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2),
+			Span(css.Class(tw.Text12, tw.TextFaint), uistate.T("sync.encTitle")),
+			If(loadAppLock().Active(), P(css.Class(tw.Text12), uistate.T("sync.encOn"))),
+			If(!loadAppLock().Active(), Fragment(
+				P(css.Class(tw.Text12), uistate.T("sync.encOff")),
+				Div(css.Class(tw.Mt1),
+					Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "sync-enable-passcode"),
+						OnClick(onEnablePasscode), uistate.T("sync.encEnable"))),
+			)),
+		),
 
 		// Link out to the fuller Cloud settings (subscription, sign-in, devices).
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),

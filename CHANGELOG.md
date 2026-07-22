@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Sync-transfer logging.** The embedded sync bridge now logs every sync RPC that crosses the wire —
+  method, authenticated user, and, for a workspace push, the workspace, byte count, and whether the
+  dataset arrived as client-side **ciphertext** (a cryptobox envelope) or **plaintext** JSON — so an
+  operator can confirm transfers happen and verify at-rest encryption.
+- **Encryption decision on the sync page.** The `/sync` page now shows a persistent Privacy panel: when
+  a passcode lock is on it confirms end-to-end encryption (server stores ciphertext only); when it's
+  off it warns that data is stored as readable JSON and offers a one-tap "Turn on passcode lock" so the
+  user can choose zero-knowledge sync. The "what syncs" line no longer buries the encryption note.
+
 ### Changed
 - **Loopback origins are interchangeable.** The websocket origin check (and the CORS check that shares
   it) now treats `localhost`, `127.0.0.1`, and `::1` as the same origin when scheme and port match, so
