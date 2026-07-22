@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Actionable "Test connection" errors.** The backend connection toast no longer just echoes the raw
+  HTTP status (e.g. the offline service worker's synthetic "HTTP 504", which masked the real cause).
+  It now names the likely problem: a `502/503/504` points at an unreachable host or an extra path in
+  the URL; a `404` says to use the base URL only; `401/403` points at the token. When the backend
+  URL's origin differs from the page's, the message spells out both origins and that they must match
+  (noting `localhost` ≠ `127.0.0.1`, and that ports must match) — the usual reason a cross-origin sync
+  request is blocked and surfaces as a 504.
+
 ### Added
 - **Sync-bridge discovery handshake.** `NewSyncBridgeHandler` now also serves `GET /v1/version` (with
   its CORS preflight) alongside the `/grpc` tunnel, so a frontend pointed at an embedded sync engine

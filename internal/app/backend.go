@@ -55,6 +55,52 @@ func backendOrigin(endpoint string) string {
 	return u.Scheme + "://" + u.Host
 }
 
+// appOrigin returns the page's own origin (scheme://host:port), or "" off the browser.
+func appOrigin() string {
+	loc := js.Global().Get("location")
+	if !loc.Truthy() {
+		return ""
+	}
+	o := loc.Get("origin")
+	if !o.Truthy() {
+		return ""
+	}
+	return o.String()
+}
+
+// originMismatchHint returns a trailing sentence naming a same-origin problem when the backend URL's
+// origin differs from the page's — the usual cause of a masked failure, since a cross-origin sync
+// request is blocked by the browser (and the offline service worker then reports it as a 504). It
+// returns "" when the origins match or can't be determined. Note that localhost and 127.0.0.1 are
+// distinct origins, as are different ports — a common trap.
+func originMismatchHint(endpoint string) string {
+	page := appOrigin()
+	backend := backendOrigin(endpoint)
+	if page == "" || backend == "" || strings.EqualFold(page, backend) {
+		return ""
+	}
+	return fmt.Sprintf(" This app is loaded from %s, but the backend is %s — they must be the SAME origin (scheme, host, and port; localhost and 127.0.0.1 don't match). Open the app from %s, or point sync at %s.",
+		page, backend, backend, page)
+}
+
+// backendStatusHint turns a non-2xx discovery status into an actionable message. A 502/503/504 from
+// the discovery probe is almost always the offline service worker masking a request that never
+// reached a server (cross-origin, an extra path in the URL, or an unreachable host) rather than a
+// real gateway timeout — so it points at those causes instead of the raw code.
+func backendStatusHint(code int, endpoint string) string {
+	switch code {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return fmt.Sprintf("Couldn't reach a backend at %s — the request never completed (HTTP %d). Make sure the URL is the server's base address with no extra path (e.g. http://127.0.0.1:8095, not …/budget).%s",
+			endpoint, code, originMismatchHint(endpoint))
+	case http.StatusNotFound:
+		return fmt.Sprintf("No backend found at %s (HTTP 404). Use the server's base URL only — with no path like /budget.%s", endpoint, originMismatchHint(endpoint))
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Sprintf("The backend rejected the request (HTTP %d). Check the bearer token.", code)
+	default:
+		return fmt.Sprintf("Backend returned HTTP %d.%s", code, originMismatchHint(endpoint))
+	}
+}
+
 func testBackendConnection(endpoint, token string, onDone func(backendauth.Discovery), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
 	token = strings.TrimSpace(token)
@@ -69,17 +115,17 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			onError("Couldn't reach the backend server.")
+			onError("Couldn't reach a backend at " + endpoint + ". Check the server is running and the URL is its base address (e.g. http://127.0.0.1:8095) with no extra path." + originMismatchHint(endpoint))
 			return
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			onError(fmt.Sprintf("Backend returned HTTP %d.", resp.StatusCode))
+			onError(backendStatusHint(resp.StatusCode, endpoint))
 			return
 		}
 		var version backendVersionResponse
 		if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
-			onError("Backend version response was invalid.")
+			onError(endpoint + " responded, but not like a CashFlux backend. Make sure it's the sync server's base URL — no /budget or other path." + originMismatchHint(endpoint))
 			return
 		}
 		if version.APIVersion != "v1" || version.MinClientAPIVersion != "v1" {
