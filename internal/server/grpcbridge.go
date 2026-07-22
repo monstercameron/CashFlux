@@ -64,7 +64,7 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
-	return grpctunnel.Wrap(grpcServer,
+	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
@@ -72,6 +72,27 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),
 		grpctunnel.WithMaxUpgradesPerClientPerMinute(cfg.GRPCMaxUpgradesPerClientPerMinute),
 	)
+	// The sync engine's contract is the /grpc tunnel plus the /v1/version discovery handshake: the
+	// frontend GETs /v1/version to confirm the backend is reachable and learn its auth mode before it
+	// will connect. Serve exactly those two — no billing/portal/OAuth/blob HTTP surface.
+	mux := http.NewServeMux()
+	mux.Handle("/grpc", tunnel)
+	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		writeJSON(w, VersionResponse{
+			APIVersion:          APIVersion,
+			MinClientAPIVersion: MinClientAPIVersion,
+			AuthMode:            cfg.AuthMode,
+			BillingEnabled:      cfg.Billing,
+			AuthProviders:       cfg.OAuthProviderNames(),
+			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+		})
+	})
+	return mux
 }
 
 func grpcTokenValidator(cfg Config) TokenValidator {

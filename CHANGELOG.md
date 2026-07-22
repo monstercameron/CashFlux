@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Sync-bridge discovery handshake.** `NewSyncBridgeHandler` now also serves `GET /v1/version` (with
+  its CORS preflight) alongside the `/grpc` tunnel, so a frontend pointed at an embedded sync engine
+  can complete its "Test connection" / backend-discovery probe (which fetches `/v1/version` for the
+  API version + auth mode) before connecting — without pulling in the rest of the HTTP site.
 - **Embeddable data-sync engine (`pkg/embed`).** A host Go service can now embed *only* CashFlux's
   multi-device sync — the gRPC `SyncService` over a GoGRPCBridge WebSocket tunnel — without running
   the full HTTP site. `pkg/embed.NewSyncBridge(dataDir)` opens the encrypted server-side store and
