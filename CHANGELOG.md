@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Loopback origins are interchangeable.** The websocket origin check (and the CORS check that shares
+  it) now treats `localhost`, `127.0.0.1`, and `::1` as the same origin when scheme and port match, so
+  a self-hoster whose app is opened on `localhost` can sync to a backend whose configured origin is
+  `127.0.0.1` (or vice-versa) without a rejected handshake. Non-loopback cross-origin requests are
+  still rejected.
 - **Actionable "Test connection" errors.** The backend connection toast no longer just echoes the raw
   HTTP status (e.g. the offline service worker's synthetic "HTTP 504", which masked the real cause).
   It now names the likely problem: a `502/503/504` points at an unreachable host or an extra path in

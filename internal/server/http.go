@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -577,9 +578,33 @@ func allowedOrigin(origin, configured string) bool {
 		return true
 	}
 	if configured != "" {
-		return origin == configured
+		return origin == configured || sameLoopbackOrigin(origin, configured)
 	}
+	return isLoopbackOrigin(origin)
+}
+
+// isLoopbackOrigin reports whether origin is an http loopback origin.
+func isLoopbackOrigin(origin string) bool {
 	return strings.HasPrefix(origin, "http://127.0.0.1:") ||
 		strings.HasPrefix(origin, "http://localhost:") ||
 		strings.HasPrefix(origin, "http://[::1]:")
+}
+
+// sameLoopbackOrigin reports whether two origins are the same loopback origin differing only by the
+// interchangeable loopback host spelling (localhost / 127.0.0.1 / [::1]), with the same scheme and
+// port. It spares self-hosters the classic footgun where the app is opened on localhost but the
+// backend origin is configured as 127.0.0.1 (or vice-versa) — technically distinct origins that are
+// nonetheless the same machine.
+func sameLoopbackOrigin(a, b string) bool {
+	ua, err := url.Parse(a)
+	if err != nil {
+		return false
+	}
+	ub, err := url.Parse(b)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(ua.Scheme, ub.Scheme) &&
+		ua.Port() == ub.Port() &&
+		isLoopbackHost(ua.Hostname()) && isLoopbackHost(ub.Hostname())
 }
