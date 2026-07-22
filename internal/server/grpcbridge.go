@@ -45,6 +45,35 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	)
 }
 
+// NewSyncBridgeHandler builds a GoGRPCBridge WebSocket handler that exposes ONLY the data-sync
+// gRPC service (SyncService) — no AIService, no HTTP site. It is the embeddable slice of the
+// server for hosts that want just the encrypted workspace-sync engine over gRPC-over-WebSocket,
+// reusing the same auth (token), request-ID, logging, entitlement, and keepalive machinery as the
+// full bridge so an existing CashFlux frontend syncs against it unchanged.
+func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
+	var store *Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             20 * time.Second,
+			PermitWithoutStream: false,
+		}),
+	)
+	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
+	return grpctunnel.Wrap(grpcServer,
+		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
+		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
+		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
+		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
+		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),
+		grpctunnel.WithMaxUpgradesPerClientPerMinute(cfg.GRPCMaxUpgradesPerClientPerMinute),
+	)
+}
+
 func grpcTokenValidator(cfg Config) TokenValidator {
 	return func(_ context.Context, token string) (AuthUser, error) {
 		user, ok := authUserForToken(strings.TrimSpace(token), cfg)

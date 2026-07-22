@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Embeddable data-sync engine (`pkg/embed`).** A host Go service can now embed *only* CashFlux's
+  multi-device sync — the gRPC `SyncService` over a GoGRPCBridge WebSocket tunnel — without running
+  the full HTTP site. `pkg/embed.NewSyncBridge(dataDir)` opens the encrypted server-side store and
+  returns the bridge handler (mount it at `/grpc`), a close func, and the auto-generated access token
+  (so the host can surface it — otherwise sync is unauthenticated). Backed by a new
+  `server.NewSyncBridgeHandler`, a sync-only sibling of `NewGRPCBridgeHandler` (same auth / logging /
+  entitlement / keepalive interceptors, minus `AIService`).
+
 ## [1.3.0] - 2026-07-21
 
 ### Fixed

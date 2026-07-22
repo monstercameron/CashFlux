@@ -1,3 +1,18 @@
+## 2026-07-21 — embeddable sync engine (`pkg/embed`)
+
+Another Go service (a personal-site backend) wanted to host CashFlux as a managed budgeting app,
+but only the *sync* — encrypted server-side storage for multi-device — not the whole HTTP site
+(billing/portal/console/AI proxy). Added `pkg/embed.NewSyncBridge`: a thin public wrapper over
+`internal/server` that opens the store and returns a gRPC-over-WebSocket bridge exposing just
+`SyncService`. It sits on `server.NewSyncBridgeHandler`, a sync-only twin of `NewGRPCBridgeHandler`
+— identical interceptor chain (RequestID → Auth → Logging → CloudEntitlement, unary + stream),
+keepalive policy, and `grpctunnel.Wrap` options, only dropping `RegisterAIServiceServer`. Verified
+line-for-line against the full handler; `/grpc` is the sole bridge mount the full server used, so a
+pure sync client needs nothing else (auth is a bearer token in gRPC metadata, not a cookie/OAuth
+session). The one sharp edge: token-mode auto-mints a random token each start, and unlike
+`cmd/cashflux-server` the embed had no way to surface it — so `NewSyncBridge` now returns
+`cfg.TokenForDisplay()` for the host to log, otherwise the frontend could never authenticate.
+
 ## 2026-07-20 — /health: from one score to a resilience + analysis surface
 
 Reworking /health, which was an honest but static six-factor score. The brief: "way more analysis"
