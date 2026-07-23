@@ -610,7 +610,7 @@ type tmplReviewRowProps struct {
 func tmplReviewRow(props tmplReviewRowProps) ui.Node {
 	toggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
 	return Label(css.Class("budget-tmpl-row"),
-		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "tmpl-pick-" + props.ID), OnChange(toggle)}, checkedAttr(props.Checked)...)...),
+		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "tmpl-pick-"+props.ID), OnChange(toggle)}, checkedAttr(props.Checked)...)...),
 		Span(css.Class("budget-tmpl-name"), props.Label),
 		Span(css.Class("budget-tmpl-amt"), props.AmountStr),
 	)

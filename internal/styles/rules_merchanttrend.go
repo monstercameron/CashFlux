@@ -92,7 +92,6 @@ func registerMerchantTrendSurface() {
 		opacity("0.6"),
 	)
 
-
 	// --- Sparkline scale metadata (so the line is readable, not a bare squiggle) ----
 	rule(".mtrend-spark",
 		display("flex"),
