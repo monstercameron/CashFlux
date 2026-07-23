@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Full competitive teardown (`docs/COMPETITIVE_TEARDOWN.md`, user-requested).** 16-area,
+  15-comp feature-by-feature teardown of CashFlux vs YNAB, Monarch, Copilot, Simplifi, Rocket
+  Money, Lunch Money, PocketSmith, Empower, PiggySize, Boldin, ProjectionLab, Actual Budget,
+  Firefly III, the simple tier, and Tiller — what each does better with UI mechanics and
+  click-cost comparisons, per-area missing features, a 16-entry missing intra-feature-connection
+  map, each comp's announced/shipped 2025–26 roadmap, a cross-app interaction-cost appendix, and
+  sources. New unfiled gaps are consolidated in Part III with a CT1 triage ticket in `TODOS.md`.
 - **FB-series backlog — external product-review deltas (docs).** Triaged a third-party review of
   the deployed app + repo into `TODOS.md`: inline refinements to WF1 (acceptance metric = median
   seconds per reviewed transaction, one-keypress confirm) and WF4 (per-account freshness model +

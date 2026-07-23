@@ -417,6 +417,18 @@ keeping verbatim — *"a local-first financial planning and control system for p
 number explained and every problem tracked to resolution"* — with the honest caveat pair: privacy ≠
 durability, and no-bank-sync means freshness is a product surface (WF4/FB5/FB9), not a footnote.
 
+### CT — Full competitive teardown document (2026-07-23)
+- [ ] **CT1 — Triage `docs/COMPETITIVE_TEARDOWN.md` Part III into tickets.** The full 16-area
+  teardown vs all 15 comps (Cam-directed, 2026-07-23) lives in
+  [`docs/COMPETITIVE_TEARDOWN.md`](./docs/COMPETITIVE_TEARDOWN.md): per-area what-comps-do-better
+  with click-cost comparisons, **Part III.1** = ~50 missing features NOT yet filed as tickets
+  (headliners: forecast-built-from-recurring — the cheapest high-value fix found; age-of-money;
+  typed budget targets + Flex one-number mode; balance-derived goals; tri-state recurring
+  occurrences; local API/CLI + watch-folder import; named switcher importers; investment
+  activity/lot model), and **Part III.2** = the 16-entry missing-connection map (top damage:
+  liability↛recurring, forecast↛recurring, rules↛workflows, allocate↛debt/goals/budgets).
+  Do NOT re-research — promote items from the doc into the WF/PS/FB series as they're scheduled.
+
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.
@@ -5363,3 +5375,66 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   them; today rows read equally weighted).
 - [x] **C415 [MINOR][DASH] Edit-mode calm.** Resize/settings handles appear on hover/selection
   only, not on every widget simultaneously.
+
+## Y. Custom Sync — seamless auth + token lifecycle (design, 2026-07-23) ★
+
+Context: a hosted backend, gRPC-over-websocket sync tunnel, zero-knowledge envelope encryption,
+and a cloud-OAuth auth path already exist (`internal/syncbridge`, `internal/backendrpc`,
+`internal/server`, `cmd/cashflux-portal`) — CLAUDE.md's "needs a hosted backend, out of scope" line
+is stale. This wave replaces the manual server-URL + static-token self-host story with a single
+"Custom Sync" toggle backed by one shared identity core (device/session table with per-device
+revocation) reachable through three enrollment doors, keeps the whole client-facing surface on the
+existing gRPC tunnel (no parallel REST/cookie auth system), and moves artifact transfer off REST to
+close the last non-auth REST surface in the sync path. Build order follows the dependency chain
+below (core first, enrollment doors next, lifecycle hardening last).
+
+- [ ] **C418 [MAJOR][SYNC] AuthService + device/session core.** New gRPC `AuthService`
+  (`Enroll`/`Login`/`Refresh`/`RedeemPairingCode`) backing a per-device session table (device
+  label, created/last-seen, refresh-token family) — the shared identity core every enrollment tier
+  writes into. Extend the existing cloud-OAuth `sessions/{family}` revocation concept to cover
+  these sessions too, so one device list + revoke UI serves every enrollment path.
+- [ ] **C419 [MAJOR][SYNC] "Custom Sync" toggle + silent reconnect.** Settings/Sync gains a single
+  toggle against a fixed, built-in server endpoint — no URL field, ever. On toggle: an
+  already-enrolled device does a silent reconnect (cached refresh token → dial tunnel → `Refresh`
+  RPC → resume, zero UI); a never-enrolled device falls through to C420.
+- [ ] **C420 [MAJOR][SYNC] SMS enrollment (primary path) via Twilio Verify.** `RequestPhoneVerification`
+  / `VerifyPhoneCode` gRPC calls; server integrates Twilio Verify specifically (not raw SMS) so code
+  generation/expiry/replay/fraud protection isn't hand-rolled; per-phone and per-device rate limits
+  on `RequestPhoneVerification` (it sends real, money-costing texts — a public toggle reaching it
+  is a real abuse surface). Client UI is a single phone field; use the WebOTP API
+  (`navigator.credentials.get` with an otp transport) plus `autocomplete="one-time-code"` so the
+  incoming code auto-fills/auto-submits with no typing.
+- [ ] **C421 [MINOR][SYNC] Pairing-code device linking from the portal.** `cashflux-portal`
+  Settings → Devices gains "Link a new device" (mints a short-lived, single-use code — digits +
+  QR); minting stays plain REST from the portal, consistent with its existing style. App side:
+  `RedeemPairingCode` gRPC call returns the same token pair SMS enrollment would. This only
+  resolves an *existing* account — gate the UI so it's offered as "already have an account? link
+  this device," never as a new-account path.
+- [ ] **C422 [MINOR][SYNC] Username/password fallback.** `Register`/`Login` gRPC calls for users
+  who won't share a phone number. Needs its own reset flow (email, or a one-time recovery code
+  shown once at signup) since it loses the free-recovery property phone verification has built in.
+- [ ] **C423 [MAJOR][SYNC] Token lifecycle: rotation, proactive refresh, reuse detection.**
+  Short-lived access token + longer-lived refresh token that rotates on every use (old token
+  invalidated the moment a new one is issued); proactive background refresh at ~80% of the access
+  token's lifetime, with a reactive refresh-then-retry-once fallback on any auth failure as a
+  backstop. Treat replay of an already-rotated refresh token as a compromise signal — revoke the
+  whole session family, not just the one call.
+- [ ] **C424 [MINOR][SYNC] Multi-tab refresh race guard.** Use the Web Locks API
+  (`navigator.locks.request`) so exactly one tab performs a given token refresh while others await
+  its result instead of racing. Same failure class as the existing two-tab dataset clobber, but
+  worse here — a losing tab presenting an already-rotated refresh token is indistinguishable from
+  the replay-attack signal in C423 and would falsely trigger a session revoke.
+- [ ] **C425 [MINOR][SYNC] Tie access-token refresh into the watch-stream reconnect.** The sync
+  watch stream can outlive an access token; gRPC can't swap auth metadata on an open connection.
+  Don't add new reconnect plumbing — make "access token refreshed" one more trigger for the
+  existing `runBackendWatch` reconnect/backoff to tear down and re-establish the stream with the
+  new token.
+- [ ] **C426 [MAJOR][SYNC] Move artifact/blob transfer off REST onto gRPC streaming.** Replace the
+  `/v1/blobs/{hash}` PUT/GET REST calls with a `BlobService` (client-streaming upload,
+  server-streaming download) on the same authenticated tunnel. Content-addressed hash model is
+  unchanged — transport only. Closes the last non-auth REST surface in the sync/artifact path.
+- [ ] **C427 [MINOR][SYNC] Graceful degrade on unrecoverable auth failure.** A rejected refresh
+  (expired from inactivity, or the device was revoked from the portal's device list) clears the
+  local credential and drops to local-only silently — no error dialog, no data loss, the encrypted
+  dataset stays fully usable. The next active sync attempt offers the fastest re-entry for an
+  existing account (SMS re-verify) rather than a full re-onboarding flow.

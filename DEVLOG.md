@@ -1,3 +1,28 @@
+## 2026-07-23 — Full competitive teardown → docs/COMPETITIVE_TEARDOWN.md (research, no code)
+
+Cam set a goal: every CashFlux feature vs every comp, excruciating detail, click counts, UI
+mechanics, missing features, missing intra-feature connections, announced roadmaps — as a
+document in the project. Method: help-center articles turned out to be the goldmine for exact UI
+flows on paywalled apps (Monarch's rules/flex/rollover articles, Copilot's savings-goal-spending
+mechanics, Actual's rules docs are effectively specs); PiggySize was already hands-on; Actual and
+Firefly from their public docs; everything else from vendor pages + 2026 reviews. The report is
+honest about the method split (✋ hands-on vs 📄 doc-derived) and counts interaction cost as
+deliberate activations from the default landing screen.
+
+Shape of the findings: (1) the ledger/feature-list comparisons mostly come back "par or ahead" —
+the losses are concentrated in *loop economics* (Copilot dispatches an ordinary imported txn in 1
+tap vs our 3–4; Actual's rule editor doubles as a live batch editor; YNAB opens a loan straight
+into its simulator) and *typed semantics we have as toggles* (YNAB's set-aside-vs-refill target
+grammar, Monarch's Flex one-number mode, tri-state recurring occurrences). (2) The most damning
+recurring theme is engines-that-don't-talk — Part III.2 maps 16 missing connections, worst being
+liability↛recurring (breaks missed-payment detection) and forecast↛recurring (our 12-month
+forecast uses trailing averages while the recurring roster knows next year's bills — cheapest
+high-value fix in the doc). (3) Market motion: Monarch shipped a Plus tier (retirement/business/
+forecasting) in April 2026 and Goals v2 in June — the trackers are climbing into the planning
+seam PS1 targets, so the unoccupied "ledger + planning + explainable, fully local" position has a
+clock on it. Also filed CT1 in TODOS.md so Part III gets promoted into tickets instead of
+re-researched.
+
 ## 2026-07-23 — External review triage → FB-series + WF1/WF4 refinements (docs, no code)
 
 Cam brought in a third-party review of the deployed app and asked for it to be folded into the
