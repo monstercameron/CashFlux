@@ -1,3 +1,22 @@
+## 2026-07-23 — §5a addendum: two reference hosting stacks (docs, no code)
+
+Cam asked for a lowest-cost and an optimal hosting plan with rationales. The design decision was
+to make them *named, complete stacks* rather than component menus, with a hard switch rule — the
+failure mode being guarded against is improvising a third stack mid-launch. Stack A ("prove-it",
+~$6–7/mo): Hetzner CPX11 in Ashburn (the US location kills the latency objection), blobs on the
+40 GB local disk to defer the object-store decision until real usage data exists, nightly
+encrypted B2 backups, Cloudflare Email Routing + SES, everything else free tiers. The absolute
+floor (IONOS $2, 1 GB) was rejected in writing: saving $3/mo to lose all headroom is false
+economy. Stated trade-offs: one box = single point of failure (tolerable only with off-box
+backups and no uptime promises), and no DO-referral coherence while it runs. Stack B ("launch",
+~$21–25/mo): DO $12 droplet + Spaces + automated backups + SES — optimal defined as the cost
+floor *consistent with the strategy*: one provider for the whole ops surface, hosting where the
+§14 referral flywheel pays, resize-in-place headroom. Seven $40/yr subscribers cover the entire
+stack; at 1k it's ~0.7% of revenue. Switch trigger = first charge, deliberately the same trigger
+as buying insurance, so "the month money starts moving" is one checklist, not three decisions.
+Both stacks run identical software (Go binary + Caddy + SQLite + S3-compatible blobs), so A→B
+is rsync + DNS.
+
 ## 2026-07-23 — §5a addendum: insurance (docs, no code)
 
 Cam asked whether a small SaaS needs insurance. Answer folded into §5a: legally no (Florida

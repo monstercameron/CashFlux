@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Cloud business plan §5a — two reference hosting stacks (`docs/CLOUD_BUSINESS_PLAN.md`).**
+  Stack A "prove-it" (~$6–7/mo: Hetzner CPX11 US-east, blobs on disk, B2 nightly backups,
+  SES + Cloudflare free tiers) for the unproven-funnel phase, with honest trade-offs named
+  (single point of failure, no referral coherence, IONOS $2 floor rejected as false economy);
+  Stack B "launch" (~$21–25/mo: DO $12 droplet + Spaces + automated backups + SES) as the
+  strategy-coherent optimum — one-provider ops surface, referral-flywheel alignment, resize
+  headroom; 7 subscribers cover the stack, ~0.7% of revenue at 1k. Switch rule: A through beta,
+  B the month billing turns on (same trigger as insurance); identical software both sides so
+  the move is rsync + DNS.
 - **Cloud business plan §5a — insurance line added (`docs/CLOUD_BUSINESS_PLAN.md`).** Not legally
   required (FL workers' comp starts at 4+ employees; no E&O/cyber mandate for SaaS); recommended:
   one bundled tech E&O + cyber policy (~$50–130/mo, SaaS avg $1,516/yr) bought the same month
