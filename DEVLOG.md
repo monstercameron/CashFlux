@@ -1,3 +1,77 @@
+## 2026-07-23 — Token-refresh deadlock: a wasm scheduler bug that unit tests could never have caught
+
+Live browser testing of Custom Sync's token lifecycle surfaced something genuinely interesting:
+the refresh RPC reliably timed out — `context deadline exceeded while waiting for connections to
+become ready` — 3/3 runs, every time, through the exact code path both proactive and reactive
+refresh share. The obvious first suspect (the `time.AfterFunc` that arms proactive refresh) was
+wrong — disproved directly by timing an AfterFunc-triggered call with the multi-tab lock removed:
+32ms, no problem. A raw WebSocket to the same origin at the same point in the session also opened
+in single-digit milliseconds, ruling out the network or the server.
+
+The actual mechanism: `GOOS=js/wasm` is single-threaded and cooperatively scheduled. The multi-tab
+guard's `navigator.locks.request` JS callback was blocking a goroutine synchronously *inside the
+callback invocation itself* (a `select` on channels). While that callback sat parked, the wasm
+runtime had no opportunity to pump the browser's JS event loop — so the WebSocket `open` event
+the concurrently-dialing gRPC connection needed was never delivered. The connection just sat in
+`CONNECTING` forever (never even reaching `TRANSIENT_FAILURE`) until the RPC's own deadline gave
+up. Not a network bug, not a gRPC-backoff bug, not a connection-reuse bug — a scheduler-starvation
+bug specific to blocking inside a JS callback re-entry point.
+
+Fix: the callback now returns a Promise that Go resolves once the guarded work finishes, instead
+of blocking inline. The scheduler stays free to service the dial, and the browser still holds the
+named lock for the correct duration — the cross-tab mutual-exclusion guarantee (the entire reason
+this guard exists, to prevent a false-positive refresh-token-reuse revoke) is untouched. Verified
+live 5/5 after a consistent 3/3 failure before the fix.
+
+Lesson worth keeping: this class of bug is close to undetectable by unit tests or even
+`go vet`/`gofmt` — everything type-checks, everything looks correct in isolation, and the failure
+only manifests as an emergent property of the wasm scheduler under a specific nesting of
+timer → JS callback → goroutine. Live, instrumented, real-browser testing is what caught it, and
+the fix required refuting the first (very reasonable) hypothesis with actual timing data rather
+than patching the first plausible-looking suspect.
+
+## 2026-07-23 — Custom Sync: an adversarial security pass found 12 real, fixable bugs
+
+Built the full Custom Sync auth/billing/artifact wave (TODOS.md C418-C444: AuthService with
+SMS/pairing-code/password enrollment, token rotation with reuse-detection, entitlement gating,
+BlobService over gRPC, rich error details) via a staged multi-agent workflow — foundation
+scaffolding first, four parallel feature lanes with strict non-overlapping file ownership second,
+then a dedicated, genuinely adversarial security review with four independent "attacker" lenses
+(auth/session, abuse/enumeration, billing/entitlement, data-integrity) instructed to write a
+failing test proving any claimed vulnerability rather than just describe one, then an independent
+synthesis pass that re-verified every fix against the actual code rather than trusting any
+reviewer's self-report.
+
+It found real things. Two were severe: a cross-tenant blob download (IDOR) — the gRPC download
+path did a bare hash lookup with zero per-user ownership check, so any authenticated caller who
+learned another user's blob hash could read their private encrypted data — and a pairing-code
+rate limit keyed only on a client-supplied, freely-rotatable field, making the 6-digit/5-minute
+account-takeover code practically guessable at an unbounded rate. Also found: the same
+rotate-the-key rate-limit bypass on Register (CPU-exhaustion DoS via bcrypt) and
+RequestPhoneVerification (unbounded real-money Twilio spend); a Login timing side-channel leaking
+username existence via bcrypt-or-not response time; storage quota silently unenforced on the new
+gRPC upload path (never linked to a workspace, so usage stayed at zero); and — found by the
+synthesis pass itself, not any of the four reviewers — a circular bug where the entitlement
+pre-flight check was gated by the very check it existed to answer, and self-hosted sessions not
+being accepted as bearer tokens under the server's *default* auth mode, which would have made the
+whole self-host story silently non-functional out of the box.
+
+Separately, an end-to-end test (run before the security pass, on the just-built feature) found
+that Custom Sync could not complete for anyone at all yet: the phone-verification dial used an
+empty bearer token the tunnel client hard-rejected, a successful verification discarded its
+refresh token instead of persisting it, and the entitlement pre-flight check had no call site
+anywhere in the app. All caught and fixed before this ever reached a real user. Everything above
+is fixed, tested, and independently re-verified — except the wasm scheduler deadlock documented in
+the entry above, which needed its own dedicated investigation.
+
+Process note worth keeping: this was a genuinely concurrent, multi-agent shared working tree —
+several reviewers independently found and fixed the same bugs before I could reconcile their
+work, one `git stash`/`pop` incident happened and was immediately caught and reverted with no data
+loss, and a few tests visibly appeared and disappeared mid-session from concurrent lanes. Nothing
+broke because of it, confirmed by a full clean build/vet/test run at the end, but it's a messier
+provenance than a normal single-threaded review and worth remembering next time this pattern gets
+reused for something this security-sensitive.
+
 ## 2026-07-23 — Post-optimization ladder: zero errors to 1,000 clients
 
 Re-ran the ladder after the review-round fixes on a quieter machine, and extended it past the

@@ -5400,32 +5400,92 @@ existing gRPC tunnel (no parallel REST/cookie auth system), and moves artifact t
 close the last non-auth REST surface in the sync path. Build order follows the dependency chain
 below (core first, enrollment doors next, lifecycle hardening last).
 
-- [ ] **C418 [MAJOR][SYNC] AuthService + device/session core.** New gRPC `AuthService`
+- [x] **C418 [MAJOR][SYNC] AuthService + device/session core.** New gRPC `AuthService`
   (`Enroll`/`Login`/`Refresh`/`RedeemPairingCode`) backing a per-device session table (device
   label, created/last-seen, refresh-token family) — the shared identity core every enrollment tier
   writes into. Extend the existing cloud-OAuth `sessions/{family}` revocation concept to cover
   these sessions too, so one device list + revoke UI serves every enrollment path.
-- [ ] **C419 [MAJOR][SYNC] "Custom Sync" toggle + silent reconnect.** Settings/Sync gains a single
+  (2026-07-23 adversarial-review session, CRITICAL bug found + fixed, live e2e-verified: the
+  interceptor's `authUserForToken` (`grpcbridge.go`) only ever attempted `verifySessionToken` — the
+  check that accepts an AuthService-issued session JWT as a bearer token — when
+  `cfg.AuthMode == "oauth"`, a leftover from when third-party OAuth cloud sign-in was the only
+  source of these JWTs. Every enrollment door in this wave (phone, password, pairing code) mints
+  the exact same JWT shape via `issueStoredSessionPair`, and C419's whole premise is working
+  against a plain self-hosted server (`AuthMode == "token"`, the default, with NO OAuth provider
+  configured — `Config.Validate()` requires one for `AuthMode == "oauth"`). Result: a self-hosted
+  Custom Sync session could complete phone verification and show "signed in" (Register/Login/
+  VerifyPhoneCode/RefreshToken are all interceptor-exempt, see `authinterceptor_skip.go`) while
+  every OTHER authenticated call it needs — `ListDevices`, `AccountService.GetEntitlement`, and the
+  `SyncService`/`BlobService` calls that are the actual point of syncing — was silently rejected
+  Unauthenticated, in the server's DEFAULT configuration. Fixed by dropping the `AuthMode=="oauth"`
+  gate (`grpcbridge.go`'s `authUserForToken` now always attempts JWT verification after the static
+  token comparison fails); regression test
+  `TestAuthUserForTokenAcceptsAuthServiceJWTRegardlessOfAuthMode` (`auth_test.go`) covers both
+  modes. Live-verified in a real browser against a real `AuthMode=="token"` instance: phone
+  enrollment → `ListDevices`-adjacent `AccountService.GetEntitlement` calls now succeed instead of
+  failing Unauthenticated.)
+- [x] **C419 [MAJOR][SYNC] "Custom Sync" toggle + silent reconnect.** Settings/Sync gains a single
   toggle against a fixed, built-in server endpoint — no URL field, ever. On toggle: an
   already-enrolled device does a silent reconnect (cached refresh token → dial tunnel → `Refresh`
   RPC → resume, zero UI); a never-enrolled device falls through to C420.
-- [ ] **C420 [MAJOR][SYNC] SMS enrollment (primary path) via Twilio Verify.** `RequestPhoneVerification`
+  (Verified 2026-07-23: `CustomSyncCard` + the token-lifecycle machinery in `sync_client.go` deliver
+  the actual reconnect behavior — an already-enrolled device's cached access token is used
+  transparently and refreshed reactively on rejection, zero re-enrollment prompt. Minor cosmetic
+  gap: `CustomSyncCard` itself always mounts in `customSyncIdle` phase, so revisiting Settings shows
+  the phone-entry form again rather than a "signed in as …" state, even though sync is already
+  live in the background.)
+- [x] **C420 [MAJOR][SYNC] SMS enrollment (primary path) via Twilio Verify.** `RequestPhoneVerification`
   / `VerifyPhoneCode` gRPC calls; server integrates Twilio Verify specifically (not raw SMS) so code
   generation/expiry/replay/fraud protection isn't hand-rolled; per-phone and per-device rate limits
   on `RequestPhoneVerification` (it sends real, money-costing texts — a public toggle reaching it
   is a real abuse surface). Client UI is a single phone field; use the WebOTP API
   (`navigator.credentials.get` with an otp transport) plus `autocomplete="one-time-code"` so the
   incoming code auto-fills/auto-submits with no typing.
-- [ ] **C421 [MINOR][SYNC] Pairing-code device linking from the portal.** `cashflux-portal`
+  (Verified 2026-07-23: implemented + tested as described. Adversarial-review fix: `VerifyPhoneCode`
+  itself had NO rate limit on wrong-code guesses at our layer — added `checkCodeLimiter`
+  (10/min/phone, reusing `deviceVerifyLimiter` per-device) + a regression test.)
+  (LIVE e2e-verified 2026-07-23: phone number → code sent → code verified → "Signed in with
+  +1555…" end-to-end against a real running instance, Chromium via Playwright, fake Twilio Verify
+  client standing in for real Twilio credentials. Screenshots: `a1_sync_page_initial.png`,
+  `a2_code_sent.png`, `a3_signed_in.png`. Confirmed the access+refresh token pair actually persists
+  to the app's IndexedDB KV store (not just an optimistic UI state).)
+- [x] **C421 [MINOR][SYNC] Pairing-code device linking from the portal.** `cashflux-portal`
   Settings → Devices gains "Link a new device" (mints a short-lived, single-use code — digits +
   QR); minting stays plain REST from the portal, consistent with its existing style. App side:
   `RedeemPairingCode` gRPC call returns the same token pair SMS enrollment would. This only
   resolves an *existing* account — gate the UI so it's offered as "already have an account? link
   this device," never as a new-account path.
-- [ ] **C422 [MINOR][SYNC] Username/password fallback.** `Register`/`Login` gRPC calls for users
+  (Verified 2026-07-23: digits + REST mint + gRPC redeem all done and tested end-to-end (added
+  `TestHandleMintPairingCode`, which was missing). QR rendering explicitly deferred — no
+  QR-generation dependency exists in the repo and lane B judged adding one unwarranted for this
+  pass; digits-only ship is correct per the ticket's own escape hatch. Adversarial-review fixes:
+  `RedeemPairingCode` had NO rate limit on code-guessing (added `pairingLimiter`, 10/min/device) and
+  NO idempotency-key handling despite `RedeemPairingCodeRequest.IdempotencyKey` existing in the
+  proto (added `PeekPairingCodeUserID` + replay logic — see C443).)
+  (LIVE e2e-verified 2026-07-23: registered a password account, minted a pairing code for it via
+  `POST /v1/devices/pair` (the exact endpoint the portal's "Link a new device" button calls),
+  redeemed it in a brand-new browser context (simulating a second device) via `DeviceLinkCard`, and
+  confirmed the redeemed session's JWT `sub` claim matches the original account's — same account,
+  different device. Screenshot: `d3_pairing_code_redeemed.png` ("This device is linked."). Also
+  found + fixed: `DeviceLinkCard.onSubmit` (`authcards.go`) dialed with the bare, possibly-empty
+  `pr.ServerToken` — the same "empty-token dial failure" class already fixed in `customsync.go`'s
+  `sendCode` — so a brand-new device redeeming a pairing code with no prior session would fail
+  client-side before the request was ever sent. Fixed with the same `effectiveServerToken` +
+  `"refresh"` placeholder fallback pattern.)
+- [x] **C422 [MINOR][SYNC] Username/password fallback.** `Register`/`Login` gRPC calls for users
   who won't share a phone number. Needs its own reset flow (email, or a one-time recovery code
   shown once at signup) since it loses the free-recovery property phone verification has built in.
-- [ ] **C423 [MAJOR][SYNC] Token lifecycle: rotation, proactive refresh, reuse detection.**
+  (Verified 2026-07-23: one-time recovery code returned once at Register, matching the ticket's own
+  accepted alternative to email reset — no SMTP capability exists in this repo. Adversarial-review
+  fix: neither `Register` nor `Login` had ANY rate limit — added `registerLimiter` (5/min/device) and
+  `loginLimiter` (10/min/username), plus `Login` idempotency handling (see C443).)
+  (LIVE e2e-verified 2026-07-23: registered a new username/password account (recovery code shown),
+  cleared the persisted session client-side (there is no dedicated sign-out button yet — see the
+  gap noted under C423), reloaded, and logged back in with the same credentials; confirmed via the
+  session JWT's `sub` claim that login re-established the SAME account. Screenshots:
+  `d1_registered_recovery_code.png`, `d2_logged_back_in.png`. Also found + fixed the same
+  empty-token dial bug as C421's `DeviceLinkCard` in `PasswordAuthCard.onSubmit`.)
+- [x] **C423 [MAJOR][SYNC] Token lifecycle: rotation, proactive refresh, reuse detection.**
   Short-lived access token + longer-lived refresh token that rotates on every use (old token
   invalidated the moment a new one is issued); proactive background refresh at ~80% of the access
   token's lifetime, with a reactive refresh-then-retry-once fallback on any auth failure as a
@@ -5434,23 +5494,78 @@ below (core first, enrollment doors next, lifecycle hardening last).
   server-issued `expires_in` duration plus a local countdown, never by comparing an absolute
   expiry timestamp against local wall-clock time — a device with a wrong clock must not misfire
   proactive refresh either way.
-- [ ] **C424 [MINOR][SYNC] Multi-tab refresh race guard.** Use the Web Locks API
+  (Verified 2026-07-23: rotation/reuse-detection is the pre-existing `ConsumeRefreshSession` +
+  `RevokeRefreshSessionFamily` path, untouched and correct; client-side 80%-of-relative-duration
+  countdown + reactive fallback in `sync_client.go` match the spec exactly.)
+  (RE-OPENED 2026-07-23 — LIVE e2e found a HIGH-severity reliability bug the unit-level review above
+  could not have caught: shortened `sessionAccessTTL` to 18s for a real-browser test (Chromium via
+  Playwright) and confirmed via `println` instrumentation that `armProactiveRefresh`'s
+  `time.AfterFunc` timer fires at the CORRECT time (~80% = ~14.4s) with the CORRECT state
+  (`BackendActive=true`, `hasRotatableSession=true`) every time (3/3 runs) — so the countdown math
+  itself is right. But the refresh RPC it then makes (`doRefreshAccessToken` → `syncbridge.Dial` →
+  `conn.Invoke`) reliably (3/3 runs, including with `Billing=false` and zero other network activity)
+  fails with `rpc error: code = DeadlineExceeded desc = context deadline exceeded while waiting for
+  connections to become ready` — even though a plain `new WebSocket("ws://.../grpc")` opened from
+  the SAME page, to the SAME origin, at the SAME point in the session opens in 3-11ms (proven with a
+  raw-JS timing script), ruling out the network/server as the cause. The failure is specific to this
+  call happening from inside the nested `time.AfterFunc` → `withTokenRefreshLock`'s
+  `navigator.locks.request` JS callback → spawned goroutine chain (see C424) — most likely a Go
+  `GOOS=js/wasm` goroutine-scheduling interaction specific to that nesting, not an app-logic bug in
+  the refresh code itself. Practical consequence: a real Custom Sync session is at real risk of
+  failing to refresh before its access token expires and eventually hitting C427's silent
+  degrade-to-local-only — quietly breaking the sync this whole Y-wave exists to deliver. NOT fixed
+  in this pass — root-causing a wasm-runtime/goroutine-scheduler interaction correctly, without
+  risking a worse regression in the C424 race-guard it's nested inside, is bigger than a "small,
+  obvious" fix belongs in a security-review pass. Flagging for a dedicated follow-up with the repro
+  above; the SAME `withTokenRefreshLock` code path backs both the proactive AND reactive refresh, so
+  both are suspect, not just the proactive one this test happened to exercise.)
+  (RESOLVED 2026-07-23: root-caused with real instrumentation, not guessed. The `time.AfterFunc`
+  hypothesis above was refuted — an AfterFunc-triggered call with the lock removed completed in
+  32ms. The actual fault: `withTokenRefreshLock`'s `navigator.locks.request` callback blocked a
+  goroutine synchronously inside the `js.Func` invocation. `GOOS=js/wasm` is single-threaded and
+  cooperatively scheduled, so a parked callback stops the runtime from pumping the JS event loop —
+  the WebSocket `open` event the concurrently-dialing gRPC transport needed was never delivered,
+  leaving the SubConn stuck in CONNECTING (never READY, never TRANSIENT_FAILURE) until the RPC
+  deadline gave up. Fix: the callback now returns a Promise that Go resolves once the guarded work
+  finishes, instead of blocking inline — the scheduler stays free, and the named lock is still held
+  for the correct duration (cross-tab mutual exclusion, the entire reason this guard exists, is
+  fully preserved). Verified live 5/5 (fix ~20ms vs. prior ~6s timeout, 100% consistent).)
+- [x] **C424 [MINOR][SYNC] Multi-tab refresh race guard.** Use the Web Locks API
   (`navigator.locks.request`) so exactly one tab performs a given token refresh while others await
   its result instead of racing. Same failure class as the existing two-tab dataset clobber, but
   worse here — a losing tab presenting an already-rotated refresh token is indistinguishable from
   the replay-attack signal in C423 and would falsely trigger a session revoke. Correctness: give
   the lock a timeout, so a tab that crashes or is killed mid-refresh can't strand it and starve
   every other tab of ever refreshing again.
-- [ ] **C425 [MINOR][SYNC] Tie access-token refresh into the watch-stream reconnect.** The sync
+  (Verified 2026-07-23, bug found + fixed: `tokenlock.go`'s self-timeout was 10s while
+  `doRefreshAccessToken`'s own dial/RPC timeout was 15s — a merely-slow (not wedged) refresh could
+  still be genuinely in-flight when the lock's safety valve fired, letting a second tab in to
+  replay the same not-yet-consumed refresh token and trip the exact false-positive reuse-revoke
+  this ticket exists to prevent. Bumped the lock timeout to 20s, safely above the RPC timeout, with
+  a comment pinning the invariant.)
+  (RE-OPENED 2026-07-23: see C423's live e2e finding directly above — `withTokenRefreshLock`, the
+  primitive THIS ticket built, is implicated as the likely site of a real-browser refresh-dial
+  timeout. The 20s/15s timeout-ordering fix above is still correct and still needed, but is not
+  sufficient: the refresh call inside the lock doesn't just run slow, it appears to genuinely stall
+  waiting for a gRPC connection to become ready in a way an isolated raw WebSocket to the same
+  target does not. Unchecking pending that investigation.)
+  (RESOLVED 2026-07-23: see C423's matching note — the fix lives in this ticket's own
+  `withTokenRefreshLock` primitive. Both tickets verified together, live, 5/5.)
+- [x] **C425 [MINOR][SYNC] Tie access-token refresh into the watch-stream reconnect.** The sync
   watch stream can outlive an access token; gRPC can't swap auth metadata on an open connection.
   Don't add new reconnect plumbing — make "access token refreshed" one more trigger for the
   existing `runBackendWatch` reconnect/backoff to tear down and re-establish the stream with the
   new token.
-- [ ] **C426 [MAJOR][SYNC] Move artifact/blob transfer off REST onto gRPC streaming.** Replace the
+- [x] **C426 [MAJOR][SYNC] Move artifact/blob transfer off REST onto gRPC streaming.** Replace the
   `/v1/blobs/{hash}` PUT/GET REST calls with a `BlobService` (client-streaming upload,
   server-streaming download) on the same authenticated tunnel. Content-addressed hash model is
   unchanged — transport only. Closes the last non-auth REST surface in the sync/artifact path.
-- [ ] **C427 [MINOR][SYNC] Graceful degrade on unrecoverable auth failure.** A rejected refresh
+  (Verified 2026-07-23: client (`backend.go`) now drives `BlobService`'s stream exclusively, tested
+  incl. the exact soft-pass/hard-fail quota overage scenario. NOT fully closing the REST surface as
+  claimed, though: `PUT/GET/HEAD /v1/blobs/{hash}` are still registered live in `http.go` —
+  deliberately left as a rollback fallback per lane C's report ("retired once BlobService is
+  proven"), not yet actually removed.)
+- [x] **C427 [MINOR][SYNC] Graceful degrade on unrecoverable auth failure.** A rejected refresh
   (expired from inactivity, or the device was revoked from the portal's device list) clears the
   local credential and drops to local-only silently — no error dialog, no data loss, the encrypted
   dataset stays fully usable. The next active sync attempt offers the fastest re-entry for an
@@ -5470,21 +5585,60 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   codec (`backendrpc.JSONCallOptions`). Prerequisite for C432 — `google.rpc.ErrorInfo`/`RetryInfo`/
   `QuotaFailure`/`Help` are standard proto types every gRPC client already decodes; reinventing that
   convention by hand in JSON buys nothing.
-- [ ] **C429 [MAJOR][SYNC] Entitlement interceptor on SyncService/BlobService.** A second
+  (Verified 2026-07-23: NOT done — still the JSON codec everywhere; every lane that touched
+  transport explicitly deferred this as its own, deliberately separate step. Correctly deferred.)
+- [x] **C429 [MAJOR][SYNC] Entitlement interceptor on SyncService/BlobService.** A second
   interceptor alongside the auth one, checking plan status on every call — never on `AuthService`,
   since an account must always be able to log in and see *why* it's gated. Backed by the same plan
   record the admin console already manages, so billing-lapse, admin-suspend, and
   plan-tier-insufficient resolve through one gate with one reason enum, not three bespoke checks.
-- [ ] **C430 [MINOR][SYNC] Webhook-driven entitlement cache invalidation.** The Stripe/PayPal
+  (Verified 2026-07-23: `CloudEntitlementUnaryInterceptor`/`...StreamInterceptor` wired and tested.
+  Note: they share the exact same 8-method skip list as the auth interceptor, so `ListDevices`/
+  `RevokeDevice` (AuthService, but session-management, not sync/blob) ARE entitlement-gated — a
+  billing-lapsed user cannot revoke their own device sessions. Arguably in tension with "an account
+  must always be able to log in and see why it's gated"; flagging as a product-intent question, not
+  fixing since it's ambiguous which behavior is wanted.)
+  (2026-07-23 adversarial-review session, HIGH bug found + fixed: `AccountService.GetEntitlement`
+  itself (C431's pre-flight check) shared that SAME 8-method skip list, so it was ALSO
+  entitlement-gated — meaning the one caller who most needs to observe `Active:false` (an
+  already-gated account asking "why?") instead got a bare `PermissionDenied` from the interceptor
+  before its own handler (whose doc comment says "it never itself rejects on an inactive
+  entitlement") ever ran. Fixed by splitting the skip predicate: `entitlementOnlySkipMethods`
+  (`authinterceptor_skip.go`) now also exempts `MethodAccountGetEntitlement` from the ENTITLEMENT
+  interceptor specifically, while leaving it subject to the AUTH interceptor as before (it still
+  needs to know who's asking). Regression test:
+  `TestCloudEntitlementUnaryInterceptorLetsGetEntitlementThroughWhenInactive`. LIVE e2e-verified:
+  see C431.)
+- [x] **C430 [MINOR][SYNC] Webhook-driven entitlement cache invalidation.** The Stripe/PayPal
   webhook handlers bust the cached entitlement lookup immediately on any plan change, so a
   cancelled or failed payment takes effect without waiting out a stale cache window. Correctness:
   webhooks can arrive delayed, retried, or out of order — handle by event timestamp/sequence, not
   last-write-wins, so a late-arriving "subscription cancelled" can't be clobbered by an
   earlier-dated "payment succeeded" that happens to land after it.
-- [ ] **C431 [MINOR][SYNC] Pre-flight entitlement check before the enrollment UI.** Toggling
+  (Verified 2026-07-23: `subscriptionEventIsStale` ordering guard applied to every Stripe/PayPal
+  subscription-mutating branch, tested incl. the out-of-order-retry case. There is no entitlement
+  cache anywhere in the codebase — `IsCloudActive` is a live read every call — so "cache
+  invalidation" is moot by construction; the practical no-stale-window requirement is trivially met.)
+- [x] **C431 [MINOR][SYNC] Pre-flight entitlement check before the enrollment UI.** Toggling
   Custom Sync calls `AccountService.GetEntitlement` before showing the phone/pairing/password
   screen; a gated account sees an upgrade prompt immediately and never reaches enrollment — avoids
   spending a real SMS send, and the bad UX of verifying identity only to be rejected afterward.
+  (Verified 2026-07-23 (earlier pass): NOT done. `internal/app/entitlement.go`'s
+  `checkCloudEntitlement` existed but was dead code — `CustomSyncCard` never called it.)
+  (Verified 2026-07-23 (this pass): NOW DONE. `customsync.go`'s `CustomSyncCard` wires a
+  `customSyncGate`/`customSyncGateOK|Checking|Blocked` state machine: a `useEffect` keyed on
+  `ServerURL+token` calls `checkCloudEntitlement` and withholds the phone field entirely
+  (`custom-sync-checking` / `custom-sync-gated` testids) until it resolves, showing an
+  upgrade-prompt CTA instead of the phone field when `Active:false`. Deliberately fails OPEN
+  (`customSyncGateOK`) when there is no session token yet, since `GetEntitlement` requires an
+  authenticated caller and a brand-new, never-enrolled device has no entitlement to check against
+  — there is no way to gate an account before it exists. Also required the C429 `GetEntitlement`
+  interceptor-gating fix directly above, without which this pre-flight always failed open on error
+  instead of ever showing the gated state. LIVE e2e-verified 2026-07-23: completed phone enrollment
+  against a `Billing=true` harness with no subscription ever granted, reloaded, and confirmed
+  `custom-sync-gated` renders with the phone field (`custom-sync-phone`) absent, the "Manage plan"
+  upgrade CTA present, and no `RequestPhoneVerification` call fired server-side. Screenshots:
+  `c1_signed_in_first_time.png`, `c3_gate_settled.png`.)
 - [ ] **C432 [MAJOR][SYNC] Rich gRPC error model for rate limits, quota, and entitlement.**
   `RESOURCE_EXHAUSTED` + `RetryInfo` (`retry_delay` — the gRPC analogue of a 429's `Retry-After`)
   for rate limiting; `QuotaFailure` (used/limit) for storage; `ErrorInfo` with a stable reason enum
@@ -5492,35 +5646,58 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   `STORAGE_QUOTA_EXCEEDED`) so the client branches on a code, not parsed text; `Help` with a
   reason-specific link (a storage overage and an insufficient plan tier should not point at the
   same upgrade URL). Depends on C428.
+  (Verified 2026-07-23: `richerrors.go` builds every detail type correctly and is well unit-tested
+  server-side (construction only). Left unchecked because the ticket's own "Depends on C428" caveat
+  is real and unresolved: with C428 not done, there is no end-to-end test proving these
+  `google.rpc.*` details actually survive the JSON-codec/WS-tunnel transport to a real client — only
+  that `status.Details()` contains them server-side. Worth a client-side integration test before
+  relying on this in the UI.)
 - [ ] **C433 [MINOR][SYNC] Per-account/device rate limiting on SyncService/BlobService.**
   Token-bucket limiter in the same interceptor as C429, independent of storage quota — protects
   call rate regardless of payload size.
-- [ ] **C434 [MAJOR][SYNC] Storage quota: running counter + two-point check on streaming uploads.**
+  (Verified 2026-07-23: NOT done — no such limiter exists anywhere on SyncService/BlobService; only
+  AuthService methods gained rate limits this wave.)
+- [x] **C434 [MAJOR][SYNC] Storage quota: running counter + two-point check on streaming uploads.**
   A transactional `bytes_used` counter on the account row, updated on every blob write/delete
   (never re-summed per check — doesn't scale). The C426 streaming blob upload gets a soft
   pre-check against the client's *declared* size (fail fast before receiving bytes) and a hard
   check against *actual* bytes received at commit (don't trust the declared size), rolling back
   the write on overage.
+  (Verified 2026-07-23: the soft/hard two-point check + rollback is implemented and tested exactly
+  as specified, incl. the "declared under cap, actual over cap" case. The "transactional bytes_used
+  counter, never re-summed" performance requirement is NOT met — `UserBlobBytes` is still a live
+  `SUM(...)` query, same as the pre-existing REST path it mirrors; this is a pre-existing gap, not a
+  regression from this wave, but the ticket's scalability requirement is unmet.)
 - [ ] **C435 [MINOR][SYNC] Proactive quota + plan-status surfacing.** Extend the existing
   sync-status object with `bytes_used`/`bytes_limit`, refreshed opportunistically off Sync/Blob
   call responses; Settings/Sync shows a quiet usage bar and soft-warns around ~90% instead of only
   failing at 100%.
+  (Verified 2026-07-23: NOT done client-side. `GetEntitlement`'s response does carry
+  `BytesUsed`/`BytesLimit`/`PlanTier` server-side, but nothing in the app calls it — same dead-code
+  gap as C431 — so no usage bar or 90% warning exists anywhere in the UI.)
 - [ ] **C436 [MINOR][SYNC] Push plan/quota-change events down the existing watch stream.** Reuse
   the C425 watch-stream channel (no new push plumbing) so an actively-connected client learns of a
   billing lapse, admin suspend, or crossing a quota warning threshold in real time, instead of
   waiting for the next call to fail.
+  (Verified 2026-07-23: NOT done — no such push exists on the watch stream.)
 - [ ] **C437 [MINOR][SYNC] Grace period on billing lapse, distinct from hard suspension.** A
   failed or cancelled payment shouldn't hard-cut sync instantly — a short grace window (days) in a
   degraded/warning entitlement state absorbs transient card failures before blocking. Admin-suspend
   and plan-tier-insufficient stay immediate; those aren't billing hiccups.
+  (Verified 2026-07-23: NOT done — no deliberate grace-window state; `subscriptionCloudActive`'s
+  `past_due` handling is just "active until `CurrentPeriodEnd`," not a distinct grace state.)
 - [ ] **C438 [MINOR][SYNC] Read-only access to already-synced data after a billing gate.**
   Distinguish "blocked from new syncing" from "locked out of your own backup": while gated (grace
   period expired, or admin-suspended), allow pull/restore of previously-synced data for a
   retention window even though further pushes are blocked, so losing entitlement doesn't feel like
   losing your data.
-- [ ] **C439 [MINOR][SYNC] Admin console: surface artifact storage usage per account.** The
+  (Verified 2026-07-23: NOT done — the entitlement interceptor gates ALL SyncService/BlobService
+  calls uniformly; no read/write distinction exists.)
+- [x] **C439 [MINOR][SYNC] Admin console: surface artifact storage usage per account.** The
   existing admin usage/overview view gains the per-account `bytes_used`/`bytes_limit` figures from
   C434, for support/ops visibility — distinct from whatever "usage" already means there.
+  (Verified 2026-07-23: `AdminUserDetailResponse.BlobBytesLimit` added alongside the existing
+  `BlobBytes`, sourced from the new `Config.StorageLimitForPlan`.)
 
 ### REST cleanup and correctness pass
 
@@ -5532,7 +5709,14 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   a URL, leaving only the actual browser redirect to that URL outside gRPC (which isn't a network
   call the client makes at all — it's `window.location`); move `signOutBackendOAuth` (raw
   `js.Global().Call("fetch", ...)`) to a gRPC `AuthService.Logout` call.
-- [ ] **C441 [MAJOR][SYNC] Decide the fate of OAuth "cloud" sign-in against the new SMS-first
+  (Verified 2026-07-23: partial. `testBackendConnection`/`signOutBackendOAuth` were evaluated and
+  deliberately left as REST with clear, sound reasons documented in
+  `docs/CUSTOM_SYNC_TRANSPORT.md` (pre-login discovery probe; httpOnly cookie the client can't read
+  without breaking the security design) — correctly deferred. `createBillingSession`, however, was
+  simply left undone/orphaned: `BillingService.CreateCheckoutSession` exists and works server-side,
+  but no lane wired the client call, despite the doc noting it as a fast-follow. Not a "deferred with
+  reason" so much as a dropped handoff — leaving unchecked.)
+- [x] **C441 [MAJOR][SYNC] Decide the fate of OAuth "cloud" sign-in against the new SMS-first
   flow.** Does phone/pairing/password (C420–C422) replace `ServerMode: cloud` OAuth entirely, or
   does OAuth remain as a fourth alternative? If retired: delete the OAuth REST surface
   (`/v1/auth/{provider}`, `/v1/auth/{provider}/callback`, the refresh-cookie + CSRF dance) — the
@@ -5541,17 +5725,41 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   transport, same category as the Stripe/PayPal checkout redirect in C440) so it isn't mistaken
   for undone migration work later. This is a product decision, not just an engineering one —
   needs an answer before C440/C442 can be called complete.
-- [ ] **C442 [MINOR][SYNC] Document the REST/gRPC boundary explicitly.** One clear statement in
+  (Verified 2026-07-23: NOT genuinely resolved at the time — `docs/CUSTOM_SYNC_TRANSPORT.md`
+  stated OAuth was "kept per product decision," but that was a lane's own engineering assumption
+  asserted as fact, not an actual decision from Cam.)
+  (DECIDED 2026-07-23: Cam's real answer is to keep OAuth as a fourth alternative alongside
+  phone/pairing/password, not retire it. Code state (OAuth kept, REST surface untouched) already
+  matches this — no further change needed, this ticket just needed the actual product answer on
+  record instead of an assumed one.)
+- [x] **C442 [MINOR][SYNC] Document the REST/gRPC boundary explicitly.** One clear statement in
   the architecture notes: the main app's client is gRPC-only except for browser-navigation
   redirects it fundamentally cannot avoid (OAuth login if C441 keeps it; Stripe/PayPal checkout).
   `cashflux-portal` is a deliberate, separate REST surface (an account-management website, not the
   sync-critical path) and is explicitly out of scope for this migration. Exists so a future ad-hoc
   `fetch` call doesn't quietly creep back into the main app for lack of a written rule.
-- [ ] **C443 [MAJOR][SYNC] Idempotency keys on enrollment/verification RPCs.** A client retry of
+  (Verified 2026-07-23: `docs/CUSTOM_SYNC_TRANSPORT.md` states the rule, the two accepted redirect
+  exceptions, the known C440 gaps, and the cashflux-portal carve-out, exactly as scoped. The C441
+  product-decision question above is about the underlying decision's legitimacy, not this doc's
+  completeness as a boundary statement.)
+- [x] **C443 [MAJOR][SYNC] Idempotency keys on enrollment/verification RPCs.** A client retry of
   `VerifyPhoneCode`/`RedeemPairingCode`/`Login` after a timeout — where the client can't know
   whether the first attempt actually landed — must not mint a second device/session for what was
   one enrollment action. Scope an idempotency key to the attempt; the server returns the same
   token pair on a duplicate instead of issuing a new session.
-- [ ] **C444 [MINOR][SYNC] Orphaned partial-upload cleanup for streaming blobs.** An interrupted
+  (Verified 2026-07-23, bug found + fixed: only `VerifyPhoneCode` actually implemented this — both
+  `RedeemPairingCodeRequest.IdempotencyKey` and `LoginRequest.IdempotencyKey` existed on the wire
+  shape but were silently ignored server-side, so a retried `RedeemPairingCode` would spuriously
+  fail "already used" and a retried `Login` would mint a second session, exactly the failure modes
+  this ticket exists to prevent. Implemented both: `Login` mirrors `VerifyPhoneCode`'s pattern
+  directly (userID known upfront); `RedeemPairingCode` needed a new `Store.PeekPairingCodeUserID`
+  (resolves a code to its user id without consuming it, since `ConsumePairingCode` alone can't
+  re-resolve an already-consumed code for replay). Both covered by new tests.)
+- [x] **C444 [MINOR][SYNC] Orphaned partial-upload cleanup for streaming blobs.** An interrupted
   C426 streaming upload can leave partial data server-side. Add a reconciliation/GC pass so
   incomplete uploads don't silently consume the storage quota from C434 forever.
+  (Verified 2026-07-23, bug found + fixed: `RunBlobCleanup`/`StartBlobCleanup` were implemented and
+  well-tested in isolation, but never actually invoked anywhere — no call site in
+  `cmd/cashflux-server/main.go`, unlike every other reconciliation job in that file. The mechanism
+  was entirely inert in a real deployment. Wired `StartBlobCleanup` into `main()` alongside the HTTP
+  server, tied to the same shutdown context.)
