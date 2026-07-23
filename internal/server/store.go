@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 11
+const CurrentServerSchemaVersion = 12
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -240,6 +240,12 @@ func (s *Store) migrate() error {
 		}
 		version = 11
 	}
+	if version < 12 {
+		if err := s.migrateTo12(); err != nil {
+			return err
+		}
+		version = 12
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -440,6 +446,28 @@ CREATE TABLE IF NOT EXISTS setup_codes (
 		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN phone_verified_at TEXT NOT NULL DEFAULT '';`); err != nil {
 			return fmt.Errorf("server store: migrate v11: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateTo12 adds the invite_codes table backing admin-mintable single-use
+// enrollment invites (pkg/embed.Admin.MintInviteCode) — a companion to the
+// fixed Config.SetupCode gate that lets an operator hand out a fresh,
+// short-lived code per person instead of sharing one static secret. Unlike
+// setup_codes, which stores only a hash (the plaintext value lives in an env
+// var with its own source of truth), invite_codes stores the code itself in
+// plaintext, exactly like pairing_codes: a minted invite code has no other
+// source of truth, so the row itself is instance zero.
+func (s *Store) migrateTo12() error {
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS invite_codes (
+	code TEXT PRIMARY KEY,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	consumed_at TEXT NOT NULL DEFAULT ''
+);
+`); err != nil {
+		return fmt.Errorf("server store: migrate v12: %w", err)
 	}
 	return nil
 }

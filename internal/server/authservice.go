@@ -275,6 +275,35 @@ func (s *authServer) ensurePhoneUser(phone string, now time.Time) error {
 	return s.store.UpsertUser(User{ID: phoneUserID(phone), Provider: "phone", Subject: phone, CreatedAt: now})
 }
 
+// codeMatchesSetupCode reports whether presented equals the operator's fixed
+// Config.SetupCode, constant-time. It does not check cfg.SetupCode != "" —
+// callers already gate on that separately.
+func (s *authServer) codeMatchesSetupCode(presented string) bool {
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(s.cfg.SetupCode)) == 1
+}
+
+// enrollmentCodeAvailable is RequestPhoneVerification's fail-fast check: does
+// presented look like it could succeed at VerifyPhoneCode time, without
+// consuming anything. presented is valid if it matches either the operator's
+// static Config.SetupCode or an admin-minted, still-unexpired, unconsumed
+// invite code (pkg/embed.Admin.MintInviteCode/TODOS.md C446) — the two
+// sources an operator can hand out an enrollment door through.
+func (s *authServer) enrollmentCodeAvailable(presented string, now time.Time) (bool, error) {
+	if s.codeMatchesSetupCode(presented) {
+		return s.store.SetupCodeAvailable(s.cfg.SetupCode)
+	}
+	return s.store.InviteCodeAvailable(strings.TrimSpace(presented), now)
+}
+
+// consumeEnrollmentCode is VerifyPhoneCode's authoritative check-and-consume,
+// mirroring enrollmentCodeAvailable's source precedence.
+func (s *authServer) consumeEnrollmentCode(presented string, now time.Time) (bool, error) {
+	if s.codeMatchesSetupCode(presented) {
+		return s.store.ConsumeSetupCode(s.cfg.SetupCode, now)
+	}
+	return s.store.ConsumeInviteCode(strings.TrimSpace(presented), now)
+}
+
 // requestVerificationIdempotencyKey derives a dedupe key for
 // RequestPhoneVerification from phone and a coarse time bucket, so retries
 // within requestVerificationDedupeWindow of each other collide onto the same
@@ -328,12 +357,11 @@ func (s *authServer) RequestPhoneVerification(ctx context.Context, req backendrp
 	// returning user signing in on another device, not a new invite, so it
 	// skips this check regardless of cfg.SetupCode. Checked here, fail-fast,
 	// so a wrong/spent code never costs an SMS — VerifyPhoneCode is what
-	// actually consumes it, only on successful verification.
+	// actually consumes it, only on successful verification. The presented
+	// code may be either the fixed Config.SetupCode or an admin-minted,
+	// still-valid invite code (see enrollmentCodeAvailable).
 	if !verifiedBefore && s.cfg.SetupCode != "" {
-		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.SetupCode)), []byte(s.cfg.SetupCode)) != 1 {
-			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
-		}
-		available, err := s.store.SetupCodeAvailable(s.cfg.SetupCode)
+		available, err := s.enrollmentCodeAvailable(req.SetupCode, now)
 		if err != nil {
 			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "setup code check failed")
 		}
@@ -450,12 +478,11 @@ func (s *authServer) VerifyPhoneCode(ctx context.Context, req backendrpc.VerifyP
 	// proven correct — so a fumbled verification attempt never burns the
 	// invite (see RequestPhoneVerification's fail-fast check for the same
 	// gate, and migrateTo11's doc comment for why verifiedBefore, not user-row
-	// existence, is the "new account" signal).
+	// existence, is the "new account" signal). The presented code may be
+	// either the fixed Config.SetupCode or an admin-minted invite code (see
+	// consumeEnrollmentCode).
 	if !verifiedBefore && s.cfg.SetupCode != "" {
-		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.SetupCode)), []byte(s.cfg.SetupCode)) != 1 {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
-		}
-		consumed, err := s.store.ConsumeSetupCode(s.cfg.SetupCode, now)
+		consumed, err := s.consumeEnrollmentCode(req.SetupCode, now)
 		if err != nil {
 			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "setup code consume failed")
 		}

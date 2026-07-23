@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Admin-mintable invite codes + client listing for private embedding (TODOS.md C446).**
+  `Config.SetupCode` was a single static value with no visibility into who'd registered and no way
+  to add a client without editing an env var and restarting. New `internal/server/invitecode.go`
+  (migration v12, `invite_codes` table) adds admin-mintable, single-use, 15-minute codes that work
+  as an additional source alongside the static code — `RequestPhoneVerification`/`VerifyPhoneCode`
+  now accept either. New `internal/server/phoneclients.go` (`ListPhoneClients`) lists enrolled
+  accounts, filtered to exclude abandoned/never-verified attempts. Both exposed via a new
+  `pkg/embed.Admin` handle; `NewSyncAndAuthBridge` now returns a `*Bridge{Handler, Admin, Close,
+  Token}` struct instead of a plain tuple.
+
 ### Fixed
 - **`AuthService.Register` bypassed the new setup-code gate entirely (TODOS.md C445).** Caught by
   an independent adversarial review before this ever shipped live: `NewSyncAndAuthBridgeHandler`

@@ -1,3 +1,45 @@
+## 2026-07-23 — From "one static code" to "an actual admin console"
+
+Cam's reaction to the setup-code embedding landing: he went looking for it in the portfolio's admin
+console and found nothing — no way to see who'd registered, no way to add someone new short of
+editing an env var and restarting the whole site. Fair complaint: I'd built a security gate, not a
+feature anyone could actually operate. "Manually via one time setup code, KISS" was the right
+starting scope, but KISS doesn't mean "no UI ever" — it means don't build more than what's needed,
+and an admin can't manage what they can't see.
+
+The fix layers a second code source on top of the first rather than replacing it: admin-mintable,
+single-use, 15-minute invite codes, tracked in a new `invite_codes` table that's almost a carbon
+copy of the existing `pairing_codes` table (same plaintext-code-as-primary-key shape, same
+SELECT-then-atomic-UPDATE consume pattern) — CashFlux already had the right pattern for "mint a
+short-lived one-time code," it just hadn't been extended to account *creation* before, only to
+device *pairing*. The one thing that pattern doesn't carry over: `pairing_codes`/`setup_codes`'
+"not found = fine" logic for `SetupCodeAvailable` only works because that method's caller already
+proved the presented value equals `Config.SetupCode` via a constant-time compare before ever
+touching the store — there's no equivalent authority for a randomly-minted invite code, so
+`InviteCodeAvailable`/`ConsumeInviteCode` had to be written the other way: a code that was never
+minted must always read as invalid, full stop. Worth being explicit about that asymmetry in the
+code and the ticket, since it's exactly the kind of near-identical-looking-but-subtly-different
+logic that's easy to copy-paste wrong.
+
+No proto or wire change was needed to support this — the client already has one "Setup code" text
+field from the first pass; the server just started accepting two kinds of value in it instead of
+one. That fell out of the design almost by accident (the field was always just "whatever string the
+user typed"), but it's the right shape: the client doesn't need to know or care which kind of code
+it's holding.
+
+Restructured `pkg/embed.NewSyncAndAuthBridge` to return a `*Bridge` struct (`Handler`, `Admin`,
+`Close`, `Token`) instead of a four-value tuple, since there's now a fourth thing to hand back — the
+`Admin` management handle (`ListClients`/`MintInviteCode`/`ListInviteCodes`) the portfolio's own
+admin console will call into directly, in-process, with no new HTTP or gRPC surface added to
+CashFlux itself. Free to change since this function has exactly one caller and was added this same
+session. Deliberately left `SetClientSuspended` (revoke) out of this pass — wasn't asked for, and
+the underlying `Store.SetUserSuspended` already exists from the product's own admin console, so
+it's a cheap addition later if wanted rather than something to build speculatively now.
+
+Next: wire `pkg/embed.Admin` into the portfolio's existing admin console as a new tab (following
+the same tab-switching pattern the anime/résumé/settings/rss tabs already use) — that part lives in
+PersonalWebsiteMid2026's own DEVLOG.
+
 ## 2026-07-23 — The setup-code gate had a wide-open back door: `Register`
 
 Ran a dedicated adversarial review agent against the setup-code gate right after building it and

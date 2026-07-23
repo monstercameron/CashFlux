@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"google.golang.org/grpc/codes"
@@ -434,4 +435,77 @@ func assertGRPCCode(t *testing.T, err error, want codes.Code) {
 	if !ok || st.Code() != want {
 		t.Fatalf("err = %v, want gRPC code %s", err, want)
 	}
+}
+
+// TestEnrollmentAcceptsAdminMintedInviteCode proves an admin-minted invite
+// code (pkg/embed.Admin.MintInviteCode) works as an alternative to the fixed
+// Config.SetupCode for gated enrollment — the whole point of adding it.
+func TestEnrollmentAcceptsAdminMintedInviteCode(t *testing.T) {
+	verify := newFakeVerifyClient()
+	s := newGatedPhoneTestAuthServer(t, verify, "static-fallback-code")
+	inviteCode, _, err := s.store.MintInviteCode(time.Now().UTC())
+	if err != nil {
+		t.Fatalf("MintInviteCode: %v", err)
+	}
+	phone := "+15551239010"
+
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: phone, SetupCode: inviteCode,
+	}); err != nil {
+		t.Fatalf("RequestPhoneVerification with a valid invite code: %v", err)
+	}
+	resp, err := s.VerifyPhoneCode(context.Background(), backendrpc.VerifyPhoneCodeRequest{
+		PhoneNumber: phone, Code: "123456", SetupCode: inviteCode,
+	})
+	if err != nil {
+		t.Fatalf("VerifyPhoneCode with a valid invite code: %v", err)
+	}
+	if resp.AccessToken == "" {
+		t.Fatalf("resp = %+v, want a minted access token", resp)
+	}
+
+	// Single-use: a second phone number can't redeem the same invite code.
+	otherPhone := "+15551239011"
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: otherPhone, SetupCode: inviteCode,
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("RequestPhoneVerification for a second phone with a spent invite code: err = %v, want PermissionDenied", err)
+	}
+
+	// The static fallback code set in cfg.SetupCode still works independently
+	// of the invite-code mechanism — the two sources coexist.
+	thirdPhone := "+15551239012"
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: thirdPhone, SetupCode: "static-fallback-code",
+	}); err != nil {
+		t.Fatalf("RequestPhoneVerification with the static setup code: %v", err)
+	}
+}
+
+// TestEnrollmentRejectsExpiredInviteCode proves an expired invite code is
+// rejected even though it was validly minted and never consumed.
+func TestEnrollmentRejectsExpiredInviteCode(t *testing.T) {
+	verify := newFakeVerifyClient()
+	s := newGatedPhoneTestAuthServer(t, verify, "static-fallback-code")
+	mintedAt := time.Now().UTC().Add(-InviteCodeTTL - time.Minute)
+	inviteCode, _, err := s.store.MintInviteCode(mintedAt)
+	if err != nil {
+		t.Fatalf("MintInviteCode: %v", err)
+	}
+	_, err = s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: "+15551239013", SetupCode: inviteCode,
+	})
+	assertGRPCCode(t, err, codes.PermissionDenied)
+}
+
+// TestEnrollmentRejectsUnmintedCode proves an arbitrary guessed string that
+// was never minted as an invite code (and doesn't match the static setup
+// code) is rejected — the exact bug the setup-code gate's first draft had.
+func TestEnrollmentRejectsUnmintedCode(t *testing.T) {
+	verify := newFakeVerifyClient()
+	s := newGatedPhoneTestAuthServer(t, verify, "static-fallback-code")
+	_, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: "+15551239014", SetupCode: "999999",
+	})
+	assertGRPCCode(t, err, codes.PermissionDenied)
 }

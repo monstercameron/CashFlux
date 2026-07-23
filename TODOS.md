@@ -5826,3 +5826,32 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   unauthenticated caller can enumerate whether a given phone number already has an account
   (`RequestPhoneVerification` skips the gate and sends a real SMS for already-verified numbers,
   rejects immediately for new ones) — inherent to the "returning users skip the gate" design goal.)
+- [x] **C446 [MAJOR][SYNC] Admin-mintable invite codes + client listing for private embedding.**
+  C445's `Config.SetupCode` gate was a single static value — no way to see who had registered, and
+  "adding a client" meant editing an env var and restarting the server. Added a second, additional
+  code source: admin-mintable, single-use, 15-minute invite codes (`InviteCodeTTL`), mirroring
+  `pairing_codes`' plaintext-code/atomic-consume pattern almost exactly (migration v12 adds
+  `invite_codes`; new `internal/server/invitecode.go` — `MintInviteCode`/`InviteCodeAvailable`/
+  `ConsumeInviteCode`/`ListInviteCodes`). Unlike `SetupCodeAvailable` (where "never seen" means
+  "available," safe only because the caller already proved the value equals `Config.SetupCode`
+  first), `InviteCodeAvailable`/`ConsumeInviteCode` must and do treat a never-minted code as
+  invalid — this table, not an env var, is the only source of truth for which invite codes are
+  real. `AuthService.RequestPhoneVerification`/`VerifyPhoneCode` now accept EITHER the fixed
+  `Config.SetupCode` OR a valid invite code via two new `authServer` methods
+  (`enrollmentCodeAvailable`/`consumeEnrollmentCode`) that factor out the constant-time compare and
+  try both sources — no proto/wire change needed, since the client already sends whatever string
+  the user types into the one existing "Setup code" field. The overall on/off toggle is unchanged
+  (`cfg.SetupCode != ""`); existing tests keep passing unmodified. Also added
+  `internal/server/phoneclients.go` (`ListPhoneClients`, filtered to `phone_verified_at != ''` so
+  an abandoned/never-completed verification attempt — `ensurePhoneUser` upserts eagerly, before any
+  code is checked — never shows up as a "client"). Both exposed via a new `pkg/embed.Admin` handle
+  (`ListClients`/`MintInviteCode`/`ListInviteCodes`), returned from a restructured
+  `NewSyncAndAuthBridge`, which now returns a `*Bridge{Handler, Admin, Close, Token}` struct instead
+  of a plain tuple (free to change: added this session, exactly one caller). `SetClientSuspended`
+  (revoke) deliberately left out of this pass — the underlying `Store.SetUserSuspended` already
+  exists from CashFlux's own admin console, so it's a cheap fast-follow, not asked for yet. New
+  tests: `invitecode_test.go` (mint/available/consume/single-use/expiry/list-ordering),
+  `phoneclients_test.go` (unverified-attempt exclusion, suspended flag), and three
+  `authservice_phone_test.go` cases proving an invite code and the static code coexist, an expired
+  invite code is rejected, and an unminted guess is rejected (the exact class of bug C445's own
+  review found once already).
