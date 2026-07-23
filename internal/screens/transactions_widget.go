@@ -438,6 +438,16 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			}
 		}
 	}
+	// deleteRow removes the transaction (and its transfer pair). It's undoable via the toast — the
+	// same soft-safety the card view uses — so the ⋯-menu Delete needs no modal confirm.
+	deleteRow := func(id string) {
+		if err := props.App.DeleteTransactionWithTransferPair(id); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
+	}
 	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
 
 	frame := props.Frame
@@ -710,6 +720,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnUnlinkBill = unlinkBillRow
 		r.OnOpenFollowUps = openFollowUps
 		r.OnCreateRule = createRuleFromTxn
+		r.OnDelete = deleteRow
 		return ui.CreateElement(txnFrameRow, r)
 	}
 
@@ -892,6 +903,9 @@ type txnFrameRowProps struct {
 	// merchant + category and navigates to /rules, so a rule can be authored from
 	// a transaction in one click. Hidden on transfer legs (no category to file).
 	OnCreateRule func(txnID string)
+	// OnDelete removes this transaction (and its transfer pair, if any). The single delete is
+	// undoable via the toast, matching the card view — so no modal confirm, just the ⋯-menu action.
+	OnDelete func(txnID string)
 	// Transaction links (XC1 order groups / XC2 refund pairs): badge data plus the
 	// ⋯-menu actions. GroupTotal is pre-formatted; IsIncome gates the pair action
 	// (only money-in can be a refund).
@@ -1256,6 +1270,15 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label:    uistate.T("txnlinks.ungroupAction"),
 			TestID:   "txn-ungroup",
 			OnSelect: func() { props.OnUngroup(props.ID) },
+		})
+	}
+	// Destructive action last: delete this transaction (and its transfer pair). Undoable via the
+	// toast, so no modal — consistent with the card view's single delete.
+	if props.OnDelete != nil {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("action.delete"), Icon: icon.Trash,
+			TestID:   "txn-delete",
+			OnSelect: func() { props.OnDelete(props.ID) },
 		})
 	}
 	if len(items) == 0 {

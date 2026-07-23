@@ -49,6 +49,7 @@ const (
 	ChevronLeft  Name = "chevron-left"
 	ChevronRight Name = "chevron-right"
 	Close        Name = "x"
+	Trash        Name = "trash" // delete / remove permanently
 	MoreH        Name = "more-horizontal"
 	Grip         Name = "grip"   // six-dot drag handle (signals draggable, vs MoreH = menu)
 	Search       Name = "search" // magnifier for search/filter inputs
@@ -146,6 +147,7 @@ var inner = map[Name]string{
 	ChevronLeft:  `<path d="M15 18l-6-6 6-6"/>`,
 	ChevronRight: `<path d="M9 18l6-6-6-6"/>`,
 	Close:        `<path d="M18 6 6 18"/><path d="M6 6l12 12"/>`,
+	Trash:        `<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/>`,
 	MoreH:        `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 	Grip:         `<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>`,
 	Search:       `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>`,

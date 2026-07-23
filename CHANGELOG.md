@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed (coworker-feedback UX pass)
+- **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),
+  matching the rule that destructive actions live behind the ⋯ menu. It's undoable via the toast, like
+  the card view's single delete — no modal.
+- **Split-editor row separators.** Category-split rows now have a hairline + padding between them so
+  multiple breakdowns don't visually blur together.
+- **Follow-up task from the transaction history panel.** The per-transaction history popover now has an
+  "Add follow-up task" action (previously only on the row kebab), seeding the task pre-linked.
+- **Clearer category-delete copy.** The reassign-before-delete panel now spells out the full outcome —
+  transactions are recategorized, the category is deleted, sub-categories move up to the parent,
+  nothing is lost.
+
 ### Added
 - **Sync-transfer logging.** The embedded sync bridge now logs every sync RPC that crosses the wire —
   method, authenticated user, and, for a workspace push, the workspace, byte count, and whether the

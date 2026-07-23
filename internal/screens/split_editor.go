@@ -423,8 +423,10 @@ func splitRow(props splitRowProps) ui.Node {
 	})
 	onOwner := func(v string) { props.OnOwner(props.Index, v) }
 	onRemove := ui.UseEvent(func() { props.OnRemove(props.Index) })
+	// A hairline + padding under each row visually separates the splits so multiple category
+	// breakdowns don't blur together (coworker feedback).
 	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
-		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "margin-bottom": "0.4rem", "flex-wrap": "wrap"}),
+		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "padding-bottom": "0.5rem", "margin-bottom": "0.5rem", "border-bottom": "1px solid var(--border)", "flex-wrap": "wrap"}),
 		Div(Style(map[string]string{"flex": "1 1 auto"}),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.CatOpts,

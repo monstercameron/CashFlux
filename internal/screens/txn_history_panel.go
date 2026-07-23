@@ -7,6 +7,7 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v4/css"
@@ -49,8 +50,30 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		mine[i], mine[j] = mine[j], mine[i]
 	}
 
+	// A follow-up-task action right here in the history panel (coworker feedback): seed the add-task
+	// modal with a suggested title + this transaction pre-linked, matching the row ⋯-menu action.
+	merchant := ""
+	for _, t := range app.Transactions() {
+		if t.ID == props.TxnID {
+			merchant = firstNonEmpty(t.Payee, t.Desc)
+			break
+		}
+	}
+	onFollowUp := ui.UseEvent(func() {
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title:    uistate.T("transactions.followUpTaskTitle", merchant),
+			LinkType: string(domain.RelatedTransaction),
+			LinkID:   props.TxnID,
+		})
+		uistate.SetAddTarget("task")
+	})
+	followUpBtn := Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mb2),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "txn-history-followup"),
+			OnClick(onFollowUp), uistate.T("transactions.followUpTask")))
+
 	if len(mine) == 0 {
 		return Div(css.Class("modal-scroll"), Attr("data-testid", "txn-history-panel"),
+			followUpBtn,
 			P(css.Class("muted"), Attr("data-testid", "txn-history-empty"), uistate.T("txnhistory.empty")),
 		)
 	}
@@ -76,6 +99,7 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		))
 	}
 	return Div(css.Class("modal-scroll"), Attr("data-testid", "txn-history-panel"),
+		followUpBtn,
 		P(css.Class("muted", tw.Text12), uistate.T("txnhistory.scopeNote")),
 		Div(css.Class("rows"), rows),
 	)

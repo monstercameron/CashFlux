@@ -498,7 +498,7 @@ var english = Catalog{
 	"categories.parentOptional":  "Parent category (optional)",
 	"categories.parent":          "Parent category",
 	"categories.color":           "Category color",
-	"categories.reassignDesc":    "%q is used by %d transaction(s) or budget(s). Move them to another category, then it will be deleted.",
+	"categories.reassignDesc":    "%q is used by %d transaction(s) or budget(s). Pick where to move them — they'll be recategorized, this category will be deleted, and any sub-categories move up to its parent. Nothing is lost.",
 	"categories.expenseTitle":    "Expense categories",
 	"categories.incomeTitle":     "Income categories",
 	"categories.expenseEmpty":    "No expense categories yet.",
