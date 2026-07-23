@@ -1,3 +1,36 @@
+## 2026-07-23 — Loadgen: benchmark/stress harness for client-server scaling
+
+Cam asked how to stress-test client-server behavior to understand scaling, then said build it.
+Built bottom-up per the SDLC: internal/loadgen's pure layer models scenarios → deterministic
+per-client Poisson schedules (seeded per client with independent streams, so schedules stay
+stable across client-count changes) and a concurrent Recorder → percentile reports; all
+table-driven-tested natively. The driver executes plans over the REAL transport — syncbridge's
+gRPC-over-WS bridge plus blob HTTP — which is the whole point: numbers from the actual protocol,
+not an HTTP approximation. cmd/cashflux-loadgen wraps it with flags, JSON reports, and a
+-max-error-pct exit gate so runs can sit in CI or drive the Stack A vs Stack B comparison from
+the business plan (identical seed = identical workload on both boxes).
+
+The shakedown against the real server binary earned its keep before the tool even shipped:
+(1) first run — every RPC failed with "websocket: bad handshake" while dials "succeeded"
+(grpc dials lazily): the upgrade's Origin check rejects native clients that send no Origin
+header, and env config refuses APP_ORIGIN=*; fixed properly by having the driver present the
+server's own origin in the handshake (TunnelConfig.Headers — same-origin browser semantics), so
+no server-side loosening is needed. A preflight RPC now converts this class of misconfig into
+one clear error instead of N×failures. (2) second run — 55/119 errors from a healthy server:
+the per-client abuse guards (default **8 concurrent bridge connections per client**) throttled
+the single-IP fleet. That's production hardening working as designed AND a real product finding:
+households/offices behind one NAT share an 8-connection budget — filed mentally against the
+multi-device story; the loadtest env recipe (raise the GRPC_MAX_* knobs) is documented in the
+command header, with the note that leaving defaults measures the guards themselves. (3) final
+run: 50 clients × 15s mixed = 319 ops, 0 errors, push p95 ~147ms vs p50 ~3.4ms under
+interleaved blob traffic — the first hint of the SQLite single-writer ceiling the capacity
+work will need to characterize. Also: blob ops scheduled before a client's first push 404'd
+(no workspace yet) — fixed with a bootstrap push per client, which is also what real clients do.
+
+Next steps when capacity numbers are wanted for §15: rent the actual Stack A/B boxes hourly,
+run steady/storm/stampede ladders (100 → 500 → 1k clients), and convert ceilings into
+subscribers-per-box via a measured per-user-day profile.
+
 ## 2026-07-23 — Hosting stacks promoted to §15 with detail tables (docs, no code)
 
 Cam wanted the reference stacks at the bottom of the plan and in a proper detailed table. Moved

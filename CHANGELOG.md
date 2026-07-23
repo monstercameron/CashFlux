@@ -6,6 +6,25 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Benchmark/stress-test harness (`internal/loadgen` + `cmd/cashflux-loadgen`).** A load
+  generator that drives the REAL client protocol (gRPC-over-WS via `syncbridge` for sync RPCs,
+  HTTP for blobs) with M virtual clients. Six scenarios answer distinct scaling questions:
+  steady (baseline capacity), storm (9 a.m. burst), stampede (restart thundering herd with
+  jittered client backoff), conflict (paired clients on shared workspaces exercising the LWW
+  guard — rejections counted separately from errors), blob (receipt-heavy), mixed. Plans are
+  fully deterministic (same flags + seed = identical Poisson schedules), reports give
+  p50/p95/p99/max + ops/sec per op, byte volumes, and counters (push_accepted/rejected,
+  watch_events, watchers); `-out` writes JSON, `-max-error-pct` gates exit code for CI. The
+  driver dials with the server's own Origin (same-origin browser semantics) so no special
+  server config is needed for the handshake; a preflight RPC fails fast with a clear message.
+  Pure scheduling/metrics logic is table-driven-tested; an integration test runs the driver
+  against the real server mux in-process. Verified end-to-end: 50 clients × 15s mixed against
+  the actual server binary = 319 ops, 0 errors — and the shakedown already produced findings
+  (per-client connection cap of 8 throttles NAT-shared households; push p95 ~147ms under mixed
+  load hints at SQLite single-writer contention). Load-test server env recipe documented in the
+  command header.
+
 ### Changed
 - **Cloud business plan — hosting stacks moved to §15 with full detail tables
   (`docs/CLOUD_BUSINESS_PLAN.md`).** The two reference stacks now live at the end of the
