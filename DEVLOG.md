@@ -1,3 +1,31 @@
+## 2026-07-23 — Optimize → re-benchmark: watch hot path, −42% push p95 at 500 clients
+
+Cam: optimize what you can without clobbering in-development files, get costs lower and scaling
+higher. Constraint check first: store.go, http.go, config.go, grpcbridge.go are ALL uncommitted
+WIP from another session — so the SQLite read-pool fix (#2) and the in-flight/upgrade budget
+split (#3) are off-limits today. sync.go was clean, and it holds the worst measured offender.
+
+The fix: publishWorkspace ended every publish with updateWatchQueueDepthLocked(), which walks
+every channel of every connected watcher — O(all watchers) — under the global watchMu. At 125
+watchers that walk ran ~2,000 times per benchmark, each time blocking every other publish and
+subscribe. Now an atomic-CAS gate throttles the gauge to one recomputation per 250ms; drops
+(subscriber buffer full) are counted and exported as workspace_watch_dropped_total instead of
+vanishing; per-subscriber buffers went 16→64.
+
+Re-benchmark, identical seeds, same machine, same env: steady-500/125-watchers — push p95
+1.054s→610ms (−42%), push p99 1.21s→761ms, push max 1.67s→827ms (−50%), pull p95 620ms→13ms
+(−98%), pull p99 1.01s→141ms, list p95 484ms→13ms (−97%); slightly MORE watch events delivered
+(211k vs 206k — the bigger buffers dropping less). Storm-250: push p95 453→351ms, reconnect p95
+136→43ms. Steady-250 (where the walk wasn't yet dominant): push p95 342→296ms. Zero errors in
+every run. Read: the pull/list tails collapsed because they were queueing behind depth walks on
+watchMu-adjacent paths, not doing work — classic contention, exactly what the harness exists to
+find. Scaling implication: the same single box now holds sub-second p95 at 500 aggressive
+clients — the practical client ceiling per dollar moved up a tier without touching hardware.
+Remaining known levers, blocked or deferred: SQLite WAL + read pool (blocked on store.go WIP —
+the residual push-tail is single-writer queueing), upgrade-vs-request in-flight split (blocked on
+http.go/config.go WIP), proto codec on the tunnel (collides with in-flight proto work), per-
+workspace watch filtering + no-op push skip (protocol design, needs a quiet tree).
+
 ## 2026-07-23 — First benchmark ladder (local, co-located — indicative not authoritative)
 
 Ran the first real ladder with the new harness. Caveats first, per the methodology: loadgen and

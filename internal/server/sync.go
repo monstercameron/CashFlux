@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -29,7 +30,23 @@ type SyncService struct {
 	metrics           *Metrics
 	watchMu           sync.Mutex
 	watches           map[string]map[chan backendrpc.WatchWorkspacesResponse]struct{}
+	// watchDepthNext throttles the queue-depth gauge recomputation: the gauge
+	// walks every watcher channel, which is O(all connected watchers) and runs
+	// under watchMu — unthrottled it turns every publish into a full-registry
+	// scan (measured as the dominant publish cost at 100+ watchers).
+	watchDepthNext atomic.Int64
+	// watchDrops counts watch events discarded because a subscriber's buffer
+	// was full; exported so silent staleness is at least visible.
+	watchDrops atomic.Int64
 }
+
+// watchDepthEvery bounds how often the O(watchers) depth gauge recomputes.
+const watchDepthEvery = 250 * time.Millisecond
+
+// watchBuffer is the per-subscriber event buffer. Sized so a burst of rapid
+// workspace updates (imports, bulk edits) doesn't overflow a healthy stream;
+// overflow is counted in watchDrops rather than silently ignored.
+const watchBuffer = 64
 
 // PutWorkspaceResult reports the server-side result of a LWW workspace put.
 type PutWorkspaceResult struct {
@@ -181,7 +198,7 @@ func validateWorkspaceFields(workspace Workspace) error {
 }
 
 func (s *SyncService) subscribeWorkspaces(userID string) (chan backendrpc.WatchWorkspacesResponse, func(), error) {
-	ch := make(chan backendrpc.WatchWorkspacesResponse, 16)
+	ch := make(chan backendrpc.WatchWorkspacesResponse, watchBuffer)
 	s.watchMu.Lock()
 	defer s.watchMu.Unlock()
 	if s.watches == nil {
@@ -224,9 +241,31 @@ func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {
 		select {
 		case ch <- resp:
 		default:
+			// Subscriber buffer full: the event is dropped rather than
+			// blocking the publisher. Count it so staleness is observable.
+			s.watchDrops.Add(1)
 		}
 	}
+	s.maybeUpdateWatchDepthLocked()
+}
+
+// maybeUpdateWatchDepthLocked recomputes the O(all watchers) depth gauge at
+// most once per watchDepthEvery, so hot publish paths never pay a
+// full-registry walk. Callers must hold watchMu.
+func (s *SyncService) maybeUpdateWatchDepthLocked() {
+	if s.metrics == nil {
+		return
+	}
+	now := time.Now().UnixNano()
+	next := s.watchDepthNext.Load()
+	if now < next {
+		return
+	}
+	if !s.watchDepthNext.CompareAndSwap(next, now+int64(watchDepthEvery)) {
+		return
+	}
 	s.updateWatchQueueDepthLocked()
+	s.metrics.SetQueueDepth("workspace_watch_dropped_total", s.watchDrops.Load())
 }
 
 func (s *SyncService) updateWatchQueueDepth() {

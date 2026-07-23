@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Sync watch hot-path optimization (`internal/server/sync.go`).** The workspace-watch queue-depth
+  gauge walked every channel of every connected watcher under the global watch mutex on EVERY
+  publish — O(all watchers) per push, measured as the dominant publish cost at 100+ watchers. Now
+  throttled to at most one recomputation per 250ms (atomic CAS gate), watch-event drops are counted
+  and exported (`workspace_watch_dropped_total`) instead of being silently discarded, and the
+  per-subscriber buffer grew 16→64 so bursts (imports, bulk edits) don't overflow healthy streams.
+  Re-benchmarked with identical seeds on the same machine, 500 clients/125 watchers steady:
+  push p95 1.05s→610ms (−42%), push max 1.67s→827ms, pull p95 620ms→13ms (−98%), list p95
+  484ms→13ms; storm-250 reconnect p95 136ms→43ms; zero errors across all runs.
 - **First benchmark ladder run + findings (DEVLOG).** Local co-located runs (indicative, not
   authoritative): steady 100/250/500, storm 250, stampede 300, conflict 100. Key findings:
   `HTTP_MAX_IN_FLIGHT` (default 256) is the real concurrency ceiling since each WS tunnel holds
