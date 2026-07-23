@@ -77,6 +77,9 @@ func Budgets() ui.Node {
 		// Self-gating: renders nothing unless the method is zero-based (savings/
 		// investment goals counted toward the assigned total).
 		budgetNativeSpec("budget-savings"),
+		// Feedback #5: the detected recurring commitments feeding these budgets,
+		// with their frequency. Self-gates to nothing when there are no recurrings.
+		budgetNativeSpec("budget-recurring"),
 	}
 	// BG2: the flex methodology replaces the per-budget list with one pooled flex
 	// meter plus the fixed/non-monthly composition. Keep the toolbar (it holds the
@@ -136,6 +139,9 @@ func init() {
 	})
 	R("budget-flex", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(budgetFlexWidget, budgetSummaryProps{App: c.App})
+	})
+	R("budget-recurring", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(budgetRecurringWidget, budgetSummaryProps{App: c.App})
 	})
 }
 

@@ -29,6 +29,21 @@ screen renders every string through `T`), so the zero-hardcoded-copy ratchet hol
 Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
 (future-period projections so navigating forward shows projected, not empty, values).
 
+## 2026-07-23 — recurring commitments on the budgets page — feedback #5
+
+Coworker: *"For budgets, show a list of recurring transactions that were detected — recurrence
+frequency is important."* Added a self-gating `budget-recurring` tile to the budgets bento. The data
+was already there (`app.Recurring()` returns confirmed commitments with a `Cadence` and a
+`MonthlyEquivalent()` normalizer), so this was purely a surfacing job: list active recurrings biggest-
+monthly-first, each with its cadence as a prominent pill (the "frequency is important" ask), the raw
+amount, next-due date, and — when the cadence isn't monthly — a per-month equivalent so a $1,200/yr
+bill reads "≈ $100/mo" and compares fairly. Header sums the base-currency-normalized monthly total.
+
+Kept it low-risk under concurrent work: a new file (`budgets_recurring.go` + `rules_budgetsrecurring.go`
++ `en_budgetsrecurring.go`) plus two additive lines in the contended `budgets_widget.go` (a spec entry
+and a registry registration). Rows are display-only so no per-row handler hooks fire inside the loop;
+the single footer button navigates to `/recurring` for editing.
+
 ## 2026-07-21 — embeddable sync engine (`pkg/embed`)
 
 Another Go service (a personal-site backend) wanted to host CashFlux as a managed budgeting app,

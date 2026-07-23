@@ -25,6 +25,13 @@ and every commit updates this file under `Unreleased`.
   Credit Karma, Experian, Chase Credit Journey). Copy lives in `i18n/en_plan.go`, styling in
   `styles/rules_plan.go` (reusing the shared rpt-*/debt-* chrome).
 
+- **Recurring commitments on the budgets page (`/budgets`).** A new self-gating "Recurring in your
+  budgets" tile lists the household's detected recurring charges with their **frequency** front-and-
+  centre (a cadence pill), each row's amount, next-due date, and a per-month equivalent so an annual
+  bill compares fairly against a monthly one. Header shows total committed ≈ per month; footer links to
+  the full `/recurring` surface. Reads confirmed recurrings (`app.Recurring()`), so every row is real.
+  (Coworker feedback #5 — "show detected recurring transactions, frequency is important.")
+
 ### Changed (coworker-feedback UX pass)
 - **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),
   matching the rule that destructive actions live behind the ⋯ menu. It's undoable via the toast, like
