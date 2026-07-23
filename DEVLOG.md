@@ -1,3 +1,16 @@
+## 2026-07-23 — §15 addendum: serve the wasm from the CDN edge (docs)
+
+Cam, mid-loadgen-build: "we probably should serve the wasm bin from a cdn too." Correct, and
+free — Cloudflare's proxy is already in both reference stacks, so this is a cache-rule + build
+change, not a new service. Added as a §15.1 component row with the one detail that matters more
+than the CDN itself: the bundle must ship under an immutable content-hashed filename
+(main.<hash>.wasm.gz). We already know from local work that a stale wasm.gz silently runs old
+code; behind a CDN that failure mode graduates from one browser to every visitor on the edge
+until purge. Hashed names make cache invalidation a non-event and let the edge cache be
+immortal. Bonus effects: origin egress drops to near-nothing for app loads (the wasm is the
+heaviest asset by far), and global first-paint improves, which composes with FB1's staged-boot
+work.
+
 ## 2026-07-23 — Loadgen: benchmark/stress harness for client-server scaling
 
 Cam asked how to stress-test client-server behavior to understand scaling, then said build it.

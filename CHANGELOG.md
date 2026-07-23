@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Cloud plan §15 — wasm/static delivery via CDN edge cache (docs).** New component row in both
+  reference stacks: serve `main.wasm.gz` + the static shell from Cloudflare's edge ($0), which
+  removes the bulk of origin egress and fixes global first-paint latency — with the hard
+  requirement of immutable content-hashed filenames (the stale-wasm.gz landmine would otherwise
+  become a CDN-wide serve-old-code incident).
+
 ### Added
 - **Benchmark/stress-test harness (`internal/loadgen` + `cmd/cashflux-loadgen`).** A load
   generator that drives the REAL client protocol (gRPC-over-WS via `syncbridge` for sync RPCs,

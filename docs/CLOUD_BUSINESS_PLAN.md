@@ -383,6 +383,7 @@ compromising the open, no-dark-patterns promise.
 | **Email — inbound** (ingest address) | **Cloudflare Email Routing** → webhook | $0 | Same | $0 | Free and provider-neutral both sides |
 | **Domain** | Cloudflare Registrar at-cost .com (~$10.44/yr) | ~$0.87 | Same | ~$0.87 | No reason to differ |
 | **DNS / CDN / DDoS front** | Cloudflare free tier, proxied | $0 | Same | $0 | Also gives blob-egress relief via Bandwidth Alliance if B2 serves anything |
+| **App/wasm delivery** | **Serve `main.wasm.gz` + static shell from the Cloudflare edge cache**, not the VPS | $0 | Same | $0 | The wasm bundle is the single heaviest asset every visitor downloads — edge-caching it removes the bulk of origin egress AND fixes global first-paint latency (feeds FB1 boot perception). **Non-negotiable detail:** cache with immutable, content-hashed filenames (`main.<hash>.wasm.gz`), never TTL-cached mutable names — the known stale-`wasm.gz`-runs-old-code landmine becomes a CDN-wide incident otherwise. Keep pre-compressed gzip semantics correct (Content-Encoding) or let Cloudflare re-encode brotli |
 | **Monitoring** | UptimeRobot + healthchecks.io free tiers | $0 | DO monitoring (included) + healthchecks.io | $0 | — |
 | **Status page** | none (beta — no uptime promises made) | $0 | **Instatus** free tier | $0 | A deliberately makes no promises; B starts making them the day money moves |
 | **TLS** | Caddy / Let's Encrypt | $0 | Same | $0 | — |
