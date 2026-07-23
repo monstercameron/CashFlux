@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-23
+
 ### Added
 - **PS-series backlog — PiggySize competitor teardown (docs, deferred).** Filed 23 detailed tickets
   in `TODOS.md` from a 2026-07-23 teardown of piggysize.com (marketing pages + full Playwright
