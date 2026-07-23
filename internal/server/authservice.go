@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -315,8 +316,30 @@ func (s *authServer) RequestPhoneVerification(ctx context.Context, req backendrp
 		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.ResourceExhausted, "too many verification requests — try again in a minute")
 	}
 	userID := phoneUserID(phone)
+	verifiedBefore, err := s.store.PhoneVerifiedBefore(userID)
+	if err != nil {
+		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
 	if err := s.ensurePhoneUser(phone, now); err != nil {
 		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
+	// SetupCode gates account CREATION only (TODOS.md portfolio-embedding
+	// gate): a phone that has already completed verification once is a
+	// returning user signing in on another device, not a new invite, so it
+	// skips this check regardless of cfg.SetupCode. Checked here, fail-fast,
+	// so a wrong/spent code never costs an SMS — VerifyPhoneCode is what
+	// actually consumes it, only on successful verification.
+	if !verifiedBefore && s.cfg.SetupCode != "" {
+		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.SetupCode)), []byte(s.cfg.SetupCode)) != 1 {
+			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
+		}
+		available, err := s.store.SetupCodeAvailable(s.cfg.SetupCode)
+		if err != nil {
+			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "setup code check failed")
+		}
+		if !available {
+			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
+		}
 	}
 	route := backendrpc.MethodAuthRequestPhoneVerification
 	dedupeKey := requestVerificationIdempotencyKey(phone, now)
@@ -384,6 +407,10 @@ func (s *authServer) VerifyPhoneCode(ctx context.Context, req backendrpc.VerifyP
 		return backendrpc.TokenPairResponse{}, status.Error(codes.ResourceExhausted, "too many verification attempts — try again in a minute")
 	}
 	userID := phoneUserID(phone)
+	verifiedBefore, err := s.store.PhoneVerifiedBefore(userID)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
 	if err := s.ensurePhoneUser(phone, now); err != nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account lookup failed")
 	}
@@ -417,6 +444,29 @@ func (s *authServer) VerifyPhoneCode(ctx context.Context, req backendrpc.VerifyP
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "suspension check failed")
 	} else if suspended {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "account is suspended")
+	}
+	// SetupCode's authoritative check-and-consume happens here, only on a
+	// verified new account, only after the SMS code itself has already been
+	// proven correct — so a fumbled verification attempt never burns the
+	// invite (see RequestPhoneVerification's fail-fast check for the same
+	// gate, and migrateTo11's doc comment for why verifiedBefore, not user-row
+	// existence, is the "new account" signal).
+	if !verifiedBefore && s.cfg.SetupCode != "" {
+		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(req.SetupCode)), []byte(s.cfg.SetupCode)) != 1 {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
+		}
+		consumed, err := s.store.ConsumeSetupCode(s.cfg.SetupCode, now)
+		if err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "setup code consume failed")
+		}
+		if !consumed {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
+		}
+	}
+	if !verifiedBefore {
+		if err := s.store.MarkPhoneVerified(userID, now); err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "mark verified failed")
+		}
 	}
 	access, refresh, familyID, err := s.issueSession(userID, now, req.DeviceLabel)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 10
+const CurrentServerSchemaVersion = 11
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -234,6 +234,12 @@ func (s *Store) migrate() error {
 		}
 		version = 10
 	}
+	if version < 11 {
+		if err := s.migrateTo11(); err != nil {
+			return err
+		}
+		version = 11
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -396,6 +402,43 @@ CREATE INDEX IF NOT EXISTS idx_pairing_codes_user_id ON pairing_codes(user_id);
 	} else if !has {
 		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN recovery_code_hash TEXT NOT NULL DEFAULT '';`); err != nil {
 			return fmt.Errorf("server store: migrate v10: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateTo11 adds the setup_codes table backing the SetupCode enrollment gate
+// (Config.SetupCode): private/embedded deployments hand out one manually-set
+// invite code and this table tracks whether it has been redeemed. Rows are
+// keyed by a sha256 hash of the code, not the code itself — the code value
+// lives only in the operator's env var and is never persisted in plaintext.
+// Keying by hash (rather than a single fixed row) means rotating
+// CASHFLUX_SERVER_SETUP_CODE to a new value automatically opens a fresh,
+// unconsumed slot: the operator's way to invite a second person is to change
+// the env var and restart, exactly matching the "one code, one invite, KISS"
+// model this gate was built for.
+//
+// It also adds users.phone_verified_at: a timestamp set the first time a
+// phone number completes VerifyPhoneCode. This is the signal the setup-code
+// gate uses to tell "genuinely new account" from "returning phone number
+// signing in on another device" — the users row itself exists as soon as
+// RequestPhoneVerification is called (ensurePhoneUser upserts eagerly, before
+// the code is ever checked), so row *existence* can't distinguish the two
+// cases; whether the phone has ever finished verification can.
+func (s *Store) migrateTo11() error {
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS setup_codes (
+	code_hash TEXT PRIMARY KEY,
+	consumed_at TEXT NOT NULL DEFAULT ''
+);
+`); err != nil {
+		return fmt.Errorf("server store: migrate v11: %w", err)
+	}
+	if has, err := s.columnExists("users", "phone_verified_at"); err != nil {
+		return fmt.Errorf("server store: migrate v11: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN phone_verified_at TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v11: %w", err)
 		}
 	}
 	return nil

@@ -45,6 +45,10 @@ type TokenPairResponse struct {
 type RequestPhoneVerificationRequest struct {
 	PhoneNumber string `json:"phoneNumber"`
 	DeviceLabel string `json:"deviceLabel,omitempty"`
+	// SetupCode is required only when the server has Config.SetupCode
+	// configured (gated-enrollment deployments); ignored otherwise. See
+	// VerifyPhoneCodeRequest.SetupCode's doc comment for the full contract.
+	SetupCode string `json:"setupCode,omitempty"`
 }
 
 // RequestPhoneVerificationResponse reports whether a verification code was sent.
@@ -58,6 +62,13 @@ type VerifyPhoneCodeRequest struct {
 	Code           string `json:"code"`
 	DeviceLabel    string `json:"deviceLabel,omitempty"`
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
+	// SetupCode: on a deployment with Config.SetupCode configured, a new
+	// account cannot be created without presenting this manually-distributed,
+	// single-use code (checked for validity in RequestPhoneVerification,
+	// atomically consumed here only on successful verification so a fumbled
+	// SMS attempt doesn't burn it). Ignored when the server has no setup code
+	// configured — open CashFlux deployments are unaffected.
+	SetupCode string `json:"setupCode,omitempty"`
 }
 
 // RedeemPairingCodeRequest links a new device to an existing account using a

@@ -5777,3 +5777,29 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   `cmd/cashflux-server/main.go`, unlike every other reconciliation job in that file. The mechanism
   was entirely inert in a real deployment. Wired `StartBlobCleanup` into `main()` alongside the HTTP
   server, tied to the same shutdown context.)
+- [x] **C445 [MAJOR][SYNC] Gated per-person enrollment for private embedding (`pkg/embed`).**
+  `pkg/embed.NewSyncBridge` only wired `SyncService` behind a single shared static token — anyone
+  holding that token was indistinguishable from any other caller, with no per-person identity and
+  no way to add or revoke one invitee without rotating the token for everyone. Built for embedding
+  CashFlux's sync engine into another Go service (a personal-site portfolio) for the operator plus
+  a small, manually-invited set of people. Added `Config.SetupCode`
+  (`CASHFLUX_SERVER_SETUP_CODE`): when set, `AuthService.RequestPhoneVerification`/`VerifyPhoneCode`
+  refuse to create a brand-new account without a matching setup code (constant-time compared,
+  single-use — tracked hashed in the new `setup_codes` table, migration v11); a phone number that
+  has already completed verification once (`users.phone_verified_at`, also migration v11) is never
+  asked for it again on a later device, since that's a returning account, not a new invite.
+  Empty/unset `Config.SetupCode` is a total no-op, so `NewSyncBridge` and any deployment without the
+  env var are unaffected. Added `NewSyncAndAuthBridgeHandler` (server) /
+  `pkg/embed.NewSyncAndAuthBridge` registering `SyncService` + `AuthService` + `BlobService` with no
+  `AccountService`/`BillingService` — no tiers, no payment concept, just a flat storage cap as the
+  abuse guard. The `CloudEntitlement` interceptors stay in the chain even with no billing: with
+  `cfg.Billing == false`, `IsCloudActive` is a no-op past the suspension check, so keeping them costs
+  nothing and gives the operator a working moderation lever (suspend a row, that person's Sync/Blob
+  calls start failing) for free.
+  (Caught in review before landing: the first pass of the gate checked `Store.SetupCodeAvailable`/
+  `ConsumeSetupCode` against the caller-supplied code directly without ever comparing it to
+  `Config.SetupCode` — any never-before-tried string would pass, since "not yet consumed" was
+  conflated with "correct." Fixed by comparing the caller-supplied value against `Config.SetupCode`
+  with `subtle.ConstantTimeCompare` in `AuthService` before ever touching the Store, so the Store
+  methods only ever operate on the real configured secret. Covered by
+  `TestRequestPhoneVerificationRejectsMissingSetupCode`/`TestVerifyPhoneCodeSetupCodeGateEndToEnd`.)

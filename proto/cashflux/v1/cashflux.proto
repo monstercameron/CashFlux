@@ -168,6 +168,14 @@ message TokenPairResponse {
 message RequestPhoneVerificationRequest {
   string phone_number = 1;
   string device_label = 2;
+  // setup_code is required only on deployments that opt into gated enrollment
+  // (Config.SetupCode configured) — a manually-distributed, single-use code
+  // proving the caller was invited. Ignored (no gate) when the server has no
+  // setup code configured, so open-enrollment CashFlux deployments are
+  // unaffected. Checked here as a fail-fast (don't send an SMS for an
+  // already-spent or wrong code) but only actually consumed once
+  // VerifyPhoneCode succeeds, so a fumbled verification doesn't burn it.
+  string setup_code = 3;
 }
 
 message RequestPhoneVerificationResponse {
@@ -179,6 +187,10 @@ message VerifyPhoneCodeRequest {
   string code = 2;
   string device_label = 3;
   string idempotency_key = 4;
+  // setup_code: see RequestPhoneVerificationRequest's doc comment. Must match
+  // the same code presented to RequestPhoneVerification for this enrollment;
+  // consumed (marked single-use spent) only on successful verification.
+  string setup_code = 5;
 }
 
 message RedeemPairingCodeRequest {

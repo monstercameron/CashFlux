@@ -1,3 +1,49 @@
+## 2026-07-23 — Why the sync engine got built: embedding it in a personal-site portfolio
+
+The real motivation behind the whole Custom Sync push (identity, token lifecycle, gRPC-only
+transport) surfaced only after it shipped: Cam wants to embed a live CashFlux instance in an
+upcoming portfolio/blog site, so it can sync for himself and a handful of people he chooses to
+give access to. His answer on how access should be granted was "manually via one time setup code,
+KISS" — no self-service signup, no billing, no tiers.
+
+`pkg/embed.NewSyncBridge` (the existing embeddable seam, built before this need was known) only
+wired `SyncService` behind a single shared static token — fine for "this browser install talks to
+its own backend," wrong for "several distinct people share one server." Everyone holding the token
+is indistinguishable from everyone else, and there's no way to add or revoke one person without
+rotating the token for all of them.
+
+The fix layers on top of AuthService rather than inventing new machinery: `Config.SetupCode`, when
+set, gates only account *creation* — a brand-new phone number must present it to
+`RequestPhoneVerification`/`VerifyPhoneCode`, checked fail-fast (before wasting an SMS) and
+consumed atomically only on a successful verify (so a fumbled SMS doesn't burn the invite). The
+subtle part: `ensurePhoneUser` upserts a user row eagerly, before any code is ever checked, so row
+*existence* can't distinguish "brand-new invite" from "returning phone number on a second device."
+Added `users.phone_verified_at`, stamped only on a real successful verification, as the actual
+signal — a returning, already-verified number never has to present the code again.
+
+Caught in review before it ever ran against real data: the first draft of `Store.SetupCodeAvailable`/
+`ConsumeSetupCode` checked the caller-supplied string against the single-use table directly,
+without ever comparing it to `Config.SetupCode` — meaning *any* string that had never been tried
+before would read as "available" and pass. The bug was conflating "not yet consumed" with
+"correct." A same-session regression test (`TestRequestPhoneVerificationRejectsMissingSetupCode`
+asserting a `"wrong-code"` guess was rejected) caught it immediately once written, before this ever
+got near a commit. Fixed by comparing the caller-supplied value against `Config.SetupCode` with
+`subtle.ConstantTimeCompare` in `AuthService`, before the Store is ever touched — the Store methods
+now only ever operate on the real configured secret, never on unvalidated caller input.
+
+New `NewSyncAndAuthBridgeHandler`/`pkg/embed.NewSyncAndAuthBridge` register `SyncService` +
+`AuthService` + `BlobService`, deliberately dropping `AccountService`/`BillingService` — no tiers,
+no payment concept, just CashFlux's ordinary storage cap as the abuse guard. Kept the
+`CloudEntitlement` interceptors in the chain anyway, against the original plan to strip them: with
+`Config.Billing == false` (this deployment never sets up Stripe/PayPal), `IsCloudActive` is a
+no-op past the suspension check, so they cost nothing and hand the operator a free moderation lever
+— suspend one person's row, their Sync/Blob calls start failing, without touching anyone else.
+
+Still ahead: wiring `pkg/embed.NewSyncAndAuthBridge` into the portfolio site's own server, adding a
+setup-code field to its embedded enrollment UI, and that repo's own mandatory adversarial review
+before anything ships there (PersonalWebsiteMid2026 has its own, stricter governance — no AI
+attribution in commits, sequential-only subagents).
+
 ## 2026-07-23 — What the adversarial review's own blind spot looked like
 
 A post-commit automated security scan on the just-pushed Custom Sync commits caught something the

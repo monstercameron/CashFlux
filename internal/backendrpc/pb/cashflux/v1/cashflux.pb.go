@@ -1466,9 +1466,17 @@ func (x *TokenPairResponse) GetDeviceId() string {
 }
 
 type RequestPhoneVerificationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PhoneNumber   string                 `protobuf:"bytes,1,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	DeviceLabel   string                 `protobuf:"bytes,2,opt,name=device_label,json=deviceLabel,proto3" json:"device_label,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	PhoneNumber string                 `protobuf:"bytes,1,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
+	DeviceLabel string                 `protobuf:"bytes,2,opt,name=device_label,json=deviceLabel,proto3" json:"device_label,omitempty"`
+	// setup_code is required only on deployments that opt into gated enrollment
+	// (Config.SetupCode configured) — a manually-distributed, single-use code
+	// proving the caller was invited. Ignored (no gate) when the server has no
+	// setup code configured, so open-enrollment CashFlux deployments are
+	// unaffected. Checked here as a fail-fast (don't send an SMS for an
+	// already-spent or wrong code) but only actually consumed once
+	// VerifyPhoneCode succeeds, so a fumbled verification doesn't burn it.
+	SetupCode     string `protobuf:"bytes,3,opt,name=setup_code,json=setupCode,proto3" json:"setup_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1513,6 +1521,13 @@ func (x *RequestPhoneVerificationRequest) GetPhoneNumber() string {
 func (x *RequestPhoneVerificationRequest) GetDeviceLabel() string {
 	if x != nil {
 		return x.DeviceLabel
+	}
+	return ""
+}
+
+func (x *RequestPhoneVerificationRequest) GetSetupCode() string {
+	if x != nil {
+		return x.SetupCode
 	}
 	return ""
 }
@@ -1567,8 +1582,12 @@ type VerifyPhoneCodeRequest struct {
 	Code           string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
 	DeviceLabel    string                 `protobuf:"bytes,3,opt,name=device_label,json=deviceLabel,proto3" json:"device_label,omitempty"`
 	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// setup_code: see RequestPhoneVerificationRequest's doc comment. Must match
+	// the same code presented to RequestPhoneVerification for this enrollment;
+	// consumed (marked single-use spent) only on successful verification.
+	SetupCode     string `protobuf:"bytes,5,opt,name=setup_code,json=setupCode,proto3" json:"setup_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VerifyPhoneCodeRequest) Reset() {
@@ -1625,6 +1644,13 @@ func (x *VerifyPhoneCodeRequest) GetDeviceLabel() string {
 func (x *VerifyPhoneCodeRequest) GetIdempotencyKey() string {
 	if x != nil {
 		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *VerifyPhoneCodeRequest) GetSetupCode() string {
+	if x != nil {
+		return x.SetupCode
 	}
 	return ""
 }
@@ -2787,17 +2813,21 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
 	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12\x1b\n" +
-	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\"g\n" +
+	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\"\x86\x01\n" +
 	"\x1fRequestPhoneVerificationRequest\x12!\n" +
 	"\fphone_number\x18\x01 \x01(\tR\vphoneNumber\x12!\n" +
-	"\fdevice_label\x18\x02 \x01(\tR\vdeviceLabel\"6\n" +
+	"\fdevice_label\x18\x02 \x01(\tR\vdeviceLabel\x12\x1d\n" +
+	"\n" +
+	"setup_code\x18\x03 \x01(\tR\tsetupCode\"6\n" +
 	" RequestPhoneVerificationResponse\x12\x12\n" +
-	"\x04sent\x18\x01 \x01(\bR\x04sent\"\x9b\x01\n" +
+	"\x04sent\x18\x01 \x01(\bR\x04sent\"\xba\x01\n" +
 	"\x16VerifyPhoneCodeRequest\x12!\n" +
 	"\fphone_number\x18\x01 \x01(\tR\vphoneNumber\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12!\n" +
 	"\fdevice_label\x18\x03 \x01(\tR\vdeviceLabel\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"\x89\x01\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
+	"\n" +
+	"setup_code\x18\x05 \x01(\tR\tsetupCode\"\x89\x01\n" +
 	"\x18RedeemPairingCodeRequest\x12!\n" +
 	"\fpairing_code\x18\x01 \x01(\tR\vpairingCode\x12!\n" +
 	"\fdevice_label\x18\x02 \x01(\tR\vdeviceLabel\x12'\n" +

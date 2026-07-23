@@ -63,6 +63,103 @@ func newPhoneTestAuthServer(t *testing.T, verify *fakeVerifyClient) *authServer 
 	return s
 }
 
+// newGatedPhoneTestAuthServer is newPhoneTestAuthServer with Config.SetupCode
+// configured, for the setup-code enrollment-gate tests below.
+func newGatedPhoneTestAuthServer(t *testing.T, verify *fakeVerifyClient, setupCode string) *authServer {
+	t.Helper()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "cashflux-server.db"))
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	cfg := Config{SessionKey: "test-session-key-1234567890", SetupCode: setupCode}
+	s := newAuthService(store, cfg)
+	s.verify = verify
+	return s
+}
+
+// TestRequestPhoneVerificationRejectsMissingSetupCode proves a deployment
+// with Config.SetupCode configured refuses to send an SMS for a brand-new
+// phone number when no (or the wrong) setup code is presented — the
+// fail-fast half of the gate, so a wrong guess never costs a Twilio send.
+func TestRequestPhoneVerificationRejectsMissingSetupCode(t *testing.T) {
+	verify := newFakeVerifyClient()
+	s := newGatedPhoneTestAuthServer(t, verify, "invite-123")
+	_, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: "+15551239001",
+	})
+	assertGRPCCode(t, err, codes.PermissionDenied)
+	if verify.sendCalls != 0 {
+		t.Fatalf("SendCode calls = %d, want 0 (must not send SMS without a valid setup code)", verify.sendCalls)
+	}
+
+	_, err = s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: "+15551239001", SetupCode: "wrong-code",
+	})
+	assertGRPCCode(t, err, codes.PermissionDenied)
+	if verify.sendCalls != 0 {
+		t.Fatalf("SendCode calls = %d, want 0 (wrong setup code must not send SMS)", verify.sendCalls)
+	}
+}
+
+// TestVerifyPhoneCodeSetupCodeGateEndToEnd proves the full gated-enrollment
+// contract: a correct setup code lets a new account through and consumes the
+// code (a second phone number can no longer redeem the same code), while a
+// returning phone number (already verified once) never needs the code again.
+func TestVerifyPhoneCodeSetupCodeGateEndToEnd(t *testing.T) {
+	verify := newFakeVerifyClient()
+	s := newGatedPhoneTestAuthServer(t, verify, "invite-123")
+	phone := "+15551239002"
+
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: phone, SetupCode: "invite-123",
+	}); err != nil {
+		t.Fatalf("RequestPhoneVerification with valid setup code: %v", err)
+	}
+
+	// A correct SMS code but no setup code on VerifyPhoneCode must still fail —
+	// RequestPhoneVerification only fail-fast-checks; VerifyPhoneCode is the
+	// authoritative gate.
+	if _, err := s.VerifyPhoneCode(context.Background(), backendrpc.VerifyPhoneCodeRequest{
+		PhoneNumber: phone, Code: "123456",
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("VerifyPhoneCode without setup code: err = %v, want PermissionDenied", err)
+	}
+
+	resp, err := s.VerifyPhoneCode(context.Background(), backendrpc.VerifyPhoneCodeRequest{
+		PhoneNumber: phone, Code: "123456", SetupCode: "invite-123",
+	})
+	if err != nil {
+		t.Fatalf("VerifyPhoneCode with valid setup code: %v", err)
+	}
+	if resp.AccessToken == "" {
+		t.Fatalf("resp = %+v, want a minted access token", resp)
+	}
+
+	// The code is single-use: a second, different phone number can't redeem it.
+	otherPhone := "+15551239003"
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: otherPhone, SetupCode: "invite-123",
+	}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("RequestPhoneVerification for a second phone with a spent code: err = %v, want PermissionDenied", err)
+	}
+
+	// The now-verified original phone number can sign in again on another
+	// device (e.g. RequestPhoneVerification/VerifyPhoneCode from a second
+	// device) with no setup code at all — it's a returning account, not a new
+	// invite.
+	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
+		PhoneNumber: phone, DeviceLabel: "second-device",
+	}); err != nil {
+		t.Fatalf("RequestPhoneVerification for a returning phone number: %v", err)
+	}
+	if _, err := s.VerifyPhoneCode(context.Background(), backendrpc.VerifyPhoneCodeRequest{
+		PhoneNumber: phone, Code: "123456", DeviceLabel: "second-device",
+	}); err != nil {
+		t.Fatalf("VerifyPhoneCode for a returning phone number: %v", err)
+	}
+}
+
 func TestRequestPhoneVerificationHappyPath(t *testing.T) {
 	verify := newFakeVerifyClient()
 	s := newPhoneTestAuthServer(t, verify)

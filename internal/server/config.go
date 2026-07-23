@@ -68,25 +68,33 @@ type Config struct {
 	TwilioAccountSID       string
 	TwilioAuthToken        string
 	TwilioVerifyServiceSID string
-	ConsoleDir             string
-	PortalDir              string
-	OAuthProviders         map[string]OAuthProviderConfig
-	OpenAIBaseURL          string
-	AIProxyDisabled        bool
-	AIAllowedModels        []string
-	AIUpstreamTimeout      time.Duration
-	AIUpstreamRetries      int
-	AIRequestMaxBytes      int64
-	AIRequestsPerDay       int64
-	AITokensPerDay         int64
-	AIAlertRequestsPerDay  int64
-	AIAlertTokensPerDay    int64
-	AIBlockedUserIDs       []string
-	AdminUserIDs           []string
-	BlobMaxBytes           int64
-	BlobIOTimeout          time.Duration
-	StorageMaxBytes        int64
-	StorageWarnBytes       int64
+	// SetupCode, when non-empty, gates AuthService's account-creation paths
+	// (RequestPhoneVerification/VerifyPhoneCode) behind a manually-distributed,
+	// single-use code the operator hands to whoever they want to invite —
+	// built for private/embedded deployments (e.g. a personal-site-hosted
+	// instance) where open self-service enrollment isn't wanted. Empty (the
+	// default) means no gate: any phone number can enroll, matching CashFlux's
+	// normal open-product behavior. See Store.ConsumeSetupCode.
+	SetupCode             string
+	ConsoleDir            string
+	PortalDir             string
+	OAuthProviders        map[string]OAuthProviderConfig
+	OpenAIBaseURL         string
+	AIProxyDisabled       bool
+	AIAllowedModels       []string
+	AIUpstreamTimeout     time.Duration
+	AIUpstreamRetries     int
+	AIRequestMaxBytes     int64
+	AIRequestsPerDay      int64
+	AITokensPerDay        int64
+	AIAlertRequestsPerDay int64
+	AIAlertTokensPerDay   int64
+	AIBlockedUserIDs      []string
+	AdminUserIDs          []string
+	BlobMaxBytes          int64
+	BlobIOTimeout         time.Duration
+	StorageMaxBytes       int64
+	StorageWarnBytes      int64
 	// StoragePlanBytesOverride is an optional per-plan-tier override of
 	// StorageMaxBytes (TODOS.md C431/C439 — AccountService.GetEntitlement and the
 	// admin usage view need a bytes_limit that can vary by plan). Storage limits
@@ -152,6 +160,7 @@ func FromEnv() (Config, error) {
 	cfg.SessionKeyPrevious = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SESSION_KEY_PREVIOUS"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
+	cfg.SetupCode = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SETUP_CODE"))
 	cfg.StripeAPIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_API_BASE_URL"))
 	cfg.StripeSecretKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SECRET_KEY"))
 	cfg.StripeWebhookSecret = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET"))

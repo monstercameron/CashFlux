@@ -46,3 +46,35 @@ func NewSyncBridge(dataDir string) (http.Handler, func() error, string, error) {
 	}
 	return server.NewSyncBridgeHandler(cfg, store), store.Close, cfg.TokenForDisplay(), nil
 }
+
+// NewSyncAndAuthBridge is NewSyncBridge's per-person sibling: it wires up
+// SyncService + AuthService + BlobService (phone/SMS enrollment, device
+// sessions, artifact transfer), with no billing/tier concept — every account
+// minted via AuthService gets full access. It's for a host that wants CashFlux
+// sync for itself and a small, manually-invited set of people (rather than
+// NewSyncBridge's single shared static token, where every caller is
+// indistinguishable from any other).
+//
+// New-account creation is gated by CASHFLUX_SERVER_SETUP_CODE
+// (server.Config.SetupCode): if set, a brand-new phone number must present it
+// to RequestPhoneVerification/VerifyPhoneCode; a phone number that has already
+// completed verification once is never asked for it again on later devices.
+// Leave the env var unset for open self-service enrollment.
+//
+// Same configuration source, return shape, and token-generation contract as
+// NewSyncBridge — see its doc comment for CASHFLUX_SERVER_* env vars and the
+// generated-token caveat.
+func NewSyncAndAuthBridge(dataDir string) (http.Handler, func() error, string, error) {
+	cfg, err := server.FromEnv()
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if dataDir != "" {
+		cfg.DataDir = dataDir
+	}
+	store, err := server.OpenStore(filepath.Join(cfg.DataDir, "cashflux-server.db"))
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return server.NewSyncAndAuthBridgeHandler(cfg, store), store.Close, cfg.TokenForDisplay(), nil
+}

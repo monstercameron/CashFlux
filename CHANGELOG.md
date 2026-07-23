@@ -7,6 +7,21 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Gated per-person enrollment for private embedding (TODOS.md C445).** `pkg/embed.NewSyncBridge`
+  wired only `SyncService` behind a single shared static token, with no per-person identity. New
+  `Config.SetupCode` (`CASHFLUX_SERVER_SETUP_CODE`) gates `AuthService`'s account-creation paths
+  (`RequestPhoneVerification`/`VerifyPhoneCode`) behind a manually-distributed, single-use invite
+  code — constant-time compared, tracked hashed (never in plaintext), consumed only on a
+  successful verification so a fumbled SMS attempt doesn't burn it. A phone number that has already
+  verified once is never asked for the code again on a later device. New `NewSyncAndAuthBridgeHandler`
+  (server) / `pkg/embed.NewSyncAndAuthBridge` register `SyncService` + `AuthService` + `BlobService`
+  with no `AccountService`/`BillingService` — every enrolled account gets full access, no tiers. Built
+  for embedding CashFlux's sync engine into another Go service (a personal-site portfolio) for the
+  operator plus a small, manually-invited set of people. Migration v11 adds `setup_codes` and
+  `users.phone_verified_at`. Empty/unset `Config.SetupCode` is a total no-op for every existing
+  deployment.
+
+### Added
 - **Custom Sync identity: `AuthService` with SMS, password, and pairing-code enrollment (TODOS.md
   C418–C424, C441, C443).** A new gRPC `AuthService` (`Enroll`/`RequestPhoneVerification`/
   `VerifyPhoneCode`/`RedeemPairingCode`/`Register`/`Login`/`RefreshToken`/`Logout`/`ListDevices`/

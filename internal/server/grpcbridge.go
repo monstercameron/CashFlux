@@ -144,6 +144,69 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	return mux
 }
 
+// NewSyncAndAuthBridgeHandler builds a GoGRPCBridge WebSocket handler exposing
+// SyncService + AuthService + BlobService — no AIService, no
+// AccountService/BillingService, no HTTP site. It is the embeddable slice for
+// a host that wants the full per-person sync engine (phone/SMS enrollment,
+// device sessions, artifact transfer) with NO billing/tier concept: every
+// enrolled account gets full access, gated only by Config.SetupCode at
+// account creation and by cfg's ordinary storage caps thereafter (see
+// pkg/embed.NewSyncAndAuthBridge).
+//
+// The CloudEntitlement interceptors stay in the chain even though this
+// deployment has no billing: with cfg.Billing == false, IsCloudActive is a
+// no-op past the suspension check (see entitlements.go), so keeping them costs
+// nothing and gives the operator a working moderation lever — suspend a
+// user's row and their Sync/Blob calls start failing — for free. AuthService's
+// pre-auth methods are already exempt from both checks via
+// authInterceptorSkipMethods.
+func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
+	var store *Store
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	grpcServer := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             20 * time.Second,
+			PermitWithoutStream: false,
+		}),
+	)
+	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
+	RegisterAuthServiceServer(grpcServer, newAuthService(store, cfg))
+	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
+	tunnel := grpctunnel.Wrap(grpcServer,
+		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
+		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
+		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
+		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
+		grpctunnel.WithMaxConnectionsPerClient(cfg.GRPCMaxConnectionsPerClient),
+		grpctunnel.WithMaxUpgradesPerClientPerMinute(cfg.GRPCMaxUpgradesPerClientPerMinute),
+	)
+	// Same discovery contract as NewSyncBridgeHandler: the /grpc tunnel plus
+	// /v1/version so the frontend can confirm reachability and auth mode
+	// before connecting.
+	mux := http.NewServeMux()
+	mux.Handle("/grpc", tunnel)
+	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, cfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		writeJSON(w, VersionResponse{
+			APIVersion:          APIVersion,
+			MinClientAPIVersion: MinClientAPIVersion,
+			AuthMode:            cfg.AuthMode,
+			BillingEnabled:      cfg.Billing,
+			AuthProviders:       cfg.OAuthProviderNames(),
+			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+		})
+	})
+	return mux
+}
+
 func grpcTokenValidator(cfg Config) TokenValidator {
 	return func(_ context.Context, token string) (AuthUser, error) {
 		user, ok := authUserForToken(strings.TrimSpace(token), cfg)
