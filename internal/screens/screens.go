@@ -76,6 +76,7 @@ func All() []Route {
 		{Path: "/reports", Label: "nav.reports", Title: "nav.reports", Subtitle: "screen.reportsSub", Phase: 2, Group: GroupPrimary, View: Reports},
 
 		// TOOLS / Plan & forecast — debt management, investing, allocation, forecasting.
+		{Path: "/plan", Label: "nav.plan", Title: "nav.plan", Subtitle: "screen.planSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: PlanScreen},
 		{Path: "/debt", Label: "nav.debt", Title: "nav.debt", Subtitle: "screen.debtSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: DebtPlanner},
 		{Path: "/investments", Label: "nav.investments", Title: "nav.investments", Subtitle: "screen.investmentsSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: InvestmentsScreen},
 		{Path: "/allocate", Label: "nav.allocate", Title: "nav.allocate", Subtitle: "screen.allocateSub", Phase: 2, Group: GroupTools, SubGroup: SubGroupPlan, View: Allocate},

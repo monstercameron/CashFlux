@@ -24,6 +24,7 @@ func Register() {
 	registerReportsSurface()
 	registerNetWorthSurface()
 	registerHealthSurface()
+	registerPlanSurface()
 	registerAssistantSurface()
 	registerCreditSurface()
 	registerStudioSurface()

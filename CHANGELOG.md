@@ -14,6 +14,16 @@ and every commit updates this file under `Unreleased`.
   (emergency-fund months, high-interest debt, non-mortgage debt, savings-rate proxy); steps it can't
   judge (employer match, deductibles) are marked *not assessable* so the UI asks rather than guessing.
   The current step is the first that isn't done. Foundation for the "steps to fix your finances" surface.
+- **"Fix My Finances" roadmap screen (`/plan`).** The surface over `internal/finplan`: an opinionated,
+  data-driven roadmap that names the household's single next move and backs it with the full ladder.
+  Assesses live data (liquid cash, emergency-fund months, savings rate, and a pass over the accounts to
+  classify high-interest / non-mortgage debt) against a chosen playbook — **Order of Operations**
+  (default, math-first) or **Baby Steps** (debt-first) — with a segmented switch. A two-question
+  onboarding check (employer match, insurance deductibles), persisted per-device, resolves the steps
+  data can't see. Steps show a status pill (Done / Do this now / To do / Confirm); the current step
+  deep-links to where you act on it. Closes with **free credit-score links** (AnnualCreditReport.com,
+  Credit Karma, Experian, Chase Credit Journey). Copy lives in `i18n/en_plan.go`, styling in
+  `styles/rules_plan.go` (reusing the shared rpt-*/debt-* chrome).
 
 ### Changed (coworker-feedback UX pass)
 - **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),

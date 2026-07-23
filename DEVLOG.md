@@ -1,3 +1,34 @@
+## 2026-07-23 — "Fix My Finances" roadmap (`/plan`) — coworker feedback #8
+
+The biggest ask in the coworker feedback: *"Steps to correct your finances — research FOO (Financial
+Order of Operations), Dave Ramsey Baby Steps, on-start questionnaire, add free credit-score links,
+need to be more opinionated."* Built it in two layers, engine first per the SDLC rule.
+
+The engine (`internal/finplan`, committed earlier) is pure and tested: it models FOO and Ramsey as
+two deliberately-distinct ladders and places the user on the first step their data says isn't done.
+The design decision that made it honest was the three-state `Status` — Done / Todo / **NotAssessable**.
+A budgeting app can measure emergency-fund months and whether high-interest debt exists, but it can't
+see your employer's match terms or your insurance deductibles. Rather than guess (and silently skip a
+step), those read NotAssessable, which is *not* Done, so they surface as the current "confirm this"
+step. That's what turns the two onboarding questions into real inputs instead of decoration.
+
+The screen (`internal/screens/plan.go`) reuses the shared rpt-*/debt-* redesign vocabulary (bento host,
+hero, chips, takeaway, sections) so it matches /debt, /health, /about rather than inventing a look.
+`livePlanInputs` glues the existing engines together — `liveHealthInputs` for emergency-months/savings-
+rate, `liveEngineVars["liquid_cash"]` for the starter-fund check, and one pass over `app.Accounts()`
+(skip archived, skip mortgages) to classify non-mortgage vs high-interest (≥6% APR) debt. Framework
+choice and the two questionnaire answers persist through `uistate.KV*` + `RequestPersist`, so the "on
+start questionnaire" sticks across reloads. Each option button lives in its own `planQuestion`
+component so its handler hook stays at a stable render position (the On*-in-loop gotcha).
+
+Opinionated, as asked: FOO is the default (math-first beats debt-first on the numbers), the copy says
+so, and the free-credit-score section names only the genuinely-free reputable sources with a plain
+"we earn nothing from these" disclaimer. All copy is in `i18n/en_plan.go` (engine stays English-pure,
+screen renders every string through `T`), so the zero-hardcoded-copy ratchet holds.
+
+Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
+(future-period projections so navigating forward shows projected, not empty, values).
+
 ## 2026-07-21 — embeddable sync engine (`pkg/embed`)
 
 Another Go service (a personal-site backend) wanted to host CashFlux as a managed budgeting app,
