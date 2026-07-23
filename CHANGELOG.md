@@ -6,6 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Cloud business plan refined for honesty + profitability (`docs/CLOUD_BUSINESS_PLAN.md`).**
+  Ratifies the capped included-AI tier alongside BYOK (retires the no-longer-true "AI costs us
+  $0" margin claim; honest $0.10–0.50/user/mo estimate with metering as a launch requirement and
+  a kill-switch threshold); adds §2a — the server-only Cloud bundle (bill reminders, email-ingest
+  imports, FX/quote/valuation feeds) as the answer to weak "just sync" willingness-to-pay; states
+  the zero-knowledge AI claim precisely (client-assembled context, proxy meters, storage never
+  decrypts — provider-sees-query fine print always published); reprices $39.99/yr / $4.99/mo with
+  a 30-day no-card trial; adds PiggySize/Simplifi/Monarch-Plus to the comp table; recalibrates
+  funnel math to honest no-card conversion rates (15–25%, ≈$24k ARR at 100k users) with an
+  explicit "this isn't a salary below ~50–100k users" note; adds trust-regression standing rules
+  (free tier never loses features, disclosed caps, no dark patterns) and revised sequencing where
+  every paid beat is a nameable server-only value.
+
 ### Added
 - **Teardown Part V — long-tail missing/partial feature census (`docs/COMPETITIVE_TEARDOWN.md`).**
   Third pass: swept each comp's full help-center/docs article inventory for the features that

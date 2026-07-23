@@ -1,3 +1,30 @@
+## 2026-07-23 — Cloud business plan: honesty + profitability pass (docs, no code)
+
+Cam proposed the model in conversation (pay for encrypted storage, BYOK at your own pace, "perhaps
+a limited AI tier") — which turned out to be ~90% what docs/CLOUD_BUSINESS_PLAN.md already said.
+The refinement ratifies the one real amendment and fixes the places where the plan was flattering
+itself.
+
+Honesty fixes: the "AI costs us $0" margin story dies the day an included tier ships, so §5 now
+carries a real token-cost estimate ($0.10–0.50/user/mo blended, 50 msgs/day cap, small-model
+default, metering as a launch requirement, kill-switch at ~$1). The 30–50% trial→paid assumption
+was above no-card industry norms — recalibrated to 15–25%, which shrinks the 100k-user sanity
+check from $42k to ~$24k ARR and forces the honest corollary into the doc: below ~50–100k active
+local users this is high-margin convenience revenue, not a salary, so no decision should trade
+the trust position for near-term conversion. Also added the trust-regression standing rules as a
+named risk (free tier never loses features; disclosed caps; no dark patterns; global AI
+off-switch honored) — the brand IS the moat, so the plan now treats eroding it as the top risk.
+
+Profitability fixes: §2a makes Cloud a nameable bundle instead of "just sync" — bill reminders,
+email-ingest imports (the Firefly pattern, which also attacks our freshness weakness), FX/quote/
+valuation feeds, AI both ways — every item operations or third-party feeds, never an app feature.
+Price moves $34.99→$39.99/yr ($4.99 monthly) to cover included-AI with headroom while staying
+half of Simplifi's nearest-value price and under half of PiggySize. Comp table gains PiggySize
+(the $9/mo included-Claude price-pressure comp), Simplifi (value floor), and Monarch's Plus tier
+(validates a future CashFlux Plus slot — explicitly deferred until PS1/PS2/PS4 exist). The
+zero-knowledge AI claim is now stated precisely with its fine print, because it's the one
+marketing sentence nobody in the roster can say.
+
 ## 2026-07-23 — Teardown Part V: long-tail feature census (research, no code)
 
 Cam: "make sure to scour the apps to search for missing or partial features." The Parts I–IV
