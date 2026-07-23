@@ -72,4 +72,21 @@ func registerBudgetsRecurringSurface() {
 	rule(".brc-amt", prop("font-weight", "700"), prop("color", "var(--text)"))
 	rule(".brc-permo", prop("font-size", "var(--type-12)"))
 	rule(".brc-foot", prop("margin-top", "0.75rem"))
+	rule(".brc-more", prop("padding", "0.4rem 0.6rem"))
+
+	// Future-period projection tile (#6): the in / out / net summary above the
+	// projected-occurrence list.
+	rule(".bfut-stats",
+		prop("display", "flex"),
+		prop("gap", "1.5rem"),
+		prop("flex-wrap", "wrap"),
+		prop("margin", "0.6rem 0 0.2rem"),
+	)
+	rule(".bfut-stat", prop("display", "flex"), prop("flex-direction", "column"))
+	rule(".bfut-stat-label",
+		prop("font-size", "var(--type-12)"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.03em"),
+	)
+	rule(".bfut-stat-val", prop("font-size", "1.35rem"), prop("font-weight", "700"))
 }

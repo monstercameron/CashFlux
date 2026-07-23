@@ -33,6 +33,12 @@ and every commit updates this file under `Unreleased`.
   (Coworker feedback #5 — "show detected recurring transactions, frequency is important.")
   The "Committed ≈ /month" figure counts spending recurrings only — a detected paycheck is still
   listed, but doesn't understate what's actually spoken-for — and rows sort by absolute monthly size.
+- **Future-period projection on `/budgets`.** Paging the period control into the future used to show
+  empty actuals. A new self-gating "Projected for <period>" tile now appears only for a future window
+  and fills it with what's set to happen: money coming in, going out, the net, and every recurring
+  occurrence that lands in the window, by date. Renders nothing for the current or a past period.
+  (Coworker feedback #6 — "when navigating future timelines, show future-related things, not empty
+  values.")
 
 ### Changed (coworker-feedback UX pass)
 - **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),

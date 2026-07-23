@@ -29,6 +29,30 @@ screen renders every string through `T`), so the zero-hardcoded-copy ratchet hol
 Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
 (future-period projections so navigating forward shows projected, not empty, values).
 
+## 2026-07-23 — future-period projection on budgets — feedback #6
+
+Coworker: *"When navigating future timelines, show future-related things — no empty values."* The
+concrete gap: the global period pill (`ResolutionControl`) pages forward with no future clamp, and
+every period-aware screen follows it, so a future month on `/budgets` shows budget limits against
+zero actuals — which reads empty because no transactions exist yet.
+
+Fixed with a self-gating `budget-future` tile. It computes `w.Range()` from the viewed window and
+bails (`display:none` placeholder, not an empty Fragment — see below) unless the window *begins* in
+the future. For a future window it reuses `txncalendar.Ghosts` — the same forward occurrence-stepper
+the transaction calendar uses — to project every recurring bill/paycheck into the window, then shows
+money-in / money-out / net plus the individual occurrences by date, capped at 8 with "+ N more". So
+paging to Sep 2026 now leads with "$4,700 coming in, $5,267 going out, net −$567" and the dated list,
+instead of a blank grid. Verified in a headless run: hidden on the current month, appears with the
+right total and 8 rows on a future one, zero console errors.
+
+Two honest notes. (1) I returned a hidden keyed placeholder rather than `Fragment()` on the gate,
+because an empty→content transition late-mounts and appends the tile to the bento's end (the
+documented GWC quirk). (2) Even so, MapKeyed appends *newly-keyed* tiles after the originals
+regardless of spec-array order, so the tile still renders below the older tiles rather than leading;
+reordering would mean touching the contended budgets assembly, not worth the risk. The projection is
+present and sits among the other forward-looking surfaces (the recurring tile, the annual grid), so
+the empty-future problem is materially addressed. This complements #5, which shares the file trio.
+
 ## 2026-07-23 — recurring commitments on the budgets page — feedback #5
 
 Coworker: *"For budgets, show a list of recurring transactions that were detected — recurrence
