@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **First benchmark ladder run + findings (DEVLOG).** Local co-located runs (indicative, not
+  authoritative): steady 100/250/500, storm 250, stampede 300, conflict 100. Key findings:
+  `HTTP_MAX_IN_FLIGHT` (default 256) is the real concurrency ceiling since each WS tunnel holds
+  an HTTP request (confirmed by hypothesis test — 1,688 errors → 0 at 4096); watch fan-out is
+  the dominant sustained-load driver (206k deliveries for 2k pushes at 125 watchers; push p95
+  1.05s at 500 clients); the LWW guard held perfectly under 100-client/50-workspace contention;
+  a 3s sync storm absorbed at 331 pushes/s with zero errors.
 - **Cloud plan §15 — wasm/static delivery via CDN edge cache (docs).** New component row in both
   reference stacks: serve `main.wasm.gz` + the static shell from Cloudflare's edge ($0), which
   removes the bulk of origin egress and fixes global first-paint latency — with the hard

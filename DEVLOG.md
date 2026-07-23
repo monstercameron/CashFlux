@@ -1,3 +1,40 @@
+## 2026-07-23 — First benchmark ladder (local, co-located — indicative not authoritative)
+
+Ran the first real ladder with the new harness. Caveats first, per the methodology: loadgen and
+server co-located on Cam's Windows desktop (they compete for CPU), 30s runs, one machine — these
+numbers characterize the SERVER CODE's behavior and find knees; the §15 subscribers-per-box
+numbers still require rented Stack A/B hardware. Config: throwaway server, GRPC caps raised,
+seed 42, watch-every 4 (25% of clients hold watch streams).
+
+| Run | Ops | Errors | push p50 | push p95 | pushes/s | Notes |
+|---|---|---|---|---|---|---|
+| steady 100 | 925 | 0 | 2.6ms | 88ms | 13.6 | 8.8k watch events to 25 watchers |
+| steady 250 | 2,234 | 0 | 2.8ms | 342ms | 33.4 | 54k watch events to 63 watchers |
+| steady 500 (defaults) | 4,440 | **1,688** | 2.4ms | 224ms | 66 | the knee — see finding 1 |
+| steady 500 (in-flight 4096) | 4,440 | **0** | 5.4ms | 1.05s | 65 | 206k watch events to 125 watchers |
+| storm 250 (3s burst) | 2,234 | 0 | 42ms | 453ms | **331** | full sync storm absorbed, zero errors |
+| stampede 300 (600 dials) | 2,964 | 223 | 2.3ms | 313ms | 40 | herd double-connection window trips the in-flight cap |
+| conflict 100 (50 shared ws) | 925 | 0 | 2.8ms | 79ms | 13.6 | **375 accepted + 33 rejected — LWW guard perfect, no data errors** |
+
+Findings, in order of importance:
+1. **`HTTP_MAX_IN_FLIGHT` (default 256) is the real concurrency ceiling**, not the GRPC caps:
+   every WS tunnel is a held HTTP request, so ~256 concurrent clients is the default config's
+   hard limit. Hypothesis→test→confirmed: raising it to 4096 took steady-500 from 1,688 errors
+   to zero. Deploy implication: this knob must scale with expected concurrent devices, and the
+   stampede result shows the *double-connection window* during a reconnect herd needs ~2×
+   headroom over steady-state connections.
+2. **Watch fan-out is the quadratic-ish load driver**: every push broadcasts to every watcher
+   (206k deliveries for 2k pushes at 125 watchers). Sustained-load latency (push p95 1.05s at
+   500 clients) tracks fan-out volume, not push count. Per-workspace (rather than per-user-all-
+   workspaces) watch filtering is the obvious server-side optimization when this matters.
+3. **The LWW guard held perfectly under deliberate contention** — 50 workspaces fought over by
+   100 clients for 30s: zero errors, clean accepted/rejected accounting. The two-tab-clobber
+   class does not reproduce at the server tier.
+4. **Storm absorption is strong**: 331 pushes/s through a 3s burst with zero errors on a
+   desktop — the 9 a.m. scenario is not the scary one; sustained watch fan-out is.
+5. push p50 stays 2–5ms at every scale — the median path is healthy; the tail is where the
+   ceilings live (p95 88ms→342ms→1.05s across 100→250→500).
+
 ## 2026-07-23 — §15 addendum: serve the wasm from the CDN edge (docs)
 
 Cam, mid-loadgen-build: "we probably should serve the wasm bin from a cdn too." Correct, and
