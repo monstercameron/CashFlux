@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Cloud business plan §5a — insurance line added (`docs/CLOUD_BUSINESS_PLAN.md`).** Not legally
+  required (FL workers' comp starts at 4+ employees; no E&O/cyber mandate for SaaS); recommended:
+  one bundled tech E&O + cyber policy (~$50–130/mo, SaaS avg $1,516/yr) bought the same month
+  charging starts, skipped pre-revenue. ToS row strengthened (liability cap, arbitration,
+  not-financial-advice disclaimer as prerequisites); quote-form guidance added (state no-custody /
+  no-credentials / E2E-encrypted so insurers don't price us as fintech); GL/BOP explicitly skipped.
 - **Cloud business plan §5a — full services & cost matrix (`docs/CLOUD_BUSINESS_PLAN.md`).**
   Verified-2026 pricing for every external component: top-10 VPS providers (min tier + step up,
   with the Hetzner-vs-DO decision rule tied to the §14 referral flywheel), domains, object

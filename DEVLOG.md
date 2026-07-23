@@ -1,3 +1,16 @@
+## 2026-07-23 — §5a addendum: insurance (docs, no code)
+
+Cam asked whether a small SaaS needs insurance. Answer folded into §5a: legally no (Florida
+mandates nothing for a zero-employee SaaS), practically yes at exactly one moment — the month
+charging starts, when we simultaneously hold a customer database and become worth suing. The
+right product is one bundled tech E&O + cyber policy (~$50–130/mo; SaaS average $1,516/yr,
+solo/low-revenue quotes lower), not a stack of GL/BOP we have no premises for. Two sharper
+points made it into the doc: the ToS clauses (liability cap, arbitration, not-financial-advice)
+do more protective work than the policy and are prerequisites insurers ask about anyway; and on
+quote forms we must lead with "no funds custody, no bank credentials, E2E-encrypted storage —
+the server cannot read financial data," because 'personal finance app' otherwise prices like
+fintech when our breach surface is emails + Stripe metadata + support tickets, not balances.
+
 ## 2026-07-23 — Cloud business plan §5a: the services & cost matrix (docs, no code)
 
 Cam asked the right question — "what ARE my costs? do I even know?" — and the honest answer was

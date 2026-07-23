@@ -173,8 +173,20 @@ monthly it's 9–13% of revenue — another honest argument for pushing annual.
 | FL LLC formation (Sunbiz) | **$125 one-time** ($100 filing + $25 registered-agent designation) | Self as registered agent = $0/yr (address becomes public record; a service is $50–150/yr) |
 | FL LLC annual report | **$138.75/yr** | Due May 1; late = $400 penalty — calendar it |
 | EIN | $0 | Direct from IRS; ignore paid "services" |
-| Privacy policy + ToS | $0–500 | Templates fine at launch; lawyer review before scale |
+| Privacy policy + ToS | $0–500 | Templates fine at launch; lawyer review before scale. **Must include:** liability cap, arbitration clause, not-financial-advice disclaimer — these do more work than any insurance policy |
 | PCI | $0 | Stripe/PayPal carry it (SAQ-A) |
+
+### Insurance (not legally required — buy at first charge)
+| Item | Cost (2026) | Notes |
+|---|---|---|
+| **Tech E&O + cyber (bundled)** | ~$50–130/mo (~$600–1,500/yr; SaaS avg $1,516/yr, solo/low-rev quotes lower) | The one policy that fits: covers breach response AND "your app's numbers misled me" claims. Hiscox / Next / Vouch / Embroker |
+| GL / BOP / workers' comp | skip | No premises, no foot traffic; FL workers' comp starts at 4+ employees |
+
+Timing: **skip pre-revenue** (LLC + ToS clauses are the real shield); buy the bundle **the same
+month charging starts** — that's when we simultaneously hold a customer database and become
+worth suing. Quote-form leverage: state "no funds custody, no bank credentials, E2E-encrypted
+storage — server cannot read financial data" or insurers will price us like fintech. Treat
+quotes above ~$150/mo as a shop-harder signal.
 
 ### Taxes (Florida + federal) — the good news column
 | Item | Rate | Notes |
