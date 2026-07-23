@@ -191,24 +191,38 @@ func PlanScreen() ui.Node {
 		fwName = uistate.T("plan.fw.ramsey")
 	}
 
+	heroLabel := uistate.T("plan.hero.next")
 	heroValue := uistate.T("plan.hero.allDone")
 	heroDetail := uistate.T("plan.hero.allDoneDetail")
 	var heroCTA ui.Node
 	if hasCur {
-		heroValue = uistate.T(planStepKey(framework, cur.Num, "title"))
-		heroDetail = uistate.T(planStepKey(framework, cur.Num, "detail"))
-		if route := planStepRoute(framework, cur.Num); route != "" {
+		if cur.Status == finplan.NotAssessable {
+			// Don't present something we can't judge as confident advice — send the
+			// beginner to the two questions instead of headlining a jargon step.
+			heroLabel = uistate.T("plan.hero.confirmLabel")
+			heroValue = uistate.T("plan.hero.confirmValue")
+			heroDetail = uistate.T("plan.hero.confirmDetail")
 			heroCTA = Button(css.Class("btn"), Type("button"), Attr("data-testid", "plan-cta"),
-				OnClick(func() { nav.Navigate(uistate.RoutePath(route)) }),
-				uistate.T("plan.fw.pick"))
+				OnClick(func() { smoothScrollToSection("sec-plan-q") }),
+				uistate.T("plan.hero.confirmCTA"))
+		} else {
+			// A real, assessed next move: lead with the plain-English one-liner.
+			heroValue = uistate.T(planStepKey(framework, cur.Num, "title"))
+			heroDetail = uistate.T(planStepKey(framework, cur.Num, "plain"))
+			if route := planStepRoute(framework, cur.Num); route != "" {
+				heroCTA = Button(css.Class("btn"), Type("button"), Attr("data-testid", "plan-cta"),
+					OnClick(func() { nav.Navigate(uistate.RoutePath(route)) }),
+					uistate.T("plan.fw.pick"))
+			}
 		}
 	}
 
 	hero := Div(css.Class("rpt-hero"), Attr("id", "sec-plan-hero"),
 		P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("plan.hero.eyebrow")),
+		P(css.Class("plan-intro", tw.TextDim), uistate.T("plan.hero.intro")),
 		Div(css.Class("rpt-hero-main"),
 			Div(
-				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("plan.hero.next")),
+				Div(css.Class("rpt-hero-label", tw.TextDim), heroLabel),
 				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "plan-current"), heroValue),
 			),
 		),
@@ -235,6 +249,7 @@ func PlanScreen() ui.Node {
 	playbook := rptSection("sec-plan-fw", uistate.T("plan.fw.title"), nil, Div(
 		Div(css.Class("plan-seg"), fooBtn, ramseyBtn),
 		P(css.Class("t-body", tw.TextDim, tw.Mt3), Attr("data-testid", "plan-fw-desc"), uistate.T(fwDescKey)),
+		P(css.Class("t-caption", tw.TextFaint, tw.Mt2), uistate.T("plan.fw.hint")),
 	))
 
 	// ── Questionnaire. ──────────────────────────────────────────────────────────
@@ -273,7 +288,8 @@ func PlanScreen() ui.Node {
 				Div(css.Class("plan-step-head"),
 					Span(css.Class("plan-step-title", tw.Fold(tw.FontDisplay)), uistate.T(planStepKey(framework, s.Num, "title"))),
 					Span(ClassStr("plan-pill "+tone), label)),
-				P(css.Class("t-body", tw.TextDim), uistate.T(planStepKey(framework, s.Num, "detail"))),
+				P(css.Class("plan-step-plain"), uistate.T(planStepKey(framework, s.Num, "plain"))),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T(planStepKey(framework, s.Num, "detail"))),
 			),
 		))
 	}
@@ -296,8 +312,9 @@ func PlanScreen() ui.Node {
 
 	return Div(css.Class("bento bento-sys"), Attr("id", "plan-page"),
 		rptTile("plan-hero", "1 / span 4", rptSection("", "", nil, hero)),
-		rptTile("plan-playbook", "span 2", playbook),
+		// Questions first (they inform the hero above), then the playbook choice.
 		rptTile("plan-questions", "span 2", questions),
+		rptTile("plan-playbook", "span 2", playbook),
 		rptTile("plan-ladder", "1 / span 4", ladder),
 		rptTile("plan-credit", "1 / span 4", credit),
 	)

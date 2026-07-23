@@ -15,6 +15,22 @@ func registerPlanSurface() {
 		prop("overflow", "visible"),
 	)
 
+	// Beginner intro line under the hero eyebrow.
+	rule(".plan-intro",
+		prop("max-width", "52ch"),
+		prop("margin", "0.35rem 0 0.9rem"),
+		prop("line-height", "1.5"),
+	)
+
+	// The plain-English one-liner is the primary text on each step; the "why" detail
+	// sits under it, quieter.
+	rule(".plan-step-plain",
+		prop("color", "var(--text)"),
+		prop("font-weight", "500"),
+		prop("line-height", "1.45"),
+		prop("margin-bottom", "0.2rem"),
+	)
+
 	// ── Playbook segmented control. ─────────────────────────────────────────────
 	rule(".plan-seg",
 		prop("display", "inline-flex"),

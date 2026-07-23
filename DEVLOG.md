@@ -29,6 +29,26 @@ screen renders every string through `T`), so the zero-hardcoded-copy ratchet hol
 Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
 (future-period projections so navigating forward shows projected, not empty, values).
 
+## 2026-07-23 — /plan beginner-proofing pass
+
+Cam asked whether `/plan` was simple enough for newbies; honest answer was "good bones, wrong
+vocabulary + one misleading moment," so I fixed both. The misleading moment: the hero headlined the
+first not-done step as "YOUR NEXT MOVE," but a NotAssessable step counts as not-done, so an *unanswered
+question* (deductibles) was being presented as confident advice. Now the hero branches on
+`cur.Status` — for a NotAssessable current step it reads "Let's find your next move → Answer 2 quick
+questions" with a button that scrolls to them (`smoothScrollToSection("sec-plan-q")`), and only shows a
+real recommendation once the current step is an actual Todo. Verified the flip: unanswered → "Answer 2
+quick questions"; after answering match=No → "Your next move: Get the full employer match" with the
+plain gloss.
+
+The vocabulary fix: added a `plain` key per step (both frameworks) — a jargon-free one-liner that's now
+the primary text on each ladder row and the hero takeaway, with the technical `detail` demoted to a
+quiet secondary line that defines the term (what a deductible/employer match/Roth IRA actually is).
+Also: a "New to this?" intro line, reordered the two questions above the playbook choice (they feed the
+hero), and a "leave it on the default" hint under the playbook toggle. New CSS: `.plan-intro`,
+`.plan-step-plain`. All copy in en_plan.go so the i18n ratchet holds; zero console errors on the live
+page.
+
 ## 2026-07-23 — follow-up action on the merchant trend popover — feedback #3 (the graph one)
 
 Cam clarified that the "transaction history popover" the coworker meant for the add-a-todo action was

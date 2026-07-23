@@ -14,6 +14,13 @@ and every commit updates this file under `Unreleased`.
   (emergency-fund months, high-interest debt, non-mortgage debt, savings-rate proxy); steps it can't
   judge (employer match, deductibles) are marked *not assessable* so the UI asks rather than guessing.
   The current step is the first that isn't done. Foundation for the "steps to fix your finances" surface.
+- **`/plan` beginner-friendly pass.** Made the roadmap genuinely newbie-proof: the hero no longer
+  presents an unanswered step as advice — when the top rung is a "Confirm" (something we can't judge
+  from data), it says *"Let's find your next move — answer 2 quick questions"* with a button that jumps
+  to them, and only shows a confident next move once it's a real assessed step. Every step now leads
+  with a **plain-English one-liner** (no jargon; the technical "why" sits quieter beneath), a "New to
+  this?" intro explains the one-thing-at-a-time idea, the two questions now sit above the playbook
+  choice (they inform the hero), and a hint tells unsure users to leave the default playbook on.
 - **"Fix My Finances" roadmap screen (`/plan`).** The surface over `internal/finplan`: an opinionated,
   data-driven roadmap that names the household's single next move and backs it with the full ladder.
   Assesses live data (liquid cash, emergency-fund months, savings rate, and a pass over the accounts to
