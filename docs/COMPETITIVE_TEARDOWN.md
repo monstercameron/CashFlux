@@ -989,3 +989,343 @@ CashFlux: FEATURE_MAP.md §1–3, live :8080 session (2026-07-23), TODOS.md seri
 
 *Caveats: paywalled apps not operated hands-on (flows quoted from official help docs); prices
 as reported mid-2026; Monarch Plus pricing not publicly itemized in sources reviewed.*
+
+---
+
+# PART IV — FINE-GRAINED FEATURE CROSS-EXAMINATION
+
+Added 2026-07-23 (second pass, per Cam: "fine detailed feature cross examination"). Part I
+compared *areas*; this part interrogates *individual mechanics* — one section per feature, a
+matrix across comps, then a cross-examination and the exact CashFlux deltas. Comp abbreviations:
+**YN**=YNAB · **MO**=Monarch · **CP**=Copilot · **SI**=Simplifi · **RM**=Rocket Money ·
+**LM**=Lunch Money · **PSm**=PocketSmith · **AC**=Actual · **FF**=Firefly III · **PG**=PiggySize
+· **CF**=CashFlux. "—" = feature absent. Cells marked (?) were not verifiable from sources.
+
+## IV.1 Transaction entry & quick capture
+
+| | Manual entry | Quick-add from anywhere | Keyboard-complete entry | Scheduled/future-dated entry | Mobile widget/watch |
+|---|---|---|---|---|---|
+| YN | register row, payee/category memory autosuggest | mobile quick-add + **home-screen widgets** | **Yes — famous shortcut system**, discoverable (hints shown per action; toggleable in Settings) | Yes — scheduled txns, 9 frequencies (see IV.9) | Yes (widgets) |
+| MO | web + mobile forms | mobile quick actions | partial | recurring items, not arbitrary future txns (?) | push-first mobile |
+| CP | mobile-first form | iOS shortcuts/widgets | n/a (touch-first) | via recurring | Yes (Apple ecosystem) |
+| LM | web row entry | — | good web-row ergonomics | future-dated supported | mobile app v2 |
+| AC | register row | — | strong register keyboard flow | schedules cover it | PWA |
+| FF | multi-split form (heavyweight by design) | — | form-based | recurrences | community apps |
+| PG ✋ | form per entity (no txns at all) | — | — | n/a | PWA |
+| **CF** | modal form; dashboard hero **1-click** to form | **+ Add flip-panel planned (B11)**; Ctrl-K palette exists | **unverified end-to-end** — palette + shortcuts (?/Ctrl-K/Alt+1–9) exist, but no documented register-level key grammar | recurring autopost covers repeating; **arbitrary future-dated txn allowed but doesn't drive forecasts** | PWA only |
+
+**Cross-examination.** YNAB wins entry on two mechanics CashFlux lacks: *payee memory* (typing a
+payee pre-fills last category+amount — entry converges to 3 keys: payee-prefix ⇥ Enter) and a
+*documented, discoverable* shortcut grammar (in-context hints teach it). CashFlux's 1-click hero
+button is the best *button* placement in the roster, but the form after it is untyped repetition
+— no payee-memory prefill. **Deltas:** payee-memory prefill (last category/amount/account per
+payee — the rules engine's data can seed it); register-level shortcut grammar documented in /help
+and hinted in-context; finish B11 quick-add panel; future-dated txns should register in runway.
+
+## IV.2 Splitting
+
+| | Split by | Rule-driven auto-split | Un-split reversible | Temporal spread | Split visibility |
+|---|---|---|---|---|---|
+| YN | amount subtransactions (API: `subtransactions[]`) | — | delete splits | — | inline expand |
+| MO | amount or **percentage**; **Smart Split rules** auto-split matching txns, retro-applicable with count | **Yes** | yes | — | split filter exists |
+| CP | equal / dollar / **percentage**; shortcuts | — | original amount always on record | **Yes — spread across 3/6/12 months as dated child txns, full history** | dedicated split icon |
+| LM | split + **group** (inverse: merge several txns into one logical txn) | via rules | yes (mobile can split/unsplit) | — | grouped-view |
+| AC | splits in register; **unsplit keeps parent info** | — (rule formula mode experimental) | **yes, lossless** | — | ⚠ splits distort filtered-view totals (documented bug — a cautionary spec note) |
+| **CF** | SplitEditor inline (amounts) | — | (?) | — | split rows in table |
+
+**Cross-examination.** Three mechanics CashFlux lacks: **percentage splits** (MO/CP), **rule-
+driven splitting** (MO — the household use-case: auto-split every paycheck/joint-card txn by
+60/40), **temporal spread** (CP — semi-annual insurance amortized into 6 monthly child txns with
+the original preserved; this is the correct answer to lumpy expenses that CashFlux currently
+answers with sinking funds only), and **grouping** (LM — merging N real txns into one logical
+event, the inverse of split; useful for trips/events; CashFlux tags approximate but don't total
+as one unit). Actual's documented filtered-totals distortion is a spec warning: define split
+semantics in filtered aggregates before building. **Deltas:** percentage mode on SplitEditor;
+split action in rules (→ WF7); temporal-spread as first-class ("amortize this txn over N
+months" creating linked children, budgets seeing the children); txn grouping.
+
+## IV.3 Transfers & internal-movement intelligence
+
+| | Transfer entity | Auto-detect/pair imported legs | Cross-currency | Excluded from spend correctly |
+|---|---|---|---|---|
+| YN | payee-based transfer, category-free | on import, matches legs (linked accounts) | — | yes |
+| MO | transfer category + rules can set | detection + hide from cash flow | (?) | yes |
+| CP | **Intelligence auto-recognizes internal transfers** | **yes, no user action** | — | yes ("not double-counted") |
+| LM | transfer grouping | pairs plaid legs | multi-currency aware | yes |
+| AC | transfer payees between on-budget accounts | on import via matching | — | yes |
+| FF | first-class transfer type (double-entry) | importer rules | yes | yes |
+| **CF** | first-class transfer (from/to/amount/date) | **no pairing on import** | FX-aware ledger | yes |
+
+**Cross-examination.** CashFlux's *entered* transfers are fine; **imported** ones arrive as two
+unlinked txns (a Venmo-out and a deposit-in) that inflate spend+income until hand-fixed. Copilot
+treats this as a zero-click Intelligence feature; even Actual pairs on import. This is WF11's
+core case and the #1 source of "my numbers look wrong" for import-heavy users. **Delta:**
+import-time transfer pairing (amount ± tolerance, date window, opposite signs, cross-account) →
+propose-link UI in the draft-review step, and retro-detector over the ledger.
+
+## IV.4 Tags, flags, labels, marks
+
+| | Mechanism | Multiple per txn | Budget/report integration | Special semantics |
+|---|---|---|---|---|
+| YN | **7 color flags** + memo (no tags) | one flag | flag filter in register | flags-as-workflow (e.g. "check later") |
+| MO | tags | yes | tag filters in reports/rules; CSV import maps tags | needs-review is a separate state |
+| LM | tags | yes | **budgetable-by-tag** (watch-list style), rules add tags | "exclude from totals" is a **category property** |
+| PSm | **labels** | yes | search/filter + saved searches | explicit tax-deductible labeling pattern |
+| AC | **#tags inside notes text** (case-sensitive, no spaces, ## escapes) | yes | 'has tag(s)' filter; find-existing-tags button | zero-schema — tags are conventions |
+| FF | tags | yes | tags in search/rules/reports | tag "clouds," tag pages |
+| **CF** | tags | yes | filter toolbar + rules can set tags (?) — **reports cannot group by tag** | deductible flag lives on *categories*, not txns |
+
+**Cross-examination.** CashFlux tags exist but are a filter, not an analysis dimension: Reports
+has by-category/payee/member/custom-field — **no by-tag report**, and no tag-scoped budget/
+watchlist. YNAB's flags suggest a second, orthogonal need CashFlux also lacks: a lightweight
+*workflow mark* ("look at this later") distinct from taxonomy — our review inbox partially
+covers it, flags are the manual version. **Deltas:** tag dimension in Reports + WF8 watchlists;
+per-txn deductible override (category-level only today); consider flag/star as a workflow mark.
+
+## IV.5 Search & filtering
+
+| | Filter surface | Query language | Saved searches | Bulk actions from search | Special |
+|---|---|---|---|---|---|
+| MO | rich filter set: debit/credit, hidden, synced-vs-manual, **has attachments / splits / notes** | — | shared views | yes | filters double as rule criteria |
+| LM | every column filterable | — | saved filters | yes | API queries |
+| PSm | search engine over txns | criteria search | **saved searches, one-click in side panel** | **yes — bulk categorize from search results** | search-as-workbench |
+| AC | stacked multi-filters | — | (dashboard widgets take filters) | via rule-editor trick (IV.7) | 'has tag(s)' |
+| FF | global search | **full operator language: from:, to:, amount ranges, dates, has_attachments:true, AND/OR (no NOT)** | via rules ("search rule engine") | **searches can BE rules** | the ceiling |
+| **CF** | filter toolbar (account/category/member/tag/date/amount/cleared/custom-field) + chips, persisted | — | **no saved filter sets** | bulk bar on selection | Ctrl-K palette (nav, not txn search?) |
+
+**Cross-examination.** CashFlux's filter *breadth* is top-3; what's missing is the *workbench
+layer*: no saved searches (PSm's one-click side panel; MO's shared views), no query syntax for
+power users (FF), and — the sharpest gap — no path from "this filtered set" to "monitor this"
+(WF8) or "make this a rule" (WF7). Firefly's deepest idea: **a search IS a rule** (the
+search-rule engine runs a stored query as the rule trigger) — one grammar for finding,
+monitoring, and automating. That's the architecture WF7/WF8 should share instead of three
+grammars. **Deltas:** saved filter sets (→ WF16/WF13 saved views — reaffirmed); filtered-set →
+watchlist/rule handoff; evaluate one shared predicate grammar (filters = rules conditions =
+watchlist criteria = formula predicates).
+
+## IV.6 Review states & assignment
+
+| | New-txn state | Dispatch gesture | Assignment | Bulk review | Session undo |
+|---|---|---|---|---|---|
+| CP | To-Review queue on Dashboard | **1 tap** Mark-Reviewed; suggested type+category shown | — | yes | (?) |
+| MO | "Needs review" flag; review-status buttons atop txn page | 1–2 clicks | **assign a specific household member to review** | yes | — |
+| LM | "unreviewed" default state | row-level | — | bulk | — |
+| **CF** | review inbox (count badge) | navigate → row edit (3–4) | — | bulk bar exists | **bulk-undo snapshot exists** (better than comps) |
+
+**Cross-examination.** Monarch's **assign-to-member review** is the one mechanic here nobody
+else has and CashFlux's household model is *perfectly shaped for* (owner exists on every entity;
+a "review by Priya" assignment is a natural extension) — a differentiator we could take from
+them cheaply. Otherwise this table is WF1/FB2 restated with numbers. **Deltas:** WF1 queue with
+1-keypress dispatch; per-member review assignment (new — extends WF1); keep and advertise
+bulk-undo (unique strength).
+
+## IV.7 Categorization intelligence (rules vs learning)
+
+Consolidated matrix for the Area-2 prose:
+
+| | Match fields | Operators | Stages/priority | Actions | Learning | Retro-apply | Editor superpower |
+|---|---|---|---|---|---|---|---|
+| MO | original statement, merchant, amount, more | exact/contains | list order | rename merchant, category, **tags, owner, hide, SPLIT** | — | **checkbox with change-count** | criteria from filters |
+| LM | payee, amount, etc., multi-condition | contains/starts/exact | **explicit priority levels** | multi-action: category, tags, **split, email-notify** | — | yes | one rule, many actions |
+| AC | imported-payee vs payee, account, category, date, notes, amount(in/out) | is/contains/one-of/**regex** | **pre/default/post + specificity auto-rank** | category/payee/notes(prepend/append)/cleared/account/date/amount, formula mode | **auto-rules from renames + most-common-category, opt-out per payee** | via editor | **live match list + Apply-actions = batch editor** |
+| FF | any search operator | full query language | rule groups, strict/non-strict | set category/budget/tags, **link to bill/piggy bank**, description | — | run on stored txns | searches-as-rules |
+| CP | n/a (model, not rules) | — | — | — | **ML, confidence, 2nd-best suggestion, transfer detection** | — | invisible |
+| PSm | merchant memory + filters | contains | filter order | category, rename, labels | **bank-feed auto-categorize default-on + merchant memory** | filters re-run | — |
+| **CF** | keyword phrase (+conditions override) | contains | drag order, shadow warnings | category, tags(?), rename-desc | AI-suggested rules (batch) | page-level Apply-to-existing | live match **count**, coverage %, Mermaid precedence |
+
+**Cross-examination.** CashFlux's *transparency* tooling (coverage %, shadow warnings,
+precedence flowchart) is unique — nobody else shows rule-system health. But on raw capability
+the ranking is AC > FF ≥ LM ≥ MO > CF: we lack regex, multi-field conditions in one rule,
+stages, split/notify actions, learned rules, and the live match-*list* editor. WF7 should be
+scoped as: adopt Actual's engine semantics + keep CashFlux's transparency layer + Firefly's
+search-rule unification (IV.5). That combination would be the best rules system in the market.
+
+## IV.8 Reconciliation & balance assertion
+
+| | Flow | Lock state | Adjustment txn | Frequency nudge |
+|---|---|---|---|---|
+| YN | "Is this your current balance?" → auto-locates discrepancy → creates adjustment | **locked** reconciled txns | auto-created | prompted cadence |
+| AC | reconcile mode with target balance, running delta | cleared vs reconciled distinct | auto adjustment | — |
+| **CF** | per-account reconcile-to-statement: uncleared list + mark-cleared | **no lock** — cleared only | set-balance with delta preview (separate flow) | stale badges (days-based, not reconcile-based) |
+
+**Cross-examination.** CashFlux has the pieces (reconcile inline, set-balance, stale badges) but
+not the *state machine*: cleared ≠ reconciled ≠ locked, and freshness (WF4) counts days since
+update, not days since *reconciliation*. YNAB's flow is 2 inputs + auto-adjustment; ours is a
+list-marking session. **Deltas:** reconciled-as-state (locks rows, feeds WF4 confidence);
+one-question reconcile flow ("statement balance?" → propose adjustment); reconcile recency as a
+freshness input.
+
+## IV.9 Scheduled & recurring mechanics
+
+| | Frequency vocabulary | Variable amounts | Occurrence states | Auto-enter vs remind | Detection |
+|---|---|---|---|---|---|
+| YN | never/daily/weekly/everyOtherWeek/**twiceAMonth**/every4Weeks/monthly/everyOtherMonth/every3Months (API enum) | flexible targets instead | — | auto-enter N days ahead | — |
+| FF | cron-grade: "**last Friday of month**", "every 3 weeks" | — | fired/pending | auto-create | importer patterns |
+| MO | learned from history | **estimated for variable bills** | **paid / paid-different-amount / missed** | remind + calendar confirm | strong |
+| SI | learned + manual | estimates | in Spending Plan | reminders + projected-balance effects | strong |
+| AC | schedules with templates; **schedule preview shows splits** | tolerance-based matching to real txns | upcoming/missed/paid via matching | post automatically option | matching engine links real txn to schedule |
+| **CF** | daily?/weekly/monthly/quarterly/yearly + first-due (store-order slugs) | fixed amounts (price-*change* detection only) | due/overdue/paid-mark | autopost + autopay badge + "Post due" | detector w/ sensitivity prefs |
+
+**Cross-examination.** Two vocabulary gaps: **semimonthly/twice-a-month** (YN enum, LM beta —
+paycheck reality for huge US cohort) and **positional patterns** ("last Friday") (FF). One
+mechanic gap that's bigger than both: **Actual's schedule↔transaction matching** — a schedule
+isn't just a generator, it's a *matcher* that recognizes the real imported txn (amount within
+tolerance, date within window) and marks the occurrence satisfied. That's the machinery behind
+Monarch's tri-state calendar and the prerequisite for honest missed-bill detection (WF12).
+CashFlux's autopost generates txns but nothing reconciles generated-vs-actual when both exist
+(double-count risk documented in RH-series). **Deltas:** semimonthly + positional cadences;
+schedule-matching engine (expected occurrence ↔ real txn linking, tolerance bands); tri-state
+occurrence status (Part I A7 reaffirmed, now with the mechanism named).
+
+## IV.10 Budget math edge cases
+
+| | Overspend handling | Negative/credit months | Rollover sign | CC float handling | Month epoch |
+|---|---|---|---|---|---|
+| YN | overspending turns category red, must be covered — cash vs credit overspend *distinguished*; **credit-card payment categories auto-move budgeted cash** | yes | envelope carries positive only (overspend resets unless covered) | **the** reference implementation | month rolls at calendar month |
+| MO | flex bucket absorbs (IV. Area 4) | rollover ± at category level | signed | — | month |
+| CP | cumulative signed rollover | signed | **signed, cumulative** | — | **user-chosen epoch ("first month with rollover")** |
+| AC | envelope: cover-from-category flows; hold-for-next-month | yes | positive carry; overspend must be covered | manual convention | month |
+| **CF** | over-budget banner + pills; cover-from-another; PeriodBoosts top-ups | (?) | rollover toggle (sign semantics undocumented) | **absent** | fixed |
+
+**Cross-examination.** The YNAB credit-card mechanic deserves its own paragraph because no
+other comp does it and CashFlux *has the data to*: when you budget cash for Groceries and swipe
+a credit card, YNAB silently moves that budgeted cash into the card's *payment category* — so
+"money available to pay the card" is always true cash, and float never lies. CashFlux tracks
+card liabilities and budgets separately; nothing connects "spent on card" to "reserved to pay
+card." With our ledger + liability model this is buildable and would be a genuine
+YNAB-parity claim no aggregator matches. **Deltas:** define signed-rollover semantics + epoch
+(CP); cash-vs-credit overspend distinction; credit-card payment reservation (new, significant —
+candidate ticket).
+
+## IV.11 Goals fine mechanics
+
+| | Funding source | Progress driver | Spend-from-goal | States | Plan integration |
+|---|---|---|---|---|---|
+| MO v2 | **designated real accounts (multi)** | **balance movement** | — | on/off track | in budget as contributions |
+| CP | balance allocation slider or txn association | allocations | **yes — blue-bar budget bump, "Update Budgets on Spend" toggle, reactivation** | Active / Ready-to-Spend | budget-integrated |
+| SI | contribution amount | contributions | release funds back | — | **subtracted from Spending Plan like a bill; Available Balance = bank − goal set-asides** |
+| RM | Smart Savings: **auto-transfers sized by checking balance every 1–3 days**, pause, auto-pause at target | real money movement | withdraw | active/paused/complete | — |
+| **CF** | linked account (one) + contribute form (optional post-to-ledger) | contributions | — | active/achieved | monthly-needed shown; **not subtracted from STS** |
+
+**Cross-examination.** Simplifi's *Available Balance* mechanic is the cleanest expression of
+what CashFlux's safe-to-spend should do with goals: bank balance minus goal set-asides, shown
+side-by-side. Rocket's Smart Savings is the automated version (balance-aware micro-transfers) —
+CashFlux's surplus-sweep/round-up workflows are the local-first equivalent but aren't connected
+to goals (they move money between accounts, not into goal progress). **Deltas:** STS subtraction
+(reaffirmed A5); goal-aware available-balance display on accounts; wire savings workflows →
+goal contributions; balance-derived progress (A5).
+
+## IV.12 Alerts & notification channels
+
+| | In-app | Push | Email | Per-signal config | Assignable |
+|---|---|---|---|---|---|
+| MO | yes | yes | yes | **Settings→Notifications: per-type toggles per channel** | review-assignment |
+| SI | yes | yes | yes | watchlist thresholds at 50/75/80/90% | — |
+| RM | yes | yes | yes | bill-due, low-balance | — |
+| PG ✋ | yes | — | **bill-due emails (opt-in)** | per-bill | — |
+| **CF** | notification center (severity, snooze 1d, catch-up banner) + R28 configurable alerts | **no push** (PWA notification API unused?) | **no email (local)** | per-alert config exists (R28) | — |
+
+**Cross-examination.** CashFlux's in-app center is competitive; the *channel* story is the gap
+(FB1/PS3 territory): no push even though it's a PWA (service-worker Notification API works
+offline-scheduled on desktop — verify platform limits), no email without Cloud. Simplifi's
+threshold ladder (alert at 50/75/90%) is a config pattern our watchlists (WF8) should adopt.
+**Deltas:** PWA push via SW (research spike — the one channel local-first CAN do); threshold
+ladders on watchlists; snooze durations beyond 1 day.
+
+## IV.13 Data I/O: import, export, API
+
+| | Import formats | Bank feeds | Export | Public API | Automation hooks |
+|---|---|---|---|---|---|
+| YN | file-based import, migration importers | direct + Apple Card | CSV | **Yes — famous public REST API, SDKs, community ecosystem ("Works with YNAB")** | API |
+| MO | CSV (+tags), Mint migration | Plaid/MX/Finicity | CSV | unofficial only (community MCP/scrapers) | extension |
+| LM | CSV | Plaid | **CSV-first philosophy** | **Yes — lunchmoney.dev, dev community directory** | API triggers/actions |
+| AC | QIF/OFX/QFX/CSV, **YNAB4/nYNAB importers** | SimpleFIN/GoCardless | full export | **JS API on local file** | community daemons |
+| FF | CSV importer (separate container), **SFTP/email fetch on cron** | via importer (GoCardless etc.) | CSV/JSON, full | **full REST API + webhooks** | the ceiling |
+| **CF** | CSV+mapping profiles, OFX/statement paste, receipt/statement vision | — (by design) | per-dataset CSV, JSON full | **none** | workflows (internal only) |
+
+**Cross-examination.** The starkest single table in this document. Every power-user comp has an
+API; the two OSS local-first peers have *both* API and headless import; CashFlux — the app whose
+audience is literally "found it on GitHub" — has neither. YNAB's API is the model for ecosystem
+gravity ("Works with YNAB" splitwise-sync, Raycast extensions, MCP servers *built by users*);
+Firefly's email-fetch importer is the model for freshness automation. **Deltas (reaffirming
+A12 + new):** local HTTP API (localhost-only, token) over the pure store; CLI (`cashflux import
+file.csv --account=X`); watch-folder; MCP server (the gwc-MCP pattern already exists in-repo —
+a *product* MCP server would make CashFlux the first budget app with native agent tooling as a
+feature — genuine first-mover slot, nobody in the roster ships one officially).
+
+## IV.14 Multi-currency fine points
+
+| | Per-account currency | Home-currency rollup | Rate source | Per-txn override |
+|---|---|---|---|---|
+| LM | yes | **"every dollar, euro and yen" rolled to home currency** | automatic | yes |
+| FF | yes | yes | manual/automatic | yes |
+| PSm | multi-currency accounts | yes | feeds | — |
+| **CF** | yes | yes, via FX table | **manual only** + missing-rate alerts | (?) |
+
+**Delta:** scheduled rate refresh is a Cloud candidate; local option: rate CSV paste (pairs
+with price CSV, A9). Missing-rate alert already best-in-class honesty.
+
+## IV.15 Attachments & documents
+
+| | Receipt attach | OCR/extract | Statement store | Search by has-attachment |
+|---|---|---|---|---|
+| MO | yes (attachments on txns) | receipt scanning (Dec 2025) | — | **filter: has attachments** |
+| PG ✋ | paystub scan | AI extract | — | — |
+| **CF** | receipts on txns + artifacts store + vision extract | **yes (vision)** | artifacts hold images/CSVs | **no has-attachment filter** |
+
+**Delta:** has-attachment/has-note/has-split filters (MO parity, trivial); account-level
+statement attachments (A3).
+
+## IV.16 Feature-by-feature scoreboard
+
+Verdict roll-up at mechanic level (win = best-in-roster, par = competitive, lose = behind):
+
+| Mechanic | CF verdict | Beat by | Ticket |
+|---|---|---|---|
+| Entry button placement | **win** | — | — |
+| Payee-memory prefill | lose | YN | new |
+| Keyboard grammar | lose | YN | new |
+| % / rule / temporal splits, grouping | lose | MO/CP/LM | WF7+new |
+| Transfer pairing on import | lose | CP/AC | WF11 |
+| Tag analysis dimension | lose | LM/PSm | WF8 |
+| Filter breadth | par-win | FF (syntax) | WF16 |
+| Saved searches → monitor/rule handoff | lose | PSm/FF | WF7/WF8 |
+| Review dispatch cost | lose | CP | WF1/FB2 |
+| Review assignment | absent (uniquely buildable) | MO | new |
+| Bulk-undo snapshot | **win** | — | advertise |
+| Rules transparency (coverage/shadow/precedence) | **win** | — | keep in WF7 |
+| Rules capability | lose | AC/FF/LM | WF7 |
+| Reconcile state machine | lose | YN/AC | new |
+| Cadence vocabulary (semimonthly/positional) | lose | YN/FF | WF17 |
+| Schedule↔txn matching | lose | AC/MO | WF12 |
+| Rollover semantics (signed/epoch) | lose | CP | WF17 |
+| CC float / payment reservation | absent | YN | new (candidate flagship) |
+| Goal lifecycle + spend-from-goal | lose | CP | WF18 |
+| Goal STS subtraction / available balance | lose | SI | new |
+| Automated savings → goals wiring | par (engines exist, unwired) | RM | XC |
+| Notification channels | lose | MO/SI | PS3+new (PWA push) |
+| Threshold ladders | lose | SI | WF8 |
+| API/CLI/ecosystem | **absent** | YN/LM/AC/FF | new (A12) |
+| Vision extraction | **win** | — | — |
+| FX honesty (missing-rate alerts) | **win** | — | — |
+| Health/stress/coaching | **win** | Boldin only | A14 |
+| Explainability (formula disclosure, breakdowns) | **win** | — | — |
+
+Net: CashFlux wins on transparency, explainability, vision import, breadth-in-one-app; loses
+concentrated in six mechanic clusters — **review economics, rules capability, schedule
+matching, budget-math typing, goal funding mechanics, and ecosystem I/O** — all of which are
+already series-anchored (WF1/WF7/WF12/WF17/WF18) plus two genuinely new flagship candidates
+from this pass: **credit-card payment reservation (YNAB-parity claim)** and **product MCP
+server / local API (first-mover claim)**.
+
+## IV.17 Part IV sources (addendum)
+
+YNAB API docs + SDKs (frequency enum, subtransactions), support.ynab.com keyboard-shortcuts &
+reconcile articles · Monarch help: editing-transactions, tags, rules, review blog posts,
+notifications; Monarch-Tweaks community repo · Copilot help: splitting (3/6/12 spread),
+rollovers, savings-goal spending; roadmap.copilot.money · Actual docs: rules, filters, tags,
+schedules/goal-templates, release notes (split caveats, unsplit) · Firefly docs + DeepWiki:
+search operators, search-rule engine, recurrences · PocketSmith Learn Center: labels,
+saved searches, auto-categorize, filters · Simplifi help: savings-goals (available-balance
+mechanics), watchlists (threshold alerts) · Rocket help: smart-savings setup/pause ·
+Lunch Money KB: rules, category properties (exclude-from-totals), pending; changelog.

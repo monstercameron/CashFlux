@@ -427,7 +427,13 @@ durability, and no-bank-sync means freshness is a product surface (WF4/FB5/FB9),
   occurrences; local API/CLI + watch-folder import; named switcher importers; investment
   activity/lot model), and **Part III.2** = the 16-entry missing-connection map (top damage:
   liability↛recurring, forecast↛recurring, rules↛workflows, allocate↛debt/goals/budgets).
-  Do NOT re-research — promote items from the doc into the WF/PS/FB series as they're scheduled.
+  **Part IV** (added same day) = mechanic-level cross-examination matrices (17 sections:
+  splits/transfers/tags/search/review/rules/reconcile/schedule-matching/budget-math/goals/
+  alerts/data-I-O/…) ending in the IV.16 scoreboard; its two new flagship candidates:
+  **credit-card payment reservation** (YNAB-parity mechanic no aggregator matches) and a
+  **local API/CLI + product MCP server** (first-mover — no budget app ships official agent
+  tooling). Do NOT re-research — promote items from the doc into the WF/PS/FB series as
+  they're scheduled.
 
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
@@ -5418,12 +5424,17 @@ below (core first, enrollment doors next, lifecycle hardening last).
   invalidated the moment a new one is issued); proactive background refresh at ~80% of the access
   token's lifetime, with a reactive refresh-then-retry-once fallback on any auth failure as a
   backstop. Treat replay of an already-rotated refresh token as a compromise signal — revoke the
-  whole session family, not just the one call.
+  whole session family, not just the one call. Correctness: derive the ~80% refresh point from the
+  server-issued `expires_in` duration plus a local countdown, never by comparing an absolute
+  expiry timestamp against local wall-clock time — a device with a wrong clock must not misfire
+  proactive refresh either way.
 - [ ] **C424 [MINOR][SYNC] Multi-tab refresh race guard.** Use the Web Locks API
   (`navigator.locks.request`) so exactly one tab performs a given token refresh while others await
   its result instead of racing. Same failure class as the existing two-tab dataset clobber, but
   worse here — a losing tab presenting an already-rotated refresh token is indistinguishable from
-  the replay-attack signal in C423 and would falsely trigger a session revoke.
+  the replay-attack signal in C423 and would falsely trigger a session revoke. Correctness: give
+  the lock a timeout, so a tab that crashes or is killed mid-refresh can't strand it and starve
+  every other tab of ever refreshing again.
 - [ ] **C425 [MINOR][SYNC] Tie access-token refresh into the watch-stream reconnect.** The sync
   watch stream can outlive an access token; gRPC can't swap auth metadata on an open connection.
   Don't add new reconnect plumbing — make "access token refreshed" one more trigger for the
@@ -5438,3 +5449,103 @@ below (core first, enrollment doors next, lifecycle hardening last).
   local credential and drops to local-only silently — no error dialog, no data loss, the encrypted
   dataset stays fully usable. The next active sync attempt offers the fastest re-entry for an
   existing account (SMS re-verify) rather than a full re-onboarding flow.
+
+### Billing gate, quotas, and rate limiting
+
+Identity (is this token valid) and entitlement (is this account allowed to sync right now) are
+separate concerns with different lifetimes — a non-expired token doesn't mean an active
+subscription, so entitlement has to be checked per-call, not just at enrollment. This sub-wave
+gates `SyncService`/`BlobService` on plan status, reuses the existing admin plan/suspend data as
+the single source of truth for *why* an account is gated, and communicates rate limits and storage
+limits back to the client using gRPC's own rich-error convention instead of inventing one.
+
+- [ ] **C428 [MAJOR][SYNC] Commit to real protobuf wire format for the gRPC tunnel.** Wire the
+  existing `.pb.go` generation into the actual client + server build, replacing the custom JSON
+  codec (`backendrpc.JSONCallOptions`). Prerequisite for C432 — `google.rpc.ErrorInfo`/`RetryInfo`/
+  `QuotaFailure`/`Help` are standard proto types every gRPC client already decodes; reinventing that
+  convention by hand in JSON buys nothing.
+- [ ] **C429 [MAJOR][SYNC] Entitlement interceptor on SyncService/BlobService.** A second
+  interceptor alongside the auth one, checking plan status on every call — never on `AuthService`,
+  since an account must always be able to log in and see *why* it's gated. Backed by the same plan
+  record the admin console already manages, so billing-lapse, admin-suspend, and
+  plan-tier-insufficient resolve through one gate with one reason enum, not three bespoke checks.
+- [ ] **C430 [MINOR][SYNC] Webhook-driven entitlement cache invalidation.** The Stripe/PayPal
+  webhook handlers bust the cached entitlement lookup immediately on any plan change, so a
+  cancelled or failed payment takes effect without waiting out a stale cache window. Correctness:
+  webhooks can arrive delayed, retried, or out of order — handle by event timestamp/sequence, not
+  last-write-wins, so a late-arriving "subscription cancelled" can't be clobbered by an
+  earlier-dated "payment succeeded" that happens to land after it.
+- [ ] **C431 [MINOR][SYNC] Pre-flight entitlement check before the enrollment UI.** Toggling
+  Custom Sync calls `AccountService.GetEntitlement` before showing the phone/pairing/password
+  screen; a gated account sees an upgrade prompt immediately and never reaches enrollment — avoids
+  spending a real SMS send, and the bad UX of verifying identity only to be rejected afterward.
+- [ ] **C432 [MAJOR][SYNC] Rich gRPC error model for rate limits, quota, and entitlement.**
+  `RESOURCE_EXHAUSTED` + `RetryInfo` (`retry_delay` — the gRPC analogue of a 429's `Retry-After`)
+  for rate limiting; `QuotaFailure` (used/limit) for storage; `ErrorInfo` with a stable reason enum
+  (`BILLING_LAPSED` / `ADMIN_SUSPENDED` / `PLAN_TIER_INSUFFICIENT` / `RATE_LIMITED` /
+  `STORAGE_QUOTA_EXCEEDED`) so the client branches on a code, not parsed text; `Help` with a
+  reason-specific link (a storage overage and an insufficient plan tier should not point at the
+  same upgrade URL). Depends on C428.
+- [ ] **C433 [MINOR][SYNC] Per-account/device rate limiting on SyncService/BlobService.**
+  Token-bucket limiter in the same interceptor as C429, independent of storage quota — protects
+  call rate regardless of payload size.
+- [ ] **C434 [MAJOR][SYNC] Storage quota: running counter + two-point check on streaming uploads.**
+  A transactional `bytes_used` counter on the account row, updated on every blob write/delete
+  (never re-summed per check — doesn't scale). The C426 streaming blob upload gets a soft
+  pre-check against the client's *declared* size (fail fast before receiving bytes) and a hard
+  check against *actual* bytes received at commit (don't trust the declared size), rolling back
+  the write on overage.
+- [ ] **C435 [MINOR][SYNC] Proactive quota + plan-status surfacing.** Extend the existing
+  sync-status object with `bytes_used`/`bytes_limit`, refreshed opportunistically off Sync/Blob
+  call responses; Settings/Sync shows a quiet usage bar and soft-warns around ~90% instead of only
+  failing at 100%.
+- [ ] **C436 [MINOR][SYNC] Push plan/quota-change events down the existing watch stream.** Reuse
+  the C425 watch-stream channel (no new push plumbing) so an actively-connected client learns of a
+  billing lapse, admin suspend, or crossing a quota warning threshold in real time, instead of
+  waiting for the next call to fail.
+- [ ] **C437 [MINOR][SYNC] Grace period on billing lapse, distinct from hard suspension.** A
+  failed or cancelled payment shouldn't hard-cut sync instantly — a short grace window (days) in a
+  degraded/warning entitlement state absorbs transient card failures before blocking. Admin-suspend
+  and plan-tier-insufficient stay immediate; those aren't billing hiccups.
+- [ ] **C438 [MINOR][SYNC] Read-only access to already-synced data after a billing gate.**
+  Distinguish "blocked from new syncing" from "locked out of your own backup": while gated (grace
+  period expired, or admin-suspended), allow pull/restore of previously-synced data for a
+  retention window even though further pushes are blocked, so losing entitlement doesn't feel like
+  losing your data.
+- [ ] **C439 [MINOR][SYNC] Admin console: surface artifact storage usage per account.** The
+  existing admin usage/overview view gains the per-account `bytes_used`/`bytes_limit` figures from
+  C434, for support/ops visibility — distinct from whatever "usage" already means there.
+
+### REST cleanup and correctness pass
+
+- [ ] **C440 [MAJOR][SYNC] Retire the remaining ad-hoc HTTP calls on the main app's client.**
+  None of these have a redirect requirement forcing them onto HTTP — they're leftover ad-hoc
+  calls, not deliberate exceptions. Move `testBackendConnection` (`GET /v1/version`) to a
+  lightweight gRPC health/connectivity call; move billing-session creation (`createBillingSession`,
+  `POST /v1/billing/checkout|portal`) to a gRPC `BillingService.CreateCheckoutSession` that returns
+  a URL, leaving only the actual browser redirect to that URL outside gRPC (which isn't a network
+  call the client makes at all — it's `window.location`); move `signOutBackendOAuth` (raw
+  `js.Global().Call("fetch", ...)`) to a gRPC `AuthService.Logout` call.
+- [ ] **C441 [MAJOR][SYNC] Decide the fate of OAuth "cloud" sign-in against the new SMS-first
+  flow.** Does phone/pairing/password (C420–C422) replace `ServerMode: cloud` OAuth entirely, or
+  does OAuth remain as a fourth alternative? If retired: delete the OAuth REST surface
+  (`/v1/auth/{provider}`, `/v1/auth/{provider}/callback`, the refresh-cookie + CSRF dance) — the
+  single largest remaining REST surface in the app. If kept: document it as the one deliberate
+  exception (an OAuth authorization-code redirect is fundamentally incompatible with a pure-RPC
+  transport, same category as the Stripe/PayPal checkout redirect in C440) so it isn't mistaken
+  for undone migration work later. This is a product decision, not just an engineering one —
+  needs an answer before C440/C442 can be called complete.
+- [ ] **C442 [MINOR][SYNC] Document the REST/gRPC boundary explicitly.** One clear statement in
+  the architecture notes: the main app's client is gRPC-only except for browser-navigation
+  redirects it fundamentally cannot avoid (OAuth login if C441 keeps it; Stripe/PayPal checkout).
+  `cashflux-portal` is a deliberate, separate REST surface (an account-management website, not the
+  sync-critical path) and is explicitly out of scope for this migration. Exists so a future ad-hoc
+  `fetch` call doesn't quietly creep back into the main app for lack of a written rule.
+- [ ] **C443 [MAJOR][SYNC] Idempotency keys on enrollment/verification RPCs.** A client retry of
+  `VerifyPhoneCode`/`RedeemPairingCode`/`Login` after a timeout — where the client can't know
+  whether the first attempt actually landed — must not mint a second device/session for what was
+  one enrollment action. Scope an idempotency key to the attempt; the server returns the same
+  token pair on a duplicate instead of issuing a new session.
+- [ ] **C444 [MINOR][SYNC] Orphaned partial-upload cleanup for streaming blobs.** An interrupted
+  C426 streaming upload can leave partial data server-side. Add a reconciliation/GC pass so
+  incomplete uploads don't silently consume the storage quota from C434 forever.

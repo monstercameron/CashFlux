@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Teardown Part IV — mechanic-level cross-examination (`docs/COMPETITIVE_TEARDOWN.md`).**
+  Second pass per Cam ("fine detailed feature cross examination"): 17 matrix sections
+  interrogating individual mechanics across all comps — entry/quick-capture, splitting (incl.
+  Copilot's 3/6/12-month temporal spread and Monarch's rule-driven Smart Split), transfer
+  pairing, tags/flags/labels, search grammars (Firefly's search-IS-a-rule unification),
+  review states (Monarch's assign-review-to-member), the consolidated rules-capability matrix,
+  reconciliation state machines, schedule↔transaction matching (Actual's tolerance engine),
+  budget-math edge cases (signed rollovers, epochs, YNAB's credit-card payment-category float
+  handling), goal funding lifecycles, notification channels, and the data-I/O/API table —
+  closing with a per-mechanic win/par/lose scoreboard. Two new flagship candidates surfaced:
+  credit-card payment reservation (YNAB parity) and a local API/CLI + product MCP server
+  (first-mover). CT1 ticket updated to cover Part IV.
 - **Full competitive teardown (`docs/COMPETITIVE_TEARDOWN.md`, user-requested).** 16-area,
   15-comp feature-by-feature teardown of CashFlux vs YNAB, Monarch, Copilot, Simplifi, Rocket
   Money, Lunch Money, PocketSmith, Empower, PiggySize, Boldin, ProjectionLab, Actual Budget,

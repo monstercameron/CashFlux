@@ -1,3 +1,29 @@
+## 2026-07-23 — Teardown Part IV: mechanic-level cross-examination (research, no code)
+
+Cam's verdict on the first pass: not comprehensive enough — he wants feature *cross-examination*,
+not area summaries. Second pass drills to mechanic level: 17 matrix sections where each row is a
+comp and each column a specific behavior, with a cross-examination paragraph and explicit
+CashFlux deltas per section. The research trick that made it possible: help-center articles and
+API docs state exact mechanics (YNAB's scheduled-frequency enum literally enumerates
+`twiceAMonth`; Copilot's split article documents the 3/6/12-month spread; Actual's rules doc
+reads like a spec; Simplifi's savings-goal article defines the available-balance math).
+
+Findings that weren't visible at area altitude: (1) **YNAB's credit-card payment-category
+mechanic** — budgeted cash silently moves to the card's payment category on swipe, so float
+never lies — no aggregator matches it and CashFlux has the ledger+liability data to build it;
+filed as a flagship candidate. (2) **Actual's schedule↔transaction matching** (tolerance-based
+linking of expected occurrences to real txns) is the hidden machinery under Monarch's tri-state
+recurring calendar and the prerequisite for honest missed-bill detection — our autopost
+generates but never reconciles generated-vs-actual. (3) **Firefly's search-IS-a-rule
+unification** argues WF7/WF8/filters/formulas should share one predicate grammar instead of
+growing four. (4) The IV.13 data-I/O table is the starkest in the doc: every power-user comp
+has an API, both OSS peers have API + headless import, we have neither — and a product MCP
+server would be a first-mover claim nobody in the roster holds. (5) Monarch's
+assign-review-to-member is the one review mechanic our household model is uniquely shaped to
+steal. IV.16 scoreboard nets it out: wins on transparency/explainability/vision/breadth; losses
+concentrated in six clusters (review economics, rules capability, schedule matching, budget-math
+typing, goal funding, ecosystem I/O), all series-anchored plus the two new flagship candidates.
+
 ## 2026-07-23 — Full competitive teardown → docs/COMPETITIVE_TEARDOWN.md (research, no code)
 
 Cam set a goal: every CashFlux feature vs every comp, excruciating detail, click counts, UI
