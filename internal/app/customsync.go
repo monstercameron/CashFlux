@@ -90,6 +90,11 @@ func CustomSyncCard() uic.Node {
 	phase := uic.UseState(customSyncIdle)
 	phoneInput := uic.UseState("")
 	codeInput := uic.UseState("")
+	// setupCodeInput is the optional single-use invite code some private/
+	// embedded deployments require to create a brand-new account
+	// (Config.SetupCode/TODOS.md C445). Blank and harmless on every ordinary
+	// deployment — the server only checks it when it has one configured.
+	setupCodeInput := uic.UseState("")
 	// idempotencyKey is regenerated for every fresh send so a genuine second
 	// attempt (new code) doesn't collide with a stale one, while retries of
 	// verifying the SAME code (e.g. a flaky connection) keep reusing it so the
@@ -165,6 +170,7 @@ func CustomSyncCard() uic.Node {
 			err = conn.Invoke(ctx, backendrpc.MethodAuthRequestPhoneVerification, backendrpc.RequestPhoneVerificationRequest{
 				PhoneNumber: phone,
 				DeviceLabel: customSyncDeviceLabel(),
+				SetupCode:   strings.TrimSpace(setupCodeInput.Get()),
 			}, &out, backendrpc.JSONCallOptions()...)
 			if err != nil {
 				phase.Set(customSyncIdle)
@@ -180,9 +186,10 @@ func CustomSyncCard() uic.Node {
 			// (listenForSMSOTP checks feature support first) fall through to the
 			// plain autocomplete="one-time-code" input below.
 			capturedPhone := phone
+			capturedSetupCode := strings.TrimSpace(setupCodeInput.Get())
 			listenForSMSOTP(func(code string) {
 				codeInput.Set(code)
-				verifyCodeValue(prefsAtom, noticeAtom, phase, idempotencyKey, capturedPhone, code)
+				verifyCodeValue(prefsAtom, noticeAtom, phase, idempotencyKey, capturedPhone, code, capturedSetupCode)
 			})
 		}()
 	})
@@ -194,7 +201,7 @@ func CustomSyncCard() uic.Node {
 			notify(uistate.T("customSync.codeRequired"), true)
 			return
 		}
-		verifyCodeValue(prefsAtom, noticeAtom, phase, idempotencyKey, phone, code)
+		verifyCodeValue(prefsAtom, noticeAtom, phase, idempotencyKey, phone, code, strings.TrimSpace(setupCodeInput.Get()))
 	})
 
 	onStartOver := uic.UseEvent(func() {
@@ -204,6 +211,7 @@ func CustomSyncCard() uic.Node {
 
 	onPhoneInput := uic.UseEvent(func(v string) { phoneInput.Set(v) })
 	onCodeInput := uic.UseEvent(func(v string) { codeInput.Set(v) })
+	onSetupCodeInput := uic.UseEvent(func(v string) { setupCodeInput.Set(v) })
 
 	sending := phase.Get() == customSyncSending
 	verifying := phase.Get() == customSyncVerifying
@@ -241,6 +249,12 @@ func CustomSyncCard() uic.Node {
 			Input(css.Class("set-input"), Type("tel"), Attr("inputmode", "tel"), Attr("autocomplete", "tel"),
 				Attr("aria-label", uistate.T("customSync.phoneLabel")), Attr("data-testid", "custom-sync-phone"),
 				Placeholder(uistate.T("customSync.phonePlaceholder")), Value(phoneInput.Get()), OnInput(onPhoneInput)),
+			// Optional single-use invite code (Config.SetupCode/TODOS.md C445) —
+			// blank and harmless on every ordinary deployment; only a
+			// private/embedded deployment gating new accounts actually checks it.
+			Input(css.Class("set-input"), Type("text"), Attr("autocomplete", "off"),
+				Attr("aria-label", uistate.T("customSync.setupCodeLabel")), Attr("data-testid", "custom-sync-setup-code"),
+				Placeholder(uistate.T("customSync.setupCodePlaceholder")), Value(setupCodeInput.Get()), OnInput(onSetupCodeInput)),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "custom-sync-send"),
 				DisabledIf(sending), OnClick(sendCode),
 				IfElse(sending, Text(uistate.T("customSync.sending")), Text(uistate.T("customSync.sendCode")))),
@@ -268,7 +282,7 @@ func CustomSyncCard() uic.Node {
 // picks up the new session immediately. It is a free function (not a closure
 // captured per-render) so both the manual "Verify" click and the WebOTP
 // auto-fill callback share one code path.
-func verifyCodeValue(prefsAtom state.Atom[prefs.Prefs], noticeAtom state.Atom[uistate.Notice], phase uic.State[customSyncPhase], idempotencyKey uic.State[string], phone, code string) {
+func verifyCodeValue(prefsAtom state.Atom[prefs.Prefs], noticeAtom state.Atom[uistate.Notice], phase uic.State[customSyncPhase], idempotencyKey uic.State[string], phone, code, setupCode string) {
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
 	phase.Set(customSyncVerifying)
 	go func() {
@@ -300,6 +314,7 @@ func verifyCodeValue(prefsAtom state.Atom[prefs.Prefs], noticeAtom state.Atom[ui
 			Code:           code,
 			DeviceLabel:    customSyncDeviceLabel(),
 			IdempotencyKey: key,
+			SetupCode:      setupCode,
 		}, &out, backendrpc.JSONCallOptions()...)
 		if err != nil {
 			phase.Set(customSyncCodeSent)
