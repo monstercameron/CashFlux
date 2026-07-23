@@ -5855,3 +5855,15 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   `authservice_phone_test.go` cases proving an invite code and the static code coexist, an expired
   invite code is rejected, and an unminted guess is rejected (the exact class of bug C445's own
   review found once already).
+  (A follow-up adversarial review, run once the portfolio-side admin tab was also wired in, found
+  no enrollment-gate bypass and no double-spend race — `db.SetMaxOpenConns(1)` serializes the store
+  to one physical connection, so `ConsumeInviteCode`'s SELECT-then-conditional-UPDATE can't race
+  even in theory — but flagged one pre-existing, low-severity structural inconsistency worth
+  recording: `VerifyPhoneCode` backstops `RequestPhoneVerification`/`RedeemPairingCode`/`Register`
+  with a global rate limiter specifically because their per-caller keys — phone number, device
+  label — are attacker-controlled and rotatable, but the setup/invite-code guess on
+  `VerifyPhoneCode` itself has no equivalent global backstop, only the phone- and device-label-keyed
+  limiters. Practical exploitability is low — guessing requires first obtaining a real Twilio SMS
+  code, itself globally rate-limited at 30/min — and this predates the invite-code work (the
+  original C445 static-code gate had the identical shape), so left as an accepted residual rather
+  than fixed here; a real fix would add a `setupCodeGlobalLimiter` mirroring the other three.)
