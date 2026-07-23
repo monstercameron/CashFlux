@@ -80,6 +80,10 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
 	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))
+	RegisterAuthServiceServer(grpcServer, newAuthService(store, cfg))
+	RegisterAccountServiceServer(grpcServer, newAccountService(store, cfg))
+	RegisterBillingServiceServer(grpcServer, newBillingService(store, cfg))
+	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
 	return grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
@@ -167,10 +171,28 @@ func authUserForToken(token string, cfg Config) (AuthUser, bool) {
 			return authUserFromToken(token), true
 		}
 	}
-	if strings.EqualFold(cfg.AuthMode, "oauth") {
-		if userID, ok := verifySessionToken(cfg, token, "access", time.Now().UTC()); ok {
-			return AuthUser{ID: userID, Token: token}, true
-		}
+	// A signed session-JWT access token is checked regardless of cfg.AuthMode.
+	// This used to be gated on AuthMode=="oauth" (third-party OAuth "cloud"
+	// sign-in, the only source of these JWTs when that gate was written), but
+	// AuthService (TODOS.md C418) mints the exact same JWT shape for "Custom
+	// Sync" phone/password enrollment, whose entire premise is working
+	// against a plain self-hosted server with AuthMode=="token" and NO OAuth
+	// provider configured — that's what "a fixed, built-in server endpoint"
+	// (C419) means. Leaving the oauth-only gate in place made a self-hosted
+	// Custom Sync session look "signed in" (Register/Login/VerifyPhoneCode/
+	// RefreshToken are all interceptor-exempt, see authinterceptor_skip.go)
+	// while every OTHER authenticated call it needs — ListDevices,
+	// AccountService.GetEntitlement, and the SyncService/BlobService calls
+	// that are the actual point of syncing — was silently rejected
+	// Unauthenticated, eventually degrading to local-only (C427) with no
+	// visible error. This check is purely additive: it only ever matches a
+	// token that already failed the static cfg.Token/TokenSHA256 comparison
+	// above AND verifies against cfg.SessionKey (falling back to MasterKey,
+	// same as every other session-signing call site), so a self-host
+	// deployment that never issues any AuthService session has nothing new to
+	// accept.
+	if userID, ok := verifySessionToken(cfg, token, "access", time.Now().UTC()); ok {
+		return AuthUser{ID: userID, Token: token}, true
 	}
 	return AuthUser{}, false
 }

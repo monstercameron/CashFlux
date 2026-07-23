@@ -37,6 +37,31 @@ and every commit updates this file under `Unreleased`.
   user regardless of Twilio configuration, a discarded refresh token that would let a session
   silently die at access-token expiry with no recovery, and the entitlement pre-flight check
   being fully built but never called from the enrollment UI.
+- **Custom Sync token lifecycle + artifact streaming over gRPC (TODOS.md C425–C427, C444).** The
+  client now proactively refreshes its access token at ~80% of its server-issued lifetime (derived
+  from the relative duration, never compared against wall-clock time, so a device with a wrong
+  clock can't misfire it), with a reactive refresh-then-retry-once fallback on any auth failure,
+  and a Web Locks–guarded cross-tab mutex so two tabs can't race the same refresh and trigger a
+  false-positive reuse-revoke. A rejected refresh (expired/revoked) degrades silently to
+  local-only — no error dialog, no data loss. Artifact/blob transfer moved off REST
+  (`/v1/blobs/{hash}`) onto a new gRPC `BlobService` (client-streaming upload, server-streaming
+  download) riding the same authenticated tunnel, with a two-point storage-quota check (soft
+  pre-check on declared size, hard check + rollback on actual bytes at commit) and a background
+  sweep for orphaned partial uploads.
+
+  Adversarial review found and fixed a critical cross-tenant blob download (IDOR: no per-user
+  ownership check existed on the gRPC download path — any authenticated caller who knew another
+  user's blob hash could read it) and a high-severity storage-quota bypass (uploads through this
+  transport were never linked to a workspace, so usage stayed at zero regardless of how much was
+  uploaded), plus a cleanup-sweep bug where one busy file on Windows could permanently block
+  reaping of genuinely abandoned uploads sorted after it. Live browser testing separately found and
+  root-caused a reliable token-refresh deadlock: the multi-tab lock's `navigator.locks.request`
+  callback blocked a goroutine synchronously inside the JS callback, and since `GOOS=js/wasm` is
+  single-threaded and cooperatively scheduled, the parked callback stopped the runtime from pumping
+  the browser's event loop — starving the concurrently-dialing gRPC connection of the WebSocket
+  `open` event it needed, until the RPC's own deadline gave up. Fixed by having the callback return
+  a Promise Go resolves on completion instead of blocking inline (cross-tab exclusion unchanged,
+  scheduler never starved) — verified live 5/5 after a consistent 3/3 failure before the fix.
 
 ### Changed
 - **Adversarial-review round: metrics sharding + watch-path completions (server hot path).**

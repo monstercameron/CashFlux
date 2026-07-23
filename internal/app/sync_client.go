@@ -20,11 +20,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backoff"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const syncMetaPrefix = "cashflux:sync-meta:"
@@ -65,6 +68,272 @@ type syncStatus struct {
 
 var syncPushMu sync.Mutex
 
+// --- Token lifecycle (TODOS.md C423 client half, C424, C425, C427) ---
+//
+// A "Custom Sync" AuthService session (login/enroll/pairing) mints a rotating
+// access/refresh token pair (backendrpc.TokenPairResponse) instead of the
+// static self-host CASHFLUX_SERVER_TOKEN. These three keys hold that
+// session's local state; a self-host static token never touches them, so
+// effectiveServerToken transparently falls back to prefs.ServerToken when no
+// rotated session exists.
+const (
+	authAccessTokenKey  = "cashflux:auth:access-token"
+	authRefreshTokenKey = "cashflux:auth:refresh-token"
+	authExpiresInKey    = "cashflux:auth:expires-in-seconds"
+)
+
+// proactiveRefreshTimer is the single in-flight countdown to the next
+// proactive refresh (armed by storeAuthTokenPair). It is a relative timer
+// (time.AfterFunc), never an absolute deadline compared against wall-clock
+// time later — a device with a wrong clock cannot make it misfire either way
+// (TODOS.md C423's correctness note).
+var (
+	proactiveRefreshMu    sync.Mutex
+	proactiveRefreshTimer *time.Timer
+)
+
+// effectiveServerToken returns the bearer token every backend RPC should use:
+// the locally rotated access token from a Custom Sync session when one
+// exists, otherwise the static token from prefs (self-host token mode).
+func effectiveServerToken(pr prefs.Prefs) string {
+	if t := strings.TrimSpace(lsGet(authAccessTokenKey)); t != "" {
+		return t
+	}
+	return pr.ServerToken
+}
+
+// hasRotatableSession reports whether a Custom Sync refresh token is on
+// hand — the signal that this device's credential can be refreshed/degraded,
+// as opposed to a static self-host token, which never rotates and is left
+// entirely alone by this machinery.
+func hasRotatableSession() bool {
+	return strings.TrimSpace(lsGet(authRefreshTokenKey)) != ""
+}
+
+// dialAuthed dials the backend using whichever token is currently effective
+// (rotated session token, or the static self-host token) — the single choke
+// point every call site should dial through so a refresh is picked up
+// immediately by the next dial, with no other plumbing required.
+func dialAuthed(ctx context.Context, pr prefs.Prefs) (*grpc.ClientConn, error) {
+	return syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: effectiveServerToken(pr)})
+}
+
+// isAuthError reports whether err is the backend rejecting the bearer token
+// (codes.Unauthenticated) — the trigger for the reactive refresh fallback,
+// as opposed to any other RPC failure (network, quota, validation, ...),
+// which a refresh cannot fix and retrying would just waste a round trip.
+func isAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.Unauthenticated
+}
+
+// invokeAuthed calls method against *conn and, on an Unauthenticated failure,
+// performs the C423 reactive fallback: exactly one RefreshToken attempt via
+// refreshAccessToken, then — only if that succeeded — re-dials *conn with the
+// refreshed token and retries the original call exactly once more. The old
+// connection is closed before being replaced, and *conn always ends up
+// pointing at whichever connection is current, so a caller's own
+// `defer (*conn).Close()` keeps working unmodified.
+func invokeAuthed(ctx context.Context, conn **grpc.ClientConn, pr prefs.Prefs, method string, req, resp any) error {
+	err := (*conn).Invoke(ctx, method, req, resp, backendrpc.JSONCallOptions()...)
+	if !isAuthError(err) {
+		return err
+	}
+	if !refreshAccessToken(ctx, pr) {
+		return err
+	}
+	fresh := uistate.LoadPrefs().Normalize()
+	newConn, dialErr := dialAuthed(ctx, fresh)
+	if dialErr != nil {
+		return err
+	}
+	old := *conn
+	*conn = newConn
+	_ = old.Close()
+	return (*conn).Invoke(ctx, method, req, resp, backendrpc.JSONCallOptions()...)
+}
+
+// refreshAccessToken performs (or, if another tab wins the race, waits for
+// and reuses the result of) a single RefreshToken round trip, guarded by the
+// cross-tab Web Locks guard (TODOS.md C424) so concurrently open tabs never
+// race the server for a refresh. It returns false when there is no
+// rotatable session to refresh, or the refresh attempt failed.
+func refreshAccessToken(ctx context.Context, pr prefs.Prefs) bool {
+	startingRefresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
+	if startingRefresh == "" {
+		return false
+	}
+	ok := false
+	withTokenRefreshLock(func() {
+		// Reuse without replaying: another tab may have already refreshed
+		// while we waited for the lock. A refresh token is single-use —
+		// replaying our now-stale copy would trip the server's reuse/
+		// compromise detection and revoke the WHOLE session family. If the
+		// stored refresh token has moved on, there is already fresh state
+		// to use; nothing left for us to do.
+		if strings.TrimSpace(lsGet(authRefreshTokenKey)) != startingRefresh {
+			ok = true
+			return
+		}
+		ok = doRefreshAccessToken(ctx, pr, startingRefresh)
+	})
+	return ok
+}
+
+// doRefreshAccessToken makes the actual AuthService.RefreshToken call. It
+// must run only while holding the token-refresh lock (via refreshAccessToken)
+// so it is never invoked twice concurrently for the same session.
+//
+// RefreshToken/Logout are exempt from the server's auth interceptor (see
+// authinterceptor_skip.go), so the tunnel dial below only needs SOME
+// non-empty token to satisfy syncbridge's handshake requirement — it need
+// not itself be valid, which matters because this is exactly the call made
+// when the access token has expired.
+func doRefreshAccessToken(ctx context.Context, pr prefs.Prefs, refreshToken string) bool {
+	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	token := effectiveServerToken(pr)
+	if token == "" {
+		token = "refresh"
+	}
+	conn, err := syncbridge.Dial(dialCtx, syncbridge.Config{ServerURL: pr.ServerURL, Token: token})
+	if err != nil {
+		logSyncError("token refresh dial failed", err)
+		return false
+	}
+	defer conn.Close()
+	var resp backendrpc.TokenPairResponse
+	err = conn.Invoke(dialCtx, backendrpc.MethodAuthRefreshToken, backendrpc.RefreshTokenRequest{RefreshToken: refreshToken}, &resp, backendrpc.JSONCallOptions()...)
+	if err != nil {
+		if isAuthError(err) {
+			// C427 graceful degrade: the refresh token itself is
+			// expired/revoked, not just the access token. There is no
+			// credential left to recover — drop to local-only silently. No
+			// error dialog, no data loss: the encrypted dataset on disk
+			// stays fully usable, just no longer synced.
+			degradeToLocalOnly()
+		} else {
+			logSyncError("token refresh failed", err)
+		}
+		return false
+	}
+	storeAuthTokenPair(resp)
+	return true
+}
+
+// storeAuthTokenPair persists a freshly (re)issued token pair and rearms the
+// proactive countdown. C425: an already-open watch stream authenticated
+// with the OLD token has no reason to keep running under it — cycle it
+// through the existing reconnect/backoff machinery (stopBackendWatch/
+// startBackendWatch, unchanged) as one more trigger, so it re-subscribes
+// with the new access token right away instead of running until it
+// eventually gets rejected on its own.
+func storeAuthTokenPair(pair backendrpc.TokenPairResponse) {
+	if strings.TrimSpace(pair.AccessToken) != "" {
+		lsSet(authAccessTokenKey, pair.AccessToken)
+	}
+	if strings.TrimSpace(pair.RefreshToken) != "" {
+		lsSet(authRefreshTokenKey, pair.RefreshToken)
+	}
+	if pair.ExpiresInSeconds > 0 {
+		lsSet(authExpiresInKey, strconv.FormatInt(pair.ExpiresInSeconds, 10))
+		armProactiveRefresh(pair.ExpiresInSeconds)
+	}
+	stopBackendWatch()
+	startBackendWatch()
+}
+
+// armProactiveRefresh (re)starts the local countdown to the next proactive
+// refresh, firing at ~80% of the server-issued lifetime (TODOS.md C423): a
+// pure relative time.AfterFunc duration, derived only from the
+// server-supplied expiresInSeconds — never an absolute expiry timestamp
+// compared against time.Now() later, which a skewed device clock could get
+// wrong in either direction (refreshing needlessly early, or never firing
+// because "now" never appears to reach a bad deadline).
+func armProactiveRefresh(expiresInSeconds int64) {
+	if expiresInSeconds <= 0 {
+		return
+	}
+	d := time.Duration(float64(expiresInSeconds) * 0.8 * float64(time.Second))
+	if d <= 0 {
+		return
+	}
+	proactiveRefreshMu.Lock()
+	defer proactiveRefreshMu.Unlock()
+	if proactiveRefreshTimer != nil {
+		proactiveRefreshTimer.Stop()
+	}
+	proactiveRefreshTimer = time.AfterFunc(d, func() {
+		pr := uistate.LoadPrefs().Normalize()
+		if !pr.BackendActive() || !hasRotatableSession() {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		refreshAccessToken(ctx, pr)
+	})
+}
+
+// stopProactiveRefreshTimer cancels the pending countdown, if any — part of
+// dropping to local-only (degradeToLocalOnly) and of tearing down sync
+// (stopBackendWatch's caller sites), so a stale timer never fires a refresh
+// attempt for a session that no longer exists.
+func stopProactiveRefreshTimer() {
+	proactiveRefreshMu.Lock()
+	defer proactiveRefreshMu.Unlock()
+	if proactiveRefreshTimer != nil {
+		proactiveRefreshTimer.Stop()
+		proactiveRefreshTimer = nil
+	}
+}
+
+// degradeToLocalOnly is the C427 graceful-degrade path: the refresh token
+// itself came back rejected (expired/revoked), so there is no credential
+// left worth keeping. It clears every locally stored credential (the
+// rotated session AND, since a rotatable session implies this was never the
+// static self-host token, the prefs-level ServerToken/BackendDisabled too),
+// tears down the watch, and settles the sync chip on "local" — silently, no
+// error dialog. The encrypted dataset already on disk is untouched and
+// fully usable; only cloud sync stops.
+func degradeToLocalOnly() {
+	lsRemove(authAccessTokenKey)
+	lsRemove(authRefreshTokenKey)
+	lsRemove(authExpiresInKey)
+	stopProactiveRefreshTimer()
+	stopBackendWatch()
+	pr := uistate.LoadPrefs()
+	pr.ServerToken = ""
+	pr.BackendDisabled = true
+	uistate.PersistPrefs(pr.Normalize())
+	setSyncStatus(syncStatus{State: "local"})
+}
+
+// restoreTokenLifecycleOnBoot rearms the proactive refresh countdown for a
+// session that already had a rotated token pair when this page loaded (e.g.
+// a reload mid-session). It restarts the countdown from the FULL
+// server-issued duration rather than trying to account for time already
+// elapsed in a prior page load — consistent with never trusting a stored
+// wall-clock deadline; the reactive fallback covers the (rare) case where
+// that restarted countdown undershoots and the access token expires before
+// it fires.
+func restoreTokenLifecycleOnBoot() {
+	if !hasRotatableSession() {
+		return
+	}
+	raw := strings.TrimSpace(lsGet(authExpiresInKey))
+	if raw == "" {
+		return
+	}
+	seconds, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || seconds <= 0 {
+		return
+	}
+	armProactiveRefresh(seconds)
+}
+
 func startBackendSync() {
 	// Don't wire up auto-sync (or its visibility/focus/online listeners) when the
 	// backend is off or unconfigured — otherwise the app dials a websocket on load
@@ -72,6 +341,7 @@ func startBackendSync() {
 	if !uistate.LoadPrefs().Normalize().BackendActive() {
 		return
 	}
+	restoreTokenLifecycleOnBoot()
 	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
@@ -195,15 +465,15 @@ func flushBackendSyncQueue() {
 		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "offline", Pending: len(queue), Message: "backend unavailable"})
 			logSyncError("backend sync dial failed", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { conn.Close() }()
 		for _, item := range queue {
-			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, item.WorkspaceID, []byte(item.Dataset))
+			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
@@ -212,7 +482,7 @@ func flushBackendSyncQueue() {
 				return
 			}
 			var resp backendrpc.PutWorkspaceResponse
-			err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+			err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
 				Workspace: backendrpc.Workspace{
 					ID:       item.WorkspaceID,
 					Name:     item.Name,
@@ -222,7 +492,7 @@ func flushBackendSyncQueue() {
 				},
 				Dataset:         dataset,
 				ClientUpdatedAt: item.ClientUpdatedAt,
-			}, &resp, backendrpc.JSONCallOptions()...)
+			}, &resp)
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
@@ -349,7 +619,7 @@ func runBackendWatch(ctx context.Context) {
 		if !pr.BackendActive() {
 			return
 		}
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			logSyncError("backend sync watch dial failed", err)
 			if !sleepBackoff() {
@@ -363,6 +633,18 @@ func runBackendWatch(ctx context.Context) {
 		}
 		if err == nil {
 			err = stream.CloseSend()
+		}
+		if err != nil && isAuthError(err) {
+			// Reactive fallback (C423) for the watch stream: one refresh
+			// attempt now, so the NEXT reconnect (right below, via the
+			// normal backoff loop) dials with a live token instead of
+			// repeating the same failure until a proactive refresh happens
+			// to land. A successful refresh here also resets the backoff
+			// via the attempt=0 below, so the reconnect is prompt, not
+			// delayed by whatever backoff this failed attempt earned.
+			if refreshAccessToken(ctx, pr) {
+				attempt = 0
+			}
 		}
 		if err == nil {
 			// Reconcile on every RE-subscribe: the server streams only FUTURE
@@ -428,14 +710,14 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			logSyncError("backend sync dial failed", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { conn.Close() }()
 		var resp backendrpc.GetWorkspaceResponse
-		err = conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp, backendrpc.JSONCallOptions()...)
+		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: "pull failed"})
@@ -444,7 +726,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		if !resp.Found || len(resp.Dataset) == 0 {
 			return
 		}
-		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, w.ID, resp.Dataset)
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), w.ID, resp.Dataset)
 		if errors.Is(err, errSyncDatasetLocked) {
 			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
 			// the server keeps it, and onAppUnlocked re-pulls once the passcode is known.
@@ -614,21 +896,21 @@ func resolveConflictKeepLocal() {
 		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "error", Pending: 0, Message: "backend unavailable"})
 			logSyncError("conflict resolve-keep dial failed", err)
 			return
 		}
-		defer conn.Close()
-		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, item.WorkspaceID, []byte(item.Dataset))
+		defer func() { conn.Close() }()
+		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 		if err != nil {
 			setSyncStatus(syncStatus{State: "error", Message: "artifact upload failed"})
 			logSyncError("conflict resolve-keep artifact upload failed", err)
 			return
 		}
 		var resp backendrpc.PutWorkspaceResponse
-		err = conn.Invoke(ctx, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
 			Workspace: backendrpc.Workspace{
 				ID:       item.WorkspaceID,
 				Name:     item.Name,
@@ -639,7 +921,7 @@ func resolveConflictKeepLocal() {
 			Dataset:         dataset,
 			ClientUpdatedAt: item.ClientUpdatedAt,
 			Force:           true, // bypass LWW staleness check — user chose "keep local"
-		}, &resp, backendrpc.JSONCallOptions()...)
+		}, &resp)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "error", Message: "force push failed"})
 			logSyncError("conflict resolve-keep force push failed", err)
@@ -672,16 +954,16 @@ func resolveConflictUseServer() {
 		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: pr.ServerToken})
+		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			// Revert to conflict so the chip still offers the modal.
 			setSyncStatus(syncStatus{State: "conflict", Message: "backend unavailable"})
 			logSyncError("conflict resolve-server dial failed", err)
 			return
 		}
-		defer conn.Close()
+		defer func() { conn.Close() }()
 		var resp backendrpc.GetWorkspaceResponse
-		err = conn.Invoke(ctx, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: wID}, &resp, backendrpc.JSONCallOptions()...)
+		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: wID}, &resp)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "conflict"})
 			logSyncError("conflict resolve-server pull failed", err)
@@ -693,7 +975,7 @@ func resolveConflictUseServer() {
 			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 			return
 		}
-		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, pr.ServerToken, wID, resp.Dataset)
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), wID, resp.Dataset)
 		if errors.Is(err, errSyncDatasetLocked) {
 			// Can't apply the server copy while locked — keep the conflict and tell the
 			// user to unlock first; the choice re-runs once the passcode is known.

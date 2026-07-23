@@ -170,6 +170,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Reap orphaned partial-upload artifacts from interrupted BlobService
+	// streaming uploads (TODOS.md C444) — otherwise they'd silently consume
+	// the C434 storage quota forever. Tied to the same shutdown context as
+	// the HTTP server; stopBlobCleanup blocks until its goroutine exits so
+	// shutdown doesn't return while a sweep is still touching disk.
+	stopBlobCleanup := server.StartBlobCleanup(ctx, cfg.DataDir, 0, 0, logger)
+	defer stopBlobCleanup()
+
 	select {
 	case err := <-errc:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {

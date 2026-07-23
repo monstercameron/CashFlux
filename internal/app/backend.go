@@ -21,10 +21,19 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 )
+
+// blobStreamChunkBytes is the size of each UploadBlob/DownloadBlob stream
+// message on the client side — must match the server's expectations only in
+// spirit (either side may chunk differently; the protocol reassembles by
+// concatenation), kept the same as the server's constant for symmetry.
+const blobStreamChunkBytes = 64 << 10
 
 const defaultBackendURL = "http://127.0.0.1:8081"
 
@@ -399,16 +408,26 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	return store.Export(ds)
 }
 
+// uploadBackendArtifactBlob uploads an artifact's bytes over the authenticated
+// BlobService gRPC stream (TODOS.md C426), replacing the former REST
+// PUT /v1/blobs/{hash}?workspaceId=... call. workspaceID IS sent to the
+// server (as UploadBlobHeader.WorkspaceID): the server verifies the caller
+// owns that workspace and links the committed blob to it — the same
+// LinkWorkspaceBlob step blob_http.go's handlePutBlob performs. Without it,
+// the blob is never attributed to anyone: BlobService's quota accounting
+// (Store.UserBlobBytes) sums bytes reachable through workspace_blobs links,
+// so an unlinked upload silently never counts against the account's storage
+// cap, and DownloadBlob has nothing to scope tenant access by.
 func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID string, art domain.Artifact) (domain.BlobRef, error) {
 	// When encryption is active the server stores ciphertext — it never sees the
-	// plaintext bytes. The payload is the encrypted envelope; Content-Type is set
-	// to application/octet-stream so the real MIME is not leaked. The artifact's
+	// plaintext bytes. The payload is the encrypted envelope; MIME is reported as
+	// application/octet-stream so the real MIME is not leaked. The artifact's
 	// MIME is preserved in the dataset record (which is itself encrypted at rest),
 	// so the client can still render the blob correctly after decryption.
 	payload := art.Bytes
-	contentType := strings.TrimSpace(art.MIME)
-	if contentType == "" {
-		contentType = "application/octet-stream"
+	mime := strings.TrimSpace(art.MIME)
+	if mime == "" {
+		mime = "application/octet-stream"
 	}
 	if datasetEncryptionActive() {
 		enc, err := encryptArtifactSync(art.Bytes)
@@ -416,48 +435,72 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 			return domain.BlobRef{}, fmt.Errorf("blob upload: encrypt artifact: %w", err)
 		}
 		payload = enc
-		contentType = "application/octet-stream"
+		mime = "application/octet-stream"
 	}
 
 	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])
-	blobURL := normalizedBackendEndpoint(endpoint) + "/v1/blobs/" + hash + "?workspaceId=" + url.QueryEscape(workspaceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, blobURL, bytes.NewReader(payload))
+	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
+	size, err := uploadBlobStream(ctx, pr, hash, payload, mime, true)
 	if err != nil {
 		return domain.BlobRef{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
-	req.Header.Set("Content-Type", contentType)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return domain.BlobRef{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return domain.BlobRef{}, fmt.Errorf("blob upload returned HTTP %d", resp.StatusCode)
 	}
 	// Store the real MIME in BlobRef so the client can render the artifact. Size
 	// reflects the on-wire payload (ciphertext) for storage accounting; the
 	// artifact domain record carries the unencrypted Size separately.
-	return domain.BlobRef{Hash: hash, MIME: art.MIME, Size: len(payload)}, nil
+	return domain.BlobRef{Hash: hash, MIME: art.MIME, Size: int(size)}, nil
 }
 
+// uploadBlobStream drives one UploadBlob client stream: a header chunk
+// (hash + declared size) followed by fixed-size data chunks, then reads the
+// server's single UploadBlobResponse. On an Unauthenticated failure it
+// performs the same C423 reactive fallback as the unary call sites — one
+// RefreshToken attempt, then retries the whole stream exactly once with the
+// refreshed token — since a half-sent client stream cannot be resumed
+// in place; retrying from the top is the correct (and only) recovery.
+func uploadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, payload []byte, mime string, allowRetry bool) (int64, error) {
+	conn, err := dialAuthed(ctx, pr)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, backendrpc.MethodBlobUploadBlob, backendrpc.JSONCallOptions()...)
+	if err == nil {
+		err = stream.SendMsg(&backendrpc.UploadBlobChunk{Header: &backendrpc.UploadBlobHeader{
+			Hash: hash, DeclaredSizeBytes: int64(len(payload)), Mime: mime,
+		}})
+	}
+	for i := 0; err == nil && i < len(payload); i += blobStreamChunkBytes {
+		end := i + blobStreamChunkBytes
+		if end > len(payload) {
+			end = len(payload)
+		}
+		err = stream.SendMsg(&backendrpc.UploadBlobChunk{Data: payload[i:end]})
+	}
+	if err == nil {
+		err = stream.CloseSend()
+	}
+	var resp backendrpc.UploadBlobResponse
+	if err == nil {
+		err = stream.RecvMsg(&resp)
+	}
+	if err != nil {
+		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
+			return uploadBlobStream(ctx, uistate.LoadPrefs().Normalize(), hash, payload, mime, false)
+		}
+		return 0, err
+	}
+	return resp.Size, nil
+}
+
+// downloadBackendArtifactBlob downloads a content-addressed blob over the
+// authenticated BlobService gRPC stream (TODOS.md C426), replacing the
+// former REST GET /v1/blobs/{hash} call. workspaceID is accepted for
+// call-site compatibility (see uploadBackendArtifactBlob's note).
 func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID, hash string) ([]byte, error) {
-	blobURL := normalizedBackendEndpoint(endpoint) + "/v1/blobs/" + strings.TrimSpace(hash) + "?workspaceId=" + url.QueryEscape(workspaceID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, blobURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("blob download returned HTTP %d", resp.StatusCode)
-	}
-	raw, err := io.ReadAll(resp.Body)
+	_ = workspaceID
+	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
+	raw, err := downloadBlobStream(ctx, pr, hash, true)
 	if err != nil {
 		return nil, err
 	}
@@ -472,4 +515,41 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 		return plain, nil
 	}
 	return raw, nil
+}
+
+// downloadBlobStream drives one DownloadBlob server stream and concatenates
+// its chunks. Retry semantics mirror uploadBlobStream: an Unauthenticated
+// failure gets one refresh-then-retry-the-whole-stream attempt.
+func downloadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, allowRetry bool) ([]byte, error) {
+	conn, err := dialAuthed(ctx, pr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodBlobDownloadBlob, backendrpc.JSONCallOptions()...)
+	if err == nil {
+		err = stream.SendMsg(&backendrpc.DownloadBlobRequest{Hash: strings.TrimSpace(hash)})
+	}
+	if err == nil {
+		err = stream.CloseSend()
+	}
+	var out []byte
+	for err == nil {
+		var chunk backendrpc.DownloadBlobChunk
+		if recvErr := stream.RecvMsg(&chunk); recvErr != nil {
+			if recvErr == io.EOF {
+				break
+			}
+			err = recvErr
+			break
+		}
+		out = append(out, chunk.Data...)
+	}
+	if err != nil {
+		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
+			return downloadBlobStream(ctx, uistate.LoadPrefs().Normalize(), hash, false)
+		}
+		return nil, err
+	}
+	return out, nil
 }

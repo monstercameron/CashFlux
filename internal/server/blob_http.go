@@ -78,7 +78,8 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 }
 
 func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string, size int64, cfg Config) bool {
-	if cfg.StorageMaxBytes <= 0 && cfg.StorageWarnBytes <= 0 {
+	limit := storageLimitForUser(store, userID, cfg)
+	if limit <= 0 && cfg.StorageWarnBytes <= 0 {
 		return true
 	}
 	linked, err := store.UserBlobLinked(userID, hash)
@@ -95,7 +96,7 @@ func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string
 		return false
 	}
 	next := current + size
-	if cfg.StorageMaxBytes > 0 && next > cfg.StorageMaxBytes {
+	if limit > 0 && next > limit {
 		writeErrorJSON(w, ErrorReasonResourceExhausted, "storage quota exceeded")
 		return false
 	}
@@ -103,6 +104,28 @@ func withinStorageQuota(w http.ResponseWriter, store *Store, userID, hash string
 		w.Header().Set(storageWarningHeader, "storage quota warning")
 	}
 	return true
+}
+
+// storageLimitForUser resolves the storage quota that actually applies to
+// userID: the per-plan override for their current subscription plan
+// (Config.StorageLimitForPlan / StoragePlanBytesOverride, TODOS.md C439)
+// when billing is enabled and a subscription is on record, falling back to
+// the flat global Config.StorageMaxBytes for self-host deployments (billing
+// disabled) or a caller with no subscription row. Both storage-quota gates —
+// this file's withinStorageQuota (REST) and blobservice.go's
+// blobWithinStorageQuota (gRPC BlobService) — consult this single function,
+// so a per-plan override is actually enforced everywhere it is already
+// reported (accountservice.go's GetEntitlement and admin_manage.go's admin
+// view both surface StorageLimitForPlan's number as if it were the real cap).
+func storageLimitForUser(store *Store, userID string, cfg Config) int64 {
+	if !cfg.Billing || store == nil {
+		return cfg.StorageMaxBytes
+	}
+	sub, ok, err := store.GetSubscription(userID)
+	if err != nil || !ok {
+		return cfg.StorageMaxBytes
+	}
+	return cfg.StorageLimitForPlan(sub.Plan)
 }
 
 func handleGetBlob(cfg Config, store *Store) http.HandlerFunc {
