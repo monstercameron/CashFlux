@@ -1,3 +1,36 @@
+## 2026-07-23 — What the adversarial review's own blind spot looked like
+
+A post-commit automated security scan on the just-pushed Custom Sync commits caught something the
+four-lens adversarial review (see the entry below) missed entirely: `uploadBackendArtifactBlob`/
+`downloadBackendArtifactBlob` in `internal/app/backend.go` received a `workspaceID` parameter and
+never actually sent it to the server. The upload path's header never carried it at all — dropped
+silently between the function and its own call to `uploadBlobStream`, which didn't even have a
+parameter for it. The download path was more explicit about it: `_ = workspaceID`, discarded on
+purpose, with a comment claiming it was kept "for call-site compatibility." Both comments described
+intent, not actual behavior — a fabricated confidence that nothing downstream ever checked against
+reality.
+
+Consequence check mattered here: the server (correctly, from the earlier IDOR fix) fails closed on
+an empty workspace id, rejecting the request outright rather than serving it under weaker scoping.
+So this specific bug was "every real artifact upload/download is broken," not "anyone can read
+anyone's blobs" — a real correctness bug, not the security catastrophe it could have been if the
+server had failed open instead. That the *server* fails closed and the *client* still had this bug
+for as long as it did is exactly why defense in depth matters: one correct layer bought the time to
+find and fix the other one before it became exploitable.
+
+Why four dedicated attacker-lens reviews missed it: every lens was pointed at `internal/server/*`.
+Nobody was specifically asked "does the client actually send what the server now requires," and the
+e2e pass exercised BlobService's Go API directly rather than through this real client wrapper — so
+a code path that had *never had a single test at any layer* sailed through review clean simply
+because nothing ever looked at it. Fixed by pulling the wire-message construction into pure,
+no-build-tag helper functions (`backend.go` is `js && wasm`-gated, so its own logic can't be
+unit-tested on native Go) with tests that assert the workspace id is never silently dropped.
+
+Lesson for next time this pattern gets reused: an adversarial review is only as complete as its
+file list. Client-side call sites that thread security-relevant parameters into a server API need
+their own explicit hunt target — "does every caller of a now-hardened server method actually supply
+what it now requires" — not just "is the server method itself correct in isolation."
+
 ## 2026-07-23 — Token-refresh deadlock: a wasm scheduler bug that unit tests could never have caught
 
 Live browser testing of Custom Sync's token lifecycle surfaced something genuinely interesting:

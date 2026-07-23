@@ -441,7 +441,7 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])
 	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
-	size, err := uploadBlobStream(ctx, pr, hash, payload, mime, true)
+	size, err := uploadBlobStream(ctx, pr, workspaceID, hash, payload, mime, true)
 	if err != nil {
 		return domain.BlobRef{}, err
 	}
@@ -458,7 +458,7 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 // RefreshToken attempt, then retries the whole stream exactly once with the
 // refreshed token — since a half-sent client stream cannot be resumed
 // in place; retrying from the top is the correct (and only) recovery.
-func uploadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, payload []byte, mime string, allowRetry bool) (int64, error) {
+func uploadBlobStream(ctx context.Context, pr prefs.Prefs, workspaceID, hash string, payload []byte, mime string, allowRetry bool) (int64, error) {
 	conn, err := dialAuthed(ctx, pr)
 	if err != nil {
 		return 0, err
@@ -466,9 +466,9 @@ func uploadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, payload 
 	defer conn.Close()
 	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, backendrpc.MethodBlobUploadBlob, backendrpc.JSONCallOptions()...)
 	if err == nil {
-		err = stream.SendMsg(&backendrpc.UploadBlobChunk{Header: &backendrpc.UploadBlobHeader{
-			Hash: hash, DeclaredSizeBytes: int64(len(payload)), Mime: mime,
-		}})
+		err = stream.SendMsg(&backendrpc.UploadBlobChunk{
+			Header: buildUploadBlobHeader(workspaceID, hash, int64(len(payload)), mime),
+		})
 	}
 	for i := 0; err == nil && i < len(payload); i += blobStreamChunkBytes {
 		end := i + blobStreamChunkBytes
@@ -486,7 +486,7 @@ func uploadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, payload 
 	}
 	if err != nil {
 		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
-			return uploadBlobStream(ctx, uistate.LoadPrefs().Normalize(), hash, payload, mime, false)
+			return uploadBlobStream(ctx, uistate.LoadPrefs().Normalize(), workspaceID, hash, payload, mime, false)
 		}
 		return 0, err
 	}
@@ -495,12 +495,18 @@ func uploadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, payload 
 
 // downloadBackendArtifactBlob downloads a content-addressed blob over the
 // authenticated BlobService gRPC stream (TODOS.md C426), replacing the
-// former REST GET /v1/blobs/{hash} call. workspaceID is accepted for
-// call-site compatibility (see uploadBackendArtifactBlob's note).
+// former REST GET /v1/blobs/{hash} call. workspaceID IS sent to the server
+// (as DownloadBlobRequest.WorkspaceID): the server verifies the caller owns
+// that workspace and that the blob is linked to it before streaming any
+// bytes back — without it every request is rejected with InvalidArgument
+// (the server fails closed on an empty workspace id, per blobservice.go),
+// and dropping it silently here would have made every download impossible
+// rather than a bypass, but it's still the same class of bug as the upload
+// side: a required authorization-scoping parameter that must never be
+// silently discarded between a client wrapper and the wire.
 func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID, hash string) ([]byte, error) {
-	_ = workspaceID
 	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
-	raw, err := downloadBlobStream(ctx, pr, hash, true)
+	raw, err := downloadBlobStream(ctx, pr, workspaceID, hash, true)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +526,7 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 // downloadBlobStream drives one DownloadBlob server stream and concatenates
 // its chunks. Retry semantics mirror uploadBlobStream: an Unauthenticated
 // failure gets one refresh-then-retry-the-whole-stream attempt.
-func downloadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, allowRetry bool) ([]byte, error) {
+func downloadBlobStream(ctx context.Context, pr prefs.Prefs, workspaceID, hash string, allowRetry bool) ([]byte, error) {
 	conn, err := dialAuthed(ctx, pr)
 	if err != nil {
 		return nil, err
@@ -528,7 +534,7 @@ func downloadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, allowR
 	defer conn.Close()
 	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodBlobDownloadBlob, backendrpc.JSONCallOptions()...)
 	if err == nil {
-		err = stream.SendMsg(&backendrpc.DownloadBlobRequest{Hash: strings.TrimSpace(hash)})
+		err = stream.SendMsg(buildDownloadBlobRequest(workspaceID, strings.TrimSpace(hash)))
 	}
 	if err == nil {
 		err = stream.CloseSend()
@@ -547,7 +553,7 @@ func downloadBlobStream(ctx context.Context, pr prefs.Prefs, hash string, allowR
 	}
 	if err != nil {
 		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
-			return downloadBlobStream(ctx, uistate.LoadPrefs().Normalize(), hash, false)
+			return downloadBlobStream(ctx, uistate.LoadPrefs().Normalize(), workspaceID, hash, false)
 		}
 		return nil, err
 	}

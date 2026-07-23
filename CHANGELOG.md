@@ -80,6 +80,19 @@ and every commit updates this file under `Unreleased`.
   last-event-timestamp guard applied to every Stripe/PayPal subscription-mutating branch, proven
   with a test that reproduces exactly this out-of-order scenario.
 
+### Fixed
+- **Artifact upload/download workspace-id authorization gap (found post-merge by an automated
+  security scan, TODOS.md C426).** `uploadBackendArtifactBlob`/`downloadBackendArtifactBlob`
+  received a `workspaceID` parameter but never actually sent it to the server — the upload path's
+  header never carried it at all, and the download path explicitly discarded it — despite comments
+  claiming otherwise. The server fails closed on an empty workspace id, so this wasn't a live
+  cross-tenant read, but it meant every real artifact upload/download through the app was
+  hard-rejected. Root cause of the miss: the security review's data-integrity lens scrutinized the
+  server-side handler thoroughly but nothing specifically checked whether the client sends what the
+  server requires, and this client code had never had a single test at any layer. Fixed by
+  extracting message construction into pure, natively-testable helpers with regression tests
+  asserting the workspace id is never silently dropped.
+
 ### Changed
 - **Adversarial-review round: metrics sharding + watch-path completions (server hot path).**
   A Sonnet critic reviewed the prior optimization (verdict ITERATE) and re-reviewed the fixes

@@ -5565,6 +5565,20 @@ below (core first, enrollment doors next, lifecycle hardening last).
   claimed, though: `PUT/GET/HEAD /v1/blobs/{hash}` are still registered live in `http.go` —
   deliberately left as a rollback fallback per lane C's report ("retired once BlobService is
   proven"), not yet actually removed.)
+  (BUG FOUND POST-MERGE 2026-07-23, FIXED: a post-commit automated security scan caught what every
+  prior review missed — `uploadBackendArtifactBlob`/`downloadBackendArtifactBlob` (`backend.go`)
+  received `workspaceID` as a parameter but never actually threaded it into the wire message
+  (`uploadBlobStream` didn't even accept it as a parameter; the download side explicitly discarded
+  it with `_ = workspaceID`), despite comments claiming otherwise. The server fails closed on an
+  empty workspace id (confirmed: `InvalidArgument, "workspace id is required"`), so this wasn't a
+  live cross-tenant read — it meant every real artifact upload/download through the actual app was
+  hard-rejected. Root cause of the miss: the adversarial security review scrutinized
+  `blobservice.go` (server) thoroughly but no lens specifically checked whether the client actually
+  sends what the server now requires, and e2e testing exercised BlobService's Go API directly, never
+  through this real client wrapper. Fixed by extracting message construction into pure,
+  natively-testable helpers (`internal/app/blobmessages.go`) with regression tests asserting
+  WorkspaceID is never silently dropped — the file-level split from the initial commit meant this
+  code had never had a single test at any layer before this.)
 - [x] **C427 [MINOR][SYNC] Graceful degrade on unrecoverable auth failure.** A rejected refresh
   (expired from inactivity, or the device was revoked from the portal's device list) clears the
   local credential and drops to local-only silently — no error dialog, no data loss, the encrypted
