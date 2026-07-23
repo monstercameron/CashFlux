@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **FB-series backlog — external product-review deltas (docs).** Triaged a third-party review of
+  the deployed app + repo into `TODOS.md`: inline refinements to WF1 (acceptance metric = median
+  seconds per reviewed transaction, one-keypress confirm) and WF4 (per-account freshness model +
+  four-state visible labels), plus nine new tickets — FB1 staged boot text with recovery actions,
+  FB2 local review-throughput metric, FB3 "Mine/Ours/<Name>'s" ownership vocabulary, FB4
+  outcome-first onboarding ending on a concrete result, FB5 freshness caveats printed under
+  aggregate heroes, FB6 chrome data-safety status control (privacy ≠ durability), FB7
+  question-driven Reports IA, FB8 six-destination-nav research spike, FB9 "Refresh my finances"
+  guided ritual. Includes a stale-claims ledger (IA remap, dashboard attention banner, Allocate
+  advanced-sliders, AI determinism, report narratives — already shipped) so the discounted points
+  aren't re-litigated.
+
 ## [1.4.0] - 2026-07-23
 
 ### Added

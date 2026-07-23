@@ -42,6 +42,11 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   conflicts. Each row: **Fix · Correct · Snooze · Dismiss · Create task**, plus bulk actions. This is
   the single biggest quality-of-life win — it ends "patrol every page manually." (Extend the existing
   review-inbox surface into an all-signal queue; each signal type is a pure detector with tests.)
+  *Refined 2026-07-23 (external review):* the acceptance metric is **median seconds per reviewed
+  transaction** (see FB2) — one-keypress confirm for high-confidence rows, confidence-ordered queue,
+  modal interaction reserved for genuine ambiguity, session-wide undo. Speed is the spec, not a
+  nice-to-have; the queue also serves as the dashboard's attention feed (severity-ranked, not
+  tile-equal).
 - [ ] **WF2 — Cross-page Scenario Lab.** ★ Save & compare named scenarios (Baseline, lose 20% income,
   +$500/mo to debt, cancel selected subs, +5% savings, buy a home/car, cash→investments, retire a debt
   and redirect its payment). ONE scenario updates cash runway, low-balance dates, budgets, debt-free
@@ -57,6 +62,12 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   inconsistent currencies, accounts excluded from plans, estimated-vs-recorded values, calculation
   assumptions, last-update date, confidence. Every calculated insight traceable to its inputs. No
   competitor exposes the reliability of its own numbers — this strengthens every other feature.
+  *Refined 2026-07-23 (external review):* the per-account model is: last transaction date, last
+  balance date, **expected update cadence** (user-set), reconciliation state, source type
+  (imported/manual/calculated), confidence. Every aggregate derives a four-state freshness label —
+  **Current / Mostly current / Incomplete / Stale** — surfaced *in visible text*, not a tooltip
+  (see FB5 for the caveat-line spec, FB6 for the chrome status control, FB9 for the guided
+  refresh ritual).
 - [ ] **WF5 — Deterministic "What changed?" engine.** ★ Every major number answers "why is this
   different from last month?" with evidence: net worth (investments +$X, debt −$Y, cash −$Z), health
   (utilization up, savings down = −4), Dining (six extra restaurant buys), debt-free date (a minimum
@@ -314,6 +325,97 @@ legibility patterns inside our visual language, not their skin.
   the page title overlapping a translucent "CashFlux" wordmark. Either the route transition/skeleton
   fade is far too slow or an overlay lingers. Reproduce headless (fresh profile, sample data,
   navigate rail links, screenshot at +1s/+2.5s), then fix against the motion-spec tokens.
+
+### FB-series — external product review deltas (2026-07-23; repo-only reviewer)
+Source: a third-party review of the deployed app + repository. Calibration matters: the reviewer's
+browser **could not operate the wasm app** — it saw only the "Getting your money in order…" boot
+shell — so the capability inventory (read from the repo, e2e suites, and docs) is well-verified,
+while every *usability* judgment is inferred, not observed. Its central thesis ("a prioritized queue
+of financial conditions, decisions, and actions"; "more capability than the interface can explain")
+is the WF-series thesis independently re-derived — that convergence, plus my PiggySize teardown
+landing on the same gaps, settles that **WF1 + WF4 are the right next builds**. Refinements it
+sharpened are folded inline into WF1 (review-speed metric) and WF4 (freshness model + visible
+labels), dated 2026-07-23. This section holds only the genuine deltas.
+
+**Stale claims — checked and discounted, do not re-litigate:** "navigation reflects the domain
+model" (the §5 one-noun IA remap shipped 2026-06-28; what remains open is rail *count*, see FB8);
+"dashboard is an equal-weight mosaic" (Needs-attention banner leads, focus modes + auto-importance
+shipped; the remaining gap is queue semantics = WF1); "don't lead Allocate with raw sliders"
+(sliders already live in the Advanced panel; profiles + income nudge + apply-confirm shipped);
+"AI should never invent the number" (already law — CLAUDE.md rule 5 + WF-series preamble);
+"written conclusions above charts" (the Reports narrative/takeaway layer shipped — the *grouping*
+gap is FB7). The reviewer also never saw the health stress-tests, debt coaching, E1 what-changed
+card, or the agent tool-calling harness; its per-area scores are directional at best.
+
+- [ ] **FB1 — Boot-stage loading + recovery actions.** ★ Replace the indefinite branded spinner
+  with staged, truthful boot text driven by real milestones — "Starting CashFlux → Opening your
+  local database → Restoring your workspace → Calculating balances" — and, past a threshold
+  (~10s), recovery actions: **Retry · Start without cached data · Export diagnostics**. Never an
+  indefinite spinner: two independent probes (this reviewer's crawler and the PS-QA1 teardown
+  shots) both stalled on this exact shell, and any link-preview/SEO fetcher sees only the spinner
+  today. Pairs with PS-QA1; stages must come from actual boot phases, not timers.
+- [ ] **FB2 — Review-throughput metric: median seconds per reviewed transaction.** The sharpest
+  idea in the review — an *instrumentable* acceptance criterion for the whole review surface
+  instead of a feature list. Measure locally (no telemetry leaves the device): per-session median
+  time from row-focus to resolution, split by high-confidence vs ambiguous rows. Target order:
+  high-confidence rows resolve in **one keypress, ≪3s median**. Gates WF1 and WF7; surface the
+  number in dev/e2e (a Playwright review-session benchmark) so regressions in review speed fail
+  like perf ratchets do.
+- [ ] **FB3 — "Mine / Ours / <Name>'s" ownership vocabulary.** Replace system language
+  ("ownership scope", "member-owned") with the words households actually use: **Mine · Ours ·
+  Marcus's** in owner pickers, filters, chips, and report groupings. Note the review's "Theirs"
+  generalizes poorly past two members — use the member's name. Pure i18n + labeling pass over
+  existing owner plumbing; fits the plain-English rule; keep the precise terms in docs/formulas.
+- [ ] **FB4 — Outcome-first onboarding.** ★ The one P0 gap with the least existing coverage: the
+  /setup wizard ends on configuration (currency → income → account → members) and an empty-ish
+  dashboard, not a result. Reshape: **Step 1 — choose the outcome** (Understand my spending /
+  Build a budget / Pay down debt / Grow savings / Manage a household / Explore with sample data);
+  **Step 2 — one financial source** (import a statement / add one account / load the demo
+  household); **Step 3 — review what came in**; **Step 4 — confirm current balances**; **Step 5 —
+  first plan**, ending on a concrete success sentence: *"You have about $1,240 left after this
+  month's expected obligations — here's a proposed allocation."* The chosen outcome should also
+  set the initial dashboard focus mode and nav emphasis. Extends R5/F1; the sample-data path stays
+  one click the whole way.
+- [ ] **FB5 — Freshness caveat printed under aggregates.** Concrete UI spec for WF4's output:
+  headline numbers carry a visible one-line provenance caveat — *"Net worth $81,425 — based on 8
+  current accounts and 2 balances older than 30 days"* — on net worth, safe-to-spend, runway,
+  health, and forecast heroes, with the four-state freshness label and a click-through to the
+  Data-Quality Center. Visible text, not a tooltip; density-mode aware; i18n keys.
+- [ ] **FB6 — Data-safety status control in the chrome.** One compact, always-visible control
+  unifying privacy + durability + freshness: **"Stored locally · Last backup 8 days ago · 3
+  accounts need updates."** Clicking opens a Data-safety center: where data lives, backup
+  status/restore preview, export, encryption state, sync opt-in state, AI-sharing state, device
+  limitations. Key insight worth quoting: *local-first users read "everything stays in your
+  browser" as "safely backed up" — privacy and durability are different promises.* Prompt for a
+  first encrypted export once a meaningful dataset exists (site-data clearing, profile deletion,
+  and storage eviction are real loss paths). Extends WF-BACKUP + F44 + the /about privacy cards
+  into an *operating surface*, not prose.
+- [ ] **FB7 — Question-driven Reports IA.** Reorganize Reports around the questions users return
+  with, not report names: **Where did my money go? · Am I improving? · Can I afford this? · What
+  changed? · Is my data trustworthy?** Each section leads with a written conclusion (the shipped
+  takeaway/narrative layer, extended) and charts support the answer beneath. "What changed?" is
+  WF5's surface; "Is my data trustworthy?" is WF4's; "Can I afford this?" links the planning
+  tools. Mostly re-grouping + narrative coverage, not new computation.
+- [ ] **FB8 — Six-destination navigation (RESEARCH ONLY — do not implement on this evidence).**
+  The review proposes collapsing the rail to six jobs (Home / Activity / Plan / Upcoming /
+  Reports / Tasks) with everything else nested beneath. This conflicts with the shipped one-noun
+  remap and was proposed by someone who never saw the rail; but the underlying claim — ~27
+  peer-level destinations exceed a mental model — is plausible and now made twice (cf. PS11/PS12
+  discoverability). Research: card-sort / findability comparison of current grouping vs a
+  six-hub prototype behind a preference flag; measure task-finding, not opinions. Composes with
+  B5/B7/B8 rail work; any outcome must keep deep-links stable.
+- [ ] **FB9 — "Refresh my finances" guided ritual.** A freshness-scoped guided flow (distinct
+  from WF3's month close): walk the user through exactly what's out of date, in order — *"Chase
+  needs a June statement → Apple Card has 14 imported txns to review → mortgage balance is 51
+  days old → cash account isn't reconciled → 2 possible duplicates."* Turns the manual-import
+  weakness into an organized 10-minute ritual with a clean "everything current" end state that
+  stamps freshness. Sources WF4's model, drains into WF1's queue; likely the same detectors with
+  a sequenced, completable presentation.
+
+**Positioning note (feeds PS22 / marketing, not a code ticket):** the review's framing is worth
+keeping verbatim — *"a local-first financial planning and control system for people who want every
+number explained and every problem tracked to resolution"* — with the honest caveat pair: privacy ≠
+durability, and no-bank-sync means freshness is a product surface (WF4/FB5/FB9), not a footnote.
 
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on

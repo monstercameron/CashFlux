@@ -1,3 +1,34 @@
+## 2026-07-23 — External review triage → FB-series + WF1/WF4 refinements (docs, no code)
+
+Cam brought in a third-party review of the deployed app and asked for it to be folded into the
+backlog. The triage principle: calibrate first, then dedupe, then keep only deltas. Calibration —
+the reviewer's browser never got past the "Getting your money in order…" boot shell, so the
+capability inventory (read from repo + e2e suites) is solid while every usability score is
+inference. Its central thesis is the WF-series thesis independently re-derived, which is the real
+news: three independent reviews (2026-07-21 pair, PiggySize teardown, this) now converge on the
+same top gaps, so WF1 (review inbox) + WF4 (data quality) are settled as the next builds.
+
+Two tickets got sharper rather than new: WF1 now carries the review's best idea as its acceptance
+metric — **median seconds per reviewed transaction**, measured locally, one-keypress confirm for
+high-confidence rows — and WF4 gained the concrete per-account freshness model (last txn/balance
+dates, expected cadence, reconciliation state, source, confidence → Current / Mostly current /
+Incomplete / Stale, always visible text). Nine genuine deltas became the FB-series: staged boot
+text + recovery actions (FB1 — pairs with PS-QA1; two independent probes have now stalled on that
+shell), the throughput metric as a ratchet (FB2), Mine/Ours/<Name>'s vocabulary (FB3), outcome-first
+onboarding that ends on "you have ~$1,240 left — here's a proposed allocation" instead of an empty
+dashboard (FB4 — the one P0 gap with the least existing coverage), freshness caveats under hero
+numbers (FB5), a chrome data-safety control unifying privacy/backup/freshness (FB6 — their
+sharpest observation: users read "stays in your browser" as "backed up"; privacy and durability
+are different promises), question-driven Reports grouping (FB7), the six-hub nav collapse filed as
+research-only since it contradicts the shipped one-noun remap and came from someone who never saw
+the rail (FB8), and a guided "refresh my finances" ritual (FB9). A stale-claims ledger sits in the
+section preamble so nobody re-litigates the parts the reviewer got wrong for lack of a working
+browser (attention banner, IA remap, Allocate's advanced-panel sliders, AI-determinism rule,
+report narratives — all already shipped).
+
+Mid-edit note: another session cut release 1.4.0 while this was in flight, so the CHANGELOG entry
+went into a fresh Unreleased section; commit stayed pathspec-scoped to the three doc files.
+
 ## 2026-07-23 — PiggySize teardown → PS-series backlog (research, no code)
 
 Cam asked for a competitor read of piggysize.com. Fetched their marketing pages and drove the live
