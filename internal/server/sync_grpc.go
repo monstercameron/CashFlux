@@ -197,7 +197,10 @@ func (s *SyncService) WatchWorkspacesRPC(req backendrpc.WatchWorkspacesRequest, 
 				statusCode = status.Code(err).String()
 				return err
 			}
-			s.updateWatchQueueDepth()
+			// No per-delivery depth refresh: the gauge is maintained by the
+			// (throttled) publish path and by subscribe/unsubscribe. Walking
+			// the full watch registry here cost O(all watchers) per DELIVERED
+			// event — the same hot-path scan the publish throttle removed.
 		}
 	}
 }

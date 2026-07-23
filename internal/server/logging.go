@@ -233,6 +233,17 @@ func LoggingStreamInterceptor(logger *slog.Logger, metrics *Metrics) grpc.Stream
 }
 
 func logRPC(ctx context.Context, logger *slog.Logger, method, code string, elapsed time.Duration, err error) {
+	// The context lookups and arg-slice construction below run on every RPC;
+	// skip all of it when the target level is disabled (production installs
+	// commonly run at warn to cut log volume) instead of paying the boxing
+	// and appends just for slog to discard the record.
+	level := slog.LevelInfo
+	if err != nil {
+		level = slog.LevelError
+	}
+	if !logger.Enabled(ctx, level) {
+		return
+	}
 	id, _ := RequestIDFromContext(ctx)
 	args := []any{
 		"request_id", id,

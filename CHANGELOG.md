@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Adversarial-review round: metrics sharding + watch-path completions (server hot path).**
+  A Sonnet critic reviewed the prior optimization (verdict ITERATE) and re-reviewed the fixes
+  (verdict SHIP). Landed: (1) removed the surviving unthrottled O(all-watchers) registry walk
+  that ran per *delivered* watch event in `sync_grpc.go`; (2) **sharded the single global
+  `Metrics.mu`** into per-family locks with atomics for scalar counters and one merged critical
+  section for HTTP observe+bucket — the critic's re-analysis showed this global mutex (taken
+  2–7× per RPC via interceptor + handler + per-DB-call observations) was the true mechanism
+  behind the earlier pull/list p95 collapse, since those RPCs never touch `watchMu`;
+  (3) watch-drop counting moved to a properly-typed `cashflux_sync_watch_dropped_total` counter
+  (was a monotonic value mislabeled inside the `cashflux_queue_depth` gauge family); (4) the
+  redundant CAS gate simplified to a plain monotonic `time.Time` under `watchMu`; (5) `logRPC`
+  now early-returns via `logger.Enabled` before building arg slices (per-RPC savings on
+  warn-level production installs). Prometheus output is byte-compatible aside from the additive
+  counter block. Re-benchmark on the now-shared desktop sat within the measured variance band
+  (push p95 662–780ms vs a single 610ms prior run; pull/list tails held at improved levels);
+  the isolated-box ladder remains the arbiter. Flagged for whoever owns the frozen
+  `repository.go` next: `SoftDeleteWorkspace` doesn't bump `Version`, so a pre-delete ETag can
+  return `NotModified` after deletion, and `Delete()` double-fetches to build its publish
+  payload.
 - **Sync watch hot-path optimization (`internal/server/sync.go`).** The workspace-watch queue-depth
   gauge walked every channel of every connected watcher under the global watch mutex on EVERY
   publish — O(all watchers) per push, measured as the dominant publish cost at 100+ watchers. Now

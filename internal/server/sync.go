@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -33,11 +32,9 @@ type SyncService struct {
 	// watchDepthNext throttles the queue-depth gauge recomputation: the gauge
 	// walks every watcher channel, which is O(all connected watchers) and runs
 	// under watchMu — unthrottled it turns every publish into a full-registry
-	// scan (measured as the dominant publish cost at 100+ watchers).
-	watchDepthNext atomic.Int64
-	// watchDrops counts watch events discarded because a subscriber's buffer
-	// was full; exported so silent staleness is at least visible.
-	watchDrops atomic.Int64
+	// scan. Guarded by watchMu (every writer holds it), so a plain time.Time
+	// with Go's monotonic clock suffices — no atomics needed.
+	watchDepthNext time.Time
 }
 
 // watchDepthEvery bounds how often the O(watchers) depth gauge recomputes.
@@ -243,7 +240,7 @@ func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {
 		default:
 			// Subscriber buffer full: the event is dropped rather than
 			// blocking the publisher. Count it so staleness is observable.
-			s.watchDrops.Add(1)
+			s.metrics.ObserveWatchDropped()
 		}
 	}
 	s.maybeUpdateWatchDepthLocked()
@@ -251,21 +248,19 @@ func (s *SyncService) publishWorkspace(userID string, workspace Workspace) {
 
 // maybeUpdateWatchDepthLocked recomputes the O(all watchers) depth gauge at
 // most once per watchDepthEvery, so hot publish paths never pay a
-// full-registry walk. Callers must hold watchMu.
+// full-registry walk. Callers must hold watchMu, which also guards
+// watchDepthNext; time.Time comparison uses Go's monotonic clock, so a
+// wall-clock step cannot stall the gate.
 func (s *SyncService) maybeUpdateWatchDepthLocked() {
 	if s.metrics == nil {
 		return
 	}
-	now := time.Now().UnixNano()
-	next := s.watchDepthNext.Load()
-	if now < next {
+	now := time.Now()
+	if now.Before(s.watchDepthNext) {
 		return
 	}
-	if !s.watchDepthNext.CompareAndSwap(next, now+int64(watchDepthEvery)) {
-		return
-	}
+	s.watchDepthNext = now.Add(watchDepthEvery)
 	s.updateWatchQueueDepthLocked()
-	s.metrics.SetQueueDepth("workspace_watch_dropped_total", s.watchDrops.Load())
 }
 
 func (s *SyncService) updateWatchQueueDepth() {

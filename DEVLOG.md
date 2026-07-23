@@ -1,3 +1,38 @@
+## 2026-07-23 — Adversarial review round: the critic was right about the mechanism
+
+Cam asked for an adversarial subagent review of the optimization plus a hunt for more. One
+sequential Sonnet critic, per the standing loop (ITERATE → fix → re-review → SHIP). It earned
+its tokens twice over. First catch: my fix was incomplete — an identical unthrottled
+O(all-watchers) registry walk survived in the Watch stream's consumer loop (sync_grpc.go:200),
+running once per DELIVERED event; under fan-out that's strictly more often than per-publish.
+Second and better catch: **my causal story was wrong.** Pull and List never touch watchMu, so
+the watcher-walk theory couldn't explain their p95 collapse. The critic traced the real
+mechanism: the old per-publish gauge update ended in Metrics.mu — a single global mutex that
+EVERY RPC already takes 2–7 times (ObserveGRPC in the interceptor, ObserveSyncPull/Push in
+handlers, and one ObserveDB per store call). Throttling the publish path had accidentally
+relieved a global-lock contention problem. Lesson recorded: a benchmark win with the wrong
+mechanism attribution will misdirect the next optimization — adversarial verification of the
+*explanation*, not just the diff, is what caught it.
+
+Landed (all in clean files, WIP untouched): consumer-loop walk removed; Metrics.mu sharded into
+per-family mutexes with atomics for scalars (streams/blob/AI/LWW), ObserveHTTP's double-lock
+merged, snapshot() taking family locks in turn (Prometheus output byte-parity verified by the
+critic, one additive counter block); watch drops now a properly-typed
+cashflux_sync_watch_dropped_total counter; the needless CAS gate simplified to a monotonic
+time.Time under watchMu; logRPC gated on logger.Enabled before any arg building. Full server
+suite + loadgen suite green. Re-benchmark: the shared desktop has become the noise floor
+(other sessions building/testing) — steady-500 push p95 662–780ms across three runs vs 610ms
+in one pre-change run, pull/list tails holding at improved levels throughout; within variance,
+no regression, and the sharding's benefit has no clean single-metric signature on a co-located
+box anyway. The rented-box ladder stays the arbiter.
+
+Blocked correctness item flagged by the critic, owner = whoever picks up frozen repository.go:
+SoftDeleteWorkspace updates deleted/updated_at/device_id but NOT version, while workspaceETag
+keys purely on Version — so a conditional GetWorkspace with a pre-delete ETag returns
+NotModified after deletion (client never learns of the delete if the watch event was also
+dropped). Same function should return the updated row (RETURNING) so Delete() stops
+double-fetching to build its publish payload.
+
 ## 2026-07-23 — Optimize → re-benchmark: watch hot path, −42% push p95 at 500 clients
 
 Cam: optimize what you can without clobbering in-development files, get costs lower and scaling
