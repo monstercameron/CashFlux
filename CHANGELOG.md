@@ -46,6 +46,10 @@ and every commit updates this file under `Unreleased`.
   the card view's single delete — no modal.
 - **Split-editor row separators.** Category-split rows now have a hairline + padding between them so
   multiple breakdowns don't visually blur together.
+- **Add-follow-up-task action in the merchant trend popover.** The merchant spending-trend popover (the
+  one with the sparkline graph, opened from a transaction row's trend chip) now has an "Add follow-up
+  task…" button that seeds a task pre-linked to the transaction — matching the ⋯ → History modal. (Same
+  coworker feedback #3, but on the graph popover the coworker actually meant.)
 - **Configurable timeframe in the transaction history popover.** The per-transaction history modal now
   has a Timeframe filter (All time / 90 / 30 / 7 days) that scopes the change list to a recent window;
   the choice persists across reopens, and an empty window says so and points you to widen it. (Coworker

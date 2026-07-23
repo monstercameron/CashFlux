@@ -19,6 +19,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/merchantstats"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -362,6 +363,20 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		e.StopPropagation()
 		ensureOpen()
 	})
+	// Add-follow-up-task action inside the trend popover (parity with the ⋯ → History
+	// modal): seed the task add form pre-linked to this transaction, then close the
+	// popover. Its hook sits here at a stable position, never inside the row loop.
+	onFollowUp := ui.UseEvent(func(e ui.Event) {
+		e.PreventDefault()
+		e.StopPropagation()
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title:    uistate.T("transactions.followUpTaskTitle", props.Merchant),
+			LinkType: string(domain.RelatedTransaction),
+			LinkID:   props.TxnID,
+		})
+		uistate.SetAddTarget("task")
+		st.Set(mtrendState{}) // close the popover; the task modal takes over
+	})
 
 	s := st.Get()
 	var pop ui.Node = Fragment()
@@ -375,7 +390,14 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 			body = Span(css.Class("muted"), uistate.T("merchantTrend.none"))
 		default:
 			body = Div(css.Class("mtrend-card"),
-				merchantStoryNodes(s.Stats, props.Merchant, s.Base, s.Mag, s.HasMag))
+				merchantStoryNodes(s.Stats, props.Merchant, s.Base, s.Mag, s.HasMag),
+				Div(css.Class(tw.Mt2), Style(map[string]string{
+					"border-top": "1px solid var(--border)", "padding-top": "0.5rem", "margin-top": "0.5rem"}),
+					Button(css.Class("btn btn-sm"), Type("button"),
+						Style(map[string]string{"width": "100%", "justify-content": "center", "white-space": "nowrap"}),
+						Attr("data-testid", "mtrend-followup-"+props.TxnID),
+						OnClick(onFollowUp),
+						Span(uistate.T("transactions.followUpTask")))))
 		}
 		pop = Div(ClassStr("add-menu mtrend-pop"), Attr("role", "dialog"),
 			Attr("data-testid", "mtrend-pop-"+props.TxnID),

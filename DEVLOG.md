@@ -29,6 +29,28 @@ screen renders every string through `T`), so the zero-hardcoded-copy ratchet hol
 Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
 (future-period projections so navigating forward shows projected, not empty, values).
 
+## 2026-07-23 — follow-up action on the merchant trend popover — feedback #3 (the graph one)
+
+Cam clarified that the "transaction history popover" the coworker meant for the add-a-todo action was
+the merchant spending-trend popover — the one with the sparkline graph, opened from a row's trend
+chip — not the ⋯ → History audit modal (where I'd already put it). Added the same "Add follow-up task…"
+button to `merchant_trend.go`'s popover: an `onFollowUp` hook at a stable position seeds the task add
+form pre-linked to the transaction and closes the popover so the task modal takes over. Reused the
+existing `transactions.followUpTask*` copy.
+
+`merchant_trend.go` showed as modified in `git status` but had an EMPTY content diff (a CRLF/mtime
+touch, not another agent's WIP — confirmed with `git diff` + word-diff), so it was safe to edit and
+commit without sweeping anyone's work. `rules_merchanttrend.go` DID have a real one-line WIP edit, so
+I styled the button inline (full-width, centered, nowrap) instead of touching that file. Dropped the
+icon so the label fits the narrow popover without clipping (verified scrollWidth == clientWidth).
+
+Process gotcha worth recording: the running gwc dev server rebuilds `web/bin/main.wasm` on save but
+does NOT regenerate `main.wasm.gz`, and `index.html` fetches the `.gz` first — so my ~7-hour-old
+manual `.gz` was silently shadowing every hot-reload (the button was in the wasm but the browser ran
+stale gz). Deleted `main.wasm.gz` for the dev-server workflow; the browser now falls back to the
+freshly-built `main.wasm` each reload (two harmless 404s for the missing gz). The `.gz` is git-ignored,
+so this is a local-only change; production deploys still ship both.
+
 ## 2026-07-23 — configurable timeframe in the txn history popover — feedback #7
 
 Coworker: *"Txn history popover — allow configurable timeframes."* Same popover as #3 (the
