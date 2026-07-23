@@ -31,6 +31,8 @@ and every commit updates this file under `Unreleased`.
   bill compares fairly against a monthly one. Header shows total committed ≈ per month; footer links to
   the full `/recurring` surface. Reads confirmed recurrings (`app.Recurring()`), so every row is real.
   (Coworker feedback #5 — "show detected recurring transactions, frequency is important.")
+  The "Committed ≈ /month" figure counts spending recurrings only — a detected paycheck is still
+  listed, but doesn't understate what's actually spoken-for — and rows sort by absolute monthly size.
 
 ### Changed (coworker-feedback UX pass)
 - **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),

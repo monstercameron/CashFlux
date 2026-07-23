@@ -49,8 +49,15 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	if len(recs) == 0 {
 		return Fragment() // nothing detected yet — stay quiet
 	}
+	absMonthly := func(r domain.Recurring) int64 {
+		m := r.MonthlyEquivalent()
+		if m < 0 {
+			return -m
+		}
+		return m
+	}
 	sort.SliceStable(recs, func(i, j int) bool {
-		return recs[i].MonthlyEquivalent() > recs[j].MonthlyEquivalent()
+		return absMonthly(recs[i]) > absMonthly(recs[j])
 	})
 
 	catName := make(map[string]string, len(app.Categories()))
@@ -58,10 +65,17 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		catName[c.ID] = c.Name
 	}
 
-	// Total committed, normalized to a per-month figure in the base currency.
+	// Committed outflow, normalized to a per-month figure in the base currency. Only
+	// spending recurrings (negative monthly equivalent) count toward "committed" — a
+	// recurring paycheck is detected and listed, but it isn't a budget commitment, so
+	// including it would understate what's actually spoken-for each month.
 	var totalMonthly int64
 	for _, r := range recs {
-		if conv, err := currency.ConvertBetween(r.MonthlyEquivalent(), r.Amount.Currency, base, rates); err == nil {
+		me := r.MonthlyEquivalent()
+		if me >= 0 {
+			continue // income / inflow — shown in the list, but not "committed"
+		}
+		if conv, err := currency.ConvertBetween(-me, r.Amount.Currency, base, rates); err == nil {
 			totalMonthly += conv
 		}
 	}
