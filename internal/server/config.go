@@ -41,45 +41,59 @@ type Config struct {
 	// SessionKeyPrevious is an optional prior SessionKey accepted on VERIFY only
 	// (never used to sign), so a SessionKey rotation doesn't log every user out —
 	// set it to the old key for one refresh window, then remove it.
-	SessionKeyPrevious                string
-	Token                             string
-	TokenSHA256                       string
-	GeneratedToken                    bool
-	StripeAPIBaseURL                  string
-	StripeSecretKey                   string
-	StripeWebhookSecret               string
-	StripePriceAnnual                 string
-	StripePriceMonthly                string
-	StripeSuccessURL                  string
-	StripeCancelURL                   string
-	StripePortalReturnURL             string
-	PayPalClientID                    string
-	PayPalClientSecret                string
-	PayPalAPIBaseURL                  string
-	PayPalWebhookID                   string
-	PayPalPlanAnnual                  string
-	PayPalPlanMonthly                 string
-	PayPalReturnURL                   string
-	PayPalCancelURL                   string
-	ConsoleDir                        string
-	PortalDir                         string
-	OAuthProviders                    map[string]OAuthProviderConfig
-	OpenAIBaseURL                     string
-	AIProxyDisabled                   bool
-	AIAllowedModels                   []string
-	AIUpstreamTimeout                 time.Duration
-	AIUpstreamRetries                 int
-	AIRequestMaxBytes                 int64
-	AIRequestsPerDay                  int64
-	AITokensPerDay                    int64
-	AIAlertRequestsPerDay             int64
-	AIAlertTokensPerDay               int64
-	AIBlockedUserIDs                  []string
-	AdminUserIDs                      []string
-	BlobMaxBytes                      int64
-	BlobIOTimeout                     time.Duration
-	StorageMaxBytes                   int64
-	StorageWarnBytes                  int64
+	SessionKeyPrevious    string
+	Token                 string
+	TokenSHA256           string
+	GeneratedToken        bool
+	StripeAPIBaseURL      string
+	StripeSecretKey       string
+	StripeWebhookSecret   string
+	StripePriceAnnual     string
+	StripePriceMonthly    string
+	StripeSuccessURL      string
+	StripeCancelURL       string
+	StripePortalReturnURL string
+	PayPalClientID        string
+	PayPalClientSecret    string
+	PayPalAPIBaseURL      string
+	PayPalWebhookID       string
+	PayPalPlanAnnual      string
+	PayPalPlanMonthly     string
+	PayPalReturnURL       string
+	PayPalCancelURL       string
+	// Twilio Verify backs SMS enrollment (TODOS.md C420): code
+	// generation/expiry/replay/fraud protection is Twilio's, not hand-rolled.
+	// Matches the existing Stripe/PayPal pattern of raw HTTP calls (no vendor
+	// SDK dependency in go.mod) — see internal/twilio.
+	TwilioAccountSID       string
+	TwilioAuthToken        string
+	TwilioVerifyServiceSID string
+	ConsoleDir             string
+	PortalDir              string
+	OAuthProviders         map[string]OAuthProviderConfig
+	OpenAIBaseURL          string
+	AIProxyDisabled        bool
+	AIAllowedModels        []string
+	AIUpstreamTimeout      time.Duration
+	AIUpstreamRetries      int
+	AIRequestMaxBytes      int64
+	AIRequestsPerDay       int64
+	AITokensPerDay         int64
+	AIAlertRequestsPerDay  int64
+	AIAlertTokensPerDay    int64
+	AIBlockedUserIDs       []string
+	AdminUserIDs           []string
+	BlobMaxBytes           int64
+	BlobIOTimeout          time.Duration
+	StorageMaxBytes        int64
+	StorageWarnBytes       int64
+	// StoragePlanBytesOverride is an optional per-plan-tier override of
+	// StorageMaxBytes (TODOS.md C431/C439 — AccountService.GetEntitlement and the
+	// admin usage view need a bytes_limit that can vary by plan). Storage limits
+	// are otherwise a single global constant (StorageMaxBytes); this is
+	// deliberately a small additive map rather than a schema change — see
+	// StorageLimitForPlan.
+	StoragePlanBytesOverride          map[string]int64
 	GRPCReadLimitBytes                int64
 	GRPCKeepaliveInterval             time.Duration
 	GRPCIdleTimeout                   time.Duration
@@ -100,14 +114,14 @@ type Config struct {
 	// ignored, so a client cannot spoof X-Forwarded-For to bypass the limiter or
 	// exhaust its bucket map. Empty means "trust no forwarding headers" (use the
 	// socket peer address directly) — the safe default when no reverse proxy is set.
-	TrustedProxies []*net.IPNet
-	AuditRetentionDays                int
-	SnapshotHistoryRetentionDays      int
-	BackupRetentionDays               int
-	OTLPEndpoint                      string
-	LogFormat                         string
-	LogLevel                          string
-	LogHotPathSampleRate              int
+	TrustedProxies               []*net.IPNet
+	AuditRetentionDays           int
+	SnapshotHistoryRetentionDays int
+	BackupRetentionDays          int
+	OTLPEndpoint                 string
+	LogFormat                    string
+	LogLevel                     string
+	LogHotPathSampleRate         int
 	// DevMode enables developer-only features such as the /console/devcreds
 	// endpoint. Must never be set to true in production deployments.
 	DevMode bool
@@ -154,6 +168,9 @@ func FromEnv() (Config, error) {
 	cfg.PayPalPlanMonthly = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_PLAN_MONTHLY"))
 	cfg.PayPalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_RETURN_URL"))
 	cfg.PayPalCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CANCEL_URL"))
+	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_ACCOUNT_SID"))
+	cfg.TwilioAuthToken = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_AUTH_TOKEN"))
+	cfg.TwilioVerifyServiceSID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_VERIFY_SERVICE_SID"))
 	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.PortalDir = envOr("CASHFLUX_SERVER_PORTAL_DIR", "web/portal")
@@ -174,6 +191,7 @@ func FromEnv() (Config, error) {
 	cfg.BlobIOTimeout = envDuration("CASHFLUX_SERVER_BLOB_IO_TIMEOUT", 10*time.Second)
 	cfg.StorageMaxBytes = envInt64("CASHFLUX_SERVER_STORAGE_MAX_BYTES", 0)
 	cfg.StorageWarnBytes = envInt64("CASHFLUX_SERVER_STORAGE_WARN_BYTES", 0)
+	cfg.StoragePlanBytesOverride = envPlanBytesMap("CASHFLUX_SERVER_STORAGE_PLAN_BYTES")
 	cfg.GRPCReadLimitBytes = envInt64("CASHFLUX_SERVER_GRPC_READ_LIMIT_BYTES", 16<<20)
 	cfg.GRPCKeepaliveInterval = envDuration("CASHFLUX_SERVER_GRPC_KEEPALIVE_INTERVAL", 30*time.Second)
 	cfg.GRPCIdleTimeout = envDuration("CASHFLUX_SERVER_GRPC_IDLE_TIMEOUT", 90*time.Second)
@@ -325,6 +343,17 @@ func (c Config) IsAdmin(userID string) bool {
 	return false
 }
 
+// StorageLimitForPlan returns the storage quota (bytes) that applies to a
+// subscription plan, preferring a per-plan override (StoragePlanBytesOverride)
+// over the global StorageMaxBytes. Zero means "no limit" (matching
+// StorageMaxBytes's existing convention in withinStorageQuota).
+func (c Config) StorageLimitForPlan(plan string) int64 {
+	if limit, ok := c.StoragePlanBytesOverride[strings.TrimSpace(plan)]; ok {
+		return limit
+	}
+	return c.StorageMaxBytes
+}
+
 func validAESKeyLength(n int) bool { return n == 16 || n == 24 || n == 32 }
 
 func validOAuthRedirectURL(provider, redirect string) bool {
@@ -399,6 +428,34 @@ func envInt64(key string, fallback int64) int64 {
 		return fallback
 	}
 	return n
+}
+
+// envPlanBytesMap parses a "plan=bytes,plan=bytes" env var into a per-plan
+// storage override map. Malformed entries are skipped rather than failing
+// startup, so a typo degrades to the global StorageMaxBytes instead of
+// refusing to boot.
+func envPlanBytesMap(key string) map[string]int64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil
+	}
+	out := make(map[string]int64)
+	for _, entry := range strings.Split(raw, ",") {
+		plan, value, ok := strings.Cut(strings.TrimSpace(entry), "=")
+		plan = strings.TrimSpace(plan)
+		if !ok || plan == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+		if err != nil || n < 0 {
+			continue
+		}
+		out[plan] = n
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func envCSV(key string) []string {

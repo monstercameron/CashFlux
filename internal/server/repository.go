@@ -82,6 +82,13 @@ type Subscription struct {
 	CurrentPeriodEnd     time.Time
 	TrialEnd             time.Time
 	UpdatedAt            time.Time
+	// LastEventAt is the provider-supplied timestamp of the most recent webhook
+	// event that mutated Status/Plan/CurrentPeriodEnd/TrialEnd (TODOS.md C430).
+	// It is the ordering guard: webhook delivery is at-least-once but not
+	// ordered, so applyStripeEvent/ApplyWebhook only overwrite the row when the
+	// incoming event is newer than this. Zero means no event has ever driven a
+	// status change (e.g. an admin-set row).
+	LastEventAt time.Time
 }
 
 // AccountExport is the self-serve server-side data bundle for a user.
@@ -243,19 +250,21 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 }
 
 type RefreshSession struct {
-	JTI       string
-	FamilyID  string
-	UserID    string
-	TokenHash string
-	ExpiresAt time.Time
-	UsedAt    time.Time
-	RevokedAt time.Time
+	JTI         string
+	FamilyID    string
+	UserID      string
+	TokenHash   string
+	DeviceLabel string
+	ExpiresAt   time.Time
+	UsedAt      time.Time
+	RevokedAt   time.Time
 }
 
 type RefreshSessionFamily struct {
-	FamilyID  string    `json:"familyId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	Current   bool      `json:"current,omitempty"`
+	FamilyID    string    `json:"familyId"`
+	DeviceLabel string    `json:"deviceLabel,omitempty"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	Current     bool      `json:"current,omitempty"`
 }
 
 type IdempotencyResult struct {
@@ -273,9 +282,9 @@ func (s *Store) PutRefreshSession(session RefreshSession) error {
 	}
 	defer s.observeDB("PutRefreshSession", time.Now())
 	_, err := s.db.Exec(`
-INSERT INTO refresh_tokens(jti, family_id, user_id, token_hash, expires_at, used_at, revoked_at)
-VALUES(?, ?, ?, ?, ?, '', '')`,
-		session.JTI, session.FamilyID, session.UserID, session.TokenHash, formatTime(session.ExpiresAt.UTC()))
+INSERT INTO refresh_tokens(jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at)
+VALUES(?, ?, ?, ?, ?, ?, '', '')`,
+		session.JTI, session.FamilyID, session.UserID, session.TokenHash, session.DeviceLabel, formatTime(session.ExpiresAt.UTC()))
 	if err != nil {
 		return fmt.Errorf("server store: put refresh session: %w", err)
 	}
@@ -337,7 +346,7 @@ func (s *Store) ConsumeRefreshSession(jti, tokenHash string, now time.Time) (Ref
 	}
 	defer func() { _ = tx.Rollback() }()
 	row := tx.QueryRow(`
-SELECT jti, family_id, user_id, token_hash, expires_at, used_at, revoked_at
+SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at
 FROM refresh_tokens
 WHERE jti = ?`, jti)
 	session, err := scanRefreshSession(row)
@@ -407,7 +416,7 @@ func (s *Store) ListRefreshSessionFamilies(userID string, now time.Time) ([]Refr
 	}
 	defer s.observeDB("ListRefreshSessionFamilies", time.Now())
 	rows, err := s.db.Query(`
-SELECT family_id, MAX(expires_at)
+SELECT family_id, MAX(expires_at), MAX(device_label)
 FROM refresh_tokens
 WHERE user_id = ? AND revoked_at = '' AND expires_at > ?
 GROUP BY family_id
@@ -421,7 +430,7 @@ ORDER BY MAX(expires_at) DESC`,
 	for rows.Next() {
 		var family RefreshSessionFamily
 		var expiresAt string
-		if err := rows.Scan(&family.FamilyID, &expiresAt); err != nil {
+		if err := rows.Scan(&family.FamilyID, &expiresAt, &family.DeviceLabel); err != nil {
 			return nil, fmt.Errorf("server store: scan refresh session family: %w", err)
 		}
 		family.ExpiresAt, err = parseTime(expiresAt)
@@ -595,7 +604,7 @@ type subscriptionScanner interface {
 func scanRefreshSession(row refreshSessionScanner) (RefreshSession, error) {
 	var session RefreshSession
 	var expiresAt, usedAt, revokedAt string
-	if err := row.Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &expiresAt, &usedAt, &revokedAt); err != nil {
+	if err := row.Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt); err != nil {
 		return RefreshSession{}, fmt.Errorf("server store: scan refresh session: %w", err)
 	}
 	var err error
@@ -634,7 +643,7 @@ func scanAuditEvent(row auditScanner) (AuditEvent, error) {
 
 func scanSubscription(row subscriptionScanner) (Subscription, bool, error) {
 	var sub Subscription
-	var currentPeriodEnd, trialEnd, updatedAt string
+	var currentPeriodEnd, trialEnd, updatedAt, lastEventAt string
 	err := row.Scan(
 		&sub.UserID,
 		&sub.Provider,
@@ -645,6 +654,7 @@ func scanSubscription(row subscriptionScanner) (Subscription, bool, error) {
 		&currentPeriodEnd,
 		&trialEnd,
 		&updatedAt,
+		&lastEventAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Subscription{}, false, nil
@@ -661,6 +671,9 @@ func scanSubscription(row subscriptionScanner) (Subscription, bool, error) {
 	}
 	if sub.UpdatedAt, parseErr = parseTime(updatedAt); parseErr != nil {
 		return Subscription{}, false, fmt.Errorf("server store: parse subscription updated_at: %w", parseErr)
+	}
+	if sub.LastEventAt, parseErr = parseOptionalTime(lastEventAt); parseErr != nil {
+		return Subscription{}, false, fmt.Errorf("server store: parse subscription last_event_at: %w", parseErr)
 	}
 	return sub, true, nil
 }
@@ -1426,8 +1439,8 @@ func (s *Store) PutSubscription(sub Subscription) error {
 	}
 	defer s.observeDB("PutSubscription", time.Now())
 	_, err := s.db.Exec(`
-INSERT INTO subscriptions(user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO subscriptions(user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at, last_event_at)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id) DO UPDATE SET
   provider = excluded.provider,
   provider_customer = excluded.provider_customer,
@@ -1436,7 +1449,8 @@ ON CONFLICT(user_id) DO UPDATE SET
   plan = excluded.plan,
   current_period_end = excluded.current_period_end,
   trial_end = excluded.trial_end,
-  updated_at = excluded.updated_at`,
+  updated_at = excluded.updated_at,
+  last_event_at = excluded.last_event_at`,
 		strings.TrimSpace(sub.UserID),
 		strings.TrimSpace(sub.Provider),
 		strings.TrimSpace(sub.ProviderCustomer),
@@ -1445,7 +1459,8 @@ ON CONFLICT(user_id) DO UPDATE SET
 		strings.TrimSpace(sub.Plan),
 		formatOptionalTime(sub.CurrentPeriodEnd),
 		formatOptionalTime(sub.TrialEnd),
-		formatTime(sub.UpdatedAt))
+		formatTime(sub.UpdatedAt),
+		formatOptionalTime(sub.LastEventAt))
 	if err != nil {
 		return fmt.Errorf("server store: put subscription: %w", err)
 	}
@@ -1456,7 +1471,7 @@ ON CONFLICT(user_id) DO UPDATE SET
 func (s *Store) GetSubscription(userID string) (Subscription, bool, error) {
 	defer s.observeDB("GetSubscription", time.Now())
 	return scanSubscription(s.db.QueryRow(`
-SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at, last_event_at
 FROM subscriptions
 WHERE user_id = ?`, strings.TrimSpace(userID)))
 }
@@ -1469,12 +1484,12 @@ func (s *Store) GetSubscriptionByProviderID(provider, providerSubscription strin
 	provider = strings.TrimSpace(provider)
 	if provider == "" {
 		return scanSubscription(s.db.QueryRow(`
-SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at, last_event_at
 FROM subscriptions
 WHERE provider_subscription = ?`, strings.TrimSpace(providerSubscription)))
 	}
 	return scanSubscription(s.db.QueryRow(`
-SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at
+SELECT user_id, provider, provider_customer, provider_subscription, status, plan, current_period_end, trial_end, updated_at, last_event_at
 FROM subscriptions
 WHERE provider = ? AND provider_subscription = ?`, provider, strings.TrimSpace(providerSubscription)))
 }

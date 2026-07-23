@@ -152,6 +152,14 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/account/export", handleAccountExport(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/account", handleCORSPreflight(cfg))
 	mux.HandleFunc("DELETE /v1/account", handleAccountDelete(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/devices/pair", handleCORSPreflight(cfg))
+	// authLimiter here, unlike the gRPC AuthService doors, has a real client IP to key
+	// on (see rateLimitClientIP) — this is a plain HTTP endpoint. Without it, an
+	// authenticated caller could mint pairing codes at an unbounded rate: each mint
+	// is a fresh 5-minute-lived, 6-digit account-takeover credential (see
+	// pairingcode.go), so spamming this endpoint grows both storage and the
+	// standing attack surface with no cost to the caller.
+	mux.Handle("POST /v1/devices/pair", authLimiter(handleMintPairingCode(cfg, store)))
 	mux.HandleFunc("OPTIONS /v1/billing/checkout", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/billing/checkout", handleBillingCheckout(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/billing/portal", handleCORSPreflight(cfg))

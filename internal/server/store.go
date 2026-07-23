@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 7
+const CurrentServerSchemaVersion = 10
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -216,6 +216,24 @@ func (s *Store) migrate() error {
 		}
 		version = 7
 	}
+	if version < 8 {
+		if err := s.migrateTo8(); err != nil {
+			return err
+		}
+		version = 8
+	}
+	if version < 9 {
+		if err := s.migrateTo9(); err != nil {
+			return err
+		}
+		version = 9
+	}
+	if version < 10 {
+		if err := s.migrateTo10(); err != nil {
+			return err
+		}
+		version = 10
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -282,6 +300,103 @@ func (s *Store) migrateTo7() error {
 	}
 	if _, err := s.db.Exec(serverSchemaV7); err != nil {
 		return fmt.Errorf("server store: migrate v7: %w", err)
+	}
+	return nil
+}
+
+// migrateTo8 backs the Custom Sync identity core (TODOS.md C418-C422): a
+// device_label on each refresh-token family so the device/session list has a
+// human-readable name, and phone_number/password_hash on users so SMS and
+// username/password enrollment extend the SAME users table rather than a
+// parallel identity table (matching the existing "provider:subject" id
+// convention — see internal/server/repository.go User). Every ALTER is
+// guarded by columnExists because ALTER TABLE ADD COLUMN is not idempotent
+// and a re-run migration must not fail on an already-present column.
+func (s *Store) migrateTo8() error {
+	if has, err := s.columnExists("refresh_tokens", "device_label"); err != nil {
+		return fmt.Errorf("server store: migrate v8: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE refresh_tokens ADD COLUMN device_label TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v8: %w", err)
+		}
+	}
+	if has, err := s.columnExists("users", "phone_number"); err != nil {
+		return fmt.Errorf("server store: migrate v8: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN phone_number TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v8: %w", err)
+		}
+	}
+	if has, err := s.columnExists("users", "password_hash"); err != nil {
+		return fmt.Errorf("server store: migrate v8: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v8: %w", err)
+		}
+	}
+	// A partial unique index (rather than a column-level UNIQUE, which SQLite's
+	// ALTER TABLE ADD COLUMN cannot express) so any number of users with no
+	// phone number yet ('') coexist, while two users can never claim the same
+	// verified phone number.
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number) WHERE phone_number != '';`); err != nil {
+		return fmt.Errorf("server store: migrate v8: %w", err)
+	}
+	return nil
+}
+
+// migrateTo9 adds subscriptions.last_event_at (TODOS.md C430): the
+// provider-supplied event timestamp of the most recent webhook that mutated
+// this subscription's status. Webhook delivery is at-least-once but not
+// ordered — a delayed "past_due" retry can otherwise arrive after a newer
+// "canceled" event and silently un-cancel the row. Guarding every
+// status-affecting apply with "only write if this event is newer than what's
+// already there" needs a durable per-subscription high-water mark, hence the
+// column (in-memory tracking would not survive a restart or a multi-instance
+// deployment).
+func (s *Store) migrateTo9() error {
+	if has, err := s.columnExists("subscriptions", "last_event_at"); err != nil {
+		return fmt.Errorf("server store: migrate v9: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE subscriptions ADD COLUMN last_event_at TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v9: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateTo10 adds the pairing_codes table backing AuthService.RedeemPairingCode
+// (TODOS.md C421): a short-lived, single-use code the portal mints for an
+// existing account so a new device can link to it without re-entering a
+// password. A dedicated table (rather than reusing refresh_tokens/users) keeps
+// the code's short TTL and single-use consumption independent of session
+// lifecycle, and lets an unconsumed, expired code simply age out.
+//
+// It also adds users.recovery_code_hash (TODOS.md C422): a bcrypt hash of the
+// one-time account-recovery code shown to a Register caller exactly once.
+// Password accounts have no email/SMS-backed recovery path, so this is the
+// only thing standing between a forgotten password and a locked-out account;
+// storing only the hash (never the plaintext) means a later ResetPassword
+// ticket can verify a presented recovery code without this column itself
+// being a second password.
+func (s *Store) migrateTo10() error {
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS pairing_codes (
+	code TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL,
+	consumed_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_pairing_codes_user_id ON pairing_codes(user_id);
+`); err != nil {
+		return fmt.Errorf("server store: migrate v10: %w", err)
+	}
+	if has, err := s.columnExists("users", "recovery_code_hash"); err != nil {
+		return fmt.Errorf("server store: migrate v10: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN recovery_code_hash TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v10: %w", err)
+		}
 	}
 	return nil
 }

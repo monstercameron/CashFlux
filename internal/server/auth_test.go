@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -86,6 +87,53 @@ func TestAuthUserForTokenAcceptsSHA256Hash(t *testing.T) {
 	}
 	if _, ok := authUserForToken("wrong", cfg); ok {
 		t.Fatal("wrong token accepted against hash")
+	}
+}
+
+// TestAuthUserForTokenAcceptsAuthServiceJWTRegardlessOfAuthMode proves
+// authUserForToken accepts a valid AuthService session-JWT access token (the
+// same shape Register/Login/VerifyPhoneCode/RedeemPairingCode all mint via
+// issueStoredSessionPair) under AuthMode=="token" — the default self-host
+// mode, and exactly the mode "Custom Sync" (TODOS.md C418-C427) targets per
+// its own "fixed, built-in server endpoint, no OAuth setup" premise (C419).
+//
+// Before this test's fix, this path was gated on AuthMode=="oauth" (a
+// leftover from when third-party OAuth cloud sign-in was the only source of
+// these JWTs): a self-hosted Custom Sync session could complete phone
+// verification and look "signed in" client-side (Register/Login/
+// VerifyPhoneCode/RefreshToken are all interceptor-exempt — see
+// authinterceptor_skip.go) while every OTHER authenticated call it actually
+// needs (ListDevices, AccountService.GetEntitlement, SyncService/
+// BlobService — the whole point of syncing) silently failed Unauthenticated
+// and the session eventually degraded to local-only (C427) with no visible
+// error, in the server's DEFAULT configuration.
+func TestAuthUserForTokenAcceptsAuthServiceJWTRegardlessOfAuthMode(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	if err := store.UpsertUser(User{ID: "u1", Provider: "local", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	for _, mode := range []string{"token", "oauth"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := Config{AuthMode: mode, Token: "self-host-token", SessionKey: "0123456789abcdef0123456789abcdef"}
+			access, _, err := issueStoredSessionPair(cfg, store, "u1", now, "fam1", "test-device")
+			if err != nil {
+				t.Fatalf("issueStoredSessionPair: %v", err)
+			}
+			user, ok := authUserForToken(access, cfg)
+			if !ok || user.ID != "u1" {
+				t.Fatalf("AuthMode=%q: authUserForToken(sessionJWT) = %+v/%v, want u1/true", mode, user, ok)
+			}
+			// The static self-host token must keep working unaffected in either mode.
+			staticUser, ok := authUserForToken("self-host-token", cfg)
+			if !ok || staticUser.Token != "self-host-token" {
+				t.Fatalf("AuthMode=%q: authUserForToken(staticToken) = %+v/%v, want accepted", mode, staticUser, ok)
+			}
+			// A garbage token must still be rejected in either mode.
+			if _, ok := authUserForToken("not-a-real-token", cfg); ok {
+				t.Fatalf("AuthMode=%q: garbage token was accepted", mode)
+			}
+		})
 	}
 }
 

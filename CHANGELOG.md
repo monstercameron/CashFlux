@@ -6,6 +6,38 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Custom Sync identity: `AuthService` with SMS, password, and pairing-code enrollment (TODOS.md
+  C418–C424, C441, C443).** A new gRPC `AuthService` (`Enroll`/`RequestPhoneVerification`/
+  `VerifyPhoneCode`/`RedeemPairingCode`/`Register`/`Login`/`RefreshToken`/`Logout`/`ListDevices`/
+  `RevokeDevice`) gives self-hosted/cloud accounts three ways in instead of one static bearer
+  token: SMS via Twilio Verify (raw REST, no SDK dependency, matching the existing Stripe/PayPal
+  house style) with WebOTP auto-fill on the client; a portal-minted pairing code for linking an
+  additional device to an existing account without repeating verification; and a username/password
+  fallback with a one-time recovery code shown once at signup. All three converge on the same
+  session core — rotating access/refresh tokens, reuse-detection that revokes the whole device
+  session on replay, and idempotency keys so a retried enrollment call can't mint a duplicate
+  session. The 8 unauthenticated enrollment methods bypass the auth+entitlement gate via an
+  explicit interceptor skip-list; every other method (including `ListDevices`/`RevokeDevice`)
+  still requires a valid session. OAuth cloud sign-in is kept as a fourth alternative alongside
+  these three, per product decision (C441). New `internal/twilio` package; new
+  `internal/app/{customsync,authcards,authcredentials}.go` UI.
+
+  Hardened by adversarial security review before landing, not after: fixed a pairing-code rate
+  limit keyed only on a client-supplied, rotatable field (made unauthenticated account takeover
+  practically feasible on the 6-digit code), the same bypassable-limit shape on `Register`
+  (CPU-exhaustion DoS) and `RequestPhoneVerification` (unbounded real-money SMS spend), a `Login`
+  timing side-channel leaking username existence via bcrypt-or-not response time, a missing
+  server-side username length cap, a missing rate limit on the pairing-code minting endpoint
+  itself, a circular bug where the entitlement pre-flight check was gated by the same check it
+  exists to answer, and self-hosted sessions not being accepted as bearer tokens under the
+  server's default auth mode (would have silently broken every authenticated call after a
+  successful phone/password/pairing sign-in). Also fixed three client-wiring gaps end-to-end
+  testing found: an empty-bearer-token dial failure blocking phone verification for every new
+  user regardless of Twilio configuration, a discarded refresh token that would let a session
+  silently die at access-token expiry with no recovery, and the entitlement pre-flight check
+  being fully built but never called from the enrollment UI.
+
 ### Changed
 - **Adversarial-review round: metrics sharding + watch-path completions (server hot path).**
   A Sonnet critic reviewed the prior optimization (verdict ITERATE) and re-reviewed the fixes

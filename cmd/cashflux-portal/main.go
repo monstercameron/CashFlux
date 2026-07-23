@@ -68,6 +68,12 @@ type billingSession struct {
 	URL string `json:"url"`
 }
 
+// pairingCodeResp mirrors internal/server's POST /v1/devices/pair response.
+type pairingCodeResp struct {
+	Code      string `json:"code"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
 // --- state -------------------------------------------------------------------
 
 type screen int
@@ -172,6 +178,27 @@ func fetchMe(token string) (me *meResponse, authErr bool, err error) {
 	return &m, false, nil
 }
 
+// mintPairingCode asks the server for a new short-lived device-pairing code
+// (TODOS.md C421). A QR-code image is a reasonable follow-up (no vendored
+// QR-generation helper exists in this repo yet) — this pass shows the digits
+// only, which the user types on the new device.
+func mintPairingCode(token string) (code, expiresAt string, err error) {
+	resp, err := authed(http.MethodPost, "/v1/devices/pair", token, nil)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	var out pairingCodeResp
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", "", err
+	}
+	return out.Code, out.ExpiresAt, nil
+}
+
 func fetchSessions(token string) []sessionRow {
 	resp, err := authed(http.MethodGet, "/v1/auth/sessions", token, nil)
 	if err != nil {
@@ -261,6 +288,8 @@ func App() ui.Node {
 	interval := ui.UseState("annual")
 	provider := ui.UseState("stripe")
 	msg := ui.UseState("")
+	pairingCode := ui.UseState("")
+	pairingExpires := ui.UseState("")
 
 	load := func(tok string) {
 		go func() {
@@ -330,6 +359,18 @@ func App() ui.Node {
 			sessions.Set(fetchSessions(token.Get()))
 		}()
 	}
+	onLinkDevice := ui.UseEvent(func() {
+		msg.Set("")
+		go func() {
+			code, expiresAt, err := mintPairingCode(token.Get())
+			if err != nil {
+				msg.Set("Couldn't create a pairing code. Try again.")
+				return
+			}
+			pairingCode.Set(code)
+			pairingExpires.Set(expiresAt)
+		}()
+	})
 	onSubscribe := ui.UseEvent(func() {
 		path := "/v1/billing/checkout"
 		if p := provider.Get(); p != "" && p != "stripe" {
@@ -375,7 +416,8 @@ func App() ui.Node {
 		return homeView(onSignInGoogle, onSignInGitHub, msg.Get())
 	default:
 		return dashboardView(me.Get(), sessions.Get(), interval, provider, revokeSession,
-			onSubscribe, onManage, onExport, onDelete, onSignOut, msg.Get())
+			onSubscribe, onManage, onExport, onDelete, onSignOut, onLinkDevice,
+			pairingCode.Get(), pairingExpires.Get(), msg.Get())
 	}
 }
 
@@ -395,7 +437,8 @@ func homeView(onGoogle, onGitHub ui.Handler, msg string) ui.Node {
 }
 
 func dashboardView(me *meResponse, sessions []sessionRow, interval, provider ui.State[string], onRevoke func(string),
-	onSubscribe, onManage, onExport, onDelete, onSignOut ui.Handler, msg string) ui.Node {
+	onSubscribe, onManage, onExport, onDelete, onSignOut, onLinkDevice ui.Handler,
+	pairingCode, pairingExpires, msg string) ui.Node {
 	if me == nil {
 		return Div(css.Class("portal-wrap"), Div(css.Class("portal-card"), P(css.Class("muted"), "No account data.")))
 	}
@@ -442,6 +485,10 @@ func dashboardView(me *meResponse, sessions []sessionRow, interval, provider ui.
 						return ui.CreateElement(sessionItem, sessionItemProps{row: s, onRevoke: onRevoke})
 					}),
 				)),
+				Div(css.Class("portal-actions"),
+					Button(css.Class("portal-btn"), Attr("data-testid", "link-device"), OnClick(onLinkDevice), "Link a new device"),
+				),
+				If(pairingCode != "", pairingCodePanel(pairingCode, pairingExpires)),
 			),
 
 			// Data card.
@@ -453,6 +500,22 @@ func dashboardView(me *meResponse, sessions []sessionRow, interval, provider ui.
 				),
 			),
 		),
+	)
+}
+
+// pairingCodePanel shows a freshly minted pairing code (digits only — see
+// mintPairingCode for why a QR image is deferred rather than built now) and
+// its expiry, so the user can type it into their new device within the
+// 5-minute window.
+func pairingCodePanel(code, expiresAt string) ui.Node {
+	meta := "Expires in a few minutes."
+	if len(expiresAt) >= 19 {
+		meta = "Expires at " + expiresAt[11:19] + " UTC."
+	}
+	return Div(css.Class("portal-pairing"), Attr("data-testid", "pairing-code"),
+		P(css.Class("muted"), "Enter this code on your new device:"),
+		Div(css.Class("portal-pairing-code"), code),
+		P(css.Class("muted"), meta),
 	)
 }
 

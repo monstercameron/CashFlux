@@ -162,7 +162,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		}
 		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
-		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "")
+		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "", "")
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
@@ -238,7 +238,7 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
 			return
 		}
-		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID)
+		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID, session.DeviceLabel)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
@@ -736,7 +736,7 @@ func issueSessionPair(cfg Config, userID string, now time.Time) (string, string,
 	return access, refresh, nil
 }
 
-func issueStoredSessionPair(cfg Config, store *Store, userID string, now time.Time, familyID string) (string, string, error) {
+func issueStoredSessionPair(cfg Config, store *Store, userID string, now time.Time, familyID, deviceLabel string) (string, string, error) {
 	if store == nil {
 		return "", "", fmt.Errorf("store is not configured")
 	}
@@ -767,11 +767,12 @@ func issueStoredSessionPair(cfg Config, store *Store, userID string, now time.Ti
 		return "", "", err
 	}
 	if err := store.PutRefreshSession(RefreshSession{
-		JTI:       jti,
-		FamilyID:  familyID,
-		UserID:    userID,
-		TokenHash: sessionTokenHash(refresh),
-		ExpiresAt: now.Add(sessionRefreshTTL),
+		JTI:         jti,
+		FamilyID:    familyID,
+		UserID:      userID,
+		TokenHash:   sessionTokenHash(refresh),
+		DeviceLabel: strings.TrimSpace(deviceLabel),
+		ExpiresAt:   now.Add(sessionRefreshTTL),
 	}); err != nil {
 		return "", "", err
 	}

@@ -55,6 +55,9 @@ func BearerTokenFromContext(ctx context.Context) (string, error) {
 // AuthUnaryInterceptor validates bearer metadata and puts the user in the RPC context.
 func AuthUnaryInterceptor(validate TokenValidator) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if info != nil && skipsAuthAndEntitlement(info.FullMethod) {
+			return handler(ctx, req)
+		}
 		user, err := authenticateContext(ctx, validate)
 		if err != nil {
 			return nil, err
@@ -66,6 +69,9 @@ func AuthUnaryInterceptor(validate TokenValidator) grpc.UnaryServerInterceptor {
 // AuthStreamInterceptor validates bearer metadata and puts the user in the stream context.
 func AuthStreamInterceptor(validate TokenValidator) grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if info != nil && skipsAuthAndEntitlement(info.FullMethod) {
+			return handler(srv, stream)
+		}
 		user, err := authenticateContext(stream.Context(), validate)
 		if err != nil {
 			return err

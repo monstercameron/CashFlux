@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -114,5 +115,52 @@ func TestCloudEntitlementUnaryInterceptorRejectsInactiveBilling(t *testing.T) {
 	}
 	if called {
 		t.Fatal("handler called for inactive entitlement")
+	}
+}
+
+// TestCloudEntitlementUnaryInterceptorLetsGetEntitlementThroughWhenInactive
+// proves TODOS.md C431's own stated invariant for AccountService.GetEntitlement
+// ("it never itself rejects on an inactive entitlement — Active=false with a
+// Reason is the whole point of the call"): before entitlementOnlySkipMethods
+// existed, GetEntitlement shared authInterceptorSkipMethods' verdict with
+// every other Sync/Blob call, so CloudEntitlementUnaryInterceptor rejected it
+// with a bare PermissionDenied for exactly the caller who most needs to
+// observe Active:false — the pre-flight check (internal/app/customsync.go)
+// would see that as a network/RPC error and fail OPEN into showing the phone
+// field anyway, letting a real SMS go out for a gated account. This must
+// reach the handler and get a normal (possibly Active:false) response.
+func TestCloudEntitlementUnaryInterceptorLetsGetEntitlementThroughWhenInactive(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	if err := store.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	// No subscription row: an inactive account, same as the rejection test above.
+	interceptor := CloudEntitlementUnaryInterceptor(Config{Billing: true}, store)
+	called := false
+	resp, err := interceptor(
+		ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}),
+		backendrpc.GetEntitlementRequest{},
+		&grpc.UnaryServerInfo{FullMethod: backendrpc.MethodAccountGetEntitlement},
+		func(ctx context.Context, req any) (any, error) {
+			called = true
+			return newAccountService(store, Config{Billing: true}).GetEntitlement(ctx, req.(backendrpc.GetEntitlementRequest))
+		},
+	)
+	if err != nil {
+		t.Fatalf("GetEntitlement was rejected by the entitlement interceptor instead of reaching the handler: %v", err)
+	}
+	if !called {
+		t.Fatal("handler was never called")
+	}
+	out, ok := resp.(backendrpc.GetEntitlementResponse)
+	if !ok {
+		t.Fatalf("response type = %T, want backendrpc.GetEntitlementResponse", resp)
+	}
+	if out.Active {
+		t.Fatalf("GetEntitlementResponse.Active = true, want false for an account with no subscription")
+	}
+	if out.Reason != backendrpc.EntitlementReasonPlanTierInsufficient {
+		t.Fatalf("GetEntitlementResponse.Reason = %q, want %q", out.Reason, backendrpc.EntitlementReasonPlanTierInsufficient)
 	}
 }

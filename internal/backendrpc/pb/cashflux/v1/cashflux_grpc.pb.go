@@ -574,3 +574,787 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "cashflux/v1/cashflux.proto",
 }
+
+const (
+	AuthService_Enroll_FullMethodName                   = "/cashflux.v1.AuthService/Enroll"
+	AuthService_RequestPhoneVerification_FullMethodName = "/cashflux.v1.AuthService/RequestPhoneVerification"
+	AuthService_VerifyPhoneCode_FullMethodName          = "/cashflux.v1.AuthService/VerifyPhoneCode"
+	AuthService_RedeemPairingCode_FullMethodName        = "/cashflux.v1.AuthService/RedeemPairingCode"
+	AuthService_Register_FullMethodName                 = "/cashflux.v1.AuthService/Register"
+	AuthService_Login_FullMethodName                    = "/cashflux.v1.AuthService/Login"
+	AuthService_RefreshToken_FullMethodName             = "/cashflux.v1.AuthService/RefreshToken"
+	AuthService_Logout_FullMethodName                   = "/cashflux.v1.AuthService/Logout"
+	AuthService_ListDevices_FullMethodName              = "/cashflux.v1.AuthService/ListDevices"
+	AuthService_RevokeDevice_FullMethodName             = "/cashflux.v1.AuthService/RevokeDevice"
+)
+
+// AuthServiceClient is the client API for AuthService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AuthServiceClient interface {
+	Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	RequestPhoneVerification(ctx context.Context, in *RequestPhoneVerificationRequest, opts ...grpc.CallOption) (*RequestPhoneVerificationResponse, error)
+	VerifyPhoneCode(ctx context.Context, in *VerifyPhoneCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	RedeemPairingCode(ctx context.Context, in *RedeemPairingCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
+	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
+	ListDevices(ctx context.Context, in *ListDevicesRequest, opts ...grpc.CallOption) (*ListDevicesResponse, error)
+	RevokeDevice(ctx context.Context, in *RevokeDeviceRequest, opts ...grpc.CallOption) (*RevokeDeviceResponse, error)
+}
+
+type authServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAuthServiceClient(cc grpc.ClientConnInterface) AuthServiceClient {
+	return &authServiceClient{cc}
+}
+
+func (c *authServiceClient) Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_Enroll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RequestPhoneVerification(ctx context.Context, in *RequestPhoneVerificationRequest, opts ...grpc.CallOption) (*RequestPhoneVerificationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestPhoneVerificationResponse)
+	err := c.cc.Invoke(ctx, AuthService_RequestPhoneVerification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) VerifyPhoneCode(ctx context.Context, in *VerifyPhoneCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_VerifyPhoneCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RedeemPairingCode(ctx context.Context, in *RedeemPairingCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_RedeemPairingCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPairResponse)
+	err := c.cc.Invoke(ctx, AuthService_RefreshToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LogoutResponse)
+	err := c.cc.Invoke(ctx, AuthService_Logout_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListDevices(ctx context.Context, in *ListDevicesRequest, opts ...grpc.CallOption) (*ListDevicesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDevicesResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListDevices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RevokeDevice(ctx context.Context, in *RevokeDeviceRequest, opts ...grpc.CallOption) (*RevokeDeviceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeDeviceResponse)
+	err := c.cc.Invoke(ctx, AuthService_RevokeDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AuthServiceServer is the server API for AuthService service.
+// All implementations must embed UnimplementedAuthServiceServer
+// for forward compatibility.
+type AuthServiceServer interface {
+	Enroll(context.Context, *EnrollRequest) (*TokenPairResponse, error)
+	RequestPhoneVerification(context.Context, *RequestPhoneVerificationRequest) (*RequestPhoneVerificationResponse, error)
+	VerifyPhoneCode(context.Context, *VerifyPhoneCodeRequest) (*TokenPairResponse, error)
+	RedeemPairingCode(context.Context, *RedeemPairingCodeRequest) (*TokenPairResponse, error)
+	Register(context.Context, *RegisterRequest) (*TokenPairResponse, error)
+	Login(context.Context, *LoginRequest) (*TokenPairResponse, error)
+	RefreshToken(context.Context, *RefreshTokenRequest) (*TokenPairResponse, error)
+	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
+	ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error)
+	RevokeDevice(context.Context, *RevokeDeviceRequest) (*RevokeDeviceResponse, error)
+	mustEmbedUnimplementedAuthServiceServer()
+}
+
+// UnimplementedAuthServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAuthServiceServer struct{}
+
+func (UnimplementedAuthServiceServer) Enroll(context.Context, *EnrollRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Enroll not implemented")
+}
+func (UnimplementedAuthServiceServer) RequestPhoneVerification(context.Context, *RequestPhoneVerificationRequest) (*RequestPhoneVerificationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestPhoneVerification not implemented")
+}
+func (UnimplementedAuthServiceServer) VerifyPhoneCode(context.Context, *VerifyPhoneCodeRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyPhoneCode not implemented")
+}
+func (UnimplementedAuthServiceServer) RedeemPairingCode(context.Context, *RedeemPairingCodeRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RedeemPairingCode not implemented")
+}
+func (UnimplementedAuthServiceServer) Register(context.Context, *RegisterRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedAuthServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*TokenPairResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshToken not implemented")
+}
+func (UnimplementedAuthServiceServer) Logout(context.Context, *LogoutRequest) (*LogoutResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Logout not implemented")
+}
+func (UnimplementedAuthServiceServer) ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDevices not implemented")
+}
+func (UnimplementedAuthServiceServer) RevokeDevice(context.Context, *RevokeDeviceRequest) (*RevokeDeviceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevokeDevice not implemented")
+}
+func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
+func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeAuthServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AuthServiceServer will
+// result in compilation errors.
+type UnsafeAuthServiceServer interface {
+	mustEmbedUnimplementedAuthServiceServer()
+}
+
+func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
+	// If the following call pancis, it indicates UnimplementedAuthServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AuthService_ServiceDesc, srv)
+}
+
+func _AuthService_Enroll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnrollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Enroll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Enroll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Enroll(ctx, req.(*EnrollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RequestPhoneVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestPhoneVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RequestPhoneVerification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, req.(*RequestPhoneVerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_VerifyPhoneCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyPhoneCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_VerifyPhoneCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, req.(*VerifyPhoneCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RedeemPairingCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RedeemPairingCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RedeemPairingCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RedeemPairingCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RedeemPairingCode(ctx, req.(*RedeemPairingCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Register(ctx, req.(*RegisterRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LoginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RefreshToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RefreshToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RefreshToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RefreshToken(ctx, req.(*RefreshTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_Logout_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LogoutRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).Logout(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_Logout_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).Logout(ctx, req.(*LogoutRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListDevices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDevicesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListDevices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListDevices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListDevices(ctx, req.(*ListDevicesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RevokeDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RevokeDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RevokeDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RevokeDevice(ctx, req.(*RevokeDeviceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AuthService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cashflux.v1.AuthService",
+	HandlerType: (*AuthServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Enroll",
+			Handler:    _AuthService_Enroll_Handler,
+		},
+		{
+			MethodName: "RequestPhoneVerification",
+			Handler:    _AuthService_RequestPhoneVerification_Handler,
+		},
+		{
+			MethodName: "VerifyPhoneCode",
+			Handler:    _AuthService_VerifyPhoneCode_Handler,
+		},
+		{
+			MethodName: "RedeemPairingCode",
+			Handler:    _AuthService_RedeemPairingCode_Handler,
+		},
+		{
+			MethodName: "Register",
+			Handler:    _AuthService_Register_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _AuthService_Login_Handler,
+		},
+		{
+			MethodName: "RefreshToken",
+			Handler:    _AuthService_RefreshToken_Handler,
+		},
+		{
+			MethodName: "Logout",
+			Handler:    _AuthService_Logout_Handler,
+		},
+		{
+			MethodName: "ListDevices",
+			Handler:    _AuthService_ListDevices_Handler,
+		},
+		{
+			MethodName: "RevokeDevice",
+			Handler:    _AuthService_RevokeDevice_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "cashflux/v1/cashflux.proto",
+}
+
+const (
+	AccountService_GetEntitlement_FullMethodName = "/cashflux.v1.AccountService/GetEntitlement"
+)
+
+// AccountServiceClient is the client API for AccountService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AccountServiceClient interface {
+	GetEntitlement(ctx context.Context, in *GetEntitlementRequest, opts ...grpc.CallOption) (*GetEntitlementResponse, error)
+}
+
+type accountServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAccountServiceClient(cc grpc.ClientConnInterface) AccountServiceClient {
+	return &accountServiceClient{cc}
+}
+
+func (c *accountServiceClient) GetEntitlement(ctx context.Context, in *GetEntitlementRequest, opts ...grpc.CallOption) (*GetEntitlementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEntitlementResponse)
+	err := c.cc.Invoke(ctx, AccountService_GetEntitlement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AccountServiceServer is the server API for AccountService service.
+// All implementations must embed UnimplementedAccountServiceServer
+// for forward compatibility.
+type AccountServiceServer interface {
+	GetEntitlement(context.Context, *GetEntitlementRequest) (*GetEntitlementResponse, error)
+	mustEmbedUnimplementedAccountServiceServer()
+}
+
+// UnimplementedAccountServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAccountServiceServer struct{}
+
+func (UnimplementedAccountServiceServer) GetEntitlement(context.Context, *GetEntitlementRequest) (*GetEntitlementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEntitlement not implemented")
+}
+func (UnimplementedAccountServiceServer) mustEmbedUnimplementedAccountServiceServer() {}
+func (UnimplementedAccountServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeAccountServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AccountServiceServer will
+// result in compilation errors.
+type UnsafeAccountServiceServer interface {
+	mustEmbedUnimplementedAccountServiceServer()
+}
+
+func RegisterAccountServiceServer(s grpc.ServiceRegistrar, srv AccountServiceServer) {
+	// If the following call pancis, it indicates UnimplementedAccountServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AccountService_ServiceDesc, srv)
+}
+
+func _AccountService_GetEntitlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEntitlementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountServiceServer).GetEntitlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AccountService_GetEntitlement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountServiceServer).GetEntitlement(ctx, req.(*GetEntitlementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AccountService_ServiceDesc is the grpc.ServiceDesc for AccountService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AccountService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cashflux.v1.AccountService",
+	HandlerType: (*AccountServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetEntitlement",
+			Handler:    _AccountService_GetEntitlement_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "cashflux/v1/cashflux.proto",
+}
+
+const (
+	BillingService_CreateCheckoutSession_FullMethodName = "/cashflux.v1.BillingService/CreateCheckoutSession"
+)
+
+// BillingServiceClient is the client API for BillingService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BillingServiceClient interface {
+	CreateCheckoutSession(ctx context.Context, in *CreateCheckoutSessionRequest, opts ...grpc.CallOption) (*CreateCheckoutSessionResponse, error)
+}
+
+type billingServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBillingServiceClient(cc grpc.ClientConnInterface) BillingServiceClient {
+	return &billingServiceClient{cc}
+}
+
+func (c *billingServiceClient) CreateCheckoutSession(ctx context.Context, in *CreateCheckoutSessionRequest, opts ...grpc.CallOption) (*CreateCheckoutSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateCheckoutSessionResponse)
+	err := c.cc.Invoke(ctx, BillingService_CreateCheckoutSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BillingServiceServer is the server API for BillingService service.
+// All implementations must embed UnimplementedBillingServiceServer
+// for forward compatibility.
+type BillingServiceServer interface {
+	CreateCheckoutSession(context.Context, *CreateCheckoutSessionRequest) (*CreateCheckoutSessionResponse, error)
+	mustEmbedUnimplementedBillingServiceServer()
+}
+
+// UnimplementedBillingServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBillingServiceServer struct{}
+
+func (UnimplementedBillingServiceServer) CreateCheckoutSession(context.Context, *CreateCheckoutSessionRequest) (*CreateCheckoutSessionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateCheckoutSession not implemented")
+}
+func (UnimplementedBillingServiceServer) mustEmbedUnimplementedBillingServiceServer() {}
+func (UnimplementedBillingServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeBillingServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BillingServiceServer will
+// result in compilation errors.
+type UnsafeBillingServiceServer interface {
+	mustEmbedUnimplementedBillingServiceServer()
+}
+
+func RegisterBillingServiceServer(s grpc.ServiceRegistrar, srv BillingServiceServer) {
+	// If the following call pancis, it indicates UnimplementedBillingServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BillingService_ServiceDesc, srv)
+}
+
+func _BillingService_CreateCheckoutSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateCheckoutSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BillingServiceServer).CreateCheckoutSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BillingService_CreateCheckoutSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BillingServiceServer).CreateCheckoutSession(ctx, req.(*CreateCheckoutSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BillingService_ServiceDesc is the grpc.ServiceDesc for BillingService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BillingService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cashflux.v1.BillingService",
+	HandlerType: (*BillingServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateCheckoutSession",
+			Handler:    _BillingService_CreateCheckoutSession_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "cashflux/v1/cashflux.proto",
+}
+
+const (
+	BlobService_UploadBlob_FullMethodName   = "/cashflux.v1.BlobService/UploadBlob"
+	BlobService_DownloadBlob_FullMethodName = "/cashflux.v1.BlobService/DownloadBlob"
+)
+
+// BlobServiceClient is the client API for BlobService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type BlobServiceClient interface {
+	UploadBlob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadBlobChunk, UploadBlobResponse], error)
+	DownloadBlob(ctx context.Context, in *DownloadBlobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadBlobChunk], error)
+}
+
+type blobServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBlobServiceClient(cc grpc.ClientConnInterface) BlobServiceClient {
+	return &blobServiceClient{cc}
+}
+
+func (c *blobServiceClient) UploadBlob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadBlobChunk, UploadBlobResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BlobService_ServiceDesc.Streams[0], BlobService_UploadBlob_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[UploadBlobChunk, UploadBlobResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobService_UploadBlobClient = grpc.ClientStreamingClient[UploadBlobChunk, UploadBlobResponse]
+
+func (c *blobServiceClient) DownloadBlob(ctx context.Context, in *DownloadBlobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadBlobChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BlobService_ServiceDesc.Streams[1], BlobService_DownloadBlob_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadBlobRequest, DownloadBlobChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobService_DownloadBlobClient = grpc.ServerStreamingClient[DownloadBlobChunk]
+
+// BlobServiceServer is the server API for BlobService service.
+// All implementations must embed UnimplementedBlobServiceServer
+// for forward compatibility.
+type BlobServiceServer interface {
+	UploadBlob(grpc.ClientStreamingServer[UploadBlobChunk, UploadBlobResponse]) error
+	DownloadBlob(*DownloadBlobRequest, grpc.ServerStreamingServer[DownloadBlobChunk]) error
+	mustEmbedUnimplementedBlobServiceServer()
+}
+
+// UnimplementedBlobServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBlobServiceServer struct{}
+
+func (UnimplementedBlobServiceServer) UploadBlob(grpc.ClientStreamingServer[UploadBlobChunk, UploadBlobResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method UploadBlob not implemented")
+}
+func (UnimplementedBlobServiceServer) DownloadBlob(*DownloadBlobRequest, grpc.ServerStreamingServer[DownloadBlobChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method DownloadBlob not implemented")
+}
+func (UnimplementedBlobServiceServer) mustEmbedUnimplementedBlobServiceServer() {}
+func (UnimplementedBlobServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeBlobServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BlobServiceServer will
+// result in compilation errors.
+type UnsafeBlobServiceServer interface {
+	mustEmbedUnimplementedBlobServiceServer()
+}
+
+func RegisterBlobServiceServer(s grpc.ServiceRegistrar, srv BlobServiceServer) {
+	// If the following call pancis, it indicates UnimplementedBlobServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BlobService_ServiceDesc, srv)
+}
+
+func _BlobService_UploadBlob_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BlobServiceServer).UploadBlob(&grpc.GenericServerStream[UploadBlobChunk, UploadBlobResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobService_UploadBlobServer = grpc.ClientStreamingServer[UploadBlobChunk, UploadBlobResponse]
+
+func _BlobService_DownloadBlob_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadBlobRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BlobServiceServer).DownloadBlob(m, &grpc.GenericServerStream[DownloadBlobRequest, DownloadBlobChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BlobService_DownloadBlobServer = grpc.ServerStreamingServer[DownloadBlobChunk]
+
+// BlobService_ServiceDesc is the grpc.ServiceDesc for BlobService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BlobService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cashflux.v1.BlobService",
+	HandlerType: (*BlobServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "UploadBlob",
+			Handler:       _BlobService_UploadBlob_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "DownloadBlob",
+			Handler:       _BlobService_DownloadBlob_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "cashflux/v1/cashflux.proto",
+}

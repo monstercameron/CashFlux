@@ -81,6 +81,9 @@ func subscriptionCloudActive(sub Subscription, now time.Time) bool {
 
 func CloudEntitlementUnaryInterceptor(cfg Config, store *Store) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if info != nil && skipsEntitlementCheck(info.FullMethod) {
+			return handler(ctx, req)
+		}
 		if err := requireCloudEntitlement(ctx, cfg, store); err != nil {
 			return nil, err
 		}
@@ -90,6 +93,9 @@ func CloudEntitlementUnaryInterceptor(cfg Config, store *Store) grpc.UnaryServer
 
 func CloudEntitlementStreamInterceptor(cfg Config, store *Store) grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if info != nil && skipsEntitlementCheck(info.FullMethod) {
+			return handler(srv, stream)
+		}
 		if err := requireCloudEntitlement(stream.Context(), cfg, store); err != nil {
 			return err
 		}
@@ -107,7 +113,26 @@ func requireCloudEntitlement(ctx context.Context, cfg Config, store *Store) erro
 		return err
 	}
 	if !active {
-		return status.Error(codes.PermissionDenied, "cloud entitlement is inactive")
+		return richEntitlementRejection(ctx, store, user)
 	}
 	return nil
+}
+
+// richEntitlementRejection classifies WHY the caller's cloud entitlement is
+// inactive and returns the matching rich error (TODOS.md C428/C433) instead
+// of the bare status this used to return, so the client can render a
+// suspended/billing-lapsed/no-subscription state without re-deriving it from
+// a plain message string. The classification re-reads the same rows
+// IsCloudActive just consulted; it does not change the active/inactive
+// verdict itself, only what's told to the caller after that verdict lands.
+func richEntitlementRejection(ctx context.Context, store *Store, user AuthUser) error {
+	if store != nil {
+		if suspended, err := store.IsUserSuspended(user.ID); err == nil && suspended {
+			return RichAdminSuspendedError("this account has been suspended")
+		}
+		if sub, ok, err := store.GetSubscription(user.ID); err == nil && ok {
+			return RichBillingLapsedError("your cloud subscription is not active (status: " + sub.Status + ")")
+		}
+	}
+	return RichBillingLapsedError("cloud entitlement is inactive")
 }

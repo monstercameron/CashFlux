@@ -151,3 +151,162 @@ service AIService {
   rpc ChatStream(ChatRequest) returns (stream CompletionChunk);
   rpc VisionStream(VisionRequest) returns (stream CompletionChunk);
 }
+
+// --- AuthService: device/session identity core (TODOS.md C418) ---
+
+message EnrollRequest {
+  string device_label = 1;
+}
+
+message TokenPairResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in_seconds = 3;
+  string device_id = 4;
+}
+
+message RequestPhoneVerificationRequest {
+  string phone_number = 1;
+  string device_label = 2;
+}
+
+message RequestPhoneVerificationResponse {
+  bool sent = 1;
+}
+
+message VerifyPhoneCodeRequest {
+  string phone_number = 1;
+  string code = 2;
+  string device_label = 3;
+  string idempotency_key = 4;
+}
+
+message RedeemPairingCodeRequest {
+  string pairing_code = 1;
+  string device_label = 2;
+  string idempotency_key = 3;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string device_label = 3;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string device_label = 3;
+  string idempotency_key = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool revoked = 1;
+}
+
+message ListDevicesRequest {}
+
+message DeviceSession {
+  string family_id = 1;
+  string device_label = 2;
+  string expires_at = 3;
+  bool current = 4;
+}
+
+message ListDevicesResponse {
+  repeated DeviceSession devices = 1;
+}
+
+message RevokeDeviceRequest {
+  string family_id = 1;
+}
+
+message RevokeDeviceResponse {
+  bool revoked = 1;
+}
+
+service AuthService {
+  rpc Enroll(EnrollRequest) returns (TokenPairResponse);
+  rpc RequestPhoneVerification(RequestPhoneVerificationRequest) returns (RequestPhoneVerificationResponse);
+  rpc VerifyPhoneCode(VerifyPhoneCodeRequest) returns (TokenPairResponse);
+  rpc RedeemPairingCode(RedeemPairingCodeRequest) returns (TokenPairResponse);
+  rpc Register(RegisterRequest) returns (TokenPairResponse);
+  rpc Login(LoginRequest) returns (TokenPairResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (TokenPairResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+  rpc RevokeDevice(RevokeDeviceRequest) returns (RevokeDeviceResponse);
+}
+
+// --- AccountService: entitlement read (TODOS.md C431) ---
+
+message GetEntitlementRequest {}
+
+message GetEntitlementResponse {
+  bool active = 1;
+  string reason = 2;
+  int64 bytes_used = 3;
+  int64 bytes_limit = 4;
+  string plan_tier = 5;
+}
+
+service AccountService {
+  rpc GetEntitlement(GetEntitlementRequest) returns (GetEntitlementResponse);
+}
+
+// --- BillingService: checkout session (TODOS.md C440) ---
+
+message CreateCheckoutSessionRequest {
+  string plan = 1;
+  string provider = 2;
+}
+
+message CreateCheckoutSessionResponse {
+  string checkout_url = 1;
+}
+
+service BillingService {
+  rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
+}
+
+// --- BlobService: artifact transfer off REST (TODOS.md C426) ---
+
+message UploadBlobHeader {
+  string hash = 1;
+  int64 declared_size_bytes = 2;
+  string mime = 3;
+  string name = 4;
+}
+
+message UploadBlobChunk {
+  oneof payload {
+    UploadBlobHeader header = 1;
+    bytes data = 2;
+  }
+}
+
+message UploadBlobResponse {
+  string hash = 1;
+  int64 size = 2;
+}
+
+message DownloadBlobRequest {
+  string hash = 1;
+}
+
+message DownloadBlobChunk {
+  bytes data = 1;
+}
+
+service BlobService {
+  rpc UploadBlob(stream UploadBlobChunk) returns (UploadBlobResponse);
+  rpc DownloadBlob(DownloadBlobRequest) returns (stream DownloadBlobChunk);
+}

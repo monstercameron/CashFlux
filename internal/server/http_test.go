@@ -671,6 +671,50 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	}
 }
 
+// TestHandleMintPairingCode exercises the POST /v1/devices/pair route
+// end-to-end through NewMux: an authenticated caller gets back a code that
+// genuinely redeems (via Store.ConsumePairingCode) to their own account, and
+// an unauthenticated caller is rejected outright (TODOS.md C421).
+func TestHandleMintPairingCode(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	seedSyncUser(t, store, user.ID, time.Now().UTC())
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, store)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/devices/pair", nil)
+	req.Header.Set("Authorization", "Bearer dev-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("mint status = %d body %q", rr.Code, rr.Body.String())
+	}
+	var resp pairingCodeResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode mint response: %v", err)
+	}
+	if resp.Code == "" || resp.ExpiresAt == "" {
+		t.Fatalf("mint response = %+v, want a non-empty code and expiry", resp)
+	}
+
+	redeemedUserID, ok, err := store.ConsumePairingCode(resp.Code, time.Now().UTC())
+	if err != nil || !ok {
+		t.Fatalf("ConsumePairingCode(%q) = ok %v err %v, want a redeemable code", resp.Code, ok, err)
+	}
+	if redeemedUserID != user.ID {
+		t.Fatalf("redeemed user id = %q, want %q", redeemedUserID, user.ID)
+	}
+}
+
+func TestHandleMintPairingCodeRequiresAuthentication(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodPost, "/v1/devices/pair", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d body %q, want 401", rr.Code, rr.Body.String())
+	}
+}
+
 func TestAccountAndAdminErrorsReturnMachineReadableReasons(t *testing.T) {
 	h := NewMux(Config{AuthMode: "token", Token: "dev-token", AppOrigin: "http://127.0.0.1:8080"}, openTestStore(t))
 	for _, tc := range []struct {
@@ -1486,11 +1530,11 @@ func TestOAuthLogoutAllRevokesEveryUserRefreshSession(t *testing.T) {
 	if err := store.UpsertUser(User{ID: "github:42", Provider: "github", Subject: "42", CreatedAt: now}); err != nil {
 		t.Fatalf("UpsertUser: %v", err)
 	}
-	access, _, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	access, _, err := issueStoredSessionPair(cfg, store, "github:42", now, "", "")
 	if err != nil {
 		t.Fatalf("issue first session: %v", err)
 	}
-	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "", "")
 	if err != nil {
 		t.Fatalf("issue second session: %v", err)
 	}
@@ -1563,15 +1607,15 @@ func TestOAuthSessionListAndRevokeFamily(t *testing.T) {
 			t.Fatalf("UpsertUser %+v: %v", user, err)
 		}
 	}
-	access, refresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	access, refresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "", "")
 	if err != nil {
 		t.Fatalf("issue first session: %v", err)
 	}
-	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "")
+	_, otherRefresh, err := issueStoredSessionPair(cfg, store, "github:42", now, "", "")
 	if err != nil {
 		t.Fatalf("issue second session: %v", err)
 	}
-	otherAccess, _, err := issueStoredSessionPair(cfg, store, "github:99", now, "")
+	otherAccess, _, err := issueStoredSessionPair(cfg, store, "github:99", now, "", "")
 	if err != nil {
 		t.Fatalf("issue other user session: %v", err)
 	}
@@ -2147,6 +2191,45 @@ func TestBlobEndpointRejectsStorageQuotaExceeded(t *testing.T) {
 		t.Fatalf("quota body = %q", rr.Body.String())
 	}
 	assertHTTPErrorReason(t, rr, ErrorReasonResourceExhausted)
+}
+
+// TestBlobEndpointEnforcesPerPlanStorageLimit proves that PUT /v1/blobs/{hash}
+// (withinStorageQuota via storageLimitForUser) honors a per-plan storage
+// override (Config.StoragePlanBytesOverride / StorageLimitForPlan, TODOS.md
+// C439) rather than only the flat global Config.StorageMaxBytes — the same
+// invariant TestBlobServiceUploadEnforcesPerPlanStorageLimit proves for the
+// gRPC BlobService transport. A generous global cap must not let a user on a
+// deliberately storage-limited cheap plan upload past their real,
+// plan-specific quota.
+func TestBlobEndpointEnforcesPerPlanStorageLimit(t *testing.T) {
+	store := openTestStore(t)
+	user := authUserFromToken("dev-token")
+	now := time.Date(2026, time.June, 19, 3, 30, 0, 0, time.UTC)
+	seedSyncUser(t, store, user.ID, now)
+	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: user.ID, Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if err := store.PutSubscription(Subscription{
+		UserID: user.ID, ProviderCustomer: "cus-1", ProviderSubscription: "sub-1",
+		Status: "active", Plan: "free", UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("PutSubscription: %v", err)
+	}
+	cfg := Config{
+		AuthMode: "token", Token: "dev-token", Billing: true, DataDir: t.TempDir(),
+		StorageMaxBytes:          1_000_000,
+		StoragePlanBytesOverride: map[string]int64{"free": 3},
+	}
+	h := NewMux(cfg, store)
+	data := []byte("abcd")
+	req := httptest.NewRequest(http.MethodPut, "/v1/blobs/"+blobHash(data)+"?workspaceId=w1", bytes.NewReader(data))
+	req.Header.Set("Authorization", "Bearer dev-token")
+	req.Header.Set("Content-Type", "text/plain")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusInsufficientStorage {
+		t.Fatalf("a free-plan user's 4-byte upload should have been rejected against their real 3-byte plan limit despite the generous 1,000,000-byte global cap; status = %d body %q", rr.Code, rr.Body.String())
+	}
 }
 
 func TestBlobEndpointWarnsNearStorageQuota(t *testing.T) {
