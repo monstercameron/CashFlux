@@ -1,3 +1,16 @@
+## 2026-07-23 — Hosting stacks promoted to §15 with detail tables (docs, no code)
+
+Cam wanted the reference stacks at the bottom of the plan and in a proper detailed table. Moved
+them out of §5a (pointer left behind) into a new §15 with three layers: the 10-row side-by-side
+component table where every row carries both stacks' choice, cost, and a why-the-choice-differs
+column (the useful one — e.g., blobs-on-disk in A *because no promise requiring an object store
+has been made yet*, Spaces in B so droplet rebuilds never touch user data); a capacity/risk/
+economics table making the uncomfortable rows explicit (single point of failure posture,
+referral coherence forfeited while A runs, and the rejected alternatives on both ends — IONOS $2
+as false economy, oversized droplet as pre-measurement spending); and the rationale prose ending
+with the calendar-trigger switch rule: first charge = Stack B + insurance + status page + SLA
+posture as one checklist.
+
 ## 2026-07-23 — §5a addendum: two reference hosting stacks (docs, no code)
 
 Cam asked for a lowest-cost and an optimal hosting plan with rationales. The design decision was

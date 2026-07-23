@@ -197,53 +197,10 @@ quotes above ~$150/mo as a shop-harder signal.
 | Federal self-employment | 15.3% on net profit + ordinary income tax | Quarterly estimates once profit is real |
 | **Other states' sales tax** | Varies — SaaS *is* taxable in NY/TX/PA/WA etc. | Economic nexus ≈ $100k/state; **Stripe Tax (0.5%) monitors + files-ready**; a non-issue until revenue is real, a solved one after |
 
-### Two reference hosting stacks (pick one, don't improvise)
-
-Both run the identical software (one Go binary + Caddy auto-HTTPS + SQLite + S3-compatible
-blob store), so moving A→B is an rsync + DNS flip, not a migration project.
-
-#### Stack A — Lowest cost ("prove-it"): ~$6/mo all-in
-| Component | Choice | Cost |
-|---|---|---|
-| VPS | **Hetzner CPX11 (Ashburn, US-east)** — 2 vCPU AMD / 2 GB / 40 GB, 20 TB traffic | ~$5/mo |
-| Blobs | On the VPS disk (40 GB ≈ first ~100+ users at realistic usage) | $0 |
-| Backups | Nightly encrypted snapshot → **Backblaze B2** | ~$0.10–0.50/mo |
-| Email | Cloudflare Email Routing (inbound, $0) + **SES** outbound | ~$0–1/mo |
-| Domain + DNS/CDN | Cloudflare at-cost .com + free tier proxy | ~$0.87/mo |
-| Monitoring | UptimeRobot / healthchecks.io free tiers | $0 |
-| **Total** | | **~$6–7/mo** |
-
-**Rationale:** minimizes burn while the funnel is unproven — the whole stack costs less than
-one subscriber's annual fee per month. Hetzner's US location fixes the latency objection; 20 TB
-included traffic makes egress a non-thought; blobs-on-disk delays the object-store decision
-until real usage data exists. **Honest trade-offs:** one box is a single point of failure
-(acceptable *only* with nightly off-box backups and no uptime promises made); the absolute
-floor (IONOS $2/1 GB) was rejected — saving $3/mo to lose all headroom for backup jobs and
-traffic spikes is a false economy; and this stack forfeits the §14 DigitalOcean referral
-coherence while it runs.
-
-#### Stack B — Optimal ("launch"): ~$21–25/mo, carries ~1–2k subscribers
-| Component | Choice | Cost |
-|---|---|---|
-| VPS | **DigitalOcean Basic $12** — 2 GB / 1 vCPU / 50 GB (resize-in-place upgrade path) | $12/mo |
-| Blobs | **DO Spaces** — 250 GB + 1 TB egress included | $5/mo |
-| VPS backups | DO automated backups (20% of droplet) | $2.40/mo |
-| Email | SES (upgrade to Postmark $15 only if deliverability ever measurably hurts) | ~$1–5/mo |
-| Domain + DNS/CDN | Cloudflare at-cost + free proxy in front | ~$0.87/mo |
-| Monitoring/status | DO monitoring + healthchecks free + Instatus free status page | $0 |
-| **Total** | | **~$21–25/mo** |
-
-**Rationale:** optimal ≠ cheapest — it's the cost floor *consistent with the strategy*. One
-provider for compute+blobs+backups keeps the solo-operator ops surface tiny; DO is where the
-§14 referral/Marketplace flywheel pays, so hosting there is coherent rather than hypocritical;
-2 GB buys headroom for import bursts and the AI proxy without a resize; provider-level backups
-plus B2 offsite copies make the durability promise (FB6, "privacy ≠ durability") true on the
-server side too. At $40/yr pricing, **7 subscribers cover the entire stack**; at 1k subscribers
-it's ~0.7% of revenue.
-
-**Switch rule:** run Stack A through beta; move to Stack B the month billing turns on (same
-month as the insurance purchase — first charge is the trigger for both). Do not improvise a
-third stack between them.
+### Reference hosting stacks
+Two named stacks — lowest-cost "prove-it" (~$6–7/mo) and optimal "launch" (~$21–25/mo) — are
+specified in full detail in **§15** at the end of this document, including the side-by-side
+component table, rationales, trade-offs, and the switch rule (first charge = move to Stack B).
 
 ### Bottom line — the actual launch budget
 | Phase | Monthly | Annual-ish |
@@ -408,3 +365,54 @@ compromising the open, no-dark-patterns promise.
 - If a referral looks suspicious, exclude it from internal COGS/revenue modeling and keep the user experience
   unchanged; do not punish app access based on referral outcome.
 - Keep the non-referral self-host path equally visible so the referral link remains optional and disclosed.
+
+## 15. Reference hosting stacks — full detail
+
+> Pick one of these two, don't improvise a third. Both run the identical software — one Go
+> binary + Caddy auto-HTTPS + SQLite + an S3-compatible blob interface — so moving A→B is an
+> rsync + DNS flip, not a migration project. Prices verified 2026-07-23.
+
+### 15.1 Side-by-side component table
+
+| Component | **Stack A — "Prove-it" (lowest cost)** | A cost/mo | **Stack B — "Launch" (optimal)** | B cost/mo | Why the choice differs |
+|---|---|---|---|---|---|
+| **VPS** | Hetzner **CPX11**, Ashburn US-east — 2 vCPU AMD / 2 GB RAM / 40 GB NVMe / 20 TB traffic | ~$5.00 | DigitalOcean **Basic $12** — 1 vCPU / 2 GB RAM / 50 GB NVMe / 2 TB transfer | $12.00 | A buys the best raw price-perf on the market; B buys the provider where the §14 referral/Marketplace flywheel pays and resize-in-place upgrades |
+| **Blob storage** (receipts/artifacts) | On the VPS's 40 GB disk — covers first ~100+ users at realistic usage | $0 | **DO Spaces** — 250 GB storage + 1 TB egress included, S3-compatible | $5.00 | A defers the object-store decision until real usage data exists; B separates blobs from the box so droplet resize/rebuild never touches user data |
+| **Server backups** | Nightly encrypted snapshot pushed off-box to **Backblaze B2** ($0.006/GB) | ~$0.10–0.50 | **DO automated backups** (20% of droplet price) **+ the same nightly B2 push** (offsite, different provider) | $2.40 + ~$0.50 | A gets off-box durability for pennies; B adds provider-level restore *and* keeps the cross-provider copy — the server-side half of the "privacy ≠ durability" promise (FB6) |
+| **Email — outbound** (reminders, receipts, auth) | **Amazon SES** — $0.10 per 1,000 | ~$0–1 | **SES** (same); upgrade path: Postmark $15/mo *only if* deliverability measurably hurts | ~$1–5 | Volume, not vendor, is the difference; the Postmark trigger is a measured bounce/spam rate, not vibes |
+| **Email — inbound** (ingest address) | **Cloudflare Email Routing** → webhook | $0 | Same | $0 | Free and provider-neutral both sides |
+| **Domain** | Cloudflare Registrar at-cost .com (~$10.44/yr) | ~$0.87 | Same | ~$0.87 | No reason to differ |
+| **DNS / CDN / DDoS front** | Cloudflare free tier, proxied | $0 | Same | $0 | Also gives blob-egress relief via Bandwidth Alliance if B2 serves anything |
+| **Monitoring** | UptimeRobot + healthchecks.io free tiers | $0 | DO monitoring (included) + healthchecks.io | $0 | — |
+| **Status page** | none (beta — no uptime promises made) | $0 | **Instatus** free tier | $0 | A deliberately makes no promises; B starts making them the day money moves |
+| **TLS** | Caddy / Let's Encrypt | $0 | Same | $0 | — |
+| **TOTAL** | | **~$6–7/mo** | | **~$21–25/mo** | |
+
+### 15.2 Capacity, risk, and economics detail
+
+| Dimension | Stack A | Stack B |
+|---|---|---|
+| Realistic capacity | Beta cohort → low hundreds of users | ~1,000–2,000 subscribers before first resize |
+| Single point of failure | **Yes — one box.** Tolerable *only* with nightly off-box backups and zero uptime promises | Box still single, but blobs externalized + two backup layers; restore = new droplet + rsync + DNS |
+| Latency (US users) | Fixed by choosing Ashburn (the reason CPX11, not the cheaper EU-only CX22) | US regions native |
+| Egress ceiling | 20 TB included (a non-thought) | 2 TB droplet + 1 TB Spaces (fine; Cloudflare front absorbs static) |
+| Referral coherence (§14) | **Forfeited** while A runs | Aligned — we host where we send self-hosters |
+| Upgrade path | Move to B (rsync + DNS) | Resize droplet in place; Spaces scales linearly |
+| Cost as % of revenue | Pre-revenue by definition | **7 subscribers cover the stack**; ~0.7% of revenue at 1k subs |
+| Rejected alternative | IONOS $2 (1 GB RAM): saving $3/mo to lose all headroom for backup jobs and traffic spikes is false economy | Bigger droplet up front: paying for headroom before measurement contradicts §5's measure-first rule |
+
+### 15.3 Rationales (the reasoning, not just the rows)
+
+- **Stack A exists to make the funnel experiment nearly free.** The entire stack costs less per
+  month than one subscriber pays per year, so running the beta for six months is a ~$40
+  question. Everything deferred (object store, status page, provider backups) is deferred
+  *because no promise requiring it has been made yet*.
+- **Stack B is "optimal" as in: the cost floor consistent with the strategy** — not the
+  cheapest possible number. One provider for compute + blobs + backups keeps the solo-operator
+  ops surface tiny; hosting on DO while pointing self-hosters at DO referrals is coherent
+  rather than hypocritical; 2 GB and external blobs buy headroom for import bursts and the AI
+  proxy without touching architecture.
+- **The switch rule is a calendar trigger, not a judgment call:** run A through beta; move to B
+  **the month billing turns on** — deliberately the same trigger as buying the §5a insurance
+  bundle, so "the month money starts moving" is one checklist (Stack B + insurance + status
+  page + published SLA posture), not three separate decisions.

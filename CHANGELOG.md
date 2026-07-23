@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Cloud business plan — hosting stacks moved to §15 with full detail tables
+  (`docs/CLOUD_BUSINESS_PLAN.md`).** The two reference stacks now live at the end of the
+  document as §15: a 10-row side-by-side component table (choice, cost, and why-the-choice-
+  differs per row for both stacks), a capacity/risk/economics table (SPOF posture, latency,
+  egress ceilings, referral coherence, upgrade paths, rejected alternatives), and the
+  rationales + calendar-trigger switch rule. §5a keeps a pointer.
 - **Cloud business plan §5a — two reference hosting stacks (`docs/CLOUD_BUSINESS_PLAN.md`).**
   Stack A "prove-it" (~$6–7/mo: Hetzner CPX11 US-east, blobs on disk, B2 nightly backups,
   SES + Cloudflare free tiers) for the unproven-funnel phase, with honest trade-offs named
