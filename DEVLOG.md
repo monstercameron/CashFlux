@@ -29,6 +29,21 @@ screen renders every string through `T`), so the zero-hardcoded-copy ratchet hol
 Next in the feedback list: #5 (surface detected recurring transactions + cadence in budgets) and #6
 (future-period projections so navigating forward shows projected, not empty, values).
 
+## 2026-07-23 — configurable timeframe in the txn history popover — feedback #7
+
+Coworker: *"Txn history popover — allow configurable timeframes."* Same popover as #3 (the
+per-transaction history modal, `txn_history_panel.go`), which scanned a fixed 500-entry audit window
+and showed everything. Added a Timeframe filter (All time / 90 / 30 / 7 days) that clips the entry
+list to `now - N days` by each entry's timestamp. The choice persists via KV so it holds across
+reopens, and an empty window gets its own honest message ("No changes in this timeframe. Widen it…")
+instead of the generic "nothing recorded" line, so a filtered-to-empty state isn't mistaken for a
+transaction with no history. Each option is its own `txnHistTfButton` child component so the click
+hook stays at a stable render position. No new CSS — reuses the btn chrome and tw layout utilities.
+
+Verified headless: the popover opens with all four options, selecting "7 days" swaps in the
+window-aware empty message, zero console errors. This closes the coworker-feedback list (#1–#8 plus
+the split-editor redesign).
+
 ## 2026-07-23 — future-period projection on budgets — feedback #6
 
 Coworker: *"When navigating future timelines, show future-related things — no empty values."* The

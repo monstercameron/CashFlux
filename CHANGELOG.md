@@ -46,6 +46,10 @@ and every commit updates this file under `Unreleased`.
   the card view's single delete — no modal.
 - **Split-editor row separators.** Category-split rows now have a hairline + padding between them so
   multiple breakdowns don't visually blur together.
+- **Configurable timeframe in the transaction history popover.** The per-transaction history modal now
+  has a Timeframe filter (All time / 90 / 30 / 7 days) that scopes the change list to a recent window;
+  the choice persists across reopens, and an empty window says so and points you to widen it. (Coworker
+  feedback #7 — "txn history popover allow configurable timeframes.")
 - **Follow-up task from the transaction history panel.** The per-transaction history popover now has an
   "Add follow-up task" action (previously only on the row kebab), seeding the task pre-linked.
 - **Clearer category-delete copy.** The reassign-before-delete panel now spells out the full outcome —
