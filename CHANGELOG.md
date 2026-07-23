@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Teardown Part V — long-tail missing/partial feature census (`docs/COMPETITIVE_TEARDOWN.md`).**
+  Third pass: swept each comp's full help-center/docs article inventory for the features that
+  never make marketing pages, classifying every find vs CashFlux as missing/partial/present/
+  CF-win. 18 net-new items (V.2), headliners: payee as a first-class entity (YNAB/Actual
+  merge+rename-rules), global undo/redo stack, category & month notes, one-click Auto-Assign,
+  single-key bulk setters (Actual's P/N/C/M/G), category exclude-from-totals, decision-advice
+  wizards (Monarch Advice), Zillow/VinAudit auto-valuation adapters, investment
+  benchmark-vs-holding, focused views, money-moves log — plus recorded CF-wins (full
+  multi-currency vs Copilot's USD-only; unlimited free categories). CT1 updated.
 - **Teardown Part IV — mechanic-level cross-examination (`docs/COMPETITIVE_TEARDOWN.md`).**
   Second pass per Cam ("fine detailed feature cross examination"): 17 matrix sections
   interrogating individual mechanics across all comps — entry/quick-capture, splitting (incl.

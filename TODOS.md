@@ -432,8 +432,14 @@ durability, and no-bank-sync means freshness is a product surface (WF4/FB5/FB9),
   alerts/data-I-O/…) ending in the IV.16 scoreboard; its two new flagship candidates:
   **credit-card payment reservation** (YNAB-parity mechanic no aggregator matches) and a
   **local API/CLI + product MCP server** (first-mover — no budget app ships official agent
-  tooling). Do NOT re-research — promote items from the doc into the WF/PS/FB series as
-  they're scheduled.
+  tooling). **Part V** (same day, third pass) = long-tail help-center sweep census: 18 net-new
+  missing/partial items (V.2), headline finds: **payee as a first-class entity**
+  (list/merge/stats/rename-rules — strengthens rules, subscriptions, and reports at once) and a
+  **global undo/redo stack** (uniquely buildable local-first; comps only do scoped undo); plus
+  category/month notes, one-click Auto-Assign, single-key bulk setters, exclude-from-totals,
+  decision-advice wizards, Zillow/VinAudit-class valuation adapters (Cloud), category emoji,
+  focused views, money-moves log. Do NOT re-research — promote items from the doc into the
+  WF/PS/FB series as they're scheduled.
 
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on

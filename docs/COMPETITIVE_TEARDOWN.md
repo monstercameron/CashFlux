@@ -1318,14 +1318,170 @@ already series-anchored (WF1/WF7/WF12/WF17/WF18) plus two genuinely new flagship
 from this pass: **credit-card payment reservation (YNAB-parity claim)** and **product MCP
 server / local API (first-mover claim)**.
 
-## IV.17 Part IV sources (addendum)
+---
 
-YNAB API docs + SDKs (frequency enum, subtransactions), support.ynab.com keyboard-shortcuts &
-reconcile articles · Monarch help: editing-transactions, tags, rules, review blog posts,
-notifications; Monarch-Tweaks community repo · Copilot help: splitting (3/6/12 spread),
-rollovers, savings-goal spending; roadmap.copilot.money · Actual docs: rules, filters, tags,
-schedules/goal-templates, release notes (split caveats, unsplit) · Firefly docs + DeepWiki:
-search operators, search-rule engine, recurrences · PocketSmith Learn Center: labels,
-saved searches, auto-categorize, filters · Simplifi help: savings-goals (available-balance
-mechanics), watchlists (threshold alerts) · Rocket help: smart-savings setup/pause ·
-Lunch Money KB: rules, category properties (exclude-from-totals), pending; changelog.
+# PART V — LONG-TAIL SWEEP: MISSING & PARTIAL FEATURE CENSUS
+
+Added 2026-07-23 (third pass, per Cam: "scour the apps to search for missing or partial
+features"). Method: swept each comp's *full help-center/docs article inventory* — the long tail
+of features that never make marketing pages — and classified every find against CashFlux:
+**MISSING** (absent), **PARTIAL** (exists but thinner, with the exact thinness named),
+**PRESENT** (parity+, listed only when the comp's version has a twist), **CF-WIN** (we're
+ahead; listed for the record). Items already covered in Parts I–IV are cross-referenced, not
+repeated. This is the census of everything found; nothing withheld.
+
+## V.1 Per-comp finds
+
+**Monarch (help-center sweep):**
+- **Zillow Zestimate auto-valuation** — home value syncs from Zillow's estimate, auto-refreshed
+  **every Monday**. CashFlux: MISSING (manual valuation snapshots only). A Cloud-tier adapter
+  slot; local option: none honest.
+- **VinAudit vehicle valuation** — vehicle market value auto-refreshed **monthly (~27th)**.
+  CashFlux: MISSING. Same adapter class as Zillow.
+- **Advice section** — a questionnaire-driven advice wizard "built by actual financial
+  advisors": rent-vs-buy, how to save more, which goals to prioritize. CashFlux: PARTIAL —
+  /plan (FOO/Ramsey) + recommendation hub cover "next step" advice, but there is no
+  *decision-wizard* class (rent-vs-buy, lease-vs-buy, new-vs-used) despite the affordability
+  engine existing. Cheap to build on what-if + affordability.
+- **Holdings view** — securities grouped by type/institution/account + performance graph +
+  manual holdings alongside synced. CashFlux: PARTIAL (per-account cards; no cross-account
+  grouped holdings view — the same security in two accounts never aggregates).
+- CSV import **maps tags** on the way in. CashFlux: PARTIAL (mapping wizard has
+  Date/Description/Amount/Debit/Credit; no tag/member/custom-field columns).
+
+**Copilot (help-center sweep):**
+- **Investment Benchmark** — compare portfolio performance against **any chosen holding**
+  (e.g. vs SPY). CashFlux: MISSING (no benchmark concept; needs price series — Cloud or CSV).
+- **Category emoji/color customization** — names, colors, AND emoji per category. CashFlux:
+  PARTIAL (color swatch only; no icon/emoji — small but users notice; theme-editor-adjacent).
+- **Shared budgets for couples** (within one subscription's shared space). CashFlux: blocked on
+  sync (Area 11) — recorded for the census.
+- **International currency: USD-only, no conversion.** CashFlux: **CF-WIN** (full multi-currency
+  ledger + FX table). Worth stating in marketing comparisons.
+- **Recurring created from any past transaction** ("as long as you have at least one previous
+  transaction"). CashFlux: PRESENT (detected charges + one-click add) — parity.
+
+**YNAB (support-center sweep):**
+- **Payee as a first-class entity + Manage Payees** — combine/merge payees, delete, and
+  **renaming rules** created from an edit ("update future transactions?"). CashFlux: MISSING
+  at the entity level — payees are description strings; there is no payee list, no merge, no
+  per-payee stats page (top-merchants insight computes over strings). A payee entity would
+  strengthen rules (IV.7), subscriptions (payee drill), and reports simultaneously. **One of
+  the two biggest finds of this sweep.**
+- **Auto-Assign** — one click distributes Ready-to-Assign across categories per their targets
+  (underfunded first). CashFlux: MISSING on budgets — /allocate ranks *accounts/debts/goals*
+  but there's no "fund all budget targets" single action (WF17's auto-assign line reaffirmed;
+  the census point is it's a *one-click* affordance, not a planner).
+- **Money Moves log** — a 34-day history of every cover/move between categories, viewable from
+  the plan screen (and undoable on mobile). CashFlux: PARTIAL — Activity logs entity changes,
+  but budget cover-from/top-up moves are not first-class logged events with their own history
+  view (→ WF-AUDIT scope note).
+- **Global undo/redo** — web buttons + mobile undo of recent money movements. CashFlux:
+  PARTIAL (bulk-op undo snapshot + most-recent Activity undo; no global multi-step undo/redo
+  stack).
+- **Focused Views** — saved lens presets over the budget screen (e.g. show only underfunded).
+  CashFlux: MISSING (status pills filter-ish; not savable lenses) → merges into WF13/WF16.
+- **Category colors AND icons.** CashFlux: PARTIAL (colors only — same as Copilot find).
+- **"Get a month ahead" framing** — aging money into next month as an explicit practice +
+  **Age of Money** metric. CashFlux: MISSING both metric and framing (Part I A1 filed
+  age-of-money; the census adds the month-ahead practice as onboarding/coaching content).
+
+**Actual (docs/release sweep):**
+- **Payee merge UI** (select → merge/delete, undoable) — same finding as YNAB; reinforces the
+  payee-entity gap.
+- **Register hotkeys** — single-key bulk setters on selected rows: **P**=payee, **N**=notes,
+  **C**=category, **M**=amount, **G**=merge selected transactions. CashFlux: MISSING (bulk bar
+  is mouse-only; IV.1 keyboard-grammar gap made concrete).
+- **Merge selected transactions (G)** — a lighter cousin of Lunch Money grouping; MISSING.
+- **Category notes & month notes** — free-text notes on a category and on a budget month,
+  API-accessible (used to carry template/goal directives). CashFlux: MISSING (no notes on
+  categories, budgets, or periods — users have nowhere to record "why I set it to $400 this
+  month"). Cheap, real.
+- **Pending-transaction import preference** (sync-import-pending; incoming cleared-status
+  preferred). CashFlux: n/a for sync but PARTIAL for imports — draft review doesn't carry a
+  pending/cleared distinction from OFX.
+
+**Lunch Money (KB/features sweep):**
+- **Query tool** — ad-hoc "insightful overviews" query surface over spending. CashFlux:
+  PARTIAL (formula engine computes metrics; Reports has fixed slices; no ad-hoc query UI over
+  transactions — the formula engine reads aggregates, not arbitrary txn queries). Related to
+  IV.5's one-grammar argument.
+- **Category property: "exclude from totals"** (IV.4) — CashFlux: MISSING as a category-level
+  property (per-account/per-txn exclusions don't exist either; reports include everything).
+  Needed for reimbursables/pass-throughs.
+- Net-worth what-if tied to expense reduction — PRESENT (our /planning trim-spending overlay).
+
+**PocketSmith (learn-center sweep):**
+- **Saved searches in the side panel + bulk actions from search results** (IV.5) — reaffirmed;
+  census adds: search **saves are one click to re-run**, which is the retention mechanic.
+- **Income & Expense statements** — accountant-style P&L per period. CashFlux: PARTIAL
+  (Reports Overview approximates; no formal statement layout/export). Low priority.
+- **Attachments on transactions** widely supported — CashFlux PRESENT (receipts) with the
+  IV.15 filter caveat.
+
+**Rocket Money (site/review sweep):**
+- **FICO Score 2 via Experian with factor breakdown + improvement suggestions.** CashFlux:
+  MISSING (proxy only; Area 3 manual-series delta stands). Bureau data is inherently
+  cloud/partner — census records it as a known non-goal with a named workaround.
+- **Unlimited custom categories as a premium gate** — pricing-model note only (CashFlux
+  unlimited free; CF-WIN for comparison pages).
+- **RocketBNK earned-wage access** — adjacent fintech product, out of scope; recorded so the
+  census is complete.
+
+**Firefly III (docs sweep, residual):**
+- **Object groups** (group accounts/piggy banks arbitrarily) — CashFlux PARTIAL (account types
+  only; no user-defined account groups for reporting).
+- **Attachments on any object** (accounts, bills, piggy banks — not just txns) — CashFlux
+  PARTIAL (txns + artifacts only; Area 3 account-docs delta reaffirmed).
+- **Audit log per object** ("show all changes to this account") — CashFlux PARTIAL (global
+  Activity timeline; no per-entity history view → WF-AUDIT scope note).
+
+**Empower / Boldin / ProjectionLab / PiggySize:** long tails already fully captured in Parts
+I–II (fee analyzer, recession simulator, guardrails, IRMAA, tax-bracket viz, paystub scan,
+persona demo). No additional finds.
+
+## V.2 Census roll-up — net-new items from this sweep
+
+**MISSING (not previously filed anywhere):**
+1. Payee entity: list, merge, per-payee stats, rename-rules integration (**flagship find #1**).
+2. Auto-Assign one-click "fund all targets" on budgets.
+3. Category & month notes.
+4. Single-key bulk setters + merge-selected in the ledger (**concrete keyboard spec**).
+5. Category/entity "exclude from totals" property.
+6. Decision-advice wizards (rent-vs-buy class) on the affordability engine.
+7. Zillow/VinAudit-class auto-valuation adapters (Cloud).
+8. Investment benchmark-vs-holding.
+9. Cross-account grouped holdings view.
+10. Category icons/emoji.
+11. Focused views (saved budget lenses).
+12. Money-moves first-class log (budget cover/top-up history).
+13. Global undo/redo stack (**flagship find #2** — local-first + SQLite makes this uniquely
+    buildable as a marquee trust feature; comps only do scoped undo).
+14. Import mapping for tags/member/custom-field columns.
+15. Pending/cleared carried from OFX drafts.
+16. User-defined account groups.
+17. Per-entity audit view (filtered Activity).
+18. "Month ahead" coaching content + age-of-money (metric already filed A1).
+
+**CF-WIN for the comparison page:** full multi-currency (vs Copilot USD-only); unlimited
+categories free (vs Rocket's premium gate); no-credential posture (vs all aggregators).
+
+**Fold-into-existing:** #2→WF17 · #4→IV.1/keyboard ticket · #5→reports/watchlists ·
+#11→WF13/WF16 · #12+#17→WF-AUDIT · #14/#15→import lane · #1/#3/#6/#13→new tickets via CT1.
+
+## Sources addendum (Parts IV & V)
+
+YNAB API docs + SDKs (frequency enum, subtransactions), support.ynab.com: keyboard-shortcuts,
+reconcile, manage-payees, age-of-money, undo/redo, moving-money/money-moves, auto-assign,
+focused-views, colors-and-icons · Monarch help: editing-transactions, tags, rules, review blog,
+notifications, tracking-property-vehicles-valuables (Zillow weekly / VinAudit monthly),
+investments-in-Monarch, Advice launch blog; Monarch-Tweaks community repo · Copilot help:
+splitting (3/6/12 spread), rollovers, savings-goal spending, categories FAQ (emoji/colors),
+international-currency (USD-only), investments-tab (Benchmark); roadmap.copilot.money · Actual
+docs + releases: rules, filters, tags, schedules/goal-templates, payees (merge), hotkeys
+(P/N/C/M/G), category-notes API, sync-import-pending, split caveats · Firefly docs + DeepWiki:
+search operators, search-rule engine, recurrences, object groups, attachments, audit ·
+PocketSmith Learn Center: labels, saved searches, auto-categorize, filters, statements ·
+Simplifi help: savings-goals (available-balance mechanics), watchlists (threshold ladder) ·
+Rocket: smart-savings setup/pause, FICO Score 2/Experian factor insights · Lunch Money KB +
+features: rules, category properties (exclude-from-totals), pending, query tool; changelog.

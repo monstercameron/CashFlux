@@ -1,3 +1,28 @@
+## 2026-07-23 — Teardown Part V: long-tail feature census (research, no code)
+
+Cam: "make sure to scour the apps to search for missing or partial features." The Parts I–IV
+comparisons only tested mechanics I knew to ask about; the long tail lives in help-center
+article inventories, so this pass swept those (Monarch's tracking-property article, YNAB's
+manage-payees/auto-assign/money-moves docs, Actual's hotkey and category-notes releases,
+Copilot's categories FAQ and investments-tab article, Lunch Money's category-properties KB…)
+and classified every find against FEATURE_MAP as missing/partial/present/CF-win.
+
+The two flagship finds were hiding in plain sight: (1) **payees aren't an entity in CashFlux**
+— YNAB and Actual both ship payee lists with merge/combine and rename-rules, and half our
+surfaces (rules, subscriptions, top-merchants, reports) compute over raw description strings; a
+payee entity strengthens all four at once. (2) **Global undo/redo** — YNAB has web undo/redo
+buttons and mobile money-move undo; we have bulk-op snapshots and a single most-recent Activity
+undo. A real multi-step undo stack is *uniquely* buildable in a local-first SQLite app and
+would be a marquee trust feature no aggregator can match cleanly. Also caught: category/month
+notes (nowhere to write "why $400 this month"), one-click Auto-Assign, Actual's single-key bulk
+setters (P/N/C/M/G — the concrete spec for our keyboard gap), exclude-from-totals category
+property (reimbursables/pass-throughs currently pollute every report), Monarch's Advice
+decision-wizards (rent-vs-buy on top of an affordability engine we already have), Zillow-weekly/
+VinAudit-monthly auto-valuation (Cloud adapter class), Copilot's benchmark-vs-any-holding, and
+two CF-wins worth putting on a comparison page: full multi-currency (Copilot is USD-only,
+no conversion) and unlimited free categories (Rocket gates them behind premium). V.2 rolls up
+18 net-new items with fold-into targets; CT1 remains the promotion gate.
+
 ## 2026-07-23 — Teardown Part IV: mechanic-level cross-examination (research, no code)
 
 Cam's verdict on the first pass: not comprehensive enough — he wants feature *cross-examination*,
