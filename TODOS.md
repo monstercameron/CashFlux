@@ -154,6 +154,167 @@ automatic bank/institution sync, live credit scores/bureau monitoring, bill nego
 subscription cancellation, real-time brokerage/rewards pricing, automatic money transfers, tax filing /
 live payroll. Manual import + statement parsing may approximate parts, clearly labelled as such.
 
+### PS-series — PiggySize teardown: what they do better (competitor research 2026-07-23; DEFERRED — for a later research pass)
+Source: piggysize.com marketing pages (home / compare / how-it-works / ai-assistant /
+retirement-planning) plus a full Playwright walkthrough of their live demo (all 15 demo pages
+screenshotted 2026-07-23, sample scenario "working couple + side gig"). Context that frames every
+item: **PiggySize has no transaction ledger.** It is a balances-and-obligations planner (recurring
+income + bills + assets + debts, updated ~15 min/month) built on stock shadcn/Tailwind, sold at
+$9/mo against YNAB/Monarch's $14.99. CashFlux wins on the ledger, budgets, reports, extensibility,
+visual identity, and the strictly-local privacy story — none of that is at risk here. This list is
+*only* what they do better, kept detailed so a later research pass can start from the essence
+instead of re-deriving it. Dedupe against WF-series (esp. WF2 scenario lab, WF6 action preview,
+WF13 saved views) before starting any ticket.
+
+> Also filed from the same session: **PS-QA1** below — a real defect on our side the teardown
+> screenshots caught.
+
+**A. Flagship capability gaps (product)**
+- [ ] **PS1 — Retirement planner.** ★ The decisive gap: CashFlux has nothing that answers "will my
+  money last?" Their Pro planner: month-by-month household cash flow **to age 95**; Monte Carlo
+  (up to 10k simulated market histories) yielding a **success rate** plus best/median/worst bands;
+  Social Security modeled **at every whole claim age 62–70** (≈30% cut at 62 → ≈+24% at 70, spousal
+  *and survivor* benefits built in); pensions with COLA; RMDs from 73/75 (birth-year aware); Roth
+  conversion ladders + pre-59½ penalty awareness; a default **withdrawal sequencing** (income → SS →
+  pension → HSA → taxable → traditional → Roth); an "already retired — start from where you are"
+  mode; survivor-income analysis ("which check survives, and how far household income falls").
+  Design essence worth copying: the projection table's columns are **named ages, not dates**
+  ("Current 48 / You retire 65 / Both retired 69") with delta + % under each figure; assumptions
+  live in a right-rail accordion (Retirement Age / Rates & Contributions / Spending Money /
+  Scenario Analysis / Social Security / Healthcare) that live-updates results; an "On Track" chip
+  sits beside the title; "Save report" exports the moment. Research direction: deterministic
+  projection engine first (pure Go, table-driven tests — our forecast/formula/what-if substrate is
+  a genuine head start), Monte Carlo layered on top; everything runs local-first (their math being
+  server-side is incidental, not required). Tax/limit constants come from PS9.
+- [ ] **PS2 — Business tracking.** Per-venture sub-ledgers (income / expenses / assets / debts /
+  settings as nested nav under each business), profit margin, owner-entered valuation, and **one
+  combined personal+business net worth**. Aimed at side-hustle/LLC users. Research: model as a
+  scoping dimension (venture tag on existing entities) vs parallel books — their nested-nav UX
+  suggests parallel books read clearer to users even if stored as scoped rows.
+- [ ] **PS3 — Bill reminders that reach a closed tab.** Their opt-in "we email you before a bill is
+  due" is small but has outsized retention value, and a local-first app fundamentally cannot do it.
+  Natural CashFlux **Cloud-tier** feature (server knows due dates the user chose to sync); the
+  local approximation is PWA push/notification scheduling — research what's reliably deliverable
+  from a service worker on desktop before promising anything.
+- [ ] **PS4 — Real multi-user, today.** Separate logins per family member, roles & permissions,
+  row-level security, cross-device "one account, always in sync", one subscription covering the
+  household. CashFlux's household model is analytically richer (per-owner views, split/settle) but
+  is one browser on one machine until sync ships. This is the Cloud track (R29 roles + §7 sync +
+  envelope-sync work) — the PiggySize lesson is that "separate logins, same numbers" is the
+  headline families actually buy, so lead with it when that lands.
+- [ ] **PS5 — Free no-account calculator tools as acquisition funnels.** Nine standalone tools
+  (retirement, net worth, **net-worth percentile**, loan payoff, loan payment, avalanche-vs-
+  snowball comparison, take-home pay, emergency fund, 50/30/20) — pure SEO surface, each ending in
+  a "see this with your own numbers" CTA into the app. CashFlux already owns the engines (payoff,
+  forecast, allocate, budgeting); research: static hosted pages reusing the wasm logic packages,
+  zero backend.
+- [ ] **PS6 — Paystub scanning.** Photo of a paystub → income source pre-filled with salary plus
+  **~20 deduction categories** (pre-tax, taxes/FICA, post-tax), feeding a gross→net "where your
+  pay goes" donut (theirs centers "63% take-home"). Extends our existing receipt-vision import
+  pipeline to a second document type; the review-before-save pattern already exists. Pairs with
+  their ~30 income *types* — worth auditing our income modeling breadth at the same time.
+
+**B. Assistant UX (theirs is weaker but lower-friction — steal the friction fixes)**
+- [ ] **PS7 — Turnkey AI, no key ceremony.** Piggy is included in the plan (50 msgs/day free tier),
+  runs server-side on Anthropic Claude, with an unusually honest disclosure (what's sent, "read
+  once" for images, terms prohibit training, chats reviewable by their team, hard off-switch in
+  Settings). CashFlux's BYO-OpenAI-key gate is a wall for normal users. Research: Cloud-tier AI
+  proxy with metered free allowance; keep BYOK as the power/local path. Their "the AI can only
+  ever save your birthday and a support ticket" capability-framing is a trust pattern worth
+  copying verbatim in spirit.
+- [ ] **PS8 — Guided-navigation spotlight.** Ask "how do I add a new income source?" and the
+  assistant **highlights the actual button with a spotlight animation and walks you through step
+  by step**. Best support/onboarding idea in their product. We already have the agent runtime
+  bridge + in-wasm semantic verbs — research a `spotlight(target)` verb + step-scripting so the
+  assistant can point at real UI instead of describing it.
+- [ ] **PS9 — Current tax & limits reference pack.** Piggy cites live IRS/SSA numbers (401k/IRA/HSA
+  limits, catch-up rules, brackets, SS claiming math). Research: a versioned, dated local dataset
+  (`taxref` package) consulted by engines and assistant alike, with the *vintage shown in the UI*
+  ("2026 limits") and a Cloud-refreshed update path — never model-recalled numbers.
+- [ ] **PS10 — Support handoff with context.** "Can you send this to your support team?" attaches
+  the full conversation context to a ticket. Ours could generate a redacted diagnostic bundle
+  (app version, settings shape, recent errors — never financial rows) for the GitHub-issue path.
+
+**C. Design / UX patterns (the legibility lessons — adopt the clarity, not their aesthetics)**
+- [ ] **PS11 — Self-explaining navigation.** Every rail item carries a plain-English subtitle:
+  "Income — *what you earn regularly*", "Debts — *what you owe*", "Debt Payoff Planner — *when
+  you'll be debt-free*". The nav doubles as the product's mental model. Our collapsed group labels
+  (UNDERSTAND / BUILD / DATA & PEOPLE) are abstract and hide half the app on first load. Research:
+  subtitles or rich hover reveals on rail items + group headers that preview their contents
+  (composes with B5 collapsed-rail hover and B8 menu management).
+- [ ] **PS12 — One predictable page contract.** Every PiggySize page is the same scaffold: icon +
+  title + one-line subtitle → period "Breakdown" select + Page Guide → a row of ≤4 KPI cards →
+  search / Filters / Sort & Group / Add toolbar → content + right rail. Learn one page, operate
+  all of them. Our from-scratch pages are individually stronger but each invents its own
+  vocabulary, which costs transfer learning. Research: define a light CashFlux "page contract"
+  (hero slot, primary actions slot, help affordance, consistent toolbar order) that pages honor
+  without flattening their identity.
+- [ ] **PS13 — Teaching microcopy inline, not in tooltips.** Their stat cards explain themselves
+  under the label: "Monthly Take-Home — *what actually hits your bank account*", "Needs — *what
+  you can't easily skip*". We already write this copy but hide it behind (i)-tooltips. Research:
+  promote explainers to visible sublabels on the highest-stakes numbers (safe-to-spend, committed,
+  runway, health factors) with a density-mode-aware toggle; all via i18n keys (i18n-zero ratchet).
+- [ ] **PS14 — A persistent entity color language.** Green=income, red=bills, blue=assets,
+  orange=debts — as dots, chips, badges, chart series, and scenario rows on *every* surface, so
+  lists and charts reinforce each other. We only have semantic pos/neg. Research: per-entity hue
+  tokens in the theme engine (user-overridable in the Theme Editor, both themes validated) applied
+  consistently across KPIs, chips, and chart palettes.
+- [ ] **PS15 — Outcomes embedded in the controls + one-tap "try it".** Their avalanche/snowball
+  chooser is two radio-*cards* with the consequence printed inside each ("Debt-free Apr 23 2041 ·
+  Interest $101,841", badges "SAVES THE MOST" / "QUICK WINS"); extra-payment presets are chips
+  (+$50/+$100/+$250/+$500); and insights sell the action with the number *and* a button:
+  "Putting just $100/mo extra would get you debt-free **11 months sooner** and save **$6,924**"
+  → [Try $100/mo]. Generalize as a CashFlux control pattern (choice-cards with computed outcomes;
+  suggestion banners with apply buttons) — this is the UI half of WF6's action preview.
+- [ ] **PS16 — The scenario diff metaphor.** Scenario Tester is two columns: "Subtract from
+  Current" (red-tinted rows) vs "Add to Scenario" (green-tinted rows), with template shortcuts
+  (Buy a House / Buy a Vehicle) and a delta chip on the net-worth KPI (↑ $7,500). Reads as a
+  visual diff of your life, no chart needed. Feed directly into WF2 scenario-lab UI design.
+- [ ] **PS17 — Age and life events as the time axis.** Named-age table columns ("You retire 65"),
+  an 18→100 age timeline bar with a milestone badge, life-milestone **stars on the history chart**
+  (hover for details), and "5 months left" phrasing over dates. Emotionally resonant wherever the
+  horizon is long — adopt for goals pace, forecast, and the future retirement surface.
+- [ ] **PS18 — Right-rail live assumptions for exploratory tuning.** Their config accordions sit
+  *beside* the results and update them live. Our staged-draft flip-modals are right for data
+  edits, but for explore-loops (debt tuner, stress tests, forecast knobs) side-by-side beats
+  open-modal→save→close. Research which of our tuners should migrate to an inline rail.
+- [ ] **PS19 — Grouped lists with group subtotals + Needs/Wants tagging.** Bills grouped by
+  category with the group's monthly total in the header ("Real Estate — $1,950"), per-row
+  Need/Want chips rolling up to a Needs-vs-Wants donut and a needs/wants split on the KPI cards
+  (50/30/20-adjacent framing). Our recurring/budget lists render as long walls of identical rows —
+  add grouping with subtotal headers, and consider a needs/wants dimension on recurring items.
+- [ ] **PS20 — Per-page "Page Guide".** A consistent top-right help affordance on every page that
+  explains *this* page (vs our global /help). Cheap once PS12's page contract exists; pairs with
+  PS8's spotlight for "show me" instead of "tell me".
+
+**D. Demo & acquisition surface**
+- [ ] **PS21 — A designed live demo with persona switcher.** Their demo is the real app, read-only,
+  sample-filled, with: a persistent "you're viewing sample data" banner, a 4-step welcome tour,
+  per-page guides, and — the best idea — a bottom **persona switcher** (Working couple + side gig /
+  Teacher with a pension / Catching up at 50 / Already retired / Retire early (FIRE) / Just
+  starting out) that reloads the whole demo with a different dataset. We already have the sample
+  seed + "Sample data · Start fresh" chip; a hosted demo mode is mostly wiring plus 4–5 more
+  persona datasets (the five-year Hartley seed is one persona already).
+- [ ] **PS22 — Compare page + pricing sharpness.** A direct comparison table vs YNAB/Monarch
+  (price, free tier, bank credentials, retirement, business, AI, family roles), $9 anchored
+  against $14.99, free tier framed as "ad-free, funded by Pro members", 30-day trial with no card.
+  Marketing surface for the CashFlux site when Cloud pricing goes live — we have the material
+  (privacy story is *stronger* than theirs: their numbers still live in their database; ours
+  don't leave the machine).
+
+**What NOT to copy:** the stock shadcn/Tailwind look (pleasant, interchangeable), the smiley-face
+health indicator, and the near-total absence of interpretation — nothing on their side explains
+*why* a number moved. CashFlux's editorial identity (serif numerals, annual-review narrative,
+"why this score" attribution, what-if answers in full sentences) is the moat; adopt their
+legibility patterns inside our visual language, not their skin.
+
+- [ ] **PS-QA1 — Route-transition ghosting (our defect, caught by the teardown shots).** ★
+  Screenshots taken **2.5s after** navigating to /debt and /budgets still showed the previous
+  page's ghost content, a faded "Getting your money in order…" watermark bleeding through, and
+  the page title overlapping a translucent "CashFlux" wordmark. Either the route transition/skeleton
+  fade is far too slow or an overlay lingers. Reproduce headless (fresh profile, sample data,
+  navigate rail links, screenshot at +1s/+2.5s), then fix against the motion-spec tokens.
+
 ### RH-series — capabilities lost in the Bills & recurring redesign (found by the E2E migration, 2026-07-20) ★
 Each of these worked on the retired Scheduled | Bills | Subscriptions tabs and has no equivalent on
 the unified surface. Found while porting the old specs, so each has a failing-or-absent test naming it.

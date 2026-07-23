@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **PS-series backlog — PiggySize competitor teardown (docs, deferred).** Filed 23 detailed tickets
+  in `TODOS.md` from a 2026-07-23 teardown of piggysize.com (marketing pages + full Playwright
+  walkthrough of all 15 live-demo pages): flagship capability gaps (retirement planner with Monte
+  Carlo/SS/RMD/withdrawal sequencing, business tracking, email bill reminders, real multi-user,
+  free calculator funnels, paystub scanning), assistant-friction fixes (turnkey AI, guided-navigation
+  spotlight, tax-reference pack, support handoff), design/UX legibility patterns (self-explaining
+  nav, page contract, inline teaching microcopy, entity color language, outcome-embedded controls,
+  scenario diff, age-as-axis, right-rail tuning, grouped subtotals, page guides), demo/acquisition
+  surface (persona-switcher demo, compare page), plus **PS-QA1** — a route-transition ghosting
+  defect on /debt and /budgets the teardown screenshots caught on our side.
 - **Financial-plan engine (`internal/finplan`, pure + tested).** An opinionated order-of-operations
   engine that places the user on a step of a known framework from their own data. Models two
   deliberately-distinct frameworks: **FOO** (Financial Order of Operations — 9 steps, math-optimized)

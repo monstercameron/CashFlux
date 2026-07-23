@@ -1,3 +1,29 @@
+## 2026-07-23 — PiggySize teardown → PS-series backlog (research, no code)
+
+Cam asked for a competitor read of piggysize.com. Fetched their marketing pages and drove the live
+demo headless (Playwright out of `e2e/node_modules`, cookie banner + 4-step tour dismissed, all 15
+demo pages screenshotted), then compared against our FEATURE_MAP and fresh :8080 screenshots with
+sample data. The framing insight: **PiggySize has no ledger at all** — it's a balances-and-
+obligations planner ("15 minutes a month") positioned against YNAB/Monarch at $9/mo, whose real
+product is a retirement/projection engine wearing a dashboard. We don't overlap where we're strong
+(ledger, budgets, reports, extensibility, identity, strictly-local privacy); we're absent where
+they're strong (retirement to age 95 with Monte Carlo + SS claiming + withdrawal sequencing —
+nothing in CashFlux answers "will my money last?").
+
+Filed the durable output as the **PS-series in TODOS.md (PS1–PS22 + PS-QA1, deferred)** rather than
+prose in chat: product gaps (retirement, business books, email reminders, multi-user, free
+calculator funnels, paystub scan), assistant friction fixes (turnkey AI vs our BYOK wall, their
+spotlight guided-navigation — best idea in their app, maps onto our agent bridge), and the design
+lessons, which are all about *legibility for novices*, not aesthetics: self-explaining nav
+subtitles, one rigid page contract, teaching microcopy inline instead of tooltips, a persistent
+entity color language, outcomes printed inside the controls with one-tap apply, the red/green
+scenario-diff columns, age-as-the-time-axis. Explicit "what NOT to copy" note: their stock shadcn
+skin and smiley-face health score — our editorial/interpretive identity is the moat.
+
+Bonus defect (PS-QA1): shots taken 2.5s after navigating to /debt and /budgets still showed the
+prior page ghosting through plus the "Getting your money in order…" watermark overlapping content —
+the route transition or skeleton fade is lingering far too long. Filed with a headless repro recipe.
+
 ## 2026-07-23 — "Fix My Finances" roadmap (`/plan`) — coworker feedback #8
 
 The biggest ask in the coworker feedback: *"Steps to correct your finances — research FOO (Financial
