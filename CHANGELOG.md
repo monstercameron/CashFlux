@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Cloud business plan §5a — full services & cost matrix (`docs/CLOUD_BUSINESS_PLAN.md`).**
+  Verified-2026 pricing for every external component: top-10 VPS providers (min tier + step up,
+  with the Hetzner-vs-DO decision rule tied to the §14 referral flywheel), domains, object
+  storage (B2 $6/TB w/ Bandwidth-Alliance egress vs R2 zero-egress vs Spaces), transactional
+  email (SES $0.10/1k; reminder math), SMS priced and recommended AGAINST for v1 (A2P 10DLC
+  bureaucracy + carrier surcharges), Stripe vs PayPal effective rates per $39.99 charge (3.7–4.7%
+  — and the honest 9–13% hit on monthly billing), Florida LLC formation/annual-report costs, and
+  the tax column: **electronically delivered SaaS is not taxable in Florida**, no state income
+  tax, LLC pass-through avoids the 5.5% corporate rate, Stripe Tax covers other-state nexus.
+  Ends with the actual launch budget (pre-launch ~$5–7/mo; 0–500 subs ~$12–17/mo + $138.75/yr FL;
+  at 1k subs fixed costs ≈ 2–3% of revenue) and a standing re-verify-before-signing rule.
 - **Cloud business plan refined for honesty + profitability (`docs/CLOUD_BUSINESS_PLAN.md`).**
   Ratifies the capped included-AI tier alongside BYOK (retires the no-longer-true "AI costs us
   $0" margin claim; honest $0.10–0.50/user/mo estimate with metering as a launch requirement and

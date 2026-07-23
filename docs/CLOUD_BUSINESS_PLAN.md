@@ -91,6 +91,111 @@ later, higher-ARPU segment.
 - **Guardrails:** storage fair-use cap; AI message cap; content-addressed blob dedup; overage →
   soft prompt to prune / BYOK, never surprise charges.
 
+## 5a. Services & cost matrix (verified 2026-07-23; re-verify before signing anything)
+
+Every external component the business touches, with real market prices. ⚠ = promo pricing that
+renews higher · (≈) = from general knowledge, not re-verified this week.
+
+### Hosting (VPS) — top 10, min tier + one step up
+
+| Provider | Minimum | Step up | Notes |
+|---|---|---|---|
+| **Hetzner** | €3.35–3.79 — CX22 2vCPU/4GB/40GB (ARM CAX11 €3.29 no-IPv4) | ≈€6.80 — CX32 4vCPU/8GB | Best price-perf; 20 TB traffic incl.; EU + limited US |
+| **DigitalOcean** | $4 — 512MB/1vCPU/10GB | $6 — 1GB/1vCPU/25GB | Per-second billing since Jan 2026; §14 referral program lives here |
+| **Vultr** | $2.50 — 512MB (often IPv6-only) | $6 — 1GB/25GB/2TB | Benchmarks beat Lightsail at half price |
+| **Linode (Akamai)** | $5 — Nanode 1GB/25GB | ≈$12 — 2GB/50GB | Solid, boring |
+| **AWS Lightsail** | ≈$5 — 512MB/20GB | ≈$7 — 1GB/40GB | Weakest per-dollar of the majors |
+| **Contabo** | €6.99 — 4vCPU/8GB/100GB NVMe | ≈€12 — 6vCPU/16GB | Density king; sustained CPU lags spec |
+| **Hostinger** | ⚠ ~$4.99 — KVM1 1vCPU/4GB | ⚠ ~$6.99 — KVM2 2vCPU/8GB | Renewal jump — read the term |
+| **IONOS** | $2 — VPS XS 1vCPU/1GB/10GB, unmetered | ≈$5–6 — 2vCPU/2GB | Cheapest legit non-promo entry |
+| **OVHcloud** | ≈$4–5 — 1vCPU/2GB | ≈$7–11 | Unmetered bandwidth, spartan panel |
+| **Scaleway** | ≈€1–2 — Stardust (stock-limited) | ≈€7 — DEV1-S 2vCPU/2GB | EU-only in practice |
+
+Decision rule: the server is one Go binary + SQLite + blobs — any row runs it. Differentiators
+are **egress** (blob sync is the only real traffic), snapshots, and reputation. Cost-optimal:
+Hetzner CX22. Strategy-coherent: **DO $6** while the §14 referral/Marketplace flywheel stands —
+the $2–3/mo delta is noise next to Stripe fees. (Honorable mention RackNerd $22.99/yr promos:
+fine for throwaways, not for paying users.)
+
+### Domains & TLS
+| Item | Cost | Notes |
+|---|---|---|
+| .com registration | ~$10.44/yr (Cloudflare at-cost) · ~$11 (Porkbun) · ~$13 (Namecheap) | Avoid ⚠ $1-first-year registrars with $20+ renewals |
+| TLS | $0 | Caddy/Let's Encrypt |
+| Ingest subdomain (mail) | $0 extra | MX records on the same domain |
+
+### Object storage (blobs: receipts/artifacts/backups)
+| Provider | Storage | Egress | Notes |
+|---|---|---|---|
+| **Backblaze B2** | **$6/TB/mo** ($0.006/GB) | Free up to 3× stored/mo, then $0.01/GB; free via Cloudflare (Bandwidth Alliance) | Cheapest credible; pairs with Cloudflare CDN |
+| **Cloudflare R2** | $0.015/GB ($15/TB) | **$0 always** | Egress-proof; watch buried ops-request costs |
+| **DO Spaces** | $5/mo base (250GB + 1TB egress incl.) | then $0.01/GB | Simplest if already on DO |
+| Wasabi | $7.99/TB/mo | free | ⚠ minimum-commit + 90-day retention rules |
+| AWS S3 | $23/TB/mo + $0.09/GB egress | — | No reason at our scale |
+
+At our numbers (KB–MB datasets, 1–2 GB blob cap): even 1,000 subscribers × worst-case 2 GB =
+2 TB ≈ **$12–30/mo total**. Storage is genuinely not a cost risk; pick B2+Cloudflare or Spaces.
+
+### Email (transactional: reminders, ingest, receipts, auth)
+| Provider | Cost | Notes |
+|---|---|---|
+| **Amazon SES** | **$0.10 per 1,000** | Cheapest; more setup (reputation, DKIM) |
+| Resend | Free 3k/mo → $20/mo (50k) | Nicest DX; free tier covers launch |
+| Postmark | $15/mo per 10k | Best deliverability reputation |
+| Brevo | Free 300/day | Fallback tier |
+
+Reminder math: 500 subscribers × ~20 bill-reminder emails/mo = 10k emails ≈ **$1 (SES) to
+$15/mo**. Ingest inbound: SES inbound or Cloudflare Email Routing ($0) → webhook.
+
+### SMS — priced, and recommended AGAINST for v1
+| Item | Cost |
+|---|---|
+| Twilio outbound SMS (US) | ~$0.008/segment |
+| A2P 10DLC brand registration | $4.50 one-time |
+| A2P campaign fee | $1.50–10/mo |
+| Carrier surcharges | +$0.003–0.005/msg (T-Mobile raised fees Jan 2026; 10k msgs/mo ≈ $30–50/mo in surcharges alone) |
+
+Verdict: SMS adds registration bureaucracy + per-message costs for a channel email+push already
+covers. **Skip in v1**; revisit only if users ask and price it as an add-on, never bundled.
+
+### Payments
+| Processor | Rate | Notes |
+|---|---|---|
+| **Stripe** | 2.9% + $0.30 · +0.5% Stripe Tax · +1.5% international cards | ≈**$1.46–1.66 per $39.99 annual charge** (3.7–4.2%) |
+| **PayPal** | 2.99% + $0.49 standard · **3.49% + $0.49 Checkout/subscriptions** · +1.5% intl | ≈$1.89 per $39.99 (4.7%) — keep as secondary for the PayPal-only cohort; already integrated in the portal |
+
+Annual-first billing is what keeps the fixed $0.30–0.49 per-charge fee tolerable; on a $4.99
+monthly it's 9–13% of revenue — another honest argument for pushing annual.
+
+### Compliance & business registration (Florida)
+| Item | Cost | Notes |
+|---|---|---|
+| FL LLC formation (Sunbiz) | **$125 one-time** ($100 filing + $25 registered-agent designation) | Self as registered agent = $0/yr (address becomes public record; a service is $50–150/yr) |
+| FL LLC annual report | **$138.75/yr** | Due May 1; late = $400 penalty — calendar it |
+| EIN | $0 | Direct from IRS; ignore paid "services" |
+| Privacy policy + ToS | $0–500 | Templates fine at launch; lawyer review before scale |
+| PCI | $0 | Stripe/PayPal carry it (SAQ-A) |
+
+### Taxes (Florida + federal) — the good news column
+| Item | Rate | Notes |
+|---|---|---|
+| **FL sales tax on SaaS** | **$0 — electronically delivered SaaS is NOT taxable in Florida** | Physical-media software is; we ship none. Verified Jul 2026; re-check annually |
+| FL personal income tax | **0%** | — |
+| FL corporate income tax | 5.5% — **avoided** by LLC pass-through | Don't elect C-corp without a reason |
+| Federal self-employment | 15.3% on net profit + ordinary income tax | Quarterly estimates once profit is real |
+| **Other states' sales tax** | Varies — SaaS *is* taxable in NY/TX/PA/WA etc. | Economic nexus ≈ $100k/state; **Stripe Tax (0.5%) monitors + files-ready**; a non-issue until revenue is real, a solved one after |
+
+### Bottom line — the actual launch budget
+| Phase | Monthly | Annual-ish |
+|---|---|---|
+| **Today (pre-launch)** | VPS $4–6 + domain amortized ≈ **$5–7/mo** | ~$75/yr |
+| **Launch (0–500 subs)** | VPS $6 + Spaces/B2 $5–6 + SES ~$1–5 + monitoring $0 ≈ **$12–17/mo** + $138.75/yr FL + payment fees ~4% of revenue | ~$300–350/yr fixed |
+| **1k subscribers ($40k ARR)** | infra ≈ $30–60/mo + included-AI tokens (§5, measure) + fees ~4% | fixed costs ≈ **2–3% of revenue** — margin lives or dies on AI tokens + support time, nothing else |
+
+Standing rule for this matrix: prices above were verified 2026-07-23 (or marked ≈/⚠);
+**re-verify any line before committing to it**, and update this section when a real bill
+replaces an estimate — measured beats quoted.
+
 ## 6. Funnel & assumptions (to instrument, not assume)
 Free local users → discover Cloud (calm in-app prompts) → trial → paid. Honest calibration:
 - **2–5% trial start** is plausible; the prior **30–50% trial→paid was optimistic** — industry

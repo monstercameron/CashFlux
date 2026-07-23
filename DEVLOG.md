@@ -1,3 +1,27 @@
+## 2026-07-23 — Cloud business plan §5a: the services & cost matrix (docs, no code)
+
+Cam asked the right question — "what ARE my costs? do I even know?" — and the honest answer was
+no: every per-user figure in the plan was a market-price estimate, not a measurement. This pass
+at least makes the *quotable* side of the ledger real. §5a now prices every external component
+with 2026-verified numbers: the top-10 VPS table (Hetzner CX22 €3.79 is cost-optimal; DO $6 is
+strategy-coherent while the referral flywheel stands), object storage (a non-risk — even 1k
+worst-case subscribers ≈ $12–30/mo on B2/Spaces), transactional email (10k reminder emails ≈ $1
+on SES), payments (Stripe ≈ $1.46–1.66 per $39.99 annual charge; PayPal ≈ $1.89 as the secondary;
+and the honest note that fixed per-charge fees eat 9–13% of a $4.99 *monthly* — annual-first is
+an economics decision, not just positioning), Florida LLC mechanics ($125 form, $138.75/yr, May 1
+deadline, $400 late penalty), and the tax findings that materially help: **Florida does not tax
+electronically delivered SaaS**, has no personal income tax, and pass-through avoids the 5.5%
+corporate rate — federal SE tax is the real tax line, and Stripe Tax (0.5%) turns other-state
+nexus from a research project into a fee. SMS got priced and then recommended against for v1:
+A2P 10DLC registration + carrier surcharges buy nothing email+push don't already cover.
+
+Bottom line now in the doc: pre-launch ≈ $5–7/mo, launch ≈ $12–17/mo fixed, and at 1k
+subscribers fixed infra is 2–3% of revenue — so the only two numbers that can break the margin
+story remain the unmeasured ones (included-AI tokens/user, support minutes/user), which is
+exactly what the §5 metering-at-launch requirement and pre-launch beta exist to fix. Standing
+rule added: re-verify any line before committing; replace estimates with real bills as they
+arrive.
+
 ## 2026-07-23 — Cloud business plan: honesty + profitability pass (docs, no code)
 
 Cam proposed the model in conversation (pay for encrypted storage, BYOK at your own pace, "perhaps
