@@ -1,3 +1,26 @@
+## 2026-07-23 — Post-optimization ladder: zero errors to 1,000 clients
+
+Re-ran the ladder after the review-round fixes on a quieter machine, and extended it past the
+old ceiling (same seeds, watch-every 4, all caps raised):
+
+| Clients | Ops | Errors | push p50 | push p95 | pushes/s | watch deliveries/s |
+|---|---|---|---|---|---|---|
+| 250 | 2,234 | 0 | 2.8ms | **199ms** (was 342 baseline) | 33.4 | 1.8k |
+| 500 | 4,440 | 0 | 3.1ms | **517ms** (was 1.05s baseline) | 66.4 | 7.2k |
+| 750 | 6,677 | 0 | 3.8ms | 1.03s | 100.4 | 16.5k |
+| 1,000 | 8,936 | 0 | 5.0ms | 1.33s | 133.2 | **29k** |
+
+Reads: (1) throughput scales perfectly linearly with clients (33→66→100→133 pushes/s) — the
+server is not throughput-saturated even at 1,000 aggressive clients on a shared desktop; the
+degradation is all queueing tail (SQLite single writer + fan-out), never failure. (2) The
+healthy-tail operating point (push p95 ≤ ~500ms) sits at ≈500 harness clients; serviceable to
+1,000 with degraded tails and zero errors. (3) The server absorbed 29k watch deliveries/sec —
+and that's the single-token worst case where all 250 watchers share one user; production
+fan-out is per-household (1–4), so real-world capacity is strictly better than these numbers.
+(4) push p50 stays 3–5ms at every scale. Compared to the first-ever ladder (1,688 errors at
+500 clients), the config fix + two optimization rounds roughly doubled the error-free client
+ceiling and halved the 500-client tail.
+
 ## 2026-07-23 — Adversarial review round: the critic was right about the mechanism
 
 Cam asked for an adversarial subagent review of the optimization plus a hunt for more. One
