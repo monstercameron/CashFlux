@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Financial-plan engine (`internal/finplan`, pure + tested).** An opinionated order-of-operations
+  engine that places the user on a step of a known framework from their own data. Models two
+  deliberately-distinct frameworks: **FOO** (Financial Order of Operations — 9 steps, math-optimized)
+  and **Ramsey** (7 Baby Steps — debt-first). Assesses each step from derived signals
+  (emergency-fund months, high-interest debt, non-mortgage debt, savings-rate proxy); steps it can't
+  judge (employer match, deductibles) are marked *not assessable* so the UI asks rather than guessing.
+  The current step is the first that isn't done. Foundation for the "steps to fix your finances" surface.
+
 ### Changed (coworker-feedback UX pass)
 - **Delete in the transaction ⋯ menu.** The row kebab now has a **Delete** action (with a trash icon),
   matching the rule that destructive actions live behind the ⋯ menu. It's undoable via the toast, like
