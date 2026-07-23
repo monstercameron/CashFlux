@@ -182,7 +182,11 @@ func (paypalProvider) Portal(_ context.Context, cfg Config, _ Subscription) (str
 
 // paypalWebhookEvent is the shape of a PayPal webhook notification we care about.
 type paypalWebhookEvent struct {
-	ID           string `json:"id"`
+	ID string `json:"id"`
+	// CreateTime is PayPal's event timestamp (RFC 3339). It is the ordering
+	// guard for out-of-order webhook delivery — see subscriptionEventIsStale
+	// (TODOS.md C430).
+	CreateTime   string `json:"create_time"`
 	EventType    string `json:"event_type"`
 	ResourceType string `json:"resource_type"`
 	Resource     struct {
@@ -261,6 +265,13 @@ func (paypalProvider) ApplyWebhook(store *Store, ev WebhookEvent, now time.Time,
 	if userID == "" {
 		return fmt.Errorf("paypal event is missing a user id")
 	}
+	eventTime := paypalTime(event.CreateTime, time.Time{})
+	if subscriptionEventIsStale(previous, hadPrevious, eventTime) {
+		return nil
+	}
+	if eventTime.IsZero() {
+		eventTime = now
+	}
 	plan := paypalPlanName(event.Resource.PlanID, previous.Plan)
 	next := Subscription{
 		UserID:               userID,
@@ -272,6 +283,7 @@ func (paypalProvider) ApplyWebhook(store *Store, ev WebhookEvent, now time.Time,
 		CurrentPeriodEnd:     paypalTime(event.Resource.BillingInfo.NextBillingTime, previous.CurrentPeriodEnd),
 		TrialEnd:             previous.TrialEnd,
 		UpdatedAt:            now,
+		LastEventAt:          eventTime,
 	}
 	if err := store.PutSubscription(next); err != nil {
 		return err

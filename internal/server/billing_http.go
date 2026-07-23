@@ -99,24 +99,39 @@ func isBillingConfigError(err error) bool {
 }
 
 func allowBillingCheckout(w http.ResponseWriter, store *Store, userID string) bool {
-	sub, ok, err := store.GetSubscription(userID)
+	ok, reason, err := checkoutAllowed(store, userID)
 	if err != nil {
 		writeErrorJSON(w, ErrorReasonInternal, "subscription lookup failed")
 		return false
 	}
 	if !ok {
-		return true
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, reason)
+	}
+	return ok
+}
+
+// checkoutAllowed is the transport-free twin of allowBillingCheckout (shared
+// by the REST /v1/billing/checkout handler and BillingService.
+// CreateCheckoutSession so the "can this user start a new checkout" rule
+// lives in exactly one place): ok is false if the user already has a trial
+// on record or an active/trialing/past_due subscription, with reason set to
+// a human-readable explanation.
+func checkoutAllowed(store *Store, userID string) (ok bool, reason string, err error) {
+	sub, found, err := store.GetSubscription(userID)
+	if err != nil {
+		return false, "", err
+	}
+	if !found {
+		return true, "", nil
 	}
 	if !sub.TrialEnd.IsZero() {
-		writeErrorJSON(w, ErrorReasonFailedPrecondition, "cloud trial already used")
-		return false
+		return false, "cloud trial already used", nil
 	}
 	switch strings.TrimSpace(sub.Status) {
 	case "active", "trialing", "past_due":
-		writeErrorJSON(w, ErrorReasonFailedPrecondition, "cloud subscription is already active")
-		return false
+		return false, "cloud subscription is already active", nil
 	default:
-		return true
+		return true, "", nil
 	}
 }
 
@@ -390,11 +405,26 @@ func stripeErrorMessage(body []byte) string {
 }
 
 type stripeEvent struct {
-	ID   string `json:"id"`
-	Type string `json:"type"`
-	Data struct {
+	ID string `json:"id"`
+	// Created is the Stripe-assigned event timestamp (epoch seconds). It is the
+	// ordering guard for out-of-order webhook delivery — see
+	// subscriptionEventIsStale/Subscription.LastEventAt (TODOS.md C430).
+	Created int64  `json:"created"`
+	Type    string `json:"type"`
+	Data    struct {
 		Object json.RawMessage `json:"object"`
 	} `json:"data"`
+}
+
+// subscriptionEventIsStale reports whether eventTime is not newer than the last
+// event already applied to sub, so a delayed/reordered webhook retry can't
+// overwrite a subscription with older state (e.g. a slow "past_due" retry
+// arriving after a newer "canceled" event must not un-cancel the row).
+// A zero eventTime (provider didn't supply one) is treated as "not stale" —
+// we have no ordering signal, so we fall back to applying it (matching the
+// prior last-write-wins behavior) rather than silently dropping the update.
+func subscriptionEventIsStale(previous Subscription, hadPrevious bool, eventTime time.Time) bool {
+	return hadPrevious && !eventTime.IsZero() && !previous.LastEventAt.IsZero() && !eventTime.After(previous.LastEventAt)
 }
 
 type stripeSubscriptionObject struct {
@@ -604,6 +634,7 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 			Status:               metadataValueDefault(session.Metadata, "trialing", "subscription_status", "status"),
 			Plan:                 metadataValueDefault(session.Metadata, "unknown", "plan", "price"),
 			UpdatedAt:            now,
+			LastEventAt:          unixTime(event.Created),
 		}
 		if err := store.PutSubscription(next); err != nil {
 			return err
@@ -618,11 +649,19 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		if event.Type == "customer.subscription.deleted" {
 			sub.Status = "canceled"
 		}
-		previous := existingSubscriptionForStripe(store, sub.ID)
+		previous, hadPrevious, err := store.GetSubscriptionByProviderID("stripe", sub.ID)
+		if err != nil {
+			return err
+		}
+		eventTime := unixTime(event.Created)
+		if subscriptionEventIsStale(previous, hadPrevious, eventTime) {
+			return nil
+		}
 		next, err := stripeSubscriptionRecord(store, sub, now)
 		if err != nil {
 			return err
 		}
+		next.LastEventAt = eventTime
 		if err := store.PutSubscription(next); err != nil {
 			return err
 		}
@@ -640,9 +679,14 @@ func applyStripeEvent(store *Store, event stripeEvent, now time.Time, metrics *M
 		if !ok {
 			return fmt.Errorf("stripe invoice subscription is unknown")
 		}
+		eventTime := unixTime(event.Created)
+		if subscriptionEventIsStale(existing, true, eventTime) {
+			return nil
+		}
 		previous := existing
 		existing.Status = "past_due"
 		existing.UpdatedAt = now
+		existing.LastEventAt = eventTime
 		if strings.TrimSpace(invoice.Customer) != "" {
 			existing.ProviderCustomer = invoice.Customer
 		}
@@ -695,14 +739,6 @@ func stripeSubscriptionPlan(sub stripeSubscriptionObject) string {
 		}
 	}
 	return "unknown"
-}
-
-func existingSubscriptionForStripe(store *Store, stripeSubscription string) Subscription {
-	existing, ok, err := store.GetSubscriptionByProviderID("stripe", stripeSubscription)
-	if err != nil || !ok {
-		return Subscription{}
-	}
-	return existing
 }
 
 func observeBillingTransition(metrics *Metrics, eventType string, previous, next Subscription) {

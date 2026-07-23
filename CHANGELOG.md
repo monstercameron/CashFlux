@@ -62,6 +62,23 @@ and every commit updates this file under `Unreleased`.
   `open` event it needed, until the RPC's own deadline gave up. Fixed by having the callback return
   a Promise Go resolves on completion instead of blocking inline (cross-tab exclusion unchanged,
   scheduler never starved) — verified live 5/5 after a consistent 3/3 failure before the fix.
+- **Custom Sync billing/entitlement RPC surface + rich gRPC errors (TODOS.md C428–C431, C434,
+  C439, C442).** New `AccountService.GetEntitlement` (client-callable pre-flight check before
+  spending an SMS send) and `BillingService.CreateCheckoutSession` RPCs, both thin wrappers over
+  existing billing/entitlement logic rather than a parallel implementation. Rejections from the
+  entitlement gate now carry `google.rpc.ErrorInfo`/`RetryInfo`/`QuotaFailure`/`Help` details
+  (stable reason codes, a retry delay for rate limits, used/limit numbers for storage, a
+  reason-specific upgrade link) instead of a bare status code. Storage limits can now vary by plan
+  tier. `docs/CUSTOM_SYNC_TRANSPORT.md` documents the REST/gRPC boundary: the app client is
+  gRPC-only except for browser-navigation redirects it can't avoid (OAuth login, Stripe/PayPal
+  checkout); the account-management portal is a deliberate, separate REST surface out of scope for
+  this migration.
+
+  Adversarial review found and fixed a real webhook-ordering gap: subscription webhooks were
+  deduplicated by event ID but not guarded against delayed/reordered delivery, so a late-arriving
+  stale event could silently un-cancel an already-cancelled subscription. Added a
+  last-event-timestamp guard applied to every Stripe/PayPal subscription-mutating branch, proven
+  with a test that reproduces exactly this out-of-order scenario.
 
 ### Changed
 - **Adversarial-review round: metrics sharding + watch-path completions (server hot path).**

@@ -194,6 +194,22 @@ func SyncPage() uic.Node {
 			)),
 		),
 
+		// Custom Sync: sign in with a phone number instead of a server URL/token
+		// (TODOS.md C420/C419). Its own self-contained component/hooks; composed
+		// in here rather than folded into this page's logic.
+		uic.CreateElement(CustomSyncCard),
+
+		// Password fallback for phone sign-in (TODOS.md C422 client UI): collapsed
+		// behind a small "Use a password instead" link so it reads as the escape
+		// hatch, not a co-equal option next to CustomSyncCard's phone flow.
+		uic.CreateElement(PasswordAuthCard),
+
+		// Link a new device to an EXISTING account via a portal-minted pairing code
+		// (TODOS.md C421 client UI). Deliberately its own card, never folded into
+		// the brand-new-user phone/password flows above, since it only ever
+		// resolves an account that already exists.
+		uic.CreateElement(DeviceLinkCard),
+
 		// Link out to the fuller Cloud settings (subscription, sign-in, devices).
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "sync-open-settings"),

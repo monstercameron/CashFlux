@@ -32,9 +32,14 @@ type AdminUserDetailResponse struct {
 	TrialEnd           string `json:"trialEnd,omitempty"`
 	WorkspaceCount     int    `json:"workspaceCount"`
 	BlobBytes          int64  `json:"blobBytes"`
-	UsageTodayRequests int64  `json:"usageTodayRequests"`
-	UsageTodayTokens   int64  `json:"usageTodayTokens"`
-	Suspended          bool   `json:"suspended"`
+	// BlobBytesLimit is the storage quota that applies to this user's plan
+	// (TODOS.md C439 — Config.StorageLimitForPlan; see accountservice.go's
+	// GetEntitlement for the client-facing twin of this figure). Zero means
+	// unlimited, matching StorageMaxBytes's existing convention.
+	BlobBytesLimit     int64 `json:"blobBytesLimit"`
+	UsageTodayRequests int64 `json:"usageTodayRequests"`
+	UsageTodayTokens   int64 `json:"usageTodayTokens"`
+	Suspended          bool  `json:"suspended"`
 }
 
 // AdminUsageHistoryResponse is the JSON body for GET /v1/admin/users/{id}/usage: a
@@ -228,6 +233,7 @@ func handleAdminUserDetail(cfg Config, store *Store) http.HandlerFunc {
 		if bytes, err := store.UserBlobBytes(target); err == nil {
 			resp.BlobBytes = bytes
 		}
+		resp.BlobBytesLimit = cfg.StorageLimitForPlan(resp.SubscriptionPlan)
 		if usage, ok, err := store.GetUsage(target, time.Now().UTC()); err == nil && ok {
 			resp.UsageTodayRequests = usage.Requests
 			resp.UsageTodayTokens = usage.Tokens
