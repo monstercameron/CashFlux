@@ -5803,3 +5803,26 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   with `subtle.ConstantTimeCompare` in `AuthService` before ever touching the Store, so the Store
   methods only ever operate on the real configured secret. Covered by
   `TestRequestPhoneVerificationRejectsMissingSetupCode`/`TestVerifyPhoneCodeSetupCodeGateEndToEnd`.)
+  (CRITICAL, caught by an independent adversarial review agent before this ever shipped live:
+  `AuthService.Register` — username/password account creation — has NO `Config.SetupCode` check of
+  its own; it predates this embedding. `NewSyncAndAuthBridgeHandler` registered the full
+  `AuthServiceServer` including `Register`, so anyone dialing `/grpc` directly (the route is
+  deliberately not behind the portfolio's `budgetGate` — see the portfolio-side commit) could
+  self-register an unlimited number of fully-functional accounts with zero setup code, completely
+  defeating the feature's purpose. The wasm UI never exposed this (only the phone card got the
+  setup-code field), but the RPC was live on the wire and the request/method types are public in
+  the open-source module — a trivial few-line exploit for anyone reading the client or the repo,
+  not a theoretical one. Fixed by disabling `Register`/`Login` entirely in this embedding —
+  `phoneOnlyAuthServer` (`grpcbridge.go`) wraps the real `AuthServiceServer` and always returns
+  `Unimplemented` for both, regardless of whether `SetupCode` is set, matching the original design
+  intent ("phone+SMS is the only account-creation path" for this embedding) rather than bolting a
+  second gate onto a door that was never meant to be open here. Verified end-to-end over the actual
+  wire (not just at the Go interface level) by `TestPhoneOnlyAuthServerDisablesRegisterAndLogin`,
+  which also proves `RequestPhoneVerification` still reaches the real handler with a valid code.
+  Two lower-severity findings from the same review were assessed and accepted as residual risk
+  rather than fixed, to avoid over-engineering a KISS single-code invite gate: (1) a timing gap
+  between a wrong-code rejection and a right-but-already-consumed-code rejection, bounded by the
+  existing 30/min global rate limiter and swamped by real-world network jitter; (2) an
+  unauthenticated caller can enumerate whether a given phone number already has an account
+  (`RequestPhoneVerification` skips the gate and sends a real SMS for already-verified numbers,
+  rejects immediately for new ones) — inherent to the "returning users skip the gate" design goal.)

@@ -1,3 +1,38 @@
+## 2026-07-23 — The setup-code gate had a wide-open back door: `Register`
+
+Ran a dedicated adversarial review agent against the setup-code gate right after building it and
+before touching the portfolio's own commit — same discipline as the earlier Custom Sync work,
+this time scoped tightly to one feature instead of a whole 27-ticket wave. It found something real
+in minutes: `AuthService.Register` (username/password account creation) has never had a
+`Config.SetupCode` check, because it predates the gate entirely — the gate was only ever added to
+`RequestPhoneVerification`/`VerifyPhoneCode`. But `NewSyncAndAuthBridgeHandler` registers the
+*whole* `AuthServiceServer`, `Register` included, via one `grpc.ServiceDesc` that doesn't let you
+register a subset of methods. So the moment that handler went live, anyone who dialed `/grpc`
+directly — a WebSocket endpoint deliberately left outside the portfolio's password gate, on the
+stated reasoning that "AuthService's own bearer-token gate is the real access control now" — could
+call `Register` with any username/password and walk away with a fully valid session, zero setup
+code required. The wasm client never wired a Register form into this UI, so it wasn't reachable by
+clicking around the site, but the RPC method name and request shape are public in an open-source
+repo; anyone who read either the client code or the proto file had a two-line exploit.
+
+The fix is not "add a setup-code check to Register too" — that would reintroduce password accounts
+as a second, gated enrollment path, when the actual design intent for this embedding was always
+"phone+SMS only, minimize surface." Since the gRPC service registration can't selectively omit
+methods, the answer is a small decorator (`phoneOnlyAuthServer`) that wraps the real
+`AuthServiceServer` and makes `Register`/`Login` unconditionally return `Unimplemented` for this
+specific embedding, independent of whether `SetupCode` happens to be configured — the door doesn't
+exist here, full stop, rather than existing-but-locked. Verified with a real end-to-end test that
+dials the actual bridge over the wire and confirms both `Register` and `Login` come back
+`Unimplemented` while `RequestPhoneVerification` with a valid code still reaches the real handler —
+proving the fix didn't collaterally break the feature it was protecting.
+
+Lesson, and it's the same one from the workspace-ID bug a few days ago: a security feature's
+correctness is bounded by everywhere its precondition is assumed, not just everywhere it's
+checked. The gate lived in two methods; the vulnerability lived in a third method that nobody
+thought to ask "does this one need it too" because it was old code, not new code being reviewed.
+An adversarial pass that reads the *whole* interface a new registration function exposes — not
+just the methods the feature description mentions — is what caught it here.
+
 ## 2026-07-23 — Why the sync engine got built: embedding it in a personal-site portfolio
 
 The real motivation behind the whole Custom Sync push (identity, token lifecycle, gRPC-only

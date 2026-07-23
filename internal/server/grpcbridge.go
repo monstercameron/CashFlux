@@ -17,7 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 )
 
 // syncTransferLog records each sync RPC that crosses the wire so an operator can confirm transfers
@@ -144,6 +146,30 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	return mux
 }
 
+// phoneOnlyAuthServer wraps an AuthServiceServer and disables Register/Login
+// (username/password enrollment): NewSyncAndAuthBridgeHandler's embedding is
+// phone/SMS-only by design (TODOS.md C445) — Config.SetupCode gates account
+// creation on RequestPhoneVerification/VerifyPhoneCode, but Register creates
+// an account from nothing but a username/password with NO setup-code check
+// of its own, since it predates this embedding and was never meant to be
+// reachable here. Rather than bolt a second, redundant gate onto Register,
+// this embedding simply never exposes it: Register/Login always return
+// Unimplemented, regardless of whether Config.SetupCode is set, matching the
+// original design ("phone+SMS is the only account-creation path" for this
+// embedding) rather than reintroducing password accounts as a gated
+// alternative.
+type phoneOnlyAuthServer struct {
+	AuthServiceServer
+}
+
+func (phoneOnlyAuthServer) Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error) {
+	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "username/password enrollment is not available on this server")
+}
+
+func (phoneOnlyAuthServer) Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error) {
+	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "username/password sign-in is not available on this server")
+}
+
 // NewSyncAndAuthBridgeHandler builds a GoGRPCBridge WebSocket handler exposing
 // SyncService + AuthService + BlobService — no AIService, no
 // AccountService/BillingService, no HTTP site. It is the embeddable slice for
@@ -151,7 +177,8 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 // device sessions, artifact transfer) with NO billing/tier concept: every
 // enrolled account gets full access, gated only by Config.SetupCode at
 // account creation and by cfg's ordinary storage caps thereafter (see
-// pkg/embed.NewSyncAndAuthBridge).
+// pkg/embed.NewSyncAndAuthBridge). AuthService's Register/Login
+// (username/password) are deliberately disabled — see phoneOnlyAuthServer.
 //
 // The CloudEntitlement interceptors stay in the chain even though this
 // deployment has no billing: with cfg.Billing == false, IsCloudActive is a
@@ -174,7 +201,7 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
-	RegisterAuthServiceServer(grpcServer, newAuthService(store, cfg))
+	RegisterAuthServiceServer(grpcServer, phoneOnlyAuthServer{newAuthService(store, cfg)})
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
 	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),

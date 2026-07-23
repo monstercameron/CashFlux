@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **`AuthService.Register` bypassed the new setup-code gate entirely (TODOS.md C445).** Caught by
+  an independent adversarial review before this ever shipped live: `NewSyncAndAuthBridgeHandler`
+  registered the full `AuthServiceServer`, but `Register` (username/password account creation) has
+  no `Config.SetupCode` check of its own — it predates the gate. Anyone dialing `/grpc` directly
+  could self-register unlimited fully-functional accounts with zero setup code, completely
+  defeating the feature. Fixed by disabling `Register`/`Login` entirely in this embedding
+  (`phoneOnlyAuthServer` in `grpcbridge.go` always returns `Unimplemented` for both), matching the
+  original design intent that phone/SMS is the only account-creation path here, rather than adding
+  a second gate to a door that was never meant to be open. Verified end-to-end over the real wire
+  by a new test.
+
 ### Added
 - **Gated per-person enrollment for private embedding (TODOS.md C445).** `pkg/embed.NewSyncBridge`
   wired only `SyncService` behind a single shared static token, with no per-person identity. New
