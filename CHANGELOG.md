@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Friendlier invite-code entry on the Custom Sync sign-in card (TODOS.md C447).** The setup-code
+  field is now hidden behind a "Have an invite code?" toggle instead of always showing next to the
+  phone input — most users never have one. Revealed field is auto-focused, numeric-input-mode, and
+  relabeled "Invite code" with a clearer placeholder, matching the admin console's terminology.
+
 ### Added
 - **Admin-mintable invite codes + client listing for private embedding (TODOS.md C446).**
   `Config.SetupCode` was a single static value with no visibility into who'd registered and no way

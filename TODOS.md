@@ -5867,3 +5867,16 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   code, itself globally rate-limited at 30/min — and this predates the invite-code work (the
   original C445 static-code gate had the identical shape), so left as an accepted residual rather
   than fixed here; a real fix would add a `setupCodeGlobalLimiter` mirroring the other three.)
+- [x] **C447 [MINOR][SYNC] Friendlier invite-code entry on the Custom Sync sign-in card.** The
+  setup-code field added in C445 was always visible on `CustomSyncCard`, next to the phone input —
+  correct but a little confusing for the vast majority of users who will never have one (open
+  self-host deployments, or anyone not specifically invited). Hidden it behind a small "Have an
+  invite code?" toggle link (`showInviteCode` state) that reveals a proper labeled field only when
+  clicked — auto-focused, `inputmode="numeric"` (minted invite codes are 6 digits), relabeled
+  "Invite code" with a clearer placeholder ("6-digit code from whoever invited you"). i18n keys
+  renamed `customSync.setupCode*` → `customSync.inviteCode*` to match the admin-side terminology
+  ("invite a new client", "mint invite code") introduced in C446. No behavior change to the
+  send/verify flow itself — purely a presentation change on top of the existing `setupCodeInput`
+  state and wire field. Verified visually in an isolated scratch webroot (never touching the live
+  `gwc dev` server's `web/bin/main.wasm` — a repeat near-miss of the earlier wasm-build-race mistake
+  was caught before it mattered).

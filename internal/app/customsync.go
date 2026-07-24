@@ -92,9 +92,13 @@ func CustomSyncCard() uic.Node {
 	codeInput := uic.UseState("")
 	// setupCodeInput is the optional single-use invite code some private/
 	// embedded deployments require to create a brand-new account
-	// (Config.SetupCode/TODOS.md C445). Blank and harmless on every ordinary
-	// deployment — the server only checks it when it has one configured.
+	// (Config.SetupCode/TODOS.md C445-C446). Blank and harmless on every
+	// ordinary deployment — the server only checks it when it has one
+	// configured. showInviteCode keeps the field hidden behind a toggle
+	// until asked for, so the common (open-enrollment) case never shows a
+	// field almost nobody needs.
 	setupCodeInput := uic.UseState("")
+	showInviteCode := uic.UseState(false)
 	// idempotencyKey is regenerated for every fresh send so a genuine second
 	// attempt (new code) doesn't collide with a stale one, while retries of
 	// verifying the SAME code (e.g. a flaky connection) keep reusing it so the
@@ -212,6 +216,7 @@ func CustomSyncCard() uic.Node {
 	onPhoneInput := uic.UseEvent(func(v string) { phoneInput.Set(v) })
 	onCodeInput := uic.UseEvent(func(v string) { codeInput.Set(v) })
 	onSetupCodeInput := uic.UseEvent(func(v string) { setupCodeInput.Set(v) })
+	onShowInviteCode := uic.UseEvent(func() { showInviteCode.Set(true) })
 
 	sending := phase.Get() == customSyncSending
 	verifying := phase.Get() == customSyncVerifying
@@ -249,12 +254,21 @@ func CustomSyncCard() uic.Node {
 			Input(css.Class("set-input"), Type("tel"), Attr("inputmode", "tel"), Attr("autocomplete", "tel"),
 				Attr("aria-label", uistate.T("customSync.phoneLabel")), Attr("data-testid", "custom-sync-phone"),
 				Placeholder(uistate.T("customSync.phonePlaceholder")), Value(phoneInput.Get()), OnInput(onPhoneInput)),
-			// Optional single-use invite code (Config.SetupCode/TODOS.md C445) —
-			// blank and harmless on every ordinary deployment; only a
-			// private/embedded deployment gating new accounts actually checks it.
-			Input(css.Class("set-input"), Type("text"), Attr("autocomplete", "off"),
-				Attr("aria-label", uistate.T("customSync.setupCodeLabel")), Attr("data-testid", "custom-sync-setup-code"),
-				Placeholder(uistate.T("customSync.setupCodePlaceholder")), Value(setupCodeInput.Get()), OnInput(onSetupCodeInput)),
+			// Optional single-use invite code (Config.SetupCode/TODOS.md
+			// C445-C446) — hidden behind a toggle so nobody without an
+			// invite ever sees it; only a private/embedded deployment
+			// gating new accounts actually checks it.
+			IfElse(showInviteCode.Get(),
+				Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
+					P(css.Class(tw.TextFaint, tw.Text12), uistate.T("customSync.inviteCodeLabel")),
+					Input(css.Class("set-input"), Type("text"), Attr("inputmode", "numeric"),
+						Attr("autocomplete", "off"), Attr("autofocus", ""),
+						Attr("aria-label", uistate.T("customSync.inviteCodeLabel")), Attr("data-testid", "custom-sync-setup-code"),
+						Placeholder(uistate.T("customSync.inviteCodePlaceholder")), Value(setupCodeInput.Get()), OnInput(onSetupCodeInput)),
+				),
+				Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "custom-sync-show-setup-code"),
+					OnClick(onShowInviteCode), uistate.T("customSync.inviteCodeToggle")),
+			),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "custom-sync-send"),
 				DisabledIf(sending), OnClick(sendCode),
 				IfElse(sending, Text(uistate.T("customSync.sending")), Text(uistate.T("customSync.sendCode")))),

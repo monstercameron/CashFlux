@@ -1,3 +1,31 @@
+## 2026-07-23 — A near-repeat of the wasm-build-race mistake, caught this time
+
+Small follow-up once the admin-mintable invite codes landed: Cam asked for two things — a
+copy-to-clipboard button on the freshly-minted code in the portfolio's admin tab (that one's in
+PersonalWebsiteMid2026's own DEVLOG), and a friendlier way to enter the code on the CashFlux side
+itself. The setup-code field from C445 was always visible right next to the phone number input —
+correct, but a little odd-looking for the near-totality of users who will never have one. Hid it
+behind a "Have an invite code?" toggle; the revealed field is now auto-focused, numeric-input-mode,
+and relabeled "Invite code" to match the vocabulary the admin console already uses ("mint invite
+code", "invite a new client").
+
+Went to screenshot-verify the change and made almost the exact mistake from earlier this session
+again: ran `GOOS=js GOARCH=wasm go build -o web/bin/main.wasm .` directly into the live `gwc dev`
+server's own webroot — the same file that server's hot-reload watcher owns — while that process
+(same PID as before) was still running. Caught it immediately this time by checking `netstat`
+before doing anything else, verified the live page hadn't actually broken (no concurrent rebuild
+was in flight at that exact moment, so no torn write happened), and redid the actual verification
+properly: copied `web/` into an isolated scratch directory, built the wasm there, served it with
+`e2e/serve.exe` on a throwaway port, and screenshotted through Playwright. Confirmed the collapsed
+state shows just the phone field with a small unobtrusive link, and the expanded state shows a
+clean labeled, auto-focused, correctly-hinted input.
+
+Worth being honest about the pattern here: this is the second time in one session I've reached for
+"just rebuild the wasm real quick to check" and grabbed the live path instead of the isolated one.
+The isolated-scratch-copy habit needs to be the *default* reflex for any visual check in this repo,
+not a recovery step after almost clobbering something — there's no scenario where writing into
+`web/bin/main.wasm` directly is actually necessary for a screenshot check.
+
 ## 2026-07-23 — From "one static code" to "an actual admin console"
 
 Cam's reaction to the setup-code embedding landing: he went looking for it in the portfolio's admin

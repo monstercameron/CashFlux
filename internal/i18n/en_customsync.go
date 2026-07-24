@@ -34,12 +34,13 @@ var customSyncKeys = Catalog{
 	"customSync.gatedPlanTier":       "Phone sign-in isn't included on your current plan. Upgrade to turn it on.",
 	"customSync.gatedGeneric":        "Cloud sync isn't available on this account right now.",
 	"customSync.upgradeCta":          "Manage plan",
-	// setupCode* covers the optional single-use invite code some private/
+	// inviteCode* covers the optional single-use invite code some private/
 	// embedded deployments require to create a brand-new account
-	// (Config.SetupCode/TODOS.md C445). Blank on every ordinary deployment —
-	// the field is low-key and optional-looking on purpose.
-	"customSync.setupCodeLabel":       "Setup code",
-	"customSync.setupCodePlaceholder": "Only if you were given one",
+	// (Config.SetupCode/TODOS.md C445-C446). Hidden behind a toggle on every
+	// ordinary deployment — nobody without an invite ever needs to see it.
+	"customSync.inviteCodeToggle":      "Have an invite code?",
+	"customSync.inviteCodeLabel":       "Invite code",
+	"customSync.inviteCodePlaceholder": "6-digit code from whoever invited you",
 }
 
 func init() {
