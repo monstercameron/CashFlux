@@ -38,6 +38,10 @@ test.describe("sync error visibility", () => {
     if (await useDifferent.count() > 0) await useDifferent.click();
 
     await app.locator('[data-testid="sync-server-url"]').fill(UNREACHABLE);
+    // The token field is never auto-revealed (2026-07-24: Cam — "I didn't ask
+    // for a bearer token field... I want a clean UI that doesn't confuse the
+    // user") — it's always a deliberate, one-click "advanced" disclosure now.
+    await app.locator('[data-testid="sync-advanced-token-toggle"]').click();
     const tokenField = app.locator('[data-testid="sync-server-token"]');
     await tokenField.waitFor({ timeout: 10_000 });
     await tokenField.fill("not-a-real-token");

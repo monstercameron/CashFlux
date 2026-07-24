@@ -382,8 +382,12 @@ func CloudConnectionPane() uic.Node {
 	// Commercial always offers OAuth — a paid backend's capabilities are a known
 	// quantity, not something to probe for — so discovery is never even run.
 	showOAuth := commercial || (phase == discoveryOK && len(d.AuthProviders) > 0)
-	tokenPrimary := commercial || phase != discoveryOK || (!showPassword && !showOAuth)
-	showTokenField := tokenPrimary || advancedTokenOpen.Get()
+	// tokenOnly is purely informational (see sync.tokenFieldPrimary below) —
+	// it never auto-reveals the token field itself. True only once discovery
+	// has actually SUCCEEDED and confirmed this server offers nothing else;
+	// while checking, idle, or errored, we simply don't know yet, so nothing
+	// token-related is claimed or shown by default.
+	tokenOnly := !commercial && phase == discoveryOK && !showPassword && !showOAuth
 	// showPendingPairing offers the admin-approved pairing bootstrap
 	// (TODOS.md C454) only where it's the actual answer to "I have no
 	// credentials yet": a self-hosted server with password/pairing auth but
@@ -473,24 +477,30 @@ func CloudConnectionPane() uic.Node {
 				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPricingTeaser", cloudPrice))),
 
 			// Exactly one primary sign-in surface, chosen by what the server
-			// actually reports supporting (or, for Commercial, always OAuth).
+			// actually reports supporting. The raw access-token field is NEVER
+			// auto-revealed, in ANY phase — Cam: "I didn't ask for a bearer
+			// token field... I want a clean UI that doesn't confuse the
+			// user." Earlier logic showed it by default whenever discovery
+			// hadn't succeeded (checking/idle/a plain network error) as well
+			// as whenever a server turned out to be token-only — surfacing
+			// raw infrastructure UI for the single most common case (still
+			// typing a URL, or a same-origin/network hiccup). It is always a
+			// deliberate, one-click "advanced" disclosure now — the exact
+			// same toggle regardless of WHY nothing else is showing.
 			If(showPassword, uic.CreateElement(PasswordAuthCard)),
 			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub")),
 			)),
-			If(tokenPrimary && !commercial && phase == discoveryOK, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
-			If(tokenPrimary && showTokenField, tokenField),
+			If(tokenOnly, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
 
-			If(showPassword || !tokenPrimary, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
-				Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading")),
+			If(!commercial, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
+				If(showPassword || showPendingPairing, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
 				If(showPassword, uic.CreateElement(DeviceLinkCard)),
 				If(showPendingPairing, uic.CreateElement(PendingDeviceCard)),
-				If(!tokenPrimary, Fragment(
-					If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
-						Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),
-					If(advancedTokenOpen.Get(), tokenField),
-				)),
+				If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
+					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),
+				If(advancedTokenOpen.Get(), tokenField),
 			)),
 
 			// Sign out / clear-invalid-token — "Sign out" implies an active session,
