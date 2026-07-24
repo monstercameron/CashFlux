@@ -56,6 +56,59 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — Adversarial security review of the pairing bootstrap: two real findings, fixed
+
+Task 9's mandatory security-review pass — dispatched a sequential agent to actively try to break the
+device-pairing feature (RequestDevicePairing rate-limit bypass, device-id spoofing, SetPassword's
+auth boundary — the specific angles the plan flagged, plus told to look for anything else). Findings:
+
+**Confirmed #1 — `WatchPairingStatus`/`CancelDevicePairing` had zero rate limiting.** Every sibling
+unauthenticated door in this feature (`RequestDevicePairing`) and every pre-existing one
+(`RedeemPairingCode`, `Register`, `Login`) has the two-limiter (per-key + global backstop) pattern.
+These two simply didn't — I'd added them to the auth-interceptor skip list (the earlier C459 fix) but
+never gave them a rate limiter, a genuinely easy thing to miss since "unauthenticated" and
+"unrated-limited" are two separate properties that happen to usually travel together in this
+codebase, except here. The real exposure: each `WatchPairingStatus` call spins its own goroutine plus
+a 1-second poll `time.Ticker`, and the store is `SetMaxOpenConns(1)` — every DB operation in the whole
+process serializes through ONE SQLite connection. An anonymous caller opening enough concurrent
+watches (or looping `CancelDevicePairing`) starves that connection for every other caller: Login,
+Register, real sync traffic, everything. Fixed by adding the identical two-limiter pattern
+(`watchPairingStatusLimiter`/`watchPairingStatusGlobalLimiter`,
+`cancelDevicePairingLimiter`/`cancelDevicePairingGlobalLimiter`) already used everywhere else — no new
+mechanism, just the existing one applied where I'd missed it.
+
+**Confirmed #2 — `pending_devices` rows are never deleted.** `devicePairingGlobalLimiter`'s own doc
+comment claims it exists partly to prevent "storage exhaustion" — true in the sense that it slows the
+mint RATE, but nothing ever deletes a row once minted, resolved or not, expired or not. A patient
+attacker staying just under the 30/min global cap accumulates rows forever — the limiter bounds the
+RATE of growth, not the cumulative total, which is a real gap relative to what its own comment
+implied it guaranteed. Fixed with `Store.PruneExpiredPendingDevices(now)` — deletes any row (pending,
+approved, or rejected) whose `expires_at` has passed, since nothing reads a row again once its TTL is
+up regardless of how it resolved (an approved/rejected row was already delivered via
+`WatchPairingStatus`'s one-shot single event). Called opportunistically inside `MintPendingDevice`
+itself — every legitimate new request also sweeps a batch of old ones, so the table's steady-state
+size tracks the request RATE rather than growing with the lifetime total. No new background job/
+scheduler needed; matches the "simplest thing that bounds the actual problem" bar rather than
+reaching for the heavier periodic-sweep machinery `blobcleanup.go`/`retention.go` use elsewhere in
+this codebase for larger, meaningfully-retained data — these rows are ephemeral 5-10 minute secrets,
+not something worth a configurable retention window.
+
+**Ruled out, worth recording since they were the plan's named risk areas:** device-id brute force
+(160 bits of `crypto/rand`, astronomically infeasible), the pairing-code guess budget (unchanged,
+still bounded to ~150 total guesses per outstanding code), `SetPassword`'s auth boundary (traced
+`AuthUserFromContext` → `ensureUserRow` → `SetLocalCredentials(user.ID, ...)` end to end — no path
+lets a caller influence `user.ID` independent of their verified bearer token), and the
+`ApprovePendingDevice`/`RejectPendingDevice` concurrent-race property (both are single atomic
+`UPDATE ... WHERE status = 'pending'` statements decided purely by `RowsAffected() > 0` — a losing
+concurrent call just affects zero rows, no silent overwrite). One PLAUSIBLE, not fixed: `SetPassword`
+has no "already has a username" guard, so a session can change its username repeatedly, instantly
+freeing the old one for anyone else to claim — not concretely exploitable (a new claimant gets their
+OWN fresh account, never the original user's data) so left as-is, but worth a deliberate call if
+`SetPassword` is ever meant to be a strict one-time action rather than "set/change your credentials."
+
+4 new tests (2 rate-limit tests covering both fixed doors, 2 storage-growth tests covering the prune
+and its opportunistic call site). Full native build/vet/test and a real wasm build both clean.
+
 ## 2026-07-24 — PendingDeviceCard, and actually proving the whole flow works live
 
 Sixth task off the plan: the client half of C454 — `PendingDeviceCard`, a new secondary sign-in

@@ -134,6 +134,24 @@ func TestAuthServerCancelDevicePairingCannotCancelAnotherDevice(t *testing.T) {
 	}
 }
 
+// TestAuthServerCancelDevicePairingRateLimited proves CancelDevicePairing —
+// unauthenticated by design — cannot be flooded (security review finding:
+// this door originally had no rate limit at all, unlike every sibling
+// unauthenticated RPC).
+func TestAuthServerCancelDevicePairingRateLimited(t *testing.T) {
+	s := newTestAuthServer(t)
+	ctx := context.Background()
+	for i := 0; i < cancelDevicePairingLimitPerMinute; i++ {
+		if _, err := s.CancelDevicePairing(ctx, backendrpc.CancelDevicePairingRequest{DeviceID: "same-guessed-id"}); err != nil {
+			t.Fatalf("call %d: unexpected error: %v", i, err)
+		}
+	}
+	_, err := s.CancelDevicePairing(ctx, backendrpc.CancelDevicePairingRequest{DeviceID: "same-guessed-id"})
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("call over the per-device limit: err = %v, want ResourceExhausted", err)
+	}
+}
+
 func TestAuthServerSetPasswordRequiresAuthentication(t *testing.T) {
 	s := newTestAuthServer(t)
 	_, err := s.SetPassword(context.Background(), backendrpc.SetPasswordRequest{Username: "cam", Password: "correct-horse-battery"})
@@ -282,5 +300,27 @@ func TestAuthServerWatchPairingStatusUnknownDevice(t *testing.T) {
 	err := s.WatchPairingStatusRPC(backendrpc.WatchPairingStatusRequest{DeviceID: "never-minted"}, stream)
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("WatchPairingStatusRPC for an unknown device: err = %v, want NotFound", err)
+	}
+}
+
+// TestAuthServerWatchPairingStatusRateLimited proves an unauthenticated
+// caller cannot open unbounded watches on the same (real or fabricated)
+// device id (security review finding: this door originally had no rate
+// limit at all, unlike RequestDevicePairing, despite each open watch
+// spinning its own goroutine + poll loop against the single-connection
+// store).
+func TestAuthServerWatchPairingStatusRateLimited(t *testing.T) {
+	s := newTestAuthServer(t)
+	for i := 0; i < watchPairingStatusLimitPerMinute; i++ {
+		stream := newFakeServerStream()
+		err := s.WatchPairingStatusRPC(backendrpc.WatchPairingStatusRequest{DeviceID: "same-guessed-id"}, stream)
+		if status.Code(err) != codes.NotFound {
+			t.Fatalf("call %d: err = %v, want NotFound below the limit", i, err)
+		}
+	}
+	stream := newFakeServerStream()
+	err := s.WatchPairingStatusRPC(backendrpc.WatchPairingStatusRequest{DeviceID: "same-guessed-id"}, stream)
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("call over the per-device limit: err = %v, want ResourceExhausted", err)
 	}
 }

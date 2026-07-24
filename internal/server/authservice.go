@@ -132,6 +132,24 @@ type authServer struct {
 	// bypass exactly like pairingGlobalLimiter's doc comment explains.
 	devicePairingLimiter       *fixedWindowLimiter
 	devicePairingGlobalLimiter *fixedWindowLimiter
+
+	// watchPairingStatusLimiter/watchPairingStatusGlobalLimiter guard
+	// WatchPairingStatus (security review finding, TODOS.md C454 follow-up):
+	// unlike RequestDevicePairing, this door was originally left completely
+	// unrated — an unauthenticated caller could open unbounded concurrent
+	// watches (each its own goroutine + 1s poll ticker) on a real or even
+	// nonexistent deviceID, degrading the single-connection SQLite store
+	// (see OpenStore's SetMaxOpenConns(1)) for every other caller. Keyed by
+	// deviceID (a legitimate client opens exactly one watch per request) with
+	// the usual constant-keyed global backstop against a caller who fabricates
+	// or rotates device ids to evade the per-key limit.
+	watchPairingStatusLimiter       *fixedWindowLimiter
+	watchPairingStatusGlobalLimiter *fixedWindowLimiter
+
+	// cancelDevicePairingLimiter/cancelDevicePairingGlobalLimiter are
+	// CancelDevicePairing's twin — same finding, same shape, same rationale.
+	cancelDevicePairingLimiter       *fixedWindowLimiter
+	cancelDevicePairingGlobalLimiter *fixedWindowLimiter
 }
 
 // pairingGlobalLimiterKey is the single, constant bucket key
@@ -146,6 +164,14 @@ const registerGlobalLimiterKey = "register:global"
 // devicePairingGlobalLimiterKey is devicePairingGlobalLimiter's constant
 // bucket key — see pairingGlobalLimiterKey.
 const devicePairingGlobalLimiterKey = "request-device-pairing:global"
+
+// watchPairingStatusGlobalLimiterKey/cancelDevicePairingGlobalLimiterKey are
+// their respective global backstops' constant bucket keys — see
+// pairingGlobalLimiterKey.
+const (
+	watchPairingStatusGlobalLimiterKey  = "watch-pairing-status:global"
+	cancelDevicePairingGlobalLimiterKey = "cancel-device-pairing:global"
+)
 
 // loginLimitPerMinute/registerLimitPerMinute/pairingLimitPerMinute cap
 // attempts against the guessable-secret doors (password, pairing code) per
@@ -181,19 +207,37 @@ const (
 	// authServer.devicePairingLimiter's doc comment.
 	devicePairingLimitPerMinute       = 10
 	devicePairingGlobalLimitPerMinute = 30
+
+	// watchPairingStatusLimitPerMinute/watchPairingStatusGlobalLimitPerMinute
+	// cap WatchPairingStatus — see authServer.watchPairingStatusLimiter's doc
+	// comment. Set higher than the mint-side limiters: a legitimate client can
+	// reasonably reconnect a few times if a connection drops while waiting on
+	// a human admin, which the mint-side doors never need to do.
+	watchPairingStatusLimitPerMinute       = 20
+	watchPairingStatusGlobalLimitPerMinute = 60
+
+	// cancelDevicePairingLimitPerMinute/cancelDevicePairingGlobalLimitPerMinute
+	// cap CancelDevicePairing — see authServer.cancelDevicePairingLimiter's
+	// doc comment. A legitimate client cancels at most once per request.
+	cancelDevicePairingLimitPerMinute       = 5
+	cancelDevicePairingGlobalLimitPerMinute = 30
 )
 
 func newAuthService(store *Store, cfg Config) *authServer {
 	return &authServer{
-		store:                      store,
-		cfg:                        cfg,
-		loginLimiter:               newFixedWindowLimiter(loginLimitPerMinute),
-		registerLimiter:            newFixedWindowLimiter(registerLimitPerMinute),
-		pairingLimiter:             newFixedWindowLimiter(pairingLimitPerMinute),
-		pairingGlobalLimiter:       newFixedWindowLimiter(pairingGlobalLimitPerMinute),
-		registerGlobalLimiter:      newFixedWindowLimiter(registerGlobalLimitPerMinute),
-		devicePairingLimiter:       newFixedWindowLimiter(devicePairingLimitPerMinute),
-		devicePairingGlobalLimiter: newFixedWindowLimiter(devicePairingGlobalLimitPerMinute),
+		store:                            store,
+		cfg:                              cfg,
+		loginLimiter:                     newFixedWindowLimiter(loginLimitPerMinute),
+		registerLimiter:                  newFixedWindowLimiter(registerLimitPerMinute),
+		pairingLimiter:                   newFixedWindowLimiter(pairingLimitPerMinute),
+		pairingGlobalLimiter:             newFixedWindowLimiter(pairingGlobalLimitPerMinute),
+		registerGlobalLimiter:            newFixedWindowLimiter(registerGlobalLimitPerMinute),
+		devicePairingLimiter:             newFixedWindowLimiter(devicePairingLimitPerMinute),
+		devicePairingGlobalLimiter:       newFixedWindowLimiter(devicePairingGlobalLimitPerMinute),
+		watchPairingStatusLimiter:        newFixedWindowLimiter(watchPairingStatusLimitPerMinute),
+		watchPairingStatusGlobalLimiter:  newFixedWindowLimiter(watchPairingStatusGlobalLimitPerMinute),
+		cancelDevicePairingLimiter:       newFixedWindowLimiter(cancelDevicePairingLimitPerMinute),
+		cancelDevicePairingGlobalLimiter: newFixedWindowLimiter(cancelDevicePairingGlobalLimitPerMinute),
 	}
 }
 
@@ -508,6 +552,10 @@ func (s *authServer) WatchPairingStatusRPC(req backendrpc.WatchPairingStatusRequ
 	if deviceID == "" {
 		return status.Error(codes.InvalidArgument, "device id is required")
 	}
+	now := time.Now().UTC()
+	if !s.watchPairingStatusLimiter.allow(deviceID, now) || !s.watchPairingStatusGlobalLimiter.allow(watchPairingStatusGlobalLimiterKey, now) {
+		return status.Error(codes.ResourceExhausted, "too many watch requests — try again in a minute")
+	}
 	const pollInterval = time.Second
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -559,6 +607,10 @@ func (s *authServer) CancelDevicePairing(ctx context.Context, req backendrpc.Can
 	deviceID := strings.TrimSpace(req.DeviceID)
 	if deviceID == "" {
 		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.InvalidArgument, "device id is required")
+	}
+	now := time.Now().UTC()
+	if !s.cancelDevicePairingLimiter.allow(deviceID, now) || !s.cancelDevicePairingGlobalLimiter.allow(cancelDevicePairingGlobalLimiterKey, now) {
+		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.ResourceExhausted, "too many cancel requests — try again in a minute")
 	}
 	canceled, err := s.store.RejectPendingDevice(deviceID)
 	if err != nil {

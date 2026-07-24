@@ -6,6 +6,22 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Adversarial security review of the device-pairing bootstrap (TODOS.md C454) found and fixed two
+  real gaps.** (1) `WatchPairingStatus` and `CancelDevicePairing` had NO rate limiting at all — unlike
+  every sibling unauthenticated door (`RequestDevicePairing`, `RedeemPairingCode`, `Register`,
+  `Login`) — so an anonymous caller could open unbounded concurrent watches (each its own goroutine +
+  1s poll against the store) or flood cancels, starving the single-connection SQLite store
+  (`SetMaxOpenConns(1)`) for everyone. Added the same two-limiter (per-device + global backstop)
+  pattern already used elsewhere to both. (2) `pending_devices` rows were never deleted — the
+  per-minute mint-rate limiter only slowed growth, it never bounded the cumulative total, so the
+  table would grow unbounded for the life of a deployment even under the rate limit. Added
+  `Store.PruneExpiredPendingDevices`, called opportunistically from every `MintPendingDevice` (a
+  legitimate request always cleans up a batch of past ones too), plus new tests proving it deletes
+  expired rows regardless of resolution status and that steady mint traffic doesn't accumulate stale
+  rows. 4 new tests. Verified via full native `go build`/`go vet`/`go test ./...` and a real
+  `GOOS=js GOARCH=wasm go build`.
+
 ### Added
 - **Client UI for the admin-approved device-pairing bootstrap (TODOS.md C454): `PendingDeviceCard`**,
   a new secondary sign-in option in Settings → Cloud alongside `PasswordAuthCard`/`DeviceLinkCard`,

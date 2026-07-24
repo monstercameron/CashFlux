@@ -171,3 +171,76 @@ func TestRejectPendingDeviceUnknownID(t *testing.T) {
 		t.Fatal("RejectPendingDevice: expected ok=false for an id that was never minted")
 	}
 }
+
+// TestPruneExpiredPendingDevicesDeletesRegardlessOfStatus proves an expired
+// row is removed whether it's still pending, was approved, or was rejected —
+// nothing reads any of those states again once expires_at has passed
+// (security review finding: this table previously had no cleanup at all).
+func TestPruneExpiredPendingDevicesDeletesRegardlessOfStatus(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	past := now.Add(-2 * PendingDeviceTTL)
+
+	// Mint the fresh row FIRST: MintPendingDevice's own opportunistic sweep
+	// (called internally on every mint, see its doc comment) would otherwise
+	// clean up the expired rows below before this test's own explicit
+	// PruneExpiredPendingDevices call gets a chance to — order matters here
+	// specifically to isolate what's under test.
+	freshID, _, err := store.MintPendingDevice("still-fresh", now)
+	if err != nil {
+		t.Fatalf("MintPendingDevice: %v", err)
+	}
+	pendingID, _, err := store.MintPendingDevice("expired-pending", past)
+	if err != nil {
+		t.Fatalf("MintPendingDevice: %v", err)
+	}
+	approvedID, _, err := store.MintPendingDevice("expired-approved", past)
+	if err != nil {
+		t.Fatalf("MintPendingDevice: %v", err)
+	}
+	if ok, err := store.ApprovePendingDevice(approvedID, "111111", past); err != nil || !ok {
+		t.Fatalf("ApprovePendingDevice: ok=%v err=%v", ok, err)
+	}
+	rejectedID, _, err := store.MintPendingDevice("expired-rejected", past)
+	if err != nil {
+		t.Fatalf("MintPendingDevice: %v", err)
+	}
+	if ok, err := store.RejectPendingDevice(rejectedID); err != nil || !ok {
+		t.Fatalf("RejectPendingDevice: ok=%v err=%v", ok, err)
+	}
+
+	deleted, err := store.PruneExpiredPendingDevices(now)
+	if err != nil {
+		t.Fatalf("PruneExpiredPendingDevices: %v", err)
+	}
+	if deleted != 3 {
+		t.Fatalf("PruneExpiredPendingDevices: deleted %d rows, want 3", deleted)
+	}
+	for _, id := range []string{pendingID, approvedID, rejectedID} {
+		if _, ok, err := store.GetPendingDevice(id); err != nil || ok {
+			t.Fatalf("GetPendingDevice(%s) after prune: ok=%v err=%v, want ok=false", id, ok, err)
+		}
+	}
+	if _, ok, err := store.GetPendingDevice(freshID); err != nil || !ok {
+		t.Fatalf("GetPendingDevice(fresh) after prune: ok=%v err=%v, want ok=true — an unexpired row must survive", ok, err)
+	}
+}
+
+// TestMintPendingDeviceSweepsExpiredRows proves the table doesn't grow
+// unbounded under steady legitimate traffic: every real mint also cleans up
+// past-expiry rows, so the table's steady-state size tracks the request
+// rate rather than the lifetime total.
+func TestMintPendingDeviceSweepsExpiredRows(t *testing.T) {
+	store := openTestStore(t)
+	past := time.Now().UTC().Add(-2 * PendingDeviceTTL)
+	staleID, _, err := store.MintPendingDevice("stale-device", past)
+	if err != nil {
+		t.Fatalf("MintPendingDevice: %v", err)
+	}
+	if _, _, err := store.MintPendingDevice("fresh-device", time.Now().UTC()); err != nil {
+		t.Fatalf("second MintPendingDevice: %v", err)
+	}
+	if _, ok, err := store.GetPendingDevice(staleID); err != nil || ok {
+		t.Fatalf("GetPendingDevice(stale) after a later mint: ok=%v err=%v, want ok=false (swept)", ok, err)
+	}
+}

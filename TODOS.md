@@ -6262,3 +6262,43 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   set-password — over the real network, twice, both clean. Verified via full native
   `go build`/`go vet`/`go test ./...`, a real `GOOS=js GOARCH=wasm go build`, and
   `smoke.spec.mjs`/`sync.spec.mjs` — no regressions.
+- [x] **C461 [MAJOR][SYNC] Adversarial security review of the device-pairing bootstrap found and fixed
+  two real gaps (TODOS.md C454, mandatory review pass).** Dispatched a sequential review agent
+  specifically targeting `RequestDevicePairing` rate-limit bypass, device-id spoofing, and
+  `SetPassword`'s auth boundary — the risk areas the original plan named — plus told to look for
+  anything else.
+
+  **Confirmed #1: `WatchPairingStatus`/`CancelDevicePairing` had NO rate limiting**, unlike every
+  sibling unauthenticated door (`RequestDevicePairing`, `RedeemPairingCode`, `Register`, `Login`).
+  Real exposure: each `WatchPairingStatus` call spins its own goroutine + 1-second poll ticker, and
+  the store is `SetMaxOpenConns(1)` — every DB operation in the process serializes through ONE SQLite
+  connection, so an anonymous caller flooding either RPC starves that connection for everyone (Login,
+  Register, real sync traffic). Fixed by adding the same two-limiter (per-device + global backstop)
+  pattern already used everywhere else in this feature — `watchPairingStatusLimiter`/
+  `watchPairingStatusGlobalLimiter`, `cancelDevicePairingLimiter`/`cancelDevicePairingGlobalLimiter`.
+
+  **Confirmed #2: `pending_devices` rows are never deleted.** `devicePairingGlobalLimiter`'s own doc
+  comment claims it guards against "storage exhaustion" — true only in the sense that it slows the
+  MINT rate; nothing ever deleted a row, so a patient attacker staying under the 30/min global cap
+  accumulates rows forever. Fixed with `Store.PruneExpiredPendingDevices(now)` — deletes any row
+  (pending, approved, or rejected) whose `expires_at` has passed, since nothing reads a row again
+  once its TTL is up regardless of resolution. Called opportunistically inside `MintPendingDevice`
+  itself (every legitimate new request sweeps a batch of old ones) rather than reaching for a
+  periodic background job — these rows are 5-10 minute ephemeral secrets, not data worth the
+  configurable-retention-window machinery `blobcleanup.go`/`retention.go` use for larger, meaningfully
+  retained data elsewhere in this codebase.
+
+  **Ruled out** (the plan's named risk areas, confirmed sound): device-id brute force (160 bits of
+  `crypto/rand`, infeasible), the pairing-code guess budget (unchanged, ~150 total guesses per
+  outstanding code), `SetPassword`'s auth boundary (traced `AuthUserFromContext` → `ensureUserRow` →
+  `SetLocalCredentials(user.ID, ...)` end to end — no path lets a caller influence `user.ID`
+  independent of their verified bearer token), and the `ApprovePendingDevice`/`RejectPendingDevice`
+  concurrent-race property (both single atomic `UPDATE ... WHERE status = 'pending'`, decided purely
+  by `RowsAffected() > 0`). **One PLAUSIBLE finding, not fixed:** `SetPassword` has no "already has a
+  username" guard, so a session can change its username repeatedly, instantly freeing the old one for
+  anyone else to claim — not concretely exploitable (a new claimant only ever gets their OWN fresh
+  account, never the original user's data), left as-is pending a deliberate call on whether
+  username-changing should be a supported capability of this endpoint.
+
+  4 new tests (2 rate-limit, 2 storage-growth). Verified via full native `go build`/`go vet`/
+  `go test ./...` and a real `GOOS=js GOARCH=wasm go build`.

@@ -66,6 +66,14 @@ func (s *Store) MintPendingDevice(label string, now time.Time) (deviceID string,
 	}
 	defer s.observeDB("MintPendingDevice", time.Now())
 	now = now.UTC()
+	// Best-effort opportunistic cleanup (security review finding: nothing
+	// ever deleted pending_devices rows, so the table grew unbounded even
+	// under devicePairingGlobalLimiter's per-minute cap — that limiter only
+	// slows growth, it doesn't bound it over days/weeks). Piggybacking the
+	// sweep on every real mint bounds the table's steady-state size to
+	// roughly the request RATE rather than the cumulative total; a failure
+	// here must never block a legitimate pairing request, so it's ignored.
+	_, _ = s.PruneExpiredPendingDevices(now)
 	expiresAt = now.Add(PendingDeviceTTL)
 	for attempt := 0; attempt < pendingDeviceIDMintAttempts; attempt++ {
 		id, genErr := randomPendingDeviceID()
@@ -204,6 +212,35 @@ func (s *Store) RejectPendingDevice(deviceID string) (ok bool, err error) {
 		return false, fmt.Errorf("server store: reject pending device: %w", err)
 	}
 	return affected > 0, nil
+}
+
+// PruneExpiredPendingDevices removes every pending_devices row whose expiry
+// has passed, regardless of resolution status (pending/approved/rejected) —
+// security review finding (TODOS.md C454 follow-up): nothing ever deleted
+// these rows, so the table grew unbounded even while
+// devicePairingGlobalLimiter capped the per-minute MINT rate (that limiter
+// only slows growth, it never bounded the cumulative total). Safe to delete
+// any status once expires_at has passed: an approved/rejected row was
+// already delivered to the waiting device via WatchPairingStatus (its own
+// single-event, one-shot delivery — see WatchPairingStatusRPC) and nothing
+// else ever reads it again; the actual account link an approval grants
+// lives in pairing_codes/users, entirely independent of this row. Called
+// opportunistically from MintPendingDevice; exported so tests and any
+// future periodic sweep can call it directly too.
+func (s *Store) PruneExpiredPendingDevices(now time.Time) (deleted int64, err error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("server store: not configured")
+	}
+	defer s.observeDB("PruneExpiredPendingDevices", time.Now())
+	res, err := s.db.Exec(`DELETE FROM pending_devices WHERE expires_at < ?`, formatTime(now.UTC()))
+	if err != nil {
+		return 0, fmt.Errorf("server store: prune expired pending devices: %w", err)
+	}
+	deleted, err = res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("server store: prune expired pending devices: %w", err)
+	}
+	return deleted, nil
 }
 
 // randomPendingDeviceID returns a cryptographically random, URL-safe device
