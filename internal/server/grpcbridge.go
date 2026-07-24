@@ -115,6 +115,7 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
+	const customAuthEnabled = false // SyncService only — no AuthServiceServer registered on this bridge
 	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
@@ -141,6 +142,7 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+			CustomAuthEnabled:   customAuthEnabled,
 		})
 	})
 	return mux
@@ -229,6 +231,7 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+			CustomAuthEnabled:   true, // AuthServiceServer (phone-only) is registered on this bridge
 		})
 	})
 	return mux

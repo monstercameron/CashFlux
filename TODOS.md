@@ -5880,3 +5880,50 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   state and wire field. Verified visually in an isolated scratch webroot (never touching the live
   `gwc dev` server's `web/bin/main.wasm` — a repeat near-miss of the earlier wasm-build-race mistake
   was caught before it mattered).
+- [x] **C448 [MAJOR][SYNC] Capability-aware /sync page redesign.** The page stacked every sign-in
+  door at once regardless of what the connected server actually supported: a Cloud/Self-hosted
+  toggle + manual server-URL/bearer-token fields, the phone card, a collapsed password link, and an
+  **always-expanded** pairing-code card — five doors visible together with no signal for which one
+  applied to *this* deployment. The `/v1/version` capability check already existed but was thrown
+  away (`testBackendConnection` only drove a one-off toast); `BillingEnabled`/`PaymentProviders`
+  weren't even in the client's JSON-decode struct, so the server already told the client what it
+  supported and the client silently dropped it. Two real bugs found in the same audit: "Open Cloud
+  settings" did a plain `nav.Navigate("/settings")` instead of `uistate.OpenGlobalSettingsAt("cloud")`
+  (landed on Household, not Cloud, despite its own label); Settings' Cloud pane pre-guessed
+  Google+GitHub OAuth were available the instant `ServerMode==cloud` (`settings.go:932-937`,
+  hard-coded), showing buttons that 404 until a manual "Test backend" click corrected the guess.
+  There was also no signal at all for "does this server support phone/password/pairing" — a bare
+  `NewSyncBridge` (SyncService only) and `NewSyncAndAuthBridge` (+AuthService) reported an identical
+  `VersionResponse` shape.
+
+  Fixed all of it. New `VersionResponse.CustomAuthEnabled` (true wherever `AuthServiceServer` is
+  registered — full server, `NewSyncAndAuthBridgeHandler`; false for `NewSyncBridgeHandler`) plus a
+  complete `backendauth.Discovery` (added `CustomAuthEnabled`/`BillingEnabled`/`PaymentProviders`,
+  previously silently dropped). `SyncPage` now runs discovery automatically (mount + on address-host
+  change, not on every keystroke) and renders exactly one primary sign-in surface chosen by what
+  discovery reports — phone/password/pairing (`CustomAuthEnabled`), OAuth buttons (new, inline, reuses
+  `startOAuthLogin` directly — no more trip to Settings to find them), or a fixed access token as a
+  last resort — with the token field always available as a quiet "paste an access token instead"
+  disclosure regardless. `DeviceLinkCard` gained the same collapse `PasswordAuthCard` already had (it
+  was the one door left always-expanded). Dropped the Cloud/Self-hosted segmented control from this
+  page entirely — Settings already owns that exact toggle for billing bookkeeping, and duplicating it
+  here no longer served a purpose once capability detection replaced it as the field-visibility gate.
+
+  **Zero-config same-origin auto-detection** (added after initial review — the embedded-in-another-
+  site case, e.g. this site mounted at `/budget/` with its sync bridge at `/grpc` on the SAME host,
+  is a first-class modality, not an edge case): before ever asking for an address, the page silently
+  probes the document's own origin (`js.Global().Get("location").Get("origin")`, matching
+  `anchorintercept.go`'s existing pattern) via the same discovery handshake. Success persists that
+  origin as `ServerURL` and skips the address field entirely — phone sign-in just appears. Failure
+  (the normal non-embedded desktop-app case, nothing listening at the page's own origin) falls
+  through to today's manual-address flow, unchanged. Caught and fixed a real bug in the "has this
+  user already configured something" check during verification: `prefs.Default()` itself (not just
+  `Normalize()`) pre-fills `ServerURL` with `DefaultServerURL`, so a blank-string check never actually
+  distinguished a fresh user — fixed to compare against `prefs.DefaultServerURL` directly.
+
+  Verified end-to-end against three real backend shapes in isolated scratch environments (never the
+  live `gwc dev` webroot): a full-server instance (`CustomAuthEnabled=true`) confirming the capability
+  signal over the real wire; a `NewSyncBridge`-only instance (`CustomAuthEnabled=false`) confirming
+  the token-only fallback; and a combined static-client+`NewSyncAndAuthBridge` instance on one port
+  (mirroring the portfolio's actual architecture) confirming the same-origin zero-config path — no
+  address typed, no token field, phone card appears automatically.

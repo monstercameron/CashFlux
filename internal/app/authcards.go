@@ -304,12 +304,19 @@ func DeviceLinkCard() uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
 
+	// Collapsed by default, same reasoning as PasswordAuthCard: linking an
+	// EXISTING device is a returning-user action, not something every
+	// first-time visitor needs in front of them alongside CustomSyncCard's
+	// brand-new-account phone flow.
+	expanded := uic.UseState(false)
 	code := uic.UseState("")
 	submitting := uic.UseState(false)
 	linked := uic.UseState(false)
 	idempotencyKey := uic.UseState("")
 
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
+
+	onToggleExpand := uic.UseEvent(func() { expanded.Set(!expanded.Get()) })
 
 	onCodeInput := uic.UseEvent(func(v string) {
 		code.Set(v)
@@ -374,6 +381,13 @@ func DeviceLinkCard() uic.Node {
 		code.Set("")
 		idempotencyKey.Set("")
 	})
+
+	if !expanded.Get() {
+		return Div(css.Class(tw.Mt1), Attr("data-testid", "device-link-collapsed"),
+			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "device-link-expand"),
+				OnClick(onToggleExpand), uistate.T("authCards.haveAnAccount")),
+		)
+	}
 
 	return Div(css.Class("card", "device-link-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "device-link-card"),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),

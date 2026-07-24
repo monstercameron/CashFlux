@@ -929,10 +929,11 @@ func globalSettingsForm() uic.Node {
 		// them down when off (Phase 1c).
 		restartBackendSync()
 	}
+	// Start unverified rather than guessing Google+GitHub are available the instant
+	// ServerMode==cloud: this server may have neither configured, and showing sign-in
+	// buttons that 404 until a "Test backend" click corrects the guess is worse than
+	// showing nothing until the real discovery check (testBackend, below) resolves.
 	initialAuth := backendauth.Discovery{AuthMode: backendauth.ModeToken}
-	if pr.ServerMode == prefs.ServerCloud {
-		initialAuth = backendauth.Discovery{AuthMode: backendauth.ModeOAuth, AuthProviders: []string{"google", "github"}}
-	}
 	serverAuthMode := uic.UseState(initialAuth.AuthMode)
 	serverAuthProviders := uic.UseState(strings.Join(initialAuth.AuthProviders, ","))
 	billingInterval := uic.UseState("annual")
@@ -956,13 +957,11 @@ func globalSettingsForm() uic.Node {
 	}
 	onServerMode := func(v string) {
 		serverMode.Set(v)
-		if prefs.ServerMode(v) == prefs.ServerCloud {
-			serverAuthMode.Set(backendauth.ModeOAuth)
-			serverAuthProviders.Set("google,github")
-		} else {
-			serverAuthMode.Set(backendauth.ModeToken)
-			serverAuthProviders.Set("")
-		}
+		// Switching modes doesn't know what the (possibly not-yet-typed) server
+		// actually offers — reset to unverified rather than guessing, same
+		// reasoning as initialAuth above; "Test backend" is what actually confirms it.
+		serverAuthMode.Set(backendauth.ModeToken)
+		serverAuthProviders.Set("")
 		p := prefsAtom.Get()
 		p.ServerMode = prefs.ServerMode(v)
 		savePrefs(p)

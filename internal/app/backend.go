@@ -42,6 +42,13 @@ type backendVersionResponse struct {
 	MinClientAPIVersion string   `json:"minClientApiVersion"`
 	AuthMode            string   `json:"authMode"`
 	AuthProviders       []string `json:"authProviders"`
+	// CustomAuthEnabled/BillingEnabled/PaymentProviders mirror
+	// server.VersionResponse's matching fields — previously the server sent
+	// these but the client silently dropped them by never decoding into a
+	// matching field.
+	CustomAuthEnabled bool     `json:"customAuthEnabled"`
+	BillingEnabled    bool     `json:"billingEnabled"`
+	PaymentProviders  []string `json:"paymentProviders"`
 }
 
 type billingSessionResponse struct {
@@ -141,7 +148,13 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 			onError("Backend API version is not compatible.")
 			return
 		}
-		onDone(backendauth.Discovery{AuthMode: version.AuthMode, AuthProviders: version.AuthProviders}.Normalize())
+		onDone(backendauth.Discovery{
+			AuthMode:          version.AuthMode,
+			AuthProviders:     version.AuthProviders,
+			CustomAuthEnabled: version.CustomAuthEnabled,
+			BillingEnabled:    version.BillingEnabled,
+			PaymentProviders:  version.PaymentProviders,
+		}.Normalize())
 	}()
 }
 

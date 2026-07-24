@@ -39,3 +39,38 @@ func TestOAuthProvidersOrFallback(t *testing.T) {
 		t.Fatalf("advertised providers = %#v", got)
 	}
 }
+
+// TestDiscoveryNormalizePreservesCapabilityFields proves CustomAuthEnabled,
+// BillingEnabled, and PaymentProviders survive Normalize() untouched (they
+// aren't part of the auth-mode/provider dedupe logic Normalize exists for).
+func TestDiscoveryNormalizePreservesCapabilityFields(t *testing.T) {
+	got := (Discovery{
+		AuthMode:          ModeToken,
+		CustomAuthEnabled: true,
+		BillingEnabled:    true,
+		PaymentProviders:  []string{"Stripe", "paypal", "stripe"},
+	}).Normalize()
+	if !got.CustomAuthEnabled {
+		t.Fatalf("CustomAuthEnabled = false, want true")
+	}
+	if !got.BillingEnabled {
+		t.Fatalf("BillingEnabled = false, want true")
+	}
+	want := []string{"stripe", "paypal"}
+	if !reflect.DeepEqual(got.PaymentProviders, want) {
+		t.Fatalf("PaymentProviders = %#v, want %#v", got.PaymentProviders, want)
+	}
+}
+
+func TestDiscoveryNormalizeDefaultsCapabilityFieldsFalse(t *testing.T) {
+	got := (Discovery{AuthMode: ModeToken}).Normalize()
+	if got.CustomAuthEnabled {
+		t.Fatalf("CustomAuthEnabled = true, want false (zero value)")
+	}
+	if got.BillingEnabled {
+		t.Fatalf("BillingEnabled = true, want false (zero value)")
+	}
+	if len(got.PaymentProviders) != 0 {
+		t.Fatalf("PaymentProviders = %#v, want empty", got.PaymentProviders)
+	}
+}

@@ -1,3 +1,70 @@
+## 2026-07-24 — The /sync page finally asks the server what it supports, instead of guessing
+
+Cam's reaction to actually looking at `/sync` closely: "confusing dogshit." Fair — a Cloud/self-
+hosted toggle, a manual URL+token pair, the phone card, a collapsed password link, and an
+always-expanded pairing-code card all sat on one screen at once, with nothing on the page telling
+you which of those five doors actually worked against whatever server you were pointed at. The
+`/v1/version` discovery check already existed and already told the client everything it needed —
+`AuthMode`, `AuthProviders`, and (unused) `BillingEnabled`/`PaymentProviders` — but `SyncPage` threw
+the result away after a one-line toast. Confirmed by grep: zero other read sites for those last two
+fields anywhere in `internal/app/`. The server had been telling the truth the whole time; nothing
+was listening.
+
+Root design change: stop asking the user to declare what KIND of server they have (Cloud vs.
+self-hosted) and instead ask the server directly, then show only what it actually offers. Needed one
+new signal that genuinely didn't exist anywhere: whether `AuthServiceServer` is even registered on
+the connected backend at all (`NewSyncBridge`'s SyncService-only shape vs. `NewSyncAndAuthBridge`'s
+full shape look byte-identical over `/v1/version` today) — added `CustomAuthEnabled` to close that
+gap. Everything else was just wiring a check that already existed into rendering decisions that had
+never consulted it.
+
+Along the way, found the kind of bug that only shows up when you actually trace a whole flow instead
+of reading it top-down: Settings' Cloud pane pre-guesses Google+GitHub OAuth are available the
+instant `ServerMode` flips to Cloud (`settings.go:932-937`, a hard-coded `[]string{"google",
+"github"}`), showing sign-in buttons that 404 against any server without those providers configured
+— corrected only after a manual "Test backend" click fixes the guess. And "Open Cloud settings"
+turned out to navigate to plain `/settings`, landing on Household, not Cloud, despite the button's
+own label — a one-line fix (`uistate.OpenGlobalSettingsAt("cloud")`) that had apparently just never
+been noticed because the destination still *looked* like a settings page.
+
+Midway through, Cam pushed further: "there needs to be a way to do self-hosted same origin,
+self-hosted remote origin, and service... use the handshake so the user doesn't have to fill out any
+forms where applicable." Direct hit on something the redesign had missed — for the actual use case
+that started this whole session (CashFlux mounted at `/budget/` on a site whose backend also serves
+`/grpc` on the *same* origin), the address is already known; asking for it at all is exactly the
+kind of unnecessary form this pass was supposed to eliminate. Added a silent same-origin probe
+(`js.Global().Get("location").Get("origin")`, the same pattern `anchorintercept.go` already uses)
+that runs the discovery handshake against the page's own origin *before* ever showing an address
+field. Success skips the field entirely; failure (the ordinary non-embedded desktop-app case, where
+nothing listens at the page's own origin) falls through to typing an address, unchanged.
+
+Shipped that same-origin probe with a real bug in it, caught during verification, not before: the
+"has this user already configured something, so don't override it" check compared
+`prefsAtom.Get().ServerURL` against `""`. It's never empty — `prefs.Default()` itself (not just
+`Normalize()`, which was the function I'd actually gone and checked) pre-fills `ServerURL` with
+`DefaultServerURL` for every never-configured user. So the same-origin probe never ran for anyone,
+ever — every fresh user looked "already configured" to a check that was comparing against a value
+that literally cannot occur. Fixed by comparing against `prefs.DefaultServerURL` explicitly instead
+of blank. Caught via a from-scratch verification server that actually mirrors the portfolio's real
+architecture (one Go process serving the static client AND the sync bridge on the same port,
+built as a throwaway module with a `replace` back to this checkout) rather than trusting that the
+code read correctly — running the actual handshake against the actual same-origin case is what
+surfaced it; reading the diff again would not have.
+
+Also nearly repeated the exact wasm-build-race mistake from earlier in the session a second time —
+ran `GOOS=js GOARCH=wasm go build -o web/bin/main.wasm .` directly while the live `gwc dev` was still
+running, before catching it via `netstat` and redoing the check in an isolated scratch copy. Worth
+being honest that this keeps almost happening: the discipline needs to be "isolated copy is step
+one," not "check netstat, then remember the rule."
+
+One more thing worth naming plainly: `gwc dev` watches source files and rebuilds automatically on
+every save, completely independent of whether I ever manually touch `web/bin/main.wasm` myself. That
+means every incremental edit during this pass was live on the real `:8080` page in real time, mid-
+implementation, with no way to stage a finished result before Cam could see it. Several of the
+sharper messages this session were almost certainly reactions to genuinely-incomplete intermediate
+states rendering live, not the finished design — a real cost of hot-reload during active
+multi-file rework that's worth remembering next time a change touches this many files at once.
+
 ## 2026-07-23 — A near-repeat of the wasm-build-race mistake, caught this time
 
 Small follow-up once the admin-mintable invite codes landed: Cam asked for two things — a

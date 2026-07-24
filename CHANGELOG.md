@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Capability-aware /sync page redesign (TODOS.md C448).** The page no longer stacks every sign-in
+  method at once — it asks the connected server what it actually supports (new
+  `VersionResponse.CustomAuthEnabled` + a completed `backendauth.Discovery`) and shows exactly one
+  primary surface: phone/password/pairing, inline OAuth buttons, or a fixed access token, with the
+  token field always available as a demoted "paste an access token instead" disclosure. Zero-config
+  same-origin auto-detection: an embedded deployment (this app mounted on a site whose backend also
+  serves the sync bridge at the same origin) now needs no address typed at all — sign-in just
+  appears. `DeviceLinkCard` gained the same collapse `PasswordAuthCard` already had. Fixed two real
+  bugs found in the same audit: "Open Cloud settings" now actually deep-links to the Cloud tab
+  (`uistate.OpenGlobalSettingsAt("cloud")`, was a plain navigate landing on Household); Settings'
+  Cloud pane no longer pre-guesses Google+GitHub OAuth are available before a real check runs.
 - **Friendlier invite-code entry on the Custom Sync sign-in card (TODOS.md C447).** The setup-code
   field is now hidden behind a "Have an invite code?" toggle instead of always showing next to the
   phone input — most users never have one. Revealed field is auto-focused, numeric-input-mode, and

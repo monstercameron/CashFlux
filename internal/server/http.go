@@ -24,6 +24,13 @@ type VersionResponse struct {
 	// PaymentProviders lists the configured, ready-to-use payment providers
 	// ("stripe", "paypal") so the client offers only the buttons that will work.
 	PaymentProviders []string `json:"paymentProviders,omitempty"`
+	// CustomAuthEnabled reports whether AuthServiceServer is registered on this
+	// backend (phone/SMS, username/password, and pairing-code sign-in) — true
+	// on the full server and NewSyncAndAuthBridgeHandler, false on
+	// NewSyncBridgeHandler (SyncService only, single static token). Lets the
+	// client show only the sign-in methods this specific backend actually
+	// supports instead of every method CashFlux can ever offer.
+	CustomAuthEnabled bool `json:"customAuthEnabled"`
 }
 
 // RootResponse is returned by / for local backend discoverability.
@@ -181,6 +188,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+			CustomAuthEnabled:   true,
 		})
 	})
 	mux.Handle("GET /v1/auth/{provider}", authLimiter(handleOAuthStart(cfg)))

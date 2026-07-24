@@ -39,8 +39,10 @@ var authCardsKeys = Catalog{
 	"authCards.recoveryIntro":   "There's no email on file to reset your password if you forget it. Write this code down somewhere safe — it won't be shown again.",
 	"authCards.recoveryDismiss": "I've saved it",
 
-	// Link a new device (pairing code) — existing-account-only redemption.
-	"authCards.deviceLinkTitle":        "Already have an account?",
+	// Link a new device (pairing code) — existing-account-only redemption,
+	// collapsed under a link the same way the password fallback is.
+	"authCards.haveAnAccount":          "Already have an account? Link this device",
+	"authCards.deviceLinkTitle":        "Link this device",
 	"authCards.deviceLinkIntro":        "Link this device using a pairing code from your account settings on another device.",
 	"authCards.pairingCodeLabel":       "Pairing code",
 	"authCards.pairingCodePlaceholder": "123456",

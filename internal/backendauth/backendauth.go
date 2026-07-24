@@ -12,6 +12,15 @@ const (
 type Discovery struct {
 	AuthMode      string
 	AuthProviders []string
+	// CustomAuthEnabled mirrors VersionResponse.CustomAuthEnabled: whether this
+	// backend has AuthServiceServer registered (phone/SMS, username/password,
+	// pairing-code sign-in) at all. False on a SyncService-only embedding.
+	CustomAuthEnabled bool
+	// BillingEnabled/PaymentProviders mirror the matching VersionResponse
+	// fields — whether this backend has a billing/subscription concept, and
+	// which payment providers are actually configured and ready to use.
+	BillingEnabled   bool
+	PaymentProviders []string
 }
 
 func (d Discovery) Normalize() Discovery {
@@ -21,7 +30,7 @@ func (d Discovery) Normalize() Discovery {
 	default:
 		mode = ModeToken
 	}
-	out := Discovery{AuthMode: mode}
+	out := Discovery{AuthMode: mode, CustomAuthEnabled: d.CustomAuthEnabled, BillingEnabled: d.BillingEnabled}
 	seen := map[string]bool{}
 	for _, provider := range d.AuthProviders {
 		provider = strings.ToLower(strings.TrimSpace(provider))
@@ -30,6 +39,15 @@ func (d Discovery) Normalize() Discovery {
 		}
 		seen[provider] = true
 		out.AuthProviders = append(out.AuthProviders, provider)
+	}
+	seenPayment := map[string]bool{}
+	for _, provider := range d.PaymentProviders {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if provider == "" || seenPayment[provider] {
+			continue
+		}
+		seenPayment[provider] = true
+		out.PaymentProviders = append(out.PaymentProviders, provider)
 	}
 	return out
 }
