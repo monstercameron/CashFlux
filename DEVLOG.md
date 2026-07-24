@@ -56,6 +56,27 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — Caught starting the client UI: the pairing RPCs were never actually reachable
+
+Small but real gap found the moment I started wiring up the client side of C454. Every
+`RequestDevicePairing`/`WatchPairingStatus`/`CancelDevicePairing` unit test from the server-side
+commit calls the Go method directly on `*authServer` — which never goes through
+`AuthUnaryInterceptor`/`AuthStreamInterceptor` at all. Over the real wire, those interceptors run
+FIRST and reject anything without a valid bearer token unless the full method name is explicitly
+skip-listed — and I never added these three to `authInterceptorSkipMethods`. So the entire server-
+side commit, while "tested" and green, was unreachable by any real client. A reminder that a unit
+test calling a method directly and an integration test going through the actual interceptor chain
+prove genuinely different things — the skip-list tests (`authinterceptor_skip_test.go`) exist
+precisely to cover the gap between them, and I should have extended that table in the same commit
+that added the RPCs, not caught it a task later. Fixed, plus locked in with two more skip-list test
+cases (and one asserting `SetPassword` stays correctly gated, since it's the one new method that must
+NOT be on the list).
+
+While in there, added `VersionResponse.RegistrationOpen`: `CustomAuthEnabled` alone can't tell a full
+server (open self-signup) apart from a pairing-only embedding (every account needs admin approval) —
+both report `true` — and the client needs that distinction to decide whether to offer "create an
+account" or "ask an admin to approve this device."
+
 ## 2026-07-24 — pkg/embed.Admin gets the pairing approve/reject console API
 
 Fifth task off the plan: `pkg/embed.Admin.ListPendingDevices`/`ApprovePairing`/`RejectPairing` — the

@@ -6225,3 +6225,18 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   5 new tests (`admin_test.go`) covering list/approve/one-shot/unknown-device/reject, including the
   distinct-account property above. Verified via full native `go build`/`go vet`/`go test ./...` and
   a real `GOOS=js GOARCH=wasm go build`.
+- [x] **C459 [MAJOR][SYNC] `RequestDevicePairing`/`WatchPairingStatus`/`CancelDevicePairing` were
+  unreachable with no bearer token — a gap in C454.** Caught starting the client UI: these three
+  exist specifically for a brand-new device with no session yet, the same unauthenticated shape as
+  `RedeemPairingCode`/`Register`/`Login`, but were never added to `authInterceptorSkipMethods` —
+  every real call would have hit `Unauthenticated` before reaching the handler at all, meaning C454's
+  server-side work, while individually unit-tested (which calls the Go methods directly, bypassing
+  the interceptor entirely), was never actually reachable over the wire. `SetPassword` correctly
+  stays off the list — it authenticates the caller's own session. Added 2 test cases to the existing
+  `TestAuthUnaryInterceptorSkipList`/`TestAuthStreamInterceptorSkipList` coverage to lock this in;
+  both now also assert `SetPassword` is (correctly) gated.
+
+  Also added `VersionResponse.RegistrationOpen` (mirrored through `backendauth.Discovery`): the
+  client needs to tell a full server (open self-signup) apart from a pairing-only embedding, and
+  `CustomAuthEnabled` alone can't — it's true on both. `RegistrationOpen` is `true` on the standalone
+  server, `false` on `NewSyncAndAuthBridgeHandler`'s `pairingOnlyAuthServer` embedding.

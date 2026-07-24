@@ -6,7 +6,21 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **`RequestDevicePairing`/`WatchPairingStatus`/`CancelDevicePairing` were unreachable with no bearer
+  token — the exact case they exist for.** Caught while starting the client UI for TODOS.md C454: these
+  three RPCs are meant to work for a brand-new device with no session yet, the same shape as
+  `RedeemPairingCode`/`Register`/`Login`, but were never added to `authInterceptorSkipMethods` —
+  `AuthUnaryInterceptor`/`AuthStreamInterceptor` would have rejected every call with `Unauthenticated`
+  before it ever reached the handler. `SetPassword` is deliberately left off the list — it
+  authenticates the caller's own existing session and must keep requiring a valid token. 2 new test
+  cases added to the existing skip-list coverage test to lock this in.
+
 ### Added
+- **`VersionResponse.RegistrationOpen`** (mirrored through `backendauth.Discovery`) lets a client
+  tell a full server (open self-signup) apart from a pairing-only embedding, where every account
+  must go through admin approval — needed so the pending-device UI (TODOS.md C454) knows which
+  sign-in method to offer instead of guessing from `CustomAuthEnabled` alone (true on both shapes).
 - **`pkg/embed.Admin` gets `ListPendingDevices`/`ApprovePairing`/`RejectPairing`** (new
   `pkg/embed/admin.go`), completing the CashFlux-side half of the admin-approved device-pairing
   bootstrap (TODOS.md C454) — the portfolio's admin console (a later, separate commit) drives these
