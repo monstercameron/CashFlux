@@ -47,6 +47,31 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 	}
 }
 
+// syncStatusTooltip builds the hover/AX description shared by every sync
+// indicator: what the state is, when it last synced, any error detail, and which
+// server this household is talking to (§3.4 — a multi-server user needs to tell
+// at a glance). Shared so the rail chip and the top-bar pulse can never drift
+// into describing the same state two different ways.
+func syncStatusTooltip(st syncStatus) string {
+	labelKey, _, ok := syncChipFace(st.State)
+	tip := st.State
+	if ok {
+		if label := uistate.T(labelKey); label != labelKey {
+			tip = label
+		}
+	}
+	if st.LastSyncedAt != "" {
+		tip = uistate.T("sync.lastSynced", st.LastSyncedAt)
+	}
+	if st.Message != "" {
+		tip = tip + " — " + st.Message
+	}
+	if host := backendHost(uistate.UsePrefs().Get().ServerURL); host != "" {
+		tip = tip + "\n" + uistate.T("sync.server", host)
+	}
+	return tip
+}
+
 // SyncChip renders a compact Cloud-sync status indicator for the top bar / by the
 // workspace switcher (§7.11): synced / syncing / offline / conflict / error, with a
 // queued-count badge and a "last synced" tooltip. Clicking it triggers a Sync-now
@@ -68,18 +93,7 @@ func SyncChip() uic.Node {
 	if label == labelKey { // i18n key missing → fall back to the raw state
 		label = st.State
 	}
-	tip := label
-	if st.LastSyncedAt != "" {
-		tip = uistate.T("sync.lastSynced", st.LastSyncedAt)
-	}
-	if st.Message != "" {
-		tip = tip + " — " + st.Message
-	}
-	// Name the active server in the tooltip so a multi-server user can tell at a
-	// glance which backend this household is syncing with (§3.4).
-	if host := backendHost(uistate.UsePrefs().Get().ServerURL); host != "" {
-		tip = tip + "\n" + uistate.T("sync.server", host)
-	}
+	tip := syncStatusTooltip(st)
 
 	onClick := uic.UseEvent(func() {
 		// In conflict state the chip opens the resolve modal (C309 / #464) rather

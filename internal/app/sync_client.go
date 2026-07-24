@@ -593,6 +593,10 @@ func flushBackendSyncQueue() {
 			// Accepted: only now is it safe to drop the local mutation from the queue.
 			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
+			// The server took it — the one moment worth announcing in the top bar.
+			// Deliberately NOT the setSyncStatus below, which also fires for a flush
+			// that found an empty queue and uploaded nothing.
+			noteSyncActivity()
 		}
 		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 	}()
@@ -844,6 +848,11 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
 		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)})
+		// A remote snapshot actually landed on this device — real traffic, same as an
+		// accepted push. (Seen only when reloadOnApply is false; an applying pull that
+		// reloads the page takes the flash with it, which is fine — the reload is a
+		// far louder signal that something arrived.)
+		noteSyncActivity()
 		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if reloadOnApply {
 			reloadPage()

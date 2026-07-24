@@ -84,6 +84,7 @@ func Register() {
 	registerLane6Fixes()
 	registerBgPolish()
 	registerDtxPolish()
+	registerSyncPulse()
 	registerNotifTriage()
 	registerDashTodo()
 	registerNotifAsst()

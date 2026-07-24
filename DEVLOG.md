@@ -28961,3 +28961,26 @@ never purged, so it outlives the account by design.
 Verified against a real synced account rather than an empty one: 1.5 MB database, 7 artifact
 blobs, a workspace and a snapshot and a refresh token — all zero afterwards, including the 7
 files on disk, with the audit row still there.
+
+## 2026-07-24 — A liveness indicator that doesn't lie
+
+Cam wants to feel sure sync is alive. The honest difficulty: sync here is a sub-second
+background push, so there is nothing to show while it happens. The two easy answers are both
+bad — a spinner would need faking to last long enough to see, and flashing on every
+`setSyncStatus` would light up on tab focus, when a flush finds an empty queue and uploads
+nothing. That second one is the same failure as the "Synced" chip over an empty server, and
+having just spent a session fixing exactly that, reintroducing it would be perverse.
+
+So: a separate `sync:activity` counter bumped at the two points where bytes actually moved —
+an accepted PutWorkspace, and an applied pull — and a flash LATCHED in Go for 450ms so a 40ms
+transfer is still legible. The flash means data moved. Nothing else makes it fire.
+
+Verified with a rAF watcher counting class transitions across a whole session: exactly ONE
+flash on the first real sync, and zero on a subsequent "Sync now" that found the dataset
+unchanged. That zero is the design working — nothing was sent, so nothing was claimed.
+
+Two things worth remembering. The late-mount append bug bit again: SyncPulse returned an empty
+Fragment until sync was configured, so the first time it appeared it landed past the ⋯ menu at
+the far right of the bar. A persistent hidden slot pins it, same as LockToggle. And the motion
+ratchet is safe by construction here — every duration is a token, so the CSSOM value the spec
+parses is an unresolved `var()`, which it skips.

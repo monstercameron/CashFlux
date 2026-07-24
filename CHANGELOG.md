@@ -7,6 +7,31 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Top-bar sync pulse — a liveness indicator, not another status label.** A small cloud in the
+  top bar sits dim and motionless at rest and flashes ONCE each time data actually reaches (or
+  arrives from) the server. Cam: "I wanna see more liveness indications so I can feel secure in
+  knowing it's getting synced." A static "Synced" cannot answer "is this thing still alive?", and a
+  spinner would be theatre — a push completes in tens of milliseconds, so it would either never be
+  seen or have to be faked into lasting long enough to notice. The flash is instead LATCHED to
+  450ms (`--motion-narrative`, the motion spec's ceiling for routine motion) so a 40ms transfer
+  still produces a legible confirmation.
+  - It fires on a NARROWER signal than the existing status chip: a new `sync:activity` counter
+    bumped only on an accepted `PutWorkspace` push or an applied pull, never on the `setSyncStatus`
+    churn that also fires when a flush finds an empty queue on tab focus. Flashing on that broader
+    signal would light up for tab switches during which nothing was uploaded — the same species of
+    reassuring-but-false readout as a chip reading "Synced" over an empty server.
+  - Non-intrusive by construction: no motion at rest, no text, colour/opacity only (never size or
+    position, so a sync mid-sentence can't nudge what the eye is tracking), and nothing rendered at
+    all when cloud sync isn't in use. A non-draining queue — work outstanding, as opposed to work
+    happening — is the one state shown continuously. Under `prefers-reduced-motion` the flash
+    becomes a static accent tint for the same window rather than disappearing: losing the signal
+    entirely would defeat the point.
+  - Clicking it does exactly what the rail chip does (sync now + open Cloud settings), and both now
+    share one `syncStatusTooltip` so the two surfaces can never describe the same state differently.
+  - Renders a persistent hidden slot rather than an empty `Fragment` when sync is unconfigured: a
+    component whose first render is an empty Fragment gets APPENDED to the container end when it
+    later mounts (the reconciler behavior logged 2026-07-19), which parked the indicator past the
+    ⋯ menu at the far right the first time sync was configured.
 - **`pkg/embed.Admin.DeleteUser`** — permanent erasure of an enrolled account for the embedding
   host's admin console. Purges everything the account owns (workspaces, snapshots and their
   history, artifact-blob links, AI keys, usage, subscriptions, idempotency keys) and, critically,

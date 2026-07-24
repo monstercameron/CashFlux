@@ -1051,6 +1051,11 @@ func TopBar(props topBarProps) uic.Node {
 			// player effect runs from this single mounted instance. The Smart-insights
 			// peek and activity stamp remain in the ⋯ More overflow.
 			uic.CreateElement(MuzakToggle),
+			// Cloud-sync liveness: quiet and dim at rest, one flash per real sync
+			// (see SyncPulse). Sits with the other icon controls rather than in the
+			// context strip because it is clickable — the strip's contract is that
+			// nothing there moves what the user is aiming for.
+			uic.CreateElement(SyncPulse),
 			uic.CreateElement(NotifyBell),
 			uic.CreateElement(AddMenu),
 			// The "⋯ More" overflow menu sits last, against the right edge. It now hosts
