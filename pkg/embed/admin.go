@@ -118,3 +118,100 @@ func newDeviceUserID() (string, error) {
 	}
 	return "device:" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf), nil
 }
+
+// User is one enrolled account, for the admin console's user list.
+type User struct {
+	ID                 string
+	Provider           string
+	Email              string
+	CreatedAt          time.Time
+	SubscriptionPlan   string
+	SubscriptionStatus string
+	// RequestsThisMonth is the summed request count across this account's
+	// usage rows for the current calendar month (UTC) — the admin console's
+	// "request volume" column.
+	RequestsThisMonth int64
+}
+
+// maxListUsersPage caps a single ListUsers call, matching
+// internal/server.Store.ListUsersFiltered's own safety ceiling.
+const maxListUsersPage = 500
+
+// ListUsers returns a page of enrolled accounts, newest first, each carrying
+// its current calendar month's request volume — the admin console's user
+// list. limit is clamped to [1, 500]; offset below 0 is treated as 0.
+func (a *Admin) ListUsers(limit, offset int) ([]User, error) {
+	if a == nil || a.store == nil {
+		return nil, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > maxListUsersPage {
+		limit = maxListUsersPage
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := a.store.ListUsers(limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("pkg/embed: list users: %w", err)
+	}
+	monthStart := currentMonthStartUTC()
+	out := make([]User, 0, len(rows))
+	for _, r := range rows {
+		createdAt, _ := time.Parse(time.RFC3339Nano, r.CreatedAt) // zero value on a malformed/legacy row — never fatal to the whole list
+		requests, err := a.monthlyRequestTotal(r.ID, monthStart)
+		if err != nil {
+			return nil, fmt.Errorf("pkg/embed: usage for %s: %w", r.ID, err)
+		}
+		out = append(out, User{
+			ID:                 r.ID,
+			Provider:           r.Provider,
+			Email:              r.Email,
+			CreatedAt:          createdAt,
+			SubscriptionPlan:   r.SubscriptionPlan,
+			SubscriptionStatus: r.SubscriptionStatus,
+			RequestsThisMonth:  requests,
+		})
+	}
+	return out, nil
+}
+
+// monthlyRequestTotal sums a user's daily request counts from monthStart
+// onward — a small (at most 31-row) query per user, acceptable at this
+// package's target scale (a single embedding host's own small, admin-invited
+// user set — see NewSyncAndAuthBridge's doc comment — not a
+// multi-tenant SaaS user list).
+func (a *Admin) monthlyRequestTotal(userID string, monthStart time.Time) (int64, error) {
+	usage, err := a.store.ListUserUsage(userID, monthStart)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, u := range usage {
+		total += u.Requests
+	}
+	return total, nil
+}
+
+// currentMonthStartUTC returns 00:00:00 UTC on the 1st of the current
+// calendar month.
+func currentMonthStartUTC() time.Time {
+	now := time.Now().UTC()
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+// StorageStats reports on-disk storage usage for the admin console's storage
+// panel: the SQLite database's own size and the total size of every stored
+// artifact blob.
+func (a *Admin) StorageStats() (dbBytes, blobBytes int64, err error) {
+	if a == nil || a.store == nil {
+		return 0, 0, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	dbBytes, blobBytes, err = a.store.StorageStats()
+	if err != nil {
+		return 0, 0, fmt.Errorf("pkg/embed: storage stats: %w", err)
+	}
+	return dbBytes, blobBytes, nil
+}

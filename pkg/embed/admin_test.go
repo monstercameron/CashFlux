@@ -152,3 +152,69 @@ func TestAdminRejectPairing(t *testing.T) {
 		t.Fatal("ApprovePairing: expected approval of an already-rejected request to fail")
 	}
 }
+
+// TestAdminListUsersIncludesMonthlyRequestVolume proves each listed user
+// carries its own current-month request total, not another user's or a
+// running lifetime total.
+func TestAdminListUsersIncludesMonthlyRequestVolume(t *testing.T) {
+	a := newTestAdmin(t)
+	now := time.Now().UTC()
+
+	if err := a.store.UpsertUser(server.User{ID: "u1", Provider: "device", Subject: "u1", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser u1: %v", err)
+	}
+	if err := a.store.UpsertUser(server.User{ID: "u2", Provider: "device", Subject: "u2", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser u2: %v", err)
+	}
+	if _, err := a.store.AddUsage("u1", now, 7, 100); err != nil {
+		t.Fatalf("AddUsage u1 today: %v", err)
+	}
+	if _, err := a.store.AddUsage("u1", now.AddDate(0, -2, 0), 40, 400); err != nil {
+		t.Fatalf("AddUsage u1 two months ago: %v", err)
+	}
+	if _, err := a.store.AddUsage("u2", now, 3, 30); err != nil {
+		t.Fatalf("AddUsage u2 today: %v", err)
+	}
+
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	byID := map[string]User{}
+	for _, u := range users {
+		byID[u.ID] = u
+	}
+	if got := byID["u1"].RequestsThisMonth; got != 7 {
+		t.Fatalf("u1 RequestsThisMonth = %d, want 7 (the two-months-ago row must not count)", got)
+	}
+	if got := byID["u2"].RequestsThisMonth; got != 3 {
+		t.Fatalf("u2 RequestsThisMonth = %d, want 3", got)
+	}
+}
+
+func TestAdminListUsersEmpty(t *testing.T) {
+	a := newTestAdmin(t)
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 0 {
+		t.Fatalf("ListUsers on a fresh store: got %d users, want 0", len(users))
+	}
+}
+
+// TestAdminStorageStats proves the reported sizes are real numbers, not
+// zero-valued placeholders.
+func TestAdminStorageStats(t *testing.T) {
+	a := newTestAdmin(t)
+	dbBytes, blobBytes, err := a.StorageStats()
+	if err != nil {
+		t.Fatalf("StorageStats: %v", err)
+	}
+	if dbBytes <= 0 {
+		t.Fatalf("StorageStats: db size = %d, want > 0", dbBytes)
+	}
+	if blobBytes != 0 {
+		t.Fatalf("StorageStats: blob size = %d, want 0 on a fresh store with no blobs", blobBytes)
+	}
+}

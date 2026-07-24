@@ -1153,6 +1153,31 @@ WHERE wb.hash IS NULL`)
 	return len(blobs), nil
 }
 
+// StorageStats reports on-disk storage usage for the admin console's storage
+// panel: the SQLite database's own size (via PRAGMA page_count/page_size —
+// deliberately not the OS file path, which Store never stores, so this works
+// identically for any caller regardless of how the db was opened) and the
+// total size of every artifact blob's content (SUM(blobs.size); this is the
+// metadata total, not a walk of the actual files on disk — SweepUnreferencedBlobs
+// is what reconciles the two if they've ever drifted).
+func (s *Store) StorageStats() (dbBytes, blobBytes int64, err error) {
+	if s == nil || s.db == nil {
+		return 0, 0, fmt.Errorf("server store: not configured")
+	}
+	defer s.observeDB("StorageStats", time.Now())
+	var pageCount, pageSize int64
+	if err := s.db.QueryRow(`PRAGMA page_count`).Scan(&pageCount); err != nil {
+		return 0, 0, fmt.Errorf("server store: db page count: %w", err)
+	}
+	if err := s.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+		return 0, 0, fmt.Errorf("server store: db page size: %w", err)
+	}
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(size), 0) FROM blobs`).Scan(&blobBytes); err != nil {
+		return 0, 0, fmt.Errorf("server store: blob size total: %w", err)
+	}
+	return pageCount * pageSize, blobBytes, nil
+}
+
 // PutAIKey encrypts and stores a user's provider key with AES-GCM.
 func (s *Store) PutAIKey(userID, provider, key string, masterKey []byte) error {
 	if strings.TrimSpace(userID) == "" || strings.TrimSpace(provider) == "" || strings.TrimSpace(key) == "" {
