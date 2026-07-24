@@ -6,6 +6,8 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-24
+
 ### Changed
 - **/sync visual hierarchy pass (TODOS.md C449).** C448 fixed which sign-in method shows; this fixes
   how it looks. Renamed the "Custom Sync" card to "Sign in with your phone" and gave it a real phone

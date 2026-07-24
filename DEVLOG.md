@@ -1,3 +1,13 @@
+## 2026-07-24 — Release v1.5.0
+
+Cut a release: bumped `internal/version.Version` 1.4.0 → 1.5.0 and rolled the accumulated
+`Unreleased` section into `## [1.5.0] - 2026-07-24`. Covers everything since 1.4.0 — the Custom Sync
+auth surface hardening (C445–C449: setup-code gate fix, admin-mintable invite codes, the
+capability-aware /sync redesign, and this session's visual-hierarchy follow-up), the sync-engine
+hot-path optimizations and benchmark harness, and the accumulated Cloud business-plan/competitive-
+teardown docs work. No new git tag cut — matching this project's existing pattern of not tagging past
+v1.2.0, versioning tracked in `CHANGELOG.md`/`internal/version` only.
+
 ## 2026-07-24 — /sync had the right logic and the wrong hierarchy
 
 Cam, right after the capability-aware rewrite below shipped: "the ux and ui are so bad, did you use
