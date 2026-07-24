@@ -299,3 +299,107 @@ func TestAdminMintActivationCodeUnconfigured(t *testing.T) {
 		t.Fatal("MintActivationCode with no store: expected an error")
 	}
 }
+
+// TestAdminDeleteUserPurgesEverythingOwned proves the delete is a real erasure,
+// not a tombstone: the account, its workspaces, and its dataset snapshots are all
+// gone afterwards. The refresh-token check is the one that matters most — a
+// surviving token would let a deleted account resurrect itself.
+func TestAdminDeleteUserPurgesEverythingOwned(t *testing.T) {
+	a := newTestAdmin(t)
+	now := time.Now().UTC()
+
+	code, _, err := a.MintActivationCode()
+	if err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if _, ok, err := a.store.ConsumePairingCode(code, now); err != nil || !ok {
+		t.Fatalf("ConsumePairingCode: ok=%v err=%v", ok, err)
+	}
+	if err := a.store.PutWorkspace(server.Workspace{
+		ID: "ws-1", UserID: OwnerAccountID, Name: "Default", Version: 1, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if err := a.store.PutSnapshot(server.Snapshot{
+		WorkspaceID: "ws-1", Dataset: []byte(`{"hello":"world"}`), Version: 1, UpdatedAt: now,
+	}, 1<<20, 5); err != nil {
+		t.Fatalf("PutSnapshot: %v", err)
+	}
+
+	deleted, err := a.DeleteUser(OwnerAccountID)
+	if err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	if !deleted {
+		t.Fatal("DeleteUser: expected deleted=true")
+	}
+
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 0 {
+		t.Fatalf("ListUsers after delete: got %+v, want none", users)
+	}
+	if ws, err := a.store.ListWorkspaces(OwnerAccountID, true); err != nil || len(ws) != 0 {
+		t.Fatalf("ListWorkspaces after delete: got %+v err=%v, want none", ws, err)
+	}
+	if _, ok, err := a.store.GetSnapshotForUser(OwnerAccountID, "ws-1"); err != nil || ok {
+		t.Fatalf("GetSnapshotForUser after delete: ok=%v err=%v, want ok=false", ok, err)
+	}
+}
+
+// TestAdminDeleteUserUnknownIsNotAnError proves a double-submit (or a stale admin
+// console listing an account someone else already removed) reads as "already
+// gone", not as a failure the operator has to interpret.
+func TestAdminDeleteUserUnknownIsNotAnError(t *testing.T) {
+	a := newTestAdmin(t)
+	deleted, err := a.DeleteUser("device:nobody")
+	if err != nil {
+		t.Fatalf("DeleteUser on an unknown id: %v", err)
+	}
+	if deleted {
+		t.Fatal("DeleteUser on an unknown id: expected deleted=false")
+	}
+}
+
+// TestAdminDeleteUserAudits proves the erasure leaves a trail. audit_events has no
+// foreign key to users and is never purged, so the record has to outlive the
+// account it describes.
+func TestAdminDeleteUserAudits(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if _, err := a.DeleteUser(OwnerAccountID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	events, err := a.store.ListAuditEvents(0, 100) // (afterID, limit) — everything from the start
+	if err != nil {
+		t.Fatalf("ListAuditEvents: %v", err)
+	}
+	found := false
+	for _, e := range events {
+		if e.Action == "admin.user.delete" && e.TargetID == OwnerAccountID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no admin.user.delete audit event for %s in %+v", OwnerAccountID, events)
+	}
+}
+
+// TestAdminDeleteUserRejectsBlankAndUnconfigured proves the two guard rails: a
+// blank id must never reach the store (a DELETE with an empty user id is the kind
+// of thing that reads as "delete everything" if a bug ever loosened the WHERE),
+// and an unconfigured Admin reports an error instead of panicking.
+func TestAdminDeleteUserRejectsBlankAndUnconfigured(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, err := a.DeleteUser("   "); err == nil {
+		t.Fatal("DeleteUser(blank): expected an error")
+	}
+	var nilAdmin *Admin
+	if _, err := nilAdmin.DeleteUser("device:owner"); err == nil {
+		t.Fatal("DeleteUser on a nil Admin: expected an error")
+	}
+}

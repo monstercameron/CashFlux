@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/server"
@@ -170,6 +171,60 @@ func newDeviceUserID() (string, error) {
 		return "", err
 	}
 	return "device:" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf), nil
+}
+
+// DeleteUser permanently purges an enrolled account and everything it owns:
+// workspaces, dataset snapshots and their history, artifact-blob links, AI keys,
+// usage rows, subscriptions, idempotency keys, and — critically — every refresh
+// token, so a deleted account cannot be resurrected through a session that
+// outlived it. It then sweeps blob files no surviving workspace references, since
+// purging the rows alone would leave the bytes on disk.
+//
+// Returns deleted=false (with no error) when no such account exists, so a
+// double-submit or a stale admin console reads as "already gone" rather than a
+// failure. This is NOT reversible and there is no tombstone: the account is
+// erased, and re-admitting that person means minting them a new activation code
+// and starting from an empty dataset.
+//
+// The audit entry is written BEFORE the purge (matching handleAccountDelete) so
+// the record exists even if the delete itself fails partway. audit_events has no
+// foreign key to users and is never purged, so the trail survives the account.
+// The actor is recorded as "embed:admin" rather than a user id: pkg/embed.Admin is
+// called directly from the embedding host's own Go code and there is no CashFlux
+// session behind it — the real authorization happened at the host's admin login,
+// which CashFlux cannot see.
+func (a *Admin) DeleteUser(userID string) (deleted bool, err error) {
+	if a == nil || a.store == nil {
+		return false, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, fmt.Errorf("pkg/embed: user id is required")
+	}
+	if _, auditErr := a.store.AppendAuditEvent(server.AuditEvent{
+		Timestamp:  time.Now().UTC(),
+		ActorID:    "embed:admin",
+		Action:     "admin.user.delete",
+		TargetType: "user",
+		TargetID:   userID,
+	}); auditErr != nil {
+		return false, fmt.Errorf("pkg/embed: audit delete: %w", auditErr)
+	}
+	deleted, err = a.store.DeleteAccount(userID)
+	if err != nil {
+		return false, fmt.Errorf("pkg/embed: delete account: %w", err)
+	}
+	if !deleted {
+		return false, nil
+	}
+	if _, err := a.store.SweepUnreferencedBlobs(a.blobRoot); err != nil {
+		// The account IS gone at this point — reporting a failure would be a lie
+		// that invites a retry against an id that no longer exists. Surface it as a
+		// deletion that succeeded with cleanup still owed; the next delete (or the
+		// periodic sweep) reclaims the same orphans.
+		return true, fmt.Errorf("pkg/embed: account deleted, blob sweep failed: %w", err)
+	}
+	return true, nil
 }
 
 // User is one enrolled account, for the admin console's user list.

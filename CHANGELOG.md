@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`pkg/embed.Admin.DeleteUser`** — permanent erasure of an enrolled account for the embedding
+  host's admin console. Purges everything the account owns (workspaces, snapshots and their
+  history, artifact-blob links, AI keys, usage, subscriptions, idempotency keys) and, critically,
+  every refresh token — a surviving token would let a deleted account resurrect itself. Then sweeps
+  blob files no remaining workspace references, since purging rows alone leaves the bytes on disk;
+  `Admin` gained the blob root for that. Returns `deleted=false` with no error when the account is
+  already gone, so a double-submit or a stale console reads as "already done" rather than a failure.
+  Audits as `admin.user.delete` with actor `embed:admin` (there is no CashFlux session behind a
+  pkg/embed call — the real authorization happened at the host's own admin login), written before
+  the purge so the record survives a partial failure. 4 new tests.
 - **`pkg/embed.Admin.MintActivationCode`** — an admin-initiated activation code, the counterpart to
   the device-initiated `RequestDevicePairing` → `ApprovePairing` flow. The embedding host mints a
   short-lived (5 min) single-use code from its own admin console; the user types it into Settings →

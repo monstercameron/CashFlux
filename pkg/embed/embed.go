@@ -91,7 +91,7 @@ func NewSyncAndAuthBridge(dataDir string) (*Bridge, error) {
 	}
 	return &Bridge{
 		Handler: server.NewSyncAndAuthBridgeHandler(cfg, store),
-		Admin:   &Admin{store: store},
+		Admin:   &Admin{store: store, blobRoot: filepath.Join(cfg.DataDir, "blobs")},
 		Close:   store.Close,
 		Token:   cfg.TokenForDisplay(),
 	}, nil
@@ -103,4 +103,8 @@ func NewSyncAndAuthBridge(dataDir string) (*Bridge, error) {
 // surface on the CashFlux side.
 type Admin struct {
 	store *server.Store
+	// blobRoot is the artifact-blob directory (cfg.DataDir/blobs), needed by
+	// DeleteUser: purging an account's rows leaves its content-addressed blob files
+	// on disk, and only a sweep against this root reclaims them.
+	blobRoot string
 }

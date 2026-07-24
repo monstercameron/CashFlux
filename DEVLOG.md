@@ -28934,3 +28934,30 @@ Two real bugs fell out of doing it:
 Verified in one persistent browser context: activate → signed-in view → Sign out → the
 activation card comes straight back with no reload, which is the same-device re-login loop
 closing. The instant return is itself the proof the prefs-derived read works.
+
+## 2026-07-24 — Deleting users from the host's console
+
+Cam needs to remove CashFlux accounts from the portfolio admin. Almost all of it already
+existed server-side: `Store.DeleteAccount` spells out every child-table delete explicitly
+rather than trusting `ON DELETE CASCADE` (a per-connection pragma is the wrong thing for
+right-to-erasure to depend on), and `SweepUnreferencedBlobs` reclaims the files. The gap
+was only that `pkg/embed.Admin` never exposed either, and had no blob root to sweep with.
+
+Two judgement calls worth recording:
+
+- **`deleted=false` is not an error.** A double-submit, or a console listing an account
+  another session already removed, is work that is done — reporting it as a failure invites
+  a retry against an id that no longer exists.
+- **A failed blob sweep still returns `deleted=true`.** The account IS gone by then; saying
+  otherwise would be a lie. It returns true *with* the error so the caller knows cleanup is
+  owed, and the next delete reclaims the same orphans.
+
+The audit actor is `embed:admin`. pkg/embed is called from the host's own Go code with no
+CashFlux session behind it, so there is no user id to attribute — the real authorization
+happened at the host's admin login, which CashFlux cannot see. Written before the purge, so
+the trail exists even if the delete fails partway; `audit_events` has no FK to `users` and is
+never purged, so it outlives the account by design.
+
+Verified against a real synced account rather than an empty one: 1.5 MB database, 7 artifact
+blobs, a workspace and a snapshot and a refresh token — all zero afterwards, including the 7
+files on disk, with the audit row still there.
