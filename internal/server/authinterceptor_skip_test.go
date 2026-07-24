@@ -13,9 +13,10 @@ import (
 )
 
 // TestAuthUnaryInterceptorSkipList proves exactly which full method names run
-// with no bearer token in context: the 8 AuthService enrollment/lifecycle
-// methods skip the check, while ListDevices/RevokeDevice and every existing
-// SyncService/AIService method still require one (TODOS.md C418).
+// with no bearer token in context: the 9 AuthService enrollment/lifecycle/
+// device-pairing methods skip the check, while ListDevices/RevokeDevice,
+// SetPassword, and every existing SyncService/AIService method still require
+// one (TODOS.md C418, C454).
 func TestAuthUnaryInterceptorSkipList(t *testing.T) {
 	failValidator := func(context.Context, string) (AuthUser, error) {
 		return AuthUser{}, status.Error(codes.Unauthenticated, "no token presented")
@@ -40,8 +41,11 @@ func TestAuthUnaryInterceptorSkipList(t *testing.T) {
 		{name: "login", method: backendrpc.MethodAuthLogin, wantSkip: true},
 		{name: "refresh token", method: backendrpc.MethodAuthRefreshToken, wantSkip: true},
 		{name: "logout", method: backendrpc.MethodAuthLogout, wantSkip: true},
+		{name: "request device pairing", method: backendrpc.MethodAuthRequestDevicePairing, wantSkip: true},
+		{name: "cancel device pairing", method: backendrpc.MethodAuthCancelDevicePairing, wantSkip: true},
 		{name: "list devices requires auth", method: backendrpc.MethodAuthListDevices, wantSkip: false},
 		{name: "revoke device requires auth", method: backendrpc.MethodAuthRevokeDevice, wantSkip: false},
+		{name: "set password requires auth", method: backendrpc.MethodAuthSetPassword, wantSkip: false},
 		{name: "sync list workspaces requires auth", method: backendrpc.MethodSyncListWorkspaces, wantSkip: false},
 		{name: "ai chat requires auth", method: backendrpc.MethodAIChat, wantSkip: false},
 	} {
@@ -88,6 +92,7 @@ func TestAuthStreamInterceptorSkipList(t *testing.T) {
 		wantSkip bool
 	}{
 		{name: "refresh token", method: backendrpc.MethodAuthRefreshToken, wantSkip: true},
+		{name: "watch pairing status", method: backendrpc.MethodAuthWatchPairingStatus, wantSkip: true},
 		{name: "list devices requires auth", method: backendrpc.MethodAuthListDevices, wantSkip: false},
 		{name: "ai chat stream requires auth", method: backendrpc.MethodAIChatStream, wantSkip: false},
 	} {

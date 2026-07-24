@@ -13,14 +13,22 @@ import "github.com/monstercameron/CashFlux/internal/backendrpc"
 // internal/server/entitlements.go — entitlement is checked per-Sync/Blob-call,
 // never on AuthService). ListDevices and RevokeDevice are deliberately NOT
 // listed here: those manage an already-authenticated session and require a
-// caller identity, same as every other service.
+// caller identity, same as every other service. RequestDevicePairing/
+// WatchPairingStatus/CancelDevicePairing (TODOS.md C454) are the same shape
+// as RedeemPairingCode — a brand-new device with no session yet cannot
+// present a bearer token — but SetPassword is deliberately NOT listed here:
+// it authenticates the CALLER's existing session (AuthUserFromContext) and
+// must keep going through the normal bearer-token check.
 var authInterceptorSkipMethods = map[string]bool{
-	backendrpc.MethodAuthEnroll:            true,
-	backendrpc.MethodAuthRedeemPairingCode: true,
-	backendrpc.MethodAuthRegister:          true,
-	backendrpc.MethodAuthLogin:             true,
-	backendrpc.MethodAuthRefreshToken:      true,
-	backendrpc.MethodAuthLogout:            true,
+	backendrpc.MethodAuthEnroll:               true,
+	backendrpc.MethodAuthRedeemPairingCode:    true,
+	backendrpc.MethodAuthRegister:             true,
+	backendrpc.MethodAuthLogin:                true,
+	backendrpc.MethodAuthRefreshToken:         true,
+	backendrpc.MethodAuthLogout:               true,
+	backendrpc.MethodAuthRequestDevicePairing: true,
+	backendrpc.MethodAuthWatchPairingStatus:   true,
+	backendrpc.MethodAuthCancelDevicePairing:  true,
 }
 
 // skipsAuthAndEntitlement reports whether fullMethod must bypass both

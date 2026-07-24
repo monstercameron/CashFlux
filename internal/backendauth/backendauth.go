@@ -16,6 +16,11 @@ type Discovery struct {
 	// backend has AuthServiceServer registered (username/password, pairing-code
 	// sign-in) at all. False on a SyncService-only embedding.
 	CustomAuthEnabled bool
+	// RegistrationOpen mirrors VersionResponse.RegistrationOpen: whether open
+	// self-signup (Register) actually works here, vs. a pairing-only
+	// embedding where every account must go through admin approval
+	// (TODOS.md C454). Only meaningful when CustomAuthEnabled is true.
+	RegistrationOpen bool
 	// BillingEnabled/PaymentProviders mirror the matching VersionResponse
 	// fields — whether this backend has a billing/subscription concept, and
 	// which payment providers are actually configured and ready to use.
@@ -30,7 +35,7 @@ func (d Discovery) Normalize() Discovery {
 	default:
 		mode = ModeToken
 	}
-	out := Discovery{AuthMode: mode, CustomAuthEnabled: d.CustomAuthEnabled, BillingEnabled: d.BillingEnabled}
+	out := Discovery{AuthMode: mode, CustomAuthEnabled: d.CustomAuthEnabled, RegistrationOpen: d.RegistrationOpen, BillingEnabled: d.BillingEnabled}
 	seen := map[string]bool{}
 	for _, provider := range d.AuthProviders {
 		provider = strings.ToLower(strings.TrimSpace(provider))

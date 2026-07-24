@@ -49,6 +49,9 @@ type backendVersionResponse struct {
 	CustomAuthEnabled bool     `json:"customAuthEnabled"`
 	BillingEnabled    bool     `json:"billingEnabled"`
 	PaymentProviders  []string `json:"paymentProviders"`
+	// RegistrationOpen mirrors server.VersionResponse.RegistrationOpen — see
+	// its doc comment.
+	RegistrationOpen bool `json:"registrationOpen"`
 }
 
 type billingSessionResponse struct {
@@ -152,6 +155,7 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 			AuthMode:          version.AuthMode,
 			AuthProviders:     version.AuthProviders,
 			CustomAuthEnabled: version.CustomAuthEnabled,
+			RegistrationOpen:  version.RegistrationOpen,
 			BillingEnabled:    version.BillingEnabled,
 			PaymentProviders:  version.PaymentProviders,
 		}.Normalize())

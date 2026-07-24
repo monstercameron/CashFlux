@@ -31,6 +31,15 @@ type VersionResponse struct {
 	// client show only the sign-in methods this specific backend actually
 	// supports instead of every method CashFlux can ever offer.
 	CustomAuthEnabled bool `json:"customAuthEnabled"`
+	// RegistrationOpen reports whether AuthService.Register (open
+	// username/password self-signup) actually works on this backend — true
+	// on the full server, false on NewSyncAndAuthBridgeHandler's pairing-only
+	// embedding (see pairingOnlyAuthServer), meaningless when
+	// CustomAuthEnabled is false. Lets the client decide whether to offer
+	// "create an account" (Register/PasswordAuthCard) or "ask an admin to
+	// approve this device" (RequestDevicePairing, TODOS.md C454) — showing
+	// the wrong one is actively misleading, not just redundant.
+	RegistrationOpen bool `json:"registrationOpen"`
 }
 
 // RootResponse is returned by / for local backend discoverability.
@@ -189,6 +198,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
 			CustomAuthEnabled:   true,
+			RegistrationOpen:    true, // the full server: Register is never wrapped/blocked here
 		})
 	})
 	mux.Handle("GET /v1/auth/{provider}", authLimiter(handleOAuthStart(cfg)))

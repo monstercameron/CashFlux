@@ -224,7 +224,8 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
-			CustomAuthEnabled:   true, // AuthServiceServer (pairing-only) is registered on this bridge
+			CustomAuthEnabled:   true,  // AuthServiceServer (pairing-only) is registered on this bridge
+			RegistrationOpen:    false, // Register is blocked — see pairingOnlyAuthServer
 		})
 	})
 	return mux
