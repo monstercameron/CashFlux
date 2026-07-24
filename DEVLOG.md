@@ -1,3 +1,39 @@
+## 2026-07-24 — Two more bugs, both caught by looking at the actual pixels
+
+The error text finally had a home (C450) and real content (C451). Cam looked at it live and found
+two more real problems in about two messages.
+
+First: "why is the error message greyed out retard?" He was right to be annoyed — I'd rendered a
+genuine failure with `tw.TextFaint`, the exact same dim treatment used for "auth mode: token" and
+every other routine caption on the page. Visibility and legibility are different things; I'd only
+fixed the first one. The app already has a proper danger-red (`--danger`, `#d8716f`, used all over
+budgets/transactions/goal-health for exactly this kind of alarm) but no Go `tw` token wrapped it —
+only `TextWarn` (amber) existed, and it hardcodes its hex rather than reading the CSS variable.
+Added `tw.TextDanger` following the `TextDown`/`TextUp` pattern instead (`var(--danger, fallback)`,
+theme-safe), applied it to both the status label and its detail line, on both `/sync` and Settings →
+Cloud, gated strictly on `status.State == "error"` so every other state keeps its existing neutral
+look — only a confirmed failure gets the alarm treatment.
+
+Then, mid-fix: "so how am I signed in if the token was invalid, are you high bro?" He'd pasted a
+screenshot showing "Reason: invalid bearer token" sitting directly above a "Sign out" button. That's
+not a styling problem, that's a logic bug: "Sign out" was gated purely on
+`strings.TrimSpace(p.ServerToken) != ""` — a string existing in local prefs, which says nothing about
+whether the server actually accepts it. A locally-saved token and a working session are not the same
+fact, and the UI was treating them as one. Fixed by adding `syncStatus.AuthFailed`, set at every
+`setSyncStatus` failure site via `isAuthError(err)` — which, it turned out, already existed
+(`sync_client.go`'s reactive-refresh logic already needed to distinguish "credentials rejected" from
+"something else went wrong"). I'd actually written a duplicate of it (`errIsUnauthenticated`) before
+a stale-diagnostic reminder pointed out the existing one — deleted mine, reused theirs. When
+`AuthFailed` is true, the button now reads "Clear invalid token" instead of "Sign out"; the actual
+click behavior (clear the local token, fire a best-effort logout call) didn't need to change at all,
+only the label's honesty.
+
+Verified both live against the real deployment, not just compiled: forced a real "invalid bearer
+token" response (pointed sync at the real reachable server with a deliberately wrong token) and read
+`getComputedStyle(...).color` directly — `rgb(216, 113, 111)` on both the label and detail line,
+confirming the exact `--danger` value renders, not just that a class name got attached. Confirmed
+"Sign out" is gone and "Clear invalid token" is in its place by DOM query and screenshot.
+
 ## 2026-07-24 — The visible error message was still a lie by omission
 
 Shipped the "give sync errors a visible home" fix (below), then Cam actually looked at what it

@@ -48,6 +48,7 @@ func TestExactTailwindValues(t *testing.T) {
 		{"MinW0", MinW0, []string{"min-width:0"}},
 		{"TextFaint", TextFaint, []string{"color:var(--text-faint,#7d7d85)"}}, // theme-aware (GX14)
 		{"TextDown", TextDown, []string{"color:var(--down,#d8716f)"}},
+		{"TextDanger", TextDanger, []string{"color:var(--danger,#d8716f)"}},
 		{"BgBase", BgBase, []string{"background-color:#0e0e0f"}},
 		{"Rounded4", Rounded4, []string{"border-radius:4px"}},
 		{"RoundedFull", RoundedFull, []string{"border-radius:9999px"}},

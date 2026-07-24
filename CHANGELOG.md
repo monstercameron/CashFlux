@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Two more real bugs Cam caught live on the error text itself (TODOS.md C452).** (1) The newly-
+  visible error text was styled identically to routine captions (`TextFaint`) — invisible at a
+  glance despite being the one thing on the page that actually matters. New `tw.TextDanger` (backed
+  by the existing `--danger` theme token) now colors the "Sync error"/"Reason: …" text on both
+  `/sync` and Settings → Cloud, matching the app's existing danger-red used everywhere else. (2)
+  Settings → Cloud showed a "Sign out" button — implying an active session — at the exact same time
+  it showed "Reason: invalid bearer token," i.e. explicitly no valid session. `settings.signOut` is
+  now gated on the new `syncStatus.AuthFailed` (set via the existing `isAuthError` check wherever a
+  sync call fails): when the server has explicitly rejected the credentials, the button relabels to
+  "Clear invalid token" instead — same action, honest framing.
 - **The sync error detail line itself was still generic (TODOS.md C451, follow-up to C450).**
   Giving `syncStatus.Message` a visible home (C450) surfaced it — but every failure site in
   `sync_client.go` only ever set it to a fixed literal ("pull failed", "sync failed", "backend

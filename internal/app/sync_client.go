@@ -64,6 +64,12 @@ type syncStatus struct {
 	Pending      int    `json:"pending,omitempty"`
 	LastSyncedAt string `json:"lastSyncedAt,omitempty"`
 	Message      string `json:"message,omitempty"`
+	// AuthFailed is true when the server explicitly rejected the current
+	// credentials (gRPC Unauthenticated), as opposed to a network/availability
+	// failure. Settings' Cloud pane uses this to stop showing "Sign out" (which
+	// implies an active session) once the saved token is known to be rejected —
+	// a locally-saved token string is not the same thing as a working session.
+	AuthFailed bool `json:"authFailed,omitempty"`
 }
 
 var syncPushMu sync.Mutex
@@ -467,7 +473,7 @@ func flushBackendSyncQueue() {
 		defer cancel()
 		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
-			setSyncStatus(syncStatus{State: "offline", Pending: len(queue), Message: customSyncErrorMessage(err, "backend unavailable")})
+			setSyncStatus(syncStatus{State: "offline", Pending: len(queue), Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("backend sync dial failed", err)
 			return
 		}
@@ -477,7 +483,7 @@ func flushBackendSyncQueue() {
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
-				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob upload failed")})
+				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob upload failed"), AuthFailed: isAuthError(err)})
 				logSyncError("backend artifact blob upload failed", err)
 				return
 			}
@@ -496,7 +502,7 @@ func flushBackendSyncQueue() {
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
-				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "sync failed")})
+				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
 				logSyncError("backend sync push failed", err)
 				return
 			}
@@ -720,7 +726,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
-			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "pull failed")})
+			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
@@ -735,7 +741,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		}
 		if err != nil {
 			logSyncError("backend artifact blob download failed", err)
-			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob download failed")})
+			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob download failed"), AuthFailed: isAuthError(err)})
 			return
 		}
 		meta := loadSyncMeta(w.ID)
@@ -898,14 +904,14 @@ func resolveConflictKeepLocal() {
 		defer cancel()
 		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
-			setSyncStatus(syncStatus{State: "error", Pending: 0, Message: customSyncErrorMessage(err, "backend unavailable")})
+			setSyncStatus(syncStatus{State: "error", Pending: 0, Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-keep dial failed", err)
 			return
 		}
 		defer func() { conn.Close() }()
 		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 		if err != nil {
-			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "artifact upload failed")})
+			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "artifact upload failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-keep artifact upload failed", err)
 			return
 		}
@@ -923,7 +929,7 @@ func resolveConflictKeepLocal() {
 			Force:           true, // bypass LWW staleness check — user chose "keep local"
 		}, &resp)
 		if err != nil {
-			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "force push failed")})
+			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "force push failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-keep force push failed", err)
 			return
 		}
@@ -957,7 +963,7 @@ func resolveConflictUseServer() {
 		conn, err := dialAuthed(ctx, pr)
 		if err != nil {
 			// Revert to conflict so the chip still offers the modal.
-			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "backend unavailable")})
+			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server dial failed", err)
 			return
 		}
@@ -965,7 +971,7 @@ func resolveConflictUseServer() {
 		var resp backendrpc.GetWorkspaceResponse
 		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: wID}, &resp)
 		if err != nil {
-			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "pull failed")})
+			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server pull failed", err)
 			return
 		}
@@ -983,7 +989,7 @@ func resolveConflictUseServer() {
 			return
 		}
 		if err != nil {
-			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "pull failed")})
+			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server hydrate failed", err)
 			return
 		}
@@ -993,7 +999,7 @@ func resolveConflictUseServer() {
 			return
 		}
 		if err := app.ImportJSON(dataset); err != nil {
-			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed")})
+		setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server import failed", err)
 			return
 		}

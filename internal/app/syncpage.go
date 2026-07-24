@@ -20,6 +20,17 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v4/ui"
 )
 
+// statusLabelColor returns the alarm color for a genuine sync error, or nil
+// (silently ignored by css.Class) for every other status — a status that is
+// merely offline/syncing/conflicted doesn't warrant the same visual alarm as
+// one the app has confirmed actually failed.
+func statusLabelColor(state string) any {
+	if state == "error" {
+		return tw.TextDanger
+	}
+	return nil
+}
+
 // currentPageOrigin returns the browser's document origin (e.g.
 // "https://earlcameron.com"), matching the pattern already used by
 // anchorintercept.go. Used to auto-detect a same-origin backend — the
@@ -287,16 +298,18 @@ func SyncPage() uic.Node {
 		// Live status card.
 		Div(css.Class("sync-status-card", tw.Flex, tw.ItemsCenter, tw.Gap3, tw.Px3, tw.Py2, tw.Rounded4, tw.Border, tw.BorderLine),
 			Attr("role", "status"), Attr("data-testid", "sync-status-card"),
-			ui.Icon(icon.Cloud, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
+			ui.Icon(icon.Cloud, css.Class(tw.W5, tw.H5, tw.ShrinkO, IfElseValue(status.State == "error", tw.TextDanger, tw.TextDim))),
 			Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0),
-				Span(css.Class(tw.Text15, tw.FontSemibold), syncStatusLabel()),
+				Span(css.Class(tw.Text15, tw.FontSemibold, statusLabelColor(status.State)), syncStatusLabel()),
 				If(status.Pending > 0, Span(css.Class(tw.Text12, tw.TextFaint),
 					uistate.T("sync.pendingCount", status.Pending))),
 				// The specific reason a non-happy status happened (e.g. "backend
 				// unavailable", "pull failed") was previously only ever readable in
 				// a hover tooltip on the topbar SyncChip — nowhere on the page whose
-				// whole job is showing sync health. Surface it here, always visible.
-				If(status.Message != "", Span(css.Class(tw.Text12, tw.TextFaint), Attr("data-testid", "sync-status-detail"),
+				// whole job is showing sync health. Surface it here, always visible,
+				// and in the same alarm color as the label above it on a real error —
+				// TextFaint made a genuine failure blend into routine captions.
+				If(status.Message != "", Span(css.Class(tw.Text12, IfElseValue(status.State == "error", tw.TextDanger, tw.TextFaint)), Attr("data-testid", "sync-status-detail"),
 					uistate.T("sync.statusDetail", status.Message))),
 			),
 		),

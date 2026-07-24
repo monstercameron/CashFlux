@@ -393,17 +393,22 @@ func settingsCloudPane(p settingsRightProps) uic.Node {
 		If(p.CloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendNote"))),
 		If(!p.CloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.selfHostedNote"))),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.authMode", p.AuthDiscovery.AuthMode)),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.syncStatus", syncStatusLabel())),
+		P(css.Class(tw.Text12, tw.Mt1, IfElseValue(status.State != "error", tw.TextFaint, tw.TextDanger)), uistate.T("settings.syncStatus", syncStatusLabel())),
 		// The specific reason behind a non-happy status (e.g. "backend unavailable")
 		// was previously only readable in a hover tooltip on the topbar SyncChip —
 		// nowhere in Settings itself. Surface it here, always visible, right under
-		// the status line it explains.
-		If(status.Message != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt045), Attr("data-testid", "settings-sync-status-detail"),
+		// the status line it explains, in the same alarm color on a real error —
+		// TextFaint made a genuine failure blend into routine captions.
+		If(status.Message != "", P(css.Class(tw.Text12, tw.Mt045, IfElseValue(status.State != "error", tw.TextFaint, tw.TextDanger)), Attr("data-testid", "settings-sync-status-detail"),
 			uistate.T("sync.statusDetail", status.Message))),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
 			If(p.ShowGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGoogle), uistate.T("settings.signInGoogle"))),
 			If(p.ShowGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGitHub), uistate.T("settings.signInGitHub"))),
-			If(strings.TrimSpace(p.ServerToken) != "", Button(css.Class("btn"), Type("button"), OnClick(p.OnSignOut), uistate.T("settings.signOut"))),
+			// "Sign out" implies an active session — misleading once the server has
+			// explicitly rejected the saved token (status.AuthFailed). Same action
+			// (OnSignOut just clears the saved credential either way), honest label.
+			If(strings.TrimSpace(p.ServerToken) != "" && !status.AuthFailed, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignOut), uistate.T("settings.signOut"))),
+			If(strings.TrimSpace(p.ServerToken) != "" && status.AuthFailed, Button(css.Class("btn"), Type("button"), Attr("data-testid", "settings-clear-invalid-token"), OnClick(p.OnSignOut), uistate.T("settings.clearInvalidToken"))),
 			// Test/Sync/Upload each open a real connection to the saved server URL, so
 			// they only appear while the backend is switched on — otherwise clicking
 			// them fires a network request the "Backend off — fully local" copy just

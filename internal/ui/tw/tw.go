@@ -255,9 +255,10 @@ var (
 	// readable light values (--down #b3322f, --up #1f8a52) and the dark values equal
 	// these literals exactly, so dark mode is byte-identical. BgDown/BgUp keep the
 	// literal hex (intentional fills, like BgFg).
-	TextDown  = css.TextColor(css.Color("var(--down, " + cDown + ")"))
-	TextUp    = css.TextColor(css.Color("var(--up, " + cUp + ")"))
-	TextWarn  = css.TextColor(css.Color(cWarn))
+	TextDown   = css.TextColor(css.Color("var(--down, " + cDown + ")"))
+	TextUp     = css.TextColor(css.Color("var(--up, " + cUp + ")"))
+	TextWarn   = css.TextColor(css.Color(cWarn))
+	TextDanger = css.TextColor(css.Color("var(--danger, " + cDown + ")"))
 
 	// tinted backgrounds / borders (Tailwind color/opacity)
 	BgAmber10     = css.Bg(css.Color("rgb(251 191 36 / 0.1)"))

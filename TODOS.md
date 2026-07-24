@@ -6010,3 +6010,31 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   bare fallback phrase, guarding against ever silently regressing back to an unhelpful generic
   message. Verified passing against the real hermetic Playwright suite (`npx playwright test
   sync.spec.mjs`), not just compiled.
+- [x] **C452 [MINOR][SYNC] Two more real bugs on the error text itself, both caught by Cam live.**
+  (1) "why is the error message greyed out retard?" — fair: `syncStatus.Message` had a visible home
+  (C450) and real content (C451), but was styled with `tw.TextFaint` — literally the SAME dimmed
+  treatment as every routine caption on the page (auth mode, self-hosted note, etc.). A genuine
+  failure blended into the background instead of standing out. New `tw.TextDanger`
+  (`css.TextColor(css.Color("var(--danger, " + cDown + ")"))`, matching the existing `TextDown`/
+  `TextUp` var()-with-fallback pattern rather than `TextWarn`'s hardcoded-only hex) colors both the
+  "Sync error" label and its "Reason: …" line red on `/sync` and Settings → Cloud, only when
+  `status.State == "error"` — every other state (offline/syncing/conflict/locked) keeps its existing
+  neutral styling, since only a confirmed failure warrants the alarm.
+
+  (2) "so how am I signed in if the token was invalid, are you high bro?" — a real, separate bug:
+  Settings → Cloud's "Sign out" button was gated purely on `strings.TrimSpace(p.ServerToken) != ""`
+  — a non-empty string saved in LOCAL prefs, with zero connection to whether the server actually
+  accepted it. Showing "Sign out" (implying an active session) in the same breath as "Reason: invalid
+  bearer token" (the server explicitly saying there is no valid session) was a direct, user-visible
+  contradiction. New `syncStatus.AuthFailed bool`, set at all ~13 `setSyncStatus` call sites in
+  `sync_client.go` via the ALREADY-EXISTING `isAuthError(err)` helper (originally written for the
+  reactive token-refresh fallback — this fix needed no new detection logic, just reading a signal
+  that already existed). When `AuthFailed` is true, the button relabels to "Clear invalid token"
+  instead of "Sign out" — `OnSignOut`'s actual behavior (clear the saved token locally,
+  fire-and-forget a best-effort server logout call) is unchanged; only the label's honesty changed.
+
+  Verified live against the real embedded deployment: pointed sync at the real reachable server with
+  a deliberately wrong token, confirmed via computed `getComputedStyle(...).color` that both the
+  label and detail line render as `rgb(216, 113, 111)` (`#d8716f`, the `--danger` token) on `/sync`,
+  and confirmed on Settings → Cloud that "Sign out" is gone and "Clear invalid token" renders in its
+  place, both by DOM query and screenshot.

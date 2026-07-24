@@ -1802,6 +1802,7 @@ var english = Catalog{
 	"settings.signInGoogle":       "Sign in with Google",
 	"settings.signInGitHub":       "Sign in with GitHub",
 	"settings.signOut":            "Sign out",
+	"settings.clearInvalidToken":  "Clear invalid token",
 	"settings.oauthSignedIn":      "Signed in to the backend.",
 	"settings.oauthSignedInAs":    "Signed in to the backend as %s.",
 	"settings.oauthSignedOut":     "Signed out of the backend on this device.",
