@@ -7,8 +7,8 @@ package i18n
 // C419). Kept in its own file (concurrent WIP on en_sync.go/en.go) like the
 // other feature key files.
 var customSyncKeys = Catalog{
-	"customSync.title":               "Custom Sync",
-	"customSync.intro":               "Sign in with your phone number instead — no server address or token to copy. We'll text you a one-time code.",
+	"customSync.title":               "Sign in with your phone",
+	"customSync.intro":               "Enter your phone number and we'll text you a one-time code — no server address or password to remember.",
 	"customSync.phoneLabel":          "Phone number",
 	"customSync.phonePlaceholder":    "+1 555 123 4567",
 	"customSync.phoneRequired":       "Enter your phone number first.",

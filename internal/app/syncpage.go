@@ -267,6 +267,19 @@ func SyncPage() uic.Node {
 	tokenPrimary := phase != discoveryOK || (!showPhone && !showOAuth)
 	showTokenField := tokenPrimary || advancedTokenOpen.Get()
 
+	// tokenField is shared by its two mutually-exclusive render sites (primary,
+	// when no other method exists; advanced disclosure, when one does) so the
+	// markup is written once.
+	tokenField := Fragment(
+		Input(css.Class("set-input"), Type("password"),
+			Attr("aria-label", uistate.T("settings.backendToken")), Attr("data-testid", "sync-server-token"),
+			Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onToken)),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-test"), OnClick(onTest), uistate.T("settings.testBackend")),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "sync-now"), OnClick(onSyncNow), uistate.T("settings.syncNow")),
+		),
+	)
+
 	return Div(css.Class("sync-page", tw.Flex, tw.FlexCol, tw.Gap4),
 		// Framing: what this page is for and exactly what leaves the device.
 		P(css.Class(tw.TextDim, tw.Text14), uistate.T("sync.intro")),
@@ -307,32 +320,32 @@ func SyncPage() uic.Node {
 			If(phase == discoveryOK, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryOK"))),
 			If(phase == discoveryError, P(css.Class(tw.Text12, tw.TextFaint), Attr("data-testid", "sync-discovery-error"), uistate.T("settings.serverTestFailed", discoveryMsg.Get()))),
 
-			// Phone/password/pairing — only when this server actually has AuthService.
-			If(showPhone, Fragment(
-				uic.CreateElement(CustomSyncCard),
-				uic.CreateElement(PasswordAuthCard),
-				uic.CreateElement(DeviceLinkCard),
-			)),
-
-			// OAuth — only for the providers this server actually reports.
+			// Exactly one primary sign-in surface, chosen by what the server
+			// actually reports supporting.
+			If(showPhone, uic.CreateElement(CustomSyncCard)),
 			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
 				If(containsString(d.AuthProviders, "google"), Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle"))),
 				If(containsString(d.AuthProviders, "github"), Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub"))),
 			)),
-
-			// Fixed access token — primary when nothing else is available (or
-			// discovery hasn't resolved yet), otherwise a quiet "advanced" opt-in.
 			If(tokenPrimary && phase == discoveryOK, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
-			If(!tokenPrimary && !advancedTokenOpen.Get(), Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
-				Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle"))),
-			If(showTokenField, Fragment(
-				Input(css.Class("set-input"), Type("password"),
-					Attr("aria-label", uistate.T("settings.backendToken")), Attr("data-testid", "sync-server-token"),
-					Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onToken)),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-test"), OnClick(onTest), uistate.T("settings.testBackend")),
-					Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "sync-now"), OnClick(onSyncNow), uistate.T("settings.syncNow")),
-				),
+			If(tokenPrimary && showTokenField, tokenField),
+
+			// Every fallback grouped under one quiet, uniformly-demoted
+			// disclosure — matching the sidebar's own section-label treatment
+			// (Text11+Uppercase+Tracking008+TextFaint) — instead of several
+			// independent accent-colored links competing with the primary
+			// surface above for attention.
+			If(showPhone || !tokenPrimary, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
+				Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading")),
+				If(showPhone, Fragment(
+					uic.CreateElement(PasswordAuthCard),
+					uic.CreateElement(DeviceLinkCard),
+				)),
+				If(!tokenPrimary, Fragment(
+					If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
+						Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),
+					If(advancedTokenOpen.Get(), tokenField),
+				)),
 			)),
 		)),
 

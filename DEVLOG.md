@@ -1,3 +1,46 @@
+## 2026-07-24 — /sync had the right logic and the wrong hierarchy
+
+Cam, right after the capability-aware rewrite below shipped: "the ux and ui are so bad, did you use
+the front end design skill?" Direct hit. The skill had been invoked by name earlier in the session,
+but its actual process — a token pass, a restraint pass, self-critique against the generic-AI-defaults
+checklist — never ran on this page. What shipped was a real information-architecture fix (ask the
+server, render exactly one method) wearing zero visual hierarchy on top of it.
+
+Screenshotted the live page before touching anything, rather than guessing what was wrong from the
+source. Three real problems, none of them subtle once looked at directly: the card was titled "Custom
+Sync" — an internal component name, meaningless to anyone using the app; its icon was a padlock,
+reused wholesale from `PasswordAuthCard`, on a card about phone sign-in; and `PasswordAuthCard`/
+`DeviceLinkCard`'s collapsed links used plain `.btn-link` (full accent green — identical color to the
+primary "Text me a code" button) while the neighboring `sync.useDifferentAddress` and
+`sync.advancedTokenToggle` links, written in the very same redesign, already used the correctly-
+demoted `tw.TextDim` variant. Not a design decision — an inconsistency. Two alternate sign-in paths
+were visually shouting exactly as loud as the one action that actually mattered.
+
+Deliberately did not give this page its own palette or type system. It's one page inside a 46-page
+app with an established `tw`/motion-spec design language; inventing a bespoke visual identity for a
+single settings-adjacent screen would trade one inconsistency for a worse, more visible one. The
+actual fix was hierarchy discipline within the existing system: renamed the card to "Sign in with your
+phone," rewrote its intro to drop a dangling "instead" that only parsed when other methods were
+visible next to it, added a real `icon.Smartphone` glyph (lucide-style, matching the hand-rolled SVG
+set already in `internal/icon`), fixed the two collapsed links to the same `tw.TextDim` treatment
+everything else on the page already uses, and grouped all three fallbacks (password, pairing, access
+token) under one "OTHER WAYS TO SIGN IN" eyebrow — reusing the sidebar's own section-header token
+combo (`Text11`+`Uppercase`+`Tracking008`+`TextFaint`) instead of inventing new styling for the
+occasion.
+
+Verification caught one more real bug: the access-token toggle button sat as a *direct* child of the
+column flex container, so it stretched to the container's full width under the default
+`align-items: stretch`, and the browser's UA-stylesheet `text-align: center` on `<button>` then
+centered its label across that full width — while the other two fallback links stayed left-aligned
+because they're each wrapped in a plain, non-flex `<div>`. Wrapped the toggle in a matching div. Also
+found, while in `internal/icon`, that `TestAllMatchesCuratedSet` was already failing before this
+session touched it — `Trash` had been added to the icon set at some point with no matching entry in
+the test's curated list — fixed alongside adding `Smartphone` to both.
+
+Verified against the real live embedded deployment (`localhost:8096/budget/sync`), not a scratch
+stand-in — this was specifically about how that one exact page looks, so that's the page that had to
+be screenshotted, before and after.
+
 ## 2026-07-24 — The /sync page finally asks the server what it supports, instead of guessing
 
 Cam's reaction to actually looking at `/sync` closely: "confusing dogshit." Fair — a Cloud/self-

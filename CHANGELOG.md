@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **/sync visual hierarchy pass (TODOS.md C449).** C448 fixed which sign-in method shows; this fixes
+  how it looks. Renamed the "Custom Sync" card to "Sign in with your phone" and gave it a real phone
+  icon (new `icon.Smartphone`) instead of a reused padlock. `PasswordAuthCard`/`DeviceLinkCard`'s
+  collapsed links now use the same demoted `tw.TextDim` styling already used elsewhere on the page
+  (they'd been left at full accent-green, visually competing with the primary CTA) and are grouped
+  with the access-token fallback under one "OTHER WAYS TO SIGN IN" label instead of floating as
+  disconnected stray links. Fixed an alignment bug where the access-token toggle centered its text
+  after stretching to the flex container's full width, unlike its sibling links.
 - **Capability-aware /sync page redesign (TODOS.md C448).** The page no longer stacks every sign-in
   method at once — it asks the connected server what it actually supports (new
   `VersionResponse.CustomAuthEnabled` + a completed `backendauth.Discovery`) and shows exactly one

@@ -33,6 +33,7 @@ var syncPageKeys = Catalog{
 	"sync.discoveryOK":         "Connected.",
 	"sync.tokenFieldPrimary":   "This server uses a fixed access token — paste it below.",
 	"sync.advancedTokenToggle": "Paste an access token instead",
+	"sync.otherWaysHeading":    "Other ways to sign in",
 }
 
 func init() {

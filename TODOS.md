@@ -5927,3 +5927,35 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   the token-only fallback; and a combined static-client+`NewSyncAndAuthBridge` instance on one port
   (mirroring the portfolio's actual architecture) confirming the same-origin zero-config path — no
   address typed, no token field, phone card appears automatically.
+- [x] **C449 [MINOR][SYNC] /sync visual hierarchy pass — C448 fixed the logic, not the design.**
+  C448 replaced "show every door at once" with "ask the server, show one door," but shipped with no
+  actual visual hierarchy pass: `PasswordAuthCard`/`DeviceLinkCard`'s collapsed links used plain
+  `.btn-link` (full accent green — the same color as the primary CTA), while the neighboring
+  `sync.useDifferentAddress`/`sync.advancedTokenToggle` links already used the correct demoted
+  `tw.TextDim` variant right next to them — an inconsistency that made two alternate sign-in paths
+  visually shout as loud as the actual primary action. Also: the card's title was "Custom Sync" (an
+  internal component name, meaningless to a user), its icon was a padlock reused from
+  `PasswordAuthCard` (no `Smartphone` icon existed to use instead), and the three fallback links
+  floated as disconnected stray lines with no grouping between them.
+
+  Fixed within CashFlux's existing token system deliberately — one page inside a 46-page app with an
+  established `tw`/motion-spec design language doesn't get its own palette; that trades one
+  inconsistency for a worse one. Renamed the card to "Sign in with your phone" and rewrote its intro
+  to drop a dangling "instead" that only made sense when other methods were visible alongside it.
+  Added a real `icon.Smartphone` glyph (lucide-style, matching the existing hand-rolled SVG set).
+  Demoted `PasswordAuthCard`/`DeviceLinkCard`'s collapsed links to the same `tw.TextDim` treatment
+  already used elsewhere on the page, then grouped all three fallbacks (password, pairing, access
+  token) under one "OTHER WAYS TO SIGN IN" eyebrow label, reusing the sidebar's own section-header
+  token combo (`Text11`+`Uppercase`+`Tracking008`+`TextFaint`) rather than inventing new styling.
+  Caught one more bug during verification: the access-token toggle button sat as a direct child of
+  the column flex container and inherited the browser's default button `text-align: center` once it
+  stretched to the container's full width, while the other two fallback links stayed left-aligned
+  inside their own wrapper divs — wrapped it the same way to match.
+
+  Also fixed a pre-existing, unrelated test drift found while touching `internal/icon`:
+  `TestAllMatchesCuratedSet` was already failing before this change (`Trash` had been added to the
+  icon set with no matching entry in the test's curated list) — fixed alongside adding `Smartphone`
+  to both.
+
+  Verified by screenshotting the real live embedded deployment (`localhost:8096/budget/sync`, not a
+  scratch stand-in) before and after, since this was specifically about how that exact page looks.

@@ -214,8 +214,8 @@ func PasswordAuthCard() uic.Node {
 	code := recoveryCode.Get()
 
 	if !expanded.Get() {
-		return Div(css.Class(tw.Mt1), Attr("data-testid", "password-auth-collapsed"),
-			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "password-auth-expand"),
+		return Div(Attr("data-testid", "password-auth-collapsed"),
+			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "password-auth-expand"),
 				OnClick(onToggleExpand), uistate.T("authCards.usePasswordInstead")),
 		)
 	}
@@ -383,8 +383,8 @@ func DeviceLinkCard() uic.Node {
 	})
 
 	if !expanded.Get() {
-		return Div(css.Class(tw.Mt1), Attr("data-testid", "device-link-collapsed"),
-			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "device-link-expand"),
+		return Div(Attr("data-testid", "device-link-collapsed"),
+			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "device-link-expand"),
 				OnClick(onToggleExpand), uistate.T("authCards.haveAnAccount")),
 		)
 	}

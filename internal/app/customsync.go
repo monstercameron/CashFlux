@@ -225,7 +225,7 @@ func CustomSyncCard() uic.Node {
 
 	return Div(css.Class("card", "custom-sync-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "custom-sync-card"),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			ui.Icon(icon.Lock, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
+			ui.Icon(icon.Smartphone, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
 			Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("customSync.title")),
 		),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("customSync.intro")),
