@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The sync error detail line itself was still generic (TODOS.md C451, follow-up to C450).**
+  Giving `syncStatus.Message` a visible home (C450) surfaced it — but every failure site in
+  `sync_client.go` only ever set it to a fixed literal ("pull failed", "sync failed", "backend
+  unavailable"...), never the actual underlying error, so "Reason: pull failed" told you an
+  operation failed without saying why. All ~13 `setSyncStatus(..., Message: "...")` call sites now
+  run the error through the existing `customSyncErrorMessage(err, fallback)` helper (already used by
+  the phone/password auth flows), which surfaces a clean gRPC status message when the server sent one
+  (e.g. "invalid bearer token" instead of "pull failed") or appends the real Go error otherwise. Three
+  conflict-resolution failure paths that had NO message at all (a bare `State: "conflict"`) now report
+  one too. New `e2e/regression/sync.spec.mjs` (previously zero e2e coverage on this page) drives a
+  real dial failure against the hermetic test server (no backend behind it, so any address fails to
+  connect) and asserts both the `/sync` page and Settings → Cloud show real, non-generic detail —
+  guards against this regressing back to a bare fallback literal.
 - **Sync errors had no visible detail anywhere in the UI (TODOS.md C450).** `syncStatus.Message`
   already carried the specific reason a sync failed ("backend unavailable", "pull failed", "artifact
   blob upload failed", etc.) but the only place it was ever shown was a hover tooltip on the topbar

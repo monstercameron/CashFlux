@@ -5985,3 +5985,28 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   `CASHFLUX_SERVER_TOKEN` set (matching `scripts/dev.sh`'s own convention), confirmed via server logs
   (`ws_upgrade_succeeded` on `/grpc`) — but this UI gap would have hidden the real reason regardless
   of cause, hence fixing it here rather than treating it as a one-off ops incident.
+- [x] **C451 [MINOR][SYNC] The newly-visible sync error detail was itself still generic — follow-up
+  to C450.** Cam, after actually seeing "Reason: pull failed" live: "make it fucking simple to
+  understand config errors." Fair — C450 gave `syncStatus.Message` a visible home, but every failure
+  site in `sync_client.go` set it to a hardcoded literal, never the real underlying error, so the
+  newly-visible line still told you nothing about WHY (bad token? unreachable host? server down?).
+
+  Audited every `setSyncStatus(syncStatus{State: "error"|"conflict", ...})` call site (13 total) in
+  `flushBackendSyncQueue`, `pullActiveWorkspaceFromBackend`, `resolveConflictKeepLocal`, and
+  `resolveConflictUseServer`. All now route the real `err` through the existing
+  `customSyncErrorMessage(err, fallback)` helper (already battle-tested by the phone/password auth
+  flows in `customsync.go`/`authcards.go`): it surfaces a clean gRPC status message when the server
+  sent one — a bad token now reports "invalid bearer token" verbatim, straight from
+  `internal/server/auth.go`'s own `status.Error(codes.Unauthenticated, "invalid bearer token")` —
+  or falls back to `"<fallback>: <raw Go error>"` for a plain network failure (connection refused,
+  DNS failure, timeout). Also found and fixed three conflict-resolution failure branches
+  (`resolveConflictUseServer`'s pull/hydrate/import failures) that set `State: "conflict"` with NO
+  message at all — silently worse than the generic-literal problem everywhere else.
+
+  New `e2e/regression/sync.spec.mjs` — this page had zero e2e coverage before today. Two tests drive
+  a REAL failure (point sync at an address nothing listens on in the hermetic test environment — no
+  mocking needed, since the e2e server has no backend behind it at all) and assert both the `/sync`
+  page's status card and Settings → Cloud's status line show detail text meaningfully longer than the
+  bare fallback phrase, guarding against ever silently regressing back to an unhelpful generic
+  message. Verified passing against the real hermetic Playwright suite (`npx playwright test
+  sync.spec.mjs`), not just compiled.

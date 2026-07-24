@@ -1,3 +1,37 @@
+## 2026-07-24 — The visible error message was still a lie by omission
+
+Shipped the "give sync errors a visible home" fix (below), then Cam actually looked at what it
+produced live: "Reason: pull failed." Technically visible now — but still useless. His response,
+verbatim: "make it fucking simple to use and to understand config errors ffs" plus "e2e test this
+shit." Both fair. Visibility without content is just a more-discoverable way to say nothing.
+
+Audited every `setSyncStatus` call site that sets `State: "error"` or `"conflict"` in
+`sync_client.go` — thirteen of them across the push queue, the pull path, and both conflict-
+resolution branches. Every single one hardcoded a fixed literal ("pull failed", "sync failed",
+"backend unavailable"...) and discarded the real `err` it had right there in scope — in three
+conflict-resolution failure branches, discarded it so completely there was no message field at all.
+Meanwhile `customSyncErrorMessage(err, fallback)` already existed in `customsync.go`, already used by
+every phone/password auth flow, already knows how to pull a clean message off a gRPC status
+(`status.FromError`) or fall back to the raw Go error — this fix was purely "actually call the
+function that already solves this," not new machinery. Concretely: a bad self-hosted token used to
+report "Reason: pull failed"; it now reports "Reason: invalid bearer token" — the exact string
+`internal/server/auth.go` returns, telling you precisely what's wrong instead of which internal
+operation happened to be running when it noticed.
+
+Then built the e2e coverage Cam asked for, `e2e/regression/sync.spec.mjs` — this page had zero
+before. The hermetic test server has no real backend behind it, so pointing sync at literally any
+address is a free, deterministic, zero-mock way to trigger a real dial failure; no fixture needed.
+Two tests drive that failure for real and assert the detail text on both the `/sync` page and
+Settings → Cloud is meaningfully longer than the bare fallback phrase — a regression guard against
+this exact bug (enrichment silently degrading back to the generic literal) ever recurring unnoticed.
+Ran them against the real Playwright suite before calling it done: both pass.
+
+While running the broader regression suite to check for collateral damage, found 16 pre-existing
+failures completely unrelated to any of today's work (`/p/priya-business` coverage-manifest drift,
+a `/recurring` a11y baseline miss, several budgets/import-wizard/toolbar interaction tests) — none of
+it touches sync, Settings, or anything this session changed. Left it alone; flagging it rather than
+scope-creeping into an unrelated fix.
+
 ## 2026-07-24 — Two bugs, same incident: a broken origin check, and an error message with nowhere to go
 
 Cam reported a sync error on the live portfolio deployment. Root-caused it to my own restart
