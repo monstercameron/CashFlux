@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`pkg/embed.Admin` gets `ListPendingDevices`/`ApprovePairing`/`RejectPairing`** (new
+  `pkg/embed/admin.go`), completing the CashFlux-side half of the admin-approved device-pairing
+  bootstrap (TODOS.md C454) — the portfolio's admin console (a later, separate commit) drives these
+  directly as Go calls, no RPC layer needed, matching how `pkg/embed` already works.
+  `ApprovePairing` mints a **brand-new account** for each approval (never a shared "owner" identity)
+  since this deployment shape admits a small, admin-invited set of *distinct* people/devices, and
+  `RedeemPairingCode`'s own invariant is that it never creates an account itself — so an account has
+  to exist before a pairing code can be minted for it. Returns the pairing code alongside
+  `approved=true` so the admin console can display it next to the device's own display of the same
+  code, for a human cross-check. 5 new tests, including one proving two independent approvals mint
+  two genuinely distinct accounts (not the same one twice). Verified via full native
+  `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build`.
 - **Server-side plumbing for the admin-approved device-pairing bootstrap (TODOS.md C454).**
   New `pending_devices` table + store CRUD (`MintPendingDevice`/`GetPendingDevice`/
   `ListPendingDevices`/`ApprovePendingDevice`/`RejectPendingDevice`) tracks a device's pairing

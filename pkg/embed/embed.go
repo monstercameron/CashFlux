@@ -53,8 +53,9 @@ type Bridge struct {
 	// Handler serves the /grpc WebSocket tunnel and /v1/version discovery —
 	// mount it at the path the CashFlux frontend dials.
 	Handler http.Handler
-	// Admin exposes management operations (listing enrolled clients, minting
-	// invite codes) against the same underlying store Handler serves.
+	// Admin exposes management operations (listing, approving, and rejecting
+	// pending device-pairing requests — TODOS.md C454) against the same
+	// underlying store Handler serves.
 	Admin *Admin
 	// Close releases the underlying store; call it at shutdown.
 	Close func() error

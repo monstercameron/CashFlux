@@ -6198,3 +6198,30 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   new `fakePairingWatchStream` (`authservice_pairingdevice_test.go`). Regenerated the
   `.proto`/`pb.go` contract mirror via `buf generate`; `proto_contract_test.go` passes. Verified via
   full native `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build`.
+- [x] **C458 [MAJOR][SYNC] `pkg/embed.Admin` gains `ListPendingDevices`/`ApprovePairing`/
+  `RejectPairing`** — the Go-level admin API C454's server side needs a caller for; the portfolio's
+  admin console (a later, separate commit) will call these directly, the same pattern the
+  now-removed `ListClients`/`MintInviteCode` used.
+
+  The design question worth recording: whose account does `ApprovePairing` mint a pairing code
+  against? Not a single shared "owner" identity (what I'd first sketched, modeled on
+  `SyncService.ensureUser`'s lazy materialization) — `NewSyncAndAuthBridge`'s own doc comment says
+  this deployment is for "a host that wants CashFlux sync for itself *and a small, admin-invited set
+  of people*," plural and distinct, and `RedeemPairingCode` has an explicit invariant that it never
+  creates an account itself (C421), so an account must already exist by mint time. Landed on: every
+  approval creates a BRAND-NEW account (`UpsertUser` with a fresh random `device:<random>` id), then
+  mints the pairing code against that. `TestAdminApprovePairingCreatesDistinctAccount` pins this down
+  directly — two independent approvals must resolve to two different user ids, not the same one
+  twice. `ApprovePairing` returns the minted pairing code (not just approved=true) so the admin
+  console can display it beside the device's own display of the same code, for the human cross-check
+  Cam asked for earlier this session ("the client sees the pairing code and the user can accept or
+  reject").
+
+  One known asymmetry, not fixed here: if `ApprovePendingDevice` fails after the new account and
+  code already exist (e.g. a concurrent double-resolve race), that account/code are orphaned —
+  unused, unreachable without the discarded code, no PII. Harmless today; worth a cleanup pass only
+  if an exact account count is ever needed.
+
+  5 new tests (`admin_test.go`) covering list/approve/one-shot/unknown-device/reject, including the
+  distinct-account property above. Verified via full native `go build`/`go vet`/`go test ./...` and
+  a real `GOOS=js GOARCH=wasm go build`.

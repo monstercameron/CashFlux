@@ -56,6 +56,37 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — pkg/embed.Admin gets the pairing approve/reject console API
+
+Fifth task off the plan: `pkg/embed.Admin.ListPendingDevices`/`ApprovePairing`/`RejectPairing` — the
+Go-level API the portfolio's admin console (not yet built) will call directly, same pattern the now-
+removed `ListClients`/`MintInviteCode` used to.
+
+The interesting design question was "whose account does `ApprovePairing` mint a pairing code
+against?" I'd originally sketched this as a single "owner" identity, lazily created the same way
+`SyncService.ensureUser` materializes a token-mode row. That's wrong for this deployment shape:
+`NewSyncAndAuthBridge`'s own doc comment says it's for "a host that wants CashFlux sync for itself
+*and a small, admin-invited set of people*" — plural, distinct people, not one shared identity with
+multiple devices. And there's a harder constraint: `RedeemPairingCode` has an explicit, deliberate
+invariant that it NEVER creates an account (C421) — so by the time `ApprovePairing` mints a code,
+some account has to already exist for it. Landed on: every approval creates a brand-new account
+(`UpsertUser` with a fresh random `device:<random>` id), then mints a pairing code against THAT.
+Wrote a test specifically to catch the regression to a shared identity —
+`TestAdminApprovePairingCreatesDistinctAccount` approves two separate pending requests and asserts
+the two pairing codes resolve to two DIFFERENT user ids.
+
+Also revisited: should `ApprovePairing` return the pairing code, or keep it purely internal (client-
+only, via `WatchPairingStatus`)? Earlier in this session, answering a clarifying question, Cam
+confirmed the code should be shown on both sides for a human cross-check — so returning it here
+(rather than swallowing it into the store update) is what lets the not-yet-built admin console
+actually show it.
+
+One asymmetry worth flagging for later, not fixed now: if `ApprovePendingDevice` fails AFTER the
+new account and pairing code already exist (e.g. a race where someone else resolved the same request
+a moment earlier), that account and code are simply orphaned — unused, no data, unreachable without
+the discarded code. Harmless today (SQLite storage is cheap, no PII in an empty account), but worth
+a cleanup pass if this ever needs an exact accounting of "how many real accounts exist."
+
 ## 2026-07-24 — Admin-approved device pairing, server side: the SetPassword bug the plan called out
 
 Fourth task off the approved plan, and the one with the sharpest correctness trap: `SetPassword`
