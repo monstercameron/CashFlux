@@ -1153,6 +1153,68 @@ WHERE wb.hash IS NULL`)
 	return len(blobs), nil
 }
 
+// UserSyncSummary reports what an account actually HOLDS on this server: how many
+// live workspaces it owns, the total size of their dataset snapshots, and when it
+// last pushed. This is the answer to "did this person's data arrive?", which the
+// usage table cannot give — usage counts metered AI requests and is never touched
+// by the sync path, so it reads zero forever for an account that only syncs.
+//
+// Deleted (tombstoned) workspaces are excluded: they are not data the account
+// still has. A user with no workspaces at all comes back as three zero values and
+// a zero time, which callers render as "never synced" rather than "0 B".
+func (s *Store) UserSyncSummary(userID string) (workspaces int, datasetBytes int64, lastSyncedAt time.Time, err error) {
+	if s == nil || s.db == nil {
+		return 0, 0, time.Time{}, fmt.Errorf("server store: not configured")
+	}
+	if strings.TrimSpace(userID) == "" {
+		return 0, 0, time.Time{}, fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("UserSyncSummary", time.Now())
+	rows, err := s.db.Query(`
+SELECT w.updated_at, COALESCE(LENGTH(s.dataset_json), 0)
+FROM workspaces w
+LEFT JOIN snapshots s ON s.workspace_id = w.id
+WHERE w.user_id = ? AND w.deleted = 0`, userID)
+	if err != nil {
+		return 0, 0, time.Time{}, fmt.Errorf("server store: user sync summary: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var updatedAt string
+		var size int64
+		if err := rows.Scan(&updatedAt, &size); err != nil {
+			return 0, 0, time.Time{}, fmt.Errorf("server store: scan user sync summary: %w", err)
+		}
+		workspaces++
+		datasetBytes += size
+		// Compared as parsed times, not lexicographically: RFC3339Nano trims
+		// trailing zeros, so "…:00Z" and "…:00.5Z" do not sort as their instants do.
+		// A malformed legacy row is skipped rather than fataling the whole summary.
+		if t, err := parseTime(updatedAt); err == nil && t.After(lastSyncedAt) {
+			lastSyncedAt = t
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, time.Time{}, fmt.Errorf("server store: user sync summary rows: %w", err)
+	}
+	return workspaces, datasetBytes, lastSyncedAt, nil
+}
+
+// SnapshotBytes is the total size of every stored dataset snapshot — the figure
+// that actually MOVES when someone syncs, unlike the database's own page count,
+// where a 17KB dataset landing in a 284KB file is lost in the rounding.
+func (s *Store) SnapshotBytes() (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("server store: not configured")
+	}
+	defer s.observeDB("SnapshotBytes", time.Now())
+	var total int64
+	if err := s.db.QueryRow(`SELECT COALESCE(SUM(LENGTH(dataset_json)), 0) FROM snapshots`).Scan(&total); err != nil {
+		return 0, fmt.Errorf("server store: snapshot bytes: %w", err)
+	}
+	return total, nil
+}
+
 // StorageStats reports on-disk storage usage for the admin console's storage
 // panel: the SQLite database's own size (via PRAGMA page_count/page_size —
 // deliberately not the OS file path, which Store never stores, so this works

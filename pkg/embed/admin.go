@@ -236,9 +236,20 @@ type User struct {
 	SubscriptionPlan   string
 	SubscriptionStatus string
 	// RequestsThisMonth is the summed request count across this account's
-	// usage rows for the current calendar month (UTC) — the admin console's
-	// "request volume" column.
+	// usage rows for the current calendar month (UTC). NOTE: usage rows are
+	// written only by the metered AI proxy — nothing in the sync path touches
+	// them — so this reads 0 for an account that syncs constantly and buys no
+	// AI. It is a billing figure, not a liveness one; the three fields below
+	// are what answer "did this person's data actually arrive?".
 	RequestsThisMonth int64
+	// Workspaces is how many live (non-tombstoned) workspaces the account owns.
+	Workspaces int
+	// DatasetBytes is the total size of those workspaces' dataset snapshots.
+	DatasetBytes int64
+	// LastSyncedAt is the most recent push across them. Zero means this account
+	// has never synced anything — which callers should render as "never synced"
+	// rather than as a date.
+	LastSyncedAt time.Time
 }
 
 // maxListUsersPage caps a single ListUsers call, matching
@@ -273,6 +284,10 @@ func (a *Admin) ListUsers(limit, offset int) ([]User, error) {
 		if err != nil {
 			return nil, fmt.Errorf("pkg/embed: usage for %s: %w", r.ID, err)
 		}
+		workspaces, datasetBytes, lastSyncedAt, err := a.store.UserSyncSummary(r.ID)
+		if err != nil {
+			return nil, fmt.Errorf("pkg/embed: sync summary for %s: %w", r.ID, err)
+		}
 		out = append(out, User{
 			ID:                 r.ID,
 			Provider:           r.Provider,
@@ -281,6 +296,9 @@ func (a *Admin) ListUsers(limit, offset int) ([]User, error) {
 			SubscriptionPlan:   r.SubscriptionPlan,
 			SubscriptionStatus: r.SubscriptionStatus,
 			RequestsThisMonth:  requests,
+			Workspaces:         workspaces,
+			DatasetBytes:       datasetBytes,
+			LastSyncedAt:       lastSyncedAt,
 		})
 	}
 	return out, nil
@@ -310,16 +328,26 @@ func currentMonthStartUTC() time.Time {
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 }
 
-// StorageStats reports on-disk storage usage for the admin console's storage
-// panel: the SQLite database's own size and the total size of every stored
-// artifact blob.
-func (a *Admin) StorageStats() (dbBytes, blobBytes int64, err error) {
+// StorageStats reports storage usage for the admin console's storage panel: the
+// SQLite database's own size, the total size of every stored artifact blob, and
+// the total size of every dataset snapshot.
+//
+// snapshotBytes exists because the other two barely move: a 17KB dataset landing
+// in a 284KB database is lost in the page-count rounding, and an account with no
+// attachments never moves the blob figure off zero — so a panel showing only
+// those two reads as "nothing is happening" on a server that is syncing fine.
+// snapshotBytes is the figure that changes every time someone pushes.
+func (a *Admin) StorageStats() (dbBytes, blobBytes, snapshotBytes int64, err error) {
 	if a == nil || a.store == nil {
-		return 0, 0, fmt.Errorf("pkg/embed: admin is not configured")
+		return 0, 0, 0, fmt.Errorf("pkg/embed: admin is not configured")
 	}
 	dbBytes, blobBytes, err = a.store.StorageStats()
 	if err != nil {
-		return 0, 0, fmt.Errorf("pkg/embed: storage stats: %w", err)
+		return 0, 0, 0, fmt.Errorf("pkg/embed: storage stats: %w", err)
 	}
-	return dbBytes, blobBytes, nil
+	snapshotBytes, err = a.store.SnapshotBytes()
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("pkg/embed: snapshot bytes: %w", err)
+	}
+	return dbBytes, blobBytes, snapshotBytes, nil
 }

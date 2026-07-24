@@ -207,7 +207,7 @@ func TestAdminListUsersEmpty(t *testing.T) {
 // zero-valued placeholders.
 func TestAdminStorageStats(t *testing.T) {
 	a := newTestAdmin(t)
-	dbBytes, blobBytes, err := a.StorageStats()
+	dbBytes, blobBytes, snapshotBytes, err := a.StorageStats()
 	if err != nil {
 		t.Fatalf("StorageStats: %v", err)
 	}
@@ -216,6 +216,9 @@ func TestAdminStorageStats(t *testing.T) {
 	}
 	if blobBytes != 0 {
 		t.Fatalf("StorageStats: blob size = %d, want 0 on a fresh store with no blobs", blobBytes)
+	}
+	if snapshotBytes != 0 {
+		t.Fatalf("StorageStats: snapshot size = %d, want 0 on a fresh store with no snapshots", snapshotBytes)
 	}
 }
 
@@ -401,5 +404,104 @@ func TestAdminDeleteUserRejectsBlankAndUnconfigured(t *testing.T) {
 	var nilAdmin *Admin
 	if _, err := nilAdmin.DeleteUser("device:owner"); err == nil {
 		t.Fatal("DeleteUser on a nil Admin: expected an error")
+	}
+}
+
+// TestAdminListUsersReportsSyncFacts proves the console can answer the question
+// the usage counter cannot: did this account's data actually arrive? A user that
+// has pushed a snapshot reports its workspace count, its size, and when — while
+// RequestsThisMonth stays 0, because nothing in the sync path writes usage rows.
+// That combination is exactly what made the panel look dead.
+func TestAdminListUsersReportsSyncFacts(t *testing.T) {
+	a := newTestAdmin(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if err := a.store.PutWorkspace(server.Workspace{
+		ID: "ws-1", UserID: OwnerAccountID, Name: "Default", Version: 1, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	dataset := []byte(`{"hello":"world"}`)
+	if err := a.store.PutSnapshot(server.Snapshot{
+		WorkspaceID: "ws-1", Dataset: dataset, Version: 1, UpdatedAt: now,
+	}, 1<<20, 5); err != nil {
+		t.Fatalf("PutSnapshot: %v", err)
+	}
+
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("ListUsers: got %d users, want 1", len(users))
+	}
+	u := users[0]
+	if u.Workspaces != 1 {
+		t.Fatalf("Workspaces = %d, want 1", u.Workspaces)
+	}
+	if u.DatasetBytes != int64(len(dataset)) {
+		t.Fatalf("DatasetBytes = %d, want %d", u.DatasetBytes, len(dataset))
+	}
+	if !u.LastSyncedAt.Equal(now) {
+		t.Fatalf("LastSyncedAt = %s, want %s", u.LastSyncedAt, now)
+	}
+	if u.RequestsThisMonth != 0 {
+		t.Fatalf("RequestsThisMonth = %d, want 0 — the sync path writes no usage rows", u.RequestsThisMonth)
+	}
+
+	_, _, snapshotBytes, err := a.StorageStats()
+	if err != nil {
+		t.Fatalf("StorageStats: %v", err)
+	}
+	if snapshotBytes != int64(len(dataset)) {
+		t.Fatalf("snapshotBytes = %d, want %d", snapshotBytes, len(dataset))
+	}
+}
+
+// TestAdminListUsersNeverSynced proves an account that has only ever been created
+// reports a ZERO LastSyncedAt rather than some epoch date, so the console can say
+// "never synced" instead of rendering Jan 1 year 1.
+func TestAdminListUsersNeverSynced(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("ListUsers: got %d users, want 1", len(users))
+	}
+	if u := users[0]; u.Workspaces != 0 || u.DatasetBytes != 0 || !u.LastSyncedAt.IsZero() {
+		t.Fatalf("never-synced account: got workspaces=%d bytes=%d lastSynced=%s, want 0/0/zero-time",
+			u.Workspaces, u.DatasetBytes, u.LastSyncedAt)
+	}
+}
+
+// TestUserSyncSummaryExcludesDeletedWorkspaces proves a tombstoned workspace stops
+// counting toward what the account holds — it is not data the user still has.
+func TestUserSyncSummaryExcludesDeletedWorkspaces(t *testing.T) {
+	a := newTestAdmin(t)
+	now := time.Now().UTC()
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if err := a.store.PutWorkspace(server.Workspace{
+		ID: "ws-gone", UserID: OwnerAccountID, Name: "Old", Version: 1, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	if _, err := a.store.SoftDeleteWorkspace(OwnerAccountID, "ws-gone", now, "dev"); err != nil {
+		t.Fatalf("SoftDeleteWorkspace: %v", err)
+	}
+	workspaces, bytes, _, err := a.store.UserSyncSummary(OwnerAccountID)
+	if err != nil {
+		t.Fatalf("UserSyncSummary: %v", err)
+	}
+	if workspaces != 0 || bytes != 0 {
+		t.Fatalf("after soft delete: workspaces=%d bytes=%d, want 0/0", workspaces, bytes)
 	}
 }

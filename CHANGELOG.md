@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`pkg/embed` reports what an account actually HOLDS, not just what it bought.** New
+  `Store.UserSyncSummary` (live workspace count, total dataset-snapshot bytes, last push) and
+  `Store.SnapshotBytes` (the same total across the whole server), surfaced on `Admin.User` and as a
+  third `StorageStats` return. The existing `RequestsThisMonth` cannot answer "did this person's
+  data arrive?": usage rows are written only by the metered AI proxy and nothing in the sync path
+  touches them, so it reads 0 forever for an account that syncs constantly — which made an admin
+  console showing only that column look like nothing was happening on a server syncing fine. Nor
+  can the database's own page count: a 17KB dataset landing in a 284KB file is lost in the
+  rounding. Snapshot bytes is the figure that moves on every push. Deleted (tombstoned) workspaces
+  are excluded, and a never-synced account reports a ZERO time rather than an epoch date so callers
+  can say "never synced" instead of rendering year 1. 4 new tests.
 - **Hovering a sync indicator shows a last-sync time you can read.** It always carried one — as
   `Last synced 2026-07-24T20:31:34.476Z`, the raw stored RFC3339Nano stamp in UTC, which is a
   machine string and a puzzle for anyone not standing in that timezone. It now reads
