@@ -7,6 +7,36 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **`/sync` and Settings → Cloud unified into one implementation, with a new Local/Remote/
+  Commercial connection picker replacing the old raw-bearer-token-first Cloud/Self-hosted toggle.**
+  The two pages had drifted into independently-maintained duplicates of "connect a backend" — `/sync`
+  got a capability-aware redesign (2026-07-23) that Settings → Cloud never received, so Cloud still
+  showed a plain address+token field with no auto-detection or password sign-in (the literal "dogshit
+  bearer token field" complaint). Deleted `syncpage.go`'s `SyncPage`; its logic became
+  `CloudConnectionPane` (new `cloudtab.go`), a self-contained component — like `PasswordAuthCard`/
+  `DeviceLinkCard` — rather than a props-driven pane, since every field it needs is its own concern.
+  `settingsCloudPane` is now a one-line wrapper around it; ~30 now-dead Cloud-related fields removed
+  from `settingsRightProps` and their state/handlers removed from `globalSettingsForm`. `/sync` itself
+  is now `SyncRedirect`, a component that navigates straight to `/settings/cloud` on mount and renders
+  nothing — kept routable (moved off the nav rail, into the off-rail registry section) only so old
+  bookmarks/links don't 404.
+
+  New three-way segmented picker (`prefs.ConnectionSegment`, a new additive field alongside
+  `ServerMode` — no migration needed, `Normalize()` fills a sensible default): **Local** auto-probes a
+  same-origin backend first (the embedded-in-another-site case), with a manual fallback for unusual
+  URLs; **Remote** always requires a manually-typed address and shows an explicit trust disclosure,
+  since it may be someone else's server; **Commercial** (CashFlux Cloud) skips capability discovery
+  entirely and goes straight to OAuth/token sign-in + the subscription/billing surface, matching how a
+  paid backend's capabilities are a known quantity rather than something to probe for. Every other
+  Cloud-tab feature carried forward unchanged: conflict-backup restore/discard (C309), cloud AI-key
+  upload/remove (§7.11), the signed-in devices list, and the subscription checkout/manage-portal flow.
+
+  Verified via the full native `go build`/`go vet`/`go test ./...`, a real `GOOS=js GOARCH=wasm go
+  build`, and the hermetic Playwright suite: rewrote `sync.spec.mjs` for the new redirect + unified
+  surface (both cases pass), reran `interactions.spec.mjs`'s two Settings Cloud/Advanced tests plus
+  the full suite and `smoke.spec.mjs` — no new regressions beyond the same pre-existing, unrelated
+  failure set already on record (budgets/import-wizard/toolbar/review-duplicates/todo).
+
 - **Settings tabs are now real, bookmarkable URLs (`/settings/cloud`, `/settings/advanced`, …)
   instead of a one-shot in-memory deep-link.** Registered `/settings/:tab` in `app.go` following the
   same param-route pattern as `/p/:slug`; `globalSettingsForm` reads the active tab live from

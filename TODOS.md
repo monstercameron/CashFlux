@@ -6104,3 +6104,44 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   (Cloud, Advanced) now pass, with the same pre-existing unrelated 14 failures
   (budgets/import-wizard/toolbar/review-duplicates) already on record. Full native
   `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build` both clean.
+- [x] **C456 [MAJOR][SYNC] `/sync` and Settings → Cloud unified into one implementation, with a new
+  Local/Remote/Commercial connection picker — Cam: "for the sync and cloud pages they are the same!
+  the page needs 3 segments, local, remote and commercial."** The two pages had drifted: `/sync` got a
+  capability-aware rewrite (2026-07-23 — auto-probe, detect what the server supports, prefer
+  password/pairing sign-in) that Settings → Cloud never received, so Cloud still showed the plain
+  address+bearer-token field Cam called "dogshit." Deleted `syncpage.go`'s `SyncPage`; its logic became
+  `CloudConnectionPane` (new `cloudtab.go`) — a self-contained component (own hooks, no props), like
+  `PasswordAuthCard`/`DeviceLinkCard` — used by both `settingsCloudPane` (now a one-line wrapper) and
+  nothing else. `/sync` is now `SyncRedirect`: navigates to `/settings/cloud` on mount, renders
+  nothing, kept routable only so old bookmarks/links don't 404 (moved off the nav rail into the
+  off-rail registry section, same treatment as `/appearance`/`/setup`). Removed ~30 now-dead
+  Cloud-related fields from `settingsRightProps` and ~140 lines of state/handlers from
+  `globalSettingsForm` that existed solely to feed the old prop-driven pane.
+
+  Cam's spec read as three distinct trust postures, not just three ways to fill in one address field:
+  **Local** auto-probes a same-origin backend first, with a manual fallback for unusual URLs
+  (subdomains) — "your own infrastructure." **Remote** always requires a manually-typed address and
+  shows an explicit "you're trusting a third party with your data" disclosure. **Commercial** (CashFlux
+  Cloud) skips capability discovery entirely and goes straight to OAuth/token sign-in + the
+  subscription surface — a paid backend's capabilities are a known quantity, not something to probe
+  for. New `prefs.ConnectionSegment` field (additive, `Normalize()`-repaired like every other field —
+  no migration) distinguishes Local/Remote; `ServerMode` still only distinguishes Cloud from
+  self-hosted, unchanged. Deliberately did NOT hardcode a fixed CashFlux Cloud domain for Commercial —
+  none exists in this codebase yet (not a launched SaaS) — kept it pointed at whatever `ServerURL` is
+  configured, same as today, and changed only the framing; a real fixed endpoint is future work, not
+  something to fabricate. Every other Cloud-tab feature carried forward unchanged: conflict-backup
+  restore/discard (C309), cloud AI-key upload/remove (§7.11), the signed-in devices list, subscription
+  checkout/manage-portal.
+
+  Two testing snags traced to the same root cause as C455's `ContentKey` lesson: `nav()`'s
+  `data-route` wait can't target `/settings/cloud` directly (the attribute deliberately stays the
+  constant `/settings` across tabs) — fixed `sync.spec.mjs` to land on `/settings` and click the Cloud
+  tab, matching `interactions.spec.mjs`'s existing pattern. And the "backend off" hint text drifted to
+  `SyncPage`'s old phrasing during the merge — caught by `interactions.spec.mjs`'s existing Settings
+  Cloud test, fixed by keeping the established `settings.backendOffHint` string. Verified: full native
+  `go build`/`go vet`/`go test ./...`, a real `GOOS=js GOARCH=wasm go build`, rewritten `sync.spec.mjs`
+  (both cases pass), `interactions.spec.mjs`'s Settings Cloud/Advanced tests plus the full suite, and
+  `smoke.spec.mjs` — no new regressions beyond the same pre-existing unrelated failure set already on
+  record. `coverage.spec.mjs`'s ratchet failed on this run but its drift list (transactions, budgets,
+  goals, notifications, reports, recurring, etc.) never mentions sync/cloud/settings — confirmed
+  unrelated, accumulated drift from concurrent work on this multi-writer tree, not regenerated here.

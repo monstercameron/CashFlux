@@ -13,7 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
-	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -928,184 +927,6 @@ func globalSettingsForm() uic.Node {
 	memberChips = append(memberChips, Button(css.Class("member-add"), Type("button"), OnClick(goManageMembers), uistate.T("settings.addMember")))
 
 	pr := prefsAtom.Get().Normalize()
-	serverMode := uic.UseState(string(pr.ServerMode))
-	serverURL := uic.UseState(pr.ServerURL)
-	serverToken := uic.UseState(pr.ServerToken)
-	// backendOn drives the clear "connect to a backend" switch. It's the inverse of
-	// the persisted BackendDisabled flag, so off cleanly stops every sync/AI-proxy
-	// connection even with a URL/token saved.
-	backendOn := uic.UseState(!pr.BackendDisabled)
-	onBackendToggle := func(v bool) {
-		backendOn.Set(v)
-		p := prefsAtom.Get()
-		p.BackendDisabled = !v
-		savePrefs(p)
-		// Runtime effect without reload: start the watch + listeners when on, tear
-		// them down when off (Phase 1c).
-		restartBackendSync()
-	}
-	// Start unverified rather than guessing Google+GitHub are available the instant
-	// ServerMode==cloud: this server may have neither configured, and showing sign-in
-	// buttons that 404 until a "Test backend" click corrects the guess is worse than
-	// showing nothing until the real discovery check (testBackend, below) resolves.
-	initialAuth := backendauth.Discovery{AuthMode: backendauth.ModeToken}
-	serverAuthMode := uic.UseState(initialAuth.AuthMode)
-	serverAuthProviders := uic.UseState(strings.Join(initialAuth.AuthProviders, ","))
-	billingInterval := uic.UseState("annual")
-	// Which payment provider the subscribe button uses. Default Stripe; the picker
-	// lets a user choose PayPal when the backend offers it.
-	billingProvider := uic.UseState("stripe")
-	saveOAuthSession := func(token, csrf, userID string) {
-		p := prefsAtom.Get()
-		p.ServerToken = token
-		p.ServerCSRF = csrf
-		savePrefs(p)
-		serverToken.Set(token)
-		if strings.TrimSpace(userID) == "" {
-			notify(uistate.T("settings.oauthSignedIn"), false)
-		} else {
-			notify(uistate.T("settings.oauthSignedInAs", userID), false)
-		}
-		// A fresh OAuth token means the watch must reconnect with it — restart so it
-		// authenticates the stream with the new session, not just flush+pull.
-		restartBackendSync()
-	}
-	onServerMode := func(v string) {
-		serverMode.Set(v)
-		// Switching modes doesn't know what the (possibly not-yet-typed) server
-		// actually offers — reset to unverified rather than guessing, same
-		// reasoning as initialAuth above; "Test backend" is what actually confirms it.
-		serverAuthMode.Set(backendauth.ModeToken)
-		serverAuthProviders.Set("")
-		p := prefsAtom.Get()
-		p.ServerMode = prefs.ServerMode(v)
-		savePrefs(p)
-	}
-	// keySet tracks whether a cloud AI key is stored server-side, so the panel can
-	// show "Key set" + a Remove action (§7.11). Persisted locally; set on a
-	// successful upload, cleared on remove or on switching servers.
-	keySet := uic.UseState(lsGet("cashflux:cloud-ai-key-set") != "")
-	onServerURL := uic.UseEvent(func(v string) {
-		serverURL.Set(v)
-		p := prefsAtom.Get()
-		next := strings.TrimSpace(v)
-		// Switch-server flow (§3.4): pointing at a different server signs out of the
-		// old one — a token/session issued by one server is meaningless to another —
-		// and re-points sync at the new URL. Local data is untouched; only the cloud
-		// session is cleared. We compare hosts so editing the path/query of the same
-		// server doesn't needlessly drop the session.
-		hostChanged := backendHost(next) != backendHost(p.ServerURL)
-		if hostChanged && p.ServerToken != "" {
-			p.ServerToken = ""
-			p.ServerCSRF = ""
-			serverToken.Set("")
-			lsSet("cashflux:cloud-ai-key-set", "")
-			keySet.Set(false)
-			setSyncStatus(syncStatus{State: "offline"})
-			notify(uistate.T("settings.serverSwitched"), false)
-		}
-		p.ServerURL = next
-		savePrefs(p)
-		// Point the live watch at the new server now (Phase 1c) — only on a host
-		// change, so per-keystroke path edits don't thrash the connection.
-		if hostChanged {
-			restartBackendSync()
-		}
-	})
-	onServerToken := uic.UseEvent(func(v string) {
-		serverToken.Set(v)
-		p := prefsAtom.Get()
-		p.ServerToken = strings.TrimSpace(v)
-		savePrefs(p)
-	})
-	cloudPrice := uistate.T("settings.cloudPriceAnnual")
-	if billingInterval.Get() == "monthly" {
-		cloudPrice = uistate.T("settings.cloudPriceMonthly")
-	}
-	cloudSelected := prefs.ServerMode(serverMode.Get()) == prefs.ServerCloud
-	authDiscovery := backendauth.Discovery{
-		AuthMode:      serverAuthMode.Get(),
-		AuthProviders: strings.Split(serverAuthProviders.Get(), ","),
-	}.Normalize()
-	oauthProviders := authDiscovery.OAuthProvidersOrFallback(nil)
-	showTokenAuth := authDiscovery.UsesToken()
-	showGoogleOAuth := containsString(oauthProviders, "google")
-	showGitHubOAuth := containsString(oauthProviders, "github")
-	uploadKey := uic.UseEvent(func() {
-		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), aiKey.Get(), func() {
-			lsSet("cashflux:cloud-ai-key-set", "1")
-			keySet.Set(true)
-			notify(uistate.T("settings.serverKeyStored"), false)
-		}, func(msg string) {
-			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	removeKey := uic.UseEvent(func() {
-		removeOpenAIKeyFromBackend(serverURL.Get(), serverToken.Get(), func() {
-			lsSet("cashflux:cloud-ai-key-set", "")
-			keySet.Set(false)
-			notify(uistate.T("settings.serverKeyRemoved"), false)
-		}, func(msg string) {
-			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	testBackend := uic.UseEvent(func() {
-		testBackendConnection(serverURL.Get(), serverToken.Get(), func(discovery backendauth.Discovery) {
-			discovery = discovery.Normalize()
-			serverAuthMode.Set(discovery.AuthMode)
-			serverAuthProviders.Set(strings.Join(discovery.AuthProviders, ","))
-			notify(uistate.T("settings.serverTestOK", discovery.AuthMode), false)
-		}, func(msg string) {
-			notify(uistate.T("settings.serverTestFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	startCheckout := uic.UseEvent(func() {
-		startBillingCheckout(serverURL.Get(), serverToken.Get(), billingInterval.Get(), billingProvider.Get(), func(msg string) {
-			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	openPortal := uic.UseEvent(func() {
-		openBillingPortal(serverURL.Get(), serverToken.Get(), func(msg string) {
-			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	signInGoogle := uic.UseEvent(func() {
-		startOAuthLogin(serverURL.Get(), "google", saveOAuthSession, func(msg string) {
-			notify(uistate.T("settings.oauthFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	signInGitHub := uic.UseEvent(func() {
-		startOAuthLogin(serverURL.Get(), "github", saveOAuthSession, func(msg string) {
-			notify(uistate.T("settings.oauthFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	signOut := uic.UseEvent(func() {
-		p := prefsAtom.Get()
-		signOutBackendOAuth(serverURL.Get(), p.ServerToken, p.ServerCSRF, func() {
-			p.ServerToken = ""
-			p.ServerCSRF = ""
-			savePrefs(p)
-			serverToken.Set("")
-			notify(uistate.T("settings.oauthSignedOut"), false)
-		})
-	})
-	syncNow := uic.UseEvent(func() {
-		requestBackendSyncNow()
-		notify(uistate.T("settings.syncRequested"), false)
-	})
-	// C309: restore / discard a local edit that lost an LWW conflict.
-	activeWsID := loadRegistry().ActiveID
-	restoreConflict := uic.UseEvent(func() {
-		if restoreConflictBackup(activeWsID) {
-			notify(uistate.T("sync.conflictRestored"), false)
-		}
-		bump()
-	})
-	discardConflict := uic.UseEvent(func() {
-		clearConflictBackup(activeWsID)
-		notify(uistate.T("sync.conflictDiscarded"), false)
-		bump()
-	})
 
 	// Freshness window editor: per-type day inputs writing Settings.FreshnessOverrides.
 	setFreshness := func(typeKey string, days int) {
@@ -1232,38 +1053,6 @@ func globalSettingsForm() uic.Node {
 		BaseURL:        baseURLState.Get(),
 		OnBaseURL:      onBaseURL,
 
-		BackendOn:         backendOn.Get(),
-		OnBackendToggle:   onBackendToggle,
-		ServerMode:        serverMode.Get(),
-		OnServerMode:      onServerMode,
-		ServerURL:         serverURL.Get(),
-		OnServerURL:       onServerURL,
-		ServerToken:       serverToken.Get(),
-		OnServerToken:     onServerToken,
-		CloudSelected:     cloudSelected,
-		AuthDiscovery:     authDiscovery,
-		ShowTokenAuth:     showTokenAuth,
-		ShowGoogleOAuth:   showGoogleOAuth,
-		ShowGitHubOAuth:   showGitHubOAuth,
-		OnSignInGoogle:    signInGoogle,
-		OnSignInGitHub:    signInGitHub,
-		OnSignOut:         signOut,
-		OnTestBackend:     testBackend,
-		OnSyncNow:         syncNow,
-		HasConflictBackup: hasConflictBackup(activeWsID),
-		OnRestoreConflict: restoreConflict,
-		OnDiscardConflict: discardConflict,
-		OnUploadKey:       uploadKey,
-		KeySet:            keySet.Get(),
-		OnRemoveKey:       removeKey,
-		BillingInterval:   billingInterval.Get(),
-		OnBillingInterval: func(v string) { billingInterval.Set(v) },
-		BillingProvider:   billingProvider.Get(),
-		OnBillingProvider: func(v string) { billingProvider.Set(v) },
-		CloudPrice:        cloudPrice,
-		OnStartCheckout:   startCheckout,
-		OnOpenPortal:      openPortal,
-
 		OnExportJSON: func() { exportJSON(notify) },
 		OnExportCSV:  func() { exportCSV(notify) },
 		// AC16: confirm before generating — the pack lists account names and balances,
@@ -1365,7 +1154,7 @@ func globalSettingsForm() uic.Node {
 	case "ai":
 		pane = settingsAIPane(rightProps)
 	case "cloud":
-		pane = settingsCloudPane(rightProps)
+		pane = settingsCloudPane()
 	case "data":
 		pane = settingsDataPane(rightProps)
 	case "advanced":

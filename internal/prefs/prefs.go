@@ -68,6 +68,19 @@ const (
 	ServerSelfHosted ServerMode = "self-hosted"
 )
 
+// ConnectionSegment refines ServerSelfHosted into how the address was found:
+// "local" auto-detects a same-origin backend (your own infrastructure, with a
+// manual fallback for unusual URLs like subdomains); "remote" always requires
+// a manually-typed address and is framed with a trust disclosure since it may
+// point at someone else's server. Meaningless when ServerMode is ServerCloud.
+type ConnectionSegment string
+
+// The two ServerSelfHosted flavors.
+const (
+	ConnectionLocal  ConnectionSegment = "local"
+	ConnectionRemote ConnectionSegment = "remote"
+)
+
 // defaultAccent is the out-of-the-box accent color: a seagreen that clears WCAG
 // AA for UI/large elements (3:1) against BOTH the dark and light theme surfaces
 // (dark 4.09:1, light 3.63:1), unlike the original lighter mint #54b884 which
@@ -104,6 +117,10 @@ type Prefs struct {
 	ServerURL     string     `json:"serverUrl,omitempty"`
 	ServerToken   string     `json:"serverToken,omitempty"`
 	ServerCSRF    string     `json:"serverCsrf,omitempty"`
+	// ConnectionSegment only applies when ServerMode is ServerSelfHosted — see
+	// its doc comment. Empty (e.g. prefs saved before this field existed)
+	// normalizes to ConnectionLocal.
+	ConnectionSegment ConnectionSegment `json:"connectionSegment,omitempty"`
 	// Motion controls animated-flourish intensity for the WONDER system. The
 	// wasm layer writes this as the data-wonder attribute on <html>, which the
 	// CSS WONDER tokens key off. Defaults to MotionFull.
@@ -220,7 +237,7 @@ func (p Prefs) BackendActive() bool {
 // fully local — matching the About page's "Cloud sync is off by default" promise;
 // the saved ServerURL is only a prefill for when the user opts in.
 func Default() Prefs {
-	return Prefs{WeekStart: WeekSunday, DateStyle: DateLong, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, Motion: MotionFull, BackendDisabled: true}
+	return Prefs{WeekStart: WeekSunday, DateStyle: DateLong, Theme: ThemeDark, Accent: defaultAccent, Scale: ScaleDefault, ServerMode: ServerSelfHosted, ServerURL: DefaultServerURL, ConnectionSegment: ConnectionLocal, Motion: MotionFull, BackendDisabled: true}
 }
 
 // Normalize fills any blank or unrecognized field with its default, so partial or
@@ -248,6 +265,11 @@ func (p Prefs) Normalize() Prefs {
 	case ServerCloud, ServerSelfHosted:
 	default:
 		p.ServerMode = ServerSelfHosted
+	}
+	switch p.ConnectionSegment {
+	case ConnectionLocal, ConnectionRemote:
+	default:
+		p.ConnectionSegment = ConnectionLocal
 	}
 	if p.ServerURL == "" {
 		p.ServerURL = DefaultServerURL

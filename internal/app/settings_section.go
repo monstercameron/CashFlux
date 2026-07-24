@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
-	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -118,36 +117,8 @@ type settingsRightProps struct {
 	// AG18 — OpenAI-compatible base-URL override (Ollama/LM Studio/proxy).
 	BaseURL   string
 	OnBaseURL uic.Handler // UseEvent
-	// Cloud & server
-	BackendOn         bool
-	OnBackendToggle   func(bool)
-	ServerMode        string
-	OnServerMode      func(string)
-	ServerURL         string
-	OnServerURL       uic.Handler // UseEvent
-	ServerToken       string
-	OnServerToken     uic.Handler // UseEvent
-	CloudSelected     bool
-	AuthDiscovery     backendauth.Discovery
-	ShowTokenAuth     bool
-	ShowGoogleOAuth   bool
-	ShowGitHubOAuth   bool
-	OnSignInGoogle    uic.Handler // UseEvent
-	OnSignInGitHub    uic.Handler // UseEvent
-	OnSignOut         uic.Handler // UseEvent
-	OnTestBackend     uic.Handler // UseEvent
-	OnSyncNow         uic.Handler // UseEvent
-	HasConflictBackup bool        // C309: a local edit lost an LWW conflict and is recoverable
-	OnRestoreConflict uic.Handler // UseEvent
-	OnDiscardConflict uic.Handler // UseEvent
-	OnUploadKey       uic.Handler // UseEvent
-	BillingInterval   string
-	OnBillingInterval func(string)
-	BillingProvider   string
-	OnBillingProvider func(string)
-	CloudPrice        string
-	OnStartCheckout   uic.Handler // UseEvent
-	OnOpenPortal      uic.Handler // UseEvent
+	// Cloud & server: owned entirely by CloudConnectionPane (cloudtab.go) now —
+	// see settingsCloudPane's doc comment.
 	// Data
 	OnExportJSON    func()
 	OnExportCSV     func()
@@ -349,136 +320,14 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 	)
 }
 
-// settingsCloudPane renders the Cloud tab: backend connection, auth, sync,
-// conflict recovery, and the subscription surface. Pure rendering helper.
-func settingsCloudPane(p settingsRightProps) uic.Node {
-	status := loadSyncStatus()
-	return Div(
-		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
-		// C304: framing line — communicates this section as the subscription/connection
-		// surface (sync + backup + bundled AI, self-host option), not raw infrastructure.
-		// Placed immediately after the heading so the user's first question ("what is this
-		// for?") is answered before they see any controls.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudSectionIntro")),
-		// C291: always-visible data-disclosure — what leaves the device when sync is on
-		// vs. off. Shown before the toggle so the user sees the trade-off before acting.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudDataDisclosure")),
-		// C300: persistent price teaser — shown when the user is not yet subscribed to
-		// Cloud so the plan cost is discoverable in Settings without relying on the
-		// one-shot UpgradeSheet. Omitted once authenticated (ServerToken set) to avoid
-		// showing a subscribe pitch to an existing subscriber.
-		If(p.CloudSelected && strings.TrimSpace(p.ServerToken) == "",
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1),
-				uistate.T("settings.cloudPricingTeaser", p.CloudPrice),
-			),
-		),
-		// Clear on/off for all backend connections (sync + AI proxy). Off by intent
-		// keeps the app fully local even with a server saved, so an unreachable
-		// backend never throws websocket errors the user can't dismiss.
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.backendToggle"), On: p.BackendOn, OnChange: p.OnBackendToggle}),
-		If(!p.BackendOn, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendOffHint"))),
-		If(p.BackendOn, Fragment(
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("settings.serverMode"),
-				Options: []ui.SegOption{
-					{Value: string(prefs.ServerCloud), Label: uistate.T("settings.serverModeCloud")},
-					{Value: string(prefs.ServerSelfHosted), Label: uistate.T("settings.serverModeSelf")},
-				},
-				Selected: p.ServerMode,
-				OnSelect: p.OnServerMode,
-			}),
-			Input(css.Class("set-input", tw.Mt045), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")), Placeholder(defaultBackendURL), Value(p.ServerURL), OnInput(p.OnServerURL)),
-			If(p.ShowTokenAuth, Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.backendToken")), Placeholder(uistate.T("settings.backendToken")), Value(p.ServerToken), OnInput(p.OnServerToken))),
-		)),
-		If(p.CloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.backendNote"))),
-		If(!p.CloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.selfHostedNote"))),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.authMode", p.AuthDiscovery.AuthMode)),
-		P(css.Class(tw.Text12, tw.Mt1, IfElseValue(status.State != "error", tw.TextFaint, tw.TextDanger)), uistate.T("settings.syncStatus", syncStatusLabel())),
-		// The specific reason behind a non-happy status (e.g. "backend unavailable")
-		// was previously only readable in a hover tooltip on the topbar SyncChip —
-		// nowhere in Settings itself. Surface it here, always visible, right under
-		// the status line it explains, in the same alarm color on a real error —
-		// TextFaint made a genuine failure blend into routine captions.
-		If(status.Message != "", P(css.Class(tw.Text12, tw.Mt045, IfElseValue(status.State != "error", tw.TextFaint, tw.TextDanger)), Attr("data-testid", "settings-sync-status-detail"),
-			uistate.T("sync.statusDetail", status.Message))),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
-			If(p.ShowGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGoogle), uistate.T("settings.signInGoogle"))),
-			If(p.ShowGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGitHub), uistate.T("settings.signInGitHub"))),
-			// "Sign out" implies an active session — misleading once the server has
-			// explicitly rejected the saved token (status.AuthFailed). Same action
-			// (OnSignOut just clears the saved credential either way), honest label.
-			If(strings.TrimSpace(p.ServerToken) != "" && !status.AuthFailed, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignOut), uistate.T("settings.signOut"))),
-			If(strings.TrimSpace(p.ServerToken) != "" && status.AuthFailed, Button(css.Class("btn"), Type("button"), Attr("data-testid", "settings-clear-invalid-token"), OnClick(p.OnSignOut), uistate.T("settings.clearInvalidToken"))),
-			// Test/Sync/Upload each open a real connection to the saved server URL, so
-			// they only appear while the backend is switched on — otherwise clicking
-			// them fires a network request the "Backend off — fully local" copy just
-			// promised wouldn't happen.
-			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnTestBackend), uistate.T("settings.testBackend"))),
-			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnSyncNow), uistate.T("settings.syncNow"))),
-			If(p.BackendOn, Button(css.Class("btn"), Type("button"), OnClick(p.OnUploadKey), uistate.T("settings.uploadKey"))),
-			A(css.Class("btn"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
-		),
-		// C309: recoverable conflict backup — when a local edit lost an LWW conflict
-		// (server had newer changes), offer to restore the saved local copy or discard
-		// the backup, so the change is never silently lost.
-		If(p.HasConflictBackup, Div(css.Class("conflict-restore", tw.Flex, tw.FlexCol, tw.Gap1, tw.Mt2, tw.Px3, tw.Py2, tw.Rounded4, tw.BorderL),
-			Attr("role", "status"), Attr("data-testid", "sync-conflict-restore"),
-			P(css.Class(tw.Text12, tw.TextDim), uistate.T("sync.restoreConflictHint")),
-			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
-				Button(css.Class("btn", "btn-sm", "btn-primary"), Type("button"), OnClick(p.OnRestoreConflict), uistate.T("sync.restoreConflict")),
-				Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(p.OnDiscardConflict), uistate.T("sync.discardConflict")),
-			),
-		)),
-		// Cloud AI-key status: "Key set" + Remove, shown once a key has been uploaded (§7.11).
-		If(p.KeySet, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
-			Span(css.Class(tw.Text12, tw.TextDim), uistate.T("settings.serverKeySet")),
-			Button(css.Class("btn", "btn-sm", "btn-del"), Type("button"), OnClick(p.OnRemoveKey), uistate.T("settings.removeKey")),
-		)),
-		// Signed-in devices list + per-device revoke (§7.11) — shown once authenticated.
-		If(strings.TrimSpace(p.ServerToken) != "", uic.CreateElement(DevicesList)),
-		If(p.CloudSelected, Fragment(
-			// C302: discoverable manage/cancel/downgrade surface — shown whenever the
-			// user is authenticated with the cloud backend, so a subscriber can always
-			// find the billing portal without hunting through the checkout UI.
-			If(strings.TrimSpace(p.ServerToken) != "", Fragment(
-				H4(css.Class("set-label"), uistate.T("settings.manageSubTitle")),
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.manageSubHint")),
-				Button(css.Class("btn", tw.Mt045), Type("button"),
-					Attr("data-testid", "manage-subscription"),
-					OnClick(p.OnOpenPortal),
-					uistate.T("settings.manageSub"),
-				),
-			)),
-			H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
-			Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), p.CloudPrice),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrialNote")),
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("settings.cloudPlanBilling"),
-				Options: []ui.SegOption{
-					{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
-					{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
-				},
-				Selected: p.BillingInterval,
-				OnSelect: p.OnBillingInterval,
-			}),
-			// Pay with Stripe (card) or PayPal. If the backend hasn't configured the
-			// chosen provider, checkout returns a clear "not configured" error.
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("settings.cloudPayWith"),
-				Options: []ui.SegOption{
-					{Value: "stripe", Label: uistate.T("settings.cloudPayStripe")},
-					{Value: "paypal", Label: uistate.T("settings.cloudPayPayPal")},
-				},
-				Selected: p.BillingProvider,
-				OnSelect: p.OnBillingProvider,
-			}),
-			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
-				Button(css.Class("btn btn-primary"), Type("button"), OnClick(p.OnStartCheckout), uistate.T("settings.cloudSubscribe")),
-			),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
-		)),
-	)
+// settingsCloudPane renders the Cloud tab. It is a thin wrapper around
+// CloudConnectionPane (cloudtab.go) — a self-contained component like
+// PasswordAuthCard/DeviceLinkCard, not a props-driven pane — since the old
+// /sync page and this tab used to be two independently-drifted
+// implementations of the same "connect a backend" feature (2026-07-24
+// unification). Takes no props: every field here is the pane's own concern.
+func settingsCloudPane() uic.Node {
+	return uic.CreateElement(CloudConnectionPane)
 }
 
 // settingsDataPane renders the Data tab: export/import/backup actions, the

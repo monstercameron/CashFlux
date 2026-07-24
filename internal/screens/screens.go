@@ -102,7 +102,6 @@ func All() []Route {
 		{Path: "/activity", Label: "nav.activity", Title: "nav.activity", Subtitle: "screen.activitySub", Phase: 2, Group: GroupTools, SubGroup: SubGroupData, View: Activity},
 
 		// SYSTEM — household configuration and app meta.
-		{Path: "/sync", Label: "nav.sync", Title: "sync.pageTitle", Subtitle: "screen.syncSub", Phase: 3, Group: GroupSystem, View: SyncScreen},
 		{Path: "/settings", Label: "nav.settings", Title: "nav.settings", Subtitle: "screen.settingsSub", Phase: 1, Group: GroupSystem, View: SettingsScreen},
 		{Path: "/help", Label: "nav.help", Title: "nav.help", Subtitle: "screen.helpSub", Phase: 1, Group: GroupSystem, View: HelpScreen},
 		{Path: "/about", Label: "nav.about", Title: "nav.about", Subtitle: "screen.aboutSub", Phase: 1, Group: GroupSystem, View: About},
@@ -137,6 +136,10 @@ func All() []Route {
 		// R31-plans: Plans comparison surface — reachable via the upgrade sheet, cloud
 		// mention, and direct navigation.
 		{Path: "/plans", Title: "plans.pageTitle", Subtitle: "plans.pageSub", Phase: 1, View: Plans},
+		// /sync is now just a redirect to /settings/cloud (2026-07-24 unification) —
+		// kept off the rail (Settings owns the nav slot) but still routable so old
+		// bookmarks and links land somewhere instead of 404ing.
+		{Path: "/sync", Title: "sync.pageTitle", Subtitle: "screen.syncSub", Phase: 3, View: SyncScreen},
 	}
 }
 

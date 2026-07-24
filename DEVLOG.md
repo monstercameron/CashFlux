@@ -1,3 +1,61 @@
+## 2026-07-24 — Unifying /sync and Settings → Cloud, and a Local/Remote/Commercial picker
+
+Third task off the approved plan: Cam's "for the sync and cloud pages they are the same!" — they'd
+drifted into two independent implementations of "connect a backend." `/sync` got a capability-aware
+rewrite two nights ago (probe same-origin, detect what the server actually supports, prefer
+password/pairing sign-in); Settings → Cloud never got that treatment and was still the plain
+address+bearer-token field Cam called "dogshit." Fixing the drift meant picking one implementation and
+deleting the other, not patching both in parallel again.
+
+Moved `SyncPage`'s logic wholesale into a new `CloudConnectionPane` (`cloudtab.go`), used by the Cloud
+tab; `/sync` became `SyncRedirect` — navigates to `/settings/cloud` on mount, renders nothing, kept
+only so old links/bookmarks don't 404 (moved off the nav rail into the off-rail registry section,
+matching how `/appearance`, `/setup`, etc. are already handled there).
+
+The bigger design decision was `settingsRightProps`: the OLD Cloud pane was prop-driven — the parent
+`globalSettingsForm` owned `serverURL`/`serverToken`/`serverMode`/`backendOn`/discovery state and
+~20 handler closures, threading them down as props. `SyncPage` was already self-contained (owned its
+own hooks, no props), same shape as `PasswordAuthCard`/`DeviceLinkCard`. Rather than retrofit the
+self-contained component into the prop-driven shape, went the other way: deleted ~140 lines of dead
+Cloud state/handlers from `globalSettingsForm` and ~30 fields from `settingsRightProps`, so
+`settingsCloudPane` is now a one-line wrapper (`uic.CreateElement(CloudConnectionPane)`). Confirmed
+nothing else in `settings.go` read that state before deleting it — it existed solely to feed the one
+pane.
+
+Cam's spec for the merged connection UI: "local has automatic using same origin assumptions, remote is
+manual connection... for local we have automatic with safe assumptions or a manual mode for weird
+URLS such as subdomains." Read as three distinct trust postures, not just three ways to fill in the
+same address field: **Local** (your own infra, auto-detected, manual fallback for subdomains),
+**Remote** (always manual, explicit "you're trusting a third party" disclosure), **Commercial**
+(CashFlux Cloud — skips discovery entirely, since a paid backend's capabilities are known, not
+probed). Added `prefs.ConnectionSegment` as a new additive field (empty string normalizes to `local`,
+same pattern as every other `Normalize()`-repaired field) rather than overloading `ServerMode`, which
+still just distinguishes Cloud from self-hosted — Local/Remote are both self-hosted, differing only in
+UI posture (`manualAddressOpen`'s starting value and whether same-origin probing ever runs).
+
+One decision explicitly deferred rather than guessed at: "Commercial" still shows an editable server-
+address field. There's no fixed, hardcoded CashFlux Cloud domain anywhere in this codebase today (it's
+not a launched SaaS yet) — inventing one would have silently misrouted anyone who picks that segment.
+Kept behavior identical to today's actual Cloud mode (still points at whatever `ServerURL` is
+configured) and only changed the framing/copy; a real fixed endpoint is a future ticket, not something
+to fabricate here.
+
+Two testing snags, both from the SAME root cause as Task 2's `ContentKey` lesson: `#main[data-route]`
+never varies by tab (deliberately — that's what makes rail highlighting stable across tab switches),
+so `nav(app, "/settings/cloud")` hangs forever waiting for a `data-route` that will never appear.
+Fixed `sync.spec.mjs` to `nav(app, "/settings")` then click the Cloud tab button, matching the pattern
+`interactions.spec.mjs`'s existing Settings tests already use. Second snag: the "backend off" hint text
+changed from `settings.backendOffHint`'s "Backend off — the app stays fully local..." (what
+`interactions.spec.mjs` asserts) to `SyncPage`'s old `sync.offHint` phrasing when the logic merged —
+caught by the existing Settings Cloud interactions test, fixed by keeping the established
+`settings.backendOffHint` string instead of introducing a second phrasing for the same fact.
+
+`coverage.spec.mjs` (the interactive-control ratchet) failed on this run with a large drift list —
+none of it (transactions/accounts/budgets/goals/notifications/reports/recurring/etc.) mentions
+sync/cloud/settings at all, confirming it's accumulated drift from concurrent unrelated work on this
+multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
+don't `UPDATE_COVERAGE` for someone else's in-flight feature).
+
 ## 2026-07-24 — Settings tabs get real URLs, and two sharp GoWebComponents lessons along the way
 
 Second task off the approved sync/settings-unification plan: `/settings` → `/settings/:tab`, so a tab

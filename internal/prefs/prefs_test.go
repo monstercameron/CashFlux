@@ -113,12 +113,15 @@ func TestNormalize(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("bad values should normalize to default, got %+v", got)
 	}
-	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true, Scale: 110, ServerMode: ServerCloud, ServerURL: "http://127.0.0.1:8081", ServerToken: "dev-token", Motion: MotionSubtle}
+	keep := Prefs{WeekStart: WeekMonday, DateStyle: DateLong, Theme: ThemeLight, Accent: "#abc", Compact: true, Scale: 110, ServerMode: ServerCloud, ServerURL: "http://127.0.0.1:8081", ServerToken: "dev-token", ConnectionSegment: ConnectionRemote, Motion: MotionSubtle}
 	if !reflect.DeepEqual(keep.Normalize(), keep) {
 		t.Errorf("valid values should be preserved, got %+v", keep.Normalize())
 	}
 	if got := (Prefs{ServerMode: ServerMode("other")}).Normalize().ServerMode; got != ServerSelfHosted {
 		t.Errorf("invalid server mode should default to self-hosted, got %q", got)
+	}
+	if got := (Prefs{ConnectionSegment: ConnectionSegment("other")}).Normalize().ConnectionSegment; got != ConnectionLocal {
+		t.Errorf("invalid connection segment should default to local, got %q", got)
 	}
 }
 

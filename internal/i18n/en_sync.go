@@ -8,7 +8,6 @@ package i18n
 // Test/Sync buttons, server mode) reuse the existing settings.* keys so the two
 // surfaces read identically.
 var syncPageKeys = Catalog{
-	"nav.sync":           "Sync",
 	"screen.syncSub":     "Connect a backend to sync your data across devices",
 	"sync.pageTitle":     "Sync & backup",
 	"sync.intro":         "Connect CashFlux to a backend server to keep your data in sync across your devices. This is optional and local-first — turn it off and the app runs entirely on this device, with nothing uploaded.",
@@ -35,6 +34,19 @@ var syncPageKeys = Catalog{
 	"sync.tokenFieldPrimary":   "This server uses a fixed access token — paste it below.",
 	"sync.advancedTokenToggle": "Paste an access token instead",
 	"sync.otherWaysHeading":    "Other ways to sign in",
+
+	// Local/Remote/Commercial segments (2026-07-24 unification): one connection
+	// surface instead of a plain Cloud/Self-hosted toggle, since "your own server
+	// at a known address," "someone else's server," and "CashFlux's paid service"
+	// are different trust postures, not just different URLs.
+	"sync.segmentLabel":          "Where's this server?",
+	"sync.segmentLocal":          "Local",
+	"sync.segmentRemote":         "Remote",
+	"sync.segmentCommercial":     "CashFlux Cloud",
+	"sync.segmentLocalHint":      "Your own server, running alongside this app or on your network. CashFlux tries to find it automatically.",
+	"sync.segmentRemoteHint":     "A server somewhere else — yours or someone else's. Type its address; nothing is auto-detected.",
+	"sync.segmentCommercialHint": "CashFlux's own hosted, subscription-based service. No server to run yourself.",
+	"sync.remoteTrustDisclosure": "You're connecting to a server you don't run yourself. Once you sign in, everything you sync — transactions, balances, everything — is visible to whoever operates it. Only continue if you trust them.",
 }
 
 func init() {
