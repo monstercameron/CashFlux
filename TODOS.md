@@ -6145,3 +6145,56 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   record. `coverage.spec.mjs`'s ratchet failed on this run but its drift list (transactions, budgets,
   goals, notifications, reports, recurring, etc.) never mentions sync/cloud/settings — confirmed
   unrelated, accumulated drift from concurrent work on this multi-writer tree, not regenerated here.
+- [x] **C454 [MAJOR][SYNC] Admin-approved device-pairing bootstrap — server side.** Cam: "I want the
+  portfolio to list the active clients so I can click a pair button so it becomes authorized, the
+  client sees the pairing code and the user can accept or reject the pairing request... the one time
+  pairing code should have forced the creation of the account and subsequent usage the user only
+  needs to login." This ticket is the server half; client UI (C458) and the portfolio admin console
+  (C459) are separate, later commits.
+
+  New `pending_devices` table + store CRUD (`MintPendingDevice`/`GetPendingDevice`/
+  `ListPendingDevices`/`ApprovePendingDevice`/`RejectPendingDevice`) — deliberately a table distinct
+  from `pairing_codes`, which models a different, LATER step (an already-trusted account minting a
+  code for a device it already trusts); `pending_devices` is earlier in the trust chain, before any
+  account is involved at all. New `AuthService` RPCs: `RequestDevicePairing` (unauthenticated, a
+  `devicePairingLimiter`/`devicePairingGlobalLimiter` pair shaped exactly like
+  `pairingLimiter`/`pairingGlobalLimiter` guards `RedeemPairingCode` — the threat here isn't guessing
+  a secret, it's an attacker rotating device labels to spam rows into the table and flood the admin's
+  approve/reject queue), `WatchPairingStatus` (a one-shot streaming RPC — new private
+  `authServiceServer` interface split from the exported `AuthServiceServer`, mirroring
+  `syncServiceServer`/`SyncServiceServer` in `sync_grpc.go` — delivers exactly one
+  approved/rejected/expired event via a 1-second poll loop, deliberately not a pub/sub broadcaster:
+  this is a rare, human-paced flow, not the high-fanout low-latency shape
+  `SyncService.subscribeWorkspaces` exists for), `CancelDevicePairing` (unauthenticated — possession
+  of the unguessable device id `RequestDevicePairing` returned is the only credential needed, so the
+  requesting device can withdraw its own request, e.g. if the pushed pairing code doesn't match what
+  the admin console shows), and `SetPassword` (authenticated-only).
+
+  `SetPassword` surfaced a real bug the plan had only partly anticipated: `CreateLocalUser` derives a
+  DETERMINISTIC row id from the username (`"local:"+username`), and the old `GetLocalUserByUsername`
+  looked up by computing that same id — fine for `Register`'s own flow, but it means a naive
+  `SetPassword` built on `CreateLocalUser` would never actually attach anything to a token-mode
+  (`"token:..."`) or OAuth (`"google:..."`) session's real row — it would silently mint a THIRD,
+  disconnected account, the exact class of bug the plan flagged `Register` itself as unsafe for here,
+  one layer deeper. Fixed by decoupling login lookup from row id entirely: new `users.username`
+  column (partial-unique index, same pattern as the existing `phone_number` column, backfilled from
+  `subject` for every pre-existing `local:`-id account), `GetLocalUserByUsername` now queries
+  `WHERE username = ?` instead of deriving an id, and new `Store.SetLocalCredentials` does an
+  `UPDATE ... WHERE id = ?` — never an `INSERT` — so the row it touches is picked by the CALLING
+  session's own id, full stop. `SetPassword` lazily materializes that row first via a new shared
+  `ensureUserRow` (extracted from `SyncService.ensureUser`, now used by both) for a token-mode
+  session with no row yet. `TestAuthServerSetPasswordAttachesToCallingSessionNotANewAccount` pins the
+  property down directly: asserts the new username resolves back to the CALLING session's id, and
+  that no second `local:<username>` account was created — the test that would have caught the naive
+  version.
+
+  Portfolio-embedded `pairingOnlyAuthServer` now re-enables `Login` (its own doc comment said it was
+  blocked "only until SetPassword ships" — it just shipped); `Register` (open self-signup) stays
+  permanently disabled there — every account still originates from admin approval.
+
+  17 new tests: store-level mint/approve/reject/one-shot/expiry (`pendingdevice_test.go`), RPC-level
+  rate-limiting, the `SetPassword` auth-boundary properties above, username-collision/short-password
+  rejection, and the full `WatchPairingStatus` approve/reject/unknown-device paths driven through a
+  new `fakePairingWatchStream` (`authservice_pairingdevice_test.go`). Regenerated the
+  `.proto`/`pb.go` contract mirror via `buf generate`; `proto_contract_test.go` passes. Verified via
+  full native `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build`.

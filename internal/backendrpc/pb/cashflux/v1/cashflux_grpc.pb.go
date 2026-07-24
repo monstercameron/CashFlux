@@ -576,14 +576,18 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Enroll_FullMethodName            = "/cashflux.v1.AuthService/Enroll"
-	AuthService_RedeemPairingCode_FullMethodName = "/cashflux.v1.AuthService/RedeemPairingCode"
-	AuthService_Register_FullMethodName          = "/cashflux.v1.AuthService/Register"
-	AuthService_Login_FullMethodName             = "/cashflux.v1.AuthService/Login"
-	AuthService_RefreshToken_FullMethodName      = "/cashflux.v1.AuthService/RefreshToken"
-	AuthService_Logout_FullMethodName            = "/cashflux.v1.AuthService/Logout"
-	AuthService_ListDevices_FullMethodName       = "/cashflux.v1.AuthService/ListDevices"
-	AuthService_RevokeDevice_FullMethodName      = "/cashflux.v1.AuthService/RevokeDevice"
+	AuthService_Enroll_FullMethodName               = "/cashflux.v1.AuthService/Enroll"
+	AuthService_RedeemPairingCode_FullMethodName    = "/cashflux.v1.AuthService/RedeemPairingCode"
+	AuthService_Register_FullMethodName             = "/cashflux.v1.AuthService/Register"
+	AuthService_Login_FullMethodName                = "/cashflux.v1.AuthService/Login"
+	AuthService_RefreshToken_FullMethodName         = "/cashflux.v1.AuthService/RefreshToken"
+	AuthService_Logout_FullMethodName               = "/cashflux.v1.AuthService/Logout"
+	AuthService_ListDevices_FullMethodName          = "/cashflux.v1.AuthService/ListDevices"
+	AuthService_RevokeDevice_FullMethodName         = "/cashflux.v1.AuthService/RevokeDevice"
+	AuthService_RequestDevicePairing_FullMethodName = "/cashflux.v1.AuthService/RequestDevicePairing"
+	AuthService_WatchPairingStatus_FullMethodName   = "/cashflux.v1.AuthService/WatchPairingStatus"
+	AuthService_CancelDevicePairing_FullMethodName  = "/cashflux.v1.AuthService/CancelDevicePairing"
+	AuthService_SetPassword_FullMethodName          = "/cashflux.v1.AuthService/SetPassword"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -598,6 +602,10 @@ type AuthServiceClient interface {
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*LogoutResponse, error)
 	ListDevices(ctx context.Context, in *ListDevicesRequest, opts ...grpc.CallOption) (*ListDevicesResponse, error)
 	RevokeDevice(ctx context.Context, in *RevokeDeviceRequest, opts ...grpc.CallOption) (*RevokeDeviceResponse, error)
+	RequestDevicePairing(ctx context.Context, in *RequestDevicePairingRequest, opts ...grpc.CallOption) (*RequestDevicePairingResponse, error)
+	WatchPairingStatus(ctx context.Context, in *WatchPairingStatusRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PairingStatusEvent], error)
+	CancelDevicePairing(ctx context.Context, in *CancelDevicePairingRequest, opts ...grpc.CallOption) (*CancelDevicePairingResponse, error)
+	SetPassword(ctx context.Context, in *SetPasswordRequest, opts ...grpc.CallOption) (*SetPasswordResponse, error)
 }
 
 type authServiceClient struct {
@@ -688,6 +696,55 @@ func (c *authServiceClient) RevokeDevice(ctx context.Context, in *RevokeDeviceRe
 	return out, nil
 }
 
+func (c *authServiceClient) RequestDevicePairing(ctx context.Context, in *RequestDevicePairingRequest, opts ...grpc.CallOption) (*RequestDevicePairingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestDevicePairingResponse)
+	err := c.cc.Invoke(ctx, AuthService_RequestDevicePairing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) WatchPairingStatus(ctx context.Context, in *WatchPairingStatusRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PairingStatusEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AuthService_ServiceDesc.Streams[0], AuthService_WatchPairingStatus_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchPairingStatusRequest, PairingStatusEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AuthService_WatchPairingStatusClient = grpc.ServerStreamingClient[PairingStatusEvent]
+
+func (c *authServiceClient) CancelDevicePairing(ctx context.Context, in *CancelDevicePairingRequest, opts ...grpc.CallOption) (*CancelDevicePairingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelDevicePairingResponse)
+	err := c.cc.Invoke(ctx, AuthService_CancelDevicePairing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) SetPassword(ctx context.Context, in *SetPasswordRequest, opts ...grpc.CallOption) (*SetPasswordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetPasswordResponse)
+	err := c.cc.Invoke(ctx, AuthService_SetPassword_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -700,6 +757,10 @@ type AuthServiceServer interface {
 	Logout(context.Context, *LogoutRequest) (*LogoutResponse, error)
 	ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error)
 	RevokeDevice(context.Context, *RevokeDeviceRequest) (*RevokeDeviceResponse, error)
+	RequestDevicePairing(context.Context, *RequestDevicePairingRequest) (*RequestDevicePairingResponse, error)
+	WatchPairingStatus(*WatchPairingStatusRequest, grpc.ServerStreamingServer[PairingStatusEvent]) error
+	CancelDevicePairing(context.Context, *CancelDevicePairingRequest) (*CancelDevicePairingResponse, error)
+	SetPassword(context.Context, *SetPasswordRequest) (*SetPasswordResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -733,6 +794,18 @@ func (UnimplementedAuthServiceServer) ListDevices(context.Context, *ListDevicesR
 }
 func (UnimplementedAuthServiceServer) RevokeDevice(context.Context, *RevokeDeviceRequest) (*RevokeDeviceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RevokeDevice not implemented")
+}
+func (UnimplementedAuthServiceServer) RequestDevicePairing(context.Context, *RequestDevicePairingRequest) (*RequestDevicePairingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestDevicePairing not implemented")
+}
+func (UnimplementedAuthServiceServer) WatchPairingStatus(*WatchPairingStatusRequest, grpc.ServerStreamingServer[PairingStatusEvent]) error {
+	return status.Errorf(codes.Unimplemented, "method WatchPairingStatus not implemented")
+}
+func (UnimplementedAuthServiceServer) CancelDevicePairing(context.Context, *CancelDevicePairingRequest) (*CancelDevicePairingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelDevicePairing not implemented")
+}
+func (UnimplementedAuthServiceServer) SetPassword(context.Context, *SetPasswordRequest) (*SetPasswordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetPassword not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -899,6 +972,71 @@ func _AuthService_RevokeDevice_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_RequestDevicePairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestDevicePairingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RequestDevicePairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RequestDevicePairing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RequestDevicePairing(ctx, req.(*RequestDevicePairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_WatchPairingStatus_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchPairingStatusRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AuthServiceServer).WatchPairingStatus(m, &grpc.GenericServerStream[WatchPairingStatusRequest, PairingStatusEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AuthService_WatchPairingStatusServer = grpc.ServerStreamingServer[PairingStatusEvent]
+
+func _AuthService_CancelDevicePairing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelDevicePairingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CancelDevicePairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_CancelDevicePairing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).CancelDevicePairing(ctx, req.(*CancelDevicePairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_SetPassword_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPasswordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_SetPassword_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).SetPassword(ctx, req.(*SetPasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -938,8 +1076,26 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RevokeDevice",
 			Handler:    _AuthService_RevokeDevice_Handler,
 		},
+		{
+			MethodName: "RequestDevicePairing",
+			Handler:    _AuthService_RequestDevicePairing_Handler,
+		},
+		{
+			MethodName: "CancelDevicePairing",
+			Handler:    _AuthService_CancelDevicePairing_Handler,
+		},
+		{
+			MethodName: "SetPassword",
+			Handler:    _AuthService_SetPassword_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WatchPairingStatus",
+			Handler:       _AuthService_WatchPairingStatus_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "cashflux/v1/cashflux.proto",
 }
 

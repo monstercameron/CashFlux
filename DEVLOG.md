@@ -56,6 +56,64 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — Admin-approved device pairing, server side: the SetPassword bug the plan called out
+
+Fourth task off the approved plan, and the one with the sharpest correctness trap: `SetPassword`
+must attach a username/password to whatever account the caller's CURRENT session already belongs
+to, never mint a new one. Register can't be reused for this — its own doc comment says why: it
+never checks caller auth state, so calling it post-pairing would silently create a second,
+disconnected account instead of attaching credentials to the session pairing just granted.
+
+Building it surfaced a real architectural fork I hadn't fully appreciated when the plan was
+written. `CreateLocalUser` derives a DETERMINISTIC row id from the username (`id :=
+"local:"+username`), and `GetLocalUserByUsername` looks up by computing that same id and checking
+`WHERE id = ?`. That's fine for Register's own flow (brand-new account, id and username chosen
+together) — but it means Login can only ever find an account whose id happens to be
+`"local:"+username`. A token-mode session's id looks like `"token:abc123"`; an OAuth session's
+looks like `"google:xyz"`. If SetPassword just called `CreateLocalUser`, it wouldn't attach
+anything to the caller's actual row — it would create a THIRD, totally disconnected account nobody
+asked for, the exact bug the plan flagged as a risk to design around, just one layer deeper than I'd
+first modeled it.
+
+Fix: decouple the login lookup from the row id entirely. Added `users.username` (a new column,
+partial-unique like the existing `phone_number` pattern — `CREATE UNIQUE INDEX ... WHERE username
+!= ''`), backfilled from `subject` for every existing `local:`-id account (Register already sets
+`subject = username`, so this is a lossless backfill, not a guess). `GetLocalUserByUsername`
+now queries `WHERE username = ?` instead of computing an id — works for ANY row regardless of how
+it originated. New `Store.SetLocalCredentials(userID, username, passwordHash)` does an `UPDATE ...
+WHERE id = ?` (never an `INSERT`) — the row it touches is picked by the CALLER's session id, full
+stop. `SetPassword` lazily materializes that row first via a new shared `ensureUserRow` (extracted
+from `SyncService.ensureUser`, now used by both) since a token-mode session's row may not exist
+yet — the exact same "materialize on first real use" pattern sync writes already relied on.
+
+Wrote a test specifically to pin this property down, not just exercise the happy path:
+`TestAuthServerSetPasswordAttachesToCallingSessionNotANewAccount` calls `SetPassword` from a
+`token:abc123` session, then asserts (a) `GetLocalUserByUsername` resolves the new username back
+to `token:abc123` — not some fresh id — and (b) `local:cam` was never created at all. That second
+assertion is the one that would have caught the bug if I'd shipped the naive `CreateLocalUser`-based
+version.
+
+`WatchPairingStatus` (the streaming RPC a waiting device holds open until an admin approves/rejects)
+deliberately polls the store on a 1-second ticker instead of building a pub/sub broadcaster like
+`SyncService.subscribeWorkspaces` — that machinery exists for a fundamentally different traffic
+shape (many watchers, low-latency delivery). This is a rare, human-paced flow: someone has to
+notice a row in an admin console and click a button. A poll interval a human can't perceive is
+far simpler than a subscription registry sized for the wrong problem — noted this reasoning
+directly in the code so a future reader doesn't "fix" it into unneeded complexity.
+
+Followed the sync/pairing-code streaming pattern exactly (`syncServiceServer`'s split from
+`SyncServiceServer` in `sync_grpc.go`): `AuthServiceServer` stays the exported, unary-only
+interface everything else references; a new private `authServiceServer` interface adds
+`WatchPairingStatusRPC` and is what `RegisterAuthServiceServer` actually takes. Had to widen
+`pairingOnlyAuthServer`'s embedded field from `AuthServiceServer` to `authServiceServer` for it to
+keep satisfying the registration call — a good reminder that Go interface embedding only promotes
+what the embedded INTERFACE declares, not what the concrete value underneath happens to implement.
+
+While in there: re-enabled `Login` on the portfolio-embedded `pairingOnlyAuthServer` — its own doc
+comment said it was blocked "only until SetPassword ships." It just shipped. `Register` (open
+self-signup) stays blocked permanently — that deployment's whole model is admin-approved accounts
+only, which `RequestDevicePairing` + the (not-yet-built) admin console now IS the door for.
+
 ## 2026-07-24 — Settings tabs get real URLs, and two sharp GoWebComponents lessons along the way
 
 Second task off the approved sync/settings-unification plan: `/settings` → `/settings/:tab`, so a tab

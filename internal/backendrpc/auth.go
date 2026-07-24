@@ -15,6 +15,15 @@ const (
 	MethodAuthLogout            = "/cashflux.v1.AuthService/Logout"
 	MethodAuthListDevices       = "/cashflux.v1.AuthService/ListDevices"
 	MethodAuthRevokeDevice      = "/cashflux.v1.AuthService/RevokeDevice"
+
+	// Admin-approved device pairing bootstrap (2026-07-24 unification): a
+	// device with no working credentials requests pairing, an admin approves
+	// it from the portfolio console, and the device exchanges the resulting
+	// pairing code for a session then sets a password — see TODOS.md C454.
+	MethodAuthRequestDevicePairing = "/cashflux.v1.AuthService/RequestDevicePairing"
+	MethodAuthWatchPairingStatus   = "/cashflux.v1.AuthService/WatchPairingStatus"
+	MethodAuthCancelDevicePairing  = "/cashflux.v1.AuthService/CancelDevicePairing"
+	MethodAuthSetPassword          = "/cashflux.v1.AuthService/SetPassword"
 )
 
 // EnrollRequest starts a brand-new, never-before-seen device/account pairing.
@@ -102,3 +111,59 @@ type RevokeDeviceRequest struct {
 type RevokeDeviceResponse struct {
 	Revoked bool `json:"revoked"`
 }
+
+// RequestDevicePairingRequest starts a pending device-pairing request: an
+// unauthenticated device asks to be paired, and waits for an admin to
+// approve or reject it via WatchPairingStatus (TODOS.md C454).
+type RequestDevicePairingRequest struct {
+	DeviceLabel string `json:"deviceLabel,omitempty"`
+}
+
+// RequestDevicePairingResponse carries the opaque device id the caller
+// watches (WatchPairingStatus) and can cancel (CancelDevicePairing).
+// Possession of this id is the only credential this flow requires — it is
+// never guessable and never displayed to anyone but the requesting device.
+type RequestDevicePairingResponse struct {
+	DeviceID string `json:"deviceId"`
+}
+
+// WatchPairingStatusRequest opens a one-shot watch on a pending device
+// request: the stream delivers exactly one PairingStatusEvent (approved,
+// rejected, or expired) and then closes.
+type WatchPairingStatusRequest struct {
+	DeviceID string `json:"deviceId"`
+}
+
+// PairingStatusEvent is the single event WatchPairingStatus's stream
+// delivers before closing.
+type PairingStatusEvent struct {
+	// Status is one of "approved", "rejected", or "expired".
+	Status string `json:"status"`
+	// PairingCode is set only when Status is "approved" — the caller
+	// exchanges it via RedeemPairingCode for a real session.
+	PairingCode string `json:"pairingCode,omitempty"`
+}
+
+// CancelDevicePairingRequest lets the requesting device withdraw its own
+// pending request (e.g. the user declines, or the displayed pairing code
+// doesn't match what the admin console shows).
+type CancelDevicePairingRequest struct {
+	DeviceID string `json:"deviceId"`
+}
+
+// CancelDevicePairingResponse reports whether a pending request was canceled.
+type CancelDevicePairingResponse struct {
+	Canceled bool `json:"canceled"`
+}
+
+// SetPasswordRequest attaches a username/password to the CALLER's own
+// authenticated session (AuthUserFromContext) — never a new account.
+// Authenticated-only; see authServer.SetPassword's doc comment for why this
+// is a distinct RPC from Register.
+type SetPasswordRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// SetPasswordResponse is empty — success is the absence of an error.
+type SetPasswordResponse struct{}

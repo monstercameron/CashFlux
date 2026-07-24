@@ -6,6 +6,34 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Server-side plumbing for the admin-approved device-pairing bootstrap (TODOS.md C454).**
+  New `pending_devices` table + store CRUD (`MintPendingDevice`/`GetPendingDevice`/
+  `ListPendingDevices`/`ApprovePendingDevice`/`RejectPendingDevice`) tracks a device's pairing
+  request from "asked to be paired" through admin approve/reject, independent of `pairing_codes`
+  (which models a DIFFERENT, later step — an already-trusted account minting a code for a new
+  device). New `AuthService` RPCs: `RequestDevicePairing` (unauthenticated, two-limiter
+  rate-limited like `RedeemPairingCode`, mints a `pending_devices` row and returns an unguessable
+  device id), `WatchPairingStatus` (a one-shot streaming RPC — hand-rolled `grpc.ServiceDesc.Streams`
+  entry mirroring `WatchWorkspaces`, but polling rather than pub/sub since this is a rare,
+  human-paced flow) that delivers exactly one approved/rejected/expired event then closes,
+  `CancelDevicePairing` (lets the requesting device withdraw its own pending request —
+  unauthenticated, possession of the unguessable device id is the only credential needed), and
+  `SetPassword` (authenticated-only, attaches a username/password to the CALLER's own session —
+  never creates a new account the way `Register` would, which is exactly why it's a distinct RPC).
+  `users` gains a `username` column (partial-unique index, backfilled from `subject` for existing
+  `local:`-id accounts) so `GetLocalUserByUsername`/`SetPassword` can key off it directly instead
+  of deriving a row id from the username — the only way credentials can attach to an account that
+  didn't originate from the `Register` flow (token-mode, OAuth, or pairing-redeemed). The
+  portfolio-embedded deployment's `pairingOnlyAuthServer` now re-enables `Login` (previously
+  blocked "until SetPassword ships," per its own doc comment) — `Register` (open self-signup)
+  stays permanently disabled there; every account still originates from admin approval.
+  17 new tests (store-level mint/approve/reject/one-shot/expiry, RPC-level rate-limiting, the
+  auth-boundary property that `SetPassword` attaches to the calling session and never spawns a
+  second account, username-collision/short-password rejection, and the full watch-stream happy
+  path). Regenerated the `.proto`/`pb.go` contract mirror via `buf generate`. Verified via full
+  native `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build`.
+
 ### Changed
 - **`/sync` and Settings → Cloud unified into one implementation, with a new Local/Remote/
   Commercial connection picker replacing the old raw-bearer-token-first Cloud/Self-hosted toggle.**

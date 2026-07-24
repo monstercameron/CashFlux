@@ -297,16 +297,31 @@ func (s *SyncService) ensureUser(user AuthUser) error {
 	if s == nil || s.store == nil {
 		return status.Error(codes.FailedPrecondition, "sync service store is not configured")
 	}
+	return ensureUserRow(s.store, user)
+}
+
+// ensureUserRow lazily materializes a users row for user if one doesn't
+// already exist. Token-mode identity (see authUserFromToken) is synthesized
+// purely in-memory per request — nothing writes a users row for it until
+// something needs one to actually exist, which is exactly what a foreign-
+// key-shaped reference (a sync workspace owner, TODOS.md C454's SetPassword
+// attaching credentials to a session) requires. Shared by SyncService.ensureUser
+// (the original caller) and authServer.SetPassword — both need the identical
+// "materialize if missing, otherwise leave whatever's there alone" behavior.
+func ensureUserRow(store *Store, user AuthUser) error {
+	if store == nil || store.db == nil {
+		return status.Error(codes.FailedPrecondition, "store is not configured")
+	}
 	var existing string
-	err := s.store.db.QueryRow(`SELECT id FROM users WHERE id = ?`, user.ID).Scan(&existing)
+	err := store.db.QueryRow(`SELECT id FROM users WHERE id = ?`, user.ID).Scan(&existing)
 	if err == nil {
 		return nil
 	}
 	if err != sql.ErrNoRows {
-		return fmt.Errorf("server sync: find user: %w", err)
+		return fmt.Errorf("server store: find user: %w", err)
 	}
-	if err := s.store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID, CreatedAt: time.Now().UTC()}); err != nil {
-		return fmt.Errorf("server sync: upsert user: %w", err)
+	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID, CreatedAt: time.Now().UTC()}); err != nil {
+		return fmt.Errorf("server store: upsert user: %w", err)
 	}
 	return nil
 }

@@ -22,10 +22,10 @@ import (
 // GoGRPCBridge tunnel that SyncService/AIService already use (see
 // sync_grpc.go/ai_grpc.go) — a real protobuf wire format is a later,
 // deliberately separate step (TODOS.md C428).
-func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
+func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv authServiceServer) {
 	s.RegisterService(&grpc.ServiceDesc{
 		ServiceName: "cashflux.v1.AuthService",
-		HandlerType: (*AuthServiceServer)(nil),
+		HandlerType: (*authServiceServer)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "Enroll", Handler: authEnrollHandler},
 			{MethodName: "RedeemPairingCode", Handler: authRedeemPairingCodeHandler},
@@ -35,6 +35,12 @@ func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
 			{MethodName: "Logout", Handler: authLogoutHandler},
 			{MethodName: "ListDevices", Handler: authListDevicesHandler},
 			{MethodName: "RevokeDevice", Handler: authRevokeDeviceHandler},
+			{MethodName: "RequestDevicePairing", Handler: authRequestDevicePairingHandler},
+			{MethodName: "CancelDevicePairing", Handler: authCancelDevicePairingHandler},
+			{MethodName: "SetPassword", Handler: authSetPasswordHandler},
+		},
+		Streams: []grpc.StreamDesc{
+			{StreamName: "WatchPairingStatus", Handler: authWatchPairingStatusHandler, ServerStreams: true},
 		},
 		Metadata: "cashflux/v1/cashflux.proto",
 	}, srv)
@@ -53,6 +59,19 @@ type AuthServiceServer interface {
 	Logout(context.Context, backendrpc.LogoutRequest) (backendrpc.LogoutResponse, error)
 	ListDevices(context.Context, backendrpc.ListDevicesRequest) (backendrpc.ListDevicesResponse, error)
 	RevokeDevice(context.Context, backendrpc.RevokeDeviceRequest) (backendrpc.RevokeDeviceResponse, error)
+	RequestDevicePairing(context.Context, backendrpc.RequestDevicePairingRequest) (backendrpc.RequestDevicePairingResponse, error)
+	CancelDevicePairing(context.Context, backendrpc.CancelDevicePairingRequest) (backendrpc.CancelDevicePairingResponse, error)
+	SetPassword(context.Context, backendrpc.SetPasswordRequest) (backendrpc.SetPasswordResponse, error)
+}
+
+// authServiceServer adds the one streaming AuthService method
+// (WatchPairingStatus) beyond the unary-only AuthServiceServer — the same
+// split syncServiceServer uses beyond SyncServiceServer (see sync_grpc.go),
+// needed because grpc.ServiceDesc.Streams handlers take a raw grpc.ServerStream,
+// not the (context.Context, request)-shaped unary signature.
+type authServiceServer interface {
+	AuthServiceServer
+	WatchPairingStatusRPC(backendrpc.WatchPairingStatusRequest, grpc.ServerStream) error
 }
 
 // authServer implements AuthServiceServer. cfg is required (not just store)
@@ -101,6 +120,18 @@ type authServer struct {
 	// pairingGlobalLimiter's doc comment above for the full rationale; the
 	// same trade-off (one server-wide guess budget) applies here.
 	registerGlobalLimiter *fixedWindowLimiter
+
+	// devicePairingLimiter/devicePairingGlobalLimiter guard
+	// RequestDevicePairing the same shape as pairingLimiter/
+	// pairingGlobalLimiter guard RedeemPairingCode, but against a different
+	// threat: this door doesn't let a caller guess an existing secret, it
+	// lets them MINT a pending_devices row for free — an attacker rotating
+	// DeviceLabel could otherwise spam unbounded rows into the table
+	// (storage exhaustion, and a flooded admin approve/reject queue burying
+	// the real request). The global backstop closes that label-rotation
+	// bypass exactly like pairingGlobalLimiter's doc comment explains.
+	devicePairingLimiter       *fixedWindowLimiter
+	devicePairingGlobalLimiter *fixedWindowLimiter
 }
 
 // pairingGlobalLimiterKey is the single, constant bucket key
@@ -111,6 +142,10 @@ const pairingGlobalLimiterKey = "redeem-pairing-code:global"
 // registerGlobalLimiterKey is registerGlobalLimiter's constant bucket key —
 // see pairingGlobalLimiterKey.
 const registerGlobalLimiterKey = "register:global"
+
+// devicePairingGlobalLimiterKey is devicePairingGlobalLimiter's constant
+// bucket key — see pairingGlobalLimiterKey.
+const devicePairingGlobalLimiterKey = "request-device-pairing:global"
 
 // loginLimitPerMinute/registerLimitPerMinute/pairingLimitPerMinute cap
 // attempts against the guessable-secret doors (password, pairing code) per
@@ -139,17 +174,26 @@ const (
 	// time, not the deployment unbounded CPU no matter how many device labels
 	// they rotate through.
 	registerGlobalLimitPerMinute = 30
+
+	// devicePairingLimitPerMinute/devicePairingGlobalLimitPerMinute cap
+	// RequestDevicePairing the same shape as pairingLimitPerMinute/
+	// pairingGlobalLimitPerMinute cap RedeemPairingCode — see
+	// authServer.devicePairingLimiter's doc comment.
+	devicePairingLimitPerMinute       = 10
+	devicePairingGlobalLimitPerMinute = 30
 )
 
 func newAuthService(store *Store, cfg Config) *authServer {
 	return &authServer{
-		store:                 store,
-		cfg:                   cfg,
-		loginLimiter:          newFixedWindowLimiter(loginLimitPerMinute),
-		registerLimiter:       newFixedWindowLimiter(registerLimitPerMinute),
-		pairingLimiter:        newFixedWindowLimiter(pairingLimitPerMinute),
-		pairingGlobalLimiter:  newFixedWindowLimiter(pairingGlobalLimitPerMinute),
-		registerGlobalLimiter: newFixedWindowLimiter(registerGlobalLimitPerMinute),
+		store:                      store,
+		cfg:                        cfg,
+		loginLimiter:               newFixedWindowLimiter(loginLimitPerMinute),
+		registerLimiter:            newFixedWindowLimiter(registerLimitPerMinute),
+		pairingLimiter:             newFixedWindowLimiter(pairingLimitPerMinute),
+		pairingGlobalLimiter:       newFixedWindowLimiter(pairingGlobalLimitPerMinute),
+		registerGlobalLimiter:      newFixedWindowLimiter(registerGlobalLimitPerMinute),
+		devicePairingLimiter:       newFixedWindowLimiter(devicePairingLimitPerMinute),
+		devicePairingGlobalLimiter: newFixedWindowLimiter(devicePairingGlobalLimitPerMinute),
 	}
 }
 
@@ -416,6 +460,167 @@ func (s *authServer) Login(ctx context.Context, req backendrpc.LoginRequest) (ba
 		}
 	}
 	return out, nil
+}
+
+// RequestDevicePairing starts the admin-approved device-pairing bootstrap
+// (TODOS.md C454): an unauthenticated device — with no working credentials
+// yet — asks to be paired, and gets back an opaque id to watch
+// (WatchPairingStatus) or cancel (CancelDevicePairing). No account exists or
+// is created here; this is entirely BEFORE the account layer.
+func (s *authServer) RequestDevicePairing(ctx context.Context, req backendrpc.RequestDevicePairingRequest) (backendrpc.RequestDevicePairingResponse, error) {
+	if s == nil || s.store == nil {
+		return backendrpc.RequestDevicePairingResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
+	}
+	label := strings.TrimSpace(req.DeviceLabel)
+	if label == "" {
+		label = "unlabeled-device"
+	}
+	if len(label) > maxUsernameLength {
+		return backendrpc.RequestDevicePairingResponse{}, status.Errorf(codes.InvalidArgument, "device label must be at most %d characters", maxUsernameLength)
+	}
+	now := time.Now().UTC()
+	if !s.devicePairingLimiter.allow(label, now) || !s.devicePairingGlobalLimiter.allow(devicePairingGlobalLimiterKey, now) {
+		return backendrpc.RequestDevicePairingResponse{}, status.Error(codes.ResourceExhausted, "too many pairing requests — try again in a minute")
+	}
+	deviceID, _, err := s.store.MintPendingDevice(label, now)
+	if err != nil {
+		return backendrpc.RequestDevicePairingResponse{}, status.Error(codes.Internal, "pending device request failed")
+	}
+	return backendrpc.RequestDevicePairingResponse{DeviceID: deviceID}, nil
+}
+
+// WatchPairingStatusRPC streams exactly one PairingStatusEvent for a pending
+// device request, then closes (TODOS.md C454) — a one-shot watch, not a
+// resumable subscription: the device is expected to hold this stream open
+// for the lifetime of one "waiting for approval" screen, matching the
+// product decision that a pending request doesn't survive a page reload.
+// Deliberately polls the store on a short interval rather than a pub/sub
+// broadcast (contrast SyncService.subscribeWorkspaces, a high-fanout,
+// low-latency path): this is a rare, human-paced flow (someone has to
+// notice and click Approve on an admin screen), where a poll interval
+// imperceptible to a human is far simpler than a subscription registry
+// built for a fundamentally different traffic shape.
+func (s *authServer) WatchPairingStatusRPC(req backendrpc.WatchPairingStatusRequest, stream grpc.ServerStream) error {
+	if s == nil || s.store == nil {
+		return status.Error(codes.FailedPrecondition, "store is not configured")
+	}
+	deviceID := strings.TrimSpace(req.DeviceID)
+	if deviceID == "" {
+		return status.Error(codes.InvalidArgument, "device id is required")
+	}
+	const pollInterval = time.Second
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-ticker.C:
+			pd, ok, err := s.store.GetPendingDevice(deviceID)
+			if err != nil {
+				return status.Error(codes.Internal, "pending device lookup failed")
+			}
+			if !ok {
+				return status.Error(codes.NotFound, "pending device request not found")
+			}
+			if pd.Status == PendingDeviceStatusPending {
+				if time.Now().UTC().Before(pd.ExpiresAt) {
+					continue
+				}
+				_ = stream.SendMsg(&backendrpc.PairingStatusEvent{Status: "expired"})
+				return nil
+			}
+			ev := backendrpc.PairingStatusEvent{Status: pd.Status}
+			if pd.Status == PendingDeviceStatusApproved {
+				ev.PairingCode = pd.PairingCode
+			}
+			if err := stream.SendMsg(&ev); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+}
+
+// CancelDevicePairing lets the requesting device withdraw its own pending
+// request (TODOS.md C454) — e.g. the user changed their mind, or the pairing
+// code WatchPairingStatus pushed doesn't match what the admin console shows
+// (a plausible sign of a mismatched or spoofed request, worth killing
+// immediately rather than leaving outstanding). Unauthenticated by design:
+// possession of deviceID (an unguessable id only ever returned to the
+// requesting device itself — see pendingDeviceIDBytes) is the only
+// credential this needs, the same trust model RequestDevicePairing already
+// established. Succeeds identically whether the ADMIN or the DEVICE rejects
+// a request — both share RejectPendingDevice.
+func (s *authServer) CancelDevicePairing(ctx context.Context, req backendrpc.CancelDevicePairingRequest) (backendrpc.CancelDevicePairingResponse, error) {
+	if s == nil || s.store == nil {
+		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
+	}
+	deviceID := strings.TrimSpace(req.DeviceID)
+	if deviceID == "" {
+		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.InvalidArgument, "device id is required")
+	}
+	canceled, err := s.store.RejectPendingDevice(deviceID)
+	if err != nil {
+		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.Internal, "cancel pending device failed")
+	}
+	return backendrpc.CancelDevicePairingResponse{Canceled: canceled}, nil
+}
+
+// SetPassword attaches a username/password to the CALLER's own authenticated
+// session (AuthUserFromContext) — never a new account (TODOS.md C454). This
+// is the second half of the pairing bootstrap: RedeemPairingCode establishes
+// a session for whatever account the pairing code was minted against, and
+// SetPassword is how that session, on its first visit, turns into a normal
+// username/password login for every subsequent visit.
+//
+// Deliberately a distinct RPC from Register, not a reuse of it: Register
+// (see its doc comment) never checks caller auth state and always mints a
+// BRAND-NEW account — calling it after RedeemPairingCode would silently
+// create a second, disconnected account instead of attaching credentials to
+// the one pairing just granted. The caller's user row is lazily
+// materialized first (ensureUserRow — see its doc comment) since a
+// token-mode session's row may not exist yet.
+func (s *authServer) SetPassword(ctx context.Context, req backendrpc.SetPasswordRequest) (backendrpc.SetPasswordResponse, error) {
+	user, ok := AuthUserFromContext(ctx)
+	if !ok || strings.TrimSpace(user.ID) == "" {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Unauthenticated, "authenticated user is required")
+	}
+	if s == nil || s.store == nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
+	}
+	username := strings.TrimSpace(req.Username)
+	if username == "" || req.Password == "" {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.InvalidArgument, "username and password are required")
+	}
+	if len(username) > maxUsernameLength {
+		return backendrpc.SetPasswordResponse{}, status.Errorf(codes.InvalidArgument, "username must be at most %d characters", maxUsernameLength)
+	}
+	if len(req.Password) < minLocalPasswordLength {
+		return backendrpc.SetPasswordResponse{}, status.Errorf(codes.InvalidArgument, "password must be at least %d characters", minLocalPasswordLength)
+	}
+	// Authenticated already (AuthUserFromContext above resolved a valid
+	// session), so no separate rate limiter — unlike Register/Login/
+	// RequestDevicePairing, this door cannot be hit by an unauthenticated
+	// attacker at all.
+	if err := ensureUserRow(s.store, user); err != nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "password hashing failed")
+	}
+	if err := s.store.SetLocalCredentials(user.ID, username, string(passwordHash)); err != nil {
+		if errors.Is(err, ErrUsernameTaken) {
+			return backendrpc.SetPasswordResponse{}, status.Error(codes.AlreadyExists, "username is already registered")
+		}
+		if errors.Is(err, ErrUserNotFound) {
+			return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "account lookup failed")
+		}
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "set password failed")
+	}
+	s.auditActor(ctx, user.ID, "auth.password.set", "user", user.ID)
+	return backendrpc.SetPasswordResponse{}, nil
 }
 
 // minLocalPasswordLength is the minimum password length Register accepts.
@@ -736,4 +941,57 @@ func authRevokeDeviceHandler(srv any, ctx context.Context, dec func(any) error, 
 		return srv.(AuthServiceServer).RevokeDevice(ctx, req.(backendrpc.RevokeDeviceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func authRequestDevicePairingHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	var in backendrpc.RequestDevicePairingRequest
+	if err := dec(&in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RequestDevicePairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthRequestDevicePairing}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(AuthServiceServer).RequestDevicePairing(ctx, req.(backendrpc.RequestDevicePairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func authCancelDevicePairingHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	var in backendrpc.CancelDevicePairingRequest
+	if err := dec(&in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).CancelDevicePairing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthCancelDevicePairing}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(AuthServiceServer).CancelDevicePairing(ctx, req.(backendrpc.CancelDevicePairingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func authSetPasswordHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	var in backendrpc.SetPasswordRequest
+	if err := dec(&in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).SetPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthSetPassword}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(AuthServiceServer).SetPassword(ctx, req.(backendrpc.SetPasswordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func authWatchPairingStatusHandler(srv any, stream grpc.ServerStream) error {
+	var in backendrpc.WatchPairingStatusRequest
+	if err := stream.RecvMsg(&in); err != nil {
+		return err
+	}
+	return srv.(authServiceServer).WatchPairingStatusRPC(in, stream)
 }

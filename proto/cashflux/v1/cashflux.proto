@@ -217,6 +217,40 @@ message RevokeDeviceResponse {
   bool revoked = 1;
 }
 
+// --- Admin-approved device pairing bootstrap (2026-07-24 unification) ---
+
+message RequestDevicePairingRequest {
+  string device_label = 1;
+}
+
+message RequestDevicePairingResponse {
+  string device_id = 1;
+}
+
+message WatchPairingStatusRequest {
+  string device_id = 1;
+}
+
+message PairingStatusEvent {
+  string status = 1; // "approved" | "rejected" | "expired"
+  string pairing_code = 2; // set only when status == "approved"
+}
+
+message CancelDevicePairingRequest {
+  string device_id = 1;
+}
+
+message CancelDevicePairingResponse {
+  bool canceled = 1;
+}
+
+message SetPasswordRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message SetPasswordResponse {}
+
 service AuthService {
   rpc Enroll(EnrollRequest) returns (TokenPairResponse);
   rpc RedeemPairingCode(RedeemPairingCodeRequest) returns (TokenPairResponse);
@@ -226,6 +260,10 @@ service AuthService {
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
   rpc RevokeDevice(RevokeDeviceRequest) returns (RevokeDeviceResponse);
+  rpc RequestDevicePairing(RequestDevicePairingRequest) returns (RequestDevicePairingResponse);
+  rpc WatchPairingStatus(WatchPairingStatusRequest) returns (stream PairingStatusEvent);
+  rpc CancelDevicePairing(CancelDevicePairingRequest) returns (CancelDevicePairingResponse);
+  rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
 }
 
 // --- AccountService: entitlement read (TODOS.md C431) ---

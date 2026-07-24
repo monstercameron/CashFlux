@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 12
+const CurrentServerSchemaVersion = 13
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -246,6 +246,12 @@ func (s *Store) migrate() error {
 		}
 		version = 12
 	}
+	if version < 13 {
+		if err := s.migrateTo13(); err != nil {
+			return err
+		}
+		version = 13
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
 	}
@@ -453,6 +459,58 @@ CREATE TABLE IF NOT EXISTS invite_codes (
 );
 `); err != nil {
 		return fmt.Errorf("server store: migrate v12: %w", err)
+	}
+	return nil
+}
+
+// migrateTo13 adds the pending_devices table backing the admin-approved
+// device-pairing bootstrap (TODOS.md C454): an unauthenticated device asks to
+// be paired, an admin approves or rejects it from the portfolio console, and
+// on approval a pairing code is minted and attached to the row so
+// WatchPairingStatus can push it to the waiting device. A dedicated table
+// (rather than reusing pairing_codes) keeps the request's own lifecycle
+// (pending/approved/rejected, tied to a device-chosen label) independent of
+// the code itself, which pairing_codes already models for a DIFFERENT
+// purpose (an existing account minting a code for a device it already
+// trusts) — this table is earlier in the trust chain, before any account is
+// involved at all.
+//
+// It also adds users.username (TEXT, partial-unique like phone_number):
+// SetPassword needs to attach a login username/password to whatever account
+// the caller's session already belongs to (which may have originated from
+// token-mode, OAuth, or pairing — not necessarily the `local:` id scheme
+// CreateLocalUser's Register path uses), so login lookup must key off a
+// column decoupled from the row's id, not a deterministic id derived from
+// the username. GetLocalUserByUsername switches to this column; existing
+// `local:`-id rows backfill it from `subject` (Register already set
+// subject = username for those), so Login for accounts created before this
+// migration keeps working unchanged.
+func (s *Store) migrateTo13() error {
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS pending_devices (
+	device_id TEXT PRIMARY KEY,
+	label TEXT NOT NULL,
+	status TEXT NOT NULL,
+	pairing_code TEXT NOT NULL DEFAULT '',
+	requested_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_devices_status ON pending_devices(status);
+`); err != nil {
+		return fmt.Errorf("server store: migrate v13: %w", err)
+	}
+	if has, err := s.columnExists("users", "username"); err != nil {
+		return fmt.Errorf("server store: migrate v13: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v13: %w", err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE users SET username = subject WHERE provider = 'local' AND username = '';`); err != nil {
+		return fmt.Errorf("server store: migrate v13: backfill username: %w", err)
+	}
+	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username != '';`); err != nil {
+		return fmt.Errorf("server store: migrate v13: %w", err)
 	}
 	return nil
 }

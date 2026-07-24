@@ -44,9 +44,9 @@ func (s *Store) CreateLocalUser(username, passwordHash, recoveryCodeHash string,
 	id := localUserID(username)
 	now = now.UTC()
 	_, err := s.db.Exec(`
-INSERT INTO users(id, provider, subject, email, created_at, password_hash, recovery_code_hash)
-VALUES(?, 'local', ?, '', ?, ?, ?)`,
-		id, username, formatTime(now), passwordHash, recoveryCodeHash)
+INSERT INTO users(id, provider, subject, email, created_at, password_hash, recovery_code_hash, username)
+VALUES(?, 'local', ?, '', ?, ?, ?, ?)`,
+		id, username, formatTime(now), passwordHash, recoveryCodeHash, username)
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			return User{}, ErrUsernameTaken
@@ -56,10 +56,14 @@ VALUES(?, 'local', ?, '', ?, ?, ?)`,
 	return User{ID: id, Provider: "local", Subject: username, CreatedAt: now}, nil
 }
 
-// GetLocalUserByUsername looks up a username/password account and its bcrypt
-// password hash for Login (TODOS.md C422). ok is false if no such account
-// exists (including if the username was registered through a different
-// enrollment door and has no password set).
+// GetLocalUserByUsername looks up an account by its login username and its
+// bcrypt password hash for Login (TODOS.md C422). ok is false if no account
+// has that username set. Deliberately keyed off the username COLUMN rather
+// than deriving an id from username (as CreateLocalUser's `local:<username>`
+// id does): SetPassword (TODOS.md C454) attaches a username/password to
+// whatever account a session already belongs to — which may have originated
+// from token-mode, OAuth, or device pairing, none of which use the `local:`
+// id scheme — so the lookup must work for any provider, not just 'local'.
 func (s *Store) GetLocalUserByUsername(username string) (user User, passwordHash string, ok bool, err error) {
 	if s == nil || s.db == nil {
 		return User{}, "", false, fmt.Errorf("server store: not configured")
@@ -72,7 +76,7 @@ func (s *Store) GetLocalUserByUsername(username string) (user User, passwordHash
 	var created string
 	err = s.db.QueryRow(`
 SELECT id, provider, subject, email, created_at, password_hash
-FROM users WHERE id = ? AND provider = 'local'`, localUserID(username)).
+FROM users WHERE username = ?`, username).
 		Scan(&user.ID, &user.Provider, &user.Subject, &user.Email, &created, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) || strings.TrimSpace(passwordHash) == "" {
 		return User{}, "", false, nil
@@ -86,6 +90,47 @@ FROM users WHERE id = ? AND provider = 'local'`, localUserID(username)).
 	}
 	return user, passwordHash, true, nil
 }
+
+// SetLocalCredentials attaches a login username and bcrypt password hash to
+// an EXISTING user row (looked up by userID, never creating a new one) — the
+// store half of SetPassword's pairing-bootstrap contract (TODOS.md C454):
+// the account the caller is already signed in as gains a username/password,
+// it does not get a second, disconnected account the way calling
+// CreateLocalUser would. Fails with ErrUsernameTaken if another account
+// already owns that username, and with ErrUserNotFound if userID doesn't
+// exist (callers are expected to have already lazily materialized it — see
+// SyncService.ensureUser's doc comment for why that lazy-creation exists).
+func (s *Store) SetLocalCredentials(userID, username, passwordHash string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	username = strings.TrimSpace(username)
+	if userID == "" || username == "" || strings.TrimSpace(passwordHash) == "" {
+		return fmt.Errorf("server store: user id, username, and password hash are required")
+	}
+	defer s.observeDB("SetLocalCredentials", time.Now())
+	res, err := s.db.Exec(`UPDATE users SET username = ?, password_hash = ? WHERE id = ?`,
+		username, passwordHash, userID)
+	if err != nil {
+		if isUniqueConstraintErr(err) {
+			return ErrUsernameTaken
+		}
+		return fmt.Errorf("server store: set local credentials: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("server store: set local credentials: %w", err)
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
+}
+
+// ErrUserNotFound is returned by SetLocalCredentials when userID does not
+// name an existing users row.
+var ErrUserNotFound = errors.New("server store: user not found")
 
 // generateRecoveryCode returns a random, human-typeable one-time account
 // recovery code (TODOS.md C422) shown to the caller exactly once at

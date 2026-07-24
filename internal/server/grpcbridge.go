@@ -149,24 +149,19 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 }
 
 // pairingOnlyAuthServer wraps an AuthServiceServer and disables Register
-// (open username/password self-signup) and, for now, Login too:
-// NewSyncAndAuthBridgeHandler's embedding is a single-owner, invite-only
-// deployment with no password credential provisioned yet — that arrives with
-// the admin-approved device-pairing bootstrap (RedeemPairingCode followed by a
-// new SetPassword RPC, TODOS.md pending). Login stays disabled here only
-// until that bootstrap ships; Register (open self-signup) stays disabled
-// permanently for this embedding — every account creation must go through
-// admin approval.
+// (open username/password self-signup) permanently: NewSyncAndAuthBridgeHandler's
+// embedding is a single-owner, invite-only deployment — every account
+// creation must go through admin approval (RequestDevicePairing +
+// the admin console's approve action, TODOS.md C454), never open self-signup.
+// Login stays enabled: once a device completes the pairing bootstrap and
+// calls SetPassword, Login is exactly how every subsequent visit signs back
+// in — disabling it would make SetPassword pointless.
 type pairingOnlyAuthServer struct {
-	AuthServiceServer
+	authServiceServer
 }
 
 func (pairingOnlyAuthServer) Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error) {
 	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "open self-service enrollment is not available on this server")
-}
-
-func (pairingOnlyAuthServer) Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error) {
-	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "username/password sign-in is not available on this server")
 }
 
 // NewSyncAndAuthBridgeHandler builds a GoGRPCBridge WebSocket handler exposing
@@ -176,8 +171,8 @@ func (pairingOnlyAuthServer) Login(context.Context, backendrpc.LoginRequest) (ba
 // pairing, device sessions, artifact transfer) with NO billing/tier concept:
 // every enrolled account gets full access, gated only by admin approval at
 // account creation and by cfg's ordinary storage caps thereafter (see
-// pkg/embed.NewSyncAndAuthBridge). AuthService's Register/Login
-// (open username/password self-signup) are deliberately disabled — see
+// pkg/embed.NewSyncAndAuthBridge). AuthService's Register (open
+// username/password self-signup) is deliberately disabled — see
 // pairingOnlyAuthServer.
 //
 // The CloudEntitlement interceptors stay in the chain even though this
