@@ -6,6 +6,27 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Settings tabs are now real, bookmarkable URLs (`/settings/cloud`, `/settings/advanced`, …)
+  instead of a one-shot in-memory deep-link.** Registered `/settings/:tab` in `app.go` following the
+  same param-route pattern as `/p/:slug`; `globalSettingsForm` reads the active tab live from
+  `location.pathname` (`liveSettingsTab`, mirroring the existing `liveCustomPageSlug` pattern) instead
+  of consuming a one-shot `uistate.ConsumeRequestedSettingsTab()` var, which is now deleted along with
+  `OpenGlobalSettingsAt`'s old in-memory-var plumbing — it just navigates to `/settings/<tab>` now.
+  Bare `/settings` redirects to `/settings/household`.
+  Two framework subtleties surfaced and got fixed along the way: (1) a `UseEffect` closure captured
+  the tab variable *by reference*, so a later fallback reassignment in the same function silently
+  clobbered what the deferred effect saw — fixed by capturing a separate never-reassigned `rawTab`
+  before the fallback. (2) `ShellProps.ActivePath` doubles as the View subtree's reconciliation key
+  (`shell.go`), so keeping it constant across tabs (needed for correct Sidebar highlighting and the
+  `data-route` attribute) meant the settings body silently stopped re-rendering after the first tab
+  switch. Added a new, separate `ShellProps.ContentKey` field (falls back to `ActivePath` when unset,
+  so every other route is unaffected) that the `/settings/:tab` route varies per-tab while
+  `ActivePath` stays the constant `"/settings"`. Verified via a scratch Playwright check (sequential
+  tab switches, direct-load-at-a-tab, rail highlighting/`data-route` stability) and the full
+  `interactions.spec.mjs` regression run — the two Settings tests that this bug had been silently
+  breaking now pass, no new regressions.
+
 ### Removed
 - **Phone/SMS sign-in removed entirely (TODOS.md C453).** Twilio never signed up a single real user
   on the live deployment and costs real money per send — cut the whole path: `internal/twilio`,

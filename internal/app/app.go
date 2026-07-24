@@ -48,6 +48,31 @@ func liveCustomPageSlug() string {
 	return s
 }
 
+// liveSettingsTab reads the current settings tab from location.pathname at
+// render time, the same live-read pattern liveCustomPageSlug uses and for the
+// same reason: "/settings/:tab" is one registered route pattern shared by
+// every tab, so its View closure is the same function code-pointer for all of
+// them — the reconciler would otherwise treat navigating between two tabs as
+// "the same component" and never see the new value if it were captured once.
+// Returns "" for the bare "/settings" path (no tab segment) so the caller can
+// tell "redirect to a default tab" apart from "show tab X".
+func liveSettingsTab() string {
+	loc := js.Global().Get("location")
+	if !loc.Truthy() {
+		return ""
+	}
+	logical := uistate.LogicalPath(loc.Get("pathname").String())
+	const pfx = "/settings/"
+	if !strings.HasPrefix(logical, pfx) {
+		return ""
+	}
+	s := logical[len(pfx):]
+	if i := strings.IndexByte(s, '/'); i >= 0 {
+		s = s[:i]
+	}
+	return s
+}
+
 // Run initializes app state, builds the router, registers every screen wrapped
 // in the shell, mounts the app, and blocks the wasm runtime so the page stays
 // interactive.
@@ -168,6 +193,30 @@ func Run() {
 			// Read the slug live (not the captured `slug`) so navigating between two
 			// custom pages renders the right one — see liveCustomPageSlug.
 			View: func() ui.Node { return screens.CustomPage(liveCustomPageSlug()) },
+		})
+	})
+	// Settings tabs are real, bookmarkable URLs ("/settings/cloud", etc.) rather
+	// than a one-shot in-memory deep-link var: one pattern route, same reasoning
+	// as "/p/:slug" above — SettingsScreen reads the live tab itself
+	// (liveSettingsTab) rather than a captured param, for the identical reason.
+	// ActivePath stays the bare "/settings" (not "/settings/"+tab): Shell's
+	// WithKey call (shell.go) uses ActivePath as the View subtree's remount
+	// key, and Sidebar/TopBar use it for highlighting/breadcrumb — a constant
+	// value there keeps the rail correctly showing "Settings" active on every
+	// tab and avoids remounting the WHOLE chrome (not just the content) on
+	// every tab switch. ContentKey carries the PER-TAB key instead, so only
+	// the settings body itself remounts (confirmed live: without a
+	// tab-varying key somewhere, the URL updated on every click but the
+	// rendered content silently froze after the first tab switch — the
+	// reconciler needs a changed key to know the content actually changed).
+	r.Register(uistate.RoutePath("/settings/:tab"), func(attrs router.Attrs) *router.Element {
+		tab, _ := attrs["tab"].(string)
+		return ui.CreateElement(Shell, ShellProps{
+			Title:      uistate.T("nav.settings"),
+			Subtitle:   uistate.T("screen.settingsSub"),
+			ActivePath: "/settings",
+			ContentKey: "/settings/" + tab,
+			View:       func() ui.Node { return screens.SettingsScreen() },
 		})
 	})
 	// C290: /privacy is a natural URL (and share-crawler target) for the privacy

@@ -41,34 +41,25 @@ var (
 	settingsCaptured bool
 )
 
-// requestedSettingsTab is a one-shot deep-link target for the /settings page's
-// tab strip: OpenGlobalSettingsAt sets it, the settings form consumes it on
-// mount. Package-level (not an atom) because it must be writable from click
-// handlers and is only ever read once.
-var requestedSettingsTab string
-
-// OpenGlobalSettings navigates to the routed /settings page. Safe from click
-// handlers. This is still the ONE correct way to reach Settings from a screen:
-// Settings began as a flip modal with no route, and every "open settings"
-// affordance funnels through here so the entry point stays a single decision —
-// which is what made the modal→page switch a one-function change.
+// OpenGlobalSettings navigates to the routed /settings page (its default
+// tab). Safe from click handlers. This is still the ONE correct way to reach
+// Settings from a screen: every "open settings" affordance funnels through
+// here so the entry point stays a single decision.
 func OpenGlobalSettings() { OpenGlobalSettingsAt("") }
 
-// OpenGlobalSettingsAt navigates to /settings opened on the given tab
+// OpenGlobalSettingsAt navigates straight to the given settings tab's own URL
 // ("household", "prefs", "appearance", "alerts", "ai", "cloud", "data",
-// "advanced"); "" keeps the default. Callers that tell the user to do
-// something on a specific tab should land them on that tab.
+// "advanced"); "" goes to bare /settings, which itself redirects to the
+// default tab (see internal/app's liveSettingsTab). Each tab is a real,
+// bookmarkable route ("/settings/cloud") — this used to stash the target tab
+// in a one-shot package var for the settings form to consume on mount, before
+// tabs had their own URLs at all.
 func OpenGlobalSettingsAt(tab string) {
-	requestedSettingsTab = tab
-	NavigateTo("/settings")
-}
-
-// ConsumeRequestedSettingsTab returns the pending deep-link tab once, then
-// clears it, so a later plain /settings visit doesn't inherit a stale tab.
-func ConsumeRequestedSettingsTab() string {
-	t := requestedSettingsTab
-	requestedSettingsTab = ""
-	return t
+	if tab == "" {
+		NavigateTo("/settings")
+		return
+	}
+	NavigateTo("/settings/" + tab)
 }
 
 // Widget builds a target that opens a per-widget settings panel.

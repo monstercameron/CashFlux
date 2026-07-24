@@ -38,6 +38,26 @@ type ShellProps struct {
 	// change, freezing the highlight (regression covered by e2e/navigation.test.mjs).
 	ActivePath string
 	View       func() uic.Node
+	// ContentKey, when set, overrides ActivePath as the View subtree's remount
+	// key (see the WithKey call below) without affecting anything else that
+	// reads ActivePath (rail highlighting, the topbar title, data-route,
+	// scroll memory). Routes where several distinct URLs should share ONE
+	// chrome identity but still force the content itself to remount on every
+	// change — "/settings/:tab": every tab is still "Settings" for
+	// highlighting/breadcrumb purposes, but each tab's content must remount
+	// (WithKey is how "/p/:slug" avoids two custom pages sharing one stale
+	// render — same mechanism, just decoupled from the chrome identity here).
+	ContentKey string
+}
+
+// contentKeyOrActivePath returns props.ContentKey when set, else props.ActivePath —
+// the fallback that makes ContentKey opt-in: every route except "/settings/:tab"
+// leaves it empty and keeps today's one-key-per-route behavior unchanged.
+func contentKeyOrActivePath(props ShellProps) string {
+	if props.ContentKey != "" {
+		return props.ContentKey
+	}
+	return props.ActivePath
 }
 
 // sidebarProps carries the active route path so the rail re-renders and the
@@ -284,7 +304,7 @@ func Shell(props ShellProps) uic.Node {
 				// above each relevant page's content (additive — nothing renders
 				// until the user enables features that produce insights here).
 				screens.SmartStripForPath(props.ActivePath),
-				WithKey(uic.CreateElement(props.View), props.ActivePath)),
+				WithKey(uic.CreateElement(props.View), contentKeyOrActivePath(props))),
 		),
 		// Mobile bottom tab bar (L11): shown only at phone widths (CSS agent controls
 		// the breakpoint). The desktop left rail is unchanged — this is additive.

@@ -692,15 +692,30 @@ var hideableScreens = []struct{ LabelKey, Path string }{
 // and wiring data actions land in their own features).
 func globalSettingsForm() uic.Node {
 	aiOn := uic.UseState(false)
-	// The active settings tab. The panel was one dense two-column form with 14
-	// stacked sections and a jump-nav; tabs give each cluster its own room.
-	// A pending deep-link (OpenGlobalSettingsAt) picks the opening tab; the
-	// consume only matters on mount, which is exactly when UseState reads it.
-	initTab := uistate.ConsumeRequestedSettingsTab()
-	if initTab == "" {
-		initTab = "household"
+	// The active settings tab is a real URL segment ("/settings/cloud"), read
+	// live from location.pathname each render (liveSettingsTab) rather than
+	// captured once in UseState — this route pattern is shared by every tab,
+	// so the reconciler treats every tab as the same component instance; a
+	// captured value would go stale switching tabs the same way
+	// liveCustomPageSlug's doc comment describes for "/p/:slug". Bare
+	// "/settings" (no tab segment) redirects to "/settings/household" once,
+	// on mount.
+	tab := liveSettingsTab()
+	// rawTab is captured (not the mutable tab, reassigned to "household" just
+	// below) because UseEffect's callback runs deferred, after commit — by
+	// then a closure over `tab` itself would see the reassigned fallback
+	// value, never the original "" that means "needs a redirect" (Go closures
+	// capture variables by reference, not a snapshot at registration time).
+	rawTab := tab
+	uic.UseEffect(func() func() {
+		if rawTab == "" {
+			uistate.NavigateTo("/settings/household")
+		}
+		return nil
+	}, "settings-default-tab-redirect")
+	if tab == "" {
+		tab = "household"
 	}
-	setTab := uic.UseState(initTab)
 	prefsAtom := uistate.UsePrefs()
 	periodAtom := uistate.UsePeriod()
 	noticeAtom := uistate.UseNotice()
@@ -1168,7 +1183,7 @@ func globalSettingsForm() uic.Node {
 	rightProps := settingsRightProps{
 		Pr: pr,
 		// Appearance is its own tab now — the Preferences link just switches to it.
-		OnAppearanceLink: func() { setTab.Set("appearance") },
+		OnAppearanceLink: func() { uistate.NavigateTo("/settings/appearance") },
 		OnDateStyle:      onDateStyle,
 		OnWeekStart:      func(v string) { p := prefsAtom.Get(); p.WeekStart = prefs.WeekStart(v); savePrefs(p) },
 		OnPayCycleAnchor: func(v string) { p := prefsAtom.Get(); p.PayCycleAnchor = strings.TrimSpace(v); savePrefs(p) },
@@ -1336,7 +1351,7 @@ func globalSettingsForm() uic.Node {
 	// One pane at a time behind the tab strip. Panes are pure renderers (their
 	// embedded components own their hooks and mount/unmount cleanly per tab).
 	var pane uic.Node
-	switch setTab.Get() {
+	switch tab {
 	case "prefs":
 		pane = settingsPreferencesPane(rightProps)
 	case "appearance":
@@ -1362,8 +1377,8 @@ func globalSettingsForm() uic.Node {
 		Div(css.Class("set-tab-strip", tw.Mb3, tw.Pb2, tw.BorderB, tw.BorderLine),
 			ui.Segmented(ui.SegmentedProps{
 				Label:    uistate.T("settings.tabsAria"),
-				Selected: setTab.Get(),
-				OnSelect: func(v string) { setTab.Set(v) },
+				Selected: tab,
+				OnSelect: func(v string) { uistate.NavigateTo("/settings/" + v) },
 				Options: []ui.SegOption{
 					{Value: "household", Label: uistate.T("settings.tabHousehold")},
 					{Value: "prefs", Label: uistate.T("settings.tabPrefs")},

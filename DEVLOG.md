@@ -1,3 +1,40 @@
+## 2026-07-24 — Settings tabs get real URLs, and two sharp GoWebComponents lessons along the way
+
+Second task off the approved sync/settings-unification plan: `/settings` → `/settings/:tab`, so a tab
+is bookmarkable/shareable/back-button-able instead of a one-shot in-memory var. Mechanically simple —
+follow the exact `/p/:slug` pattern already in `app.go` — but two framework interactions bit hard
+enough to be worth recording.
+
+**Bug 1 — closure-by-reference in a deferred effect.** `globalSettingsForm` reads the tab from the
+route, falls back to `"household"` if empty, and redirects on that fallback via `UseEffect`. `UseEffect`
+runs deferred, after commit — so by the time the effect body executed, the local `tab` var it closed
+over had *already been reassigned* to `"household"` by the fallback line earlier in the same function
+body, and the effect's `if tab == "" { redirect }` check never saw the original empty value. Bare
+`/settings` silently stopped redirecting. Fix: capture a second, never-reassigned `rawTab := tab`
+before the fallback line, and check `rawTab` inside the effect instead.
+
+**Bug 2 — `ActivePath` is secretly a reconciliation key.** Wanted `ActivePath` constant across tab
+switches (`"/settings"`) so Sidebar highlighting and the `data-route` attribute stay correct — neither
+uses live path-matching, they compare against `ActivePath` directly. But `shell.go` also uses
+`ActivePath` as `WithKey`'s remount key for the entire View subtree (deliberately, per its own doc
+comment — it's how the reconciler forces the chrome to notice a route changed at all, since Sidebar/
+TopBar are memoized). A constant `ActivePath` meant the settings body's own key never changed between
+tabs, so the reconciler decided nothing had changed and simply stopped re-invoking
+`globalSettingsForm` after the *first* tab switch — confirmed live: URL updated every click, rendered
+content froze after one. Wanting both "stable chrome" and "changing content" from the same field was
+the actual conflict. Fix: split them — new `ShellProps.ContentKey` (falls back to `ActivePath` when
+unset, so every other route is untouched), which `/settings/:tab` sets to `"/settings/" + tab` while
+`ActivePath` stays the constant `"/settings"`.
+
+Verified with a throwaway Playwright script against a scratch wasm build before touching the real
+regression suite: fresh load at `/settings/household` → redirect works, sequential Cloud → Advanced →
+Household clicks each update both URL and rendered content, direct-load at `/settings/appearance`
+works, and the Settings sidebar link keeps `active`/`aria-current="page"` throughout. Then ran the real
+`interactions.spec.mjs`: the two Settings tests this bug had been silently breaking (Cloud, Advanced)
+now pass; the other 14 failures are the same pre-existing, unrelated set (budgets/import-wizard/
+toolbar/review-duplicates) already on record from before this change. Full native build/vet/test plus
+a real `GOOS=js GOARCH=wasm` build both clean.
+
 ## 2026-07-24 — Cutting Twilio, and the whole gate mechanism that existed just to protect it
 
 Cam: "remove sms feature as fuck twillio they stole my money." Direct instruction, and an easy one to

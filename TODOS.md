@@ -6078,3 +6078,29 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   scoped wasm `go vet` on `internal/app`, and the existing `sync.spec.mjs` (both cases) and
   `smoke.spec.mjs` (full 46-route sweep) e2e suites — all pass, confirming this wasn't just a
   compile-clean removal but a functionally intact one.
+- [x] **C455 [MINOR][SETTINGS] Settings tabs became real, bookmarkable URLs
+  (`/settings/cloud`, `/settings/advanced`, …) instead of a one-shot in-memory deep-link.**
+  Registered `/settings/:tab` in `app.go` (same param-route pattern as `/p/:slug`); bare `/settings`
+  redirects to `/settings/household`. `globalSettingsForm` now reads the active tab live from
+  `location.pathname` via a new `liveSettingsTab()` (mirrors the existing `liveCustomPageSlug`
+  pattern) instead of consuming `uistate.ConsumeRequestedSettingsTab()`, which — along with the
+  `requestedSettingsTab` var it consumed — is now deleted; `OpenGlobalSettingsAt` just navigates to
+  `/settings/<tab>`.
+
+  Two GoWebComponents subtleties surfaced fixing this: (1) a `UseEffect` closure captured the `tab`
+  var *by reference* — the deferred effect ran after a later fallback line in the same function had
+  already reassigned it, so the effect's own empty-tab check never saw the original value; fixed by
+  capturing a separate, never-reassigned `rawTab` before the fallback. (2) `ShellProps.ActivePath`
+  doubles as the View subtree's reconciliation key (`shell.go`) — keeping it constant across tabs
+  (needed so Sidebar highlighting and `data-route` stay correct) meant the reconciler saw no key
+  change on tab switches and stopped re-rendering the settings body after the first switch. Fixed by
+  adding a separate `ShellProps.ContentKey` field (falls back to `ActivePath` when unset, so every
+  other route is unaffected), which `/settings/:tab` varies per-tab while `ActivePath` stays the
+  constant `"/settings"`.
+
+  Verified with a scratch Playwright check (sequential tab switches, direct-load-at-a-tab, rail
+  highlighting/`data-route` stability) before touching the real suite, then the full
+  `interactions.spec.mjs` regression run: the two Settings tests this bug had been silently breaking
+  (Cloud, Advanced) now pass, with the same pre-existing unrelated 14 failures
+  (budgets/import-wizard/toolbar/review-duplicates) already on record. Full native
+  `go build`/`go vet`/`go test ./...` and a real `GOOS=js GOARCH=wasm go build` both clean.
