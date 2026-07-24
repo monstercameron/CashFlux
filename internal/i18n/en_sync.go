@@ -34,6 +34,14 @@ var syncPageKeys = Catalog{
 	"sync.tokenFieldPrimary":   "This server uses a fixed access token.",
 	"sync.advancedTokenToggle": "Paste an access token instead",
 	"sync.otherWaysHeading":    "Other ways to sign in",
+	// Shown instead of "Connected." on a server where an activation code is the only
+	// way in and this device doesn't have a session yet. "Connected." is true of the
+	// SERVER (an unauthenticated capability probe found it) but reads as "you're
+	// done", which is the opposite of what someone still needing a code should hear.
+	"sync.discoveryNeedsActivation": "Found your server. Enter an activation code below to finish.",
+	// One disclosure for every secondary sign-in path, replacing three competing
+	// top-level links on a server where only the activation code actually works.
+	"sync.moreWaysToggle": "More ways to sign in",
 
 	// Local/Remote/Commercial segments (2026-07-24 unification): one connection
 	// surface instead of a plain Cloud/Self-hosted toggle, since "your own server

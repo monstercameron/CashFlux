@@ -390,7 +390,11 @@ func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 			}
 			persistAuthSession(prefsAtom, pr.ServerURL, out)
 			linked.Set(true)
-			notify(uistate.T("authCards.deviceLinked"), false)
+			// The Primary card unmounts the instant this succeeds — the pane hides
+			// every sign-in surface once a session exists — so the toast is the only
+			// confirmation the user gets, and it has to say what actually happened
+			// rather than the device-linking wording.
+			notify(IfElseValue(props.Primary, uistate.T("authCards.activated"), uistate.T("authCards.deviceLinked")), false)
 		}()
 	})
 

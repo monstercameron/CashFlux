@@ -28909,3 +28909,28 @@ row under `device:owner` — with a real UUID device id, which is also the proof
 
 **Note for next time:** "the chip says Synced" is worth nothing as evidence. Every one of these
 bugs produced it. Check the server's tables.
+
+## 2026-07-24 — Simplifying the connect screen (and what it turned up)
+
+Pass over Settings → Cloud with one question: what does someone with no session actually
+need to see, and what does someone WITH one need to stop seeing.
+
+Before: "Connected." (a claim about the server, from an unauthenticated probe), the
+activation card, and three sibling links — password, ask-an-admin, paste-a-token — all
+still on screen after you signed in. After: one status line naming the next action, one
+card, one "More ways to sign in" link, and once a session exists none of it at all.
+
+Two real bugs fell out of doing it:
+
+- The pane derived "signed in" from a `UseState` seeded at mount, so signing in without
+  leaving the tab left it showing the whole signed-out apparatus and no Sign out button
+  until a remount. Now read from the prefs atom, which is what `persistAuthSession`
+  actually updates and this pane subscribes to. Four handlers had the same staleness and
+  would have sent an empty bearer token (`sessionToken()` resolves at call time now).
+- "Sign out" cleared `prefs.ServerToken` and nothing else. Sync stops, so it looked right
+  — but the rotated refresh token stayed in storage, still redeemable. Extracted
+  `clearAuthSession` from `degradeToLocalOnly` and routed sign-out through it.
+
+Verified in one persistent browser context: activate → signed-in view → Sign out → the
+activation card comes straight back with no reload, which is the same-device re-login loop
+closing. The instant return is itself the proof the prefs-derived read works.

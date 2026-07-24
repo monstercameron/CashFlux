@@ -304,12 +304,26 @@ func stopProactiveRefreshTimer() {
 // tears down the watch, and settles the sync chip on "local" — silently, no
 // error dialog. The encrypted dataset already on disk is untouched and
 // fully usable; only cloud sync stops.
-func degradeToLocalOnly() {
+// clearAuthSession tears down every locally held credential for the current
+// Custom Sync session: the rotated access/refresh pair, the refresh countdown,
+// and the live watch. It deliberately touches no prefs — callers decide whether
+// this is a user-initiated sign-out (toggle stays on, ready for a new code) or
+// the C427 forced degrade (backend switched off entirely).
+//
+// Sign-out has to come through here. Clearing only prefs.ServerToken stops sync
+// (BackendActive goes false) but leaves a WORKING refresh token sitting in
+// storage — a credential the user believes they just revoked, recoverable by
+// anything that can read this origin's storage.
+func clearAuthSession() {
 	lsRemove(authAccessTokenKey)
 	lsRemove(authRefreshTokenKey)
 	lsRemove(authExpiresInKey)
 	stopProactiveRefreshTimer()
 	stopBackendWatch()
+}
+
+func degradeToLocalOnly() {
+	clearAuthSession()
 	pr := uistate.LoadPrefs()
 	pr.ServerToken = ""
 	pr.BackendDisabled = true

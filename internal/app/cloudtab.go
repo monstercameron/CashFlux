@@ -143,6 +143,11 @@ func CloudConnectionPane() uic.Node {
 		strings.TrimSpace(pr.ServerURL) != prefs.DefaultServerURL)
 
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
+	// sessionToken resolves the bearer token to send RIGHT NOW, at call time, from
+	// prefs plus any rotated access token. The serverToken UseState is seeded once at
+	// mount, so a handler reading it would send the token this pane opened with — an
+	// empty string for anyone who signed in without leaving the tab.
+	sessionToken := func() string { return effectiveServerToken(prefsAtom.Get().Normalize()) }
 	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
 	persist := func(p prefs.Prefs) {
 		p = p.Normalize()
@@ -304,7 +309,13 @@ func CloudConnectionPane() uic.Node {
 	})
 	onSignOut := uic.UseEvent(func() {
 		p := prefsAtom.Get()
-		signOutBackendOAuth(serverURL.Get(), p.ServerToken, p.ServerCSRF, func() {
+		// Present the token the session is ACTUALLY using (a rotated access token
+		// outranks prefs.ServerToken), or the server has nothing to revoke.
+		signOutBackendOAuth(serverURL.Get(), sessionToken(), p.ServerCSRF, func() {
+			// Drop the rotated pair too, not just prefs — see clearAuthSession. The
+			// sync toggle deliberately stays ON: signing out is "this device needs a
+			// new code", not "turn cloud sync off".
+			clearAuthSession()
 			p.ServerToken = ""
 			p.ServerCSRF = ""
 			persist(p)
@@ -334,7 +345,7 @@ func CloudConnectionPane() uic.Node {
 		if a := appstate.Default; a != nil {
 			key = a.Settings().OpenAIKey
 		}
-		uploadOpenAIKeyToBackend(serverURL.Get(), serverToken.Get(), key, func() {
+		uploadOpenAIKeyToBackend(serverURL.Get(), sessionToken(), key, func() {
 			lsSet("cashflux:cloud-ai-key-set", "1")
 			keySet.Set(true)
 			notify(uistate.T("settings.serverKeyStored"), false)
@@ -343,7 +354,7 @@ func CloudConnectionPane() uic.Node {
 		})
 	})
 	removeKey := uic.UseEvent(func() {
-		removeOpenAIKeyFromBackend(serverURL.Get(), serverToken.Get(), func() {
+		removeOpenAIKeyFromBackend(serverURL.Get(), sessionToken(), func() {
 			lsSet("cashflux:cloud-ai-key-set", "")
 			keySet.Set(false)
 			notify(uistate.T("settings.serverKeyRemoved"), false)
@@ -352,12 +363,12 @@ func CloudConnectionPane() uic.Node {
 		})
 	})
 	startCheckout := uic.UseEvent(func() {
-		startBillingCheckout(serverURL.Get(), serverToken.Get(), billingInterval.Get(), billingProvider.Get(), func(msg string) {
+		startBillingCheckout(serverURL.Get(), sessionToken(), billingInterval.Get(), billingProvider.Get(), func(msg string) {
 			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
 		})
 	})
 	openPortal := uic.UseEvent(func() {
-		openBillingPortal(serverURL.Get(), serverToken.Get(), func(msg string) {
+		openBillingPortal(serverURL.Get(), sessionToken(), func(msg string) {
 			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
 		})
 	})
@@ -380,16 +391,24 @@ func CloudConnectionPane() uic.Node {
 	phase := discoveryState.Get()
 	seg := segment.Get()
 	commercial := seg == "commercial"
-	showPassword := !commercial && phase == discoveryOK && d.CustomAuthEnabled
+	// signedIn reads prefs, NOT the serverToken UseState: that state is seeded once
+	// at mount, so it is stale the moment a sign-in persists a token mid-session,
+	// while the prefs atom is what persistAuthSession updates and this pane
+	// subscribes to. Every sign-in surface below is hidden once it's true — a signed-
+	// in device being shown a full sign-in apparatus is just noise it can act on
+	// wrongly. The raw-token FIELD still binds to serverToken, since that one is an
+	// editable value rather than a fact about the session.
+	signedIn := strings.TrimSpace(pr.ServerToken) != "" && !status.AuthFailed
+	showPassword := !commercial && !signedIn && phase == discoveryOK && d.CustomAuthEnabled
 	// Commercial always offers OAuth — a paid backend's capabilities are a known
 	// quantity, not something to probe for — so discovery is never even run.
-	showOAuth := commercial || (phase == discoveryOK && len(d.AuthProviders) > 0)
+	showOAuth := !signedIn && (commercial || (phase == discoveryOK && len(d.AuthProviders) > 0))
 	// tokenOnly is purely informational (see sync.tokenFieldPrimary below) —
 	// it never auto-reveals the token field itself. True only once discovery
 	// has actually SUCCEEDED and confirmed this server offers nothing else;
 	// while checking, idle, or errored, we simply don't know yet, so nothing
 	// token-related is claimed or shown by default.
-	tokenOnly := !commercial && phase == discoveryOK && !showPassword && !showOAuth
+	tokenOnly := !commercial && !signedIn && phase == discoveryOK && !showPassword && !showOAuth
 	// showPendingPairing offers the admin-approved pairing bootstrap
 	// (TODOS.md C454) only where it's the actual answer to "I have no
 	// credentials yet": a self-hosted server with password/pairing auth but
@@ -473,7 +492,13 @@ func CloudConnectionPane() uic.Node {
 			)),
 			If(seg != "commercial", Fragment(
 				If(phase == discoveryChecking, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-checking"), uistate.T("sync.discoveryChecking"))),
-				If(phase == discoveryOK, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryOK"))),
+				// "Connected." is a claim about the SERVER, not about this device —
+				// it is set by an unauthenticated /v1/version probe. Saying it to a
+				// device with no session reads as "you're done", which is exactly the
+				// wrong thing to tell someone whose next job is to enter a code. So
+				// the unsigned-in case names the next action instead.
+				If(phase == discoveryOK && !activationOnly, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryOK"))),
+				If(phase == discoveryOK && activationOnly, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryNeedsActivation"))),
 				If(phase == discoveryError, P(css.Class(tw.Text12, tw.TextFaint), Attr("data-testid", "sync-discovery-error"), uistate.T("settings.serverTestFailed", discoveryMsg.Get()))),
 			)),
 
@@ -483,7 +508,7 @@ func CloudConnectionPane() uic.Node {
 			If(commercial, Input(css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
 				Attr("data-testid", "sync-server-url"),
 				Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onURL))),
-			If(commercial && strings.TrimSpace(serverToken.Get()) == "",
+			If(commercial && !signedIn,
 				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPricingTeaser", cloudPrice))),
 
 			// Exactly one primary sign-in surface, chosen by what the server
@@ -505,21 +530,35 @@ func CloudConnectionPane() uic.Node {
 			)),
 			If(tokenOnly, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
 
-			If(!commercial, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
-				If(showPassword || showPendingPairing, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-				If(showPassword && !activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
-				If(activationOnly, uic.CreateElement(PasswordAuthCard)),
-				If(showPendingPairing, uic.CreateElement(PendingDeviceCard)),
+			// Secondary options. On an activation-code server there is exactly ONE
+			// thing a new device can usefully do, so everything else — the password
+			// form (nobody has a password on a server that disables self-signup), the
+			// ask-an-admin-to-approve flow (redundant when the admin can just mint a
+			// code), and the raw token field — collapses behind a single "More ways to
+			// sign in" link rather than three competing top-level ones. Hidden
+			// entirely once signed in: none of it is an action a connected device has.
+			If(!commercial && !signedIn, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
+				If(!activationOnly && showPassword, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
+				If(!activationOnly && showPassword, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
 				If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
-					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),
-				If(advancedTokenOpen.Get(), tokenField),
+					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken),
+					IfElseValue(activationOnly, uistate.T("sync.moreWaysToggle"), uistate.T("sync.advancedTokenToggle"))))),
+				If(advancedTokenOpen.Get(), Fragment(
+					If(activationOnly, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
+					If(activationOnly, uic.CreateElement(PasswordAuthCard)),
+					If(activationOnly, uic.CreateElement(PendingDeviceCard)),
+					tokenField,
+				)),
 			)),
 
 			// Sign out / clear-invalid-token — "Sign out" implies an active session,
 			// misleading once the server has explicitly rejected the saved token.
-			If(strings.TrimSpace(serverToken.Get()) != "" && !status.AuthFailed,
+			// Read from prefs, not the mount-seeded serverToken state: a device that
+			// just signed in this session had no Sign out button until the pane
+			// remounted, which reads as the sign-in not having taken.
+			If(signedIn,
 				Button(css.Class("btn", tw.Mt1), Type("button"), OnClick(onSignOut), uistate.T("settings.signOut"))),
-			If(strings.TrimSpace(serverToken.Get()) != "" && status.AuthFailed,
+			If(strings.TrimSpace(pr.ServerToken) != "" && status.AuthFailed,
 				Button(css.Class("btn", tw.Mt1), Type("button"), Attr("data-testid", "settings-clear-invalid-token"), OnClick(onSignOut), uistate.T("settings.clearInvalidToken"))),
 
 			If(seg != "commercial", Div(css.Class(tw.Mt1),
@@ -540,7 +579,7 @@ func CloudConnectionPane() uic.Node {
 		)),
 
 		// Cloud AI-key status: "Key set" + Remove/Upload, shown once authenticated (§7.11).
-		If(strings.TrimSpace(serverToken.Get()) != "", Fragment(
+		If(signedIn, Fragment(
 			If(keySet.Get(), Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 				Span(css.Class(tw.Text12, tw.TextDim), uistate.T("settings.serverKeySet")),
 				Button(css.Class("btn", "btn-sm", "btn-del"), Type("button"), OnClick(removeKey), uistate.T("settings.removeKey")),
@@ -552,7 +591,7 @@ func CloudConnectionPane() uic.Node {
 
 		// Commercial-only: subscription surface.
 		If(commercial, Fragment(
-			If(strings.TrimSpace(serverToken.Get()) != "", Fragment(
+			If(signedIn, Fragment(
 				H4(css.Class("set-label"), uistate.T("settings.manageSubTitle")),
 				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.manageSubHint")),
 				Button(css.Class("btn", tw.Mt045), Type("button"),
@@ -561,7 +600,7 @@ func CloudConnectionPane() uic.Node {
 					uistate.T("settings.manageSub"),
 				),
 			)),
-			If(strings.TrimSpace(serverToken.Get()) == "", Fragment(
+			If(!signedIn, Fragment(
 				H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
 				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
 				Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), cloudPrice),

@@ -28,7 +28,30 @@ and every commit updates this file under `Unreleased`.
   artifact blob). New `Store.StorageStats` on the CashFlux side backs the latter. 5 new tests.
   Verified via full native `go build`/`go vet`/`go test ./...`.
 
+### Changed
+- **Settings → Cloud hides every sign-in surface once you're signed in, and names the next action
+  when you aren't.** Three fixes to one screen: (1) `signedIn` is now derived from prefs rather than
+  a `UseState` seeded at mount, so a device that signs in without leaving the tab immediately gets
+  its Sign out button, devices list, and AI-key controls — they used to require a remount, which
+  reads as the sign-in not having taken. (2) Every auth card, the OAuth buttons, and the
+  secondary-options block are hidden while a session exists; a connected device was being shown a
+  full sign-in apparatus it could only misuse. (3) On an activation-code server the discovery line
+  no longer says "Connected." to a device with no session — that is a claim about the SERVER (an
+  unauthenticated `/v1/version` probe found it) and reads as "you're done" to someone whose actual
+  next job is to type a code. It now says "Found your server. Enter an activation code below to
+  finish." The password form, the ask-an-admin-to-approve flow, and the raw token field collapse
+  behind a single "More ways to sign in" link instead of three competing top-level ones.
+
 ### Fixed
+- **"Sign out" left a working refresh token in browser storage.** It cleared `prefs.ServerToken`,
+  which stops sync (`BackendActive` goes false) and therefore looked correct, but the rotated
+  access/refresh pair stayed in the key-value store — a credential the user believes they just
+  revoked, readable by anything with access to that origin's storage, and still good for a token
+  refresh. Sign-out now routes through a new `clearAuthSession` (shared with `degradeToLocalOnly`)
+  that drops the pair, stops the proactive-refresh countdown, and tears down the watch. It also
+  presents the session's EFFECTIVE token to `/v1/auth/logout`, so the server has something real to
+  revoke rather than a stale prefs value. The sync toggle deliberately stays on — signing out means
+  "this device needs a new code", not "turn cloud sync off".
 - **A device that signed in and never edited anything never uploaded a byte, while the sync chip
   said "Synced".** Three separate defects stacked up on the first-sync path, each of which alone was
   enough to make sync look connected and do nothing:
