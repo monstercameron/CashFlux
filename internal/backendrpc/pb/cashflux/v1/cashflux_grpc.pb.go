@@ -576,16 +576,14 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AuthService_Enroll_FullMethodName                   = "/cashflux.v1.AuthService/Enroll"
-	AuthService_RequestPhoneVerification_FullMethodName = "/cashflux.v1.AuthService/RequestPhoneVerification"
-	AuthService_VerifyPhoneCode_FullMethodName          = "/cashflux.v1.AuthService/VerifyPhoneCode"
-	AuthService_RedeemPairingCode_FullMethodName        = "/cashflux.v1.AuthService/RedeemPairingCode"
-	AuthService_Register_FullMethodName                 = "/cashflux.v1.AuthService/Register"
-	AuthService_Login_FullMethodName                    = "/cashflux.v1.AuthService/Login"
-	AuthService_RefreshToken_FullMethodName             = "/cashflux.v1.AuthService/RefreshToken"
-	AuthService_Logout_FullMethodName                   = "/cashflux.v1.AuthService/Logout"
-	AuthService_ListDevices_FullMethodName              = "/cashflux.v1.AuthService/ListDevices"
-	AuthService_RevokeDevice_FullMethodName             = "/cashflux.v1.AuthService/RevokeDevice"
+	AuthService_Enroll_FullMethodName            = "/cashflux.v1.AuthService/Enroll"
+	AuthService_RedeemPairingCode_FullMethodName = "/cashflux.v1.AuthService/RedeemPairingCode"
+	AuthService_Register_FullMethodName          = "/cashflux.v1.AuthService/Register"
+	AuthService_Login_FullMethodName             = "/cashflux.v1.AuthService/Login"
+	AuthService_RefreshToken_FullMethodName      = "/cashflux.v1.AuthService/RefreshToken"
+	AuthService_Logout_FullMethodName            = "/cashflux.v1.AuthService/Logout"
+	AuthService_ListDevices_FullMethodName       = "/cashflux.v1.AuthService/ListDevices"
+	AuthService_RevokeDevice_FullMethodName      = "/cashflux.v1.AuthService/RevokeDevice"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -593,8 +591,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuthServiceClient interface {
 	Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
-	RequestPhoneVerification(ctx context.Context, in *RequestPhoneVerificationRequest, opts ...grpc.CallOption) (*RequestPhoneVerificationResponse, error)
-	VerifyPhoneCode(ctx context.Context, in *VerifyPhoneCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
 	RedeemPairingCode(ctx context.Context, in *RedeemPairingCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*TokenPairResponse, error)
@@ -616,26 +612,6 @@ func (c *authServiceClient) Enroll(ctx context.Context, in *EnrollRequest, opts 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TokenPairResponse)
 	err := c.cc.Invoke(ctx, AuthService_Enroll_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *authServiceClient) RequestPhoneVerification(ctx context.Context, in *RequestPhoneVerificationRequest, opts ...grpc.CallOption) (*RequestPhoneVerificationResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RequestPhoneVerificationResponse)
-	err := c.cc.Invoke(ctx, AuthService_RequestPhoneVerification_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *authServiceClient) VerifyPhoneCode(ctx context.Context, in *VerifyPhoneCodeRequest, opts ...grpc.CallOption) (*TokenPairResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(TokenPairResponse)
-	err := c.cc.Invoke(ctx, AuthService_VerifyPhoneCode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -717,8 +693,6 @@ func (c *authServiceClient) RevokeDevice(ctx context.Context, in *RevokeDeviceRe
 // for forward compatibility.
 type AuthServiceServer interface {
 	Enroll(context.Context, *EnrollRequest) (*TokenPairResponse, error)
-	RequestPhoneVerification(context.Context, *RequestPhoneVerificationRequest) (*RequestPhoneVerificationResponse, error)
-	VerifyPhoneCode(context.Context, *VerifyPhoneCodeRequest) (*TokenPairResponse, error)
 	RedeemPairingCode(context.Context, *RedeemPairingCodeRequest) (*TokenPairResponse, error)
 	Register(context.Context, *RegisterRequest) (*TokenPairResponse, error)
 	Login(context.Context, *LoginRequest) (*TokenPairResponse, error)
@@ -738,12 +712,6 @@ type UnimplementedAuthServiceServer struct{}
 
 func (UnimplementedAuthServiceServer) Enroll(context.Context, *EnrollRequest) (*TokenPairResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Enroll not implemented")
-}
-func (UnimplementedAuthServiceServer) RequestPhoneVerification(context.Context, *RequestPhoneVerificationRequest) (*RequestPhoneVerificationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RequestPhoneVerification not implemented")
-}
-func (UnimplementedAuthServiceServer) VerifyPhoneCode(context.Context, *VerifyPhoneCodeRequest) (*TokenPairResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method VerifyPhoneCode not implemented")
 }
 func (UnimplementedAuthServiceServer) RedeemPairingCode(context.Context, *RedeemPairingCodeRequest) (*TokenPairResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RedeemPairingCode not implemented")
@@ -801,42 +769,6 @@ func _AuthService_Enroll_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).Enroll(ctx, req.(*EnrollRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuthService_RequestPhoneVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestPhoneVerificationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_RequestPhoneVerification_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, req.(*RequestPhoneVerificationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuthService_VerifyPhoneCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VerifyPhoneCodeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_VerifyPhoneCode_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, req.(*VerifyPhoneCodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -977,14 +909,6 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Enroll",
 			Handler:    _AuthService_Enroll_Handler,
-		},
-		{
-			MethodName: "RequestPhoneVerification",
-			Handler:    _AuthService_RequestPhoneVerification_Handler,
-		},
-		{
-			MethodName: "VerifyPhoneCode",
-			Handler:    _AuthService_VerifyPhoneCode_Handler,
 		},
 		{
 			MethodName: "RedeemPairingCode",

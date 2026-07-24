@@ -28,6 +28,7 @@ var authCardsKeys = Catalog{
 	"authCards.usernameRequired":            "Enter a username.",
 	"authCards.passwordRequired":            "Enter a password.",
 	"authCards.passwordTooShort":            "Password must be at least %d characters.",
+	"authCards.connectFailed":               "Couldn't connect to the server. Check the address and try again.",
 	"authCards.loginFailed":                 "That username or password didn't work.",
 	"authCards.registerFailed":              "Couldn't create that account — the username may already be taken.",
 	"authCards.loggedInAs":                  "Signed in as %s.",

@@ -13,8 +13,8 @@ type Discovery struct {
 	AuthMode      string
 	AuthProviders []string
 	// CustomAuthEnabled mirrors VersionResponse.CustomAuthEnabled: whether this
-	// backend has AuthServiceServer registered (phone/SMS, username/password,
-	// pairing-code sign-in) at all. False on a SyncService-only embedding.
+	// backend has AuthServiceServer registered (username/password, pairing-code
+	// sign-in) at all. False on a SyncService-only embedding.
 	CustomAuthEnabled bool
 	// BillingEnabled/PaymentProviders mirror the matching VersionResponse
 	// fields — whether this backend has a billing/subscription concept, and

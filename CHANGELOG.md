@@ -6,6 +6,23 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Removed
+- **Phone/SMS sign-in removed entirely (TODOS.md C453).** Twilio never signed up a single real user
+  on the live deployment and costs real money per send — cut the whole path: `internal/twilio`,
+  `internal/app/customsync.go` (`CustomSyncCard`), the `RequestPhoneVerification`/`VerifyPhoneCode`
+  RPCs (regenerated `.proto`/`pb.go` to match), and the setup-code/invite-code gate mechanism that
+  existed only to gate phone signup (`setupcode.go`, `invitecode.go`, `phoneclients.go`, and the
+  matching admin-console RPCs/UI — replaced by the admin-approved device-pairing bootstrap below).
+  `Config.SetupCode`/`TwilioAccountSID`/etc. removed from `Config`. Password sign-in
+  (`PasswordAuthCard`) is now the primary surface on `/sync` wherever a phone card used to be;
+  `DeviceLinkCard` (pairing-code redemption) moved to the secondary "other ways to sign in" group.
+  Left `users.phone_verified_at`/the now-empty `setup_codes`/`invite_codes` tables in place rather
+  than risk a destructive migration for schema nothing references anymore. Extracted the three
+  genuinely shared helpers (`customSyncDeviceLabel`, `newIdempotencyKey`, `customSyncErrorMessage`)
+  that password/pairing sign-in also used into a new `internal/app/authhelpers.go` before deleting
+  the file they used to live in. Verified via full build/vet/test, a wasm build, and the existing
+  `sync.spec.mjs`/`smoke.spec.mjs` e2e suites — all pass.
+
 ### Fixed
 - **Two more real bugs Cam caught live on the error text itself (TODOS.md C452).** (1) The newly-
   visible error text was styled identically to routine captions (`TextFaint`) — invisible at a

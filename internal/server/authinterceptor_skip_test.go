@@ -35,8 +35,6 @@ func TestAuthUnaryInterceptorSkipList(t *testing.T) {
 		wantErrNil bool
 	}{
 		{name: "enroll", method: backendrpc.MethodAuthEnroll, wantSkip: true},
-		{name: "request phone verification", method: backendrpc.MethodAuthRequestPhoneVerification, wantSkip: true},
-		{name: "verify phone code", method: backendrpc.MethodAuthVerifyPhoneCode, wantSkip: true},
 		{name: "redeem pairing code", method: backendrpc.MethodAuthRedeemPairingCode, wantSkip: true},
 		{name: "register", method: backendrpc.MethodAuthRegister, wantSkip: true},
 		{name: "login", method: backendrpc.MethodAuthLogin, wantSkip: true},

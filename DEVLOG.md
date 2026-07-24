@@ -1,3 +1,46 @@
+## 2026-07-24 — Cutting Twilio, and the whole gate mechanism that existed just to protect it
+
+Cam: "remove sms feature as fuck twillio they stole my money." Direct instruction, and an easy one to
+justify — this deployment has sent, at best, a handful of real texts and never actually completed a
+single phone verification (confirmed earlier tonight: zero phone-verified rows in `users`, ever).
+Real money for a feature with zero completions.
+
+Started pulling the thread and it went further than "delete customsync.go." The `Config.SetupCode`/
+invite-code gate (`setupcode.go`, `invitecode.go`, plus the admin console's whole "mint invite code"
+UI built earlier this session) existed for exactly one reason: gating who could create a NEW account
+via phone. With phone gone, that gate has nothing left to gate — `enrollmentCodeAvailable`/
+`consumeEnrollmentCode` were only ever called from `RequestPhoneVerification`/`VerifyPhoneCode`. So
+the whole mechanism came out with it: `setupcode.go`, `invitecode.go`, `phoneclients.go`,
+`Config.SetupCode`/`TwilioAccountSID`/`TwilioAuthToken`/`TwilioVerifyServiceSID`, and
+`pkg/embed.Admin`'s `ListClients`/`MintInviteCode`/`ListInviteCodes` (whose only purpose was serving
+that admin UI). That leaves the portfolio's admin console pointing at Admin methods that no longer
+exist for the moment — expected, since the pending-device pairing bootstrap (C454, next) replaces
+that exact UI slot, not a state I'm leaving unresolved.
+
+One near-miss worth recording: `customsync.go` wasn't purely phone code. Three of its functions —
+`customSyncDeviceLabel`, `newIdempotencyKey`, `customSyncErrorMessage` — are used by
+`PasswordAuthCard`/`DeviceLinkCard` in `authcards.go` too, just because they happened to live in the
+file the phone card was written in first. Deleting the file wholesale would have silently broken
+password/pairing sign-in. Caught it by reading the file fully before deleting anything, not by
+trusting the filename — extracted those three into a new `authhelpers.go` first.
+
+Regenerated the proto contract properly rather than leaving it stale: `buf`/`protoc-gen-go`/
+`protoc-gen-go-grpc` are all installed (just not on default `PATH` — they're in `~/go/bin`), so
+`buf generate` after editing the `.proto` kept the hand-written `backendrpc/auth.go` types and the
+generated `pb.go` mirror in lockstep, exactly as `proto_contract_test.go` requires. Left the
+`phone_verified_at` column and the now-empty `setup_codes`/`invite_codes` tables in the schema rather
+than write a removal migration — a SQLite drop isn't worth the risk for columns nothing references
+anymore; updated their migration functions' doc comments to say so plainly instead of describing
+behavior that no longer exists.
+
+`go vet ./...` caught most of the fallout on its own — an unused `itoa` test helper that turned out to
+live in the deleted phone test file but was used by two unrelated rate-limit tests (replaced with
+`strconv.Itoa`), an i18n key (`customSync.connectFailed`) that the Register/Login dial-failure path
+was calling despite living in the phone-only catalog file, caught by `TestScreensKeyCoverage` rather
+than by me noticing. Verified past "it compiles": full native test suite, a wasm build, scoped wasm
+`vet` on the client packages, and both `sync.spec.mjs` and the full 46-route `smoke.spec.mjs` e2e
+sweep — all pass.
+
 ## 2026-07-24 — Two more bugs, both caught by looking at the actual pixels
 
 The error text finally had a home (C450) and real content (C451). Cam looked at it live and found

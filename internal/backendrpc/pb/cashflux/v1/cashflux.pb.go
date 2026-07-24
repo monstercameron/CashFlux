@@ -1465,196 +1465,6 @@ func (x *TokenPairResponse) GetDeviceId() string {
 	return ""
 }
 
-type RequestPhoneVerificationRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	PhoneNumber string                 `protobuf:"bytes,1,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	DeviceLabel string                 `protobuf:"bytes,2,opt,name=device_label,json=deviceLabel,proto3" json:"device_label,omitempty"`
-	// setup_code is required only on deployments that opt into gated enrollment
-	// (Config.SetupCode configured) — a manually-distributed, single-use code
-	// proving the caller was invited. Ignored (no gate) when the server has no
-	// setup code configured, so open-enrollment CashFlux deployments are
-	// unaffected. Checked here as a fail-fast (don't send an SMS for an
-	// already-spent or wrong code) but only actually consumed once
-	// VerifyPhoneCode succeeds, so a fumbled verification doesn't burn it.
-	SetupCode     string `protobuf:"bytes,3,opt,name=setup_code,json=setupCode,proto3" json:"setup_code,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RequestPhoneVerificationRequest) Reset() {
-	*x = RequestPhoneVerificationRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[25]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RequestPhoneVerificationRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RequestPhoneVerificationRequest) ProtoMessage() {}
-
-func (x *RequestPhoneVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[25]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RequestPhoneVerificationRequest.ProtoReflect.Descriptor instead.
-func (*RequestPhoneVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{25}
-}
-
-func (x *RequestPhoneVerificationRequest) GetPhoneNumber() string {
-	if x != nil {
-		return x.PhoneNumber
-	}
-	return ""
-}
-
-func (x *RequestPhoneVerificationRequest) GetDeviceLabel() string {
-	if x != nil {
-		return x.DeviceLabel
-	}
-	return ""
-}
-
-func (x *RequestPhoneVerificationRequest) GetSetupCode() string {
-	if x != nil {
-		return x.SetupCode
-	}
-	return ""
-}
-
-type RequestPhoneVerificationResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sent          bool                   `protobuf:"varint,1,opt,name=sent,proto3" json:"sent,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RequestPhoneVerificationResponse) Reset() {
-	*x = RequestPhoneVerificationResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[26]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RequestPhoneVerificationResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RequestPhoneVerificationResponse) ProtoMessage() {}
-
-func (x *RequestPhoneVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[26]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RequestPhoneVerificationResponse.ProtoReflect.Descriptor instead.
-func (*RequestPhoneVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{26}
-}
-
-func (x *RequestPhoneVerificationResponse) GetSent() bool {
-	if x != nil {
-		return x.Sent
-	}
-	return false
-}
-
-type VerifyPhoneCodeRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PhoneNumber    string                 `protobuf:"bytes,1,opt,name=phone_number,json=phoneNumber,proto3" json:"phone_number,omitempty"`
-	Code           string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
-	DeviceLabel    string                 `protobuf:"bytes,3,opt,name=device_label,json=deviceLabel,proto3" json:"device_label,omitempty"`
-	IdempotencyKey string                 `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	// setup_code: see RequestPhoneVerificationRequest's doc comment. Must match
-	// the same code presented to RequestPhoneVerification for this enrollment;
-	// consumed (marked single-use spent) only on successful verification.
-	SetupCode     string `protobuf:"bytes,5,opt,name=setup_code,json=setupCode,proto3" json:"setup_code,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *VerifyPhoneCodeRequest) Reset() {
-	*x = VerifyPhoneCodeRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *VerifyPhoneCodeRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VerifyPhoneCodeRequest) ProtoMessage() {}
-
-func (x *VerifyPhoneCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VerifyPhoneCodeRequest.ProtoReflect.Descriptor instead.
-func (*VerifyPhoneCodeRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *VerifyPhoneCodeRequest) GetPhoneNumber() string {
-	if x != nil {
-		return x.PhoneNumber
-	}
-	return ""
-}
-
-func (x *VerifyPhoneCodeRequest) GetCode() string {
-	if x != nil {
-		return x.Code
-	}
-	return ""
-}
-
-func (x *VerifyPhoneCodeRequest) GetDeviceLabel() string {
-	if x != nil {
-		return x.DeviceLabel
-	}
-	return ""
-}
-
-func (x *VerifyPhoneCodeRequest) GetIdempotencyKey() string {
-	if x != nil {
-		return x.IdempotencyKey
-	}
-	return ""
-}
-
-func (x *VerifyPhoneCodeRequest) GetSetupCode() string {
-	if x != nil {
-		return x.SetupCode
-	}
-	return ""
-}
-
 type RedeemPairingCodeRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	PairingCode    string                 `protobuf:"bytes,1,opt,name=pairing_code,json=pairingCode,proto3" json:"pairing_code,omitempty"`
@@ -1666,7 +1476,7 @@ type RedeemPairingCodeRequest struct {
 
 func (x *RedeemPairingCodeRequest) Reset() {
 	*x = RedeemPairingCodeRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[28]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1678,7 +1488,7 @@ func (x *RedeemPairingCodeRequest) String() string {
 func (*RedeemPairingCodeRequest) ProtoMessage() {}
 
 func (x *RedeemPairingCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[28]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1691,7 +1501,7 @@ func (x *RedeemPairingCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemPairingCodeRequest.ProtoReflect.Descriptor instead.
 func (*RedeemPairingCodeRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{28}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RedeemPairingCodeRequest) GetPairingCode() string {
@@ -1726,7 +1536,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[29]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1738,7 +1548,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[29]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1751,7 +1561,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{29}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RegisterRequest) GetUsername() string {
@@ -1787,7 +1597,7 @@ type LoginRequest struct {
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[30]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1799,7 +1609,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[30]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1812,7 +1622,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{30}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *LoginRequest) GetUsername() string {
@@ -1852,7 +1662,7 @@ type RefreshTokenRequest struct {
 
 func (x *RefreshTokenRequest) Reset() {
 	*x = RefreshTokenRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[31]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1864,7 +1674,7 @@ func (x *RefreshTokenRequest) String() string {
 func (*RefreshTokenRequest) ProtoMessage() {}
 
 func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[31]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1877,7 +1687,7 @@ func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
 func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{31}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RefreshTokenRequest) GetRefreshToken() string {
@@ -1896,7 +1706,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[32]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +1718,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[32]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +1731,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{32}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *LogoutRequest) GetRefreshToken() string {
@@ -1940,7 +1750,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[33]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1952,7 +1762,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[33]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1965,7 +1775,7 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{33}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *LogoutResponse) GetRevoked() bool {
@@ -1983,7 +1793,7 @@ type ListDevicesRequest struct {
 
 func (x *ListDevicesRequest) Reset() {
 	*x = ListDevicesRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[34]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1995,7 +1805,7 @@ func (x *ListDevicesRequest) String() string {
 func (*ListDevicesRequest) ProtoMessage() {}
 
 func (x *ListDevicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[34]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2008,7 +1818,7 @@ func (x *ListDevicesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDevicesRequest.ProtoReflect.Descriptor instead.
 func (*ListDevicesRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{34}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{31}
 }
 
 type DeviceSession struct {
@@ -2023,7 +1833,7 @@ type DeviceSession struct {
 
 func (x *DeviceSession) Reset() {
 	*x = DeviceSession{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[35]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2035,7 +1845,7 @@ func (x *DeviceSession) String() string {
 func (*DeviceSession) ProtoMessage() {}
 
 func (x *DeviceSession) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[35]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2048,7 +1858,7 @@ func (x *DeviceSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceSession.ProtoReflect.Descriptor instead.
 func (*DeviceSession) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{35}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeviceSession) GetFamilyId() string {
@@ -2088,7 +1898,7 @@ type ListDevicesResponse struct {
 
 func (x *ListDevicesResponse) Reset() {
 	*x = ListDevicesResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[36]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2100,7 +1910,7 @@ func (x *ListDevicesResponse) String() string {
 func (*ListDevicesResponse) ProtoMessage() {}
 
 func (x *ListDevicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[36]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2113,7 +1923,7 @@ func (x *ListDevicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDevicesResponse.ProtoReflect.Descriptor instead.
 func (*ListDevicesResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{36}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListDevicesResponse) GetDevices() []*DeviceSession {
@@ -2132,7 +1942,7 @@ type RevokeDeviceRequest struct {
 
 func (x *RevokeDeviceRequest) Reset() {
 	*x = RevokeDeviceRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[37]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2144,7 +1954,7 @@ func (x *RevokeDeviceRequest) String() string {
 func (*RevokeDeviceRequest) ProtoMessage() {}
 
 func (x *RevokeDeviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[37]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2157,7 +1967,7 @@ func (x *RevokeDeviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeDeviceRequest.ProtoReflect.Descriptor instead.
 func (*RevokeDeviceRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{37}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *RevokeDeviceRequest) GetFamilyId() string {
@@ -2176,7 +1986,7 @@ type RevokeDeviceResponse struct {
 
 func (x *RevokeDeviceResponse) Reset() {
 	*x = RevokeDeviceResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[38]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2188,7 +1998,7 @@ func (x *RevokeDeviceResponse) String() string {
 func (*RevokeDeviceResponse) ProtoMessage() {}
 
 func (x *RevokeDeviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[38]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2201,7 +2011,7 @@ func (x *RevokeDeviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeDeviceResponse.ProtoReflect.Descriptor instead.
 func (*RevokeDeviceResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{38}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *RevokeDeviceResponse) GetRevoked() bool {
@@ -2219,7 +2029,7 @@ type GetEntitlementRequest struct {
 
 func (x *GetEntitlementRequest) Reset() {
 	*x = GetEntitlementRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[39]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2231,7 +2041,7 @@ func (x *GetEntitlementRequest) String() string {
 func (*GetEntitlementRequest) ProtoMessage() {}
 
 func (x *GetEntitlementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[39]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2244,7 +2054,7 @@ func (x *GetEntitlementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEntitlementRequest.ProtoReflect.Descriptor instead.
 func (*GetEntitlementRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{39}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{36}
 }
 
 type GetEntitlementResponse struct {
@@ -2260,7 +2070,7 @@ type GetEntitlementResponse struct {
 
 func (x *GetEntitlementResponse) Reset() {
 	*x = GetEntitlementResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[40]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2272,7 +2082,7 @@ func (x *GetEntitlementResponse) String() string {
 func (*GetEntitlementResponse) ProtoMessage() {}
 
 func (x *GetEntitlementResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[40]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2285,7 +2095,7 @@ func (x *GetEntitlementResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEntitlementResponse.ProtoReflect.Descriptor instead.
 func (*GetEntitlementResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{40}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetEntitlementResponse) GetActive() bool {
@@ -2333,7 +2143,7 @@ type CreateCheckoutSessionRequest struct {
 
 func (x *CreateCheckoutSessionRequest) Reset() {
 	*x = CreateCheckoutSessionRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[41]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2345,7 +2155,7 @@ func (x *CreateCheckoutSessionRequest) String() string {
 func (*CreateCheckoutSessionRequest) ProtoMessage() {}
 
 func (x *CreateCheckoutSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[41]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2358,7 +2168,7 @@ func (x *CreateCheckoutSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCheckoutSessionRequest.ProtoReflect.Descriptor instead.
 func (*CreateCheckoutSessionRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{41}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CreateCheckoutSessionRequest) GetPlan() string {
@@ -2384,7 +2194,7 @@ type CreateCheckoutSessionResponse struct {
 
 func (x *CreateCheckoutSessionResponse) Reset() {
 	*x = CreateCheckoutSessionResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[42]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2396,7 +2206,7 @@ func (x *CreateCheckoutSessionResponse) String() string {
 func (*CreateCheckoutSessionResponse) ProtoMessage() {}
 
 func (x *CreateCheckoutSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[42]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2409,7 +2219,7 @@ func (x *CreateCheckoutSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCheckoutSessionResponse.ProtoReflect.Descriptor instead.
 func (*CreateCheckoutSessionResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{42}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CreateCheckoutSessionResponse) GetCheckoutUrl() string {
@@ -2431,7 +2241,7 @@ type UploadBlobHeader struct {
 
 func (x *UploadBlobHeader) Reset() {
 	*x = UploadBlobHeader{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[43]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2443,7 +2253,7 @@ func (x *UploadBlobHeader) String() string {
 func (*UploadBlobHeader) ProtoMessage() {}
 
 func (x *UploadBlobHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[43]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2456,7 +2266,7 @@ func (x *UploadBlobHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadBlobHeader.ProtoReflect.Descriptor instead.
 func (*UploadBlobHeader) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{43}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *UploadBlobHeader) GetHash() string {
@@ -2500,7 +2310,7 @@ type UploadBlobChunk struct {
 
 func (x *UploadBlobChunk) Reset() {
 	*x = UploadBlobChunk{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[44]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2512,7 +2322,7 @@ func (x *UploadBlobChunk) String() string {
 func (*UploadBlobChunk) ProtoMessage() {}
 
 func (x *UploadBlobChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[44]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2525,7 +2335,7 @@ func (x *UploadBlobChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadBlobChunk.ProtoReflect.Descriptor instead.
 func (*UploadBlobChunk) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{44}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *UploadBlobChunk) GetPayload() isUploadBlobChunk_Payload {
@@ -2579,7 +2389,7 @@ type UploadBlobResponse struct {
 
 func (x *UploadBlobResponse) Reset() {
 	*x = UploadBlobResponse{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[45]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2591,7 +2401,7 @@ func (x *UploadBlobResponse) String() string {
 func (*UploadBlobResponse) ProtoMessage() {}
 
 func (x *UploadBlobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[45]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2604,7 +2414,7 @@ func (x *UploadBlobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadBlobResponse.ProtoReflect.Descriptor instead.
 func (*UploadBlobResponse) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{45}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *UploadBlobResponse) GetHash() string {
@@ -2630,7 +2440,7 @@ type DownloadBlobRequest struct {
 
 func (x *DownloadBlobRequest) Reset() {
 	*x = DownloadBlobRequest{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[46]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2642,7 +2452,7 @@ func (x *DownloadBlobRequest) String() string {
 func (*DownloadBlobRequest) ProtoMessage() {}
 
 func (x *DownloadBlobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[46]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2655,7 +2465,7 @@ func (x *DownloadBlobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadBlobRequest.ProtoReflect.Descriptor instead.
 func (*DownloadBlobRequest) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{46}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *DownloadBlobRequest) GetHash() string {
@@ -2674,7 +2484,7 @@ type DownloadBlobChunk struct {
 
 func (x *DownloadBlobChunk) Reset() {
 	*x = DownloadBlobChunk{}
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[47]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2686,7 +2496,7 @@ func (x *DownloadBlobChunk) String() string {
 func (*DownloadBlobChunk) ProtoMessage() {}
 
 func (x *DownloadBlobChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_cashflux_v1_cashflux_proto_msgTypes[47]
+	mi := &file_cashflux_v1_cashflux_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2699,7 +2509,7 @@ func (x *DownloadBlobChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadBlobChunk.ProtoReflect.Descriptor instead.
 func (*DownloadBlobChunk) Descriptor() ([]byte, []int) {
-	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{47}
+	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *DownloadBlobChunk) GetData() []byte {
@@ -2813,21 +2623,7 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12,\n" +
 	"\x12expires_in_seconds\x18\x03 \x01(\x03R\x10expiresInSeconds\x12\x1b\n" +
-	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\"\x86\x01\n" +
-	"\x1fRequestPhoneVerificationRequest\x12!\n" +
-	"\fphone_number\x18\x01 \x01(\tR\vphoneNumber\x12!\n" +
-	"\fdevice_label\x18\x02 \x01(\tR\vdeviceLabel\x12\x1d\n" +
-	"\n" +
-	"setup_code\x18\x03 \x01(\tR\tsetupCode\"6\n" +
-	" RequestPhoneVerificationResponse\x12\x12\n" +
-	"\x04sent\x18\x01 \x01(\bR\x04sent\"\xba\x01\n" +
-	"\x16VerifyPhoneCodeRequest\x12!\n" +
-	"\fphone_number\x18\x01 \x01(\tR\vphoneNumber\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\x12!\n" +
-	"\fdevice_label\x18\x03 \x01(\tR\vdeviceLabel\x12'\n" +
-	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\x12\x1d\n" +
-	"\n" +
-	"setup_code\x18\x05 \x01(\tR\tsetupCode\"\x89\x01\n" +
+	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\"\x89\x01\n" +
 	"\x18RedeemPairingCodeRequest\x12!\n" +
 	"\fpairing_code\x18\x01 \x01(\tR\vpairingCode\x12!\n" +
 	"\fdevice_label\x18\x02 \x01(\tR\vdeviceLabel\x12'\n" +
@@ -2904,11 +2700,9 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\x06Vision\x12\x1a.cashflux.v1.VisionRequest\x1a\x17.cashflux.v1.Completion\x12F\n" +
 	"\n" +
 	"ChatStream\x12\x18.cashflux.v1.ChatRequest\x1a\x1c.cashflux.v1.CompletionChunk0\x01\x12J\n" +
-	"\fVisionStream\x12\x1a.cashflux.v1.VisionRequest\x1a\x1c.cashflux.v1.CompletionChunk0\x012\xca\x06\n" +
+	"\fVisionStream\x12\x1a.cashflux.v1.VisionRequest\x1a\x1c.cashflux.v1.CompletionChunk0\x012\xf9\x04\n" +
 	"\vAuthService\x12D\n" +
-	"\x06Enroll\x12\x1a.cashflux.v1.EnrollRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12w\n" +
-	"\x18RequestPhoneVerification\x12,.cashflux.v1.RequestPhoneVerificationRequest\x1a-.cashflux.v1.RequestPhoneVerificationResponse\x12V\n" +
-	"\x0fVerifyPhoneCode\x12#.cashflux.v1.VerifyPhoneCodeRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12Z\n" +
+	"\x06Enroll\x12\x1a.cashflux.v1.EnrollRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12Z\n" +
 	"\x11RedeemPairingCode\x12%.cashflux.v1.RedeemPairingCodeRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12H\n" +
 	"\bRegister\x12\x1c.cashflux.v1.RegisterRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12B\n" +
 	"\x05Login\x12\x19.cashflux.v1.LoginRequest\x1a\x1e.cashflux.v1.TokenPairResponse\x12P\n" +
@@ -2937,56 +2731,53 @@ func file_cashflux_v1_cashflux_proto_rawDescGZIP() []byte {
 	return file_cashflux_v1_cashflux_proto_rawDescData
 }
 
-var file_cashflux_v1_cashflux_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
+var file_cashflux_v1_cashflux_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_cashflux_v1_cashflux_proto_goTypes = []any{
-	(*Workspace)(nil),                        // 0: cashflux.v1.Workspace
-	(*DatasetEnvelope)(nil),                  // 1: cashflux.v1.DatasetEnvelope
-	(*BlobRef)(nil),                          // 2: cashflux.v1.BlobRef
-	(*ListWorkspacesRequest)(nil),            // 3: cashflux.v1.ListWorkspacesRequest
-	(*ListWorkspacesResponse)(nil),           // 4: cashflux.v1.ListWorkspacesResponse
-	(*GetWorkspaceRequest)(nil),              // 5: cashflux.v1.GetWorkspaceRequest
-	(*GetWorkspaceResponse)(nil),             // 6: cashflux.v1.GetWorkspaceResponse
-	(*PutWorkspaceRequest)(nil),              // 7: cashflux.v1.PutWorkspaceRequest
-	(*PutWorkspaceResponse)(nil),             // 8: cashflux.v1.PutWorkspaceResponse
-	(*DeleteWorkspaceRequest)(nil),           // 9: cashflux.v1.DeleteWorkspaceRequest
-	(*DeleteWorkspaceResponse)(nil),          // 10: cashflux.v1.DeleteWorkspaceResponse
-	(*WatchWorkspacesRequest)(nil),           // 11: cashflux.v1.WatchWorkspacesRequest
-	(*WatchWorkspacesResponse)(nil),          // 12: cashflux.v1.WatchWorkspacesResponse
-	(*SetKeyRequest)(nil),                    // 13: cashflux.v1.SetKeyRequest
-	(*SetKeyResponse)(nil),                   // 14: cashflux.v1.SetKeyResponse
-	(*ListModelsRequest)(nil),                // 15: cashflux.v1.ListModelsRequest
-	(*ListModelsResponse)(nil),               // 16: cashflux.v1.ListModelsResponse
-	(*Message)(nil),                          // 17: cashflux.v1.Message
-	(*Usage)(nil),                            // 18: cashflux.v1.Usage
-	(*ChatRequest)(nil),                      // 19: cashflux.v1.ChatRequest
-	(*VisionRequest)(nil),                    // 20: cashflux.v1.VisionRequest
-	(*Completion)(nil),                       // 21: cashflux.v1.Completion
-	(*CompletionChunk)(nil),                  // 22: cashflux.v1.CompletionChunk
-	(*EnrollRequest)(nil),                    // 23: cashflux.v1.EnrollRequest
-	(*TokenPairResponse)(nil),                // 24: cashflux.v1.TokenPairResponse
-	(*RequestPhoneVerificationRequest)(nil),  // 25: cashflux.v1.RequestPhoneVerificationRequest
-	(*RequestPhoneVerificationResponse)(nil), // 26: cashflux.v1.RequestPhoneVerificationResponse
-	(*VerifyPhoneCodeRequest)(nil),           // 27: cashflux.v1.VerifyPhoneCodeRequest
-	(*RedeemPairingCodeRequest)(nil),         // 28: cashflux.v1.RedeemPairingCodeRequest
-	(*RegisterRequest)(nil),                  // 29: cashflux.v1.RegisterRequest
-	(*LoginRequest)(nil),                     // 30: cashflux.v1.LoginRequest
-	(*RefreshTokenRequest)(nil),              // 31: cashflux.v1.RefreshTokenRequest
-	(*LogoutRequest)(nil),                    // 32: cashflux.v1.LogoutRequest
-	(*LogoutResponse)(nil),                   // 33: cashflux.v1.LogoutResponse
-	(*ListDevicesRequest)(nil),               // 34: cashflux.v1.ListDevicesRequest
-	(*DeviceSession)(nil),                    // 35: cashflux.v1.DeviceSession
-	(*ListDevicesResponse)(nil),              // 36: cashflux.v1.ListDevicesResponse
-	(*RevokeDeviceRequest)(nil),              // 37: cashflux.v1.RevokeDeviceRequest
-	(*RevokeDeviceResponse)(nil),             // 38: cashflux.v1.RevokeDeviceResponse
-	(*GetEntitlementRequest)(nil),            // 39: cashflux.v1.GetEntitlementRequest
-	(*GetEntitlementResponse)(nil),           // 40: cashflux.v1.GetEntitlementResponse
-	(*CreateCheckoutSessionRequest)(nil),     // 41: cashflux.v1.CreateCheckoutSessionRequest
-	(*CreateCheckoutSessionResponse)(nil),    // 42: cashflux.v1.CreateCheckoutSessionResponse
-	(*UploadBlobHeader)(nil),                 // 43: cashflux.v1.UploadBlobHeader
-	(*UploadBlobChunk)(nil),                  // 44: cashflux.v1.UploadBlobChunk
-	(*UploadBlobResponse)(nil),               // 45: cashflux.v1.UploadBlobResponse
-	(*DownloadBlobRequest)(nil),              // 46: cashflux.v1.DownloadBlobRequest
-	(*DownloadBlobChunk)(nil),                // 47: cashflux.v1.DownloadBlobChunk
+	(*Workspace)(nil),                     // 0: cashflux.v1.Workspace
+	(*DatasetEnvelope)(nil),               // 1: cashflux.v1.DatasetEnvelope
+	(*BlobRef)(nil),                       // 2: cashflux.v1.BlobRef
+	(*ListWorkspacesRequest)(nil),         // 3: cashflux.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),        // 4: cashflux.v1.ListWorkspacesResponse
+	(*GetWorkspaceRequest)(nil),           // 5: cashflux.v1.GetWorkspaceRequest
+	(*GetWorkspaceResponse)(nil),          // 6: cashflux.v1.GetWorkspaceResponse
+	(*PutWorkspaceRequest)(nil),           // 7: cashflux.v1.PutWorkspaceRequest
+	(*PutWorkspaceResponse)(nil),          // 8: cashflux.v1.PutWorkspaceResponse
+	(*DeleteWorkspaceRequest)(nil),        // 9: cashflux.v1.DeleteWorkspaceRequest
+	(*DeleteWorkspaceResponse)(nil),       // 10: cashflux.v1.DeleteWorkspaceResponse
+	(*WatchWorkspacesRequest)(nil),        // 11: cashflux.v1.WatchWorkspacesRequest
+	(*WatchWorkspacesResponse)(nil),       // 12: cashflux.v1.WatchWorkspacesResponse
+	(*SetKeyRequest)(nil),                 // 13: cashflux.v1.SetKeyRequest
+	(*SetKeyResponse)(nil),                // 14: cashflux.v1.SetKeyResponse
+	(*ListModelsRequest)(nil),             // 15: cashflux.v1.ListModelsRequest
+	(*ListModelsResponse)(nil),            // 16: cashflux.v1.ListModelsResponse
+	(*Message)(nil),                       // 17: cashflux.v1.Message
+	(*Usage)(nil),                         // 18: cashflux.v1.Usage
+	(*ChatRequest)(nil),                   // 19: cashflux.v1.ChatRequest
+	(*VisionRequest)(nil),                 // 20: cashflux.v1.VisionRequest
+	(*Completion)(nil),                    // 21: cashflux.v1.Completion
+	(*CompletionChunk)(nil),               // 22: cashflux.v1.CompletionChunk
+	(*EnrollRequest)(nil),                 // 23: cashflux.v1.EnrollRequest
+	(*TokenPairResponse)(nil),             // 24: cashflux.v1.TokenPairResponse
+	(*RedeemPairingCodeRequest)(nil),      // 25: cashflux.v1.RedeemPairingCodeRequest
+	(*RegisterRequest)(nil),               // 26: cashflux.v1.RegisterRequest
+	(*LoginRequest)(nil),                  // 27: cashflux.v1.LoginRequest
+	(*RefreshTokenRequest)(nil),           // 28: cashflux.v1.RefreshTokenRequest
+	(*LogoutRequest)(nil),                 // 29: cashflux.v1.LogoutRequest
+	(*LogoutResponse)(nil),                // 30: cashflux.v1.LogoutResponse
+	(*ListDevicesRequest)(nil),            // 31: cashflux.v1.ListDevicesRequest
+	(*DeviceSession)(nil),                 // 32: cashflux.v1.DeviceSession
+	(*ListDevicesResponse)(nil),           // 33: cashflux.v1.ListDevicesResponse
+	(*RevokeDeviceRequest)(nil),           // 34: cashflux.v1.RevokeDeviceRequest
+	(*RevokeDeviceResponse)(nil),          // 35: cashflux.v1.RevokeDeviceResponse
+	(*GetEntitlementRequest)(nil),         // 36: cashflux.v1.GetEntitlementRequest
+	(*GetEntitlementResponse)(nil),        // 37: cashflux.v1.GetEntitlementResponse
+	(*CreateCheckoutSessionRequest)(nil),  // 38: cashflux.v1.CreateCheckoutSessionRequest
+	(*CreateCheckoutSessionResponse)(nil), // 39: cashflux.v1.CreateCheckoutSessionResponse
+	(*UploadBlobHeader)(nil),              // 40: cashflux.v1.UploadBlobHeader
+	(*UploadBlobChunk)(nil),               // 41: cashflux.v1.UploadBlobChunk
+	(*UploadBlobResponse)(nil),            // 42: cashflux.v1.UploadBlobResponse
+	(*DownloadBlobRequest)(nil),           // 43: cashflux.v1.DownloadBlobRequest
+	(*DownloadBlobChunk)(nil),             // 44: cashflux.v1.DownloadBlobChunk
 }
 var file_cashflux_v1_cashflux_proto_depIdxs = []int32{
 	0,  // 0: cashflux.v1.ListWorkspacesResponse.workspaces:type_name -> cashflux.v1.Workspace
@@ -2997,8 +2788,8 @@ var file_cashflux_v1_cashflux_proto_depIdxs = []int32{
 	17, // 5: cashflux.v1.ChatRequest.messages:type_name -> cashflux.v1.Message
 	18, // 6: cashflux.v1.Completion.usage:type_name -> cashflux.v1.Usage
 	18, // 7: cashflux.v1.CompletionChunk.usage:type_name -> cashflux.v1.Usage
-	35, // 8: cashflux.v1.ListDevicesResponse.devices:type_name -> cashflux.v1.DeviceSession
-	43, // 9: cashflux.v1.UploadBlobChunk.header:type_name -> cashflux.v1.UploadBlobHeader
+	32, // 8: cashflux.v1.ListDevicesResponse.devices:type_name -> cashflux.v1.DeviceSession
+	40, // 9: cashflux.v1.UploadBlobChunk.header:type_name -> cashflux.v1.UploadBlobHeader
 	3,  // 10: cashflux.v1.SyncService.ListWorkspaces:input_type -> cashflux.v1.ListWorkspacesRequest
 	5,  // 11: cashflux.v1.SyncService.GetWorkspace:input_type -> cashflux.v1.GetWorkspaceRequest
 	7,  // 12: cashflux.v1.SyncService.PutWorkspace:input_type -> cashflux.v1.PutWorkspaceRequest
@@ -3011,46 +2802,42 @@ var file_cashflux_v1_cashflux_proto_depIdxs = []int32{
 	19, // 19: cashflux.v1.AIService.ChatStream:input_type -> cashflux.v1.ChatRequest
 	20, // 20: cashflux.v1.AIService.VisionStream:input_type -> cashflux.v1.VisionRequest
 	23, // 21: cashflux.v1.AuthService.Enroll:input_type -> cashflux.v1.EnrollRequest
-	25, // 22: cashflux.v1.AuthService.RequestPhoneVerification:input_type -> cashflux.v1.RequestPhoneVerificationRequest
-	27, // 23: cashflux.v1.AuthService.VerifyPhoneCode:input_type -> cashflux.v1.VerifyPhoneCodeRequest
-	28, // 24: cashflux.v1.AuthService.RedeemPairingCode:input_type -> cashflux.v1.RedeemPairingCodeRequest
-	29, // 25: cashflux.v1.AuthService.Register:input_type -> cashflux.v1.RegisterRequest
-	30, // 26: cashflux.v1.AuthService.Login:input_type -> cashflux.v1.LoginRequest
-	31, // 27: cashflux.v1.AuthService.RefreshToken:input_type -> cashflux.v1.RefreshTokenRequest
-	32, // 28: cashflux.v1.AuthService.Logout:input_type -> cashflux.v1.LogoutRequest
-	34, // 29: cashflux.v1.AuthService.ListDevices:input_type -> cashflux.v1.ListDevicesRequest
-	37, // 30: cashflux.v1.AuthService.RevokeDevice:input_type -> cashflux.v1.RevokeDeviceRequest
-	39, // 31: cashflux.v1.AccountService.GetEntitlement:input_type -> cashflux.v1.GetEntitlementRequest
-	41, // 32: cashflux.v1.BillingService.CreateCheckoutSession:input_type -> cashflux.v1.CreateCheckoutSessionRequest
-	44, // 33: cashflux.v1.BlobService.UploadBlob:input_type -> cashflux.v1.UploadBlobChunk
-	46, // 34: cashflux.v1.BlobService.DownloadBlob:input_type -> cashflux.v1.DownloadBlobRequest
-	4,  // 35: cashflux.v1.SyncService.ListWorkspaces:output_type -> cashflux.v1.ListWorkspacesResponse
-	6,  // 36: cashflux.v1.SyncService.GetWorkspace:output_type -> cashflux.v1.GetWorkspaceResponse
-	8,  // 37: cashflux.v1.SyncService.PutWorkspace:output_type -> cashflux.v1.PutWorkspaceResponse
-	10, // 38: cashflux.v1.SyncService.DeleteWorkspace:output_type -> cashflux.v1.DeleteWorkspaceResponse
-	12, // 39: cashflux.v1.SyncService.WatchWorkspaces:output_type -> cashflux.v1.WatchWorkspacesResponse
-	14, // 40: cashflux.v1.AIService.SetKey:output_type -> cashflux.v1.SetKeyResponse
-	16, // 41: cashflux.v1.AIService.ListModels:output_type -> cashflux.v1.ListModelsResponse
-	21, // 42: cashflux.v1.AIService.Chat:output_type -> cashflux.v1.Completion
-	21, // 43: cashflux.v1.AIService.Vision:output_type -> cashflux.v1.Completion
-	22, // 44: cashflux.v1.AIService.ChatStream:output_type -> cashflux.v1.CompletionChunk
-	22, // 45: cashflux.v1.AIService.VisionStream:output_type -> cashflux.v1.CompletionChunk
-	24, // 46: cashflux.v1.AuthService.Enroll:output_type -> cashflux.v1.TokenPairResponse
-	26, // 47: cashflux.v1.AuthService.RequestPhoneVerification:output_type -> cashflux.v1.RequestPhoneVerificationResponse
-	24, // 48: cashflux.v1.AuthService.VerifyPhoneCode:output_type -> cashflux.v1.TokenPairResponse
-	24, // 49: cashflux.v1.AuthService.RedeemPairingCode:output_type -> cashflux.v1.TokenPairResponse
-	24, // 50: cashflux.v1.AuthService.Register:output_type -> cashflux.v1.TokenPairResponse
-	24, // 51: cashflux.v1.AuthService.Login:output_type -> cashflux.v1.TokenPairResponse
-	24, // 52: cashflux.v1.AuthService.RefreshToken:output_type -> cashflux.v1.TokenPairResponse
-	33, // 53: cashflux.v1.AuthService.Logout:output_type -> cashflux.v1.LogoutResponse
-	36, // 54: cashflux.v1.AuthService.ListDevices:output_type -> cashflux.v1.ListDevicesResponse
-	38, // 55: cashflux.v1.AuthService.RevokeDevice:output_type -> cashflux.v1.RevokeDeviceResponse
-	40, // 56: cashflux.v1.AccountService.GetEntitlement:output_type -> cashflux.v1.GetEntitlementResponse
-	42, // 57: cashflux.v1.BillingService.CreateCheckoutSession:output_type -> cashflux.v1.CreateCheckoutSessionResponse
-	45, // 58: cashflux.v1.BlobService.UploadBlob:output_type -> cashflux.v1.UploadBlobResponse
-	47, // 59: cashflux.v1.BlobService.DownloadBlob:output_type -> cashflux.v1.DownloadBlobChunk
-	35, // [35:60] is the sub-list for method output_type
-	10, // [10:35] is the sub-list for method input_type
+	25, // 22: cashflux.v1.AuthService.RedeemPairingCode:input_type -> cashflux.v1.RedeemPairingCodeRequest
+	26, // 23: cashflux.v1.AuthService.Register:input_type -> cashflux.v1.RegisterRequest
+	27, // 24: cashflux.v1.AuthService.Login:input_type -> cashflux.v1.LoginRequest
+	28, // 25: cashflux.v1.AuthService.RefreshToken:input_type -> cashflux.v1.RefreshTokenRequest
+	29, // 26: cashflux.v1.AuthService.Logout:input_type -> cashflux.v1.LogoutRequest
+	31, // 27: cashflux.v1.AuthService.ListDevices:input_type -> cashflux.v1.ListDevicesRequest
+	34, // 28: cashflux.v1.AuthService.RevokeDevice:input_type -> cashflux.v1.RevokeDeviceRequest
+	36, // 29: cashflux.v1.AccountService.GetEntitlement:input_type -> cashflux.v1.GetEntitlementRequest
+	38, // 30: cashflux.v1.BillingService.CreateCheckoutSession:input_type -> cashflux.v1.CreateCheckoutSessionRequest
+	41, // 31: cashflux.v1.BlobService.UploadBlob:input_type -> cashflux.v1.UploadBlobChunk
+	43, // 32: cashflux.v1.BlobService.DownloadBlob:input_type -> cashflux.v1.DownloadBlobRequest
+	4,  // 33: cashflux.v1.SyncService.ListWorkspaces:output_type -> cashflux.v1.ListWorkspacesResponse
+	6,  // 34: cashflux.v1.SyncService.GetWorkspace:output_type -> cashflux.v1.GetWorkspaceResponse
+	8,  // 35: cashflux.v1.SyncService.PutWorkspace:output_type -> cashflux.v1.PutWorkspaceResponse
+	10, // 36: cashflux.v1.SyncService.DeleteWorkspace:output_type -> cashflux.v1.DeleteWorkspaceResponse
+	12, // 37: cashflux.v1.SyncService.WatchWorkspaces:output_type -> cashflux.v1.WatchWorkspacesResponse
+	14, // 38: cashflux.v1.AIService.SetKey:output_type -> cashflux.v1.SetKeyResponse
+	16, // 39: cashflux.v1.AIService.ListModels:output_type -> cashflux.v1.ListModelsResponse
+	21, // 40: cashflux.v1.AIService.Chat:output_type -> cashflux.v1.Completion
+	21, // 41: cashflux.v1.AIService.Vision:output_type -> cashflux.v1.Completion
+	22, // 42: cashflux.v1.AIService.ChatStream:output_type -> cashflux.v1.CompletionChunk
+	22, // 43: cashflux.v1.AIService.VisionStream:output_type -> cashflux.v1.CompletionChunk
+	24, // 44: cashflux.v1.AuthService.Enroll:output_type -> cashflux.v1.TokenPairResponse
+	24, // 45: cashflux.v1.AuthService.RedeemPairingCode:output_type -> cashflux.v1.TokenPairResponse
+	24, // 46: cashflux.v1.AuthService.Register:output_type -> cashflux.v1.TokenPairResponse
+	24, // 47: cashflux.v1.AuthService.Login:output_type -> cashflux.v1.TokenPairResponse
+	24, // 48: cashflux.v1.AuthService.RefreshToken:output_type -> cashflux.v1.TokenPairResponse
+	30, // 49: cashflux.v1.AuthService.Logout:output_type -> cashflux.v1.LogoutResponse
+	33, // 50: cashflux.v1.AuthService.ListDevices:output_type -> cashflux.v1.ListDevicesResponse
+	35, // 51: cashflux.v1.AuthService.RevokeDevice:output_type -> cashflux.v1.RevokeDeviceResponse
+	37, // 52: cashflux.v1.AccountService.GetEntitlement:output_type -> cashflux.v1.GetEntitlementResponse
+	39, // 53: cashflux.v1.BillingService.CreateCheckoutSession:output_type -> cashflux.v1.CreateCheckoutSessionResponse
+	42, // 54: cashflux.v1.BlobService.UploadBlob:output_type -> cashflux.v1.UploadBlobResponse
+	44, // 55: cashflux.v1.BlobService.DownloadBlob:output_type -> cashflux.v1.DownloadBlobChunk
+	33, // [33:56] is the sub-list for method output_type
+	10, // [10:33] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -3061,7 +2848,7 @@ func file_cashflux_v1_cashflux_proto_init() {
 	if File_cashflux_v1_cashflux_proto != nil {
 		return
 	}
-	file_cashflux_v1_cashflux_proto_msgTypes[44].OneofWrappers = []any{
+	file_cashflux_v1_cashflux_proto_msgTypes[41].OneofWrappers = []any{
 		(*UploadBlobChunk_Header)(nil),
 		(*UploadBlobChunk_Data)(nil),
 	}
@@ -3071,7 +2858,7 @@ func file_cashflux_v1_cashflux_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cashflux_v1_cashflux_proto_rawDesc), len(file_cashflux_v1_cashflux_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   48,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

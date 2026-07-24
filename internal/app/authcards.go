@@ -38,8 +38,7 @@ const (
 // reinvented a third way — hands the pair to sync_client.go's
 // storeAuthTokenPair, which persists the rotating refresh token, arms the
 // proactive-refresh countdown, and cycles the backend watch onto the new
-// session. Mirrors customsync.go's verifyCodeValue, plus the rotation
-// bookkeeping that function's phone flow also needs.
+// session.
 func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse) {
 	p := prefsAtom.Get()
 	p.ServerURL = serverURL
@@ -52,13 +51,9 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	storeAuthTokenPair(pair)
 }
 
-// PasswordAuthCard is the username/password escape hatch (TODOS.md C422
-// client UI): phone sign-in (CustomSyncCard) is the primary path, so this
-// renders collapsed as a single understated link — "Use a password
-// instead" — and only expands into the full Register/Login form once
-// clicked, keeping it a fallback rather than a co-equal option. Standalone
-// component (its own hooks), composed into the /sync page like
-// CustomSyncCard.
+// PasswordAuthCard is the username/password sign-in surface (TODOS.md C422
+// client UI). Standalone component (its own hooks), composed into the /sync
+// page.
 func PasswordAuthCard() uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
@@ -76,7 +71,7 @@ func PasswordAuthCard() uic.Node {
 	// idempotencyKey is cleared whenever the username/password inputs change
 	// (a different logical request) and minted fresh the first time a submit
 	// with the current inputs is attempted, so retries of one submission
-	// reuse it — matching the pattern in customsync.go's idempotencyKey.
+	// reuse it — matching the pattern in authhelpers.go's newIdempotencyKey.
 	idempotencyKey := uic.UseState("")
 
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
@@ -146,13 +141,12 @@ func PasswordAuthCard() uic.Node {
 			// Register/Login are skip-listed server-side for both auth AND
 			// entitlement (see authinterceptor_skip.go), so any non-empty
 			// placeholder token satisfies syncbridge's client-side "a bearer
-			// token is required" guard without being checked server-side —
-			// the same pattern customsync.go's sendCode already uses. A
-			// brand-new device that never went through phone verification
-			// first has no token yet (pr.ServerToken is empty), so dialing
-			// with it directly would fail this client-side guard before any
-			// network request is made — before it even reaches the point of
-			// registering or logging in at all.
+			// token is required" guard without being checked server-side. A
+			// brand-new device with no session yet has no token
+			// (pr.ServerToken is empty), so dialing with it directly would fail
+			// this client-side guard before any network request is made —
+			// before it even reaches the point of registering or logging in at
+			// all.
 			token := effectiveServerToken(pr)
 			if token == "" {
 				token = "refresh"
@@ -160,7 +154,7 @@ func PasswordAuthCard() uic.Node {
 			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: token})
 			if err != nil {
 				submitting.Set(false)
-				notify(uistate.T("customSync.connectFailed"), true)
+				notify(uistate.T("authCards.connectFailed"), true)
 				return
 			}
 			defer conn.Close()
@@ -297,17 +291,15 @@ func IfElseValue[T any](cond bool, a, b T) T {
 // DeviceLinkCard redeems a short-lived pairing code minted from the portal's
 // Settings → Devices "Link a new device" flow (TODOS.md C421 client UI).
 // This ONLY ever resolves an existing account — presented plainly as
-// "already have an account? link this device," never alongside
-// CustomSyncCard's brand-new-user phone flow as an equal alternative.
-// Standalone component (its own hooks), composed into the /sync page.
+// "already have an account? link this device," a secondary path alongside
+// PasswordAuthCard's primary sign-in form. Standalone component (its own
+// hooks), composed into the /sync page.
 func DeviceLinkCard() uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
 
-	// Collapsed by default, same reasoning as PasswordAuthCard: linking an
-	// EXISTING device is a returning-user action, not something every
-	// first-time visitor needs in front of them alongside CustomSyncCard's
-	// brand-new-account phone flow.
+	// Collapsed by default: linking an EXISTING device via a pairing code is
+	// a secondary, occasional action, not the primary sign-in path.
 	expanded := uic.UseState(false)
 	code := uic.UseState("")
 	submitting := uic.UseState(false)
@@ -355,7 +347,7 @@ func DeviceLinkCard() uic.Node {
 			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: token})
 			if err != nil {
 				submitting.Set(false)
-				notify(uistate.T("customSync.connectFailed"), true)
+				notify(uistate.T("authCards.connectFailed"), true)
 				return
 			}
 			defer conn.Close()

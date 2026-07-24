@@ -25,7 +25,7 @@ type VersionResponse struct {
 	// ("stripe", "paypal") so the client offers only the buttons that will work.
 	PaymentProviders []string `json:"paymentProviders,omitempty"`
 	// CustomAuthEnabled reports whether AuthServiceServer is registered on this
-	// backend (phone/SMS, username/password, and pairing-code sign-in) — true
+	// backend (username/password and pairing-code sign-in) — true
 	// on the full server and NewSyncAndAuthBridgeHandler, false on
 	// NewSyncBridgeHandler (SyncService only, single static token). Lets the
 	// client show only the sign-in methods this specific backend actually

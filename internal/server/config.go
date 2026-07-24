@@ -61,21 +61,6 @@ type Config struct {
 	PayPalPlanMonthly     string
 	PayPalReturnURL       string
 	PayPalCancelURL       string
-	// Twilio Verify backs SMS enrollment (TODOS.md C420): code
-	// generation/expiry/replay/fraud protection is Twilio's, not hand-rolled.
-	// Matches the existing Stripe/PayPal pattern of raw HTTP calls (no vendor
-	// SDK dependency in go.mod) — see internal/twilio.
-	TwilioAccountSID       string
-	TwilioAuthToken        string
-	TwilioVerifyServiceSID string
-	// SetupCode, when non-empty, gates AuthService's account-creation paths
-	// (RequestPhoneVerification/VerifyPhoneCode) behind a manually-distributed,
-	// single-use code the operator hands to whoever they want to invite —
-	// built for private/embedded deployments (e.g. a personal-site-hosted
-	// instance) where open self-service enrollment isn't wanted. Empty (the
-	// default) means no gate: any phone number can enroll, matching CashFlux's
-	// normal open-product behavior. See Store.ConsumeSetupCode.
-	SetupCode             string
 	ConsoleDir            string
 	PortalDir             string
 	OAuthProviders        map[string]OAuthProviderConfig
@@ -160,7 +145,6 @@ func FromEnv() (Config, error) {
 	cfg.SessionKeyPrevious = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SESSION_KEY_PREVIOUS"))
 	cfg.Token = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN"))
 	cfg.TokenSHA256 = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TOKEN_SHA256"))
-	cfg.SetupCode = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_SETUP_CODE"))
 	cfg.StripeAPIBaseURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_API_BASE_URL"))
 	cfg.StripeSecretKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_SECRET_KEY"))
 	cfg.StripeWebhookSecret = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_STRIPE_WEBHOOK_SECRET"))
@@ -177,9 +161,6 @@ func FromEnv() (Config, error) {
 	cfg.PayPalPlanMonthly = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_PLAN_MONTHLY"))
 	cfg.PayPalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_RETURN_URL"))
 	cfg.PayPalCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CANCEL_URL"))
-	cfg.TwilioAccountSID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_ACCOUNT_SID"))
-	cfg.TwilioAuthToken = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_AUTH_TOKEN"))
-	cfg.TwilioVerifyServiceSID = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_TWILIO_VERIFY_SERVICE_SID"))
 	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.PortalDir = envOr("CASHFLUX_SERVER_PORTAL_DIR", "web/portal")

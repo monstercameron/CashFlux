@@ -92,16 +92,16 @@ func TestAuthUserForTokenAcceptsSHA256Hash(t *testing.T) {
 
 // TestAuthUserForTokenAcceptsAuthServiceJWTRegardlessOfAuthMode proves
 // authUserForToken accepts a valid AuthService session-JWT access token (the
-// same shape Register/Login/VerifyPhoneCode/RedeemPairingCode all mint via
+// same shape Register/Login/RedeemPairingCode all mint via
 // issueStoredSessionPair) under AuthMode=="token" — the default self-host
 // mode, and exactly the mode "Custom Sync" (TODOS.md C418-C427) targets per
 // its own "fixed, built-in server endpoint, no OAuth setup" premise (C419).
 //
 // Before this test's fix, this path was gated on AuthMode=="oauth" (a
 // leftover from when third-party OAuth cloud sign-in was the only source of
-// these JWTs): a self-hosted Custom Sync session could complete phone
-// verification and look "signed in" client-side (Register/Login/
-// VerifyPhoneCode/RefreshToken are all interceptor-exempt — see
+// these JWTs): a self-hosted Custom Sync session could complete password/
+// pairing sign-in and look "signed in" client-side (Register/Login/
+// RedeemPairingCode/RefreshToken are all interceptor-exempt — see
 // authinterceptor_skip.go) while every OTHER authenticated call it actually
 // needs (ListDevices, AccountService.GetEntitlement, SyncService/
 // BlobService — the whole point of syncing) silently failed Unauthenticated

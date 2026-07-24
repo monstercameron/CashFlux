@@ -6,7 +6,7 @@ import "github.com/monstercameron/CashFlux/internal/backendrpc"
 
 // authInterceptorSkipMethods lists the AuthService full method names that run
 // with neither an authenticated caller nor a cloud-entitlement check
-// (TODOS.md C418-C422): a device enrolling, verifying a phone code,
+// (TODOS.md C418-C422): a device enrolling, redeeming a pairing code,
 // registering, or logging in cannot present a bearer token yet, and
 // refreshing/logging out must succeed even for a billing-gated account so the
 // token lifecycle itself never depends on entitlement (see
@@ -15,14 +15,12 @@ import "github.com/monstercameron/CashFlux/internal/backendrpc"
 // listed here: those manage an already-authenticated session and require a
 // caller identity, same as every other service.
 var authInterceptorSkipMethods = map[string]bool{
-	backendrpc.MethodAuthEnroll:                   true,
-	backendrpc.MethodAuthRequestPhoneVerification: true,
-	backendrpc.MethodAuthVerifyPhoneCode:          true,
-	backendrpc.MethodAuthRedeemPairingCode:        true,
-	backendrpc.MethodAuthRegister:                 true,
-	backendrpc.MethodAuthLogin:                    true,
-	backendrpc.MethodAuthRefreshToken:             true,
-	backendrpc.MethodAuthLogout:                   true,
+	backendrpc.MethodAuthEnroll:            true,
+	backendrpc.MethodAuthRedeemPairingCode: true,
+	backendrpc.MethodAuthRegister:          true,
+	backendrpc.MethodAuthLogin:             true,
+	backendrpc.MethodAuthRefreshToken:      true,
+	backendrpc.MethodAuthLogout:            true,
 }
 
 // skipsAuthAndEntitlement reports whether fullMethod must bypass both

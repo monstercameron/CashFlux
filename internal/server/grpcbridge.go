@@ -148,39 +148,37 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	return mux
 }
 
-// phoneOnlyAuthServer wraps an AuthServiceServer and disables Register/Login
-// (username/password enrollment): NewSyncAndAuthBridgeHandler's embedding is
-// phone/SMS-only by design (TODOS.md C445) — Config.SetupCode gates account
-// creation on RequestPhoneVerification/VerifyPhoneCode, but Register creates
-// an account from nothing but a username/password with NO setup-code check
-// of its own, since it predates this embedding and was never meant to be
-// reachable here. Rather than bolt a second, redundant gate onto Register,
-// this embedding simply never exposes it: Register/Login always return
-// Unimplemented, regardless of whether Config.SetupCode is set, matching the
-// original design ("phone+SMS is the only account-creation path" for this
-// embedding) rather than reintroducing password accounts as a gated
-// alternative.
-type phoneOnlyAuthServer struct {
+// pairingOnlyAuthServer wraps an AuthServiceServer and disables Register
+// (open username/password self-signup) and, for now, Login too:
+// NewSyncAndAuthBridgeHandler's embedding is a single-owner, invite-only
+// deployment with no password credential provisioned yet — that arrives with
+// the admin-approved device-pairing bootstrap (RedeemPairingCode followed by a
+// new SetPassword RPC, TODOS.md pending). Login stays disabled here only
+// until that bootstrap ships; Register (open self-signup) stays disabled
+// permanently for this embedding — every account creation must go through
+// admin approval.
+type pairingOnlyAuthServer struct {
 	AuthServiceServer
 }
 
-func (phoneOnlyAuthServer) Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error) {
-	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "username/password enrollment is not available on this server")
+func (pairingOnlyAuthServer) Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error) {
+	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "open self-service enrollment is not available on this server")
 }
 
-func (phoneOnlyAuthServer) Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error) {
+func (pairingOnlyAuthServer) Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error) {
 	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "username/password sign-in is not available on this server")
 }
 
 // NewSyncAndAuthBridgeHandler builds a GoGRPCBridge WebSocket handler exposing
 // SyncService + AuthService + BlobService — no AIService, no
 // AccountService/BillingService, no HTTP site. It is the embeddable slice for
-// a host that wants the full per-person sync engine (phone/SMS enrollment,
-// device sessions, artifact transfer) with NO billing/tier concept: every
-// enrolled account gets full access, gated only by Config.SetupCode at
+// a host that wants the full per-person sync engine (admin-approved device
+// pairing, device sessions, artifact transfer) with NO billing/tier concept:
+// every enrolled account gets full access, gated only by admin approval at
 // account creation and by cfg's ordinary storage caps thereafter (see
 // pkg/embed.NewSyncAndAuthBridge). AuthService's Register/Login
-// (username/password) are deliberately disabled — see phoneOnlyAuthServer.
+// (open username/password self-signup) are deliberately disabled — see
+// pairingOnlyAuthServer.
 //
 // The CloudEntitlement interceptors stay in the chain even though this
 // deployment has no billing: with cfg.Billing == false, IsCloudActive is a
@@ -203,7 +201,7 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		}),
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
-	RegisterAuthServiceServer(grpcServer, phoneOnlyAuthServer{newAuthService(store, cfg)})
+	RegisterAuthServiceServer(grpcServer, pairingOnlyAuthServer{newAuthService(store, cfg)})
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
 	tunnel := grpctunnel.Wrap(grpcServer,
 		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
@@ -231,7 +229,7 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
-			CustomAuthEnabled:   true, // AuthServiceServer (phone-only) is registered on this bridge
+			CustomAuthEnabled:   true, // AuthServiceServer (pairing-only) is registered on this bridge
 		})
 	})
 	return mux
@@ -268,11 +266,11 @@ func authUserForToken(token string, cfg Config) (AuthUser, bool) {
 	// This used to be gated on AuthMode=="oauth" (third-party OAuth "cloud"
 	// sign-in, the only source of these JWTs when that gate was written), but
 	// AuthService (TODOS.md C418) mints the exact same JWT shape for "Custom
-	// Sync" phone/password enrollment, whose entire premise is working
+	// Sync" password/pairing enrollment, whose entire premise is working
 	// against a plain self-hosted server with AuthMode=="token" and NO OAuth
 	// provider configured — that's what "a fixed, built-in server endpoint"
 	// (C419) means. Leaving the oauth-only gate in place made a self-hosted
-	// Custom Sync session look "signed in" (Register/Login/VerifyPhoneCode/
+	// Custom Sync session look "signed in" (Register/Login/RedeemPairingCode/
 	// RefreshToken are all interceptor-exempt, see authinterceptor_skip.go)
 	// while every OTHER authenticated call it needs — ListDevices,
 	// AccountService.GetEntitlement, and the SyncService/BlobService calls

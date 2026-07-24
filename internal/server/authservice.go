@@ -4,16 +4,13 @@ package server
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
-	"github.com/monstercameron/CashFlux/internal/twilio"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -31,8 +28,6 @@ func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
 		HandlerType: (*AuthServiceServer)(nil),
 		Methods: []grpc.MethodDesc{
 			{MethodName: "Enroll", Handler: authEnrollHandler},
-			{MethodName: "RequestPhoneVerification", Handler: authRequestPhoneVerificationHandler},
-			{MethodName: "VerifyPhoneCode", Handler: authVerifyPhoneCodeHandler},
 			{MethodName: "RedeemPairingCode", Handler: authRedeemPairingCodeHandler},
 			{MethodName: "Register", Handler: authRegisterHandler},
 			{MethodName: "Login", Handler: authLoginHandler},
@@ -51,8 +46,6 @@ func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
 // backendrpc value-type pattern SyncServiceServer/AIServiceServer already use.
 type AuthServiceServer interface {
 	Enroll(context.Context, backendrpc.EnrollRequest) (backendrpc.TokenPairResponse, error)
-	RequestPhoneVerification(context.Context, backendrpc.RequestPhoneVerificationRequest) (backendrpc.RequestPhoneVerificationResponse, error)
-	VerifyPhoneCode(context.Context, backendrpc.VerifyPhoneCodeRequest) (backendrpc.TokenPairResponse, error)
 	RedeemPairingCode(context.Context, backendrpc.RedeemPairingCodeRequest) (backendrpc.TokenPairResponse, error)
 	Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error)
 	Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error)
@@ -70,41 +63,18 @@ type authServer struct {
 	store *Store
 	cfg   Config
 
-	// verify is the Twilio Verify client SMS enrollment calls through (TODOS.md
-	// C420). It defaults to nil and is built lazily from cfg on first use
-	// (see verifyClient) so newAuthService's signature stays untouched for
-	// existing callers; tests set it directly on a struct literal to inject a
-	// fake without hitting the network.
-	verify twilio.VerifyClient
-
-	// phoneVerifyLimiter/deviceVerifyLimiter throttle RequestPhoneVerification
-	// per phone number and per calling device, reusing the same
-	// newFixedWindowLimiter primitive as the HTTP authLimiter
-	// (authRateLimitMiddleware in http.go) rather than inventing a new limiter.
-	// The gRPC tunnel carries no client IP (see BearerTokenFromContext/
-	// metadata.FromIncomingContext — only "authorization" and "x-request-id"
-	// are set), so "per caller device" is scoped by the request's DeviceLabel,
-	// the best caller-identifying signal available at this layer; a request
-	// with no label shares one bucket, which still caps a single unlabeled
-	// caller's rate. Both are fixed at phoneVerifyLimitPerMinute /
-	// deviceVerifyLimitPerMinute (conservative, SMS costs money) rather than
-	// cfg.AuthRateLimitPerMinute, which is a general-purpose 20/min default
-	// meant for cheap auth endpoints, not paid SMS sends.
-	phoneVerifyLimiter  *fixedWindowLimiter
-	deviceVerifyLimiter *fixedWindowLimiter
-
-	// checkCodeLimiter/loginLimiter/registerLimiter/pairingLimiter guard the
-	// remaining unauthenticated AuthService doors against brute force: a
-	// six-digit SMS code, a password, and a six-digit pairing code are all
-	// small-enough guess spaces that an unrated endpoint is a real attack
-	// surface (account takeover / device hijack), not just a cost concern.
-	// Each is keyed by the best caller-identifying signal available at this
-	// layer — see phoneVerifyLimiter's doc comment on why the gRPC tunnel
-	// gives us no client IP.
-	checkCodeLimiter *fixedWindowLimiter
-	loginLimiter     *fixedWindowLimiter
-	registerLimiter  *fixedWindowLimiter
-	pairingLimiter   *fixedWindowLimiter
+	// loginLimiter/registerLimiter/pairingLimiter guard the remaining
+	// unauthenticated AuthService doors against brute force: a password and a
+	// six-digit pairing code are small-enough guess spaces that an unrated
+	// endpoint is a real attack surface (account takeover / device hijack),
+	// not just a cost concern. Each is keyed by the best caller-identifying
+	// signal available at this layer — the gRPC tunnel carries no client IP
+	// (see BearerTokenFromContext/metadata.FromIncomingContext — only
+	// "authorization" and "x-request-id" are set), so DeviceLabel/username is
+	// the best available signal.
+	loginLimiter    *fixedWindowLimiter
+	registerLimiter *fixedWindowLimiter
+	pairingLimiter  *fixedWindowLimiter
 
 	// pairingGlobalLimiter backstops pairingLimiter with a single,
 	// server-wide bucket keyed on a fixed constant (see pairingGlobalLimiterKey)
@@ -122,18 +92,6 @@ type authServer struct {
 	// struct's doc comment) — that is a larger, separate change.
 	pairingGlobalLimiter *fixedWindowLimiter
 
-	// phoneVerifyGlobalLimiter backstops phoneVerifyLimiter/deviceVerifyLimiter
-	// with a single, server-wide bucket (see pairingGlobalLimiter's doc
-	// comment for the same reasoning): both of those are keyed on
-	// caller-supplied values (the target phone number and an unauthenticated
-	// device label), so an attacker who sprays a fresh, real phone number
-	// with a fresh device label on every call never reuses either bucket.
-	// RequestPhoneVerification sends a real, money-costing Twilio SMS on
-	// every unthrottled call, so an unbounded spray is a direct financial
-	// cost, not just an account-security issue — this limiter caps that
-	// regardless of how many distinct phones/labels a caller cycles through.
-	phoneVerifyGlobalLimiter *fixedWindowLimiter
-
 	// registerGlobalLimiter is registerGlobalLimiter's pairing-code twin:
 	// registerLimiter alone is keyed by the same caller-controlled
 	// DeviceLabel, so an attacker rotating it on every call gets unlimited
@@ -150,26 +108,17 @@ type authServer struct {
 // request, so it cannot be reset by varying request fields.
 const pairingGlobalLimiterKey = "redeem-pairing-code:global"
 
-// phoneVerifyGlobalLimiterKey is phoneVerifyGlobalLimiter's single, constant
-// bucket key, for the same reason as pairingGlobalLimiterKey.
-const phoneVerifyGlobalLimiterKey = "request-phone-verification:global"
-
 // registerGlobalLimiterKey is registerGlobalLimiter's constant bucket key —
 // see pairingGlobalLimiterKey.
 const registerGlobalLimiterKey = "register:global"
 
-// phoneVerifyLimitPerMinute/deviceVerifyLimitPerMinute cap SMS verification
-// sends per phone number / per calling device per minute (TODOS.md C420).
-// checkCodeLimitPerMinute/loginLimitPerMinute/registerLimitPerMinute/
-// pairingLimitPerMinute cap attempts against the other guessable-secret doors
-// (SMS code check, password, pairing code) per phone/username/device.
+// loginLimitPerMinute/registerLimitPerMinute/pairingLimitPerMinute cap
+// attempts against the guessable-secret doors (password, pairing code) per
+// username/device.
 const (
-	phoneVerifyLimitPerMinute  = 3
-	deviceVerifyLimitPerMinute = 5
-	checkCodeLimitPerMinute    = 10
-	loginLimitPerMinute        = 10
-	registerLimitPerMinute     = 5
-	pairingLimitPerMinute      = 10
+	loginLimitPerMinute    = 10
+	registerLimitPerMinute = 5
+	pairingLimitPerMinute  = 10
 
 	// pairingGlobalLimitPerMinute caps total RedeemPairingCode attempts across
 	// EVERY caller server-wide (see authServer.pairingGlobalLimiter's doc
@@ -183,14 +132,6 @@ const (
 	// high-frequency one like login).
 	pairingGlobalLimitPerMinute = 30
 
-	// phoneVerifyGlobalLimitPerMinute caps total RequestPhoneVerification
-	// sends across EVERY caller/phone/device server-wide (see
-	// authServer.phoneVerifyGlobalLimiter's doc comment). Set well above any
-	// plausible legitimate concurrent-enrollment burst but low enough that a
-	// spray attack costs the attacker time, not the deployment an unbounded
-	// Twilio bill.
-	phoneVerifyGlobalLimitPerMinute = 30
-
 	// registerGlobalLimitPerMinute caps total Register attempts across EVERY
 	// caller server-wide (see authServer.registerGlobalLimiter's doc comment).
 	// Set well above any plausible legitimate concurrent-signup burst but low
@@ -202,327 +143,22 @@ const (
 
 func newAuthService(store *Store, cfg Config) *authServer {
 	return &authServer{
-		store:                    store,
-		cfg:                      cfg,
-		phoneVerifyLimiter:       newFixedWindowLimiter(phoneVerifyLimitPerMinute),
-		deviceVerifyLimiter:      newFixedWindowLimiter(deviceVerifyLimitPerMinute),
-		checkCodeLimiter:         newFixedWindowLimiter(checkCodeLimitPerMinute),
-		loginLimiter:             newFixedWindowLimiter(loginLimitPerMinute),
-		registerLimiter:          newFixedWindowLimiter(registerLimitPerMinute),
-		pairingLimiter:           newFixedWindowLimiter(pairingLimitPerMinute),
-		pairingGlobalLimiter:     newFixedWindowLimiter(pairingGlobalLimitPerMinute),
-		phoneVerifyGlobalLimiter: newFixedWindowLimiter(phoneVerifyGlobalLimitPerMinute),
-		registerGlobalLimiter:    newFixedWindowLimiter(registerGlobalLimitPerMinute),
+		store:                 store,
+		cfg:                   cfg,
+		loginLimiter:          newFixedWindowLimiter(loginLimitPerMinute),
+		registerLimiter:       newFixedWindowLimiter(registerLimitPerMinute),
+		pairingLimiter:        newFixedWindowLimiter(pairingLimitPerMinute),
+		pairingGlobalLimiter:  newFixedWindowLimiter(pairingGlobalLimitPerMinute),
+		registerGlobalLimiter: newFixedWindowLimiter(registerGlobalLimitPerMinute),
 	}
-}
-
-// verifyClient returns s.verify if a test (or future wiring) set one directly,
-// otherwise builds a TwilioVerifyClient from s.cfg's Twilio fields. Twilio's
-// client itself fails clearly (twilio.ErrNotConfigured) when those fields are
-// empty, so an unconfigured deployment fails loudly rather than silently
-// pretending to send or accept a code.
-func (s *authServer) verifyClient() twilio.VerifyClient {
-	if s.verify != nil {
-		return s.verify
-	}
-	return twilio.NewTwilioVerifyClient(twilio.Config{
-		AccountSID:       s.cfg.TwilioAccountSID,
-		AuthToken:        s.cfg.TwilioAuthToken,
-		VerifyServiceSID: s.cfg.TwilioVerifyServiceSID,
-	})
-}
-
-// e164Pattern matches E.164 phone numbers: a leading "+", then 8-15 digits
-// with no leading zero (ITU-T E.164 §6: max 15 digits total including the
-// country code, and a country code never starts with 0).
-var e164Pattern = regexp.MustCompile(`^\+[1-9]\d{7,14}$`)
-
-// normalizePhoneE164 trims whitespace and confirms phone is a valid E.164
-// number, returning ("", false) otherwise. CashFlux does not attempt
-// locale-aware national-number parsing here — it requires the client to
-// collect and submit a full E.164 number (leading "+" and country code),
-// which keeps this server-side check simple and unambiguous.
-func normalizePhoneE164(phone string) (string, bool) {
-	phone = strings.TrimSpace(phone)
-	if !e164Pattern.MatchString(phone) {
-		return "", false
-	}
-	return phone, true
-}
-
-// requestVerificationDedupeWindow buckets RequestPhoneVerification retries: a
-// second call for the same phone within this window is treated as a client
-// retry of the same action, not a new send request, and replays the first
-// call's result via the idempotency store instead of re-sending a text.
-// RequestPhoneVerificationRequest carries no client-supplied idempotency key
-// (unlike VerifyPhoneCodeRequest), so the key is derived from the phone number
-// and a coarse time bucket instead.
-const requestVerificationDedupeWindow = 30 * time.Second
-
-// phoneUserID derives the stable user id for a phone-verified account: the
-// same normalized-phone-keyed id RequestPhoneVerification/VerifyPhoneCode
-// both use, so a phone number always maps to exactly one account.
-func phoneUserID(phone string) string { return "phone:" + phone }
-
-// ensurePhoneUser upserts a placeholder user row for phone before any
-// idempotency-store call for that phone. idempotency_keys.user_id has a
-// foreign key into users(id) (see serverSchemaV5 in store.go), so a lookup or
-// insert for a phone number that has never upserted a user row would fail the
-// constraint — this call guarantees the row exists first. Upserting here
-// grants no access: the row carries no password/refresh session, so a phone
-// number that never completes VerifyPhoneCode can still never sign in.
-func (s *authServer) ensurePhoneUser(phone string, now time.Time) error {
-	return s.store.UpsertUser(User{ID: phoneUserID(phone), Provider: "phone", Subject: phone, CreatedAt: now})
-}
-
-// codeMatchesSetupCode reports whether presented equals the operator's fixed
-// Config.SetupCode, constant-time. It does not check cfg.SetupCode != "" —
-// callers already gate on that separately.
-func (s *authServer) codeMatchesSetupCode(presented string) bool {
-	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(s.cfg.SetupCode)) == 1
-}
-
-// enrollmentCodeAvailable is RequestPhoneVerification's fail-fast check: does
-// presented look like it could succeed at VerifyPhoneCode time, without
-// consuming anything. presented is valid if it matches either the operator's
-// static Config.SetupCode or an admin-minted, still-unexpired, unconsumed
-// invite code (pkg/embed.Admin.MintInviteCode/TODOS.md C446) — the two
-// sources an operator can hand out an enrollment door through.
-func (s *authServer) enrollmentCodeAvailable(presented string, now time.Time) (bool, error) {
-	if s.codeMatchesSetupCode(presented) {
-		return s.store.SetupCodeAvailable(s.cfg.SetupCode)
-	}
-	return s.store.InviteCodeAvailable(strings.TrimSpace(presented), now)
-}
-
-// consumeEnrollmentCode is VerifyPhoneCode's authoritative check-and-consume,
-// mirroring enrollmentCodeAvailable's source precedence.
-func (s *authServer) consumeEnrollmentCode(presented string, now time.Time) (bool, error) {
-	if s.codeMatchesSetupCode(presented) {
-		return s.store.ConsumeSetupCode(s.cfg.SetupCode, now)
-	}
-	return s.store.ConsumeInviteCode(strings.TrimSpace(presented), now)
-}
-
-// requestVerificationIdempotencyKey derives a dedupe key for
-// RequestPhoneVerification from phone and a coarse time bucket, so retries
-// within requestVerificationDedupeWindow of each other collide onto the same
-// key and replay the first attempt's result instead of sending a second text.
-func requestVerificationIdempotencyKey(phone string, now time.Time) string {
-	bucket := now.UTC().Unix() / int64(requestVerificationDedupeWindow/time.Second)
-	return billingRequestHash("auth.requestPhoneVerification", phone, fmt.Sprintf("%d", bucket))
 }
 
 // Enroll starts a brand-new device/account pairing (the generic entry point
 // TODOS.md C419 falls through to when a device has never enrolled before).
 // TODO(laneB): see TODOS.md C419 — concrete enrollment doors are Register/
-// Login (C422), RedeemPairingCode (C421), and RequestPhoneVerification/
-// VerifyPhoneCode (C420).
+// Login (C422) and RedeemPairingCode (C421).
 func (s *authServer) Enroll(context.Context, backendrpc.EnrollRequest) (backendrpc.TokenPairResponse, error) {
 	return backendrpc.TokenPairResponse{}, status.Errorf(codes.Unimplemented, "TODO(laneB): see TODOS.md C419")
-}
-
-// RequestPhoneVerification sends an SMS verification code via Twilio Verify
-// (TODOS.md C420). It is rate-limited per phone number AND per calling device
-// (see phoneVerifyLimiter/deviceVerifyLimiter), and de-duplicated so a client
-// retry within requestVerificationDedupeWindow replays the first attempt's
-// result instead of sending a second text (see
-// requestVerificationIdempotencyKey).
-func (s *authServer) RequestPhoneVerification(ctx context.Context, req backendrpc.RequestPhoneVerificationRequest) (backendrpc.RequestPhoneVerificationResponse, error) {
-	if s == nil || s.store == nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
-	}
-	phone, ok := normalizePhoneE164(req.PhoneNumber)
-	if !ok {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.InvalidArgument, "phone number must be in international format, e.g. +15551234567")
-	}
-	now := time.Now().UTC()
-	deviceKey := strings.TrimSpace(req.DeviceLabel)
-	if deviceKey == "" {
-		deviceKey = "unlabeled-device"
-	}
-	if !s.phoneVerifyLimiter.allow(phone, now) || !s.deviceVerifyLimiter.allow(deviceKey, now) || !s.phoneVerifyGlobalLimiter.allow(phoneVerifyGlobalLimiterKey, now) {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.ResourceExhausted, "too many verification requests — try again in a minute")
-	}
-	userID := phoneUserID(phone)
-	verifiedBefore, err := s.store.PhoneVerifiedBefore(userID)
-	if err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "account lookup failed")
-	}
-	if err := s.ensurePhoneUser(phone, now); err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "account lookup failed")
-	}
-	// SetupCode gates account CREATION only (TODOS.md portfolio-embedding
-	// gate): a phone that has already completed verification once is a
-	// returning user signing in on another device, not a new invite, so it
-	// skips this check regardless of cfg.SetupCode. Checked here, fail-fast,
-	// so a wrong/spent code never costs an SMS — VerifyPhoneCode is what
-	// actually consumes it, only on successful verification. The presented
-	// code may be either the fixed Config.SetupCode or an admin-minted,
-	// still-valid invite code (see enrollmentCodeAvailable).
-	if !verifiedBefore && s.cfg.SetupCode != "" {
-		available, err := s.enrollmentCodeAvailable(req.SetupCode, now)
-		if err != nil {
-			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "setup code check failed")
-		}
-		if !available {
-			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
-		}
-	}
-	route := backendrpc.MethodAuthRequestPhoneVerification
-	dedupeKey := requestVerificationIdempotencyKey(phone, now)
-	requestHash := billingRequestHash(route, phone)
-	if cached, found, err := s.store.GetIdempotencyResult(userID, route, dedupeKey); err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "idempotency lookup failed")
-	} else if found {
-		if cached.RequestHash != requestHash {
-			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.InvalidArgument, "idempotency key was used for a different request")
-		}
-		var replay backendrpc.RequestPhoneVerificationResponse
-		if err := json.Unmarshal(cached.ResponseBody, &replay); err != nil {
-			return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "idempotency replay decode failed")
-		}
-		return replay, nil
-	}
-	if err := s.verifyClient().SendCode(ctx, phone); err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Unavailable, "sending the verification code failed")
-	}
-	out := backendrpc.RequestPhoneVerificationResponse{Sent: true}
-	body, err := json.Marshal(out)
-	if err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "encode verification response failed")
-	}
-	if err := s.store.PutIdempotencyResult(IdempotencyResult{
-		UserID:       userID,
-		Route:        route,
-		Key:          dedupeKey,
-		RequestHash:  requestHash,
-		ResponseBody: body,
-		CreatedAt:    now,
-	}); err != nil {
-		return backendrpc.RequestPhoneVerificationResponse{}, status.Error(codes.Internal, "idempotency store failed")
-	}
-	return out, nil
-}
-
-// VerifyPhoneCode completes SMS enrollment with the code the user received
-// (TODOS.md C420). On a correct code it looks up or creates a User keyed by
-// the normalized phone number, mints a session with issueSession (the same
-// primitive Register/Login/RedeemPairingCode use), and returns a real
-// TokenPairResponse. A caller-supplied IdempotencyKey makes a retried verify
-// return the SAME token pair rather than minting a second device session
-// (TODOS.md C443) — required here because, unlike an ordinary failed request,
-// a successful VerifyPhoneCode has an external side effect (Twilio marks the
-// code consumed) that must not run twice for one user action.
-func (s *authServer) VerifyPhoneCode(ctx context.Context, req backendrpc.VerifyPhoneCodeRequest) (backendrpc.TokenPairResponse, error) {
-	if s == nil || s.store == nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
-	}
-	phone, ok := normalizePhoneE164(req.PhoneNumber)
-	if !ok {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "phone number must be in international format, e.g. +15551234567")
-	}
-	code := strings.TrimSpace(req.Code)
-	if code == "" {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "verification code is required")
-	}
-	now := time.Now().UTC()
-	deviceKey := strings.TrimSpace(req.DeviceLabel)
-	if deviceKey == "" {
-		deviceKey = "unlabeled-device"
-	}
-	if !s.checkCodeLimiter.allow(phone, now) || !s.deviceVerifyLimiter.allow(deviceKey, now) {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.ResourceExhausted, "too many verification attempts — try again in a minute")
-	}
-	userID := phoneUserID(phone)
-	verifiedBefore, err := s.store.PhoneVerifiedBefore(userID)
-	if err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account lookup failed")
-	}
-	if err := s.ensurePhoneUser(phone, now); err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account lookup failed")
-	}
-	route := backendrpc.MethodAuthVerifyPhoneCode
-	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
-	requestHash := billingRequestHash(route, phone, code, req.DeviceLabel)
-	if idempotencyKey != "" {
-		cached, found, err := s.store.GetIdempotencyResult(userID, route, idempotencyKey)
-		if err != nil {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency lookup failed")
-		}
-		if found {
-			if cached.RequestHash != requestHash {
-				return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "idempotency key was used for a different request")
-			}
-			var replay backendrpc.TokenPairResponse
-			if err := json.Unmarshal(cached.ResponseBody, &replay); err != nil {
-				return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency replay decode failed")
-			}
-			return replay, nil
-		}
-	}
-	approved, err := s.verifyClient().CheckCode(ctx, phone, code)
-	if err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Unavailable, "checking the verification code failed")
-	}
-	if !approved {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "verification code is incorrect or expired")
-	}
-	if suspended, err := s.store.IsUserSuspended(userID); err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "suspension check failed")
-	} else if suspended {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "account is suspended")
-	}
-	// SetupCode's authoritative check-and-consume happens here, only on a
-	// verified new account, only after the SMS code itself has already been
-	// proven correct — so a fumbled verification attempt never burns the
-	// invite (see RequestPhoneVerification's fail-fast check for the same
-	// gate, and migrateTo11's doc comment for why verifiedBefore, not user-row
-	// existence, is the "new account" signal). The presented code may be
-	// either the fixed Config.SetupCode or an admin-minted invite code (see
-	// consumeEnrollmentCode).
-	if !verifiedBefore && s.cfg.SetupCode != "" {
-		consumed, err := s.consumeEnrollmentCode(req.SetupCode, now)
-		if err != nil {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "setup code consume failed")
-		}
-		if !consumed {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "a valid setup code is required to create a new account")
-		}
-	}
-	if !verifiedBefore {
-		if err := s.store.MarkPhoneVerified(userID, now); err != nil {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "mark verified failed")
-		}
-	}
-	access, refresh, familyID, err := s.issueSession(userID, now, req.DeviceLabel)
-	if err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
-	}
-	s.auditActor(ctx, userID, "auth.phone.verify", "user", userID)
-	out := backendrpc.TokenPairResponse{
-		AccessToken:      access,
-		RefreshToken:     refresh,
-		ExpiresInSeconds: int64(sessionAccessTTL.Seconds()),
-		DeviceID:         familyID,
-	}
-	if idempotencyKey != "" {
-		body, err := json.Marshal(out)
-		if err != nil {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "encode verification response failed")
-		}
-		if err := s.store.PutIdempotencyResult(IdempotencyResult{
-			UserID:       userID,
-			Route:        route,
-			Key:          idempotencyKey,
-			RequestHash:  requestHash,
-			ResponseBody: body,
-			CreatedAt:    now,
-		}); err != nil {
-			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency store failed")
-		}
-	}
-	return out, nil
 }
 
 // RedeemPairingCode links a new device to an existing account via a
@@ -993,36 +629,6 @@ func authEnrollHandler(srv any, ctx context.Context, dec func(any) error, interc
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthEnroll}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(AuthServiceServer).Enroll(ctx, req.(backendrpc.EnrollRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func authRequestPhoneVerificationHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
-	var in backendrpc.RequestPhoneVerificationRequest
-	if err := dec(&in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthRequestPhoneVerification}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(AuthServiceServer).RequestPhoneVerification(ctx, req.(backendrpc.RequestPhoneVerificationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func authVerifyPhoneCodeHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
-	var in backendrpc.VerifyPhoneCodeRequest
-	if err := dec(&in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthVerifyPhoneCode}
-	handler := func(ctx context.Context, req any) (any, error) {
-		return srv.(AuthServiceServer).VerifyPhoneCode(ctx, req.(backendrpc.VerifyPhoneCodeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

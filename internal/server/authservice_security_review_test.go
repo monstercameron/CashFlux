@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestAuthServerRedeemPairingCodeSurvivesDeviceLabelRotation(t *testing.T) {
 	for i := 0; i < attempts; i++ {
 		_, err := s.RedeemPairingCode(ctx, backendrpc.RedeemPairingCodeRequest{
 			PairingCode: "000000",
-			DeviceLabel: "attacker-device-" + itoa(i), // a fresh, unauthenticated label every call
+			DeviceLabel: "attacker-device-" + strconv.Itoa(i), // a fresh, unauthenticated label every call
 		})
 		if status.Code(err) == codes.ResourceExhausted {
 			throttled = true
@@ -68,9 +69,9 @@ func TestAuthServerRegisterSurvivesDeviceLabelRotation(t *testing.T) {
 	throttled := false
 	for i := 0; i < attempts; i++ {
 		req := backendrpc.RegisterRequest{
-			Username:    "spam-user-" + itoa(i),
+			Username:    "spam-user-" + strconv.Itoa(i),
 			Password:    "correct-horse-battery",
-			DeviceLabel: "attacker-device-" + itoa(i), // a fresh, unauthenticated label every call
+			DeviceLabel: "attacker-device-" + strconv.Itoa(i), // a fresh, unauthenticated label every call
 		}
 		_, err := s.Register(ctx, req)
 		if status.Code(err) == codes.ResourceExhausted {

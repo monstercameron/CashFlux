@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -271,7 +272,7 @@ func TestAuthServerRegisterRateLimited(t *testing.T) {
 	s := newTestAuthServer(t)
 	ctx := context.Background()
 	for i := 0; i < registerLimitPerMinute; i++ {
-		req := backendrpc.RegisterRequest{Username: "user" + itoa(i), Password: "correct-horse-battery", DeviceLabel: "spammer-device"}
+		req := backendrpc.RegisterRequest{Username: "user" + strconv.Itoa(i), Password: "correct-horse-battery", DeviceLabel: "spammer-device"}
 		if _, err := s.Register(ctx, req); err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i, err)
 		}

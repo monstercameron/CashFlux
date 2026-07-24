@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	_ "github.com/ncruces/go-sqlite3/driver"
 )
 
@@ -90,43 +89,6 @@ func TestMigrateV8ThroughV10ColumnsAndTablesExist(t *testing.T) {
 	}
 	if !tableExists(t, s.db, "pairing_codes") {
 		t.Fatal("missing table pairing_codes")
-	}
-}
-
-// TestPhoneNumberColumnIsNeverPopulated documents a gap between migrateTo8's
-// doc comment and what the codebase actually does: the comment says the
-// partial unique index on users.phone_number exists so "two users can never
-// claim the same verified phone number", but no code path anywhere writes to
-// that column — phone-based accounts are created via
-// authservice.go's ensurePhoneUser/phoneUserID, which upserts a
-// deterministic User{ID: "phone:"+phone, Provider: "phone", Subject: phone}
-// row and relies on the users(provider, subject) UNIQUE constraint from
-// serverSchemaV1 for de-duplication instead. That constraint does correctly
-// prevent two distinct accounts for one phone number (both concurrent
-// registrations resolve to the SAME deterministic id — see
-// TestConcurrentPhoneVerificationResolvesToSameAccount in
-// authservice_phone_test.go) but it means the phone_number column and its
-// index added in migrateTo8 are dead: always empty, protecting nothing. This
-// test pins that fact so it's caught if it silently starts to matter (e.g. a
-// future feature that lets a password account link/claim a phone number by
-// writing this column — at that point the uniqueness index is real and
-// load-bearing, but until then it is inert).
-func TestPhoneNumberColumnIsNeverPopulated(t *testing.T) {
-	verify := newFakeVerifyClient()
-	s := newPhoneTestAuthServer(t, verify)
-	phone := "+15559990001"
-	if _, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{PhoneNumber: phone}); err != nil {
-		t.Fatalf("RequestPhoneVerification: %v", err)
-	}
-	if _, err := s.VerifyPhoneCode(context.Background(), backendrpc.VerifyPhoneCodeRequest{PhoneNumber: phone, Code: "123456"}); err != nil {
-		t.Fatalf("VerifyPhoneCode: %v", err)
-	}
-	var phoneNumberColumn string
-	if err := s.store.db.QueryRow(`SELECT phone_number FROM users WHERE id = ?`, "phone:"+phone).Scan(&phoneNumberColumn); err != nil {
-		t.Fatalf("query phone_number column: %v", err)
-	}
-	if phoneNumberColumn != "" {
-		t.Fatalf("phone_number column = %q, want empty — if this now fails, migrateTo8's partial unique index has become load-bearing and needs its own dedicated concurrency test", phoneNumberColumn)
 	}
 }
 

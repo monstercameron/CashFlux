@@ -7,16 +7,14 @@ package backendrpc
 // backendrpcpb.AuthService_*_FullMethodName constants; proto_contract_test.go
 // asserts the correspondence.
 const (
-	MethodAuthEnroll                   = "/cashflux.v1.AuthService/Enroll"
-	MethodAuthRequestPhoneVerification = "/cashflux.v1.AuthService/RequestPhoneVerification"
-	MethodAuthVerifyPhoneCode          = "/cashflux.v1.AuthService/VerifyPhoneCode"
-	MethodAuthRedeemPairingCode        = "/cashflux.v1.AuthService/RedeemPairingCode"
-	MethodAuthRegister                 = "/cashflux.v1.AuthService/Register"
-	MethodAuthLogin                    = "/cashflux.v1.AuthService/Login"
-	MethodAuthRefreshToken             = "/cashflux.v1.AuthService/RefreshToken"
-	MethodAuthLogout                   = "/cashflux.v1.AuthService/Logout"
-	MethodAuthListDevices              = "/cashflux.v1.AuthService/ListDevices"
-	MethodAuthRevokeDevice             = "/cashflux.v1.AuthService/RevokeDevice"
+	MethodAuthEnroll            = "/cashflux.v1.AuthService/Enroll"
+	MethodAuthRedeemPairingCode = "/cashflux.v1.AuthService/RedeemPairingCode"
+	MethodAuthRegister          = "/cashflux.v1.AuthService/Register"
+	MethodAuthLogin             = "/cashflux.v1.AuthService/Login"
+	MethodAuthRefreshToken      = "/cashflux.v1.AuthService/RefreshToken"
+	MethodAuthLogout            = "/cashflux.v1.AuthService/Logout"
+	MethodAuthListDevices       = "/cashflux.v1.AuthService/ListDevices"
+	MethodAuthRevokeDevice      = "/cashflux.v1.AuthService/RevokeDevice"
 )
 
 // EnrollRequest starts a brand-new, never-before-seen device/account pairing.
@@ -38,37 +36,6 @@ type TokenPairResponse struct {
 	// no email/SMS-backed recovery path (TODOS.md C422). Every other method
 	// leaves this empty.
 	RecoveryCode string `json:"recoveryCode,omitempty"`
-}
-
-// RequestPhoneVerificationRequest asks the server to send an SMS verification
-// code to phoneNumber via Twilio Verify (TODOS.md C420).
-type RequestPhoneVerificationRequest struct {
-	PhoneNumber string `json:"phoneNumber"`
-	DeviceLabel string `json:"deviceLabel,omitempty"`
-	// SetupCode is required only when the server has Config.SetupCode
-	// configured (gated-enrollment deployments); ignored otherwise. See
-	// VerifyPhoneCodeRequest.SetupCode's doc comment for the full contract.
-	SetupCode string `json:"setupCode,omitempty"`
-}
-
-// RequestPhoneVerificationResponse reports whether a verification code was sent.
-type RequestPhoneVerificationResponse struct {
-	Sent bool `json:"sent"`
-}
-
-// VerifyPhoneCodeRequest completes SMS enrollment with the code the user received.
-type VerifyPhoneCodeRequest struct {
-	PhoneNumber    string `json:"phoneNumber"`
-	Code           string `json:"code"`
-	DeviceLabel    string `json:"deviceLabel,omitempty"`
-	IdempotencyKey string `json:"idempotencyKey,omitempty"`
-	// SetupCode: on a deployment with Config.SetupCode configured, a new
-	// account cannot be created without presenting this manually-distributed,
-	// single-use code (checked for validity in RequestPhoneVerification,
-	// atomically consumed here only on successful verification so a fumbled
-	// SMS attempt doesn't burn it). Ignored when the server has no setup code
-	// configured — open CashFlux deployments are unaffected.
-	SetupCode string `json:"setupCode,omitempty"`
 }
 
 // RedeemPairingCodeRequest links a new device to an existing account using a

@@ -15,7 +15,6 @@ package embed
 import (
 	"net/http"
 	"path/filepath"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/server"
 )
@@ -65,19 +64,13 @@ type Bridge struct {
 }
 
 // NewSyncAndAuthBridge is NewSyncBridge's per-person sibling: it wires up
-// SyncService + AuthService + BlobService (phone/SMS enrollment, device
-// sessions, artifact transfer), with no billing/tier concept — every account
-// minted via AuthService gets full access. It's for a host that wants CashFlux
-// sync for itself and a small, manually-invited set of people (rather than
+// SyncService + AuthService + BlobService (admin-approved device pairing,
+// device sessions, artifact transfer), with no billing/tier concept — every
+// account gets full access once created. It's for a host that wants CashFlux
+// sync for itself and a small, admin-invited set of people (rather than
 // NewSyncBridge's single shared static token, where every caller is
-// indistinguishable from any other).
-//
-// New-account creation is gated by CASHFLUX_SERVER_SETUP_CODE
-// (server.Config.SetupCode): if set, a brand-new phone number must present
-// either that fixed value or an admin-minted invite code (Bridge.Admin.
-// MintInviteCode) to RequestPhoneVerification/VerifyPhoneCode; a phone number
-// that has already completed verification once is never asked for it again
-// on later devices. Leave the env var unset for open self-service enrollment.
+// indistinguishable from any other). New-account creation is never open
+// self-service on this embedding — see Admin.ApprovePairing.
 //
 // Same configuration source and token-generation contract as NewSyncBridge —
 // see its doc comment for CASHFLUX_SERVER_* env vars and the generated-token
@@ -103,65 +96,10 @@ func NewSyncAndAuthBridge(dataDir string) (*Bridge, error) {
 	}, nil
 }
 
-// Admin exposes management operations for a NewSyncAndAuthBridge deployment:
-// listing enrolled phone/SMS clients and minting/listing invite codes. It
-// operates directly on the same in-process store the bridge's SyncService/
-// AuthService/BlobService serve — no additional HTTP/gRPC surface on the
-// CashFlux side.
+// Admin exposes management operations for a NewSyncAndAuthBridge deployment.
+// It operates directly on the same in-process store the bridge's
+// SyncService/AuthService/BlobService serve — no additional HTTP/gRPC
+// surface on the CashFlux side.
 type Admin struct {
 	store *server.Store
-}
-
-// PhoneClient is one enrolled phone/SMS account.
-type PhoneClient struct {
-	ID              string
-	PhoneNumber     string
-	CreatedAt       time.Time
-	PhoneVerifiedAt time.Time
-	Suspended       bool
-}
-
-// InviteCode is one minted enrollment invite code. ConsumedAt is the zero
-// time when the code is still outstanding (unexpired and unredeemed).
-type InviteCode struct {
-	Code       string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	ConsumedAt time.Time
-}
-
-// ListClients returns enrolled phone/SMS accounts, newest first.
-func (a *Admin) ListClients() ([]PhoneClient, error) {
-	rows, err := a.store.ListPhoneClients(0)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]PhoneClient, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, PhoneClient{
-			ID: r.ID, PhoneNumber: r.PhoneNumber, CreatedAt: r.CreatedAt,
-			PhoneVerifiedAt: r.PhoneVerifiedAt, Suspended: r.Suspended,
-		})
-	}
-	return out, nil
-}
-
-// MintInviteCode creates a new short-lived, single-use enrollment invite code
-// (server.InviteCodeTTL) not tied to any existing account — hand the
-// returned code to one specific invitee.
-func (a *Admin) MintInviteCode() (code string, expiresAt time.Time, err error) {
-	return a.store.MintInviteCode(time.Now().UTC())
-}
-
-// ListInviteCodes returns minted invite codes, newest first.
-func (a *Admin) ListInviteCodes() ([]InviteCode, error) {
-	rows, err := a.store.ListInviteCodes(0)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]InviteCode, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, InviteCode{Code: r.Code, CreatedAt: r.CreatedAt, ExpiresAt: r.ExpiresAt, ConsumedAt: r.ConsumedAt})
-	}
-	return out, nil
 }

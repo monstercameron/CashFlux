@@ -6038,3 +6038,43 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   label and detail line render as `rgb(216, 113, 111)` (`#d8716f`, the `--danger` token) on `/sync`,
   and confirmed on Settings → Cloud that "Sign out" is gone and "Clear invalid token" renders in its
   place, both by DOM query and screenshot.
+- [x] **C453 [MAJOR][SYNC] Remove phone/SMS sign-in entirely — Cam: "remove sms feature as fuck
+  twillio they stole my money."** Twilio never signed up a single real user on the live deployment
+  (confirmed earlier this session: zero phone-verified rows in `users`) and costs real money per
+  send. Removed the whole path rather than just disabling it:
+
+  **Server**: `internal/twilio/` deleted. `AuthServiceServer.RequestPhoneVerification`/
+  `VerifyPhoneCode` removed from the interface, the hand-rolled `grpc.ServiceDesc`, and their
+  handler funcs in `authservice.go` — along with every phone-only field/limiter/const on `authServer`
+  (`verify`, `phoneVerifyLimiter`, `deviceVerifyLimiter`, `phoneVerifyGlobalLimiter`,
+  `checkCodeLimiter` and their constants). This cascaded further than phone alone: the
+  `SetupCode`/invite-code gate mechanism (`setupcode.go`, `invitecode.go`) existed *only* to gate
+  phone signup, so it came out too, along with `phoneclients.go` (`ListPhoneClients` — a list of
+  accounts that will now never exist) and `Config.SetupCode`/`TwilioAccountSID`/`TwilioAuthToken`/
+  `TwilioVerifyServiceSID`. `pkg/embed.Admin.ListClients`/`MintInviteCode`/`ListInviteCodes` and
+  their `PhoneClient`/`InviteCode` types removed (replaced by the pending-device pairing bootstrap,
+  C454). `phoneOnlyAuthServer` renamed `pairingOnlyAuthServer` — still blocks `Register` permanently
+  on the embedded/portfolio deployment, and blocks `Login` only until the pairing+`SetPassword`
+  bootstrap ships. Regenerated `proto/cashflux/v1/cashflux.proto` → `internal/backendrpc/pb/` via
+  `buf generate` (both plugins resolved from `/c/Users/mreca/go/bin`, not on default `PATH`) so the
+  hand-written `backendrpc/auth.go` types stay in lockstep with the generated contract-test mirror,
+  per `proto_contract_test.go`. Left `users.phone_verified_at` and the now-empty `setup_codes`/
+  `invite_codes` tables in the schema, undropped — a SQLite migration to remove them isn't worth the
+  risk for columns/tables nothing references anymore; `migrateTo11`/`migrateTo12`'s doc comments
+  updated to say so plainly instead of describing behavior that no longer exists.
+
+  **Client**: `internal/app/customsync.go` (`CustomSyncCard`) deleted. Three functions in that file
+  were NOT phone-specific — `customSyncDeviceLabel`, `newIdempotencyKey`, `customSyncErrorMessage`
+  are used by `PasswordAuthCard`/`DeviceLinkCard` in `authcards.go` too — extracted to a new
+  `internal/app/authhelpers.go` before deleting the file they used to share. `syncpage.go`'s
+  `showPhone` renamed `showPassword`: `PasswordAuthCard` is now the primary sign-in surface wherever
+  the phone card used to render; `DeviceLinkCard` moved into the secondary "other ways to sign in"
+  group. One real i18n bug caught by `TestScreensKeyCoverage`: `authcards.go` was calling
+  `uistate.T("customSync.connectFailed")` — a key that only existed in the now-deleted
+  `en_customsync.go`, despite being used by the (non-phone) Register/Login dial-failure path;
+  renamed to `authCards.connectFailed` and added to `en_authcards.go`, where it belonged all along.
+
+  Verified via full `go build`/`go vet`/`go test ./...` (native), a `GOOS=js GOARCH=wasm go build`,
+  scoped wasm `go vet` on `internal/app`, and the existing `sync.spec.mjs` (both cases) and
+  `smoke.spec.mjs` (full 46-route sweep) e2e suites — all pass, confirming this wasn't just a
+  compile-clean removal but a functionally intact one.

@@ -140,43 +140,6 @@ func codeOf(err error) codes.Code {
 	return status.Code(err)
 }
 
-// TestAuthServerRequestPhoneVerificationGlobalCeilingCapsDistinctPhoneSpray
-// proves RequestPhoneVerification cannot be used to run up an unbounded
-// Twilio SMS bill by spraying many DIFFERENT real phone numbers. Each phone
-// number gets its own phoneVerifyLimiter bucket and each fabricated
-// DeviceLabel gets its own deviceVerifyLimiter bucket (see
-// authServer.RequestPhoneVerification), so an attacker who targets a fresh
-// phone number with a fresh device label on every call never reuses either
-// bucket and, before this test's accompanying fix, could trigger real,
-// money-costing SMS sends with no ceiling at all.
-func TestAuthServerRequestPhoneVerificationGlobalCeilingCapsDistinctPhoneSpray(t *testing.T) {
-	verify := newFakeVerifyClient()
-	s := newPhoneTestAuthServer(t, verify)
-
-	const attempts = 60
-	exhausted := 0
-	for i := 0; i < attempts; i++ {
-		_, err := s.RequestPhoneVerification(context.Background(), backendrpc.RequestPhoneVerificationRequest{
-			PhoneNumber: fmt.Sprintf("+1555987%04d", i),
-			DeviceLabel: fmt.Sprintf("spray-device-%d", i),
-		})
-		if err != nil && codeOf(err) == codes.ResourceExhausted {
-			exhausted++
-			continue
-		}
-		if err != nil {
-			t.Fatalf("call %d: unexpected error: %v", i, err)
-		}
-	}
-	if exhausted == 0 {
-		t.Fatalf("RequestPhoneVerification: %d distinct real-looking phone numbers each got a real SMS send "+
-			"(verify.sendCalls=%d) with a fresh DeviceLabel every time and none throttled — an attacker can "+
-			"spray unlimited distinct phone numbers to run up an arbitrarily large Twilio bill, since "+
-			"phoneVerifyLimiter/deviceVerifyLimiter are both keyed by caller-supplied values with no "+
-			"non-bypassable global ceiling", attempts, verify.sendCalls)
-	}
-}
-
 // TestAuthServerRegisterRejectsOverlongUsername proves Register caps username
 // length server-side rather than trusting the wasm client's own validation
 // (internal/app/authcredentials.go), which a caller can trivially bypass by

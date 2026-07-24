@@ -413,24 +413,12 @@ CREATE INDEX IF NOT EXISTS idx_pairing_codes_user_id ON pairing_codes(user_id);
 	return nil
 }
 
-// migrateTo11 adds the setup_codes table backing the SetupCode enrollment gate
-// (Config.SetupCode): private/embedded deployments hand out one manually-set
-// invite code and this table tracks whether it has been redeemed. Rows are
-// keyed by a sha256 hash of the code, not the code itself — the code value
-// lives only in the operator's env var and is never persisted in plaintext.
-// Keying by hash (rather than a single fixed row) means rotating
-// CASHFLUX_SERVER_SETUP_CODE to a new value automatically opens a fresh,
-// unconsumed slot: the operator's way to invite a second person is to change
-// the env var and restart, exactly matching the "one code, one invite, KISS"
-// model this gate was built for.
-//
-// It also adds users.phone_verified_at: a timestamp set the first time a
-// phone number completes VerifyPhoneCode. This is the signal the setup-code
-// gate uses to tell "genuinely new account" from "returning phone number
-// signing in on another device" — the users row itself exists as soon as
-// RequestPhoneVerification is called (ensurePhoneUser upserts eagerly, before
-// the code is ever checked), so row *existence* can't distinguish the two
-// cases; whether the phone has ever finished verification can.
+// migrateTo11 originally added the setup_codes table backing a phone/SMS
+// enrollment gate (Config.SetupCode) and users.phone_verified_at. Both are now
+// vestigial: phone/SMS sign-in was removed entirely (replaced by an
+// admin-approved device-pairing bootstrap), so nothing reads or writes either
+// anymore. Left in place rather than migrated away — a SQLite column/table
+// drop isn't worth the risk for schema nothing references.
 func (s *Store) migrateTo11() error {
 	if _, err := s.db.Exec(`
 CREATE TABLE IF NOT EXISTS setup_codes (
@@ -450,14 +438,11 @@ CREATE TABLE IF NOT EXISTS setup_codes (
 	return nil
 }
 
-// migrateTo12 adds the invite_codes table backing admin-mintable single-use
-// enrollment invites (pkg/embed.Admin.MintInviteCode) — a companion to the
-// fixed Config.SetupCode gate that lets an operator hand out a fresh,
-// short-lived code per person instead of sharing one static secret. Unlike
-// setup_codes, which stores only a hash (the plaintext value lives in an env
-// var with its own source of truth), invite_codes stores the code itself in
-// plaintext, exactly like pairing_codes: a minted invite code has no other
-// source of truth, so the row itself is instance zero.
+// migrateTo12 originally added the invite_codes table backing admin-mintable
+// single-use phone-enrollment invites — a companion to the now-removed
+// setup_codes gate. Vestigial along with it (see migrateTo11's doc comment):
+// nothing mints, reads, or consumes rows here anymore. Left in place rather
+// than migrated away.
 func (s *Store) migrateTo12() error {
 	if _, err := s.db.Exec(`
 CREATE TABLE IF NOT EXISTS invite_codes (

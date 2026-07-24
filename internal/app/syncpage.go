@@ -71,7 +71,7 @@ const (
 //
 // Sign-in method is chosen by capability, not by a manually-picked mode
 // (2026-07-23 redesign): the page asks the connected server what it actually
-// supports (CustomAuthEnabled → phone/password/pairing; AuthProviders → OAuth;
+// supports (CustomAuthEnabled → password/pairing; AuthProviders → OAuth;
 // neither → a fixed access token) and shows exactly that, for any of the three
 // real modalities — CashFlux Cloud, a self-hosted server, or someone else's
 // server — instead of stacking every sign-in door on screen at once regardless
@@ -137,9 +137,9 @@ func SyncPage() uic.Node {
 	// "this page is served by the same server that runs the sync bridge"
 	// (e.g. CashFlux mounted at /budget/ on a site whose backend also serves
 	// /grpc). Only attempted for someone with no address configured yet;
-	// success persists that origin as ServerURL so CustomSyncCard/
-	// PasswordAuthCard/DeviceLinkCard (which read prefs directly) pick it up
-	// too. Failure just falls through to the manual address field — the
+	// success persists that origin as ServerURL so PasswordAuthCard/
+	// DeviceLinkCard (which read prefs directly) pick it up too. Failure just
+	// falls through to the manual address field — the
 	// normal, non-embedded desktop-app case, where no backend lives at the
 	// page's own origin at all.
 	probeSameOrigin := func() {
@@ -269,13 +269,14 @@ func SyncPage() uic.Node {
 	status := loadSyncStatus()
 	d := discovery.Get()
 	phase := discoveryState.Get()
-	showPhone := phase == discoveryOK && d.CustomAuthEnabled
+	showPassword := phase == discoveryOK && d.CustomAuthEnabled
 	showOAuth := phase == discoveryOK && len(d.AuthProviders) > 0
 	// The token field is the primary (only) option once discovery resolves with
-	// neither phone nor OAuth support, a safe fallback while discovery is still
-	// checking/erroring (an address might still work even if we couldn't
-	// confirm capabilities), and otherwise a quiet opt-in "advanced" disclosure.
-	tokenPrimary := phase != discoveryOK || (!showPhone && !showOAuth)
+	// neither password/pairing nor OAuth support, a safe fallback while
+	// discovery is still checking/erroring (an address might still work even
+	// if we couldn't confirm capabilities), and otherwise a quiet opt-in
+	// "advanced" disclosure.
+	tokenPrimary := phase != discoveryOK || (!showPassword && !showOAuth)
 	showTokenField := tokenPrimary || advancedTokenOpen.Get()
 
 	// tokenField is shared by its two mutually-exclusive render sites (primary,
@@ -341,7 +342,7 @@ func SyncPage() uic.Node {
 
 			// Exactly one primary sign-in surface, chosen by what the server
 			// actually reports supporting.
-			If(showPhone, uic.CreateElement(CustomSyncCard)),
+			If(showPassword, uic.CreateElement(PasswordAuthCard)),
 			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
 				If(containsString(d.AuthProviders, "google"), Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle"))),
 				If(containsString(d.AuthProviders, "github"), Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub"))),
@@ -354,12 +355,9 @@ func SyncPage() uic.Node {
 			// (Text11+Uppercase+Tracking008+TextFaint) — instead of several
 			// independent accent-colored links competing with the primary
 			// surface above for attention.
-			If(showPhone || !tokenPrimary, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
+			If(showPassword || !tokenPrimary, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
 				Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading")),
-				If(showPhone, Fragment(
-					uic.CreateElement(PasswordAuthCard),
-					uic.CreateElement(DeviceLinkCard),
-				)),
+				If(showPassword, uic.CreateElement(DeviceLinkCard)),
 				If(!tokenPrimary, Fragment(
 					If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
 						Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),
