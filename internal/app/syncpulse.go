@@ -36,6 +36,15 @@ const syncActivityAtomID = "sync:activity"
 // response to something the user just clicked.
 const syncFlashMS = 450
 
+// syncClockTickMS re-renders the indicators periodically so the tooltip's
+// relative "last synced" age stays true between syncs. The label's resolution is
+// a minute, so this bounds how stale it can get, not how precise it is: at 30s
+// the relative part is never wrong by more than half a minute. (Measured at 60s
+// it read "just now" for a full 70 seconds — accurate to its own resolution, but
+// visibly behind.) The wall-clock time beside it is exact regardless, which is
+// why the tooltip carries both.
+const syncClockTickMS = 30000
+
 var (
 	capturedSyncActivity state.Atom[int]
 	syncActivityCaptured bool
@@ -96,6 +105,23 @@ func SyncPulse() uic.Node {
 	capturedSyncActivity = activity
 	syncActivityCaptured = true
 	n := activity.Get()
+
+	// Shared tick with SyncChip so both tooltips' "last synced" line ages correctly
+	// between sync events. Mount-scoped — the interval is torn down with the
+	// component, never left running.
+	clock := state.UseAtom(syncClockAtomID, 0)
+	_ = clock.Get()
+	uic.UseEffect(func() func() {
+		tick := js.FuncOf(func(js.Value, []js.Value) any {
+			clock.Set(clock.Get() + 1)
+			return nil
+		})
+		id := js.Global().Call("setInterval", tick, syncClockTickMS)
+		return func() {
+			js.Global().Call("clearInterval", id)
+			tick.Release()
+		}
+	}, "sync-pulse-clock")
 
 	flashing := uic.UseState(false)
 

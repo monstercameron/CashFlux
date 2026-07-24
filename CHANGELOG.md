@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Hovering a sync indicator shows a last-sync time you can read.** It always carried one — as
+  `Last synced 2026-07-24T20:31:34.476Z`, the raw stored RFC3339Nano stamp in UTC, which is a
+  machine string and a puzzle for anyone not standing in that timezone. It now reads
+  `Last synced 2m ago (4:31 pm)` in the viewer's own zone, and the line is ADDED to the state
+  rather than replacing it — "Synced" and "when did that last happen" are two different questions,
+  and the old tooltip answered only the second. A shared 30s tick (`sync:clock`, owned by SyncPulse
+  and subscribed to by SyncChip) keeps the relative half honest between syncs; measured at 60s it
+  read "just now" for a full 70 seconds, so the interval is half the label's own resolution. The
+  wall-clock time beside it is exact regardless of when the last tick fired, which is why the
+  tooltip carries both.
 - **Top-bar sync pulse — a liveness indicator, not another status label.** A small cloud in the
   top bar sits dim and motionless at rest and flashes ONCE each time data actually reaches (or
   arrives from) the server. Cam: "I wanna see more liveness indications so I can feel secure in

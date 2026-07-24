@@ -6,6 +6,8 @@ package app
 
 import (
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -47,11 +49,53 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 	}
 }
 
+// syncClockAtomID ticks periodically (see syncClockTickMS) so the "last synced"
+// line stays true without a sync event to trigger a re-render. Without it a
+// tooltip rendered twenty minutes ago still claims "2m ago" — a liveness
+// indicator that lies about liveness is worse than one that says nothing.
+const syncClockAtomID = "sync:clock"
+
+// syncLastSyncedLabel renders a stored RFC3339Nano stamp as something a person
+// reads. It gives BOTH a relative age and a wall-clock time: the relative part
+// is what answers "is this recent?" at a glance, and the absolute part is what
+// survives a stale render — if the tick hasn't fired, "5m ago" may be wrong but
+// "4:31 pm" never is. Returns "" for an absent or unparseable stamp, so the
+// caller simply omits the line rather than showing a broken one.
+func syncLastSyncedLabel(raw string, now time.Time) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return ""
+	}
+	// Stored UTC, shown in the viewer's zone — a timestamp in a zone the reader
+	// isn't in is a puzzle, not information.
+	local := t.Local()
+	clock := local.Format("3:04 pm")
+	d := now.Sub(local)
+	switch {
+	case d < time.Minute: // includes a small negative skew from a fast client clock
+		return uistate.T("sync.agoJustNow", clock)
+	case d < time.Hour:
+		return uistate.T("sync.agoMinutes", int(d/time.Minute), clock)
+	case d < 24*time.Hour:
+		return uistate.T("sync.agoHours", int(d/time.Hour), clock)
+	default:
+		return uistate.T("sync.agoDate", local.Format("Jan 2"), clock)
+	}
+}
+
 // syncStatusTooltip builds the hover/AX description shared by every sync
 // indicator: what the state is, when it last synced, any error detail, and which
 // server this household is talking to (§3.4 — a multi-server user needs to tell
 // at a glance). Shared so the rail chip and the top-bar pulse can never drift
 // into describing the same state two different ways.
+//
+// The last-synced line is ADDED to the state, not substituted for it: knowing
+// you are "Synced" and knowing when that last happened are two different
+// questions, and the old version answered only the second.
 func syncStatusTooltip(st syncStatus) string {
 	labelKey, _, ok := syncChipFace(st.State)
 	tip := st.State
@@ -60,11 +104,11 @@ func syncStatusTooltip(st syncStatus) string {
 			tip = label
 		}
 	}
-	if st.LastSyncedAt != "" {
-		tip = uistate.T("sync.lastSynced", st.LastSyncedAt)
-	}
 	if st.Message != "" {
 		tip = tip + " — " + st.Message
+	}
+	if when := syncLastSyncedLabel(st.LastSyncedAt, time.Now()); when != "" {
+		tip = tip + "\n" + uistate.T("sync.lastSynced", when)
 	}
 	if host := backendHost(uistate.UsePrefs().Get().ServerURL); host != "" {
 		tip = tip + "\n" + uistate.T("sync.server", host)
@@ -83,6 +127,9 @@ func SyncChip() uic.Node {
 	rev := state.UseAtom(syncRevAtomID, 0)
 	capturedSyncRev = rev
 	syncStatusCaptured = true
+	// Re-render on the shared minute tick as well, so this chip's "last synced"
+	// line ages correctly between sync events (SyncPulse owns the ticker).
+	_ = state.UseAtom(syncClockAtomID, 0).Get()
 	st := loadSyncStatus()
 	labelKey, cls, ok := syncChipFace(st.State)
 	if !ok {
