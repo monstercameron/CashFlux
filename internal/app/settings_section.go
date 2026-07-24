@@ -352,6 +352,7 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 // settingsCloudPane renders the Cloud tab: backend connection, auth, sync,
 // conflict recovery, and the subscription surface. Pure rendering helper.
 func settingsCloudPane(p settingsRightProps) uic.Node {
+	status := loadSyncStatus()
 	return Div(
 		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
 		// C304: framing line — communicates this section as the subscription/connection
@@ -393,6 +394,12 @@ func settingsCloudPane(p settingsRightProps) uic.Node {
 		If(!p.CloudSelected, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.selfHostedNote"))),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.authMode", p.AuthDiscovery.AuthMode)),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.syncStatus", syncStatusLabel())),
+		// The specific reason behind a non-happy status (e.g. "backend unavailable")
+		// was previously only readable in a hover tooltip on the topbar SyncChip —
+		// nowhere in Settings itself. Surface it here, always visible, right under
+		// the status line it explains.
+		If(status.Message != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt045), Attr("data-testid", "settings-sync-status-detail"),
+			uistate.T("sync.statusDetail", status.Message))),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
 			If(p.ShowGoogleOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGoogle), uistate.T("settings.signInGoogle"))),
 			If(p.ShowGitHubOAuth, Button(css.Class("btn"), Type("button"), OnClick(p.OnSignInGitHub), uistate.T("settings.signInGitHub"))),

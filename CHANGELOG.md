@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Sync errors had no visible detail anywhere in the UI (TODOS.md C450).** `syncStatus.Message`
+  already carried the specific reason a sync failed ("backend unavailable", "pull failed", "artifact
+  blob upload failed", etc.) but the only place it was ever shown was a hover tooltip on the topbar
+  `SyncChip` — the `/sync` page's own status card and Settings → Cloud both only ever printed the
+  generic `syncStatusLabel()` string ("Sync error") with no way to see why. Both now show the actual
+  message on an always-visible line right under the status, no hover required.
+
 ## [1.5.0] - 2026-07-24
 
 ### Changed

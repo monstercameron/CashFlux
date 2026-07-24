@@ -292,6 +292,12 @@ func SyncPage() uic.Node {
 				Span(css.Class(tw.Text15, tw.FontSemibold), syncStatusLabel()),
 				If(status.Pending > 0, Span(css.Class(tw.Text12, tw.TextFaint),
 					uistate.T("sync.pendingCount", status.Pending))),
+				// The specific reason a non-happy status happened (e.g. "backend
+				// unavailable", "pull failed") was previously only ever readable in
+				// a hover tooltip on the topbar SyncChip — nowhere on the page whose
+				// whole job is showing sync health. Surface it here, always visible.
+				If(status.Message != "", Span(css.Class(tw.Text12, tw.TextFaint), Attr("data-testid", "sync-status-detail"),
+					uistate.T("sync.statusDetail", status.Message))),
 			),
 		),
 

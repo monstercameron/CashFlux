@@ -1,3 +1,35 @@
+## 2026-07-24 — Two bugs, same incident: a broken origin check, and an error message with nowhere to go
+
+Cam reported a sync error on the live portfolio deployment. Root-caused it to my own restart
+shortcuts: every time I'd restarted the portfolio's `server.exe` this session to redeploy C448/C449,
+I used a bare `nohup ./bin/server.exe` instead of the project's own `scripts/dev.sh`, which skips
+`BASE_URL`. Without it, CashFlux's embedded sync bridge gets an empty `AppOrigin`, so its `/grpc`
+WebSocket upgrade rejects every connection — including same-origin ones — with `websocket: request
+origin not allowed by Upgrader.CheckOrigin`. The server logs showed hundreds of these going back to
+the very first restart; `/v1/version` (plain HTTP) kept working the whole time, so the discovery
+handshake looked healthy while the actual sync tunnel never once connected. A second, compounding
+issue: those same restarts never pinned `CASHFLUX_SERVER_TOKEN`, so each one minted a fresh random
+token, silently invalidating whatever token Cam had saved. Fixed by relaunching with `BASE_URL` and
+a stable token set (matching `dev.sh`'s own values), deliberately withholding `ADMIN_PASSWORD` since
+`dev.sh` defaults it to `"password"` — which doubles as the unrelated `/budget/` page-gate password
+via `internal/config`'s `env("BUDGET_PASSWORD", os.Getenv("ADMIN_PASSWORD"))` fallback, and would
+have locked Cam out of the page entirely, a state he clearly wasn't in.
+
+Then Cam followed up, sharper: "why is there no fold or pocket where I can see the sync error????"
+Right question. Even with the origin bug fixed, if sync fails for some OTHER reason later, there's
+nowhere to actually see why. Traced it: `syncStatus.Message` already carries a specific reason at
+every failure site in `sync_client.go` ("backend unavailable," "pull failed," "artifact blob upload
+failed"...), but `syncStatusLabel()` throws it away and returns a bare `"Sync error"`, and the ONLY
+place `.Message` was ever read was `SyncChip`'s `title` attribute — a browser hover tooltip on a
+small topbar chip. Not the `/sync` page's own status card, whose entire purpose is showing this.
+Not Settings → Cloud. Nowhere persistent, nowhere discoverable without already knowing to hover a
+specific chip.
+
+Fixed both surfaces to print `status.Message` on an always-visible line under the status label. Then
+proved it rather than trusting the diff: pointed sync at a genuinely unreachable address with a bogus
+token, clicked Sync now, waited out the real dial timeout, and read the live page — "Sync error /
+Reason: pull failed." Not a compile check standing in for a real one.
+
 ## 2026-07-24 — Release v1.5.0
 
 Cut a release: bumped `internal/version.Version` 1.4.0 → 1.5.0 and rolled the accumulated

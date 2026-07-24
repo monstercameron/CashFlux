@@ -5959,3 +5959,29 @@ limits back to the client using gRPC's own rich-error convention instead of inve
 
   Verified by screenshotting the real live embedded deployment (`localhost:8096/budget/sync`, not a
   scratch stand-in) before and after, since this was specifically about how that exact page looks.
+- [x] **C450 [MINOR][SYNC] Sync errors had no visible detail anywhere in the UI.** Cam's report: "why
+  is there no fold or pocket where I can see the sync error????????" — a fair complaint. The app
+  already tracks a specific reason for every sync failure (`syncStatus.Message`: "backend
+  unavailable", "pull failed", "artifact blob upload failed", "force push failed", etc., set at every
+  `setSyncStatus` call site in `sync_client.go`), but `syncStatusLabel()` discards it and returns a
+  flat `"Sync error"` string, and the ONLY place `.Message` was ever actually read was
+  `SyncChip.Attr("title", tip)` — a browser hover tooltip on a small topbar chip, invisible unless you
+  happen to hover it. Neither the `/sync` page's own status card (its entire purpose) nor Settings →
+  Cloud's status line showed it at all.
+
+  Fixed both: `syncpage.go`'s status card and `settings_section.go`'s Cloud pane now render
+  `status.Message` on an always-visible line directly under the status label whenever it's non-empty
+  (new `sync.statusDetail` = "Reason: %s"), reusing the same `loadSyncStatus()` call each already
+  makes. Verified live against the real embedded deployment by actually forcing a real error (pointed
+  sync at an unreachable address with a bogus token, clicked Sync now, waited for the dial to time
+  out): status card read "Sync error / Reason: pull failed" — confirmed working end-to-end, not just
+  compiling.
+
+  Found while investigating a separate, unrelated live incident this same session: ad hoc restarts of
+  the portfolio's `server.exe` (done to redeploy C448/C449) had omitted `BASE_URL`, which meant
+  CashFlux's embedded sync bridge got an empty `AppOrigin` and rejected every `/grpc` WebSocket
+  upgrade — including same-origin ones — with zero visible symptom beyond a generic "sync error" that
+  had nowhere to show its actual cause. Fixed by relaunching with `BASE_URL` and a stable
+  `CASHFLUX_SERVER_TOKEN` set (matching `scripts/dev.sh`'s own convention), confirmed via server logs
+  (`ws_upgrade_succeeded` on `/grpc`) — but this UI gap would have hidden the real reason regardless
+  of cause, hence fixing it here rather than treating it as a one-off ops incident.

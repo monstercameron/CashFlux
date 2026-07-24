@@ -20,6 +20,7 @@ var syncPageKeys = Catalog{
 	"sync.encEnable":     "Turn on passcode lock",
 	"sync.encTitle":      "Privacy",
 	"sync.pendingCount":  "%d change(s) waiting to upload",
+	"sync.statusDetail":  "Reason: %s",
 	"sync.syncingNow":    "Syncing now…",
 	"sync.openSettings":  "Manage subscription & devices",
 	"sync.manageMore":    "Billing, plan, and linked devices",
