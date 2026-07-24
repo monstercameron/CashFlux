@@ -56,6 +56,28 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — Admin console gets user list + monthly usage + storage stats
+
+Cam, refining the portfolio admin page: "I want... to see the signed up users and their request
+volume per month and the database and artifact blob storage size." Straightforward once I checked
+what already existed — `Store.ListUsers`/`ListUsersFiltered` (id/provider/email/created_at +
+subscription plan/status, joined) and a `usage` table with daily per-user request/token counters
+already existed, built for the standalone server's own admin console; I just needed to wrap them for
+`pkg/embed` and add the one genuinely missing piece: on-disk storage size.
+
+`pkg/embed.Admin.ListUsers` attaches each user's CURRENT calendar month's request total directly
+(summing `ListUserUsage` since the 1st) rather than returning raw daily rows and making the caller
+do date math — an N+1 query per page (one `ListUserUsage` call per listed user), deliberately not
+optimized into a single correlated-subquery SQL join: this package's target scale is one embedding
+host's own small, admin-invited user set (see `NewSyncAndAuthBridge`'s doc comment), not a
+multi-tenant SaaS user list, so the simpler shape was the right call, not a shortcut.
+
+`Store.StorageStats` (new) reports the SQLite database's own size via `PRAGMA page_count`/`page_size`
+rather than the OS file path — `Store` never stores its own path (`OpenStore` takes one as an
+argument and forgets it), and querying through the SQL connection itself works identically no matter
+how the store was opened, so no new plumbing was needed to thread a path through to `pkg/embed`.
+Blob storage total is a plain `SUM(size)` over the existing `blobs` table.
+
 ## 2026-07-24 — Adversarial security review of the pairing bootstrap: two real findings, fixed
 
 Task 9's mandatory security-review pass — dispatched a sequential agent to actively try to break the

@@ -6,7 +6,34 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **`pkg/embed.Admin` gains `ListUsers`/`StorageStats`** for the portfolio admin console: a paged
+  list of every enrolled account (id, provider, email, signup date, subscription plan/status) with
+  each user's current-calendar-month request volume attached, plus total on-disk usage (the SQLite
+  database's own size via `PRAGMA page_count`/`page_size`, and the summed size of every stored
+  artifact blob). New `Store.StorageStats` on the CashFlux side backs the latter. 5 new tests.
+  Verified via full native `go build`/`go vet`/`go test ./...`.
+
 ### Fixed
+- **The raw access-token field auto-revealed itself on Settings → Cloud far too often — Cam: "I
+  didn't ask for a bearer token field... I want a clean UI that doesn't confuse the user."** The
+  Local/Remote/Commercial redesign kept an old assumption: `tokenPrimary` was true (auto-showing the
+  field, unlabeled, no click required) whenever discovery hadn't SUCCEEDED — which includes the
+  single most common state, an ordinary network error or a same-origin mismatch while still typing an
+  address, not just "this server turns out to only support a token." It also made Commercial (CashFlux
+  Cloud) show the field unconditionally, even though Commercial always offers OAuth and never needed
+  it. The token field is now NEVER auto-revealed in any phase or segment — it's always a deliberate,
+  one-click "Paste an access token instead" disclosure, the identical toggle whether discovery hasn't
+  resolved yet, failed outright, or succeeded and confirmed the server only offers a token (in which
+  case an info line still names that, but doesn't auto-open the field either). Updated
+  `sync.spec.mjs` to click the toggle before filling the field, matching real usage. Verified live
+  against both `localhost:8080` and the portfolio's embedded deployment at `localhost:8096/budget/`
+  (freshly redeployed via `scripts/build-cashflux.sh`, no server restart needed — that handler serves
+  straight from disk) — confirmed the field stays hidden until explicitly requested in both places.
+  Full native `go build`/`go vet`/`go test ./...`, a real `GOOS=js GOARCH=wasm go build`, and
+  `sync.spec.mjs`/`smoke.spec.mjs`/`interactions.spec.mjs` all clean (same pre-existing, unrelated
+  failure set already on record).
+
 - **Adversarial security review of the device-pairing bootstrap (TODOS.md C454) found and fixed two
   real gaps.** (1) `WatchPairingStatus` and `CancelDevicePairing` had NO rate limiting at all — unlike
   every sibling unauthenticated door (`RequestDevicePairing`, `RedeemPairingCode`, `Register`,

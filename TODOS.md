@@ -6302,3 +6302,27 @@ limits back to the client using gRPC's own rich-error convention instead of inve
 
   4 new tests (2 rate-limit, 2 storage-growth). Verified via full native `go build`/`go vet`/
   `go test ./...` and a real `GOOS=js GOARCH=wasm go build`.
+- [x] **C462 [MAJOR][SYNC] The raw access-token field auto-revealed itself far too often on Settings
+  → Cloud — Cam: "I didn't ask for a bearer token field... I want a clean UI that doesn't confuse the
+  user."** The Local/Remote/Commercial redesign (C456) kept an old assumption: `tokenPrimary` was true
+  (auto-showing the field, no click required) whenever discovery hadn't SUCCEEDED — which covers the
+  single most common state (still typing an address, an ordinary network error, a same-origin
+  mismatch), not just "this server turns out to only support a token." Commercial (CashFlux Cloud)
+  showed it unconditionally too, despite always offering OAuth and never needing it. Fixed: the token
+  field is now NEVER auto-revealed, in any phase or segment — always a deliberate, one-click "Paste
+  an access token instead" disclosure, identical regardless of WHY nothing else is showing. Updated
+  `sync.spec.mjs` to click the toggle before filling the field. Verified live against both
+  `localhost:8080` and the portfolio's embedded deployment at `localhost:8096/budget/` (redeployed via
+  `scripts/build-cashflux.sh`, no restart needed — that handler serves straight from disk). Full
+  native build/vet/test, a real wasm build, and `sync.spec.mjs`/`smoke.spec.mjs`/`interactions.spec.mjs`
+  all clean.
+- [x] **C463 [MINOR][SYNC] `pkg/embed.Admin` gains `ListUsers`/`StorageStats`** for the portfolio
+  admin console — Cam: "I wanna see the signed up users and their request volume per month and the
+  database and artifact blob storage size." Wrapped existing `Store.ListUsers`/`ListUserUsage` (built
+  for the standalone server's own admin console, previously unused by the embedded deployment) rather
+  than inventing anything new; the one genuinely missing piece was `Store.StorageStats` (new) — SQLite
+  db size via `PRAGMA page_count`/`page_size` (no OS file path needed, since `Store` never stores its
+  own), plus `SUM(size)` over the `blobs` table. `ListUsers` attaches each user's current-month
+  request total via one `ListUserUsage` call per listed user (N+1, deliberately not a SQL join — this
+  package's target scale is one host's own small, admin-invited user set, not a multi-tenant SaaS
+  list). 5 new tests. Verified via full native `go build`/`go vet`/`go test ./...`.
