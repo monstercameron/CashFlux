@@ -28984,3 +28984,47 @@ Fragment until sync was configured, so the first time it appeared it landed past
 the far right of the bar. A persistent hidden slot pins it, same as LockToggle. And the motion
 ratchet is safe by construction here — every duration is a token, so the CSSOM value the spec
 parses is an unresolved `var()`, which it skips.
+
+## 2026-07-24 — Making cross-device sign-in actually hydrate
+
+Modelled the "sign in from a different browser" flow, found four gaps, fixed them, and then
+built a real e2e suite (in the portfolio repo, `e2e/sync-flows.mjs`) because the first three
+fixes were verified by eye and two of them were wrong.
+
+**What the flow depends on.** Two non-obvious things carry it: `defaultWSID` is the constant
+`"default"`, so a fresh browser asks for the same workspace id the first one wrote; and a
+sample-seeded device reports `hadLocalDataset = false`, so the pull isn't blocked.
+
+**The four gaps.**
+
+1. *Sample data could overwrite real data.* Pushes are LWW on a client timestamp, so a browser
+   holding the demo dataset always beats a browser holding a year of records. Reachable two
+   ways: set a matching passcode after a locked pull (`migrateDatasetAtRest` force-pushes), or
+   simply edit anything before the first pull lands. Now `pushBlockedReason` refuses to send
+   the sample at all, and refuses while state is `locked` — we will not overwrite a snapshot we
+   could not read.
+2. *Only the active workspace hydrated.* `MethodSyncListWorkspaces` existed and had no caller
+   anywhere in the client. `mergeRemoteWorkspaces` adds unknown remote workspaces to the
+   registry with an empty bundle; switching to one boots a clean slate the boot-time pull fills.
+3. *A locked snapshot had no way out.* `onAppUnlocked` only runs from the passcode gate, which
+   never renders on a device with no lock — so "unlock to sync encrypted data" named an action
+   the user could not perform. Setting the matching passcode now re-pulls, and the Cloud tab
+   says so with the control right there.
+4. *The sample banner survived hydration*, leaving a "Start fresh" wipe button over freshly
+   arrived real records.
+
+**Then the suite found two more, which is the point of the suite.**
+
+- A queued push keeps its ENQUEUE-time timestamp but is compared at DELIVERY time, while the
+  server stamps its own clock on landing. Any delay — a retry after a failed blob upload, an
+  offline queue draining — makes the device's own newer data look older than the snapshot it
+  supersedes, so it lost LWW *against itself* and got filed as a conflict. Now a rejection
+  whose current snapshot carries OUR device id is retried once with Force. Strictly scoped:
+  another device's snapshot still goes through the normal conflict path.
+- `ShouldApplyRemote` refused the remote snapshot whenever the device had a local dataset and
+  no sync meta — which is exactly a first-time sign-in once the seeded sample has autosaved.
+  The caller now passes `hadLocalDataset && !SampleActive()`.
+
+The suite asserts on a uniquely-named transaction entered on browser A and read back on
+browser B. Byte counts and status labels were green through both of those bugs; a specific
+record a person typed is the only assertion that could not be satisfied by a lie.

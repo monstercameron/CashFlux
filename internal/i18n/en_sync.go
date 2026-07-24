@@ -42,6 +42,14 @@ var syncPageKeys = Catalog{
 	// One disclosure for every secondary sign-in path, replacing three competing
 	// top-level links on a server where only the activation code actually works.
 	"sync.moreWaysToggle": "More ways to sign in",
+	// Shown when the server holds an encrypted snapshot this device has no passcode
+	// for. The old state message ("unlock to sync encrypted data") named a action the
+	// user could not take: unlocking runs from the passcode GATE, which never appears
+	// on a device that has no lock set. Setting the matching passcode is the recovery.
+	"sync.lockedTitle": "This account's data is encrypted",
+	"sync.lockedHint":  "It was locked with a passcode on another device. Turn on the passcode lock here and enter that same passcode — this device can't read the data until it matches.",
+	// Reported after a sign-in finds workspaces this device didn't know about.
+	"sync.workspacesAdded": "Added %d workspace(s) from your account. Switch to one to load its data.",
 
 	// Local/Remote/Commercial segments (2026-07-24 unification): one connection
 	// surface instead of a plain Cloud/Self-hosted toggle, since "your own server

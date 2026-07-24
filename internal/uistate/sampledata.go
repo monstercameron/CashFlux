@@ -26,6 +26,11 @@ func UseSampleActive() state.Atom[bool] {
 	return state.UseAtom("app:sampleActive", initial)
 }
 
+// SampleActive reports whether the dataset currently loaded is the seeded demo,
+// read straight from the app KV rather than an atom so it is callable from
+// background goroutines (the sync push path) and not only during a render.
+func SampleActive() bool { return KVGet(sampleActiveKey) == "1" }
+
 // SetSampleActive writes the dataset app-KV flag and updates the atom so any
 // subscribed component re-renders immediately. Call with true when the sample
 // is seeded; call with false on wipe, import, or banner dismiss.

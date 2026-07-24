@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // appLockKey is the localStorage key holding the passcode-lock config. It is
@@ -64,6 +65,14 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	// rest immediately (C45), without waiting for a reload + unlock.
 	activePasscode = passcode
 	migrateDatasetAtRest() // encrypt the existing at-rest copy now
+	// A pull that hit an encrypted snapshot this device could not read parked on
+	// state "locked" with no way out: onAppUnlocked only runs from the passcode
+	// GATE, which never renders on a device that has no lock. Setting the matching
+	// passcode is the actual recovery, so re-pull here — that is the moment this
+	// device becomes able to decrypt the account's data.
+	if uistate.LoadPrefs().Normalize().BackendActive() {
+		pullActiveWorkspaceFromBackend(true)
+	}
 	return true
 }
 

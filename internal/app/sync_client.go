@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backoff"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -365,6 +366,7 @@ func startBackendSync() {
 	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
+	mergeRemoteWorkspaces()
 	startBackendWatch()
 }
 
@@ -408,9 +410,43 @@ func wireSyncLifecycleListeners() {
 	}))
 }
 
+// pushBlockedReason reports why this device must not send its local dataset right
+// now, or "" when pushing is safe. Both cases protect the SERVER's copy from being
+// overwritten by local data that isn't the user's real data — a hazard with teeth,
+// because pushes are last-write-wins on a client-supplied timestamp, so a device
+// holding demo data always wins against a device holding a year of real records.
+//
+//   - The seeded sample. A browser signing in for the first time boots the demo
+//     dataset BEFORE it ever contacts the server. Nothing of the user's is lost by
+//     never uploading it, and uploading it can destroy everything: sign in on a new
+//     browser, have the pull fail or defer, touch anything, and the sample would go
+//     up with time.Now() and win.
+//   - A snapshot we could not read. State "locked" means the server holds an
+//     encrypted dataset this device has no passcode for. It is still the account's
+//     real data; overwriting it with whatever this device happens to hold, because
+//     we could not decrypt it, is the worst possible response to that situation.
+//
+// Both clear themselves: personalising the sample drops the flag, and unlocking
+// (or setting the matching passcode) re-pulls and clears "locked".
+func pushBlockedReason() string {
+	if uistate.SampleActive() {
+		return "local dataset is the seeded sample"
+	}
+	if loadSyncStatus().State == "locked" {
+		return "server snapshot is encrypted and this device cannot read it"
+	}
+	return ""
+}
+
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
+		return
+	}
+	if reason := pushBlockedReason(); reason != "" {
+		if app := appstate.Default; app != nil {
+			app.Log().Info("backend sync push skipped to protect the server copy", "reason", reason)
+		}
 		return
 	}
 	r := loadRegistry()
@@ -574,6 +610,38 @@ func flushBackendSyncQueue() {
 				logSyncError("backend sync push failed", err)
 				return
 			}
+			if !resp.Accepted && resp.Workspace.DeviceID == syncDeviceID() {
+				// We lost last-write-wins to a snapshot THIS device wrote. That is not
+				// a conflict — there is no other writer to protect — it is an artifact
+				// of when the timestamp was taken: ClientUpdatedAt is stamped when the
+				// edit is QUEUED, while the server stamps its own clock when the push
+				// LANDS. Any delay in between (a retry after a failed blob upload, an
+				// offline queue draining, a slow link) leaves the queued edit looking
+				// older than the snapshot it is meant to supersede, so the device's own
+				// newer data gets rejected and filed as a conflict against itself.
+				// Retry once, forcing past the comparison. Scoped strictly to our own
+				// device id: a snapshot written by any OTHER device still goes through
+				// the normal LWW path below, backup and all.
+				var forced backendrpc.PutWorkspaceResponse
+				forceErr := invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+					Workspace: backendrpc.Workspace{
+						ID:       item.WorkspaceID,
+						Name:     item.Name,
+						Color:    item.Color,
+						Sort:     item.Sort,
+						DeviceID: item.DeviceID,
+					},
+					Dataset:         dataset,
+					ClientUpdatedAt: item.ClientUpdatedAt,
+					Force:           true,
+				}, &forced)
+				if forceErr == nil && forced.Accepted {
+					resp = forced
+					if app := appstate.Default; app != nil {
+						app.Log().Info("backend sync re-pushed past our own newer snapshot", "workspace", item.WorkspaceID)
+					}
+				}
+			}
 			if !resp.Accepted {
 				// LWW resolution: the server holds a newer snapshot, so this push lost.
 				// C309: do NOT silently drop the local edit. Before removing it from the
@@ -653,6 +721,7 @@ func restartBackendSync() {
 	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
+	mergeRemoteWorkspaces()
 	startBackendWatch()
 }
 
@@ -775,6 +844,70 @@ func readBackendWatch(stream grpc.ClientStream) (received bool) {
 	}
 }
 
+// mergeRemoteWorkspaces adds any workspace this account owns on the server that
+// this device has never heard of. Without it a device signing in fresh hydrates
+// exactly ONE workspace — pullActiveWorkspaceFromBackend is singular, and nothing
+// in the client had ever called ListWorkspaces — so a household with three
+// workspaces silently became a household with one on every new browser.
+//
+// It only touches the REGISTRY, never the active dataset: each added workspace
+// gets an explicitly empty bundle, so switching to it boots a clean slate that
+// the boot-time pull then fills from the server. (An empty bundle rather than no
+// bundle for the same reason createWorkspace does it: a missing dataset key makes
+// boot seed the demo sample, which would look like a clone of whatever workspace
+// the user just came from.)
+func mergeRemoteWorkspaces() {
+	pr := uistate.LoadPrefs().Normalize()
+	if !pr.BackendActive() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		conn, err := dialAuthed(ctx, pr)
+		if err != nil {
+			logSyncError("backend workspace list dial failed", err)
+			return
+		}
+		defer func() { conn.Close() }()
+		var resp backendrpc.ListWorkspacesResponse
+		if err := invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{}, &resp); err != nil {
+			logSyncError("backend workspace list failed", err)
+			return
+		}
+		r := loadRegistry()
+		added := 0
+		for _, w := range resp.Workspaces {
+			id := strings.TrimSpace(w.ID)
+			if id == "" || w.Deleted || r.Has(id) {
+				continue
+			}
+			name := strings.TrimSpace(w.Name)
+			if name == "" {
+				name = id
+			}
+			r = r.Add(id, name)
+			if strings.TrimSpace(w.Color) != "" {
+				r = r.SetColor(id, w.Color)
+			} else {
+				r = r.SetColor(id, paletteColor(len(r.Workspaces)))
+			}
+			if data, err := store.Export(store.EmptyDataset()); err == nil {
+				saveBlob(id, map[string]string{datasetStoreKey: string(data)})
+			}
+			added++
+		}
+		if added == 0 {
+			return
+		}
+		saveRegistry(r)
+		uistate.PostNotice(uistate.T("sync.workspacesAdded", added), false)
+		if app := appstate.Default; app != nil {
+			app.Log().Info("backend sync added remote workspaces to this device", "count", added)
+		}
+	}()
+}
+
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
@@ -831,7 +964,15 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			logSyncError("backend sync timestamp parse failed", err)
 			return
 		}
-		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, hadLocalDataset, remoteUpdatedAt, true) {
+		// The seeded demo is not "local data" for the purposes of this decision. Once
+		// it has been autosaved, hadLocalDataset is true, and a device that has never
+		// synced has no local meta either — the combination ShouldApplyRemote reads as
+		// "unsynced local work, keep it" and refuses the remote snapshot. On a browser
+		// signing in for the first time that means it sits on demo data forever while
+		// the account's real records wait on the server. There is nothing to protect:
+		// sample data is what the app invented, not what the user typed.
+		localIsUsers := hadLocalDataset && !uistate.SampleActive()
+		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, localIsUsers, remoteUpdatedAt, true) {
 			return
 		}
 		app := appstate.Default
@@ -843,6 +984,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			return
 		}
 		lsSet(datasetStoreKey, string(dataset))
+		// What just replaced the local dataset is the account's real data, so the
+		// "you're viewing sample data" banner — and the "Start fresh" button sitting
+		// next to it — must not survive the hydrate. Nothing else in the sync path
+		// cleared this flag, so a freshly signed-in browser showed a wipe affordance
+		// over freshly arrived real records.
+		uistate.SetSampleActive(false)
 		// Deliberate same-tab dataset replacement: advance the cross-tab generation
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()

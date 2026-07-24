@@ -457,6 +457,18 @@ func CloudConnectionPane() uic.Node {
 			),
 		),
 
+		// Locked recovery. "unlock to sync encrypted data" in the status card named an
+		// action this device cannot perform: unlocking runs from the passcode GATE,
+		// which never renders on a device with no lock configured. The way out is to
+		// SET the matching passcode, so say that, and put the control right here.
+		If(status.State == "locked", Div(css.Class("card", tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
+			Attr("data-testid", "sync-locked-recovery"),
+			Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("sync.lockedTitle")),
+			P(css.Class(tw.Text12, tw.TextDim), uistate.T("sync.lockedHint")),
+			Div(Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "sync-locked-enable-passcode"),
+				OnClick(onEnablePasscode), uistate.T("sync.encEnable"))),
+		)),
+
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("sync.connectToggle"), On: backendOn.Get(), OnChange: onToggle}),
 		If(!backendOn.Get(), P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.backendOffHint"))),
 
