@@ -49,6 +49,13 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	prefsAtom.Set(p)
 	uistate.PersistPrefs(p)
 	storeAuthTokenPair(pair)
+	// Bring the sync engine up for the session that just started. storeAuthTokenPair
+	// only restarts the WATCH; the lifecycle listeners, the queue flush, and the
+	// initial pull (which seeds an empty server with this device's dataset) all live
+	// in restartBackendSync. Without this, activating a device left sync inert until
+	// the next page reload — the cloud tab's OAuth path called this itself, and the
+	// code-redemption paths silently did not.
+	restartBackendSync()
 }
 
 // PasswordAuthCard is the username/password sign-in surface (TODOS.md C422
@@ -288,18 +295,37 @@ func IfElseValue[T any](cond bool, a, b T) T {
 	return b
 }
 
-// DeviceLinkCard redeems a short-lived pairing code minted from the portal's
-// Settings → Devices "Link a new device" flow (TODOS.md C421 client UI).
-// This ONLY ever resolves an existing account — presented plainly as
-// "already have an account? link this device," a secondary path alongside
-// PasswordAuthCard's primary sign-in form. Standalone component (its own
-// hooks), composed into the /sync page.
-func DeviceLinkCard() uic.Node {
+// DeviceLinkCardProps configures which of this card's two jobs it is doing.
+type DeviceLinkCardProps struct {
+	// Primary promotes the card from a secondary "already have an account?"
+	// disclosure to the tab's MAIN sign-in surface: always expanded, and
+	// worded as activating this device rather than linking it to an account
+	// that already exists elsewhere. Set on a server whose only way in is an
+	// admin-minted activation code (Register disabled — see cloudtab.go's
+	// activationOnly), where redeeming a code is not "another way in", it is
+	// the way in.
+	Primary bool
+}
+
+// DeviceLinkCard redeems a short-lived code minted elsewhere and turns it
+// into a real session on this device (TODOS.md C421 client UI). It ONLY ever
+// resolves an already-existing account — the code carries the identity; this
+// card never creates one.
+//
+// Two shapes, same mechanism (see DeviceLinkCardProps.Primary): a collapsed
+// "already have an account? link this device" footnote next to
+// PasswordAuthCard's sign-in form, or the primary "activate this device" form
+// on a server where an admin-minted activation code is the only way in.
+// Standalone component (its own hooks) apart from that one prop.
+func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
 
 	// Collapsed by default: linking an EXISTING device via a pairing code is
-	// a secondary, occasional action, not the primary sign-in path.
+	// a secondary, occasional action, not the primary sign-in path. A Primary
+	// card is read as open without consulting this state at all, so a prop
+	// that flips after mount (discovery resolving) can never leave the card
+	// stuck shut on stale initial state.
 	expanded := uic.UseState(false)
 	code := uic.UseState("")
 	submitting := uic.UseState(false)
@@ -374,22 +400,33 @@ func DeviceLinkCard() uic.Node {
 		idempotencyKey.Set("")
 	})
 
-	if !expanded.Get() {
+	if !props.Primary && !expanded.Get() {
 		return Div(Attr("data-testid", "device-link-collapsed"),
 			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "device-link-expand"),
 				OnClick(onToggleExpand), uistate.T("authCards.haveAnAccount")),
 		)
 	}
 
+	title := uistate.T("authCards.deviceLinkTitle")
+	intro := uistate.T("authCards.deviceLinkIntro")
+	submitLabel := uistate.T("authCards.linkDevice")
+	doneLabel := uistate.T("authCards.deviceLinked")
+	if props.Primary {
+		title = uistate.T("authCards.activateTitle")
+		intro = uistate.T("authCards.activateIntro")
+		submitLabel = uistate.T("authCards.activate")
+		doneLabel = uistate.T("authCards.activated")
+	}
+
 	return Div(css.Class("card", "device-link-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "device-link-card"),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 			ui.Icon(icon.Repeat, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
-			Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("authCards.deviceLinkTitle")),
+			Span(css.Class(tw.Text15, tw.FontSemibold), title),
 		),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.deviceLinkIntro")),
+		P(css.Class(tw.TextFaint, tw.Text12), intro),
 
 		If(linked.Get(), Fragment(
-			P(css.Class(tw.Text12), Attr("data-testid", "device-link-linked"), uistate.T("authCards.deviceLinked")),
+			P(css.Class(tw.Text12), Attr("data-testid", "device-link-linked"), doneLabel),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "device-link-different"),
 				OnClick(onStartOver), uistate.T("authCards.linkAnotherDevice")),
 		)),
@@ -400,7 +437,7 @@ func DeviceLinkCard() uic.Node {
 				Placeholder(uistate.T("authCards.pairingCodePlaceholder")), Value(code.Get()), OnInput(onCodeInput)),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "device-link-submit"),
 				DisabledIf(submitting.Get()), OnClick(onSubmit),
-				IfElse(submitting.Get(), Text(uistate.T("authCards.linking")), Text(uistate.T("authCards.linkDevice")))),
+				IfElse(submitting.Get(), Text(uistate.T("authCards.linking")), Text(submitLabel))),
 		)),
 	)
 }

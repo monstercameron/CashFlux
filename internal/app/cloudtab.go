@@ -292,6 +292,8 @@ func CloudConnectionPane() uic.Node {
 		} else {
 			notify(uistate.T("settings.oauthSignedInAs", userID), false)
 		}
+		// This path persists prefs itself rather than going through
+		// persistAuthSession, so it still has to bring sync up on its own.
 		restartBackendSync()
 	}
 	onSignInGoogle := uic.UseEvent(func() {
@@ -395,6 +397,14 @@ func CloudConnectionPane() uic.Node {
 	// see grpcbridge.go). On a server with open self-signup, PasswordAuthCard's
 	// own Register mode already covers that case with no admin needed.
 	showPendingPairing := showPassword && !d.RegistrationOpen
+	// activationOnly: this server has no self-signup at all, so a code minted
+	// by whoever runs it is the only way a new device gets in. Redeeming one
+	// is therefore not "another way to sign in" filed under a disclosure
+	// link — it IS the sign-in, and it leads. The password form still exists
+	// (a device that has already activated once can set credentials and use
+	// them afterwards) but drops to the secondary list, because typing a
+	// password nobody has set yet is the wrong first thing to offer.
+	activationOnly := showPendingPairing
 	cloudPrice := uistate.T("settings.cloudPriceAnnual")
 	if billingInterval.Get() == "monthly" {
 		cloudPrice = uistate.T("settings.cloudPriceMonthly")
@@ -487,7 +497,8 @@ func CloudConnectionPane() uic.Node {
 			// typing a URL, or a same-origin/network hiccup). It is always a
 			// deliberate, one-click "advanced" disclosure now — the exact
 			// same toggle regardless of WHY nothing else is showing.
-			If(showPassword, uic.CreateElement(PasswordAuthCard)),
+			If(activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{Primary: true})),
+			If(showPassword && !activationOnly, uic.CreateElement(PasswordAuthCard)),
 			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub")),
@@ -496,7 +507,8 @@ func CloudConnectionPane() uic.Node {
 
 			If(!commercial, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
 				If(showPassword || showPendingPairing, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-				If(showPassword, uic.CreateElement(DeviceLinkCard)),
+				If(showPassword && !activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
+				If(activationOnly, uic.CreateElement(PasswordAuthCard)),
 				If(showPendingPairing, uic.CreateElement(PendingDeviceCard)),
 				If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
 					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),

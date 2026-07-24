@@ -55,6 +55,15 @@ var authCardsKeys = Catalog{
 	"authCards.deviceLinked":           "This device is linked.",
 	"authCards.linkAnotherDevice":      "Link a different device",
 
+	// Same card, promoted to the primary sign-in surface on a server where an
+	// admin-minted activation code is the ONLY way in (Register disabled).
+	// Worded for that case: nothing exists on "another device" yet, and the
+	// code comes from the admin console, not from account settings.
+	"authCards.activateTitle": "Activate this device",
+	"authCards.activateIntro": "Generate an activation code in your site's admin console, then enter it here. Each code works once and expires after 5 minutes.",
+	"authCards.activate":      "Activate",
+	"authCards.activated":     "This device is activated — your data will start syncing.",
+
 	// Admin-approved device pairing (TODOS.md C454) — for an invite-only
 	// server where there's no self-signup: the device asks to be paired and
 	// waits for an admin to approve it, rather than the user needing any

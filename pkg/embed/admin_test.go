@@ -218,3 +218,84 @@ func TestAdminStorageStats(t *testing.T) {
 		t.Fatalf("StorageStats: blob size = %d, want 0 on a fresh store with no blobs", blobBytes)
 	}
 }
+
+// TestAdminMintActivationCodeBindsOneOwnerAccount proves the whole point of
+// the activation-code flow: every code resolves to the SAME account, so a
+// second activated device joins the first one's data instead of landing in an
+// island of its own. It also proves the account is created lazily on the
+// first mint (a fresh store has no users at all).
+func TestAdminMintActivationCodeBindsOneOwnerAccount(t *testing.T) {
+	a := newTestAdmin(t)
+
+	first, expiresAt, err := a.MintActivationCode()
+	if err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if first == "" {
+		t.Fatal("MintActivationCode: expected a non-empty code")
+	}
+	if !expiresAt.After(time.Now().UTC()) {
+		t.Fatalf("MintActivationCode: expiresAt = %s, want a future time", expiresAt)
+	}
+
+	second, _, err := a.MintActivationCode()
+	if err != nil {
+		t.Fatalf("MintActivationCode (second): %v", err)
+	}
+	if second == first {
+		t.Fatal("MintActivationCode: expected a distinct code per mint")
+	}
+
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 || users[0].ID != OwnerAccountID {
+		t.Fatalf("ListUsers after two mints: got %+v, want exactly one %s", users, OwnerAccountID)
+	}
+
+	now := time.Now().UTC()
+	for _, code := range []string{first, second} {
+		userID, ok, err := a.store.ConsumePairingCode(code, now)
+		if err != nil {
+			t.Fatalf("ConsumePairingCode(%s): %v", code, err)
+		}
+		if !ok {
+			t.Fatalf("ConsumePairingCode(%s): expected a redeemable code", code)
+		}
+		if userID != OwnerAccountID {
+			t.Fatalf("ConsumePairingCode(%s): user = %q, want %q", code, userID, OwnerAccountID)
+		}
+	}
+}
+
+// TestAdminMintActivationCodeSingleUse proves a code cannot be replayed — the
+// second redemption of the same code always fails, so a code shoulder-surfed
+// after Cam has already used it is worthless.
+func TestAdminMintActivationCodeSingleUse(t *testing.T) {
+	a := newTestAdmin(t)
+	code, _, err := a.MintActivationCode()
+	if err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	now := time.Now().UTC()
+	if _, ok, err := a.store.ConsumePairingCode(code, now); err != nil || !ok {
+		t.Fatalf("first ConsumePairingCode: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := a.store.ConsumePairingCode(code, now); err != nil || ok {
+		t.Fatalf("second ConsumePairingCode: ok=%v err=%v, want ok=false", ok, err)
+	}
+}
+
+// TestAdminMintActivationCodeUnconfigured proves an unconfigured Admin (no
+// CashFlux embedding on this deployment) reports an error rather than
+// panicking on a nil store.
+func TestAdminMintActivationCodeUnconfigured(t *testing.T) {
+	var a *Admin
+	if _, _, err := a.MintActivationCode(); err == nil {
+		t.Fatal("MintActivationCode on a nil Admin: expected an error")
+	}
+	if _, _, err := (&Admin{}).MintActivationCode(); err == nil {
+		t.Fatal("MintActivationCode with no store: expected an error")
+	}
+}

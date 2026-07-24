@@ -95,6 +95,59 @@ func (a *Admin) ApprovePairing(deviceID string) (approved bool, pairingCode stri
 	return true, code, nil
 }
 
+// OwnerAccountID is the single CashFlux account every activation code binds
+// to. Deliberately fixed and well-known rather than random: an activation
+// code can only be minted from behind the embedding host's own admin login,
+// so the access control is that login — not the secrecy of an account id —
+// and a stable id is what makes every activated device land in the SAME
+// account and therefore sync with each other. Contrast ApprovePairing, which
+// mints a fresh account per approval because that flow admits distinct
+// people.
+const OwnerAccountID = "device:owner"
+
+// ownerAccountProvider/ownerAccountSubject are OwnerAccountID's (provider,
+// subject) pair — the unique key Store.UpsertUser conflicts on, which is what
+// makes MintActivationCode idempotent about account creation.
+const (
+	ownerAccountProvider = "device"
+	ownerAccountSubject  = "owner"
+)
+
+// MintActivationCode mints a short-lived (server.PairingCodeTTL), single-use
+// activation code for the deployment owner's account, creating that account
+// on the first call and reusing it forever after.
+//
+// This is the admin-initiated half of the pairing flow: the host's admin
+// console mints a code, the owner types it into any CashFlux client's
+// Settings → Cloud, and AuthService.RedeemPairingCode turns it into a real
+// session. Unlike RequestDevicePairing → ApprovePairing there is no pending
+// request to approve first — the code IS the credential, and minting it
+// requires nothing but access to the embedding host's admin console.
+//
+// Every code binds to OwnerAccountID, so activating a second device joins the
+// same account and the two devices sync with each other. Codes are single-use
+// and expire, so minting one repeatedly is safe; an unredeemed code simply
+// expires unread.
+func (a *Admin) MintActivationCode() (code string, expiresAt time.Time, err error) {
+	if a == nil || a.store == nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	now := time.Now().UTC()
+	if err := a.store.UpsertUser(server.User{
+		ID:        OwnerAccountID,
+		Provider:  ownerAccountProvider,
+		Subject:   ownerAccountSubject,
+		CreatedAt: now,
+	}); err != nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: create owner account: %w", err)
+	}
+	code, expiresAt, err = a.store.MintPairingCode(OwnerAccountID, now)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: mint activation code: %w", err)
+	}
+	return code, expiresAt, nil
+}
+
 // RejectPairing rejects a pending device request (TODOS.md C454). Returns
 // rejected=false (with no error) if the request was already resolved.
 func (a *Admin) RejectPairing(deviceID string) (rejected bool, err error) {
