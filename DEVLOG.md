@@ -28869,3 +28869,43 @@ inserted at their source position — the catch-up/resume band has the same beha
 a persistent hidden placeholder div that pins the slot; the family-wide reconciler
 insertion-order issue + the band placement question are logged for a follow-up (candidate
 framework fix in GWC, or slot placeholders for the whole band).
+
+## 2026-07-24 — Activation codes, and the three bugs hiding behind "Connected."
+
+Cam reported the embedded instance at `localhost:8096`: client says connected, nothing reaches
+the server. The first read was that he'd never signed in — true, and provable (the server DB
+held only e2e fixtures from 07-22, zero pending devices, zero pairing codes), but it turned out
+to be the least interesting third of the answer.
+
+**What he asked for.** "The server makes an activation code, the client uses the code, and it
+takes the creds from the privacy lock. This locks the feature to me only as I am the only one
+with access to the portfolio site." So: the access control is the portfolio's admin login, and
+the user types no credentials anywhere. `RedeemPairingCode` + `DeviceLinkCard` already did the
+client half; the missing piece was a way for an admin to mint a code with no pending device to
+approve first. `Admin.MintActivationCode` is that, bound to one fixed owner account so a second
+activated device joins the first one's data rather than starting an island.
+
+**Then it still didn't sync**, on an isolated scratch instance driven end to end with Playwright.
+Three independent bugs, each sufficient on its own, and each invisible because every one of them
+ends with the chip reading "Synced":
+
+1. Nothing ever seeded the first upload. The mutation queue is filled only by autosave, and both
+   "Sync now" and the post-sign-in path just flush that queue — an empty queue sets `"synced"` and
+   returns. A device that signs in and only READS its data would sit there forever.
+2. `syncDeviceID` detached `crypto.randomUUID` from `crypto` and invoked it, which throws
+   `Illegal invocation`, which in wasm is a Go panic that kills the program. It only fires before
+   a device id has been stored — i.e. on the first push a new device ever attempts. Once fixed,
+   the earlier `dataset autosave failed err=Illegal invocation` warnings stopped too; same root.
+3. Blobs are uploaded before the workspace is pushed, but `UploadBlob` refuses a blob for a
+   workspace that doesn't exist yet, and `PutWorkspace` is what creates it. Any dataset with
+   attachments deadlocked. Fixed with a metadata-only `PutWorkspace` first — and then, because
+   that stamps the row with the server clock, the real push lost LWW to a row it had just created
+   itself and backed its own dataset up as a "conflict" against nothing, so the create's returned
+   timestamp is carried into the push. Rejected creates are left alone so real conflicts still win.
+
+Verified on a throwaway port + data dir: mint a code in the admin console, type it into
+Settings → Cloud, touch nothing else. 1.36 MB of dataset JSON, 7 artifact blobs, and a workspace
+row under `device:owner` — with a real UUID device id, which is also the proof (2) is dead.
+
+**Note for next time:** "the chip says Synced" is worth nothing as evidence. Every one of these
+bugs produced it. Check the server's tables.

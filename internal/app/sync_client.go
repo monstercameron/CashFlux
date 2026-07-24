@@ -423,6 +423,20 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 }
 
 func requestBackendSyncNow() {
+	// Seed the queue with the CURRENT dataset before flushing. The queue is only ever
+	// filled by an autosave (pushActiveWorkspaceToBackend), so on a device that has
+	// signed in but not edited anything since, "Sync now" used to find an empty queue,
+	// report "Synced", and upload precisely nothing — the chip claiming success for a
+	// server that never received a byte. The hash guard inside
+	// pushActiveWorkspaceToBackend keeps this a no-op when the server already holds
+	// this exact dataset, so pressing Sync now repeatedly stays cheap.
+	if app := appstate.Default; app != nil {
+		if dataset, err := app.ExportJSONRedacted(); err == nil {
+			pushActiveWorkspaceToBackend(dataset, time.Now().UTC())
+		} else {
+			logSyncError("backend sync export failed", err)
+		}
+	}
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
 }
@@ -479,6 +493,46 @@ func flushBackendSyncQueue() {
 		}
 		defer func() { conn.Close() }()
 		for _, item := range queue {
+			// A first-ever push has to create the workspace row BEFORE any artifact
+			// blob is uploaded. UploadBlob deliberately refuses a blob for a workspace
+			// the caller doesn't own yet (storage attribution and cross-tenant read
+			// scoping both hang off that check), and PutWorkspace is the only thing
+			// that creates the row — so a dataset with attachments used to deadlock on
+			// its very first sync: every blob rejected NotFound, the push abandoned
+			// before PutWorkspace, and therefore the row that would have unblocked it
+			// never written. This put carries no Dataset, so the server creates the row
+			// and skips the snapshot write; the real push follows immediately below. It
+			// runs only until this workspace has synced once.
+			if meta := loadSyncMeta(item.WorkspaceID); strings.TrimSpace(meta.UpdatedAt) == "" && strings.TrimSpace(item.Name) != "" {
+				var ensured backendrpc.PutWorkspaceResponse
+				if err := invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+					Workspace: backendrpc.Workspace{
+						ID:       item.WorkspaceID,
+						Name:     item.Name,
+						Color:    item.Color,
+						Sort:     item.Sort,
+						DeviceID: item.DeviceID,
+					},
+					ClientUpdatedAt: item.ClientUpdatedAt,
+				}, &ensured); err != nil {
+					item.LastAttemptError = err.Error()
+					upsertQueuedSyncMutation(item)
+					setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
+					logSyncError("backend workspace create failed", err)
+					return
+				}
+				// Creating the row stamps it with the SERVER's clock, which is later than
+				// the moment this mutation was queued — so the real push below would lose
+				// the LWW comparison against a row it just created itself, and the dataset
+				// would be backed up as a "conflict" against nothing. Carry the server's
+				// timestamp forward so the push that follows is contemporaneous with it.
+				// Only when the create was accepted: a rejection means the server really
+				// does hold something newer (another device got there first), and that
+				// push SHOULD lose — leaving the timestamp alone keeps that intact.
+				if ensured.Accepted && strings.TrimSpace(ensured.UpdatedAt) != "" {
+					item.ClientUpdatedAt = ensured.UpdatedAt
+				}
+			}
 			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 			if err != nil {
 				item.LastAttemptError = err.Error()
@@ -730,6 +784,14 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
+			// The server holds no snapshot for this workspace at all — the shape of a
+			// freshly activated device against an empty account. Seed it with what
+			// this device already has instead of waiting for the user's next edit to
+			// trigger the very first upload: without this, a device that signs in and
+			// then only READS its data sits on "Synced" indefinitely while the server
+			// stays empty, which reads as sync being broken. Safe by construction —
+			// there is nothing on the server to lose an LWW race against.
+			forceBackendResyncActiveWorkspace()
 			return
 		}
 		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), w.ID, resp.Dataset)
@@ -999,7 +1061,7 @@ func resolveConflictUseServer() {
 			return
 		}
 		if err := app.ImportJSON(dataset); err != nil {
-		setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed"), AuthFailed: isAuthError(err)})
+			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server import failed", err)
 			return
 		}
@@ -1145,16 +1207,37 @@ func syncDeviceID() string {
 	id := ""
 	crypto := js.Global().Get("crypto")
 	if !crypto.IsUndefined() && !crypto.IsNull() {
-		randomUUID := crypto.Get("randomUUID")
-		if randomUUID.Type() == js.TypeFunction {
-			id = randomUUID.Invoke().String()
-		}
+		// Call it AS A METHOD of crypto. Getting the function and .Invoke()ing it
+		// detaches it from its receiver, and crypto.randomUUID is spec'd to throw
+		// TypeError "Illegal invocation" on a null/wrong `this` — which surfaces here
+		// as a Go panic that takes the whole wasm app down, on the one path that
+		// reaches this function before any device id has been stored (a device's very
+		// first sync push, right after it signs in). The recover below is a second
+		// belt: a hostile/patched crypto is never worth crashing the app over when a
+		// timestamp id does the job.
+		id = randomUUIDSafe(crypto)
 	}
 	if strings.TrimSpace(id) == "" {
 		id = "browser-" + time.Now().UTC().Format("20060102150405.000000000")
 	}
 	lsSet(syncDeviceIDKey, id)
 	return id
+}
+
+// randomUUIDSafe returns crypto.randomUUID() as a string, or "" if the call is
+// unavailable or throws. Any JS exception from syscall/js arrives as a Go panic, so
+// the recover here is what keeps an id-generation failure from killing the wasm app
+// — the caller has a perfectly good timestamp fallback.
+func randomUUIDSafe(crypto js.Value) (id string) {
+	defer func() {
+		if r := recover(); r != nil {
+			id = ""
+		}
+	}()
+	if crypto.Get("randomUUID").Type() != js.TypeFunction {
+		return ""
+	}
+	return crypto.Call("randomUUID").String()
 }
 
 func parseSyncMetaTime(meta syncMeta) (time.Time, bool) {

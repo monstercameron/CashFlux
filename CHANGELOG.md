@@ -7,6 +7,20 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **`pkg/embed.Admin.MintActivationCode`** — an admin-initiated activation code, the counterpart to
+  the device-initiated `RequestDevicePairing` → `ApprovePairing` flow. The embedding host mints a
+  short-lived (5 min) single-use code from its own admin console; the user types it into Settings →
+  Cloud on any device and is signed in. Unlike `ApprovePairing` (a fresh account per approval, for
+  distinct people), every activation code binds to one fixed `OwnerAccountID` (`device:owner`,
+  created lazily on the first mint), so every device the host activates shares one dataset. Access
+  control is entirely "can you reach the host's admin console". 4 new tests.
+- **The activation-code field is now the PRIMARY sign-in surface on a pairing-only server.** When
+  discovery reports `CustomAuthEnabled && !RegistrationOpen` — a server with no self-signup at all,
+  where a minted code is the only way in — `DeviceLinkCard` renders expanded and first, worded as
+  "Activate this device", and the username/password form drops to the secondary "Other ways to sign
+  in" list. Offering a password form first on a server where nobody has a password yet was the wrong
+  first thing to show. New `DeviceLinkCardProps{Primary}`; `Primary` is read directly rather than
+  seeding `UseState`, so a prop that flips when discovery resolves can't leave the card stuck shut.
 - **`pkg/embed.Admin` gains `ListUsers`/`StorageStats`** for the portfolio admin console: a paged
   list of every enrolled account (id, provider, email, signup date, subscription plan/status) with
   each user's current-calendar-month request volume attached, plus total on-disk usage (the SQLite
@@ -15,6 +29,36 @@ and every commit updates this file under `Unreleased`.
   Verified via full native `go build`/`go vet`/`go test ./...`.
 
 ### Fixed
+- **A device that signed in and never edited anything never uploaded a byte, while the sync chip
+  said "Synced".** Three separate defects stacked up on the first-sync path, each of which alone was
+  enough to make sync look connected and do nothing:
+  1. `requestBackendSyncNow` ("Sync now") only flushed the mutation queue and pulled. The queue is
+     filled exclusively by autosave, so on a freshly signed-in device it was empty — and an empty
+     queue reports `"synced"` and returns. It now seeds the queue with the current dataset first;
+     the existing hash guard keeps a repeat press free.
+  2. `pullActiveWorkspaceFromBackend` returned silently when the server had no snapshot for the
+     workspace. That is exactly the freshly-activated case, and nothing else was ever going to seed
+     it. It now pushes the local dataset when the server holds nothing — safe by construction, since
+     there is nothing to lose an LWW race against.
+  3. `persistAuthSession` never started the sync engine. `storeAuthTokenPair` restarts only the
+     watch; the lifecycle listeners, queue flush, and initial pull live in `restartBackendSync`,
+     which only the OAuth path called. Every sign-in path now brings sync up without a page reload.
+- **`syncDeviceID` crashed the entire wasm app on a device's first sync.** It read
+  `crypto.randomUUID` off the `crypto` object and `.Invoke()`d it detached, which per spec throws
+  `TypeError: Illegal invocation` on a wrong `this` — surfacing as a Go panic that killed the whole
+  program ("Go program has already exited"). It is called as a method now, behind a recover that
+  falls back to the timestamp id. Only reachable before any device id had been stored, i.e. on the
+  first push a newly signed-in device ever attempts — so it hit exactly the users it would hurt most.
+- **A first sync of any dataset with attachments deadlocked.** `UploadBlob` deliberately refuses a
+  blob for a workspace the caller doesn't own yet (storage attribution + cross-tenant read scoping
+  both depend on that check), and `PutWorkspace` is the only thing that creates the workspace row —
+  but the client uploaded blobs *before* pushing the workspace. Every blob came back `NotFound` and
+  the push aborted before it could write the row that would have unblocked it. `flushBackendSyncQueue`
+  now creates the row with a metadata-only `PutWorkspace` (no `Dataset`, so no snapshot write) before
+  preparing the dataset, once per workspace per device, and carries the server's returned timestamp
+  into the real push — otherwise that push loses an LWW comparison against a row it just created
+  itself and backs its own dataset up as a "conflict" against nothing. A rejected create is left
+  alone, so a genuinely newer server snapshot still wins.
 - **The raw access-token field auto-revealed itself on Settings → Cloud far too often — Cam: "I
   didn't ask for a bearer token field... I want a clean UI that doesn't confuse the user."** The
   Local/Remote/Commercial redesign kept an old assumption: `tokenPrimary` was true (auto-showing the
