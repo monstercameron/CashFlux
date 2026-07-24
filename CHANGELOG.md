@@ -6,6 +6,24 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Client UI for the admin-approved device-pairing bootstrap (TODOS.md C454): `PendingDeviceCard`**,
+  a new secondary sign-in option in Settings → Cloud alongside `PasswordAuthCard`/`DeviceLinkCard`,
+  shown only where it's the actual answer to "I have no credentials yet" — a self-hosted server with
+  password/pairing auth but open self-signup disabled (`CustomAuthEnabled && !RegistrationOpen`).
+  Collapsed by default; expanding it is what triggers `RequestDevicePairing` and opens
+  `WatchPairingStatus` (one-shot, no retry loop — matching the "one-shot per app load" design
+  decision). On approval, shows the pushed pairing code next to Accept/Reject so the user can
+  cross-check it against what the admin console shows before accepting. Accept redeems the code
+  (`RedeemPairingCode`), establishes a real session, then prompts to set a username/password
+  (`SetPassword`, skippable — the session already works without it). Reject/Cancel tells the server
+  to drop the pending row (`CancelDevicePairing`) immediately rather than leaving it to expire.
+
+  Verified end-to-end over the real network (not just compiled): a throwaway harness ran a real
+  `pkg/embed.NewSyncAndAuthBridge` server plus the actual wasm client, driving the complete flow —
+  request → wait → admin approve (via `pkg/embed.Admin.ApprovePairing`, the exact code path Task 6
+  built) → pushed-code cross-check → accept → redeem → set password — twice, both times clean.
+
 ### Fixed
 - **`RequestDevicePairing`/`WatchPairingStatus`/`CancelDevicePairing` were unreachable with no bearer
   token — the exact case they exist for.** Caught while starting the client UI for TODOS.md C454: these

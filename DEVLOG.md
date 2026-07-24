@@ -56,6 +56,37 @@ sync/cloud/settings at all, confirming it's accumulated drift from concurrent un
 multi-writer tree, not something this change caused or should regenerate over (per the standing rule:
 don't `UPDATE_COVERAGE` for someone else's in-flight feature).
 
+## 2026-07-24 — PendingDeviceCard, and actually proving the whole flow works live
+
+Sixth task off the plan: the client half of C454 — `PendingDeviceCard`, a new secondary sign-in
+option offering "ask an admin to approve this device" instead of typing a password. Mirrors
+`PasswordAuthCard`/`DeviceLinkCard`'s shape (self-contained, collapsed by default) but the "expand"
+action does something neither of those do: it fires a real unauthenticated request
+(`RequestDevicePairing`) and opens a live streaming watch (`WatchPairingStatus`) the moment the
+component mounts — "auto-register on mount" from the plan turned out to mean "on mount of the
+EXPANDED child component," not the whole Cloud tab, so visiting Settings never silently fires a
+pairing request nobody asked for.
+
+Given how much plumbing this touches (a brand-new unauthenticated door, a live gRPC stream from wasm,
+a cross-component admin-approve action, then an authenticated follow-up call) — and given the
+interceptor-skip-list bug two commits ago proved unit tests calling Go methods directly don't catch
+wiring gaps — I didn't trust "it compiles" here. Built a throwaway verification harness: a real
+`pkg/embed.NewSyncAndAuthBridge` server (the actual production code path, not a mock) plus a couple
+of test-only HTTP endpoints standing in for the not-yet-built portfolio admin console
+(`/test/pending`, `/test/approve`), and drove the real wasm client against it with Playwright —
+request → wait → admin-approve → pushed-code cross-check → accept → redeem → set-password, over the
+real network, twice, both times clean through every step. That's the whole novel surface this task
+added, actually exercised end to end before calling it done, not just type-checked.
+
+One thing worth a note for whoever builds the CI-grade version of this in Task 9: the harness hit
+occasional Playwright click flakiness right at the moment discovery first resolves (an element
+briefly detaching/reattaching as the "other ways to sign in" group re-renders) — didn't chase it
+down since a short settle-wait before interacting worked reliably and the underlying feature itself
+was never in question (confirmed via a temporary debug log that `showPendingPairing` was computing
+correctly every single render, including the flaky ones) — but a permanent regression test for this
+flow should account for it, the same way `nav()` already waits on `data-route` rather than a fixed
+sleep.
+
 ## 2026-07-24 — Caught starting the client UI: the pairing RPCs were never actually reachable
 
 Small but real gap found the moment I started wiring up the client side of C454. Every

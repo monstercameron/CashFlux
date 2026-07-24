@@ -384,6 +384,13 @@ func CloudConnectionPane() uic.Node {
 	showOAuth := commercial || (phase == discoveryOK && len(d.AuthProviders) > 0)
 	tokenPrimary := commercial || phase != discoveryOK || (!showPassword && !showOAuth)
 	showTokenField := tokenPrimary || advancedTokenOpen.Get()
+	// showPendingPairing offers the admin-approved pairing bootstrap
+	// (TODOS.md C454) only where it's the actual answer to "I have no
+	// credentials yet": a self-hosted server with password/pairing auth but
+	// Register disabled (an invite-only, pairingOnlyAuthServer deployment —
+	// see grpcbridge.go). On a server with open self-signup, PasswordAuthCard's
+	// own Register mode already covers that case with no admin needed.
+	showPendingPairing := showPassword && !d.RegistrationOpen
 	cloudPrice := uistate.T("settings.cloudPriceAnnual")
 	if billingInterval.Get() == "monthly" {
 		cloudPrice = uistate.T("settings.cloudPriceMonthly")
@@ -478,6 +485,7 @@ func CloudConnectionPane() uic.Node {
 			If(showPassword || !tokenPrimary, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
 				Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading")),
 				If(showPassword, uic.CreateElement(DeviceLinkCard)),
+				If(showPendingPairing, uic.CreateElement(PendingDeviceCard)),
 				If(!tokenPrimary, Fragment(
 					If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
 						Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken), uistate.T("sync.advancedTokenToggle")))),

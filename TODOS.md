@@ -6240,3 +6240,25 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   client needs to tell a full server (open self-signup) apart from a pairing-only embedding, and
   `CustomAuthEnabled` alone can't — it's true on both. `RegistrationOpen` is `true` on the standalone
   server, `false` on `NewSyncAndAuthBridgeHandler`'s `pairingOnlyAuthServer` embedding.
+- [x] **C460 [MAJOR][SYNC] Client UI for the admin-approved device-pairing bootstrap — `PendingDeviceCard`
+  (TODOS.md C454).** New secondary sign-in option in Settings → Cloud, alongside `PasswordAuthCard`/
+  `DeviceLinkCard`, shown only when it's the actual answer to "I have no credentials yet": a
+  self-hosted server with password/pairing auth but self-signup disabled
+  (`CustomAuthEnabled && !RegistrationOpen`, using C459's new discovery field). Collapsed by
+  default — expanding it is what fires `RequestDevicePairing` and opens `WatchPairingStatus`
+  ("auto-register on mount" turned out to mean mount of the expanded child, not the whole Cloud tab,
+  so visiting Settings never silently starts a pairing request). Shows the pushed pairing code next
+  to Accept/Reject for a human cross-check before accepting; Accept redeems the code and prompts a
+  skippable "set a password" step; Reject/Cancel tells the server to drop the row immediately
+  (`CancelDevicePairing`) rather than leaving it to expire.
+
+  Given how much new plumbing this touches — a fresh unauthenticated door, a live wasm→server gRPC
+  stream, a cross-component admin-approve action, an authenticated follow-up call — and given C459
+  proved unit tests calling Go methods directly don't catch real wiring gaps, didn't trust "it
+  compiles" here. Built a throwaway verification harness: a real `pkg/embed.NewSyncAndAuthBridge`
+  server (the actual production code path) plus test-only HTTP endpoints standing in for the
+  not-yet-built portfolio admin console, driving the real wasm client with Playwright through the
+  complete flow — request → wait → admin-approve → pushed-code cross-check → accept → redeem →
+  set-password — over the real network, twice, both clean. Verified via full native
+  `go build`/`go vet`/`go test ./...`, a real `GOOS=js GOARCH=wasm go build`, and
+  `smoke.spec.mjs`/`sync.spec.mjs` — no regressions.

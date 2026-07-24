@@ -1,0 +1,301 @@
+// SPDX-License-Identifier: MIT
+
+//go:build js && wasm
+
+package app
+
+import (
+	"context"
+
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/syncbridge"
+	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v4/css"
+	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v4/ui"
+	"google.golang.org/grpc"
+)
+
+// pendingPhase tracks pendingDeviceWatcher's state machine.
+type pendingPhase string
+
+const (
+	pendingPhaseConnecting  pendingPhase = "connecting"
+	pendingPhaseWaiting     pendingPhase = "waiting"
+	pendingPhaseApproved    pendingPhase = "approved"
+	pendingPhaseSettingPass pendingPhase = "settingPassword"
+	pendingPhaseDone        pendingPhase = "done"
+	pendingPhaseRejected    pendingPhase = "rejected"
+	pendingPhaseCanceled    pendingPhase = "canceled"
+	pendingPhaseExpired     pendingPhase = "expired"
+	pendingPhaseError       pendingPhase = "error"
+)
+
+// PendingDeviceCard offers the admin-approved device-pairing bootstrap
+// (TODOS.md C454): the alternative to typing a password when this device has
+// no working credentials yet and the server is invite-only (Register
+// disabled — RegistrationOpen=false in discovery). Collapsed by default like
+// DeviceLinkCard, since it's a secondary path alongside PasswordAuthCard's
+// primary sign-in form; the actual request only fires once expanded (see
+// pendingDeviceWatcher's mount effect) — expanding IS "auto-register on
+// mount," not the whole Cloud tab's mount, so visiting Settings never fires
+// a background pairing request nobody asked for.
+func PendingDeviceCard() uic.Node {
+	expanded := uic.UseState(false)
+	onToggleExpand := uic.UseEvent(func() { expanded.Set(!expanded.Get()) })
+
+	if !expanded.Get() {
+		return Div(Attr("data-testid", "pending-device-collapsed"),
+			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "pending-device-expand"),
+				OnClick(onToggleExpand), uistate.T("authCards.waitForApproval")),
+		)
+	}
+	return uic.CreateElement(pendingDeviceWatcher)
+}
+
+// pendingDeviceWatcher owns the whole request→watch→accept/reject→set-
+// password flow. Mounting it (i.e. PendingDeviceCard being expanded) is what
+// triggers RequestDevicePairing — one shot per mount, no retry loop: if it
+// errors, expires, or the user cancels, collapsing and re-expanding
+// PendingDeviceCard (which remounts this component fresh) is how to try
+// again, matching the "one-shot per app load" design decision.
+func pendingDeviceWatcher() uic.Node {
+	prefsAtom := uistate.UsePrefs()
+
+	phase := uic.UseState(string(pendingPhaseConnecting))
+	deviceID := uic.UseState("")
+	pairingCode := uic.UseState("")
+	errMsg := uic.UseState("")
+
+	setPwUsername := uic.UseState("")
+	setPwPassword := uic.UseState("")
+	setPwSubmitting := uic.UseState(false)
+	setPwErr := uic.UseState("")
+
+	uic.UseEffect(func() func() {
+		pr := prefsAtom.Get().Normalize()
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			// RequestDevicePairing/WatchPairingStatus are skip-listed
+			// server-side (no bearer token required) — a brand-new device
+			// with no session yet has no real token to present, so the
+			// same placeholder trick PasswordAuthCard/DeviceLinkCard use
+			// satisfies syncbridge's client-side "a token is required"
+			// guard without being checked server-side.
+			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: "refresh"})
+			if err != nil {
+				phase.Set(string(pendingPhaseError))
+				errMsg.Set(uistate.T("authCards.connectFailed"))
+				return
+			}
+			defer conn.Close()
+
+			var reqOut backendrpc.RequestDevicePairingResponse
+			reqErr := conn.Invoke(ctx, backendrpc.MethodAuthRequestDevicePairing,
+				backendrpc.RequestDevicePairingRequest{DeviceLabel: customSyncDeviceLabel()},
+				&reqOut, backendrpc.JSONCallOptions()...)
+			if reqErr != nil {
+				phase.Set(string(pendingPhaseError))
+				errMsg.Set(customSyncErrorMessage(reqErr, uistate.T("authCards.pendingRequestFailed")))
+				return
+			}
+			deviceID.Set(reqOut.DeviceID)
+			phase.Set(string(pendingPhaseWaiting))
+
+			stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodAuthWatchPairingStatus, backendrpc.JSONCallOptions()...)
+			if err == nil {
+				err = stream.SendMsg(&backendrpc.WatchPairingStatusRequest{DeviceID: reqOut.DeviceID})
+			}
+			if err == nil {
+				err = stream.CloseSend()
+			}
+			if err != nil {
+				phase.Set(string(pendingPhaseError))
+				errMsg.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingWatchFailed")))
+				return
+			}
+			var ev backendrpc.PairingStatusEvent
+			if err := stream.RecvMsg(&ev); err != nil {
+				if ctx.Err() != nil {
+					// The component unmounted (cancel ran) — not a real
+					// failure worth surfacing, just the watch ending because
+					// nobody's looking at it anymore.
+					return
+				}
+				phase.Set(string(pendingPhaseError))
+				errMsg.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingWatchFailed")))
+				return
+			}
+			switch ev.Status {
+			case "approved":
+				pairingCode.Set(ev.PairingCode)
+				phase.Set(string(pendingPhaseApproved))
+			case "rejected":
+				phase.Set(string(pendingPhaseRejected))
+			default: // "expired", or anything unrecognized
+				phase.Set(string(pendingPhaseExpired))
+			}
+		}()
+		return cancel
+	}, "pending-device-watch-mount")
+
+	notifyAtom := uistate.UseNotice()
+	notify := func(text string, isErr bool) { notifyAtom.Set(notifyAtom.Get().With(text, isErr)) }
+
+	onCancel := uic.UseEvent(func() {
+		id := deviceID.Get()
+		phase.Set(string(pendingPhaseCanceled))
+		if id == "" {
+			return
+		}
+		go func() {
+			ctx := context.Background()
+			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: prefsAtom.Get().Normalize().ServerURL, Token: "refresh"})
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			var out backendrpc.CancelDevicePairingResponse
+			_ = conn.Invoke(ctx, backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out, backendrpc.JSONCallOptions()...)
+		}()
+	})
+
+	onAccept := uic.UseEvent(func() {
+		pr := prefsAtom.Get().Normalize()
+		code := pairingCode.Get()
+		phase.Set(string(pendingPhaseSettingPass)) // optimistic; reverted to approved on failure below
+		go func() {
+			ctx := context.Background()
+			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: "refresh"})
+			if err != nil {
+				phase.Set(string(pendingPhaseApproved))
+				notify(uistate.T("authCards.connectFailed"), true)
+				return
+			}
+			defer conn.Close()
+			var out backendrpc.TokenPairResponse
+			err = conn.Invoke(ctx, backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
+				PairingCode:    code,
+				DeviceLabel:    customSyncDeviceLabel(),
+				IdempotencyKey: newIdempotencyKey(),
+			}, &out, backendrpc.JSONCallOptions()...)
+			if err != nil {
+				phase.Set(string(pendingPhaseApproved))
+				notify(customSyncErrorMessage(err, uistate.T("authCards.pendingRedeemFailed")), true)
+				return
+			}
+			persistAuthSession(prefsAtom, pr.ServerURL, out)
+			phase.Set(string(pendingPhaseSettingPass))
+		}()
+	})
+
+	onReject := uic.UseEvent(func() {
+		id := deviceID.Get()
+		phase.Set(string(pendingPhaseRejected))
+		go func() {
+			ctx := context.Background()
+			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: prefsAtom.Get().Normalize().ServerURL, Token: "refresh"})
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			var out backendrpc.CancelDevicePairingResponse
+			_ = conn.Invoke(ctx, backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out, backendrpc.JSONCallOptions()...)
+		}()
+	})
+
+	onSetPwUsername := uic.UseEvent(func(v string) { setPwUsername.Set(v); setPwErr.Set("") })
+	onSetPwPassword := uic.UseEvent(func(v string) { setPwPassword.Set(v); setPwErr.Set("") })
+	onSkipSetPassword := uic.UseEvent(func() { phase.Set(string(pendingPhaseDone)) })
+	onSubmitSetPassword := uic.UseEvent(func() {
+		u := normalizeUsername(setPwUsername.Get())
+		pw := setPwPassword.Get()
+		if err := validateRegisterCredentials(u, pw); err != nil {
+			switch err {
+			case ErrUsernameRequired:
+				setPwErr.Set(uistate.T("authCards.usernameRequired"))
+			case ErrPasswordRequired:
+				setPwErr.Set(uistate.T("authCards.passwordRequired"))
+			case ErrPasswordTooShort:
+				setPwErr.Set(uistate.T("authCards.passwordTooShort", authMinPasswordLength))
+			}
+			return
+		}
+		setPwSubmitting.Set(true)
+		go func() {
+			ctx := context.Background()
+			pr := prefsAtom.Get().Normalize()
+			conn, err := dialAuthed(ctx, pr)
+			if err != nil {
+				setPwSubmitting.Set(false)
+				setPwErr.Set(uistate.T("authCards.connectFailed"))
+				return
+			}
+			defer conn.Close()
+			var out backendrpc.SetPasswordResponse
+			err = conn.Invoke(ctx, backendrpc.MethodAuthSetPassword, backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out, backendrpc.JSONCallOptions()...)
+			setPwSubmitting.Set(false)
+			if err != nil {
+				setPwErr.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingSetPasswordFailed")))
+				return
+			}
+			setPwPassword.Set("")
+			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
+			phase.Set(string(pendingPhaseDone))
+		}()
+	})
+
+	p := pendingPhase(phase.Get())
+
+	return Div(css.Class("card", "pending-device-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "pending-device-card"),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+			ui.Icon(icon.Clock, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
+			Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("authCards.pendingTitle")),
+		),
+
+		If(p == pendingPhaseConnecting, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "pending-device-connecting"), uistate.T("authCards.pendingConnecting"))),
+
+		If(p == pendingPhaseWaiting, Fragment(
+			P(css.Class(tw.Text12), Attr("data-testid", "pending-device-waiting"), uistate.T("authCards.pendingWaiting")),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.pendingWaitingHint")),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "pending-device-cancel"), OnClick(onCancel), uistate.T("authCards.pendingCancel")),
+		)),
+
+		If(p == pendingPhaseApproved, Fragment(
+			P(css.Class(tw.Text12), Attr("data-testid", "pending-device-approved"), uistate.T("authCards.pendingApprovedTitle")),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.pendingApprovedHint")),
+			Div(css.Class("set-input", tw.Text15), Attr("data-testid", "pending-device-code"), Text(pairingCode.Get())),
+			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
+				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "pending-device-accept"), OnClick(onAccept), uistate.T("authCards.pendingAccept")),
+				Button(css.Class("btn btn-sm btn-del"), Type("button"), Attr("data-testid", "pending-device-reject"), OnClick(onReject), uistate.T("authCards.pendingReject")),
+			),
+		)),
+
+		If(p == pendingPhaseSettingPass, Fragment(
+			P(css.Class(tw.Text12), Attr("data-testid", "pending-device-setpassword"), uistate.T("authCards.pendingSetPasswordTitle")),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.pendingSetPasswordHint")),
+			If(setPwErr.Get() != "", P(css.Class(tw.Text12, tw.TextDanger), setPwErr.Get())),
+			Input(css.Class("set-input"), Type("text"), Attr("autocomplete", "username"),
+				Attr("aria-label", uistate.T("authCards.usernameLabel")), Attr("data-testid", "pending-device-username"),
+				Placeholder(uistate.T("authCards.usernamePlaceholder")), Value(setPwUsername.Get()), OnInput(onSetPwUsername)),
+			Input(css.Class("set-input"), Type("password"), Attr("autocomplete", "new-password"),
+				Attr("aria-label", uistate.T("authCards.passwordLabel")), Attr("data-testid", "pending-device-password"),
+				Placeholder(uistate.T("authCards.passwordPlaceholderRegister")), Value(setPwPassword.Get()), OnInput(onSetPwPassword)),
+			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
+				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "pending-device-setpassword-submit"),
+					DisabledIf(setPwSubmitting.Get()), OnClick(onSubmitSetPassword),
+					IfElse(setPwSubmitting.Get(), Text(uistate.T("authCards.pendingSetPasswordSaving")), Text(uistate.T("authCards.pendingSetPasswordSubmit")))),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "pending-device-setpassword-skip"), OnClick(onSkipSetPassword), uistate.T("authCards.pendingSetPasswordSkip")),
+			),
+		)),
+
+		If(p == pendingPhaseDone, P(css.Class(tw.Text12), Attr("data-testid", "pending-device-done"), uistate.T("authCards.pendingDone"))),
+		If(p == pendingPhaseRejected, P(css.Class(tw.Text12, tw.TextDanger), Attr("data-testid", "pending-device-rejected"), uistate.T("authCards.pendingRejectedByAdmin"))),
+		If(p == pendingPhaseCanceled, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "pending-device-canceled"), uistate.T("authCards.pendingCanceled"))),
+		If(p == pendingPhaseExpired, P(css.Class(tw.Text12, tw.TextDanger), Attr("data-testid", "pending-device-expired"), uistate.T("authCards.pendingExpired"))),
+		If(p == pendingPhaseError, P(css.Class(tw.Text12, tw.TextDanger), Attr("data-testid", "pending-device-error"), errMsg.Get())),
+	)
+}

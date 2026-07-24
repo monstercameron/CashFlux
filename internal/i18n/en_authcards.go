@@ -54,6 +54,36 @@ var authCardsKeys = Catalog{
 	"authCards.linkFailed":             "That code didn't work. Check it and try again — codes expire after a few minutes.",
 	"authCards.deviceLinked":           "This device is linked.",
 	"authCards.linkAnotherDevice":      "Link a different device",
+
+	// Admin-approved device pairing (TODOS.md C454) — for an invite-only
+	// server where there's no self-signup: the device asks to be paired and
+	// waits for an admin to approve it, rather than the user needing any
+	// credential yet. Collapsed under a link like the other secondary
+	// sign-in methods.
+	"authCards.waitForApproval":           "Ask an admin to approve this device instead",
+	"authCards.pendingTitle":              "Device pairing",
+	"authCards.pendingConnecting":         "Requesting access…",
+	"authCards.pendingWaiting":            "Waiting for an admin to approve this device…",
+	"authCards.pendingWaitingHint":        "Someone with access to this server needs to approve your request before you can sign in.",
+	"authCards.pendingCancel":             "Cancel request",
+	"authCards.pendingApprovedTitle":      "You've been approved",
+	"authCards.pendingApprovedHint":       "Check that this code matches what the admin sees, then accept.",
+	"authCards.pendingAccept":             "Accept — this is my code",
+	"authCards.pendingReject":             "This isn't right — reject",
+	"authCards.pendingRejectedByAdmin":    "This request was declined.",
+	"authCards.pendingCanceled":           "Request canceled.",
+	"authCards.pendingExpired":            "This request expired before anyone approved it. Try again.",
+	"authCards.pendingRequestFailed":      "Couldn't ask to be paired. Try again.",
+	"authCards.pendingWatchFailed":        "Lost the connection while waiting. Try again.",
+	"authCards.pendingRedeemFailed":       "Couldn't finish pairing. Try again.",
+	"authCards.pendingSetPasswordTitle":   "Set a password",
+	"authCards.pendingSetPasswordHint":    "Add a username and password so you can sign back in next time without needing approval again.",
+	"authCards.pendingSetPasswordSkip":    "Skip for now",
+	"authCards.pendingSetPasswordSubmit":  "Save password",
+	"authCards.pendingSetPasswordSaving":  "Saving…",
+	"authCards.pendingSetPasswordFailed":  "Couldn't save the password. Try again.",
+	"authCards.pendingSetPasswordSuccess": "Password saved. You can log in with it next time.",
+	"authCards.pendingDone":               "You're signed in.",
 }
 
 func init() {
