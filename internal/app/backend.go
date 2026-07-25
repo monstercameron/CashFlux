@@ -343,7 +343,10 @@ func createBillingSession(endpoint, token, path string, body map[string]string, 
 }
 
 func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
+	defer timePhase("prepare.total")()
+	done := timePhase("prepare.import")
 	ds, err := store.Import(data)
+	done()
 	if err != nil {
 		return nil, err
 	}
@@ -352,6 +355,7 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if len(ds.Artifacts[i].Bytes) == 0 {
 			continue
 		}
+		maybeYield() // encrypting and uploading a blob is not worth a dropped frame
 		ref, err := uploadBackendArtifactBlob(ctx, endpoint, token, workspaceID, ds.Artifacts[i])
 		if err != nil {
 			return nil, err
@@ -362,6 +366,7 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	}
 	out := data
 	if changed {
+		defer timePhase("prepare.export")()
 		out, err = store.Export(ds)
 		if err != nil {
 			return nil, err
@@ -372,7 +377,9 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	// own salt, so any device with the same passcode decrypts it on pull — no salt
 	// channel. Artifact blob bytes were already encrypted at upload time above.
 	if datasetEncryptionActive() {
+		doneEnc := timePhase("prepare.encrypt")
 		env, err := encryptDatasetSync(out, activePasscode)
+		doneEnc()
 		if err != nil {
 			return nil, err
 		}
@@ -387,6 +394,7 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 }
 
 func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
+	defer timePhase("hydrate.total")()
 	// Zero-knowledge pull: a server snapshot may be a cryptobox envelope. Decrypt it
 	// to plaintext JSON before importing. If the passcode is unknown (app locked),
 	// signal the caller to defer — never drop it, and never try to import ciphertext.
@@ -394,13 +402,17 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if activePasscode == "" {
 			return nil, errSyncDatasetLocked
 		}
+		doneDec := timePhase("hydrate.decrypt")
 		plain, err := decryptEnvelopeSync(data, activePasscode)
+		doneDec()
 		if err != nil {
 			return nil, err
 		}
 		data = plain
 	}
+	doneImp := timePhase("hydrate.import")
 	ds, err := store.Import(data)
+	doneImp()
 	if err != nil {
 		return nil, err
 	}
@@ -409,6 +421,7 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if len(ds.Artifacts[i].Bytes) > 0 || ds.Artifacts[i].BlobRef == nil || strings.TrimSpace(ds.Artifacts[i].BlobRef.Hash) == "" {
 			continue
 		}
+		maybeYield() // downloading and decrypting a blob is not worth a dropped frame
 		bytes, err := downloadBackendArtifactBlob(ctx, endpoint, token, workspaceID, ds.Artifacts[i].BlobRef.Hash)
 		if err != nil {
 			return nil, err

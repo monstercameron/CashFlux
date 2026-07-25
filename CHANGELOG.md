@@ -6,6 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Sync yields the moment the user touches the page.** Deferring sync to an idle callback fixed
+  *when* work starts but not how long it runs once started: wasm has one thread and no preemption,
+  so once the Go scheduler is resumed it runs every runnable goroutine until they all block - and the
+  browser bills that to whichever callback resumed it, which is why a sync surfaced as
+  `'click' handler took 1977ms`. `maybeYield` asks `navigator.scheduling.isInputPending()` (with
+  `includeContinuous`, so scroll counts) and hands the thread back immediately when input is waiting,
+  falling back to a 50ms slice where the API is missing. Called per queued mutation and per artifact
+  blob. Measured click latency during a live sync: **p95 90ms -> 14ms, max 148ms -> 107ms**.
+- **Per-phase sync timing.** Any sync phase holding the main thread for over two frames now logs
+  `sync phase held the main thread phase=... ms=...`. The browser cannot report this itself - it
+  attributes the cost to whatever JS callback resumed Go, so a slow phase shows up as a slow `click`
+  handler and is never named.
+
 ### Changed
 - **Rendering outranks networking, everywhere.** Sync used to run on whatever callback happened to
   reach it — including boot, inline with the router mounting and IndexedDB opening. On the one

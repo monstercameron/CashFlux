@@ -712,6 +712,7 @@ func flushBackendSyncQueue() {
 	}
 	go func() {
 		yieldToBrowser() // rendering first: never start a push inside a frame
+		defer timePhase("flush.total")()
 		syncPushMu.Lock()
 		defer syncPushMu.Unlock()
 		queue := loadSyncQueue()
@@ -729,6 +730,7 @@ func flushBackendSyncQueue() {
 			return
 		}
 		for _, item := range queue {
+			maybeYield() // a queue of any length must not cost the user a click
 			// A first-ever push has to create the workspace row BEFORE any artifact
 			// blob is uploaded. UploadBlob deliberately refuses a blob for a workspace
 			// the caller doesn't own yet (storage attribution and cross-tenant read
@@ -1131,6 +1133,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			pullMu.Unlock()
 		}()
 		yieldToBrowser() // rendering first: never dial from inside a frame
+		defer timePhase("pull.total")()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		conn, err := acquireConn(ctx, pr)

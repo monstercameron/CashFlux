@@ -1,3 +1,62 @@
+## 2026-07-25 (later) - Deferring was half the fix; the other half is yielding to input
+
+Cam's next console had the tell: `'requestIdleCallback' handler took 1478ms`. That is MY callback.
+Moving sync into an idle slot changed when it starts and nothing about how long it runs, so a 1.5s
+block was still a 1.5s block - just relocated. And it explained `'scroll' took 1943ms` /
+`'click' took 1977ms`: wasm has one thread and no preemption across the JS boundary, so once the Go
+scheduler is resumed it runs every runnable goroutine until they all block, and the browser charges
+that aggregate to whichever callback resumed it. The user did not click something slow. They clicked,
+and their click paid for the sync. Cam's follow-up - "remember to prioritize rendering, that means
+clicks and scrolls" - is the correct acceptance criterion.
+
+So `maybeYield`, built on `navigator.scheduling.isInputPending({includeContinuous: true})`: the
+direct question "is the browser holding input it cannot deliver because we have the thread", asked
+per queued mutation and per artifact blob, with a 50ms elapsed-time fallback for browsers without the
+API. Measured with a probe that clicks and scrolls through a live sync and times event.timeStamp to
+handler entry - the interval the page was actually unresponsive, not the handler's own duration.
+Click p95 90ms -> 14ms, max 148ms -> 107ms. Baseline taken by disabling the yields and rebuilding
+rather than by assertion.
+
+Two things I got wrong on the way, both worth keeping. First I theorised the cost was
+`prepareBackendSyncDataset` calling `store.Import` unconditionally just to walk the artifact list and
+discarding it. Measured natively: 24ms for 2.4MB. Real waste, not the culprit - and I would have
+shipped it as the fix. Second, I could not reproduce Cam's 1478ms in the harness at all: no phase
+over 32ms, worst browser task 293ms. That gap is the finding, not a nuisance. The likeliest
+difference is that his privacy lock is on, so `prepare.encrypt` / `hydrate.decrypt` over 1.3MB run on
+his machine and never here. Rather than guess again, the phase timers ship: his console will name
+the phase mine cannot.
+
+What the timers did surface locally: `flush.total` 700-870ms, `prepare.total` ~500-600ms against
+sub-parts (import 65ms, export 41ms) totalling only ~110ms. Worth stating plainly - those numbers
+are WALL CLOCK and include the yields, so they overstate thread-hold. `prepare.import` and
+`prepare.export` contain no yields and are honest thread-holds; at 65ms each they are a dropped frame
+apiece and the next thing to attack.
+
+The e2e suite then cost more than the feature. Deferring sync invalidated a set of flat sleeps that
+had been calibrated when sync hogged the thread and therefore settled predictably. Real bugs found in
+the harness, not the product: `openCloudTab` clicked the Cloud tab only `if (await cloud.count())`,
+so whenever the tab list had not rendered it silently skipped the click and ran the scenario against
+the plain Settings page - reporting "a signed-in device offers Sign out" as a product failure when
+nothing had opened the pane holding that control. And `hasMarker`'s new polling returns early, but it
+NAVIGATES, and the app now defers its sync engine past first paint, so the following `sync-pulse`
+click landed before the engine existed.
+
+I also replaced the post-dismiss sleep with a condition on `cashflux:sampleActive` and broke the
+suite for four runs: that key reads null either way, so the wait passed instantly and waited for
+nothing, the reload came back still believing it held the sample, and `pushBlockedReason()` refused
+every push for the rest of the run - 0 B on the server, six failures, and my first three explanations
+for it were all wrong. The sleep went back with a comment saying why it is a sleep: the dismissal is
+recorded inside the dataset, not in a browser key a test can read, and nothing observable reports
+when that write lands. Not every wait can be a condition, and pretending otherwise is worse than the
+sleep.
+
+Left open and NOT fixed: `sync-flows` scenario 5 still fails roughly one run in three on
+`locator.fill` for the activation field. Ruled out with probes - sign-out is stable across four
+reloads (field present, Sign out absent every time), and sign-out to re-activate succeeds three for
+three in isolation. It only appears with device B also running. Retrying the fill across reloads
+helped but did not eliminate it. It may yet be a real bug (sign out, try to sign back in, field
+sometimes absent) rather than harness churn, and it should not be written off as flake.
+
 ## 2026-07-25 — Rendering outranks networking, and the recursion hiding underneath it
 
 Cam's console showed the `'message'` handler down to 1851ms from 25937ms — the dataset key cache and
