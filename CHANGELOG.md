@@ -7,6 +7,37 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Account roles (migration v14).** `users.role` with `owner` / `member` / `viewer`, enforced in
+  `SyncService.requireWriter` — the single choke point every write already funnels through, so a
+  future RPC cannot forget to ask. Until now authorization was purely "is this row yours": an
+  activated device for an invited guest could rewrite the household's entire dataset. A viewer may
+  pull and may not push; a suspended account is refused in the same place, because suspension that
+  only hid a row in a console would leave the suspended device happily syncing. The migration
+  defaults to `member`, not `viewer` — every pre-migration account already had write access, so
+  least-privilege here would silently break working devices — and promotes `device:owner` by id.
+- **Account management through `pkg/embed.Admin`**: `CreateUser` (username + role, deliberately NO
+  password — the person activates with a code and sets their own, so a credential never travels
+  from the operator to them), `UpdateUser`, `SetSuspended` (which also revokes live sessions),
+  `ResetCredentials` (clears the password AND signs out everywhere; either half alone leaves a live
+  way in), plus `SetUserRole`/`UserRole`/`SetUsername`/`ClearLocalPassword` on the store. The owner
+  account cannot be demoted or suspended: it is what every activation code binds to, and a
+  deployment whose owner is read-only has no way back in through its own console.
+- **`Admin.ProvisionOwnerSession`** and `server.IssueSessionForUser`: a session minted in-process
+  for a caller the embedding host has ALREADY authenticated, with no credential exchange. Reachable
+  only from Go inside the host process — never from any RPC or HTTP surface — because the entire
+  trust boundary is "the host says so".
+- **`Admin.ActivationCodeIsValid`**: a non-consuming peek, so a host can recognise a visitor
+  arriving with a code it just minted. Peeking is safe to expose where consuming would not be — a
+  consuming check would let anyone burn a legitimate code by visiting a URL.
+- **Activation handoff.** A device arriving at `?activate=<code>` signs itself in and strips the
+  code via `replaceState`, so it never enters session history. Single-use, minutes-long, and grants
+  no more than typing the same digits into Settings would. A device that already has a session
+  ignores it outright — arriving with a code must never re-key a working client onto another account.
+- **`SetPasswordCard`**: a signed-in device can attach a username and password so the next sign-in
+  needs no code from the operator. An upgrade to an existing session, never a way to create an
+  account — `Register` stays blocked, so the only route to a credential still runs through a code
+  someone with admin access chose to mint.
+
 - **`pkg/embed` reports what an account actually HOLDS, not just what it bought.** New
   `Store.UserSyncSummary` (live workspace count, total dataset-snapshot bytes, last push) and
   `Store.SnapshotBytes` (the same total across the whole server), surfaced on `Admin.User` and as a

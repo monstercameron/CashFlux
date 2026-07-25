@@ -29028,3 +29028,42 @@ sample-seeded device reports `hadLocalDataset = false`, so the pull isn't blocke
 The suite asserts on a uniquely-named transaction entered on browser A and read back on
 browser B. Byte counts and status labels were green through both of those bugs; a specific
 record a person typed is the only assertion that could not be satisfied by a lie.
+
+## 2026-07-24 — Authn/authz: roles, management, and one credential instead of four
+
+Cam, on the state of sign-in: "the budget gate is retarded... it doesnt do anything." He was
+right. One person on one machine was proving who they were three times — admin password,
+budget password, activation code — plus a fourth secret (the app lock) for at-rest
+encryption, and none of the four composed.
+
+**Roles first, because it was a hole rather than a papercut.** Authorization was "is this row
+yours" with no notion of what you may DO with it, so a device activated for a guest could
+rewrite the household's books. `requireWriter` in SyncService now gates every write on role
+and suspension. It lives in the service, not the transport edge, because that is the one
+place every write already passes through for its ownership check.
+
+The migration default took the most thought. The reflex is least-privilege, and it is wrong
+here: every pre-migration account already had write access, so defaulting to `viewer` would
+break working devices with no way for the user to tell why, and `owner` would promote
+strangers. `member` changes nothing on its own, which is what a migration should do.
+
+**The four-credential problem** is solved by handing off rather than by federating. The admin
+console mints a code against its own authenticated session and carries it in the URL; the
+client redeems it once and strips it. No new auth mechanism, no cookie surgery, no IdP — the
+existing, tested activation path with the typing removed. The gate recognises a live code and
+opens on that basis, since demanding a second unrelated password from someone who just proved
+themselves to mint it proves nothing.
+
+**What the e2e suites cover, precisely.** `sync-flows.mjs` (21 checks) and `auth-flows.mjs`
+(9 checks) are green, asserting through the real UIs against a hermetic instance. They prove
+the handoff signs a device in with no typing, the code is stripped, data reaches the server,
+a second browser hydrates and sees a transaction typed on the first, and management actions
+cost no data. They do NOT prove viewer/suspension enforcement end-to-end: reaching a second
+IDENTITY needs the device-initiated pairing flow, which did not cooperate in the harness.
+That enforcement is covered by Go tests driving SyncService directly, which is the
+authoritative level for it anyway — but the gap is real and worth closing.
+
+Two of the suite's own failures this session were bad assertions, not product bugs: sampling
+a sync state once (it settles) and counting a control that appears with the signed-in state
+rather than with the page. Both now wait. Worth remembering that a flaky suite spends its
+credibility fast.

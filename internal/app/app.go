@@ -265,6 +265,12 @@ func Run() {
 
 	// Persist the dataset to localStorage so it survives a reload.
 	startDatasetAutosave()
+	// Before starting sync: a device arriving with an activation code in its URL
+	// (opened from the host's admin console) signs itself in first, so the sync
+	// engine comes up already authenticated instead of inert. Redeeming is async;
+	// it calls restartBackendSync itself when it lands, so ordering is safe either
+	// way — this call just gives it the earliest possible start.
+	TryActivationHandoff()
 	startBackendSync()
 	probeAdminAccess() // non-blocking: sets uistate.AdminConsoleAvailable on HTTP 200
 

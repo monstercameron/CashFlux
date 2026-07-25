@@ -568,6 +568,9 @@ func CloudConnectionPane() uic.Node {
 			// Read from prefs, not the mount-seeded serverToken state: a device that
 			// just signed in this session had no Sign out button until the pane
 			// remounted, which reads as the sign-in not having taken.
+			// Signed in: offer to attach a credential so the next sign-in needs no
+			// code from the operator. Collapsed — it is an option, not a chore.
+			If(signedIn, uic.CreateElement(SetPasswordCard)),
 			If(signedIn,
 				Button(css.Class("btn", tw.Mt1), Type("button"), OnClick(onSignOut), uistate.T("settings.signOut"))),
 			If(strings.TrimSpace(pr.ServerToken) != "" && status.AuthFailed,

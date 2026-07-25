@@ -1047,3 +1047,47 @@ func authWatchPairingStatusHandler(srv any, stream grpc.ServerStream) error {
 	}
 	return srv.(authServiceServer).WatchPairingStatusRPC(in, stream)
 }
+
+// IssueSessionForUser mints a session pair for a user id directly, with no RPC,
+// no credential exchange and no pairing code — the primitive behind an embedding
+// host provisioning a session for a caller it has ALREADY authenticated itself.
+//
+// This deliberately bypasses every front door (Register/Login/RedeemPairingCode)
+// because there is nothing left to verify: the host proved the caller's identity
+// with its own admin session before calling, and CashFlux has no better evidence
+// to ask for. It is unexported-by-convention dangerous — it hands out a full
+// session for any user id — so it is reachable only from Go code inside the host
+// process, never from any RPC or HTTP surface.
+//
+// Refuses a suspended account, matching every other path that issues a session:
+// suspension that only blocked the RPC doors would be trivially routed around by
+// the very shortcut this function provides.
+func IssueSessionForUser(cfg Config, store *Store, userID, deviceLabel string) (backendrpc.TokenPairResponse, error) {
+	if store == nil {
+		return backendrpc.TokenPairResponse{}, fmt.Errorf("server session: store is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return backendrpc.TokenPairResponse{}, fmt.Errorf("server session: user id is required")
+	}
+	if suspended, err := store.IsUserSuspended(userID); err != nil {
+		return backendrpc.TokenPairResponse{}, fmt.Errorf("server session: suspension check: %w", err)
+	} else if suspended {
+		return backendrpc.TokenPairResponse{}, fmt.Errorf("server session: account is suspended")
+	}
+	now := time.Now().UTC()
+	familyID, err := randomURLToken(24)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, fmt.Errorf("server session: generate refresh family: %w", err)
+	}
+	access, refresh, err := issueStoredSessionPair(cfg, store, userID, now, familyID, deviceLabel)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, err
+	}
+	return backendrpc.TokenPairResponse{
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresInSeconds: int64(sessionAccessTTL.Seconds()),
+		DeviceID:         familyID,
+	}, nil
+}

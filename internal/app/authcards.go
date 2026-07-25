@@ -445,3 +445,96 @@ func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 		)),
 	)
 }
+
+// SetPasswordCard lets a device that is ALREADY signed in attach a username and
+// password to its account, so the next sign-in on this or any other device needs
+// no activation code from the operator.
+//
+// Collapsed by default and offered only once signed in: it is an upgrade to an
+// existing session, never a way to create an account. That distinction is what
+// keeps the deployment invite-only — Register stays blocked server-side
+// (pairingOnlyAuthServer), and the only route to a credential runs through an
+// activation code someone with admin access chose to mint.
+func SetPasswordCard() uic.Node {
+	prefsAtom := uistate.UsePrefs()
+	noticeAtom := uistate.UseNotice()
+
+	expanded := uic.UseState(false)
+	username := uic.UseState("")
+	password := uic.UseState("")
+	submitting := uic.UseState(false)
+	done := uic.UseState(false)
+	errMsg := uic.UseState("")
+
+	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
+	onToggle := uic.UseEvent(func() { expanded.Set(!expanded.Get()) })
+	onUser := uic.UseEvent(func(v string) { username.Set(v); errMsg.Set("") })
+	onPass := uic.UseEvent(func(v string) { password.Set(v); errMsg.Set("") })
+
+	onSubmit := uic.UseEvent(func() {
+		u := normalizeUsername(username.Get())
+		pw := password.Get()
+		if err := validateRegisterCredentials(u, pw); err != nil {
+			switch err {
+			case ErrUsernameRequired:
+				errMsg.Set(uistate.T("authCards.usernameRequired"))
+			case ErrPasswordRequired:
+				errMsg.Set(uistate.T("authCards.passwordRequired"))
+			case ErrPasswordTooShort:
+				errMsg.Set(uistate.T("authCards.passwordTooShort", authMinPasswordLength))
+			}
+			return
+		}
+		submitting.Set(true)
+		go func() {
+			ctx := context.Background()
+			pr := prefsAtom.Get().Normalize()
+			conn, err := dialAuthed(ctx, pr)
+			if err != nil {
+				submitting.Set(false)
+				errMsg.Set(uistate.T("authCards.connectFailed"))
+				return
+			}
+			defer conn.Close()
+			var out backendrpc.SetPasswordResponse
+			err = conn.Invoke(ctx, backendrpc.MethodAuthSetPassword,
+				backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out, backendrpc.JSONCallOptions()...)
+			submitting.Set(false)
+			if err != nil {
+				errMsg.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingSetPasswordFailed")))
+				return
+			}
+			// Never keep the plaintext around once the server has the hash.
+			password.Set("")
+			done.Set(true)
+			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
+		}()
+	})
+
+	if done.Get() {
+		return Div(Attr("data-testid", "set-password-done"),
+			P(css.Class(tw.Text12, tw.TextDim), uistate.T("authCards.pendingSetPasswordSuccess")))
+	}
+	if !expanded.Get() {
+		return Div(Attr("data-testid", "set-password-collapsed"),
+			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "set-password-expand"),
+				OnClick(onToggle), uistate.T("authCards.setPasswordToggle")),
+		)
+	}
+	return Div(css.Class("card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "set-password-card"),
+		Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("authCards.pendingSetPasswordTitle")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.setPasswordHint")),
+		If(errMsg.Get() != "", P(css.Class(tw.Text12, tw.TextDanger), errMsg.Get())),
+		Input(css.Class("set-input"), Type("text"), Attr("autocomplete", "username"),
+			Attr("aria-label", uistate.T("authCards.usernameLabel")), Attr("data-testid", "set-password-username"),
+			Placeholder(uistate.T("authCards.usernamePlaceholder")), Value(username.Get()), OnInput(onUser)),
+		Input(css.Class("set-input"), Type("password"), Attr("autocomplete", "new-password"),
+			Attr("aria-label", uistate.T("authCards.passwordLabel")), Attr("data-testid", "set-password-password"),
+			Placeholder(uistate.T("authCards.passwordPlaceholderRegister")), Value(password.Get()), OnInput(onPass)),
+		Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "set-password-submit"),
+				DisabledIf(submitting.Get()), OnClick(onSubmit),
+				IfElse(submitting.Get(), Text(uistate.T("authCards.pendingSetPasswordSaving")), Text(uistate.T("authCards.pendingSetPasswordSubmit")))),
+		),
+	)
+}

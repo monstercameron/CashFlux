@@ -64,6 +64,12 @@ var authCardsKeys = Catalog{
 	"authCards.activate":      "Activate",
 	"authCards.activated":     "This device is activated — your data will start syncing.",
 
+	// Offered only to a device that is ALREADY signed in: an upgrade to an existing
+	// session, never a way to create an account. Register stays blocked server-side,
+	// so the only route to a credential still runs through an admin-minted code.
+	"authCards.setPasswordToggle": "Set a username and password for next time",
+	"authCards.setPasswordHint":   "Then you can sign in on this device without asking for a new activation code.",
+
 	// Admin-approved device pairing (TODOS.md C454) — for an invite-only
 	// server where there's no self-signup: the device asks to be paired and
 	// waits for an admin to approve it, rather than the user needing any
