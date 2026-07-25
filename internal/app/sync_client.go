@@ -125,6 +125,84 @@ func dialAuthed(ctx context.Context, pr prefs.Prefs) (*grpc.ClientConn, error) {
 	return syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: effectiveServerToken(pr)})
 }
 
+// The shared tunnel.
+//
+// Every sync function used to dial its own connection and close it again: the
+// flush, the pull, the watch, the workspace-list merge and both conflict
+// resolvers, six sites in all. Each dial is a WebSocket handshake plus a gRPC
+// HTTP/2 setup, and they overlap constantly — a tab switch alone fired a flush and
+// a pull. A server log with 279 accepted connections for one session is what that
+// looks like from the other side, and each pending handshake is another thing
+// competing for a main thread that is already the bottleneck.
+//
+// One ClientConn serves them all. grpc.ClientConn is safe for concurrent use and
+// multiplexes calls over one HTTP/2 connection, which is the whole point of the
+// protocol; opening one per call threw that away.
+//
+// Keyed by server URL AND effective token, because the bearer is fixed at dial
+// time (see syncbridge.Config): a rotated token must produce a new tunnel, not
+// reuse one authenticated as the old identity. Signing out drops it outright.
+var (
+	sharedConnMu  sync.Mutex
+	sharedConn    *grpc.ClientConn
+	sharedConnKey string
+)
+
+// connKey identifies the identity a tunnel is authenticated as.
+func connKey(pr prefs.Prefs) string {
+	return pr.ServerURL + "|" + effectiveServerToken(pr)
+}
+
+// acquireConn returns the shared tunnel, dialing it if there isn't one or if the
+// identity changed. Callers must NOT close it.
+func acquireConn(ctx context.Context, pr prefs.Prefs) (*grpc.ClientConn, error) {
+	key := connKey(pr)
+
+	sharedConnMu.Lock()
+	if sharedConn != nil && sharedConnKey == key {
+		conn := sharedConn
+		sharedConnMu.Unlock()
+		return conn, nil
+	}
+	stale := sharedConn
+	sharedConn, sharedConnKey = nil, ""
+	sharedConnMu.Unlock()
+
+	if stale != nil {
+		_ = stale.Close() // identity changed; the old tunnel is authenticated as someone else
+	}
+
+	// Dial OUTSIDE the lock: a handshake can take seconds on a slow link, and
+	// holding the mutex would serialize every other caller behind it.
+	conn, err := dialAuthed(ctx, pr)
+	if err != nil {
+		return nil, err
+	}
+
+	sharedConnMu.Lock()
+	if sharedConn != nil && sharedConnKey == key {
+		// Another goroutine won the race; keep theirs and discard ours so the
+		// process never holds two tunnels for one identity.
+		winner := sharedConn
+		sharedConnMu.Unlock()
+		return winner, nil
+	}
+	sharedConn, sharedConnKey = conn, key
+	sharedConnMu.Unlock()
+	return conn, nil
+}
+
+// dropSharedConn closes and forgets the tunnel. Called when the session ends or
+// the token rotates — anything that makes the current connection's identity wrong.
+func dropSharedConn() {
+	sharedConnMu.Lock()
+	conn := sharedConn
+	sharedConn, sharedConnKey = nil, ""
+	sharedConnMu.Unlock()
+	if conn != nil {
+	}
+}
+
 // isAuthError reports whether err is the backend rejecting the bearer token
 // (codes.Unauthenticated) — the trigger for the reactive refresh fallback,
 // as opposed to any other RPC failure (network, quota, validation, ...),
@@ -139,11 +217,12 @@ func isAuthError(err error) bool {
 
 // invokeAuthed calls method against *conn and, on an Unauthenticated failure,
 // performs the C423 reactive fallback: exactly one RefreshToken attempt via
-// refreshAccessToken, then — only if that succeeded — re-dials *conn with the
-// refreshed token and retries the original call exactly once more. The old
-// connection is closed before being replaced, and *conn always ends up
-// pointing at whichever connection is current, so a caller's own
-// `defer (*conn).Close()` keeps working unmodified.
+// refreshAccessToken, then — only if that succeeded — reacquires the shared tunnel
+// under the refreshed token and retries the original call exactly once more.
+//
+// *conn is updated to whatever is current, so a caller holding it for a later call
+// in the same batch keeps working. It must not be closed by callers: it is the
+// process-wide tunnel, and dropSharedConn owns its lifetime.
 func invokeAuthed(ctx context.Context, conn **grpc.ClientConn, pr prefs.Prefs, method string, req, resp any) error {
 	err := (*conn).Invoke(ctx, method, req, resp, backendrpc.JSONCallOptions()...)
 	if !isAuthError(err) {
@@ -152,14 +231,15 @@ func invokeAuthed(ctx context.Context, conn **grpc.ClientConn, pr prefs.Prefs, m
 	if !refreshAccessToken(ctx, pr) {
 		return err
 	}
+	// The refresh rotated the token, so the tunnel we just used is authenticated as
+	// the old one. Drop it and take a fresh tunnel under the new identity.
+	dropSharedConn()
 	fresh := uistate.LoadPrefs().Normalize()
-	newConn, dialErr := dialAuthed(ctx, fresh)
+	newConn, dialErr := acquireConn(ctx, fresh)
 	if dialErr != nil {
 		return err
 	}
-	old := *conn
 	*conn = newConn
-	_ = old.Close()
 	return (*conn).Invoke(ctx, method, req, resp, backendrpc.JSONCallOptions()...)
 }
 
@@ -321,6 +401,9 @@ func clearAuthSession() {
 	lsRemove(authExpiresInKey)
 	stopProactiveRefreshTimer()
 	stopBackendWatch()
+	// The shared tunnel is authenticated as the session that just ended. Leaving it
+	// open would keep a live, credentialed socket to the server after sign-out.
+	dropSharedConn()
 }
 
 func degradeToLocalOnly() {
@@ -613,13 +696,12 @@ func flushBackendSyncQueue() {
 		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "offline", Pending: len(queue), Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("backend sync dial failed", err)
 			return
 		}
-		defer func() { conn.Close() }()
 		for _, item := range queue {
 			// A first-ever push has to create the workspace row BEFORE any artifact
 			// blob is uploaded. UploadBlob deliberately refuses a blob for a workspace
@@ -797,6 +879,8 @@ func stopBackendWatch() {
 func restartBackendSync() {
 	if !uistate.LoadPrefs().Normalize().BackendActive() {
 		stopBackendWatch()
+		// Backend switched off: nothing should hold a socket open to it.
+		dropSharedConn()
 		return
 	}
 	wireSyncLifecycleListeners()
@@ -847,7 +931,7 @@ func runBackendWatch(ctx context.Context) {
 		if !pr.BackendActive() {
 			return
 		}
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			logSyncError("backend sync watch dial failed", err)
 			if !sleepBackoff() {
@@ -895,7 +979,6 @@ func runBackendWatch(ctx context.Context) {
 		} else {
 			logSyncError("backend sync watch failed", err)
 		}
-		_ = conn.Close()
 		if !sleepBackoff() {
 			return
 		}
@@ -954,12 +1037,11 @@ func mergeRemoteWorkspaces() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			logSyncError("backend workspace list dial failed", err)
 			return
 		}
-		defer func() { conn.Close() }()
 		var resp backendrpc.ListWorkspacesResponse
 		if err := invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{}, &resp); err != nil {
 			logSyncError("backend workspace list failed", err)
@@ -1024,12 +1106,11 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			logSyncError("backend sync dial failed", err)
 			return
 		}
-		defer func() { conn.Close() }()
 		var resp backendrpc.GetWorkspaceResponse
 		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
 		if err != nil {
@@ -1240,13 +1321,12 @@ func resolveConflictKeepLocal() {
 		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			setSyncStatus(syncStatus{State: "error", Pending: 0, Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-keep dial failed", err)
 			return
 		}
-		defer func() { conn.Close() }()
 		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 		if err != nil {
 			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "artifact upload failed"), AuthFailed: isAuthError(err)})
@@ -1298,14 +1378,13 @@ func resolveConflictUseServer() {
 		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		conn, err := dialAuthed(ctx, pr)
+		conn, err := acquireConn(ctx, pr)
 		if err != nil {
 			// Revert to conflict so the chip still offers the modal.
 			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "backend unavailable"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server dial failed", err)
 			return
 		}
-		defer func() { conn.Close() }()
 		var resp backendrpc.GetWorkspaceResponse
 		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: wID}, &resp)
 		if err != nil {
