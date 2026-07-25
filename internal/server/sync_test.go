@@ -232,3 +232,69 @@ func seedSyncUser(t *testing.T, store *Store, id string, now time.Time) {
 		t.Fatalf("UpsertUser %s: %v", id, err)
 	}
 }
+
+// TestSyncServiceViewerCannotWrite is the point of roles: an account admitted to
+// this server used to be able to rewrite anything it owned, which for an invited
+// person meant rewriting the household's books. A viewer may read and may not
+// write, enforced in the service rather than at the transport edge so a future RPC
+// cannot forget to ask.
+func TestSyncServiceViewerCannotWrite(t *testing.T) {
+	store := openTestStore(t)
+	service := NewSyncService(store)
+	now := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.UTC)
+	seedSyncUser(t, store, "u-view", now)
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u-view"})
+
+	// As a member (the default), writing works.
+	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now); err != nil || !result.Accepted {
+		t.Fatalf("member PutWorkspace: accepted=%v err=%v", result.Accepted, err)
+	}
+
+	if err := store.SetUserRole("u-view", RoleViewer); err != nil {
+		t.Fatalf("SetUserRole: %v", err)
+	}
+
+	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Rewritten"}, now.Add(time.Hour), false, now.Add(time.Hour))
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("viewer PutWorkspace: err = %v, want PermissionDenied", err)
+	}
+	if _, err := service.Delete(ctx, "w1", now.Add(time.Hour), "dev"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("viewer Delete: err = %v, want PermissionDenied", err)
+	}
+
+	// Reading is still allowed — a viewer is meant to SEE the books.
+	if _, ok, err := service.Get(ctx, "w1"); err != nil || !ok {
+		t.Fatalf("viewer Get: ok=%v err=%v, want the workspace to be readable", ok, err)
+	}
+	// And the write it attempted did not land.
+	ws, _, _ := store.GetWorkspace("u-view", "w1")
+	if ws.Name != "Home" {
+		t.Fatalf("workspace name = %q, want it untouched as Home", ws.Name)
+	}
+}
+
+// TestSyncServiceSuspendedCannotWrite proves suspension is enforced where writes
+// happen, not merely reflected in an admin list.
+func TestSyncServiceSuspendedCannotWrite(t *testing.T) {
+	store := openTestStore(t)
+	service := NewSyncService(store)
+	now := time.Date(2026, time.July, 24, 12, 0, 0, 0, time.UTC)
+	seedSyncUser(t, store, "u-susp", now)
+	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u-susp"})
+
+	if err := store.SetUserSuspended("u-susp", true, now); err != nil {
+		t.Fatalf("SetUserSuspended: %v", err)
+	}
+	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("suspended PutWorkspace: err = %v, want PermissionDenied", err)
+	}
+
+	// Un-suspending restores write access with no other action needed.
+	if err := store.SetUserSuspended("u-susp", false, now); err != nil {
+		t.Fatalf("un-suspend: %v", err)
+	}
+	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now); err != nil || !result.Accepted {
+		t.Fatalf("after un-suspend: accepted=%v err=%v", result.Accepted, err)
+	}
+}

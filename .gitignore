@@ -74,3 +74,8 @@ sample-statement.pdf
 
 # Personal statement samples (never leave this machine)
 temp/
+
+# Server-side test artifacts: internal/server tests write content-addressed blob
+# files under here, and the e2e helper leaves a data dir behind. Neither is source.
+/internal/server/blobs/
+/cashflux-portal/

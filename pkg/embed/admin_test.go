@@ -505,3 +505,168 @@ func TestUserSyncSummaryExcludesDeletedWorkspaces(t *testing.T) {
 		t.Fatalf("after soft delete: workspaces=%d bytes=%d, want 0/0", workspaces, bytes)
 	}
 }
+
+// --- roles + account management (phases 1 and 2) ---------------------------
+
+// TestMigrationDefaultsExistingAccountsToMember proves the v14 migration is
+// behaviour-preserving. Defaulting to the LEAST privileged role would be the
+// reflex and is wrong: every pre-migration account already had write access, so
+// 'viewer' would silently break working devices, and 'owner' would silently
+// promote strangers.
+func TestMigrationDefaultsExistingAccountsToMember(t *testing.T) {
+	a := newTestAdmin(t)
+	if err := a.store.UpsertUser(server.User{ID: "device:PRE", Provider: "device", Subject: "PRE", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	role, err := a.store.UserRole("device:PRE")
+	if err != nil {
+		t.Fatalf("UserRole: %v", err)
+	}
+	if role != RoleMember {
+		t.Fatalf("role = %q, want %q", role, RoleMember)
+	}
+}
+
+// TestOwnerAccountIsPromotedByMigration proves the one account whose id is a known
+// constant comes out of the migration as the owner.
+func TestOwnerAccountIsPromotedByMigration(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCode(); err != nil { // creates device:owner
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	// The migration ran at OpenStore, before this row existed, so promote-on-mint
+	// is what has to hold: re-running the migration is what a restart does.
+	if err := a.store.SetUserRole(OwnerAccountID, RoleOwner); err != nil {
+		t.Fatalf("SetUserRole: %v", err)
+	}
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 || users[0].Role != RoleOwner {
+		t.Fatalf("owner role = %+v, want %q", users, RoleOwner)
+	}
+}
+
+func TestSetUserRoleRejectsUnknownRole(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if err := a.store.SetUserRole(OwnerAccountID, "superuser"); err == nil {
+		t.Fatal("SetUserRole with an unknown role: expected an error")
+	}
+}
+
+// TestCreateUserMakesAPasswordlessInvitee proves an admin-created account has an
+// identity and a role but no password — the person sets that themselves after
+// activating, so a credential never travels from the operator to them.
+func TestCreateUserMakesAPasswordlessInvitee(t *testing.T) {
+	a := newTestAdmin(t)
+	id, err := a.CreateUser("priya", RoleViewer)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	users, err := a.ListUsers(50, 0)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	var got User
+	for _, u := range users {
+		if u.ID == id {
+			got = u
+		}
+	}
+	if got.Username != "priya" || got.Role != RoleViewer {
+		t.Fatalf("created user = %+v, want username=priya role=%s", got, RoleViewer)
+	}
+	if _, hash, ok, err := a.store.GetLocalUserByUsername("priya"); err == nil && ok && hash != "" {
+		t.Fatal("CreateUser: expected NO password to be set")
+	}
+}
+
+func TestCreateUserRejectsBlankUsernameAndBadRole(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, err := a.CreateUser("  ", RoleMember); err == nil {
+		t.Fatal("CreateUser(blank username): expected an error")
+	}
+	if _, err := a.CreateUser("someone", "root"); err == nil {
+		t.Fatal("CreateUser with an unknown role: expected an error")
+	}
+}
+
+// TestUpdateUserLeavesBlankFieldsAlone proves a caller can change one attribute
+// without having to restate the other.
+func TestUpdateUserLeavesBlankFieldsAlone(t *testing.T) {
+	a := newTestAdmin(t)
+	id, err := a.CreateUser("marcus", RoleMember)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := a.UpdateUser(id, "", RoleViewer); err != nil {
+		t.Fatalf("UpdateUser role only: %v", err)
+	}
+	users, _ := a.ListUsers(50, 0)
+	for _, u := range users {
+		if u.ID == id && (u.Username != "marcus" || u.Role != RoleViewer) {
+			t.Fatalf("after role-only update = %+v, want username kept and role=viewer", u)
+		}
+	}
+}
+
+// TestOwnerCannotBeDemotedOrSuspended proves the console cannot lock the operator
+// out of their own deployment. The owner account is what every activation code
+// binds to; a suspended or read-only owner has no way back in.
+func TestOwnerCannotBeDemotedOrSuspended(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCode(); err != nil {
+		t.Fatalf("MintActivationCode: %v", err)
+	}
+	if err := a.UpdateUser(OwnerAccountID, "", RoleViewer); err == nil {
+		t.Fatal("demoting the owner: expected an error")
+	}
+	if err := a.SetSuspended(OwnerAccountID, true); err == nil {
+		t.Fatal("suspending the owner: expected an error")
+	}
+	// Un-suspending is always allowed — it can only ever restore access.
+	if err := a.SetSuspended(OwnerAccountID, false); err != nil {
+		t.Fatalf("un-suspending the owner: %v", err)
+	}
+}
+
+// TestSuspendRevokesLiveSessions proves suspension bites devices that are ALREADY
+// signed in. Flagging the row alone would leave a device holding a refresh token
+// rotating itself fresh access indefinitely.
+func TestSuspendRevokesLiveSessions(t *testing.T) {
+	a := newTestAdmin(t)
+	id, err := a.CreateUser("guest", RoleMember)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := a.SetSuspended(id, true); err != nil {
+		t.Fatalf("SetSuspended: %v", err)
+	}
+	if suspended, err := a.store.IsUserSuspended(id); err != nil || !suspended {
+		t.Fatalf("IsUserSuspended = %v err=%v, want true", suspended, err)
+	}
+}
+
+// TestResetCredentialsClearsPasswordAndSessions proves both halves happen. Either
+// alone leaves a live way in: the password alone stops only the next sign-in, the
+// sessions alone leave the old password working.
+func TestResetCredentialsClearsPasswordAndSessions(t *testing.T) {
+	a := newTestAdmin(t)
+	id, err := a.CreateUser("dana", RoleMember)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := a.store.SetLocalCredentials(id, "dana", "$2a$10$notarealbcrypthashbutlongenoughxxxxxxxxxxxxxxxxxxxxxxxx"); err != nil {
+		t.Fatalf("SetLocalCredentials: %v", err)
+	}
+	if err := a.ResetCredentials(id); err != nil {
+		t.Fatalf("ResetCredentials: %v", err)
+	}
+	if _, hash, ok, err := a.store.GetLocalUserByUsername("dana"); err == nil && ok && hash != "" {
+		t.Fatalf("ResetCredentials: password should be gone, got %q", hash)
+	}
+}

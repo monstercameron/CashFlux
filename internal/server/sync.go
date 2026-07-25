@@ -100,6 +100,33 @@ func (s *SyncService) Get(ctx context.Context, workspaceID string) (Workspace, b
 	return workspace, ok, nil
 }
 
+// requireWriter rejects a mutating sync call from a read-only account. Reads stay
+// open to every role: a viewer is meant to SEE the books, just never rewrite them.
+//
+// Enforced here, in the service, rather than at the transport edge, because this is
+// the single choke point every write path already funnels through for its ownership
+// check -- an authorization rule that lives anywhere else is one a new RPC can
+// forget to call. A suspended account is refused for the same reason and in the
+// same place: suspension that only hid a row in the console would leave the
+// suspended device happily syncing.
+func (s *SyncService) requireWriter(userID string) error {
+	suspended, err := s.store.IsUserSuspended(userID)
+	if err != nil {
+		return fmt.Errorf("server sync: user suspended check: %w", err)
+	}
+	if suspended {
+		return status.Error(codes.PermissionDenied, "this account is suspended")
+	}
+	role, err := s.store.UserRole(userID)
+	if err != nil {
+		return fmt.Errorf("server sync: user role: %w", err)
+	}
+	if role == RoleViewer {
+		return status.Error(codes.PermissionDenied, "this account has read-only access")
+	}
+	return nil
+}
+
 // PutWorkspace applies last-write-wins workspace updates scoped to the authenticated user.
 func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, clientUpdatedAt time.Time, force bool, serverNow time.Time) (PutWorkspaceResult, error) {
 	user, err := syncUser(ctx)
@@ -108,6 +135,9 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	}
 	if strings.TrimSpace(workspace.ID) == "" || strings.TrimSpace(workspace.Name) == "" {
 		return PutWorkspaceResult{}, status.Error(codes.InvalidArgument, "workspace id and name are required")
+	}
+	if err := s.requireWriter(user.ID); err != nil {
+		return PutWorkspaceResult{}, err
 	}
 	if err := validateWorkspaceFields(workspace); err != nil {
 		return PutWorkspaceResult{}, err
@@ -163,6 +193,9 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 	}
 	if strings.TrimSpace(workspaceID) == "" {
 		return false, status.Error(codes.InvalidArgument, "workspace id is required")
+	}
+	if err := s.requireWriter(user.ID); err != nil {
+		return false, err
 	}
 	if len(workspaceID) > maxWorkspaceIDLength || len(deviceID) > maxWorkspaceDeviceLength {
 		return false, status.Error(codes.InvalidArgument, "workspace id or device id is too long")

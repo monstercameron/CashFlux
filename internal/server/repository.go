@@ -1909,6 +1909,119 @@ type AdminUserRow struct {
 	CreatedAt          string `json:"createdAt"`
 	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
 	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
+	// Role is what this account may DO (see UserRole); Username is its local-auth
+	// login name, empty for an account that only ever activates by code.
+	Role      string `json:"role"`
+	Username  string `json:"username,omitempty"`
+	Suspended bool   `json:"suspended,omitempty"`
+}
+
+// Account roles. Authorization on this server was, until v14, purely "is this row
+// yours" -- every admitted account could do everything to its own data, and every
+// account was admitted equally. These add what an account may DO:
+//
+//   - RoleOwner   the operator: full access, and the only role allowed to manage
+//     other accounts through pkg/embed.Admin.
+//   - RoleMember  an invited person: full read/write over their OWN workspaces.
+//     The default, because it is exactly the access every account had
+//     before roles existed.
+//   - RoleViewer  read-only: may pull, may not push. For sharing a copy of the
+//     books with someone who must not be able to rewrite them.
+const (
+	RoleOwner  = "owner"
+	RoleMember = "member"
+	RoleViewer = "viewer"
+)
+
+// ValidRole reports whether r is a role this server recognises. Anything else is
+// rejected at the edge rather than stored and silently reinterpreted later.
+func ValidRole(r string) bool {
+	switch r {
+	case RoleOwner, RoleMember, RoleViewer:
+		return true
+	}
+	return false
+}
+
+// UserRole returns an account's role, defaulting to RoleMember for a missing or
+// blank value. Defaulting to the LEAST privileged role would be the reflex, but it
+// is wrong here: a blank role means a row that predates the column, and those
+// accounts already had write access. Silently demoting them to read-only would
+// break working devices with no way for the user to tell why.
+func (s *Store) UserRole(userID string) (string, error) {
+	if s == nil || s.db == nil {
+		return "", fmt.Errorf("server store: not configured")
+	}
+	var role string
+	err := s.db.QueryRow(`SELECT COALESCE(role, '') FROM users WHERE id = ?`, userID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RoleMember, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("server store: user role: %w", err)
+	}
+	if strings.TrimSpace(role) == "" {
+		return RoleMember, nil
+	}
+	return role, nil
+}
+
+// ClearLocalPassword removes an account's password (and only the password -- the
+// username stays, so the person keeps their identity and can be given a new
+// credential). Pair it with RevokeAllUserSessions: on its own it stops future
+// sign-ins while leaving current ones running.
+func (s *Store) ClearLocalPassword(userID string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("ClearLocalPassword", time.Now())
+	if _, err := s.db.Exec(`UPDATE users SET password_hash = '' WHERE id = ?`, userID); err != nil {
+		return fmt.Errorf("server store: clear local password: %w", err)
+	}
+	return nil
+}
+
+// SetUsername changes an account's login name, keeping the unique-username index
+// honest by rejecting a collision as a normal error rather than a constraint panic.
+func (s *Store) SetUsername(userID, username string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	userID, username = strings.TrimSpace(userID), strings.TrimSpace(username)
+	if userID == "" || username == "" {
+		return fmt.Errorf("server store: user id and username are required")
+	}
+	defer s.observeDB("SetUsername", time.Now())
+	if _, err := s.db.Exec(`UPDATE users SET username = ? WHERE id = ?`, username, userID); err != nil {
+		if isUniqueConstraintErr(err) {
+			return fmt.Errorf("server store: username %q is already taken", username)
+		}
+		return fmt.Errorf("server store: set username: %w", err)
+	}
+	return nil
+}
+
+// SetUserRole assigns a role. Rejects unknown roles outright so a typo cannot
+// quietly create an account with no effective permissions.
+func (s *Store) SetUserRole(userID, role string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	if strings.TrimSpace(userID) == "" {
+		return fmt.Errorf("server store: user id is required")
+	}
+	if !ValidRole(role) {
+		return fmt.Errorf("server store: unknown role %q", role)
+	}
+	defer s.observeDB("SetUserRole", time.Now())
+	if _, err := s.db.Exec(`UPDATE users SET role = ? WHERE id = ?`, role, userID); err != nil {
+		return fmt.Errorf("server store: set user role: %w", err)
+	}
+	return nil
 }
 
 // ListUsers returns a page of user rows joined with their current subscription
@@ -1940,7 +2053,8 @@ func (s *Store) ListUsersFiltered(limit, offset int, search string) ([]AdminUser
 	if search == "" {
 		rows, err = s.db.Query(`
 SELECT u.id, u.provider, u.email, u.created_at,
-       COALESCE(sub.plan, ''), COALESCE(sub.status, '')
+       COALESCE(sub.plan, ''), COALESCE(sub.status, ''),
+       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, '')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
 ORDER BY u.created_at DESC, u.id
@@ -1951,7 +2065,8 @@ LIMIT ? OFFSET ?`, limit, offset)
 		pattern := "%" + esc + "%"
 		rows, err = s.db.Query(`
 SELECT u.id, u.provider, u.email, u.created_at,
-       COALESCE(sub.plan, ''), COALESCE(sub.status, '')
+       COALESCE(sub.plan, ''), COALESCE(sub.status, ''),
+       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, '')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
 WHERE u.email LIKE ? ESCAPE '\'
@@ -1965,10 +2080,15 @@ LIMIT ? OFFSET ?`, pattern, limit, offset)
 	var out []AdminUserRow
 	for rows.Next() {
 		var row AdminUserRow
-		var createdAt string
-		if err := rows.Scan(&row.ID, &row.Provider, &row.Email, &createdAt, &row.SubscriptionPlan, &row.SubscriptionStatus); err != nil {
+		var createdAt, suspendedAt string
+		if err := rows.Scan(&row.ID, &row.Provider, &row.Email, &createdAt, &row.SubscriptionPlan, &row.SubscriptionStatus,
+			&row.Role, &row.Username, &suspendedAt); err != nil {
 			return nil, fmt.Errorf("server store: scan list users: %w", err)
 		}
+		if strings.TrimSpace(row.Role) == "" {
+			row.Role = RoleMember // see UserRole: blank means pre-migration, not least-privileged
+		}
+		row.Suspended = strings.TrimSpace(suspendedAt) != ""
 		t, err := parseTime(createdAt)
 		if err != nil {
 			return nil, fmt.Errorf("server store: parse list users created_at: %w", err)

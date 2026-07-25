@@ -149,6 +149,89 @@ func (a *Admin) MintActivationCode() (code string, expiresAt time.Time, err erro
 	return code, expiresAt, nil
 }
 
+// OwnerSession is a ready-to-use CashFlux session for the deployment owner.
+type OwnerSession struct {
+	AccessToken      string
+	RefreshToken     string
+	ExpiresInSeconds int64
+	// DeviceID is the refresh-token FAMILY id, which is what the client reports as
+	// its device and what an operator revokes to sign one device out.
+	DeviceID string
+}
+
+// ProvisionOwnerSession issues a session for the owner account directly, creating
+// that account on first use exactly as MintActivationCode does.
+//
+// This exists so an embedding host that has ALREADY authenticated the operator —
+// its own admin login, on its own origin — can hand the client a signed-in
+// CashFlux without a second credential. An activation code between a console you
+// just logged into and the data behind it is a step that proves nothing new; it
+// only guarantees the operator types six digits to reach their own books.
+//
+// The host is responsible for calling this ONLY on a request it has authenticated.
+// CashFlux cannot see the host's session and does not try to: everything this
+// function knows is that its caller is Go code running inside the host process.
+// That is the whole trust boundary, and it is why nothing reachable over the wire
+// calls it.
+func (a *Admin) ProvisionOwnerSession(deviceLabel string) (OwnerSession, error) {
+	if a == nil || a.store == nil {
+		return OwnerSession{}, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	now := time.Now().UTC()
+	if err := a.store.UpsertUser(server.User{
+		ID:        OwnerAccountID,
+		Provider:  ownerAccountProvider,
+		Subject:   ownerAccountSubject,
+		CreatedAt: now,
+	}); err != nil {
+		return OwnerSession{}, fmt.Errorf("pkg/embed: create owner account: %w", err)
+	}
+	// The owner account is the one account whose role is not a judgement call.
+	// Re-asserted on every provision so a hand-edited database cannot leave the
+	// operator unable to write to their own deployment.
+	if err := a.store.SetUserRole(OwnerAccountID, RoleOwner); err != nil {
+		return OwnerSession{}, fmt.Errorf("pkg/embed: set owner role: %w", err)
+	}
+	if strings.TrimSpace(deviceLabel) == "" {
+		deviceLabel = "owner session"
+	}
+	pair, err := server.IssueSessionForUser(a.cfg, a.store, OwnerAccountID, deviceLabel)
+	if err != nil {
+		return OwnerSession{}, fmt.Errorf("pkg/embed: issue owner session: %w", err)
+	}
+	return OwnerSession{
+		AccessToken:      pair.AccessToken,
+		RefreshToken:     pair.RefreshToken,
+		ExpiresInSeconds: pair.ExpiresInSeconds,
+		DeviceID:         pair.DeviceID,
+	}, nil
+}
+
+// ActivationCodeIsValid reports whether a code is one this server minted and has
+// not yet consumed, WITHOUT consuming it.
+//
+// It exists for one job: letting the embedding host recognise a visitor who is
+// arriving with a code the host itself just minted from an authenticated admin
+// console, and let them through its own front door on that basis. The code is then
+// redeemed normally by the client, once, through the usual RPC — this only peeks.
+//
+// Peeking is safe to expose to a request-handling path in a way that consuming
+// would not be: a wrong guess here costs an attacker a lookup, while a consuming
+// check would let anyone burn a legitimate code by visiting a URL.
+func (a *Admin) ActivationCodeIsValid(code string) (bool, error) {
+	if a == nil || a.store == nil {
+		return false, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	if strings.TrimSpace(code) == "" {
+		return false, nil
+	}
+	_, ok, err := a.store.PeekPairingCodeUserID(code)
+	if err != nil {
+		return false, fmt.Errorf("pkg/embed: peek activation code: %w", err)
+	}
+	return ok, nil
+}
+
 // RejectPairing rejects a pending device request (TODOS.md C454). Returns
 // rejected=false (with no error) if the request was already resolved.
 func (a *Admin) RejectPairing(deviceID string) (rejected bool, err error) {
@@ -171,6 +254,137 @@ func newDeviceUserID() (string, error) {
 		return "", err
 	}
 	return "device:" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf), nil
+}
+
+// CreateUser adds an account the operator invites by hand, without any device
+// having asked for one. It has a username and a role but NO password: the person
+// gets in with an activation code and sets their own credential afterwards, so a
+// password never has to travel from the operator to them out of band.
+//
+// The generated id is random, unlike OwnerAccountID: this is one of "a small,
+// admin-invited set of DISTINCT people", and a guessable id for someone else's
+// account is a bad idea even when the id alone grants nothing.
+func (a *Admin) CreateUser(username, role string) (userID string, err error) {
+	if a == nil || a.store == nil {
+		return "", fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return "", fmt.Errorf("pkg/embed: username is required")
+	}
+	if role == "" {
+		role = RoleMember
+	}
+	if !server.ValidRole(role) {
+		return "", fmt.Errorf("pkg/embed: unknown role %q", role)
+	}
+	id, err := newDeviceUserID()
+	if err != nil {
+		return "", fmt.Errorf("pkg/embed: generate account id: %w", err)
+	}
+	now := time.Now().UTC()
+	if err := a.store.UpsertUser(server.User{ID: id, Provider: "device", Subject: id, CreatedAt: now}); err != nil {
+		return "", fmt.Errorf("pkg/embed: create account: %w", err)
+	}
+	if err := a.store.SetUsername(id, username); err != nil {
+		return "", fmt.Errorf("pkg/embed: set username: %w", err)
+	}
+	if err := a.store.SetUserRole(id, role); err != nil {
+		return "", fmt.Errorf("pkg/embed: set role: %w", err)
+	}
+	return id, nil
+}
+
+// UpdateUser changes an account's username and/or role. A blank field is left
+// alone, so a caller can change one without having to restate the other.
+//
+// Demoting the OWNER account is refused: it is the account every activation code
+// binds to, and a deployment whose owner is a viewer has no way back in through
+// its own console.
+func (a *Admin) UpdateUser(userID, username, role string) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("pkg/embed: user id is required")
+	}
+	if role = strings.TrimSpace(role); role != "" {
+		if !server.ValidRole(role) {
+			return fmt.Errorf("pkg/embed: unknown role %q", role)
+		}
+		if userID == OwnerAccountID && role != RoleOwner {
+			return fmt.Errorf("pkg/embed: the owner account cannot be demoted")
+		}
+		if err := a.store.SetUserRole(userID, role); err != nil {
+			return fmt.Errorf("pkg/embed: set role: %w", err)
+		}
+	}
+	if username = strings.TrimSpace(username); username != "" {
+		if err := a.store.SetUsername(userID, username); err != nil {
+			return fmt.Errorf("pkg/embed: set username: %w", err)
+		}
+	}
+	return nil
+}
+
+// SetSuspended freezes or restores an account. A suspended account keeps every
+// byte of its data and can still be listed, inspected and un-suspended — it simply
+// cannot push (see SyncService.requireWriter). Suspending revokes live sessions
+// too, so it takes effect on devices that are already signed in rather than only
+// at their next sign-in.
+//
+// Refuses to suspend the owner, for the same reason UpdateUser refuses to demote
+// it: locking the operator out of their own deployment through their own console.
+func (a *Admin) SetSuspended(userID string, suspended bool) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("pkg/embed: user id is required")
+	}
+	if suspended && userID == OwnerAccountID {
+		return fmt.Errorf("pkg/embed: the owner account cannot be suspended")
+	}
+	now := time.Now().UTC()
+	if err := a.store.SetUserSuspended(userID, suspended, now); err != nil {
+		return fmt.Errorf("pkg/embed: set suspended: %w", err)
+	}
+	if suspended {
+		// Suspension has to bite devices that are ALREADY signed in: a device
+		// holding a refresh token would otherwise keep rotating itself fresh
+		// access indefinitely, and the suspension would be advisory.
+		if err := a.store.RevokeRefreshSessionsForUser(userID, now); err != nil {
+			return fmt.Errorf("pkg/embed: revoke sessions: %w", err)
+		}
+	}
+	return nil
+}
+
+// ResetCredentials clears an account's password and logs it out everywhere,
+// leaving the account and all of its data intact. The person gets back in with a
+// fresh activation code and sets a new password.
+//
+// Both halves are required and neither is sufficient: clearing the password alone
+// stops only the NEXT sign-in, while a device already holding a refresh token
+// would keep rotating itself access indefinitely; revoking sessions alone leaves
+// the old password working.
+func (a *Admin) ResetCredentials(userID string) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("pkg/embed: user id is required")
+	}
+	if err := a.store.ClearLocalPassword(userID); err != nil {
+		return fmt.Errorf("pkg/embed: clear password: %w", err)
+	}
+	if err := a.store.RevokeRefreshSessionsForUser(userID, time.Now().UTC()); err != nil {
+		return fmt.Errorf("pkg/embed: revoke sessions: %w", err)
+	}
+	return nil
 }
 
 // DeleteUser permanently purges an enrolled account and everything it owns:
@@ -250,7 +464,22 @@ type User struct {
 	// has never synced anything — which callers should render as "never synced"
 	// rather than as a date.
 	LastSyncedAt time.Time
+	// Role is what this account may do: RoleOwner / RoleMember / RoleViewer.
+	Role string
+	// Username is its local-auth login name, empty for an account that only ever
+	// signs in with an activation code.
+	Username string
+	// Suspended accounts keep all their data but cannot push.
+	Suspended bool
 }
+
+// Roles, re-exported so an embedding host can present and validate them without
+// importing internal/server.
+const (
+	RoleOwner  = server.RoleOwner
+	RoleMember = server.RoleMember
+	RoleViewer = server.RoleViewer
+)
 
 // maxListUsersPage caps a single ListUsers call, matching
 // internal/server.Store.ListUsersFiltered's own safety ceiling.
@@ -299,6 +528,9 @@ func (a *Admin) ListUsers(limit, offset int) ([]User, error) {
 			Workspaces:         workspaces,
 			DatasetBytes:       datasetBytes,
 			LastSyncedAt:       lastSyncedAt,
+			Role:               r.Role,
+			Username:           r.Username,
+			Suspended:          r.Suspended,
 		})
 	}
 	return out, nil

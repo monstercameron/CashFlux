@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 13
+const CurrentServerSchemaVersion = 14
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -251,6 +251,12 @@ func (s *Store) migrate() error {
 			return err
 		}
 		version = 13
+	}
+	if version < 14 {
+		if err := s.migrateTo14(); err != nil {
+			return err
+		}
+		version = 14
 	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
@@ -511,6 +517,40 @@ CREATE INDEX IF NOT EXISTS idx_pending_devices_status ON pending_devices(status)
 	}
 	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username != '';`); err != nil {
 		return fmt.Errorf("server store: migrate v13: %w", err)
+	}
+	return nil
+}
+
+// migrateTo14 adds per-account roles. Until now every account this server admitted
+// was equal: a device activated for a guest could rewrite the owner's entire
+// dataset, because authorization was purely "is this row yours" with no notion of
+// what you are allowed to DO with it.
+//
+// The default is deliberately 'member', not 'owner' and not 'viewer'. 'owner'
+// would silently promote every existing account; 'viewer' would revoke write
+// access from accounts that legitimately have it — including, on a live
+// deployment, the operator's own. 'member' preserves exactly the access every
+// pre-migration account already had, so the migration changes no behaviour on its
+// own; roles only start mattering once one is explicitly assigned.
+//
+// The owner account is then promoted explicitly by id, since it is the one account
+// whose identity is a known constant (pkg/embed.OwnerAccountID).
+func (s *Store) migrateTo14() error {
+	if has, err := s.columnExists("users", "role"); err != nil {
+		return fmt.Errorf("server store: migrate v14: %w", err)
+	} else if !has {
+		if _, err := s.db.Exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member';`); err != nil {
+			return fmt.Errorf("server store: migrate v14: %w", err)
+		}
+	}
+	// Idempotent: re-running promotes the same single row to the same value.
+	if _, err := s.db.Exec(`UPDATE users SET role = 'owner' WHERE id = 'device:owner';`); err != nil {
+		return fmt.Errorf("server store: migrate v14: promote owner: %w", err)
+	}
+	// Any row that predates the column and somehow landed blank is a member, not a
+	// locked-out account.
+	if _, err := s.db.Exec(`UPDATE users SET role = 'member' WHERE role = '' OR role IS NULL;`); err != nil {
+		return fmt.Errorf("server store: migrate v14: backfill role: %w", err)
 	}
 	return nil
 }
