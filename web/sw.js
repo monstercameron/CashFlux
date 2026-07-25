@@ -18,6 +18,32 @@ const CORE = [
   "./fonts.css",
 ];
 
+// precache fetches one core asset and stores it ONLY if the response is really that
+// asset. Cache.add() would do the fetch-and-put in one call, but it validates only
+// the status code — and a login/interstitial page answering 200 with HTML for
+// "./bin/main.wasm.gz" passes that check. The result is HTML cached under the wasm's
+// URL, and a next boot that tries to instantiate a web page as WebAssembly and hangs
+// with nothing in the console to act on. That is not hypothetical: a host gate
+// answering every unauthenticated request with its lock page did exactly this.
+//
+// So: reject an HTML body for any asset that is not itself a document. The cache
+// entry is simply skipped, the network path still serves the real file once the
+// request is authorized, and the failure is logged rather than silent.
+async function precache(cache, url) {
+  try {
+    const resp = await fetch(url, { credentials: "same-origin" });
+    if (!resp.ok) throw new Error("status " + resp.status);
+    const type = resp.headers.get("content-type") || "";
+    const isDocument = url === "./" || url.endsWith(".html");
+    if (!isDocument && type.includes("text/html")) {
+      throw new Error("got HTML for a non-document asset (auth gate or error page?)");
+    }
+    await cache.put(url, resp);
+  } catch (e) {
+    console.warn("[sw] precache failed:", url, e && e.message ? e.message : e);
+  }
+}
+
 self.addEventListener("install", (event) => {
   // Cache each core asset INDIVIDUALLY (not addAll, which is all-or-nothing: a
   // single 404 would leave the cache empty and break offline). One failed asset
@@ -27,9 +53,7 @@ self.addEventListener("install", (event) => {
       // C312: don't swallow precache failures silently. Log which asset failed (a
       // failed ./bin/main.wasm is the difference between an offline boot and a blank
       // page), so the gap is visible in the console / SW devtools rather than hidden.
-      .then((c) => Promise.all(CORE.map((u) =>
-        c.add(u).catch((e) => console.warn("[sw] precache failed:", u, e && e.message ? e.message : e))
-      )))
+      .then((c) => Promise.all(CORE.map((u) => precache(c, u))))
       .catch((e) => console.warn("[sw] caches.open failed:", e && e.message ? e.message : e))
       .then(() => self.skipWaiting())
   );
