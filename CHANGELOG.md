@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **`pendingSyncCount` recursed into itself until the stack blew.** The cache-miss path returned
+  `pendingSyncCount()` instead of `len(loadSyncQueue())`, so the first count taken before anything
+  had populated the cache raised `RangeError: Maximum call stack size exceeded` and killed the wasm
+  instance mid-activation. Introduced by the change that stopped deserialising the queue just to
+  measure it: the edit that replaced call sites also rewrote the fallback the function needed to
+  terminate.
+
 ### Added
 - **Account roles (migration v14).** `users.role` with `owner` / `member` / `viewer`, enforced in
   `SyncService.requireWriter` — the single choke point every write already funnels through, so a

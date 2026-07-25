@@ -1256,7 +1256,7 @@ func pendingSyncCount() int {
 		return n
 	}
 	pendingCountMu.Unlock()
-	return pendingSyncCount() // loadSyncQueue records the count on the way out
+	return len(loadSyncQueue()) // cold: pay the parse once, loadSyncQueue caches it
 }
 
 func loadSyncQueue() []queuedSyncMutation {
