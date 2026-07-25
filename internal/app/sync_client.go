@@ -489,7 +489,7 @@ func wireSyncLifecycleListeners() {
 	js.Global().Call("addEventListener", "offline", js.FuncOf(func(js.Value, []js.Value) any {
 		st := loadSyncStatus()
 		st.State = "offline"
-		st.Pending = len(loadSyncQueue())
+		st.Pending = pendingSyncCount()
 		setSyncStatus(st)
 		return nil
 	}))
@@ -727,7 +727,7 @@ func flushBackendSyncQueue() {
 				}, &ensured); err != nil {
 					item.LastAttemptError = err.Error()
 					upsertQueuedSyncMutation(item)
-					setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
+					setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
 					logSyncError("backend workspace create failed", err)
 					return
 				}
@@ -750,7 +750,7 @@ func flushBackendSyncQueue() {
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
-				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob upload failed"), AuthFailed: isAuthError(err)})
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "artifact blob upload failed"), AuthFailed: isAuthError(err)})
 				logSyncError("backend artifact blob upload failed", err)
 				return
 			}
@@ -769,7 +769,7 @@ func flushBackendSyncQueue() {
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
-				setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
 				logSyncError("backend sync push failed", err)
 				return
 			}
@@ -814,7 +814,7 @@ func flushBackendSyncQueue() {
 				// them plainly (§7.11) and pull the newer server copy so the UI is current.
 				saveConflictBackup(item)
 				removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
-				setSyncStatus(syncStatus{State: "conflict", Pending: len(loadSyncQueue()), Message: "newer server snapshot available"})
+				setSyncStatus(syncStatus{State: "conflict", Pending: pendingSyncCount(), Message: "newer server snapshot available"})
 				uistate.PostNotice(uistate.T("sync.conflictBackedUp"), false)
 				if app := appstate.Default; app != nil {
 					app.Log().Warn("backend sync push rejected; local edit backed up, newer server snapshot pulled", "workspace", item.WorkspaceID)
@@ -829,7 +829,7 @@ func flushBackendSyncQueue() {
 			// that found an empty queue and uploaded nothing.
 			noteSyncActivity()
 		}
-		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 	}()
 }
 
@@ -1115,7 +1115,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		err = invokeAuthed(ctx, &conn, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
-			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
+			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
@@ -1136,12 +1136,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		if errors.Is(err, errSyncDatasetLocked) {
 			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
 			// the server keeps it, and onAppUnlocked re-pulls once the passcode is known.
-			setSyncStatus(syncStatus{State: "locked", Pending: len(loadSyncQueue()), Message: "unlock to sync encrypted data"})
+			setSyncStatus(syncStatus{State: "locked", Pending: pendingSyncCount(), Message: "unlock to sync encrypted data"})
 			return
 		}
 		if err != nil {
 			logSyncError("backend artifact blob download failed", err)
-			setSyncStatus(syncStatus{State: "error", Pending: len(loadSyncQueue()), Message: customSyncErrorMessage(err, "artifact blob download failed"), AuthFailed: isAuthError(err)})
+			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "artifact blob download failed"), AuthFailed: isAuthError(err)})
 			return
 		}
 		meta := loadSyncMeta(w.ID)
@@ -1187,7 +1187,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// reloads the page takes the flash with it, which is fine — the reload is a
 		// far louder signal that something arrived.)
 		noteSyncActivity()
-		setSyncStatus(syncStatus{State: "synced", Pending: len(loadSyncQueue()), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if reloadOnApply {
 			reloadPage()
 		}
@@ -1224,15 +1224,54 @@ func saveSyncMeta(workspaceID string, meta syncMeta) {
 	}
 }
 
+// pendingCount caches the queue LENGTH so callers that only want a number never
+// deserialize the queue to get it.
+//
+// Twelve call sites asked for pendingSyncCount() — every "Pending: N" in a
+// status update, on paths that run per render and per sync event. Each one parsed
+// the whole queue, and a queue entry carries a FULL COPY of the dataset as a
+// string, so counting one pending change meant unmarshalling a megabyte of JSON.
+// The queue is per-device state owned by this tab, so an in-memory count cannot
+// drift from it the way a second persisted key could.
+var (
+	pendingCountMu    sync.Mutex
+	pendingCountVal   int
+	pendingCountKnown bool
+)
+
+// setPendingCount records the authoritative length after any queue write or read.
+func setPendingCount(n int) {
+	pendingCountMu.Lock()
+	pendingCountVal, pendingCountKnown = n, true
+	pendingCountMu.Unlock()
+}
+
+// pendingSyncCount returns how many mutations are waiting to upload, parsing the
+// stored queue only on the first call of a session.
+func pendingSyncCount() int {
+	pendingCountMu.Lock()
+	if pendingCountKnown {
+		n := pendingCountVal
+		pendingCountMu.Unlock()
+		return n
+	}
+	pendingCountMu.Unlock()
+	return pendingSyncCount() // loadSyncQueue records the count on the way out
+}
+
 func loadSyncQueue() []queuedSyncMutation {
 	var queue []queuedSyncMutation
 	if raw := lsGet(syncQueueKey); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &queue)
 	}
+	setPendingCount(len(queue))
 	return queue
 }
 
 func saveSyncQueue(queue []queuedSyncMutation) {
+	// Every write is also the authoritative count, so pendingSyncCount never has to
+	// re-parse to answer "how many are waiting?".
+	setPendingCount(len(queue))
 	if len(queue) == 0 {
 		lsRemove(syncQueueKey)
 		return
@@ -1441,7 +1480,7 @@ func resolveConflictUseServer() {
 
 func enqueueSyncMutation(item queuedSyncMutation) {
 	upsertQueuedSyncMutation(item)
-	setSyncStatus(syncStatus{State: "syncing", Pending: len(loadSyncQueue())})
+	setSyncStatus(syncStatus{State: "syncing", Pending: pendingSyncCount()})
 }
 
 func upsertQueuedSyncMutation(item queuedSyncMutation) {
@@ -1516,7 +1555,7 @@ func loadSyncStatus() syncStatus {
 		return status
 	}
 	if status.State == "" {
-		if pending := len(loadSyncQueue()); pending > 0 {
+		if pending := pendingSyncCount(); pending > 0 {
 			status.State = "offline"
 			status.Pending = pending
 		} else {
