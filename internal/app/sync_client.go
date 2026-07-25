@@ -387,11 +387,13 @@ func wireSyncLifecycleListeners() {
 	syncListenersWired = true
 	cb := js.FuncOf(func(js.Value, []js.Value) any {
 		if js.Global().Get("document").Get("visibilityState").String() == "visible" {
-			flushBackendSyncQueue()
-			pullActiveWorkspaceFromBackend(true)
+			wakeSync()
 		}
 		return nil
 	})
+	// Both events fire when a tab is switched back to, and they are registered with
+	// the SAME callback — so every tab switch used to trigger two flushes and two
+	// pulls, each of which dials its own WebSocket. wakeSync coalesces them.
 	js.Global().Call("addEventListener", "visibilitychange", cb)
 	js.Global().Call("addEventListener", "focus", cb)
 	js.Global().Call("addEventListener", "online", js.FuncOf(func(js.Value, []js.Value) any {
@@ -437,6 +439,82 @@ func pushBlockedReason() string {
 	}
 	return ""
 }
+
+// yieldToBrowser hands the main thread back to JavaScript for one macrotask.
+//
+// Go on wasm is SINGLE-THREADED: `go func()` does not move work to another thread,
+// because there isn't one. A goroutine runs on the same thread as the renderer,
+// inside whatever JS callback the scheduler happened to be in, and only a BLOCKING
+// operation returns control to the event loop. CPU-bound work — a SQLite import, a
+// dataset export, JSON of any size — therefore freezes the page for exactly as long
+// as it runs, no matter how many goroutines it is spread across.
+//
+// Blocking on a channel fed by setTimeout is the one portable way to say "let the
+// browser breathe": the Go scheduler finds every goroutine parked, returns to JS,
+// and the browser gets to paint a frame and — critically here — deliver the
+// WebSocket open/message events that pending RPCs are waiting on. Without a yield
+// between the dial and the heavy work that follows it, a sync can starve the very
+// connection it is trying to use, then time out blaming the network.
+//
+// Not free: each call costs a macrotask (~4ms of clamping). Use it between phases
+// of long work, never inside a tight loop.
+func yieldToBrowser() {
+	done := make(chan struct{}, 1)
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		cb.Release()
+		done <- struct{}{}
+		return nil
+	})
+	js.Global().Call("setTimeout", cb, 0)
+	<-done
+}
+
+// wakeSync reconciles with the server after the page becomes usable again,
+// collapsing the burst of events that means "the user came back".
+//
+// visibilitychange and focus both fire on a tab switch, and each previously ran a
+// flush AND a pull — and every one of those dials its OWN WebSocket, because each
+// sync function opens a connection and closes it again. A few tab switches
+// therefore produced dozens of connections, all racing, all with 15-20s deadlines.
+// That is how a server log ends up with 279 accepted connections and the client
+// reports "WebSocket is closed before the connection is established": the sockets
+// connect fine, but the main thread is too busy to process their open events before
+// the dial contexts expire, and each expiry schedules more retries.
+//
+// The window only has to outlast the burst, not rate-limit real use: a genuine
+// second visit a second later still reconciles.
+func wakeSync() {
+	wakeMu.Lock()
+	if time.Since(lastWakeAt) < wakeCoalesceWindow {
+		wakeMu.Unlock()
+		return
+	}
+	lastWakeAt = time.Now()
+	wakeMu.Unlock()
+
+	flushBackendSyncQueue()
+	pullActiveWorkspaceFromBackend(true)
+}
+
+// wakeCoalesceWindow is how long after one wake-up another is treated as the same
+// event. Comfortably longer than the gap between visibilitychange and focus, far
+// shorter than any interval a person would notice.
+const wakeCoalesceWindow = 750 * time.Millisecond
+
+var (
+	wakeMu     sync.Mutex
+	lastWakeAt time.Time
+)
+
+// pullInFlight guards against stacking pulls. Every trigger — a wake-up, a watch
+// event, a sign-in, a boot — previously started its own goroutine and its own
+// dial, even while an identical pull was already running. They all fetch the same
+// workspace, so the extra ones cost a connection each and change nothing.
+var (
+	pullMu       sync.Mutex
+	pullInFlight bool
+)
 
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	pr := uistate.LoadPrefs().Normalize()
@@ -583,6 +661,9 @@ func flushBackendSyncQueue() {
 					item.ClientUpdatedAt = ensured.UpdatedAt
 				}
 			}
+			// The connection is up; let the browser deliver its events and paint
+			// before this goroutine spends the thread on import/encrypt/export.
+			yieldToBrowser()
 			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
 			if err != nil {
 				item.LastAttemptError = err.Error()
@@ -856,11 +937,20 @@ func readBackendWatch(stream grpc.ClientStream) (received bool) {
 // bundle for the same reason createWorkspace does it: a missing dataset key makes
 // boot seed the demo sample, which would look like a clone of whatever workspace
 // the user just came from.)
+// mergedRemoteWorkspaces ensures the workspace-list reconciliation runs at most
+// once per page load. It answers "does this account own workspaces this device has
+// never heard of?", which cannot change without either a sign-in or a reload — and
+// it costs a dial, so running it on every restartBackendSync (a toggle, a URL
+// change, a sign-in) added a connection to an already-crowded burst for an answer
+// that had not changed.
+var mergedRemoteWorkspaces bool
+
 func mergeRemoteWorkspaces() {
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !pr.BackendActive() || mergedRemoteWorkspaces {
 		return
 	}
+	mergedRemoteWorkspaces = true
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -918,7 +1008,20 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	if !ok {
 		return
 	}
+	pullMu.Lock()
+	if pullInFlight {
+		pullMu.Unlock()
+		return // an identical pull is already running; a second one changes nothing
+	}
+	pullInFlight = true
+	pullMu.Unlock()
+
 	go func() {
+		defer func() {
+			pullMu.Lock()
+			pullInFlight = false
+			pullMu.Unlock()
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		conn, err := dialAuthed(ctx, pr)
@@ -945,6 +1048,9 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			forceBackendResyncActiveWorkspace()
 			return
 		}
+		// Same reason as the push path: hydrating decrypts, downloads blobs and
+		// imports into SQLite, all of it CPU on the renderer's thread.
+		yieldToBrowser()
 		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), w.ID, resp.Dataset)
 		if errors.Is(err, errSyncDatasetLocked) {
 			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
