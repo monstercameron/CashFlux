@@ -67,7 +67,12 @@
     <link rel="mask-icon" href="./favicon.svg" color="#2e8b57" />
 
     <!-- PWA: installable, standalone, dark theme -->
-    <link rel="manifest" href="./manifest.webmanifest" />
+    <!-- crossorigin="use-credentials" because a manifest link is fetched WITHOUT
+      credentials by default. Behind an authenticating host (CashFlux embedded at
+      /budget/ on a gated site) that anonymous fetch is rejected, which shows up as
+      "Manifest fetch failed, code 401" and silently disables install/PWA metadata.
+      Same-origin either way; this only tells the browser to send the cookie. -->
+    <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="theme-color" content="#0e0e0f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

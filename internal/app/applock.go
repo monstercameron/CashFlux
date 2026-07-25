@@ -64,6 +64,7 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	// Remember the passcode for the session so the dataset autosave can encrypt at
 	// rest immediately (C45), without waiting for a reload + unlock.
 	activePasscode = passcode
+	clearDatasetKeyCache() // the old passcode's derived keys are now wrong
 	migrateDatasetAtRest() // encrypt the existing at-rest copy now
 	// A pull that hit an encrypted snapshot this device could not read parked on
 	// state "locked" with no way out: onAppUnlocked only runs from the passcode
@@ -85,6 +86,7 @@ func disableAppLock() {
 	clearPasskey()
 	saveAppLock(applock.Config{})
 	activePasscode = ""
+	clearDatasetKeyCache()
 	migrateDatasetAtRest() // rewrite the at-rest copy as plaintext now
 }
 

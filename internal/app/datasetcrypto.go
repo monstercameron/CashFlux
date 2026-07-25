@@ -51,7 +51,44 @@ func cryptoGetRandomValues(dst []byte) error {
 // success).
 //
 // All js.FuncOf callbacks are Released before onDone is called.
+// datasetKeyCache caches derived CryptoKeys so PBKDF2 at
+// cryptobox.PBKDF2Iterations (600 000) is paid at most once per passcode+salt per
+// session, mirroring artifactcrypto.go's artifactKeyCache.
+//
+// Without it the cost was paid on EVERY dataset encrypt and EVERY decrypt — so
+// every autosave, every sync push, and every pull each ran a full 600 000-round
+// derivation. On a fast desktop that is a few hundred milliseconds and easy to
+// miss; on a throttled fanless ARM64 laptop it is seconds, and it lands wherever
+// the Go scheduler happens to resume the blocked goroutine: encryptDatasetSync
+// waits on a channel fed by a SubtleCrypto callback, so the browser attributes the
+// whole derivation to whichever JS event resumed it — which is how a WebSocket
+// 'message' handler ends up reported at 26 seconds.
+//
+// Keyed by salt AND passcode: the salt alone would return a stale key after the
+// user changes their passcode, which would silently encrypt with the old one.
+var datasetKeyCache = map[string]js.Value{}
+
+// clearDatasetKeyCache drops every derived key. Called when the lock is enabled,
+// changed, or removed — any moment the passcode that keys this cache stops being
+// the right one.
+func clearDatasetKeyCache() {
+	datasetKeyCache = map[string]js.Value{}
+}
+
 func deriveKey(passcode string, saltB64 string, onDone func(key js.Value, err error)) {
+	cacheKey := saltB64 + "|" + passcode
+	if k, ok := datasetKeyCache[cacheKey]; ok {
+		onDone(k, nil)
+		return
+	}
+	inner := onDone
+	onDone = func(key js.Value, err error) {
+		if err == nil && !key.IsUndefined() && !key.IsNull() {
+			datasetKeyCache[cacheKey] = key
+		}
+		inner(key, err)
+	}
+
 	saltBytes, err := base64.StdEncoding.DecodeString(saltB64)
 	if err != nil {
 		onDone(js.Undefined(), fmt.Errorf("cryptobox: bad salt base64: %w", err))
