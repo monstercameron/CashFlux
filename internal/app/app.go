@@ -271,7 +271,22 @@ func Run() {
 	// it calls restartBackendSync itself when it lands, so ordering is safe either
 	// way — this call just gives it the earliest possible start.
 	TryActivationHandoff()
-	startBackendSync()
+	// Sync starts AFTER the app has settled, not inline with boot.
+	//
+	// Everything above this line — the wasm instantiating, IndexedDB opening, the
+	// dataset importing, the router mounting and rendering — runs on the one thread
+	// the browser also needs to complete a WebSocket handshake. Dialling from here
+	// meant the tunnel's onopen event queued behind the rest of boot, and on a slow
+	// device the 15s dial deadline expired before the event loop got back to it:
+	// "WebSocket is closed before the connection is established", then every RPC
+	// failing with "while waiting for connections to become ready", then retries
+	// competing with the boot they were already losing to.
+	//
+	// Deferring costs nothing a user can perceive — sync is a background
+	// reconciliation, not something anyone waits on — and it lets the first dial
+	// start against an idle thread, where 15 seconds is enormously generous instead
+	// of marginal.
+	afterAppSettles(startBackendSync)
 	probeAdminAccess() // non-blocking: sets uistate.AdminConsoleAvailable on HTTP 200
 
 	// Auto-post any due recurring transactions (bills, "pay yourself first")

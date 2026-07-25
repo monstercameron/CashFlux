@@ -122,3 +122,48 @@ func stripHandoffParam() {
 	url.Get("searchParams").Call("delete", handoffParam)
 	history.Call("replaceState", js.Null(), "", url.Get("pathname").String()+url.Get("search").String()+url.Get("hash").String())
 }
+
+// afterAppSettles runs fn once the browser has painted and gone idle, falling back
+// to a short timer where requestIdleCallback is unavailable (Safari).
+//
+// It exists for work that is genuinely background — reconciling with a sync server
+// — but which, run inline with boot, competes for the single thread that the
+// browser also needs to finish network handshakes and paint the first frame. The
+// double rAF is the standard "after the next paint" idiom: the first callback runs
+// before the frame is committed, the second after it.
+func afterAppSettles(fn func()) {
+	raf := js.Global().Get("requestAnimationFrame")
+	idle := js.Global().Get("requestIdleCallback")
+
+	run := js.FuncOf(func(js.Value, []js.Value) any {
+		fn()
+		return nil
+	})
+
+	schedule := func() {
+		if !idle.IsUndefined() && idle.Type() == js.TypeFunction {
+			// timeout: run anyway if the thread never goes idle, so a permanently
+			// busy app still syncs rather than silently never starting.
+			js.Global().Call("requestIdleCallback", run, map[string]any{"timeout": 2000})
+			return
+		}
+		js.Global().Call("setTimeout", run, 250)
+	}
+
+	if raf.IsUndefined() || raf.Type() != js.TypeFunction {
+		js.Global().Call("setTimeout", run, 250)
+		return
+	}
+	var first, second js.Func
+	second = js.FuncOf(func(js.Value, []js.Value) any {
+		second.Release()
+		schedule()
+		return nil
+	})
+	first = js.FuncOf(func(js.Value, []js.Value) any {
+		first.Release()
+		js.Global().Call("requestAnimationFrame", second)
+		return nil
+	})
+	js.Global().Call("requestAnimationFrame", first)
+}

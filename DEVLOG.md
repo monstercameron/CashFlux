@@ -1,3 +1,51 @@
+## 2026-07-25 — Rendering outranks networking, and the recursion hiding underneath it
+
+Cam's console showed the `'message'` handler down to 1851ms from 25937ms — the dataset key cache and
+the yields had done real work — but the WebSocket was still failing to establish at boot. The stack
+trace is what cracked it: the failing dial unwound through `artifactstore.OpenIDB` →
+`app.initBlobStore` → `app.Run`, and through `runtime.Render` → `router.Mount` → `app.Run`. Sync
+wasn't merely slow; it was starting *inside boot*, sharing a thread with the router mounting and
+IndexedDB opening. A WebSocket handshake needs the event loop to deliver `onopen`. Boot was holding
+it. The 15s dial deadline expired, every RPC then failed with "while waiting for connections to
+become ready", and each expiry scheduled retries that competed with the boot they were already
+losing to. The network was never the problem — the server log had said as much for days
+(279 accepted connections, `ws_upgrade_failed = 0`).
+
+Cam's framing when he saw the fix going in was sharper than mine and became the actual rule:
+**"rendering has to be the highest priority, we can't stall rendering for networking."** Deferring
+boot only fixes cold start; the principle has to hold for the whole session. So two changes rather
+than one. `startBackendSync` now runs after first paint (`afterAppSettles` — double rAF, then
+`requestIdleCallback`). And every yield inside the engine moved from `setTimeout(0)` to
+`requestIdleCallback` with a 1.5s timeout cap, which is a different promise: `setTimeout(0)` means
+"next task", possibly ahead of a frame the browser has already queued, while `requestIdleCallback`
+means "only once the frame is done". Flush and pull yield before touching anything at all. The
+timeout cap matters — a page under permanent load never goes idle, and without a deadline sync would
+stop happening rather than merely yielding. Worst case is "late", never "dead".
+
+Measured, on the handlers Cam's console flagged: visibilitychange 1/0/0 ms, focus 7/3/3 ms, online
+4/2/1 ms. Those were seconds.
+
+The e2e run then failed in a way that had nothing to do with any of it: `RangeError: Maximum call
+stack size exceeded`, and the trace was `pendingSyncCount` calling `pendingSyncCount` all the way
+down. Yesterday's "stop deserialising the queue to count it" change rewrote every call site of the
+old expression — including the fallback inside the new function, which was the line that made it
+terminate. So the first count taken before the cache was warm killed the wasm instance. That is the
+second time this session an over-broad string replace has written a recursive call (the first was
+`acquireConn`), and the tell both times was identical: a stack trace of one frame repeating. Worth
+remembering that the search-and-replace which updates callers must never be allowed to reach the
+callee's own body.
+
+That bug was almost certainly a chunk of what Cam was actually experiencing, and it makes the
+suite's long-standing intermittent — "re-activating signs back in — state=null", roughly one run in
+three — legible at last: not a race in the product, a wasm instance dying underneath it. With both
+changes in, `sync-flows` passed 21/21 for the first time and `auth-flows` 12/12.
+
+One harness change came with it, and it is a real improvement rather than a concession: `hasMarker`
+polled instead of sleeping a flat 3s. Now that sync deliberately waits for an idle renderer, "how
+long until a hydrated row is on screen" is a range rather than a constant, and a fixed sleep reports
+the harness's impatience as a product failure. Polling asserts the same claim without pretending to
+know when.
+
 ## 2026-07-24 — Unifying /sync and Settings → Cloud, and a Local/Remote/Commercial picker
 
 Third task off the approved plan: Cam's "for the sync and cloud pages they are the same!" — they'd

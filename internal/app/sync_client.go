@@ -539,8 +539,22 @@ func pushBlockedReason() string {
 // between the dial and the heavy work that follows it, a sync can starve the very
 // connection it is trying to use, then time out blaming the network.
 //
-// Not free: each call costs a macrotask (~4ms of clamping). Use it between phases
-// of long work, never inside a tight loop.
+// It yields to requestIdleCallback rather than setTimeout, because those two mean
+// different things. setTimeout(0) says "run me in the next task", which can still be
+// ahead of a frame the browser has already queued — so sync work resumes with a
+// render pending behind it. requestIdleCallback says "run me when the browser has
+// finished everything it wanted to do this frame, and has time left over". That is
+// the scheduling contract this app needs: RENDERING WINS, always. Networking and the
+// crypto/serialisation around it are background reconciliation, and no part of them
+// is worth a dropped frame.
+//
+// The idleTimeout cap is the safety valve. A page under permanent load never goes
+// idle, and without a deadline sync would simply stop happening rather than merely
+// yielding — so after that long the callback runs regardless. It bounds the worst
+// case at "sync is late", never "sync is dead".
+//
+// Not free: each call costs at least a frame. Use it between phases of long work,
+// never inside a tight loop.
 func yieldToBrowser() {
 	done := make(chan struct{}, 1)
 	var cb js.Func
@@ -549,9 +563,20 @@ func yieldToBrowser() {
 		done <- struct{}{}
 		return nil
 	})
-	js.Global().Call("setTimeout", cb, 0)
+	if ric := js.Global().Get("requestIdleCallback"); !ric.IsUndefined() && ric.Type() == js.TypeFunction {
+		js.Global().Call("requestIdleCallback", cb, map[string]any{"timeout": idleTimeoutMS})
+	} else {
+		// Safari and friends: one macrotask is the best available approximation.
+		js.Global().Call("setTimeout", cb, 0)
+	}
 	<-done
 }
+
+// idleTimeoutMS bounds how long a yield will wait for a quiet frame before running
+// anyway. Long enough that a busy burst — a page transition, a big list rendering —
+// finishes first; short enough that a user who leaves the app under load still gets
+// their data reconciled while they are looking at it.
+const idleTimeoutMS = 1500
 
 // wakeSync reconciles with the server after the page becomes usable again,
 // collapsing the burst of events that means "the user came back".
@@ -686,6 +711,7 @@ func flushBackendSyncQueue() {
 		return
 	}
 	go func() {
+		yieldToBrowser() // rendering first: never start a push inside a frame
 		syncPushMu.Lock()
 		defer syncPushMu.Unlock()
 		queue := loadSyncQueue()
@@ -1104,6 +1130,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			pullInFlight = false
 			pullMu.Unlock()
 		}()
+		yieldToBrowser() // rendering first: never dial from inside a frame
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		conn, err := acquireConn(ctx, pr)

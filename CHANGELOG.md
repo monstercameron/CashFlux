@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **Rendering outranks networking, everywhere.** Sync used to run on whatever callback happened to
+  reach it — including boot, inline with the router mounting and IndexedDB opening. On the one
+  thread wasm has, that meant a WebSocket handshake queued behind the whole of startup and its 15s
+  dial deadline expired before the event loop returned: "closed before the connection is
+  established", then every RPC failing with "while waiting for connections to become ready", then
+  retries competing with the boot they were already losing to. Two changes: `startBackendSync` now
+  runs after first paint via `afterAppSettles`, and every yield inside the engine uses
+  `requestIdleCallback` (1.5s timeout cap) rather than `setTimeout(0)` — the difference between
+  "next task, possibly ahead of a queued frame" and "only once the browser has finished the frame".
+  Flush and pull both yield before touching anything. Measured stall in the handlers Cam's console
+  flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
+
 ### Fixed
 - **`pendingSyncCount` recursed into itself until the stack blew.** The cache-miss path returned
   `pendingSyncCount()` instead of `len(loadSyncQueue())`, so the first count taken before anything
