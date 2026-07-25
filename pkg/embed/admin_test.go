@@ -670,3 +670,40 @@ func TestResetCredentialsClearsPasswordAndSessions(t *testing.T) {
 		t.Fatalf("ResetCredentials: password should be gone, got %q", hash)
 	}
 }
+
+// TestMintActivationCodeForUserBindsToThatAccount proves an invited person signs in
+// to THEIR account, not the operator's. Without this, CreateUser produced an account
+// nobody could ever reach.
+func TestMintActivationCodeForUserBindsToThatAccount(t *testing.T) {
+	a := newTestAdmin(t)
+	id, err := a.CreateUser("priya", RoleMember)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	code, _, err := a.MintActivationCodeForUser(id)
+	if err != nil {
+		t.Fatalf("MintActivationCodeForUser: %v", err)
+	}
+	got, ok, err := a.store.ConsumePairingCode(code, time.Now().UTC())
+	if err != nil || !ok {
+		t.Fatalf("ConsumePairingCode: ok=%v err=%v", ok, err)
+	}
+	if got != id {
+		t.Fatalf("code resolved to %q, want the invited account %q", got, id)
+	}
+	if got == OwnerAccountID {
+		t.Fatal("an invited person's code must not resolve to the owner account")
+	}
+}
+
+// TestMintActivationCodeForUserRejectsUnknownAccount proves a typo'd id errors
+// rather than minting a redeemable code for an account that does not exist.
+func TestMintActivationCodeForUserRejectsUnknownAccount(t *testing.T) {
+	a := newTestAdmin(t)
+	if _, _, err := a.MintActivationCodeForUser("device:TYPO"); err == nil {
+		t.Fatal("expected an error for an unknown account")
+	}
+	if _, _, err := a.MintActivationCodeForUser("  "); err == nil {
+		t.Fatal("expected an error for a blank id")
+	}
+}

@@ -232,6 +232,38 @@ func (a *Admin) ActivationCodeIsValid(code string) (bool, error) {
 	return ok, nil
 }
 
+// MintActivationCodeForUser mints an activation code bound to an EXISTING account,
+// so an invited person can sign in to their own data rather than the operator's.
+//
+// MintActivationCode is the owner's shortcut and always binds to OwnerAccountID —
+// deliberately, so every device the operator activates lands in one dataset. That
+// is exactly wrong for a second person, and without this function CreateUser was
+// useless: it could make an account nobody could ever sign in to.
+//
+// The account must already exist. A code minted for a typo'd id would be
+// redeemable — RedeemPairingCode resolves whatever user the code names — and would
+// silently create a session for an account with no data and no owner, which is a
+// worse outcome than an error.
+func (a *Admin) MintActivationCodeForUser(userID string) (code string, expiresAt time.Time, err error) {
+	if a == nil || a.store == nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: admin is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: user id is required")
+	}
+	if _, ok, err := a.store.GetUserByID(userID); err != nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: look up account: %w", err)
+	} else if !ok {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: no such account %q", userID)
+	}
+	code, expiresAt, err = a.store.MintPairingCode(userID, time.Now().UTC())
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("pkg/embed: mint activation code: %w", err)
+	}
+	return code, expiresAt, nil
+}
+
 // RejectPairing rejects a pending device request (TODOS.md C454). Returns
 // rejected=false (with no error) if the request was already resolved.
 func (a *Admin) RejectPairing(deviceID string) (rejected bool, err error) {
