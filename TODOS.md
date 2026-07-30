@@ -6402,3 +6402,9 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   verify the new password succeeds and sync reaches `Synced`, then suspend/reinstate and delete the
   account from the console. Assert no browser errors, no lost recovery card, no `workspace not found`,
   and no surviving account after deletion.
+- [x] **C471 [MAJOR][AUTH][ADMIN] Allow same-origin operator-console mutations.** The console's
+  overview GET worked, but browser POST/PATCH requests carried the console's own `Origin` and were
+  rejected whenever `CASHFLUX_APP_ORIGIN` pointed at the separate CashFlux app. Accept the exact
+  request scheme/host as a console origin in addition to the configured app origin, advertise
+  PATCH in preflight, and continue rejecting every unrelated origin. A focused CORS test covers
+  successful same-origin mutation and hostile cross-origin denial.

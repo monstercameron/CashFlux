@@ -47,7 +47,7 @@ func TestFixedWindowLimiterEvictsStaleBuckets(t *testing.T) {
 func TestFixedWindowLimiterSweepKeepsActiveBuckets(t *testing.T) {
 	limiter := newFixedWindowLimiter(2)
 	base := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
-	limiter.allow("198.51.100.1", base)           // window opens at base
+	limiter.allow("198.51.100.1", base)                     // window opens at base
 	limiter.allow("198.51.100.2", base.Add(90*time.Second)) // triggers a sweep at +90s
 	// 198.51.100.1's window (base) is now >1min old → evicted. 198.51.100.2 is fresh.
 	if _, ok := limiter.buckets["198.51.100.2"]; !ok {
@@ -90,7 +90,7 @@ func TestRateLimitClientIPUntrustedPeerIgnoresForgedChain(t *testing.T) {
 	_, proxyNet, _ := net.ParseCIDR("10.0.0.0/8")
 	cfg := Config{TrustedProxies: []*net.IPNet{proxyNet}}
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
-	req.RemoteAddr = "203.0.113.200:443" // NOT a trusted proxy
+	req.RemoteAddr = "203.0.113.200:443"         // NOT a trusted proxy
 	req.Header.Set("X-Forwarded-For", "1.2.3.4") // forged
 	if got := rateLimitClientIP(req, cfg); got != "203.0.113.200" {
 		t.Fatalf("untrusted peer ip = %q, want the real peer 203.0.113.200 (forged XFF ignored)", got)
@@ -111,9 +111,9 @@ func TestParseTrustedProxies(t *testing.T) {
 		ip   string
 		want bool
 	}{
-		{"10.255.1.1", true},   // inside 10.0.0.0/8
-		{"11.0.0.1", false},    // outside
-		{"203.0.113.9", true},  // bare IP → /32
+		{"10.255.1.1", true},  // inside 10.0.0.0/8
+		{"11.0.0.1", false},   // outside
+		{"203.0.113.9", true}, // bare IP → /32
 		{"203.0.113.10", false},
 		{"::1", true}, // bare IPv6 → /128
 	}
@@ -340,6 +340,28 @@ func TestWriteCORSNamedOriginReflectsWithCredentials(t *testing.T) {
 	}
 	if got := badRR.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("Allow-Origin = %q, want empty for a denied origin", got)
+	}
+}
+
+func TestWriteCORSAllowsSameOriginOperatorConsoleMutations(t *testing.T) {
+	cfg := Config{AppOrigin: "https://app.example.com"}
+	req := httptest.NewRequest(http.MethodPatch, "https://admin.example.com/v1/admin/users/u1", nil)
+	req.Header.Set("Origin", "https://admin.example.com")
+	rr := httptest.NewRecorder()
+	if !writeCORS(rr, req, cfg) {
+		t.Fatal("same-origin operator-console mutation was rejected")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://admin.example.com" {
+		t.Fatalf("Allow-Origin = %q, want same operator-console origin", got)
+	}
+	if methods := rr.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(methods, "PATCH") {
+		t.Fatalf("Allow-Methods = %q, want PATCH", methods)
+	}
+
+	hostile := httptest.NewRequest(http.MethodPost, "https://admin.example.com/v1/admin/users", nil)
+	hostile.Header.Set("Origin", "https://evil.example.com")
+	if writeCORS(httptest.NewRecorder(), hostile, cfg) {
+		t.Fatal("cross-origin operator mutation was allowed")
 	}
 }
 

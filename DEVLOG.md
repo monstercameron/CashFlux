@@ -29403,3 +29403,17 @@ by the server session secret, allowing the exact same response to be reconstruct
 the idempotency table stores the token response with its recovery code redacted. Tests prove old
 passwords, old refresh sessions, and consumed recovery codes fail, replacement codes work, unknown
 users and wrong codes return the same error shape, and retries return the same session and code.
+
+## 2026-07-30 — Same-origin operator mutations pass CORS
+
+The first real-browser create-account attempt exposed a split-origin assumption hidden by the
+console's successful overview GET. The console is served by `cashflux-server`, while
+`CASHFLUX_APP_ORIGIN` names the separate CashFlux client. Browser POST/PATCH requests include the
+console's own `Origin`, so the shared CORS gate rejected every account mutation before it reached
+the authenticated admin handler.
+
+`writeCORS` now accepts the exact HTTP(S) scheme/host serving the current request in addition to the
+configured app origin, and advertises PATCH for identity edits. This does not broaden access to
+other origins: the focused regression proves the console origin succeeds while a hostile origin
+against the same endpoint remains denied. `go test ./internal/server` and the live create/edit
+browser path pass.

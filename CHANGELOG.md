@@ -71,6 +71,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Operator-console account mutations now pass the server's CORS gate.** The full server accepts
+  the console's exact same-origin POST/PATCH requests in addition to the separately configured
+  CashFlux app origin, advertises PATCH during preflight, and still denies unrelated origins.
 - **Fresh password accounts now seed sync cleanly without losing their recovery code.** Registration
   and password reset wait for the one-time code acknowledgement before starting sync. A missing
   remote workspace now clears stale device-side server metadata before the forced upload, ensuring

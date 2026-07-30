@@ -575,11 +575,16 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	if origin == "" {
 		return true
 	}
-	if !allowedOrigin(origin, cfg.AppOrigin) {
+	// The operator console is served by this HTTP server and its mutating
+	// fetches carry an Origin header even though they are same-origin. Always
+	// accept that exact scheme/host pair in addition to the separately
+	// configured CashFlux app origin; otherwise every console POST/PATCH is
+	// rejected while its GET overview misleadingly works.
+	if !allowedOrigin(origin, cfg.AppOrigin) && !sameRequestOrigin(origin, r) {
 		return false
 	}
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CashFlux-CSRF")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, ETag, X-CashFlux-CSRF")
 	w.Header().Set("Access-Control-Max-Age", "600")
 	// All-origins mode (AppOrigin="*"): NEVER reflect an arbitrary caller origin
@@ -598,6 +603,17 @@ func writeCORS(w http.ResponseWriter, r *http.Request, cfg Config) bool {
 	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	return true
+}
+
+func sameRequestOrigin(origin string, r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	parsed, err := url.Parse(strings.TrimSpace(origin))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return false
+	}
+	return parsed.Host != "" && strings.EqualFold(parsed.Host, strings.TrimSpace(r.Host))
 }
 
 func allowedOrigin(origin, configured string) bool {
