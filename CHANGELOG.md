@@ -107,6 +107,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Webhook deploys now have deterministic Go cache paths.** The native updater supplies its own
+  `HOME`, `GOPATH`, module cache, and build cache defaults, so a clean transient systemd service
+  builds exactly like an interactive root deployment instead of failing before compilation.
 - **Local accounts are identifiable in the operator console.** User rows now render the local
   username when email is empty, expose that identity in the row's accessible name, and can be
   searched by username as well as email. The table/search copy now describes accounts rather than

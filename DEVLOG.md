@@ -29614,3 +29614,12 @@ Validation: focused repository/admin tests pass, the operator WASM builds, and t
 standalone + hosted Chromium lifecycle passes 2/2 without retries in 1.3 minutes. The lifecycle now
 polls the admin API for the persisted owner role before attempting credential login; its former
 immediate DOM assertion could match the selected option before the asynchronous PATCH completed.
+
+## 2026-07-30 — C479: deploy-hook builds own their Go environment
+
+The first update launched through `systemd-run` created a verified backup and stopped before
+touching the live release, with `go: module cache not found: neither GOMODCACHE nor GOPATH is set`.
+Interactive root SSH had hidden the assumption by providing `HOME`; the deploy-hook service does
+not. The updater now defaults `HOME`, a persistent module cache, and a separate build cache under
+`/var/cache`, while still honoring explicit operator overrides. This preserves warm unattended
+builds and makes the documented transient-service target behave like the manually proven path.

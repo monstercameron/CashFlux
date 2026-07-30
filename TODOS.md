@@ -6486,3 +6486,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   row rendered only `email`; searching was also email-only. The console now displays username with
   email/id fallback, labels rows by that identity, and searches either username or email. Native
   repository coverage and the standalone browser lifecycle protect the local-account path.
+- [x] **C479 [OPS] The deploy updater assumes an interactive shell's Go environment.** A real
+  transient-systemd run backed up safely, then stopped before compilation because `HOME`, `GOPATH`,
+  and `GOMODCACHE` were absent. The updater now owns deterministic module/build cache defaults,
+  making the documented deploy-hook target self-contained.

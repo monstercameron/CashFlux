@@ -86,8 +86,11 @@ rm -f \
 	"$build_dir/web/admin/admin.wasm" \
 	"$build_dir/web/portal/portal.wasm"
 
-export GOCACHE="${GOCACHE:-/var/cache/cashflux-go}"
-mkdir -p "$GOCACHE"
+export HOME="${HOME:-/root}"
+export GOPATH="${GOPATH:-/var/cache/cashflux-go-path}"
+export GOMODCACHE="${GOMODCACHE:-$GOPATH/pkg/mod}"
+export GOCACHE="${GOCACHE:-/var/cache/cashflux-go-build}"
+mkdir -p "$GOMODCACHE" "$GOCACHE"
 say "building browser applications"
 (
 	cd "$repo"
