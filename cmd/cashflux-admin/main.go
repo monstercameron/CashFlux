@@ -90,6 +90,22 @@ type adminBrowserSession struct {
 	ExpiresIn     int64  `json:"expiresIn"`
 }
 
+type adminSetupStatus struct {
+	Required bool `json:"required"`
+}
+
+type adminSetupResponse struct {
+	UserID       string `json:"userId"`
+	Username     string `json:"username"`
+	RecoveryCode string `json:"recoveryCode"`
+}
+
+type apiErrorResponse struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 // ---------------------------------------------------------------------------
 // View state — top-level navigation
 // ---------------------------------------------------------------------------
@@ -98,15 +114,17 @@ type adminBrowserSession struct {
 type screen int
 
 const (
-	screenHome    screen = iota // landing / hero
-	screenLogin                 // token-entry form
-	screenLoading               // skeleton while fetching data
-	screenAuthErr               // 401/403 from the API
-	screenNetErr                // network / other error
-	screenReady                 // data loaded, console visible
-	screenManage                // managing a single user (detail + actions)
-	screenCreate                // creating a username/password user
-	screenAudit                 // the global security audit log
+	screenHome          screen = iota // landing / hero
+	screenLogin                       // token-entry form
+	screenLoading                     // skeleton while fetching data
+	screenAuthErr                     // 401/403 from the API
+	screenNetErr                      // network / other error
+	screenReady                       // data loaded, console visible
+	screenManage                      // managing a single user (detail + actions)
+	screenCreate                      // creating a username/password user
+	screenAudit                       // the global security audit log
+	screenSetup                       // one-time first-owner registration
+	screenSetupRecovery               // one-time recovery-code acknowledgement
 )
 
 // ---------------------------------------------------------------------------
@@ -224,6 +242,45 @@ func signInAdminCredentials(username, password string) (*adminBrowserSession, bo
 		return nil, false, err
 	}
 	return &session, false, nil
+}
+
+func fetchAdminSetupStatus() (bool, error) {
+	code, body, err := adminDo("", http.MethodGet, "/v1/admin/setup", "")
+	if err != nil {
+		return false, err
+	}
+	if code != http.StatusOK {
+		return false, fmt.Errorf("owner setup status: HTTP %d", code)
+	}
+	var status adminSetupStatus
+	if err := json.Unmarshal(body, &status); err != nil {
+		return false, err
+	}
+	return status.Required, nil
+}
+
+func createInitialOwner(setupKey, username, password string) (*adminSetupResponse, error) {
+	body, _ := json.Marshal(map[string]string{
+		"setupKey": strings.TrimSpace(setupKey),
+		"username": strings.TrimSpace(username),
+		"password": password,
+	})
+	code, responseBody, err := adminDo("", http.MethodPost, "/v1/admin/setup", string(body))
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		var response apiErrorResponse
+		if json.Unmarshal(responseBody, &response) == nil && strings.TrimSpace(response.Error.Message) != "" {
+			return nil, fmt.Errorf("%s", response.Error.Message)
+		}
+		return nil, fmt.Errorf("owner setup: HTTP %d", code)
+	}
+	var response adminSetupResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
 }
 
 func refreshAdminSession() bool {
@@ -713,6 +770,116 @@ func credentialLoginView(
 	)
 }
 
+func ownerSetupView(
+	setupKey, username, password, confirm, message string,
+	onSetupKey, onUsername, onPassword, onConfirm, onSubmit ui.Handler,
+) ui.Node {
+	return Div(
+		css.Class("login-page"),
+		Div(
+			css.Class("login-card"),
+			Div(css.Class("login-brand"), brandMark("")),
+			H1(css.Class("login-title"), Text("Create owner account")),
+			P(css.Class("login-sub"), Text("Finish this server's one-time setup. You will use this account to approve access and manage users.")),
+			Div(
+				css.Class("setup-note"),
+				Text("Enter the break-glass key configured on this server. Setup closes permanently after the first owner is created."),
+			),
+			Label(For("setup-key"), css.Class("login-label"), Text("Break-glass setup key")),
+			Input(
+				ID("setup-key"),
+				Type("password"),
+				Attr("autocomplete", "off"),
+				Attr("data-testid", "admin-setup-key"),
+				css.Class("login-input"),
+				Placeholder("Server setup key"),
+				Value(setupKey),
+				OnInput(onSetupKey),
+			),
+			Label(For("setup-username"), css.Class("login-label"), Text("Owner username")),
+			Input(
+				ID("setup-username"),
+				Type("text"),
+				Attr("autocomplete", "username"),
+				Attr("data-testid", "admin-setup-username"),
+				css.Class("login-input"),
+				Placeholder("Username"),
+				Value(username),
+				OnInput(onUsername),
+			),
+			Label(For("setup-password"), css.Class("login-label"), Text("Password")),
+			Input(
+				ID("setup-password"),
+				Type("password"),
+				Attr("autocomplete", "new-password"),
+				Attr("data-testid", "admin-setup-password"),
+				css.Class("login-input"),
+				Placeholder("At least 8 characters"),
+				Value(password),
+				OnInput(onPassword),
+			),
+			Label(For("setup-password-confirm"), css.Class("login-label"), Text("Confirm password")),
+			Input(
+				ID("setup-password-confirm"),
+				Type("password"),
+				Attr("autocomplete", "new-password"),
+				Attr("data-testid", "admin-setup-password-confirm"),
+				css.Class("login-input"),
+				Placeholder("Repeat password"),
+				Value(confirm),
+				OnInput(onConfirm),
+			),
+			If(message != "", P(
+				css.Class("form-error"),
+				Attr("role", "alert"),
+				Attr("data-testid", "admin-setup-message"),
+				Text(message),
+			)),
+			Button(
+				Type("button"),
+				css.Class("btn btn-primary"),
+				Attr("data-testid", "admin-setup-submit"),
+				Attr("aria-label", "Create the first CashFlux owner account"),
+				OnClick(onSubmit),
+				Text("Create owner account"),
+			),
+		),
+	)
+}
+
+func ownerSetupRecoveryView(recoveryCode, message string, onContinue ui.Handler) ui.Node {
+	return Div(
+		css.Class("login-page"),
+		Div(
+			css.Class("login-card"),
+			Div(css.Class("login-brand"), brandMark("")),
+			H1(css.Class("login-title"), Text("Save your recovery code")),
+			P(css.Class("login-sub"), Text("Your owner account is ready. Store this one-time code somewhere safe before continuing.")),
+			Div(
+				css.Class("recovery-code"),
+				Attr("data-testid", "admin-setup-recovery-code"),
+				Attr("aria-label", "One-time owner recovery code"),
+				Text(recoveryCode),
+			),
+			P(css.Class("setup-note"), Text("CashFlux stores only a protected hash. This code cannot be shown again.")),
+			If(message != "", P(
+				css.Class("form-error"),
+				Attr("role", "status"),
+				Attr("data-testid", "admin-setup-message"),
+				Text(message),
+			)),
+			Button(
+				Type("button"),
+				css.Class("btn btn-primary"),
+				Attr("data-testid", "admin-setup-continue"),
+				Attr("aria-label", "Confirm the recovery code is saved and open the console"),
+				OnClick(onContinue),
+				Text("I saved it — open console"),
+			),
+		),
+	)
+}
+
 func loadingView() ui.Node {
 	return Div(
 		css.Class("loading-page"),
@@ -953,6 +1120,10 @@ func App() ui.Node {
 	view := ui.UseState(screenLoading)
 	usernameInput := ui.UseState("")
 	passwordInput := ui.UseState("")
+	setupKeyInput := ui.UseState("")
+	setupPasswordConfirm := ui.UseState("")
+	setupMessage := ui.UseState("")
+	setupRecoveryCode := ui.UseState("")
 	tokenInput := ui.UseState("")
 	devToken := ui.UseState("") // non-empty only in dev mode
 	breakGlassOpen := ui.UseState(false)
@@ -964,6 +1135,24 @@ func App() ui.Node {
 	userOffset := ui.UseState(0)    // current users-table page offset
 	usersHasMore := ui.UseState(false)
 	auditEvents := ui.UseState[[]auditEvent](nil) // global audit log (screenAudit)
+
+	// showOwnerEntry selects the only valid unauthenticated door: first-owner
+	// setup for an empty installation, normal sign-in after setup is complete.
+	showOwnerEntry := func() {
+		go func() {
+			required, err := fetchAdminSetupStatus()
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			if required {
+				view.Set(screenSetup)
+				return
+			}
+			view.Set(screenLogin)
+		}()
+	}
 
 	// reloadUsers refetches just the users table for the current search + offset,
 	// leaving the overview stats untouched. Used by search/prev/next.
@@ -987,7 +1176,76 @@ func App() ui.Node {
 	})
 	handleUsernameInput := ui.UseEvent(func(v string) { usernameInput.Set(v) })
 	handlePasswordInput := ui.UseEvent(func(v string) { passwordInput.Set(v) })
+	handleSetupKeyInput := ui.UseEvent(func(v string) { setupKeyInput.Set(v) })
+	handleSetupConfirmInput := ui.UseEvent(func(v string) { setupPasswordConfirm.Set(v) })
 	handleToggleBreakGlass := ui.UseEvent(func() { breakGlassOpen.Set(!breakGlassOpen.Get()) })
+
+	handleOwnerSetup := ui.UseEvent(func() {
+		username := strings.TrimSpace(usernameInput.Get())
+		password := passwordInput.Get()
+		switch {
+		case strings.TrimSpace(setupKeyInput.Get()) == "":
+			setupMessage.Set("Enter the server's break-glass setup key.")
+			return
+		case username == "":
+			setupMessage.Set("Choose an owner username.")
+			return
+		case len(password) < 8:
+			setupMessage.Set("Password must be at least 8 characters.")
+			return
+		case password != setupPasswordConfirm.Get():
+			setupMessage.Set("Passwords do not match.")
+			return
+		}
+		setupMessage.Set("Creating owner account…")
+		go func() {
+			response, err := createInitialOwner(setupKeyInput.Get(), username, password)
+			if err != nil {
+				setupMessage.Set(err.Error())
+				return
+			}
+			setupKeyInput.Set("")
+			setupPasswordConfirm.Set("")
+			setupRecoveryCode.Set(response.RecoveryCode)
+			setupMessage.Set("")
+			view.Set(screenSetupRecovery)
+		}()
+	})
+
+	handleFinishOwnerSetup := ui.UseEvent(func() {
+		username := strings.TrimSpace(usernameInput.Get())
+		password := passwordInput.Get()
+		setupMessage.Set("Signing in…")
+		go func() {
+			_, isAuthErr, err := signInAdminCredentials(username, password)
+			if isAuthErr {
+				setupMessage.Set("The owner was created, but sign-in failed. Return to this page and try the same username and password.")
+				return
+			}
+			if err != nil {
+				setupMessage.Set("The owner was created. Sign-in can be retried: " + err.Error())
+				return
+			}
+			ov, us, more, isAuthErr, err := fetchAdminData("")
+			if isAuthErr {
+				setupMessage.Set("The owner was created, but the console session could not be opened.")
+				return
+			}
+			if err != nil {
+				setupMessage.Set("The owner was created. Loading the console can be retried: " + err.Error())
+				return
+			}
+			passwordInput.Set("")
+			setupRecoveryCode.Set("")
+			setupMessage.Set("")
+			overview.Set(ov)
+			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
+			view.Set(screenReady)
+		}()
+	})
 
 	// The primary sign-in path establishes an owner-only HttpOnly session.
 	handleCredentialSignIn := ui.UseEvent(func() {
@@ -1097,7 +1355,8 @@ func App() ui.Node {
 
 	// handleGoToLogin transitions to the login screen and fetches dev creds.
 	handleGoToLogin := ui.UseEvent(func() {
-		view.Set(screenLogin)
+		view.Set(screenLoading)
+		showOwnerEntry()
 		go func() {
 			tok, ok := fetchDevCreds()
 			if ok {
@@ -1129,7 +1388,7 @@ func App() ui.Node {
 		view.Set(screenLoading)
 		go func() {
 			if tok == "" && !restoreAdminSession() {
-				view.Set(screenLogin)
+				showOwnerEntry()
 				return
 			}
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
@@ -1193,7 +1452,7 @@ func App() ui.Node {
 		view.Set(screenLoading)
 		go func() {
 			if tok == "" && !restoreAdminSession() {
-				view.Set(screenLogin)
+				showOwnerEntry()
 				return
 			}
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
@@ -1201,7 +1460,7 @@ func App() ui.Node {
 				// Token is stored but no longer valid; return to home.
 				lsRemove()
 				tokenInput.Set("")
-				view.Set(screenLogin)
+				showOwnerEntry()
 				return
 			}
 			if err != nil {
@@ -1266,6 +1525,13 @@ func App() ui.Node {
 		return ui.CreateElement(createUserView, createUserProps{token: lsGet(), onClose: handleCloseUser})
 	case screenAudit:
 		return auditView(auditEvents.Get(), handleCloseAudit)
+	case screenSetup:
+		return ownerSetupView(
+			setupKeyInput.Get(), usernameInput.Get(), passwordInput.Get(), setupPasswordConfirm.Get(), setupMessage.Get(),
+			handleSetupKeyInput, handleUsernameInput, handlePasswordInput, handleSetupConfirmInput, handleOwnerSetup,
+		)
+	case screenSetupRecovery:
+		return ownerSetupRecoveryView(setupRecoveryCode.Get(), setupMessage.Get(), handleFinishOwnerSetup)
 	case screenReady:
 		ov := overview.Get()
 		us := users.Get()

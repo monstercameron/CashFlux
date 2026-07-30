@@ -28,6 +28,22 @@ func localUserID(username string) string {
 // ErrUsernameTaken is returned by CreateLocalUser when username is already registered.
 var ErrUsernameTaken = errors.New("server store: username is already registered")
 
+// HasOwner reports whether the local installation has completed its one-time
+// operator bootstrap. It deliberately checks the persisted role rather than
+// configuration so a restart cannot reopen first-owner registration.
+func (s *Store) HasOwner() (bool, error) {
+	if s == nil || s.db == nil {
+		return false, fmt.Errorf("server store: not configured")
+	}
+	defer s.observeDB("HasOwner", time.Now())
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users WHERE role = ? LIMIT 1)`, RoleOwner).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("server store: check owner: %w", err)
+	}
+	return exists == 1, nil
+}
+
 // CreateLocalUser creates a new username/password account (TODOS.md C422).
 // It fails with ErrUsernameTaken if the username is already registered;
 // callers are expected to have already validated username/passwordHash are

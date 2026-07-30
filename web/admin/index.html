@@ -283,6 +283,17 @@
       }
       .login-input::placeholder { color: var(--text-faint); }
       .login-input:focus { border-color: var(--accent); box-shadow: var(--ring); }
+      .setup-note {
+        color: var(--text-dim); font-size: 13px; line-height: 1.55;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px;
+      }
+      .form-error { color: var(--danger); font-size: 13px; line-height: 1.45; }
+      .recovery-code {
+        padding: 18px; border: 1px solid rgba(62,224,143,.42); border-radius: 12px;
+        background: rgba(62,224,143,.08); color: var(--accent); text-align: center;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 22px;
+        font-weight: 800; letter-spacing: .12em; overflow-wrap: anywhere; user-select: all;
+      }
       .dev-banner {
         display: flex; align-items: center; justify-content: space-between; gap: 10px;
         background: linear-gradient(135deg, rgba(62,224,143,0.12), rgba(40,199,192,0.08));

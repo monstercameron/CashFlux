@@ -29721,3 +29721,20 @@ its cleanup unregisters before removing the file. `RunBlobCleanup` skips registe
 reaping unrelated abandoned partials. The cross-platform test now uses the real staging helper
 instead of depending on Windows sharing behavior; it passes 20 consecutive runs, followed by the
 complete server suite and vet.
+## 2026-07-30 — A login page is not a bootstrap path
+
+The deployed operator console had correct owner credential sessions, but a genuinely fresh
+database had no owner credentials to enter. My initial live check missed that because the browser
+already carried an owner cookie. The fix makes initialization explicit rather than weakening normal
+registration: `GET /v1/admin/setup` reports whether a persisted owner exists, and the rate-limited
+same-origin POST accepts the configured static break-glass key exactly once. It bcrypt-hashes both
+the chosen password and a generated recovery code, persists the account as `owner`, audits
+completion, and returns only the one-time plaintext recovery code.
+
+The Go/WASM console now chooses setup or sign-in from server state. Setup validates the owner
+credentials, requires recovery-code acknowledgement, then establishes the same hardened HttpOnly
+operator session used by ordinary owner login. Existing installations continue directly to sign-in,
+and closed client registration remains closed. Focused server tests cover key rejection, hostile
+origins, recovery hashing, one-time closure, and login; the clean-database Playwright lifecycle
+covers setup, owner login, user CRUD, recovery, approval, sync, suspension, and cleanup while
+retaining the bootstrap owner. The two-test no-retry browser run passed.

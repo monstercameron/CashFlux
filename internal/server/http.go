@@ -90,6 +90,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	}
 	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute, cfg)
 	adminAuthService := newAuthService(store, cfg)
+	adminSetupMu := &sync.Mutex{}
 	// webhookMu serializes the check-apply-record critical section of every provider
 	// webhook so a replay is deduped and a failed apply is never marked "seen".
 	webhookMu := &sync.Mutex{}
@@ -155,6 +156,9 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /metrics", handleMetrics(cfg))
+	mux.HandleFunc("OPTIONS /v1/admin/setup", handleCORSPreflight(cfg))
+	mux.Handle("GET /v1/admin/setup", authLimiter(handleAdminSetupStatus(cfg, store)))
+	mux.Handle("POST /v1/admin/setup", authLimiter(handleAdminSetupCreate(cfg, store, adminSetupMu)))
 	mux.HandleFunc("OPTIONS /v1/admin/session", handleCORSPreflight(cfg))
 	mux.Handle("GET /v1/admin/session", authLimiter(handleAdminSessionStatus(cfg, store)))
 	mux.HandleFunc("OPTIONS /v1/admin/session/login", handleCORSPreflight(cfg))

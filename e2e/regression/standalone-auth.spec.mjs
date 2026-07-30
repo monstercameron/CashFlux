@@ -13,6 +13,8 @@ const APPROVED_NEW_PASSWORD = "CashFlux-Approved-New-6248";
 const HOSTED_USERNAME = "hosted-e2e-user";
 const HOSTED_PASSWORD = "CashFlux-Hosted-5732";
 const HOSTED_NEW_PASSWORD = "CashFlux-Hosted-New-6843";
+const BOOTSTRAP_USERNAME = "cashflux-owner";
+const BOOTSTRAP_PASSWORD = "CashFlux-Owner-6291";
 
 async function openCloud(page) {
   await nav(page, "/settings");
@@ -147,10 +149,23 @@ test.describe("standalone basic-auth lifecycle", () => {
     }
     try {
       await admin.goto(`${BACKEND}/console/`);
-      await expect(admin.getByTestId("admin-credential-signin")).toBeVisible();
-      await admin.getByTestId("admin-break-glass-toggle").click();
-      await admin.getByTestId("admin-break-glass-token").fill("e2e-worker-token");
-      await admin.getByTestId("admin-break-glass-signin").click();
+      const setup = admin.getByRole("heading", { name: "Create owner account" });
+      const signIn = admin.getByTestId("admin-credential-signin");
+      await expect(setup.or(signIn)).toBeVisible();
+      if (await setup.isVisible()) {
+        await admin.getByTestId("admin-setup-key").fill("e2e-worker-token");
+        await admin.getByTestId("admin-setup-username").fill(BOOTSTRAP_USERNAME);
+        await admin.getByTestId("admin-setup-password").fill(BOOTSTRAP_PASSWORD);
+        await admin.getByTestId("admin-setup-password-confirm").fill(BOOTSTRAP_PASSWORD);
+        await admin.getByTestId("admin-setup-submit").click();
+        const ownerRecovery = (await admin.getByTestId("admin-setup-recovery-code").innerText()).trim();
+        expect(ownerRecovery).toMatch(/^[A-Z2-7]{16}$/);
+        await admin.getByTestId("admin-setup-continue").click();
+      } else {
+        await admin.getByTestId("admin-username").fill(BOOTSTRAP_USERNAME);
+        await admin.getByTestId("admin-password").fill(BOOTSTRAP_PASSWORD);
+        await signIn.click();
+      }
       await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
 
       await admin.getByRole("button", { name: "Create a user account" }).click();
@@ -162,8 +177,8 @@ test.describe("standalone basic-auth lifecycle", () => {
       expect(initialRecovery).toMatch(/^[A-Z2-7]{16}$/);
       await admin.getByRole("button", { name: "I saved the recovery code" }).click();
 
-      // A fresh backend has exactly this one user. Open it, then prove both
-      // editable identity fields persist before the user signs into CashFlux.
+      // Open the newly created member, then prove both editable identity fields
+      // persist before the user signs into CashFlux.
       await expect(admin.getByRole("columnheader", { name: "Account" })).toBeVisible();
       await expect(admin.getByLabel(`Manage ${USERNAME}`)).toBeVisible();
       await admin.getByLabel(`Manage ${USERNAME}`).click();
@@ -305,7 +320,8 @@ test.describe("standalone basic-auth lifecycle", () => {
       await admin.getByRole("button", { name: "Delete this account" }).click();
       await admin.getByRole("button", { name: "Yes, delete" }).click();
       await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
-      await expect(admin.locator("tr.user-row")).toHaveCount(0);
+      await expect(admin.locator("tr.user-row")).toHaveCount(1);
+      await expect(admin.getByLabel(`Manage ${BOOTSTRAP_USERNAME}`)).toBeVisible();
       await openPasswordForm(app);
       await passwordLogin(app, RENAMED_USERNAME, NEW_PASSWORD);
       await expectAuthFailure(app);
@@ -381,14 +397,15 @@ test.describe("standalone basic-auth lifecycle", () => {
       expect(await rejected.evaluate(() => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "")).toBe("");
       await rejectedContext.close();
 
-      // The approved account is the only survivor; remove it so the lifecycle
-      // ends with the disposable server empty again.
+      // Remove the approved account while retaining the installation owner.
       await admin.getByRole("button", { name: "Refresh console data" }).click();
-      await expect(admin.locator("tr.user-row")).toHaveCount(1);
-      await admin.locator("tr.user-row").first().click();
+      await expect(admin.locator("tr.user-row")).toHaveCount(2);
+      await expect(admin.getByLabel(`Manage ${BOOTSTRAP_USERNAME}`)).toBeVisible();
+      await admin.getByLabel(`Manage ${APPROVED_USERNAME}`).click();
       await admin.getByRole("button", { name: "Delete this account" }).click();
       await admin.getByRole("button", { name: "Yes, delete" }).click();
-      await expect(admin.locator("tr.user-row")).toHaveCount(0);
+      await expect(admin.locator("tr.user-row")).toHaveCount(1);
+      await expect(admin.getByLabel(`Manage ${BOOTSTRAP_USERNAME}`)).toBeVisible();
       expect(browserErrors).toEqual([]);
     } finally {
       await admin.close();

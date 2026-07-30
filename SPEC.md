@@ -298,3 +298,18 @@ CashFlux is **heavily configurable** so one app fits many ways of budgeting and 
   theme/density, AI on/off and model, units, week-start, fiscal-month start, etc.
 - **Custom fields + formulas (§7)** are the escape hatch when built-in config isn't enough.
 - Every option has a clear plain-English label and a sane default; nothing requires editing code.
+
+## 13. Hosted server ownership and access
+
+- A fresh full server with no persisted `owner` account must expose a one-time owner setup through
+  its same-origin operator console. Setup requires the configured static break-glass credential,
+  creates a normal username/password owner, and returns a one-time recovery code whose plaintext is
+  never persisted.
+- Persisted owner existence—not a browser flag or process lifetime—closes first-owner setup.
+  Existing installations open normal owner sign-in, and additional accounts are managed by an
+  authenticated owner.
+- Public client account creation is closed by default. A client may request access, but an owner
+  must approve the request before credentials can be created and sync can begin.
+- Operator browser sessions use same-origin HttpOnly credentials and CSRF protection. The static
+  server token remains a deliberate break-glass and bootstrap credential, not a routine browser
+  login.

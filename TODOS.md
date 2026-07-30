@@ -6516,3 +6516,11 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   Windows sharing rules masked the issue locally, but POSIX permits deleting an open upload file.
   The server now registers every active staging path and the cleanup sweep skips those entries;
   the Linux-failing scenario passes repeatedly and the full server suite remains green.
+- [x] **C485 [BLOCKER][AUTH][ADMIN] A fresh server has no way to create its first console owner.**
+  The credential login was usable only after an owner already existed, while owner creation itself
+  required an authenticated operator—a circular bootstrap that an existing browser cookie masked
+  during the first live review. The console now detects an owner-less store and presents a one-time
+  setup form gated by the configured break-glass key. It creates a recoverable owner, displays the
+  recovery code once, signs that owner in through the normal cookie session, and permanently closes
+  setup after persisted owner creation. Same-origin, rate-limit, invalid-key, recovery-hash,
+  second-owner, and full clean-browser lifecycle coverage pass; ordinary signup stays closed.

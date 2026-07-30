@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Fresh CashFlux servers can now create their first owner from the console.** An empty
+  installation opens a one-time owner-registration screen gated by the configured break-glass
+  key, creates a normal recoverable owner account, displays its recovery code exactly once, and
+  signs the owner into the console. Persisted owner state permanently closes setup; public client
+  registration remains approval-gated.
 - **Production auth has an opt-in disposable-account smoke.** The public-origin Playwright pass
   verifies TLS/readiness, closed registration, owner-console credential login, account CRUD,
   hosted login and sync, logout refresh-family revocation, password recovery, access
