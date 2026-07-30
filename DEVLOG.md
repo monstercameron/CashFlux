@@ -29738,3 +29738,9 @@ and closed client registration remains closed. Focused server tests cover key re
 origins, recovery hashing, one-time closure, and login; the clean-database Playwright lifecycle
 covers setup, owner login, user CRUD, recovery, approval, sync, suspension, and cleanup while
 retaining the bootstrap owner. The two-test no-retry browser run passed.
+
+The release exposed a separate pipeline blocker: this run and the preceding `main` run both
+completed the Linux build/security job but GitHub cancelled the Windows E2E job at exactly 30
+minutes while the expanded regression matrix was still running. The fix changes only the
+job-level orchestration ceiling to 60 minutes. Playwright's per-test and assertion timeouts remain
+strict, so this permits the full matrix and retries to finish without hiding a hung test.

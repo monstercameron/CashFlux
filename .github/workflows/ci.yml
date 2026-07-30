@@ -69,7 +69,12 @@ jobs:
     # the runner's rendering. globalSetup builds the wasm; Playwright serves it and
     # drives Chromium. Visual pixel-diffs are a local gate (skipped in CI).
     runs-on: windows-latest
-    timeout-minutes: 30
+    # The maintained matrix now covers the hosted app, operator bootstrap/auth,
+    # sync, accessibility, and route regressions. Clean Windows runners have
+    # repeatedly reached the former 30-minute job ceiling while individual
+    # tests remained inside their own strict timeouts. Keep those test-level
+    # gates unchanged and give the complete matrix enough orchestration time.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 

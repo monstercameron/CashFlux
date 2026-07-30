@@ -6524,3 +6524,9 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   recovery code once, signs that owner in through the normal cookie session, and permanently closes
   setup after persisted owner creation. Same-origin, rate-limit, invalid-key, recovery-hash,
   second-owner, and full clean-browser lifecycle coverage pass; ordinary signup stays closed.
+- [x] **C486 [BLOCKER][CI][OPS] The deploy-gating browser job is cancelled before its matrix can
+  finish.** Two consecutive `main` runs passed the complete Linux build/security lane but hit the
+  E2E job's 30-minute ceiling while Playwright was still processing retries, so the success-only
+  production webhook could never fire. Raise only the job orchestration ceiling to 60 minutes;
+  retain the suite's strict per-test, assertion, and web-server timeouts so hangs and regressions
+  still fail at their owning boundary.
