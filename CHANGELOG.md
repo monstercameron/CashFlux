@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Native same-origin production deployment.** Added the hardened systemd service, readiness
+  watchdog, verified backup/retention/blob-GC timers, root-owned environment template, Nginx
+  WebSocket/TLS vhost, and atomic build/backup/rollback updater used for
+  `budget.earlcameron.com`. The updater builds the client, services worker, operator console,
+  portal, and server together and refuses a release with missing browser assets.
 - **Server-hosted CashFlux now has a clean account gate.** The full server marks only its own HTML,
   and every hosted route withholds the financial shell until a rotating user session is validated.
   Login, recovery, and approval requests are available at the gate; successful sessions select the

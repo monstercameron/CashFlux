@@ -1,0 +1,19 @@
+[Unit]
+Description=CashFlux nightly verified backup
+
+[Service]
+Type=oneshot
+User=cashflux
+Group=cashflux
+WorkingDirectory=/opt/CashFlux
+EnvironmentFile=/etc/cashflux/cashflux.env
+ExecStart=/opt/CashFlux/bin/cashflux-server backup
+ExecStart=/usr/bin/rsync -a --delete /var/lib/cashflux/backups/ /var/backups/cashflux/
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cashflux /var/backups/cashflux
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

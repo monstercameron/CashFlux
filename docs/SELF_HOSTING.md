@@ -244,6 +244,13 @@ Keep the Go toolchain version, `GOOS`, `GOARCH`, source checkout, and dependency
 reproducible builds. Publish the checksum, `.cdx.json` SBOM, and `.sig` files beside the binary or container
 image digest.
 
+The repository also includes a native systemd/Nginx production layout under
+`deploy/production/`. It is the concrete deployment used by
+`budget.earlcameron.com`: an unprivileged loopback-only service, same-origin
+client/admin/portal WASMs, a readiness watchdog, verified backup/retention/blob
+GC timers, TLS proxy configuration, and an atomic build/backup/rollback updater.
+See `deploy/production/README.md` for installation and deploy-hook wiring.
+
 ## Reliability Knobs
 
 AI proxy calls use `CASHFLUX_SERVER_AI_UPSTREAM_TIMEOUT` and `CASHFLUX_SERVER_AI_UPSTREAM_RETRIES` to keep upstream OpenAI failures bounded. The defaults are a 45 second deadline and two retries for transient `429`/`5xx` responses or transport errors.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly CashFlux retention pruning
+
+[Timer]
+OnCalendar=Sun *-*-* 04:40:00
+Persistent=true
+RandomizedDelaySec=20m
+Unit=cashflux-retention.service
+
+[Install]
+WantedBy=timers.target

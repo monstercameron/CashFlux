@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly CashFlux unreferenced blob collection
+
+[Timer]
+OnCalendar=Sun *-*-* 05:10:00
+Persistent=true
+RandomizedDelaySec=20m
+Unit=cashflux-blob-gc.service
+
+[Install]
+WantedBy=timers.target

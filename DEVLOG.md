@@ -29575,3 +29575,23 @@ standalone lifecycle in 52.2s and the hosted lifecycle in 18.8s). The hosted tes
 `/accounts` deep link has no `.cf-shell` or sync UI, login reaches synced state, sign-out returns to
 the gate and makes the old refresh token return 401, recovery returns to a clean synced shell, and
 a separate first-time browser still sees only sign-in/request-access.
+
+## 2026-07-30 — C477: native production service assets
+
+The target droplet already runs ArticleFlux on loopback `:9000`, the portfolio on `:8095`, the
+deploy hook on `:9500`, and Nginx on the public ports. CashFlux therefore owns only
+`127.0.0.1:8105`; the production assets under `deploy/production` preserve those boundaries rather
+than introducing a second TLS proxy or publishing another port.
+
+The new systemd service runs as a dedicated `cashflux` user, reads a root-owned/group-readable
+environment file, writes only `/var/lib/cashflux`, and applies process, filesystem, task, file
+descriptor, and memory limits. Companion timers perform application-consistent backups, retention,
+blob collection, and two-probe readiness recovery. Nginx terminates TLS and gives `/grpc` the
+WebSocket upgrade and day-long stream timeouts required by sync.
+
+The updater fetches an explicit ref, creates a verified data backup when a database exists, builds
+the main app, services worker, operator console, portal, and native server into a separate
+directory, verifies every required asset and a dry-run migration, then swaps and restarts. A failed
+restart or same-origin asset check restores the prior release. Ten prior release directories remain
+available for manual rollback. The production README records first install, TLS, deploy-hook, and
+verification steps; registration remains closed in the host template.

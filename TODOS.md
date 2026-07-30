@@ -6479,3 +6479,5 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   deployhook target without disturbing ArticleFlux or the portfolio. Registration must remain
   approval-gated. Production E2E must verify TLS, client and console login, account CRUD, request
   approval, recovery, first sync, logout/session revocation, health, backup, and service isolation.
+  Native systemd/Nginx assets, maintenance timers, a watchdog, and an atomic rollback-capable
+  updater now live under `deploy/production`; live DNS/TLS installation and production E2E remain.

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check CashFlux readiness every two minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Unit=cashflux-health.service
+
+[Install]
+WantedBy=timers.target

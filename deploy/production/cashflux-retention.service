@@ -1,0 +1,18 @@
+[Unit]
+Description=CashFlux weekly retention pruning
+
+[Service]
+Type=oneshot
+User=cashflux
+Group=cashflux
+WorkingDirectory=/opt/CashFlux
+EnvironmentFile=/etc/cashflux/cashflux.env
+ExecStart=/opt/CashFlux/bin/cashflux-server retention
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cashflux
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
