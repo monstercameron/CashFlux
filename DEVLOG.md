@@ -29268,3 +29268,28 @@ bootstrap and service artifact returned 404.
 main build and watch root. Verified `/`, both WASM artifacts, the worker bootstrap, `wasm_exec.js`,
 and GWC status return 200. A real Chromium boot reported exactly one dedicated worker, reached the
 explicit `data-services-worker=ready` state, and produced no page errors.
+## 2026-07-29 - Worker sync E2E now proves a persisted two-client round trip
+
+The first live check exposed a weak assertion in the real-backend worker regression. The
+sample-data banner is rendered after boot, but the test counted it immediately; when it was not
+present yet, the test skipped **Start fresh**. CashFlux correctly refused to upload the seeded
+sample dataset, while the empty queue still reached the `Synced` label. The test therefore passed
+without proving that the server had stored anything.
+
+The regression now waits for the deferred prompt, starts fresh, creates `Worker round-trip
+account`, observes the sync queue transition through `Syncing` to `Synced`, and opens a completely
+isolated second browser context. That client connects to the same disposable CashFlux backend,
+pulls the workspace snapshot, reloads, and must render the exact account. Both clients also assert
+that exactly one dedicated `services-worker.js` owns their RPC traffic.
+
+The live two-client run also caught a development-server integration issue: applying a pulled
+snapshot reloads the current `/settings/cloud` route, but the GWC livereload server returned 404
+for history-router navigation. GoWebComponents now serves the configured app shell for missing
+HTML navigation requests while retaining 404s for missing assets. The focused livereload tests
+cover both branches.
+
+Validation used the actual development origins (`http://127.0.0.1:8080` to
+`http://127.0.0.1:8198`). The second client rendered the uploaded account, and a direct backend
+database check found one user, one workspace, one current snapshot, one history row, and the
+account marker inside the stored snapshot. The durable hermetic Playwright regression passed
+against its disposable backend as well.

@@ -53,6 +53,11 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **The real worker-sync regression now proves persistence across isolated clients.** The test
+  waits for the deferred sample-data prompt, starts with a clean dataset, creates a uniquely named
+  account, observes the actual worker-backed sync queue complete, and then verifies that a second
+  browser context pulls and renders that account from the backend. This prevents an empty no-op
+  sync from being mistaken for a successful round trip.
 - **The two-artifact development server now exposes the worker runtime.** `scripts/dev.ps1`
   serves `web/` as GWC's static root, so `services-worker.js`, `services.wasm`, `wasm_exec.js`,
   and the app shell share the expected origin during local development instead of returning 404s.
