@@ -44,6 +44,20 @@ own origin is the full server, and derives `wss://<domain>/grpc` without a manua
 URL. Set `CASHFLUX_SERVER_APP_DIR` only when the browser bundle lives somewhere other than the
 container default `/app/web` (source-tree runs default to `web`).
 
+## Connect CashFlux Settings
+
+This manual connection path is for a separately hosted or offline CashFlux client:
+
+1. Open **Settings → Cloud**. Set the server URL to `https://<domain>`.
+2. Paste the printed `CASHFLUX_SERVER_TOKEN`.
+3. Use Test connection before saving.
+
+The client verifies `/v1/version` and connects to `wss://<domain>/grpc`.
+
+The server environment stores only `CASHFLUX_SERVER_TOKEN_SHA256`; never put the plaintext access
+token in the environment file. The same-origin hosted client at `https://<domain>/` uses account
+login instead and must not receive the static server token.
+
 ## Account Approval And Recovery
 
 New-account self-registration is closed by default. A new CashFlux client shows **Request access**;

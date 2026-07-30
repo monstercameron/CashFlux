@@ -29679,3 +29679,14 @@ this was not a suppressible transitive-only advisory.
 The module now requires Go `1.26.5` and gRPC `1.82.1`, the first fixed releases reported by the Go
 vulnerability database. The local toolchain auto-selected `1.26.5`; `go mod tidy` changed only the
 expected gRPC checksums, and a fresh `govulncheck ./...` reports zero reachable vulnerabilities.
+
+## 2026-07-30 — C482: make the self-host client handoff executable
+
+The full suite reached an older deployment-document contract after the vulnerability gate cleared:
+the quickstart said users paste the token into Settings, but it did not give the complete sequence
+or distinguish the plaintext client value from the digest the server stores.
+
+`docs/SELF_HOSTING.md` now has a dedicated **Connect CashFlux Settings** section for separately
+hosted and offline clients. It names the HTTPS URL, plaintext token, Test connection step,
+`/v1/version` probe, `wss://<domain>/grpc` endpoint, and `CASHFLUX_SERVER_TOKEN_SHA256` storage
+boundary while explicitly keeping the static token out of the same-origin account-login client.

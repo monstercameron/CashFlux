@@ -6503,3 +6503,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   `GO-2026-6061` reached vulnerable gRPC `1.81.1` HTTP/2/xDS paths and `GO-2026-5856` reached the
   Go `1.26.4` TLS stack. The module now requires gRPC `1.82.1` and Go `1.26.5`;
   `govulncheck ./...` reports zero reachable vulnerabilities.
+- [x] **C482 [DOCS][SELF-HOST] Client token handoff is implicit in the deployment guide.**
+  A dedicated connection section now walks separately hosted/offline clients through the HTTPS
+  URL, plaintext token, connection test, version probe, WebSocket endpoint, and the distinction
+  between the client token and the SHA-256 digest stored by the server.

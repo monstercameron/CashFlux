@@ -111,6 +111,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Self-host setup now closes the client connection handoff.** The guide explicitly shows offline
+  clients where to set the HTTPS server URL, paste the one-time plaintext server token, test the
+  connection, and distinguish that token from the SHA-256 value stored by the server.
 - **CI and production transport dependencies are patched.** The minimum Go toolchain is now
   `1.26.5` for the `crypto/tls` ECH privacy fix, and gRPC is now `1.82.1` for the xDS RBAC and
   HTTP/2 transport fixes. `govulncheck ./...` reports no reachable vulnerabilities.
