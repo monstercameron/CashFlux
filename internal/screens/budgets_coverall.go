@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // coverAllFeatureCode is the SMART-B14 catalog code that gates the cover-overages

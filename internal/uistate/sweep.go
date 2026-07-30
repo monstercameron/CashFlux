@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // UseSweepConfigOpen returns the shared atom controlling whether the "Sweep

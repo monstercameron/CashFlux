@@ -20,9 +20,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // entityVarKind bundles the per-entity specifics of the variable surface: the variable

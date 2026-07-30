@@ -13,9 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // The DETAIL view: the full balance sheet as a numbered document, following the

@@ -15,7 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // netWorthCache lets useNetWorth share one computation across components in a single

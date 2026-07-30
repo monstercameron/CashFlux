@@ -13,9 +13,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // This file draws the Annual Review's money-flow diagram as an in-house SVG

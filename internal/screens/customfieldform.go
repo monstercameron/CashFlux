@@ -11,9 +11,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // customFieldInputProps drives one custom-field input. Value is the current

@@ -16,7 +16,7 @@ package uistate
 import (
 	"github.com/monstercameron/CashFlux/internal/agentreceipt"
 	"github.com/monstercameron/CashFlux/internal/changeset"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 const (

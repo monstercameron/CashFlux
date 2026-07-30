@@ -9,8 +9,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v4/ui"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // GoalCompareHost is mounted at the shell root (beside GoalEditHost). It reads

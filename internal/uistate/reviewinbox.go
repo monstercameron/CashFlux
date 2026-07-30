@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // capturedReviewInbox lets the transactions toolbar's "Review" button open the
 // review-inbox flip modal from a click handler without calling UseAtom outside a

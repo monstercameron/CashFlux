@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // revKey returns the store's mutation revision as a string — the base cache key for a

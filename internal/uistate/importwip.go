@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/monstercameron/CashFlux/internal/extract"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // Import-in-progress markers (#62 "Continue where I left off").

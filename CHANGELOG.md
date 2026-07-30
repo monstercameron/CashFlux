@@ -21,6 +21,11 @@ and every commit updates this file under `Unreleased`.
   handler and is never named.
 
 ### Changed
+- **GoWebComponents upgraded from v4.2.0 to v5.0.1.** All framework imports now use the `/v5`
+  module path, and the local `gwc` development runner was rebuilt against the v5 codebase. CashFlux
+  did not use v5's removed parallel-region API or the changed hydration signatures, so no product
+  behavior needed to change. Native tests, vet, release WASM compilation, the GWC unit/WASM lanes,
+  and the maintained all-routes Playwright smoke suite pass after the migration.
 - **Rendering outranks networking, everywhere.** Sync used to run on whatever callback happened to
   reach it — including boot, inline with the router mounting and IndexedDB opening. On the one
   thread wasm has, that meant a WebSocket handshake queued behind the whole of startup and its 15s

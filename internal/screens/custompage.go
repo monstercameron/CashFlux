@@ -27,9 +27,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetdata"
 	"github.com/monstercameron/CashFlux/internal/widgetengine"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // pageCtx is the precomputed data every widget on a page draws from: the engine

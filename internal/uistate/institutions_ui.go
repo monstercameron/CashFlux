@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // institutionsManagerAtomID keys the shell-root flip modal for the institution
 // directory (AC10): false = closed, true = open. The modal itself lists every

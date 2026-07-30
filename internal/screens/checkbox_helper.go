@@ -5,7 +5,7 @@
 package screens
 
 import (
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 )
 
 // CheckedIf sets a checkbox's checked state — the checkbox analogue of SelectedIf for

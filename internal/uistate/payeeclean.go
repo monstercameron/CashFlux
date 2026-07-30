@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // capturedPayeeClean lets a transaction row's "Clean up name" kebab item open the
 // payee-cleanup flip modal from a click handler without calling UseAtom outside a

@@ -5,7 +5,7 @@
 package uistate
 
 import (
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // sampleActiveKey flags that the loaded dataset is the seeded demo (L6). It lives in

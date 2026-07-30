@@ -7,7 +7,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v4/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 )
 
 // TestMeterBarComponent is the reference example for the middle layer of the test

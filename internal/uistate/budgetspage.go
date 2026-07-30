@@ -6,7 +6,7 @@ package uistate
 
 import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // budgetFormulasAtomID keys the shared "show budget metrics" toggle for the

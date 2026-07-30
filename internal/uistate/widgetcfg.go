@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // WidgetConfigs maps a widget id to its saved settings (per widgetcfg.Schema).

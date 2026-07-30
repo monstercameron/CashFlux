@@ -6,8 +6,8 @@ package ui
 
 import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v4/ui"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // AppState is the shared five-state visual vocabulary (task #68): every surface

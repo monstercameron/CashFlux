@@ -6,7 +6,7 @@ package uistate
 
 import (
 	"github.com/monstercameron/CashFlux/internal/aicontext"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // The assistant's per-conversation privacy tier (AG17). The active tier is a shared

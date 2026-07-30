@@ -7,7 +7,7 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // savedViewDismissKey is the localStorage key for the set of dismissed saved-view

@@ -7,10 +7,10 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v4/css"
-	. "github.com/monstercameron/GoWebComponents/v4/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v4/state"
-	"github.com/monstercameron/GoWebComponents/v4/ui"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // dashPresetPicker is the dashboard "Focus" select: applying a preset replaces

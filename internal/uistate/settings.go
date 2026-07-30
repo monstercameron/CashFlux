@@ -5,7 +5,7 @@
 package uistate
 
 import (
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // SettingsTarget identifies which settings panel (if any) is open. Kind is "" for

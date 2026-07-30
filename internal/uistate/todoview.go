@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // To-do surface view mode: the list (default), the kanban board, or the calendar
 // schedule. Persisted only in-session (a plain atom) so the surface reopens on the

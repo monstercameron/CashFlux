@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 
 	"github.com/monstercameron/CashFlux/internal/scope"
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 const (

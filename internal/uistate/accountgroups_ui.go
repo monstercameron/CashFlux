@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // accountGroupEditAtomID keys the shell-root flip modal for creating or editing an
 // account group (AC1): "" = closed, "new" = create, or a group id = edit that group.

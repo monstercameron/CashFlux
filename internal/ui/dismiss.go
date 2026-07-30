@@ -7,7 +7,7 @@ package ui
 import (
 	"syscall/js"
 
-	uic "github.com/monstercameron/GoWebComponents/v4/ui"
+	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // DismissPopover wires WAI-ARIA menu-button dismissal for a popover (the

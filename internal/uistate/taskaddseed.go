@@ -2,7 +2,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // TaskAddSeed pre-fills the add-task modal when it's opened from another surface
 // (e.g. a transaction's "Add follow-up task…"): a suggested title and a pre-selected

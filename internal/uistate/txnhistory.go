@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // capturedTxnHistory lets a transaction row's "History" kebab item open the
 // per-transaction history flip modal from a click handler without calling

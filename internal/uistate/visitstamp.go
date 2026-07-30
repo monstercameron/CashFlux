@@ -7,7 +7,7 @@ package uistate
 import (
 	"strconv"
 
-	"github.com/monstercameron/GoWebComponents/v4/state"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 // Visit-baseline state for the dashboard "What changed since your last visit"

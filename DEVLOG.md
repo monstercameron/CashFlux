@@ -29174,3 +29174,17 @@ Two of the suite's own failures this session were bad assertions, not product bu
 a sync state once (it settles) and counting a control that appears with the signed-in state
 rather than with the page. Both now wait. Worth remembering that a flaky suite spends its
 credibility fast.
+## 2026-07-29 - GoWebComponents v5 without a product rewrite
+
+CashFlux moved from GoWebComponents v4.2.0 to the latest published module, v5.0.1. This is a real
+major-version migration in Go: every framework import had to move from `/v4` to `/v5`, not merely
+the version in `go.mod`. The upstream breaking surface is narrow - parallel-region rendering was
+removed and the hydration signatures lost their parallel bridge parameter. CashFlux uses neither,
+so the 372-file import migration compiled without compatibility shims or behavior changes.
+
+The release check was deliberately broader than compilation. `go test ./...` and `go vet ./...`
+passed; a release-profile GWC build produced the WASM app; `gwc test -lane unit -lane wasm` passed
+both framework-runner lanes; and the trusted Playwright smoke spec passed in Chromium. That last
+gate loaded every routed page with substantive, on-topic content and no app errors, then repeated
+its sampled routes under the light theme. The ignored local `gwc.exe` runner was rebuilt as well so
+the development tool no longer trails the framework used by the app.

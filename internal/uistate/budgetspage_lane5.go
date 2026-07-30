@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v4/state"
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 // Budget attention filters (UX-05): clicking a count in the budgets issues rail
 // narrows the list to exactly the budgets behind that count, so no number on the
