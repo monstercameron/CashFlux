@@ -66,7 +66,11 @@ $watchJob = Start-Job -ArgumentList $projectRoot -ScriptBlock {
 }
 
 try {
-    & (Join-Path $projectRoot ".tools\gwc.exe") dev -app ".\main.go" -root "."
+    & (Join-Path $projectRoot ".tools\gwc.exe") dev `
+        -app ".\main.go" `
+        -root ".\web" `
+        -html ".\web\index.html" `
+        -wasm "web\bin\main.wasm"
 }
 finally {
     Stop-Job -Job $watchJob -ErrorAction SilentlyContinue

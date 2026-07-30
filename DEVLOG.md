@@ -29257,3 +29257,14 @@ The full analysis, the deliberately preserved first checklist, all ten findings,
 coding order live in `docs/GWC5_RPC_WORKER_MIGRATION.md`; durable backlog item C464 is now in
 progress. The dependency-only GWC v5.0.1 upgrade was committed separately first so this
 architecture work does not hide inside a 375-file module-path migration.
+## 2026-07-29 — GWC dev server serves the complete two-WASM application
+
+The GWC 5 migration added `services-worker.js` and `services.wasm`, but the local wrapper still
+served the repository root. GWC handles the configured HTML and main WASM as special routes; its
+ordinary static-file handler remains rooted at `-root`. The page therefore loaded while the worker
+bootstrap and service artifact returned 404.
+
+`scripts/dev.ps1` now serves `web/` as the static root while retaining the repository module as the
+main build and watch root. Verified `/`, both WASM artifacts, the worker bootstrap, `wasm_exec.js`,
+and GWC status return 200. A real Chromium boot reported exactly one dedicated worker, reached the
+explicit `data-services-worker=ready` state, and produced no page errors.

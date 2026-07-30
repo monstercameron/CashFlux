@@ -53,6 +53,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **The two-artifact development server now exposes the worker runtime.** `scripts/dev.ps1`
+  serves `web/` as GWC's static root, so `services-worker.js`, `services.wasm`, `wasm_exec.js`,
+  and the app shell share the expected origin during local development instead of returning 404s.
 - **The advanced sync-token editor no longer disappears while a token is being typed.** Persisting
   the first input marked the prefs as signed in and unmounted the still-open field plus its Test and
   Sync buttons. GWC 5's render timing made the latent race deterministic. An actively open editor
