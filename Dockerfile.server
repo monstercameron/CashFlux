@@ -5,18 +5,30 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -trimpath -ldflags="-s -w" -o /out/cashflux-server ./cmd/cashflux-server
+RUN mkdir -p /src/web/bin /src/web/admin /src/web/portal \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/cashflux-server ./cmd/cashflux-server \
+    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/main.wasm . \
+    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/services.wasm ./cmd/cashflux-services \
+    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/admin/admin.wasm ./cmd/cashflux-admin \
+    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/portal/portal.wasm ./cmd/cashflux-portal \
+    && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /src/web/wasm_exec.js \
+    && cp /src/web/wasm_exec.js /src/web/admin/wasm_exec.js \
+    && cp /src/web/wasm_exec.js /src/web/portal/wasm_exec.js
 
 FROM alpine:3.22
 
 RUN apk add --no-cache sqlite && addgroup -S cashflux && adduser -S -G cashflux cashflux
 WORKDIR /app
 COPY --from=build /out/cashflux-server /usr/local/bin/cashflux-server
+COPY --from=build /src/web /app/web
 RUN mkdir -p /data && chown -R cashflux:cashflux /data
 
 USER cashflux
 EXPOSE 8081
 ENV CASHFLUX_SERVER_ADDR=:8081
 ENV CASHFLUX_SERVER_DATA_DIR=/data
+ENV CASHFLUX_SERVER_APP_DIR=/app/web
+ENV CASHFLUX_SERVER_CONSOLE_DIR=/app/web/admin
+ENV CASHFLUX_SERVER_PORTAL_DIR=/app/web/portal
 
 ENTRYPOINT ["cashflux-server"]

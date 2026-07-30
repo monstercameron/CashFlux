@@ -12,6 +12,9 @@ const (
 type Discovery struct {
 	AuthMode      string
 	AuthProviders []string
+	// HostedApp reports that this backend also serves the primary CashFlux
+	// client at its root. Embeddable sync bridges leave it false.
+	HostedApp bool
 	// CustomAuthEnabled mirrors VersionResponse.CustomAuthEnabled: whether this
 	// backend has AuthServiceServer registered (username/password, pairing-code
 	// sign-in) at all. False on a SyncService-only embedding.
@@ -35,7 +38,7 @@ func (d Discovery) Normalize() Discovery {
 	default:
 		mode = ModeToken
 	}
-	out := Discovery{AuthMode: mode, CustomAuthEnabled: d.CustomAuthEnabled, RegistrationOpen: d.RegistrationOpen, BillingEnabled: d.BillingEnabled}
+	out := Discovery{AuthMode: mode, HostedApp: d.HostedApp, CustomAuthEnabled: d.CustomAuthEnabled, RegistrationOpen: d.RegistrationOpen, BillingEnabled: d.BillingEnabled}
 	seen := map[string]bool{}
 	for _, provider := range d.AuthProviders {
 		provider = strings.ToLower(strings.TrimSpace(provider))

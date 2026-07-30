@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The full server can now serve CashFlux itself at `/`.** `CASHFLUX_SERVER_APP_DIR` enables a
+  traversal-safe SPA/static handler while `/grpc`, `/v1`, `/console/`, `/portal/`, legal, metrics,
+  and health routes retain priority. `/v1/version` identifies a hosted deployment so the client can
+  use its own origin automatically. HTML, workers, runtime glue, and WASM revalidate to prevent
+  version skew; release and container builds now package both primary browser WASM artifacts.
 - **The production same-origin CashFlux rollout now has explicit acceptance gates.** C474-C477
   specify server-hosted client assets, automatic same-origin backend discovery, owner-only
   credential sessions for the operator console, a hosted-app login/request/recovery gate, and the

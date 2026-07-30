@@ -6432,13 +6432,18 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   before sync begins. Rejection/expiry must create no usable account or session. Cover discovery,
   direct-register denial, approval/rejection, recovery-code persistence, login, and clean first
   sync in a disposable real-server browser test.
-- [~] **C474 [MAJOR][HOSTING] Serve the CashFlux client from the full server for a true
+- [x] **C474 [MAJOR][HOSTING] Serve the CashFlux client from the full server for a true
   same-origin deployment.** Add an explicit application-directory setting and a traversal-safe SPA
   file handler at `/`, while preserving `/grpc`, `/v1`, `/console/`, `/portal/`, health, metrics,
   status, and legal routes. HTML and service-worker responses must revalidate; WASM and static
   assets must carry correct content types and safe cache policy. A hosted client must discover its
   own origin as the backend without requiring a loopback URL or copied operator token. Prove direct
   navigation, refresh fallback, assets, API discovery, and gRPC upgrade routing with focused tests.
+  Implemented with `CASHFLUX_SERVER_APP_DIR`, a rooted SPA/static handler, explicit hosted-app
+  discovery, revalidation for HTML/workers/WASM, and a final catch-all that cannot mask missing
+  control-plane routes or assets. Container and release builds now produce/package the main and
+  services WASM artifacts alongside the admin and portal apps. Focused tests cover root/deep-link
+  loads, content types/cache policy, JSON discovery, reserved-route isolation, and traversal safety.
 - [ ] **C475 [MAJOR][AUTH][ADMIN] Give owners a normal credential-based operator-console
   session.** Add same-origin admin login/session/refresh/logout endpoints backed by the existing
   password verifier and rotating session families. Only `owner` users (plus the existing explicit

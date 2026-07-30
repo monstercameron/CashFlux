@@ -21,6 +21,11 @@ type VersionResponse struct {
 	AuthMode            string   `json:"authMode"`
 	BillingEnabled      bool     `json:"billingEnabled"`
 	AuthProviders       []string `json:"authProviders,omitempty"`
+	// HostedApp is true when this full server also owns the primary browser
+	// application at /. It lets that client select its own origin as the
+	// backend without treating every embeddable sync bridge as a login-gated
+	// hosted CashFlux deployment.
+	HostedApp bool `json:"hostedApp"`
 	// PaymentProviders lists the configured, ready-to-use payment providers
 	// ("stripe", "paypal") so the client offers only the buttons that will work.
 	PaymentProviders []string `json:"paymentProviders,omitempty"`
@@ -79,12 +84,20 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		store.SetMetrics(cfg.Metrics)
 	}
 	mux := http.NewServeMux()
+	var app http.Handler
+	if strings.TrimSpace(cfg.AppDir) != "" {
+		app = appHandler(cfg)
+	}
 	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute, cfg)
 	// webhookMu serializes the check-apply-record critical section of every provider
 	// webhook so a replay is deduped and a failed apply is never marked "seen".
 	webhookMu := &sync.Mutex{}
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		if app != nil && acceptsHTML(r) {
+			app.ServeHTTP(w, r)
+			return
+		}
+		if app == nil && acceptsHTML(r) {
 			http.Redirect(w, r, "/console/", http.StatusFound)
 			return
 		}
@@ -205,6 +218,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
+			HostedApp:           app != nil,
 			CustomAuthEnabled:   true,
 			RegistrationOpen:    cfg.RegistrationOpen,
 		})
@@ -249,6 +263,11 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.Handle("GET /portal/", portalHandler(cfg))
 	mux.HandleFunc("OPTIONS /v1/me", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/me", handleMe(cfg, store))
+	if app != nil {
+		// The primary SPA is the final GET catch-all. Go's ServeMux chooses all
+		// exact and longer API/console/portal patterns above before this route.
+		mux.Handle("/", app)
+	}
 	return maxInFlightMiddleware(cfg.HTTPMaxInFlight, securityHeadersMiddleware(requestIDMiddleware(requestLogMiddlewareSampled(cfg.Logger, cfg.Metrics, cfg.LogHotPathSampleRate, userRateLimitMiddleware(cfg.HTTPUserRateLimitPerMinute, cfg, rateLimitMiddleware(cfg.HTTPRateLimitPerMinute, cfg, mux))))))
 }
 

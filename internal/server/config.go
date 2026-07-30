@@ -66,6 +66,11 @@ type Config struct {
 	PayPalPlanMonthly     string
 	PayPalReturnURL       string
 	PayPalCancelURL       string
+	// AppDir contains the primary CashFlux browser application. When non-empty,
+	// the full server serves it at / while retaining every API, gRPC, console,
+	// portal, health, and legal route on the same origin. An empty value keeps
+	// the legacy backend-only root behavior for embedded/test configurations.
+	AppDir                string
 	ConsoleDir            string
 	PortalDir             string
 	OAuthProviders        map[string]OAuthProviderConfig
@@ -168,6 +173,7 @@ func FromEnv() (Config, error) {
 	cfg.PayPalReturnURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_RETURN_URL"))
 	cfg.PayPalCancelURL = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_PAYPAL_CANCEL_URL"))
 	cfg.DevMode = envBool("CASHFLUX_SERVER_DEV_MODE", false)
+	cfg.AppDir = envOr("CASHFLUX_SERVER_APP_DIR", "web")
 	cfg.ConsoleDir = envOr("CASHFLUX_SERVER_CONSOLE_DIR", "web/admin")
 	cfg.PortalDir = envOr("CASHFLUX_SERVER_PORTAL_DIR", "web/portal")
 	cfg.OAuthProviders = oauthProvidersFromEnv()

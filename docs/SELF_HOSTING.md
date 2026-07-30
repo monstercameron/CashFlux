@@ -1,6 +1,8 @@
 # CashFlux Self-Hosting
 
-CashFlux can run with an optional backend for sync and AI proxying. The web app stays local-first; the server stores sync snapshots, blobs, encrypted BYO OpenAI keys, and auth state.
+CashFlux can run as one same-origin service: the full server serves the local-first browser app at
+`/`, the operator console at `/console/`, and sync/API traffic at `/grpc` and `/v1`. The server
+stores sync snapshots, blobs, encrypted BYO OpenAI keys, and auth state.
 
 ## Quickstart
 
@@ -37,7 +39,10 @@ CashFlux can run with an optional backend for sync and AI proxying. The web app 
    curl -i https://<domain>/readyz
    ```
 
-The gRPC tunnel is exposed at `wss://<domain>/grpc` through Caddy. The client derives that tunnel URL from the HTTPS server URL.
+Open `https://<domain>/` for CashFlux. The hosted client probes `/v1/version`, recognizes that its
+own origin is the full server, and derives `wss://<domain>/grpc` without a manually entered backend
+URL. Set `CASHFLUX_SERVER_APP_DIR` only when the browser bundle lives somewhere other than the
+container default `/app/web` (source-tree runs default to `web`).
 
 ## Account Approval And Recovery
 

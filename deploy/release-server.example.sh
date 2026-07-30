@@ -12,11 +12,11 @@ goarch="${GOARCH:-amd64}"
 
 mkdir -p "$out_dir"
 
-# Build the two console SPAs the server serves at runtime from web/admin (operator
-# console, CASHFLUX_SERVER_CONSOLE_DIR) and web/portal (customer self-service portal,
-# CASHFLUX_SERVER_PORTAL_DIR). Their compiled .wasm is git-ignored, so a fresh
+# Build the primary app/services worker plus the two console SPAs the server
+# serves from web, web/admin (operator), and web/portal (customer self-service).
+# Their compiled .wasm is git-ignored, so a fresh
 # checkout has none — this step is what makes a release bundle actually contain them.
-# Both need the Go wasm runtime glue (wasm_exec.js) beside them.
+# Each browser surface needs the Go wasm runtime glue (wasm_exec.js) beside it.
 if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then
   wasm_exec="$(go env GOROOT)/lib/wasm/wasm_exec.js"   # Go 1.24+
 else
@@ -32,6 +32,18 @@ build_console() {
   cp "$wasm_exec" "$3/wasm_exec.js"
   echo "built $3/$1.wasm"
 }
+mkdir -p web/bin
+GOOS=js GOARCH=wasm CGO_ENABLED=0 go build \
+  -trimpath \
+  -ldflags="-s -w -buildid=" \
+  -o web/bin/main.wasm \
+  .
+GOOS=js GOARCH=wasm CGO_ENABLED=0 go build \
+  -trimpath \
+  -ldflags="-s -w -buildid=" \
+  -o web/bin/services.wasm \
+  ./cmd/cashflux-services
+cp "$wasm_exec" web/wasm_exec.js
 build_console admin ./cmd/cashflux-admin web/admin
 build_console portal ./cmd/cashflux-portal web/portal
 

@@ -32,6 +32,7 @@ type backendVersionResponse struct {
 	MinClientAPIVersion string   `json:"minClientApiVersion"`
 	AuthMode            string   `json:"authMode"`
 	AuthProviders       []string `json:"authProviders"`
+	HostedApp           bool     `json:"hostedApp"`
 	// CustomAuthEnabled/BillingEnabled/PaymentProviders mirror
 	// server.VersionResponse's matching fields — previously the server sent
 	// these but the client silently dropped them by never decoding into a
@@ -144,6 +145,7 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 		onDone(backendauth.Discovery{
 			AuthMode:          version.AuthMode,
 			AuthProviders:     version.AuthProviders,
+			HostedApp:         version.HostedApp,
 			CustomAuthEnabled: version.CustomAuthEnabled,
 			RegistrationOpen:  version.RegistrationOpen,
 			BillingEnabled:    version.BillingEnabled,

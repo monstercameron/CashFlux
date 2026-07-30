@@ -40,16 +40,20 @@ func TestOAuthProvidersOrFallback(t *testing.T) {
 	}
 }
 
-// TestDiscoveryNormalizePreservesCapabilityFields proves CustomAuthEnabled,
-// BillingEnabled, and PaymentProviders survive Normalize() untouched (they
+// TestDiscoveryNormalizePreservesCapabilityFields proves HostedApp,
+// CustomAuthEnabled, BillingEnabled, and PaymentProviders survive Normalize() untouched (they
 // aren't part of the auth-mode/provider dedupe logic Normalize exists for).
 func TestDiscoveryNormalizePreservesCapabilityFields(t *testing.T) {
 	got := (Discovery{
 		AuthMode:          ModeToken,
+		HostedApp:         true,
 		CustomAuthEnabled: true,
 		BillingEnabled:    true,
 		PaymentProviders:  []string{"Stripe", "paypal", "stripe"},
 	}).Normalize()
+	if !got.HostedApp {
+		t.Fatalf("HostedApp = false, want true")
+	}
 	if !got.CustomAuthEnabled {
 		t.Fatalf("CustomAuthEnabled = false, want true")
 	}

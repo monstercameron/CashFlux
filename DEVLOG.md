@@ -29488,6 +29488,7 @@ Validation covers configuration/discovery, direct Register denial, authenticated
 rejection APIs, redeemability, recovery-hash persistence, WASM compilation, and a disposable
 full-server browser lifecycle through console approval, credentials, recovery, first sync, login,
 recovery rotation, rejection, and cleanup.
+
 ## 2026-07-30 — Same-origin CashFlux production rollout: acceptance gates first
 
 The approved production target is one origin, `https://budget.earlcameron.com`, with the full
@@ -29503,3 +29504,23 @@ droplet boundary: an unprivileged service, loopback listener, Nginx TLS, persist
 health checks, backups, deployhook integration, and production browser proof. This prevents a
 visually successful deployment from hiding the two failures that matter most here: an open sync
 endpoint or an operator console whose UI is clean but whose role enforcement is only client-side.
+
+## 2026-07-30 — C474: the server owns the browser app
+
+The full server now has an explicit `AppDir` boundary and serves CashFlux at `/`. I kept backend-only
+embeddings backward compatible: an empty directory retains the old JSON/console root, while normal
+`cashflux-server` environment loading defaults to `web`. Root requests still return the machine
+discovery JSON unless the caller accepts HTML, and a final static catch-all handles direct SPA
+navigation without outranking any exact API, gRPC, console, portal, health, metrics, or legal route.
+
+The static handler uses `os.DirFS` and valid relative paths instead of joining attacker-controlled
+paths onto a directory string. It refuses to turn missing assets or unknown control-plane URLs into
+successful `index.html` responses. HTML, service workers, the Go runtime glue, and both WASM files
+revalidate on every deployment so a cached worker cannot speak an older RPC protocol to a fresh
+binary; ordinary CSS/font/image assets receive a bounded one-hour cache.
+
+The original server container only built the native binary, which would have made this feature pass
+unit tests and fail in a real self-host install. The image and release helper now compile and package
+`main.wasm`, `services.wasm`, the operator console, the customer portal, and matching
+`wasm_exec.js`. Focused tests prove root and deep-link loads, JSON discovery, the hosted-app
+capability bit, WASM content type/cache behavior, missing-route isolation, and traversal safety.
