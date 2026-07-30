@@ -48,7 +48,7 @@ func handleAdminOverview(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
-		if !cfg.IsAdmin(user.ID) {
+		if !httpOperatorAuthorized(user, cfg) {
 			auditFromRequest(r, store, user, "admin.overview.denied", "admin", "overview")
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return
@@ -92,7 +92,7 @@ func handleAdminUsers(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
-		if !cfg.IsAdmin(user.ID) {
+		if !httpOperatorAuthorized(user, cfg) {
 			auditFromRequest(r, store, user, "admin.users.denied", "admin", "users")
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return

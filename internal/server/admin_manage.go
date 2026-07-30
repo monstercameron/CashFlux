@@ -66,9 +66,12 @@ type AdminSetPlanRequest struct {
 	Status string `json:"status"`
 }
 
-// adminGuard runs the shared admin gate (CORS, store, bearer, IsAdmin) and resolves the
-// target user id from the {id} path value. On failure it has already written the error
-// response and returns ok=false. action/resource label the audit entry on denial.
+// adminGuard runs the shared admin gate (CORS, store, bearer, operator authority)
+// and resolves the target user id from the {id} path value. In self-host token
+// mode the configured static bearer is the operator credential; session users
+// still require an explicit AdminUserIDs entry. On failure it has already written
+// the error response and returns ok=false. action/resource label the audit entry
+// on denial.
 func adminGuard(cfg Config, store *Store, w http.ResponseWriter, r *http.Request, action, resource string) (AuthUser, string, bool) {
 	if !writeCORS(w, r, cfg) {
 		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
@@ -83,7 +86,7 @@ func adminGuard(cfg Config, store *Store, w http.ResponseWriter, r *http.Request
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, "", false
 	}
-	if !cfg.IsAdmin(user.ID) {
+	if !httpOperatorAuthorized(user, cfg) {
 		auditFromRequest(r, store, user, action+".denied", "admin", resource)
 		writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 		return AuthUser{}, "", false
@@ -120,7 +123,7 @@ func handleAdminDevSeed(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
-		if !cfg.IsAdmin(admin.ID) {
+		if !httpOperatorAuthorized(admin, cfg) {
 			auditFromRequest(r, store, admin, "admin.dev.seed.denied", "admin", "dev")
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return

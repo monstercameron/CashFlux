@@ -370,8 +370,8 @@ func TestHandleAdminOverviewUnauthenticated(t *testing.T) {
 	}
 }
 
-func TestHandleAdminOverviewNonAdmin(t *testing.T) {
-	// Token authenticates fine, but AdminUserIDs is empty so nobody is admin.
+func TestHandleAdminOverviewStaticTokenIsOperator(t *testing.T) {
+	// The configured static token is the operator credential in self-host mode.
 	token := "admin-secret"
 	store := openTestStore(t)
 	cfg := Config{
@@ -379,12 +379,29 @@ func TestHandleAdminOverviewNonAdmin(t *testing.T) {
 		DataDir:      t.TempDir(),
 		AuthMode:     "token",
 		Token:        token,
-		AdminUserIDs: nil, // empty — deny by default
+		AdminUserIDs: nil,
 		Metrics:      NewMetrics(),
 	}
 	mux := NewMux(cfg, store)
 	req := httptest.NewRequest(http.MethodGet, "/v1/admin/overview", nil)
 	req.Header.Set("Authorization", adminBearer(token))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAdminOverviewSessionUserIsNotOperator(t *testing.T) {
+	cfg := Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}
+	store := openTestStore(t)
+	sessionToken, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("issue session token: %v", err)
+	}
+	mux := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/overview", nil)
+	req.Header.Set("Authorization", adminBearer(sessionToken))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {
@@ -429,8 +446,8 @@ func TestHandleAdminUsersUnauthenticated(t *testing.T) {
 	}
 }
 
-func TestHandleAdminUsersNonAdmin(t *testing.T) {
-	// Token authenticates fine, but AdminUserIDs is empty so nobody is admin.
+func TestHandleAdminUsersStaticTokenIsOperator(t *testing.T) {
+	// The configured static token is the operator credential in self-host mode.
 	token := "admin-secret"
 	store := openTestStore(t)
 	cfg := Config{
@@ -438,12 +455,29 @@ func TestHandleAdminUsersNonAdmin(t *testing.T) {
 		DataDir:      t.TempDir(),
 		AuthMode:     "token",
 		Token:        token,
-		AdminUserIDs: nil, // empty — deny by default
+		AdminUserIDs: nil,
 		Metrics:      NewMetrics(),
 	}
 	mux := NewMux(cfg, store)
 	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
 	req.Header.Set("Authorization", adminBearer(token))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandleAdminUsersSessionUserIsNotOperator(t *testing.T) {
+	cfg := Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}
+	store := openTestStore(t)
+	sessionToken, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("issue session token: %v", err)
+	}
+	mux := NewMux(cfg, store)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
+	req.Header.Set("Authorization", adminBearer(sessionToken))
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusForbidden {

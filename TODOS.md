@@ -6346,7 +6346,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   input latency against an on-main-thread failing control. This is the soak/performance proof beyond
   C464's successful real-backend sanity E2E; do not claim those measurements until the harness
   exists.
-- [ ] **C466 [MAJOR][AUTH][ADMIN] Make the standalone server's documented operator credential
+- [x] **C466 [MAJOR][AUTH][ADMIN] Make the standalone server's documented operator credential
   actually open the operator console.** A live `e2e/backend.mjs 8198 8080` server is healthy and its
   static bearer authenticates ordinary API/RPC traffic, but `/v1/admin/overview` returns 403 because
   the admin handlers require `CASHFLUX_SERVER_ADMIN_USER_IDS` even in self-host token mode. This
@@ -6354,6 +6354,9 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   operator model. Reuse the existing constant-time `httpOperatorAuthorized` policy across every
   admin overview/list/detail/mutation/dev-seed guard, while retaining deny-by-default behavior for
   ordinary session users. Prove the static token works and a non-admin JWT remains forbidden.
+  Implemented by routing all standalone admin guards through `httpOperatorAuthorized`; the static
+  token now opens overview/list/detail/mutations/dev-seed, while signed session users still require
+  an explicit `CASHFLUX_SERVER_ADMIN_USER_IDS` match. Focused server tests cover both sides.
 - [ ] **C467 [MAJOR][AUTH][ADMIN] Complete standalone account CRUD in the operator console.**
   The console can list/detail/suspend/reinstate/revoke/delete and edit subscription state, but it
   cannot create an account or update its username/role. Add audited admin endpoints and accessible

@@ -60,6 +60,11 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **The documented self-host operator token now opens the operator console.** Admin overview,
+  user-list, detail, mutation, and dev-seed guards now share the existing constant-time operator
+  policy already used by metrics/audit: a configured static server bearer is operator authority,
+  while ordinary signed session users remain forbidden unless explicitly listed in
+  `CASHFLUX_SERVER_ADMIN_USER_IDS`.
 - **Pulled sync state now survives the reload that applies it.** The browser previously wrote the
   pulled dataset and its server timestamp/hash to IndexedDB asynchronously, then immediately
   reloaded. If the dataset committed but the metadata did not, the next cross-device watch event

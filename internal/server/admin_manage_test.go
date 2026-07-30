@@ -68,10 +68,13 @@ func TestAdminUserDetailNotFound(t *testing.T) {
 }
 
 func TestAdminUserDetailNonAdmin(t *testing.T) {
-	token := "admin-secret"
 	store := openTestStore(t)
 	seedAdminFixture(t, store)
-	cfg := Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token", Token: token, AdminUserIDs: nil, Metrics: NewMetrics()}
+	cfg := Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token", Token: "operator-secret", AdminUserIDs: nil, Metrics: NewMetrics()}
+	token, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("issue session token: %v", err)
+	}
 	mux := NewMux(cfg, store)
 	w := adminReq(t, mux, http.MethodGet, "/v1/admin/users/ua", token, "")
 	if w.Code != http.StatusForbidden {

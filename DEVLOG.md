@@ -29347,3 +29347,15 @@ The browser pass also found five blocking gaps that source inspection alone unde
 
 C466-C470 split these into independently testable server authorization, CRUD, recovery, first-sync,
 and full real-browser acceptance tasks. No feature code was changed during this audit.
+## 2026-07-30 - Self-host operator token reaches every admin route
+
+The console called its input an "Admin token", and the self-host security model already treated the
+configured static bearer as operator authority for metrics and global audit, but the account-admin
+handlers used the narrower `Config.IsAdmin(user.ID)` check. That made a normal token-mode deployment
+impossible to administer unless the operator independently derived the token's synthetic user id and
+duplicated it into `CASHFLUX_SERVER_ADMIN_USER_IDS`.
+
+All standalone admin guards now use `httpOperatorAuthorized`: the static token passes through its
+existing constant-time comparison, while JWT/session users still need an explicit admin-id listing.
+Tests prove the static token succeeds with an empty admin-id list and an otherwise-valid ordinary
+session JWT remains 403. Focused `go test ./internal/server` passes.
