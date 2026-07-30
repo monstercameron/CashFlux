@@ -438,13 +438,10 @@ func CloudConnectionPane() uic.Node {
 	// see grpcbridge.go). On a server with open self-signup, PasswordAuthCard's
 	// own Register mode already covers that case with no admin needed.
 	showPendingPairing := showPassword && !d.RegistrationOpen
-	// activationOnly: this server has no self-signup at all, so a code minted
-	// by whoever runs it is the only way a new device gets in. Redeeming one
-	// is therefore not "another way to sign in" filed under a disclosure
-	// link — it IS the sign-in, and it leads. The password form still exists
-	// (a device that has already activated once can set credentials and use
-	// them afterwards) but drops to the secondary list, because typing a
-	// password nobody has set yet is the wrong first thing to offer.
+	// activationOnly: this server has no self-signup at all, so a first-time
+	// user must request operator approval. That request is the primary path.
+	// Password login/recovery and manually entering an existing pairing code
+	// remain secondary options for accounts that already exist.
 	activationOnly := showPendingPairing
 	cloudPrice := uistate.T("settings.cloudPriceAnnual")
 	if billingInterval.Get() == "monthly" {
@@ -556,20 +553,18 @@ func CloudConnectionPane() uic.Node {
 			// typing a URL, or a same-origin/network hiccup). It is always a
 			// deliberate, one-click "advanced" disclosure now — the exact
 			// same toggle regardless of WHY nothing else is showing.
-			If(activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{Primary: true})),
-			If(showPassword && !activationOnly, uic.CreateElement(PasswordAuthCard)),
+			If(activationOnly, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: true})),
+			If(showPassword && !activationOnly, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: true})),
 			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub")),
 			)),
 			If(tokenOnly, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
 
-			// Secondary options. On an activation-code server there is exactly ONE
-			// thing a new device can usefully do, so everything else — the password
-			// form (nobody has a password on a server that disables self-signup), the
-			// ask-an-admin-to-approve flow (redundant when the admin can just mint a
-			// code), and the raw token field — collapses behind a single "More ways to
-			// sign in" link rather than three competing top-level ones. A closed
+			// Secondary options. On an approval-gated server, the first-time path is
+			// Request access; existing-account password login/recovery, a previously
+			// issued pairing code, and the raw token field collapse behind one "More
+			// ways to sign in" link rather than competing with it. A closed
 			// disclosure disappears once signed in. An OPEN raw-token editor stays
 			// mounted while its OnInput persists the token, however; otherwise the
 			// first keystroke would classify the session as signed in and detach the
@@ -582,8 +577,8 @@ func CloudConnectionPane() uic.Node {
 					IfElseValue(activationOnly, uistate.T("sync.moreWaysToggle"), uistate.T("sync.advancedTokenToggle"))))),
 				If(advancedTokenOpen.Get(), Fragment(
 					If(!signedIn && activationOnly, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-					If(!signedIn && activationOnly, uic.CreateElement(PasswordAuthCard)),
-					If(!signedIn && activationOnly, uic.CreateElement(PendingDeviceCard)),
+					If(!signedIn && activationOnly, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: false})),
+					If(!signedIn && activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
 					tokenField,
 				)),
 			)),

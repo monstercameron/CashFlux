@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Full-server signup is now approval-gated by default.** New clients explicitly request access,
+  operators approve or reject requests in the standalone console, and approved clients must set
+  credentials and acknowledge a one-time recovery code before the session is persisted or sync
+  starts. Direct registration remains available only with the explicit
+  `CASHFLUX_SERVER_REGISTRATION_OPEN=true` opt-in; existing login, recovery, and operator-created
+  accounts continue to work.
 - **The complete standalone password-auth lifecycle now has a hermetic browser regression.** A
   disposable full server and freshly built client/services/operator WASM artifacts prove static
   operator login, account create/edit, clean first sync, recovery-code password rotation,

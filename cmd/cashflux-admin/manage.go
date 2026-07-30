@@ -57,6 +57,13 @@ const manageCSS = `
 .usage-fill{background:linear-gradient(90deg,#6366f1,#8b5cf6);height:100%}
 .usage-num{white-space:nowrap;color:#9aa0aa}
 .usage-empty{color:#9aa0aa;font-size:13px}
+.approval-list{display:flex;flex-direction:column;gap:.55rem;margin:.35rem 0 1rem}
+.approval-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:.75rem .9rem}
+.approval-meta{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.approval-label{font-weight:600;color:#e8eaed;overflow-wrap:anywhere}
+.approval-time{font-size:12px;color:#9aa0aa}
+.approval-actions{display:flex;gap:.45rem;flex-wrap:wrap}
+@media (max-width:620px){.approval-row{align-items:flex-start;flex-direction:column}}
 `
 
 // ensureManageCSS injects manageCSS into <head> once.
@@ -110,6 +117,20 @@ type adminCreateUserResp struct {
 	Username     string `json:"username"`
 	Role         string `json:"role"`
 	RecoveryCode string `json:"recoveryCode"`
+}
+
+type adminPendingDevice struct {
+	DeviceID    string `json:"deviceId"`
+	Label       string `json:"label"`
+	RequestedAt string `json:"requestedAt"`
+	ExpiresAt   string `json:"expiresAt"`
+}
+
+type adminPendingDecision struct {
+	OK          bool   `json:"ok"`
+	Action      string `json:"action"`
+	DeviceID    string `json:"deviceId"`
+	PairingCode string `json:"pairingCode"`
 }
 
 // ---------------------------------------------------------------------------
@@ -244,9 +265,139 @@ func patchUserIdentity(token, id, username, role string) error {
 	return nil
 }
 
+func fetchPendingDevices(token string) ([]adminPendingDevice, error) {
+	code, body, err := adminDo(token, http.MethodGet, "/v1/admin/pending-devices", "")
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("pending requests: HTTP %d", code)
+	}
+	var pending []adminPendingDevice
+	if err := json.Unmarshal(body, &pending); err != nil {
+		return nil, err
+	}
+	return pending, nil
+}
+
+func decidePendingDevice(token, deviceID, action string) (*adminPendingDecision, error) {
+	code, body, err := adminDo(token, http.MethodPost, "/v1/admin/pending-devices/"+deviceID+"/"+action, "")
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("%s request: HTTP %d", action, code)
+	}
+	var decision adminPendingDecision
+	if err := json.Unmarshal(body, &decision); err != nil {
+		return nil, err
+	}
+	return &decision, nil
+}
+
 // ---------------------------------------------------------------------------
 // Clickable users table (replaces the static table in readyView)
 // ---------------------------------------------------------------------------
+
+type pendingApprovalRowProps struct {
+	device   adminPendingDevice
+	disabled bool
+	onDecide func(string, string)
+}
+
+func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
+	approve := ui.UseEvent(func() { p.onDecide(p.device.DeviceID, "approve") })
+	reject := ui.UseEvent(func() { p.onDecide(p.device.DeviceID, "reject") })
+	label := strings.TrimSpace(p.device.Label)
+	if label == "" {
+		label = "Unnamed device"
+	}
+	return Div(css.Class("approval-row"), Attr("data-testid", "admin-pending-device"),
+		Div(css.Class("approval-meta"),
+			Span(css.Class("approval-label"), Text(label)),
+			Span(css.Class("approval-time"), Text("Requested "+trimDate(p.device.RequestedAt)+" · expires "+trimDate(p.device.ExpiresAt))),
+		),
+		Div(css.Class("approval-actions"),
+			Button(Type("button"), css.Class("btn btn-primary"), Attr("data-testid", "admin-pending-approve"),
+				Attr("aria-label", "Approve access for "+label), Disabled(p.disabled), OnClick(approve), Text("Approve")),
+			Button(Type("button"), css.Class("btn btn-danger"), Attr("data-testid", "admin-pending-reject"),
+				Attr("aria-label", "Reject access for "+label), Disabled(p.disabled), OnClick(reject), Text("Reject")),
+		),
+	)
+}
+
+type pendingApprovalsProps struct {
+	token string
+}
+
+func pendingApprovals(p pendingApprovalsProps) ui.Node {
+	devices := ui.UseState[[]adminPendingDevice](nil)
+	status := ui.UseState("")
+	busyID := ui.UseState("")
+	reload := ui.UseState(0)
+
+	ui.UseEffect(func() func() {
+		go func() {
+			out, err := fetchPendingDevices(p.token)
+			if err != nil {
+				status.Set("Could not load access requests: " + err.Error())
+				return
+			}
+			devices.Set(out)
+			if status.Get() == "Refreshing access requests…" {
+				status.Set("")
+			}
+		}()
+		return nil
+	}, p.token, reload.Get())
+
+	refresh := ui.UseEvent(func() {
+		status.Set("Refreshing access requests…")
+		reload.Set(reload.Get() + 1)
+	})
+	decide := func(deviceID, action string) {
+		busyID.Set(deviceID)
+		status.Set("")
+		go func() {
+			out, err := decidePendingDevice(p.token, deviceID, action)
+			busyID.Set("")
+			if err != nil {
+				status.Set("Could not " + action + " access: " + err.Error())
+				return
+			}
+			if action == "approve" {
+				status.Set("Access approved. Verification code: " + out.PairingCode)
+			} else {
+				status.Set("Access request rejected.")
+			}
+			reload.Set(reload.Get() + 1)
+		}()
+	}
+
+	list := Div(css.Class("usage-empty"), Attr("data-testid", "admin-pending-empty"), Text("No pending access requests."))
+	if len(devices.Get()) > 0 {
+		list = Div(css.Class("approval-list"),
+			Map(devices.Get(), func(device adminPendingDevice) ui.Node {
+				return ui.CreateElement(pendingApprovalRow, pendingApprovalRowProps{
+					device: device, disabled: busyID.Get() != "", onDecide: decide,
+				})
+			}),
+		)
+	}
+
+	return Div(Attr("data-testid", "admin-pending-approvals"),
+		Div(css.Class("users-toolbar"),
+			Div(
+				H2(css.Class("table-title"), Text("Access requests")),
+				Div(css.Class("table-hint"), Text("New clients cannot create an account or sync until you approve them.")),
+			),
+			Button(Type("button"), css.Class("btn btn-secondary"), Attr("data-testid", "admin-pending-refresh"),
+				OnClick(refresh), Text("Refresh requests")),
+		),
+		If(status.Get() != "", Div(css.Class("status-banner"), Attr("role", "status"), Attr("data-testid", "admin-pending-status"), Text(status.Get()))),
+		list,
+	)
+}
 
 type userRowProps struct {
 	user   adminUserRow

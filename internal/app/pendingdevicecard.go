@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -25,6 +26,7 @@ const (
 	pendingPhaseWaiting     pendingPhase = "waiting"
 	pendingPhaseApproved    pendingPhase = "approved"
 	pendingPhaseSettingPass pendingPhase = "settingPassword"
+	pendingPhaseRecovery    pendingPhase = "recovery"
 	pendingPhaseDone        pendingPhase = "done"
 	pendingPhaseRejected    pendingPhase = "rejected"
 	pendingPhaseCanceled    pendingPhase = "canceled"
@@ -32,19 +34,31 @@ const (
 	pendingPhaseError       pendingPhase = "error"
 )
 
-// PendingDeviceCard offers the admin-approved device-pairing bootstrap
-// (TODOS.md C454): the alternative to typing a password when this device has
-// no working credentials yet and the server is invite-only (Register
-// disabled — RegistrationOpen=false in discovery). Collapsed by default like
-// DeviceLinkCard, since it's a secondary path alongside PasswordAuthCard's
-// primary sign-in form; the actual request only fires once expanded (see
-// pendingDeviceWatcher's mount effect) — expanding IS "auto-register on
-// mount," not the whole Cloud tab's mount, so visiting Settings never fires
-// a background pairing request nobody asked for.
-func PendingDeviceCard() uic.Node {
+// PendingDeviceCard offers the admin-approved first-account bootstrap
+// (TODOS.md C454/C473) when Register is disabled. It can be the primary card or
+// a secondary disclosure, but in either case the actual request fires only
+// after the user clicks Request access. Merely visiting Settings never creates
+// a server-side request.
+type PendingDeviceCardProps struct {
+	Primary bool
+}
+
+func PendingDeviceCard(props PendingDeviceCardProps) uic.Node {
 	expanded := uic.UseState(false)
 	onToggleExpand := uic.UseEvent(func() { expanded.Set(!expanded.Get()) })
 
+	if !expanded.Get() && props.Primary {
+		return Div(css.Class("card", "pending-device-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2),
+			Attr("data-testid", "pending-device-request-card"),
+			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+				ui.Icon(icon.Clock, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
+				Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("authCards.pendingTitle")),
+			),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.pendingIntro")),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "pending-device-request"),
+				OnClick(onToggleExpand), uistate.T("authCards.pendingRequest")),
+		)
+	}
 	if !expanded.Get() {
 		return Div(Attr("data-testid", "pending-device-collapsed"),
 			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "pending-device-expand"),
@@ -72,6 +86,8 @@ func pendingDeviceWatcher() uic.Node {
 	setPwPassword := uic.UseState("")
 	setPwSubmitting := uic.UseState(false)
 	setPwErr := uic.UseState("")
+	setPwRecovery := uic.UseState("")
+	pendingPair := uic.UseState(backendrpc.TokenPairResponse{})
 
 	uic.UseEffect(func() func() {
 		pr := prefsAtom.Get().Normalize()
@@ -161,7 +177,11 @@ func pendingDeviceWatcher() uic.Node {
 				notify(customSyncErrorMessage(err, uistate.T("authCards.pendingRedeemFailed")), true)
 				return
 			}
-			persistAuthSession(prefsAtom, pr.ServerURL, out, true)
+			// Keep the provisional session in memory until credentials have
+			// been created and the requester confirms the one-time recovery
+			// code is saved. Persisting it here would allow a reload (and
+			// therefore sync) before account recovery is configured.
+			pendingPair.Set(out)
 			phase.Set(string(pendingPhaseSettingPass))
 		}()
 	})
@@ -179,7 +199,6 @@ func pendingDeviceWatcher() uic.Node {
 
 	onSetPwUsername := uic.UseEvent(func(v string) { setPwUsername.Set(v); setPwErr.Set("") })
 	onSetPwPassword := uic.UseEvent(func(v string) { setPwPassword.Set(v); setPwErr.Set("") })
-	onSkipSetPassword := uic.UseEvent(func() { phase.Set(string(pendingPhaseDone)) })
 	onSubmitSetPassword := uic.UseEvent(func() {
 		u := normalizeUsername(setPwUsername.Get())
 		pw := setPwPassword.Get()
@@ -198,8 +217,9 @@ func pendingDeviceWatcher() uic.Node {
 		go func() {
 			ctx := context.Background()
 			pr := prefsAtom.Get().Normalize()
+			pair := pendingPair.Get()
 			var out backendrpc.SetPasswordResponse
-			err := invokeWorkerRPC(ctx, pr.ServerURL, effectiveServerToken(pr), backendrpc.MethodAuthSetPassword,
+			err := invokeWorkerRPC(ctx, pr.ServerURL, pair.AccessToken, backendrpc.MethodAuthSetPassword,
 				backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out)
 			setPwSubmitting.Set(false)
 			if err != nil {
@@ -207,9 +227,18 @@ func pendingDeviceWatcher() uic.Node {
 				return
 			}
 			setPwPassword.Set("")
-			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
-			phase.Set(string(pendingPhaseDone))
+			setPwRecovery.Set(strings.TrimSpace(out.RecoveryCode))
+			phase.Set(string(pendingPhaseRecovery))
 		}()
+	})
+	onDismissRecovery := uic.UseEvent(func() {
+		pair := pendingPair.Get()
+		pr := prefsAtom.Get().Normalize()
+		setPwRecovery.Set("")
+		pendingPair.Set(backendrpc.TokenPairResponse{})
+		persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
+		notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
+		phase.Set(string(pendingPhaseDone))
 	})
 
 	p := pendingPhase(phase.Get())
@@ -252,8 +281,15 @@ func pendingDeviceWatcher() uic.Node {
 				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "pending-device-setpassword-submit"),
 					DisabledIf(setPwSubmitting.Get()), OnClick(onSubmitSetPassword),
 					IfElse(setPwSubmitting.Get(), Text(uistate.T("authCards.pendingSetPasswordSaving")), Text(uistate.T("authCards.pendingSetPasswordSubmit")))),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "pending-device-setpassword-skip"), OnClick(onSkipSetPassword), uistate.T("authCards.pendingSetPasswordSkip")),
 			),
+		)),
+
+		If(p == pendingPhaseRecovery, Fragment(
+			Span(css.Class(tw.Text13, tw.FontSemibold), uistate.T("authCards.recoveryTitle")),
+			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.recoveryIntro")),
+			Div(css.Class("set-input", tw.Text15), Attr("data-testid", "pending-device-recovery-code"), Text(setPwRecovery.Get())),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "pending-device-recovery-dismiss"),
+				OnClick(onDismissRecovery), uistate.T("authCards.recoveryDismiss")),
 		)),
 
 		If(p == pendingPhaseDone, P(css.Class(tw.Text12), Attr("data-testid", "pending-device-done"), uistate.T("authCards.pendingDone"))),

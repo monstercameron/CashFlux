@@ -63,7 +63,11 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 // PasswordAuthCard is the username/password sign-in surface (TODOS.md C422
 // client UI). Standalone component (its own hooks), composed into the /sync
 // page.
-func PasswordAuthCard() uic.Node {
+type PasswordAuthCardProps struct {
+	AllowRegistration bool
+}
+
+func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
 
@@ -268,6 +272,14 @@ func PasswordAuthCard() uic.Node {
 		)
 	}
 
+	modeOptions := []ui.SegOption{
+		{Value: string(passwordAuthLogin), Label: uistate.T("authCards.modeLogin")},
+	}
+	if props.AllowRegistration {
+		modeOptions = append(modeOptions, ui.SegOption{Value: string(passwordAuthRegister), Label: uistate.T("authCards.modeRegister")})
+	}
+	modeOptions = append(modeOptions, ui.SegOption{Value: string(passwordAuthRecover), Label: uistate.T("authCards.modeRecover")})
+
 	return Div(css.Class("card", "password-auth-card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "password-auth-card"),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
 			ui.Icon(icon.Lock, css.Class(tw.W5, tw.H5, tw.ShrinkO, tw.TextDim)),
@@ -294,12 +306,8 @@ func PasswordAuthCard() uic.Node {
 
 		If(!signedIn.Get() && code == "", Fragment(
 			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("authCards.modeGroupLabel"),
-				Options: []ui.SegOption{
-					{Value: string(passwordAuthLogin), Label: uistate.T("authCards.modeLogin")},
-					{Value: string(passwordAuthRegister), Label: uistate.T("authCards.modeRegister")},
-					{Value: string(passwordAuthRecover), Label: uistate.T("authCards.modeRecover")},
-				},
+				Label:    uistate.T("authCards.modeGroupLabel"),
+				Options:  modeOptions,
 				Selected: mode.Get(),
 				OnSelect: onMode,
 			}),
@@ -514,6 +522,7 @@ func SetPasswordCard() uic.Node {
 	password := uic.UseState("")
 	submitting := uic.UseState(false)
 	done := uic.UseState(false)
+	recoveryCode := uic.UseState("")
 	errMsg := uic.UseState("")
 
 	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
@@ -549,14 +558,24 @@ func SetPasswordCard() uic.Node {
 			}
 			// Never keep the plaintext around once the server has the hash.
 			password.Set("")
+			recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
 			done.Set(true)
 			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
 		}()
 	})
+	onDismissRecovery := uic.UseEvent(func() { recoveryCode.Set("") })
 
 	if done.Get() {
-		return Div(Attr("data-testid", "set-password-done"),
-			P(css.Class(tw.Text12, tw.TextDim), uistate.T("authCards.pendingSetPasswordSuccess")))
+		return Div(css.Class("card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2), Attr("data-testid", "set-password-done"),
+			P(css.Class(tw.Text12, tw.TextDim), uistate.T("authCards.pendingSetPasswordSuccess")),
+			If(recoveryCode.Get() != "", Fragment(
+				Span(css.Class(tw.Text13, tw.FontSemibold), uistate.T("authCards.recoveryTitle")),
+				P(css.Class(tw.TextFaint, tw.Text12), uistate.T("authCards.recoveryIntro")),
+				Div(css.Class("set-input", tw.Text15), Attr("data-testid", "set-password-recovery-code"), Text(recoveryCode.Get())),
+				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "set-password-recovery-dismiss"),
+					OnClick(onDismissRecovery), uistate.T("authCards.recoveryDismiss")),
+			)),
+		)
 	}
 	if !expanded.Get() {
 		return Div(Attr("data-testid", "set-password-collapsed"),

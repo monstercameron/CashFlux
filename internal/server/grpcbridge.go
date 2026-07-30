@@ -82,7 +82,7 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	)
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
 	RegisterAIServiceServer(grpcServer, newAIService(store, cfg))
-	RegisterAuthServiceServer(grpcServer, newAuthService(store, cfg))
+	RegisterAuthServiceServer(grpcServer, authServiceForRegistrationPolicy(store, cfg))
 	RegisterAccountServiceServer(grpcServer, newAccountService(store, cfg))
 	RegisterBillingServiceServer(grpcServer, newBillingService(store, cfg))
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
@@ -162,6 +162,14 @@ type pairingOnlyAuthServer struct {
 
 func (pairingOnlyAuthServer) Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error) {
 	return backendrpc.TokenPairResponse{}, status.Error(codes.Unimplemented, "open self-service enrollment is not available on this server")
+}
+
+func authServiceForRegistrationPolicy(store *Store, cfg Config) authServiceServer {
+	service := newAuthService(store, cfg)
+	if cfg.RegistrationOpen {
+		return service
+	}
+	return pairingOnlyAuthServer{service}
 }
 
 // NewSyncAndAuthBridgeHandler builds a GoGRPCBridge WebSocket handler exposing

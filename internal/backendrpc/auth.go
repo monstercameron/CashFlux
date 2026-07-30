@@ -177,5 +177,8 @@ type SetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// SetPasswordResponse is empty — success is the absence of an error.
-type SetPasswordResponse struct{}
+// SetPasswordResponse returns the one-time recovery code created with the
+// password. The server stores only its bcrypt hash.
+type SetPasswordResponse struct {
+	RecoveryCode string `json:"recoveryCode"`
+}

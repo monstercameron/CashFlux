@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -170,8 +171,12 @@ func TestAuthServerSetPasswordAttachesToCallingSessionNotANewAccount(t *testing.
 	tokenUserID := "token:abc123"
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: tokenUserID})
 
-	if _, err := s.SetPassword(ctx, backendrpc.SetPasswordRequest{Username: "cam", Password: "correct-horse-battery"}); err != nil {
+	setResp, err := s.SetPassword(ctx, backendrpc.SetPasswordRequest{Username: "cam", Password: "correct-horse-battery"})
+	if err != nil {
 		t.Fatalf("SetPassword: %v", err)
+	}
+	if setResp.RecoveryCode == "" {
+		t.Fatal("SetPassword did not return a recovery code")
 	}
 
 	// The row that gained credentials must be the CALLER's own row (lazily
@@ -189,6 +194,13 @@ func TestAuthServerSetPasswordAttachesToCallingSessionNotANewAccount(t *testing.
 	}
 	if _, found, _ := s.store.GetUserByID(localUserID("cam")); found {
 		t.Fatal("SetPassword must not create a second, disconnected `local:cam` account")
+	}
+	_, recoveryHash, found, err := s.store.GetLocalRecoveryByUsername("cam")
+	if err != nil || !found {
+		t.Fatalf("GetLocalRecoveryByUsername: found=%v err=%v", found, err)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(recoveryHash), []byte(setResp.RecoveryCode)); err != nil {
+		t.Fatalf("SetPassword recovery code did not verify: %v", err)
 	}
 
 	// The account can now log in with the new username/password — the whole

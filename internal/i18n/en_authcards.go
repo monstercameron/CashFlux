@@ -83,8 +83,10 @@ var authCardsKeys = Catalog{
 	// waits for an admin to approve it, rather than the user needing any
 	// credential yet. Collapsed under a link like the other secondary
 	// sign-in methods.
-	"authCards.waitForApproval":           "Ask an admin to approve this device instead",
-	"authCards.pendingTitle":              "Device pairing",
+	"authCards.waitForApproval":           "Request access",
+	"authCards.pendingTitle":              "Request access",
+	"authCards.pendingIntro":              "Ask this server's administrator to approve a new CashFlux account for this device.",
+	"authCards.pendingRequest":            "Request access",
 	"authCards.pendingConnecting":         "Requesting access…",
 	"authCards.pendingWaiting":            "Waiting for an admin to approve this device…",
 	"authCards.pendingWaitingHint":        "Someone with access to this server needs to approve your request before you can sign in.",
@@ -100,8 +102,7 @@ var authCardsKeys = Catalog{
 	"authCards.pendingWatchFailed":        "Lost the connection while waiting. Try again.",
 	"authCards.pendingRedeemFailed":       "Couldn't finish pairing. Try again.",
 	"authCards.pendingSetPasswordTitle":   "Set a password",
-	"authCards.pendingSetPasswordHint":    "Add a username and password so you can sign back in next time without needing approval again.",
-	"authCards.pendingSetPasswordSkip":    "Skip for now",
+	"authCards.pendingSetPasswordHint":    "Choose a username and password. Sync stays off until you save the recovery code shown next.",
 	"authCards.pendingSetPasswordSubmit":  "Save password",
 	"authCards.pendingSetPasswordSaving":  "Saving…",
 	"authCards.pendingSetPasswordFailed":  "Couldn't save the password. Try again.",

@@ -38,7 +38,7 @@ var syncPageKeys = Catalog{
 	// way in and this device doesn't have a session yet. "Connected." is true of the
 	// SERVER (an unauthenticated capability probe found it) but reads as "you're
 	// done", which is the opposite of what someone still needing a code should hear.
-	"sync.discoveryNeedsActivation": "Found your server. Enter an activation code below to finish.",
+	"sync.discoveryNeedsActivation": "Found your server. New accounts require administrator approval.",
 	// One disclosure for every secondary sign-in path, replacing three competing
 	// top-level links on a server where only the activation code actually works.
 	"sync.moreWaysToggle": "More ways to sign in",

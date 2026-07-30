@@ -258,7 +258,9 @@ message SetPasswordRequest {
   string password = 2;
 }
 
-message SetPasswordResponse {}
+message SetPasswordResponse {
+  string recovery_code = 1;
+}
 
 service AuthService {
   rpc Enroll(EnrollRequest) returns (TokenPairResponse);

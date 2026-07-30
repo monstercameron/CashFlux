@@ -6421,3 +6421,14 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   the password/recovery form. Give every probe a generation, invalidate it on address/segment
   changes, and allow only the newest callback to update the pane. The live recovery lifecycle now
   survives sign-out and rediscovery without losing the form.
+- [x] **C473 [MAJOR][AUTH][ADMIN] Gate full-server account creation behind operator approval by
+  default.** `cashflux-server` currently advertises open registration unconditionally, so anyone
+  who can reach it can create credentials, receive a session, and begin syncing. Default
+  `CASHFLUX_SERVER_REGISTRATION_OPEN` to false while allowing an explicit true override. In the
+  default mode, keep existing-account login and operator-created accounts working, reject direct
+  `Register`, and make **Request access** the client's primary first-time path. Surface pending
+  requests in the operator console with approve/reject controls; approval must create exactly one
+  account, let the waiting client set its username/password, and display a one-time recovery code
+  before sync begins. Rejection/expiry must create no usable account or session. Cover discovery,
+  direct-register denial, approval/rejection, recovery-code persistence, login, and clean first
+  sync in a disposable real-server browser test.

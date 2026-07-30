@@ -150,6 +150,12 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("OPTIONS /v1/admin/users", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/admin/users", handleAdminUsers(cfg, store))
 	mux.HandleFunc("POST /v1/admin/users", handleAdminUserCreate(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/pending-devices", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/admin/pending-devices", handleAdminPendingDevices(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/pending-devices/{id}/approve", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/pending-devices/{id}/approve", handleAdminPendingDeviceApprove(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/pending-devices/{id}/reject", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/pending-devices/{id}/reject", handleAdminPendingDeviceReject(cfg, store))
 	// Admin user-management surface (admin_manage.go): single-user detail, per-user usage
 	// analytics, and the account actions (set plan, revoke sessions, delete).
 	mux.HandleFunc("OPTIONS /v1/admin/users/{id}", handleCORSPreflight(cfg))
@@ -200,7 +206,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			AuthProviders:       cfg.OAuthProviderNames(),
 			PaymentProviders:    cfg.ConfiguredPaymentProviders(),
 			CustomAuthEnabled:   true,
-			RegistrationOpen:    true, // the full server: Register is never wrapped/blocked here
+			RegistrationOpen:    cfg.RegistrationOpen,
 		})
 	})
 	mux.Handle("GET /v1/auth/{provider}", authLimiter(handleOAuthStart(cfg)))

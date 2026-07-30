@@ -32,6 +32,11 @@ type Config struct {
 	Billing   bool
 	AppOrigin string
 	MasterKey string
+	// RegistrationOpen enables unauthenticated username/password self-signup.
+	// It is deliberately false by default: new people request access and wait
+	// for an operator, while existing users and operator-created accounts keep
+	// using normal password login.
+	RegistrationOpen bool
 	// SessionKey is the dedicated HMAC secret for signing session (access/refresh)
 	// JWTs. Separating it from MasterKey means an AES master-key rotation
 	// (rotate-ai-master-key) doesn't invalidate every session, and a leak of one
@@ -134,10 +139,11 @@ type OAuthProviderConfig struct {
 // FromEnv builds server config from CASHFLUX_SERVER_* environment variables.
 func FromEnv() (Config, error) {
 	cfg := Config{
-		Addr:     envOr("CASHFLUX_SERVER_ADDR", DefaultAddr),
-		DataDir:  envOr("CASHFLUX_SERVER_DATA_DIR", DefaultDataDir),
-		AuthMode: envOr("CASHFLUX_SERVER_AUTH_MODE", DefaultAuthMode),
-		Billing:  envBool("CASHFLUX_SERVER_BILLING", false),
+		Addr:             envOr("CASHFLUX_SERVER_ADDR", DefaultAddr),
+		DataDir:          envOr("CASHFLUX_SERVER_DATA_DIR", DefaultDataDir),
+		AuthMode:         envOr("CASHFLUX_SERVER_AUTH_MODE", DefaultAuthMode),
+		Billing:          envBool("CASHFLUX_SERVER_BILLING", false),
+		RegistrationOpen: envBool("CASHFLUX_SERVER_REGISTRATION_OPEN", false),
 	}
 	cfg.AppOrigin = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_APP_ORIGIN"))
 	cfg.MasterKey = strings.TrimSpace(os.Getenv("CASHFLUX_SERVER_MASTER_KEY"))

@@ -7,6 +7,9 @@ const USERNAME = "auth-e2e-user";
 const RENAMED_USERNAME = "auth-e2e-renamed";
 const OLD_PASSWORD = "CashFlux-E2E-Old-7294";
 const NEW_PASSWORD = "CashFlux-E2E-New-8427";
+const APPROVED_USERNAME = "approved-e2e-user";
+const APPROVED_PASSWORD = "CashFlux-Approved-3917";
+const APPROVED_NEW_PASSWORD = "CashFlux-Approved-New-6248";
 
 async function openCloud(page) {
   await nav(page, "/settings");
@@ -28,6 +31,9 @@ async function openCloud(page) {
 async function openPasswordForm(page) {
   const expand = page.getByTestId("password-auth-expand");
   const card = page.getByTestId("password-auth-card");
+  if (!(await expand.or(card).isVisible())) {
+    await page.getByTestId("sync-advanced-token-toggle").click();
+  }
   await expect(expand.or(card)).toBeVisible();
   if (await expand.isVisible()) {
     await expand.click();
@@ -117,12 +123,14 @@ async function expectAuthFailure(page) {
 }
 
 test.describe("standalone basic-auth lifecycle", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("operator CRUD, login, recovery, sync, suspension, and deletion work end to end", async ({
     app,
     browser,
     request,
   }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(240_000);
 
     const admin = await app.context().newPage();
     const browserErrors = [];
@@ -270,6 +278,86 @@ test.describe("standalone basic-auth lifecycle", () => {
       await openPasswordForm(app);
       await passwordLogin(app, RENAMED_USERNAME, NEW_PASSWORD);
       await expectAuthFailure(app);
+
+      // Closed registration is the full server's safe default. The password
+      // fallback still supports login/recovery for existing accounts, but it
+      // must not advertise a direct Create account path.
+      await expect(app.getByRole("radio", { name: "Create account", exact: true })).toHaveCount(0);
+
+      // A first-time client explicitly requests access. Merely opening Cloud
+      // did not create a request; this click is the consent boundary.
+      await app.getByTestId("pending-device-request").click();
+      await expect(app.getByTestId("pending-device-waiting")).toBeVisible({ timeout: 20_000 });
+      await admin.getByTestId("admin-pending-refresh").click();
+      const requestRow = admin.getByTestId("admin-pending-device");
+      await expect(requestRow).toHaveCount(1);
+      await requestRow.getByTestId("admin-pending-approve").click();
+      await expect(admin.getByTestId("admin-pending-status")).toContainText("Access approved");
+
+      await expect(app.getByTestId("pending-device-approved")).toBeVisible({ timeout: 20_000 });
+      await app.getByTestId("pending-device-accept").click();
+      await expect(app.getByTestId("pending-device-setpassword")).toBeVisible({ timeout: 20_000 });
+      await fillStable(app.getByTestId("pending-device-username"), APPROVED_USERNAME);
+      await fillStable(app.getByTestId("pending-device-password"), APPROVED_PASSWORD);
+      await app.getByTestId("pending-device-setpassword-submit").click();
+      const approvedRecovery = (await app.getByTestId("pending-device-recovery-code").innerText()).trim();
+      expect(approvedRecovery).toMatch(/^[A-Z2-7]{16}$/);
+
+      // Until the recovery code is acknowledged, the provisional session is
+      // memory-only and neither login state nor sync may start.
+      expect(await app.evaluate(() => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "")).toBe("");
+      await expect(app.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
+      await app.getByTestId("pending-device-recovery-dismiss").click();
+      await expect(app.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+      await expect(app.getByTestId("sync-pulse")).toHaveAttribute("data-sync-state", "synced", { timeout: 30_000 });
+
+      // The approved account is now a normal recoverable account.
+      await passwordSignOut(app);
+      await rediscoverBackend(app);
+      await openPasswordForm(app);
+      await choosePasswordMode(app, "Forgot password?");
+      await fillStable(app.getByTestId("password-auth-username"), APPROVED_USERNAME);
+      await fillStable(app.getByTestId("password-auth-password"), APPROVED_NEW_PASSWORD);
+      await fillStable(app.getByTestId("password-auth-recovery-input"), approvedRecovery);
+      await submitPassword(app);
+      await expect(app.getByTestId("password-auth-recovery-code")).toBeVisible();
+      await app.getByTestId("password-auth-recovery-dismiss").click();
+      await passwordSignOut(app);
+      await rediscoverBackend(app);
+      await openPasswordForm(app);
+      await passwordLogin(app, APPROVED_USERNAME, APPROVED_NEW_PASSWORD);
+      await expect(app.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+
+      // Rejection creates no second account or session.
+      const rejectedContext = await browser.newContext({
+        reducedMotion: "reduce",
+        serviceWorkers: "block",
+      });
+      const rejected = await rejectedContext.newPage();
+      await rejected.goto(APP_ORIGIN);
+      await rejected.waitForFunction(
+        () => document.documentElement.getAttribute("data-app-ready") === "true",
+        null,
+        { timeout: 45_000 },
+      );
+      await openCloud(rejected);
+      await rejected.getByTestId("pending-device-request").click();
+      await expect(rejected.getByTestId("pending-device-waiting")).toBeVisible({ timeout: 20_000 });
+      await admin.getByTestId("admin-pending-refresh").click();
+      await expect(admin.getByTestId("admin-pending-device")).toHaveCount(1);
+      await admin.getByTestId("admin-pending-reject").click();
+      await expect(rejected.getByTestId("pending-device-rejected")).toBeVisible({ timeout: 20_000 });
+      expect(await rejected.evaluate(() => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "")).toBe("");
+      await rejectedContext.close();
+
+      // The approved account is the only survivor; remove it so the lifecycle
+      // ends with the disposable server empty again.
+      await admin.getByRole("button", { name: "Refresh console data" }).click();
+      await expect(admin.locator("tr.user-row")).toHaveCount(1);
+      await admin.locator("tr.user-row").first().click();
+      await admin.getByRole("button", { name: "Delete this account" }).click();
+      await admin.getByRole("button", { name: "Yes, delete" }).click();
+      await expect(admin.locator("tr.user-row")).toHaveCount(0);
       expect(browserErrors).toEqual([]);
     } finally {
       await admin.close();

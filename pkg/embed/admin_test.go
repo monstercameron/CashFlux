@@ -660,7 +660,7 @@ func TestResetCredentialsClearsPasswordAndSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if err := a.store.SetLocalCredentials(id, "dana", "$2a$10$notarealbcrypthashbutlongenoughxxxxxxxxxxxxxxxxxxxxxxxx"); err != nil {
+	if err := a.store.SetLocalCredentials(id, "dana", "$2a$10$notarealbcrypthashbutlongenoughxxxxxxxxxxxxxxxxxxxxxxxx", "$2a$10$notarealrecoveryhashbutlongenoughxxxxxxxxxxxxxxxxxxxx"); err != nil {
 		t.Fatalf("SetLocalCredentials: %v", err)
 	}
 	if err := a.ResetCredentials(id); err != nil {

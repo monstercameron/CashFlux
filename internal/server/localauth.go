@@ -242,18 +242,18 @@ WHERE user_id = ? AND revoked_at = ''`, formatTime(now.UTC()), userID); err != n
 // already owns that username, and with ErrUserNotFound if userID doesn't
 // exist (callers are expected to have already lazily materialized it — see
 // SyncService.ensureUser's doc comment for why that lazy-creation exists).
-func (s *Store) SetLocalCredentials(userID, username, passwordHash string) error {
+func (s *Store) SetLocalCredentials(userID, username, passwordHash, recoveryCodeHash string) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("server store: not configured")
 	}
 	userID = strings.TrimSpace(userID)
 	username = strings.TrimSpace(username)
-	if userID == "" || username == "" || strings.TrimSpace(passwordHash) == "" {
-		return fmt.Errorf("server store: user id, username, and password hash are required")
+	if userID == "" || username == "" || strings.TrimSpace(passwordHash) == "" || strings.TrimSpace(recoveryCodeHash) == "" {
+		return fmt.Errorf("server store: user id, username, password hash, and recovery hash are required")
 	}
 	defer s.observeDB("SetLocalCredentials", time.Now())
-	res, err := s.db.Exec(`UPDATE users SET username = ?, password_hash = ? WHERE id = ?`,
-		username, passwordHash, userID)
+	res, err := s.db.Exec(`UPDATE users SET username = ?, password_hash = ?, recovery_code_hash = ? WHERE id = ?`,
+		username, passwordHash, recoveryCodeHash, userID)
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			return ErrUsernameTaken

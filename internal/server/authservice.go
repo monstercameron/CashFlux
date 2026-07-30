@@ -810,7 +810,15 @@ func (s *authServer) SetPassword(ctx context.Context, req backendrpc.SetPassword
 	if err != nil {
 		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "password hashing failed")
 	}
-	if err := s.store.SetLocalCredentials(user.ID, username, string(passwordHash)); err != nil {
+	recoveryCode, err := generateRecoveryCode()
+	if err != nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "recovery code generation failed")
+	}
+	recoveryHash, err := bcrypt.GenerateFromPassword([]byte(recoveryCode), bcrypt.DefaultCost)
+	if err != nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "recovery code hashing failed")
+	}
+	if err := s.store.SetLocalCredentials(user.ID, username, string(passwordHash), string(recoveryHash)); err != nil {
 		if errors.Is(err, ErrUsernameTaken) {
 			return backendrpc.SetPasswordResponse{}, status.Error(codes.AlreadyExists, "username is already registered")
 		}
@@ -820,7 +828,7 @@ func (s *authServer) SetPassword(ctx context.Context, req backendrpc.SetPassword
 		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "set password failed")
 	}
 	s.auditActor(ctx, user.ID, "auth.password.set", "user", user.ID)
-	return backendrpc.SetPasswordResponse{}, nil
+	return backendrpc.SetPasswordResponse{RecoveryCode: recoveryCode}, nil
 }
 
 // minLocalPasswordLength is the minimum password length Register accepts.

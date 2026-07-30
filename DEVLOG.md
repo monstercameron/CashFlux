@@ -29464,3 +29464,27 @@ their user-visible error surfaces.
 
 Validation: external disposable-server pass 1/1 in 20.6s; final no-retry hermetic Chromium pass 1/1
 in 36.1s (31.0s test body), including fresh builds of all WASM artifacts.
+## 2026-07-30 — Closed signup, explicit approval, recovery before sync
+
+The full server previously advertised `registrationOpen: true` unconditionally. That made the
+client's Create account option a public account-and-sync door for anyone who could reach the
+endpoint, even though the embedded server already had an invite-only pairing seam.
+
+The full server now defaults `CASHFLUX_SERVER_REGISTRATION_OPEN` to false and applies the same
+server-side Register denial used by the embedded deployment. The stronger first-use path is an
+explicit client access request. The operator console lists unresolved requests and exposes audited
+approve/reject decisions. Approval creates one provisional account and one redeemable pairing code;
+rejection and stale/racing approvals create no usable account.
+
+The important lifecycle boundary is later than approval. Redeeming the approved code stays
+in-memory: CashFlux requires a username/password, receives a one-time recovery code, and waits for
+the requester to acknowledge that code before persisting tokens or starting sync. This prevents a
+reload or eager sync from turning an unrecoverable provisional account into a live account.
+Existing-account login and recovery remain available, but the closed server no longer advertises
+Create account. Open signup is still an explicit deployment choice via
+`CASHFLUX_SERVER_REGISTRATION_OPEN=true`.
+
+Validation covers configuration/discovery, direct Register denial, authenticated approval and
+rejection APIs, redeemability, recovery-hash persistence, WASM compilation, and a disposable
+full-server browser lifecycle through console approval, credentials, recovery, first sync, login,
+recovery rotation, rejection, and cleanup.

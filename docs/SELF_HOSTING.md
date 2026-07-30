@@ -39,6 +39,28 @@ CashFlux can run with an optional backend for sync and AI proxying. The web app 
 
 The gRPC tunnel is exposed at `wss://<domain>/grpc` through Caddy. The client derives that tunnel URL from the HTTPS server URL.
 
+## Account Approval And Recovery
+
+New-account self-registration is closed by default. A new CashFlux client shows **Request access**;
+opening the Cloud settings page alone does not submit a request. The account becomes usable only
+after this sequence completes:
+
+1. The client selects **Request access** and waits.
+2. An operator opens `https://<domain>/console/`, signs in with the server's administrator token,
+   and approves or rejects the request under **Access requests**.
+3. After approval, the client confirms the matching verification code, chooses a username and
+   password, and saves the one-time recovery code.
+4. Only after the recovery code is acknowledged does CashFlux persist the session and begin sync.
+
+Rejection or expiry creates no usable account or session. Existing users can still log in or use
+their saved recovery code, and operators can create, edit, suspend, reinstate, revoke, or delete
+accounts in the console.
+
+Keep `CASHFLUX_SERVER_REGISTRATION_OPEN=false` for an approval-gated server. To deliberately allow
+anyone who can reach the server to create an account, set
+`CASHFLUX_SERVER_REGISTRATION_OPEN=true`; this removes the operator approval gate and should not be
+used on a public endpoint unless open signup is intentional.
+
 ## Connect CashFlux Settings
 
 After the stack is healthy, open CashFlux Settings and choose the self-hosted backend option.

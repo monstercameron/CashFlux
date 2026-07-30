@@ -2431,6 +2431,7 @@ func (x *SetPasswordRequest) GetPassword() string {
 
 type SetPasswordResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	RecoveryCode  string                 `protobuf:"bytes,1,opt,name=recovery_code,json=recoveryCode,proto3" json:"recovery_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2463,6 +2464,13 @@ func (x *SetPasswordResponse) ProtoReflect() protoreflect.Message {
 // Deprecated: Use SetPasswordResponse.ProtoReflect.Descriptor instead.
 func (*SetPasswordResponse) Descriptor() ([]byte, []int) {
 	return file_cashflux_v1_cashflux_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *SetPasswordResponse) GetRecoveryCode() string {
+	if x != nil {
+		return x.RecoveryCode
+	}
+	return ""
 }
 
 type GetEntitlementRequest struct {
@@ -3122,8 +3130,9 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\bcanceled\x18\x01 \x01(\bR\bcanceled\"L\n" +
 	"\x12SetPasswordRequest\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\x02 \x01(\tR\bpassword\"\x15\n" +
-	"\x13SetPasswordResponse\"\x17\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\":\n" +
+	"\x13SetPasswordResponse\x12#\n" +
+	"\rrecovery_code\x18\x01 \x01(\tR\frecoveryCode\"\x17\n" +
 	"\x15GetEntitlementRequest\"\xa5\x01\n" +
 	"\x16GetEntitlementResponse\x12\x16\n" +
 	"\x06active\x18\x01 \x01(\bR\x06active\x12\x16\n" +

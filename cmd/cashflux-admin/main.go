@@ -649,6 +649,7 @@ func statCard(label, value string) ui.Node {
 // readyViewControls bundles the console dashboard's callbacks and users-table
 // search/pagination state so the signature stays readable.
 type readyViewControls struct {
+	token         string
 	search        string
 	offset        int
 	hasMore       bool
@@ -719,6 +720,7 @@ func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.
 			statCard("Today's requests", fmt.Sprintf("%d", ov.TodayRequests)),
 			statCard("Today's tokens", fmt.Sprintf("%d", ov.TodayTokens)),
 		),
+		ui.CreateElement(pendingApprovals, pendingApprovalsProps{token: c.token}),
 		// Users toolbar: email search + page controls, then the clickable table
 		// (usersTable lives in manage.go; rows are their own components so each can
 		// own an OnClick hook).
@@ -1111,6 +1113,7 @@ func App() ui.Node {
 			return loadingView()
 		}
 		return readyView(ov, us, readyViewControls{
+			token:         lsGet(),
 			search:        userSearch.Get(),
 			offset:        userOffset.Get(),
 			hasMore:       usersHasMore.Get(),
