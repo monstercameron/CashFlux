@@ -6326,3 +6326,16 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   request total via one `ListUserUsage` call per listed user (N+1, deliberately not a SQL join — this
   package's target scale is one host's own small, admin-invited user set, not a multi-tenant SaaS
   list). 5 new tests. Verified via full native `go build`/`go vet`/`go test ./...`.
+- [~] **C464 [MAJOR][PERF][SYNC] Move every browser gRPC call into GWC 5's secondary
+  services WASM.** The render artifact must contain no gRPC/GoGRPCBridge/syncbridge dependency;
+  `services.wasm` owns connections, token-refresh singleflight, unary calls, AI/pairing/workspace
+  streams, blob client/server streams, cancellation, reconnect, and status decoding. The boundary
+  is a versioned Dedicated Web Worker protocol with readiness/fatal handling, correlated string
+  operation IDs, explicit context cancellation, exactly-one stream termination, bounded/coalesced
+  events, session-rotation events, and transferable `ArrayBuffer`s for datasets/blobs. Build,
+  deploy, development, service-worker caching, and E2E setup produce both WASM artifacts.
+  Acceptance is dependency-graph enforced and browser-measured: successful hermetic RPC/stream/blob
+  flows, worker-death/cancel/token-rotation coverage, plus delayed, high-frequency, and multi-MB
+  render-responsiveness probes with an on-main-thread control. Deep analysis, the rejected initial
+  checklist, adversarial findings, and the refined implementation order live in
+  `docs/GWC5_RPC_WORKER_MIGRATION.md`.

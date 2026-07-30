@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **GWC 5 RPC-worker migration design and adversarial checklist.** Documented the complete
+  browser gRPC inventory, two-artifact ownership boundary, versioned worker protocol, cancellation,
+  token-rotation, streaming, transferable-binary, failure, packaging, and performance requirements.
+  The preserved initial checklist was challenged against ten concrete failure modes and refined
+  into the acceptance-gated C464 implementation order before feature code began.
 - **Sync yields the moment the user touches the page.** Deferring sync to an idle callback fixed
   *when* work starts but not how long it runs once started: wasm has one thread and no preemption,
   so once the Go scheduler is resumed it runs every runnable goroutine until they all block - and the

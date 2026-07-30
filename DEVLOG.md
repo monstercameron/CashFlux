@@ -29188,3 +29188,26 @@ both framework-runner lanes; and the trusted Playwright smoke spec passed in Chr
 gate loaded every routed page with substantive, on-topic content and no app errors, then repeated
 its sampled routes under the light theme. The ignored local `gwc.exe` runner was rebuilt as well so
 the development tool no longer trails the framework used by the app.
+## 2026-07-29 — Deep design and adversarial review before the GWC 5 RPC worker migration
+
+Cam confirmed the v5 upgrade is about the second WASM artifact, not the import-path bump: every
+browser gRPC connection and call must leave `main.wasm` so long network/stream activity cannot make
+the renderer pay for GoGRPCBridge callbacks, codec work, reconnects, and stream loops. I froze the
+current inventory first (AI, auth, entitlement, sync, and blob; unary plus both stream directions),
+then wrote the initial implementation checklist without touching feature code.
+
+The hostile pass changed the plan materially. GWC's request/reply worker client does not propagate
+context cancellation into a running worker operation; token refresh needs keyed singleflight and a
+session-update event because a Dedicated Worker cannot persist local preferences; stale
+`services.wasm` can coexist with a new app under the offline cache unless readiness carries a
+protocol version; removing `Dial` is not enough while browser files still import `grpc/status`; and
+a delayed tiny response is a bad performance proof because network waiting was asynchronous even
+before the migration. The refined gates now require explicit worker-side cancel funcs, a pure error
+envelope, version negotiation, transferable buffers for datasets/blobs, bounded/coalesced stream
+events, ambiguous-write handling, a successful hermetic bridge fixture, and delayed/streaming/multi-
+MB responsiveness probes with a known-bad main-thread control.
+
+The full analysis, the deliberately preserved first checklist, all ten findings, and the final
+coding order live in `docs/GWC5_RPC_WORKER_MIGRATION.md`; durable backlog item C464 is now in
+progress. The dependency-only GWC v5.0.1 upgrade was committed separately first so this
+architecture work does not hide inside a 375-file module-path migration.
