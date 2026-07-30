@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Server-hosted CashFlux now has a clean account gate.** The full server marks only its own HTML,
+  and every hosted route withholds the financial shell until a rotating user session is validated.
+  Login, recovery, and approval requests are available at the gate; successful sessions select the
+  same-origin backend and sync automatically. Sign-out revokes the refresh family and returns to
+  the gate, while portable local/offline/static builds remain ungated.
 - **CashFlux owners can now administer the server with normal credentials.** The operator console
   opens on username/password sign-in and uses dedicated same-origin HttpOnly cookie sessions with
   rotating refresh credentials, owner-role rechecks, strict origin/CSRF checks for mutations, and

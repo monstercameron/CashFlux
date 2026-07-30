@@ -10,6 +10,9 @@ const NEW_PASSWORD = "CashFlux-E2E-New-8427";
 const APPROVED_USERNAME = "approved-e2e-user";
 const APPROVED_PASSWORD = "CashFlux-Approved-3917";
 const APPROVED_NEW_PASSWORD = "CashFlux-Approved-New-6248";
+const HOSTED_USERNAME = "hosted-e2e-user";
+const HOSTED_PASSWORD = "CashFlux-Hosted-5732";
+const HOSTED_NEW_PASSWORD = "CashFlux-Hosted-New-6843";
 
 async function openCloud(page) {
   await nav(page, "/settings");
@@ -381,6 +384,113 @@ test.describe("standalone basic-auth lifecycle", () => {
       expect(browserErrors).toEqual([]);
     } finally {
       await admin.close();
+    }
+  });
+
+  test("server-hosted CashFlux gates every route and revokes password sessions on sign-out", async ({
+    browser,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+
+    const createdResponse = await request.post(`${BACKEND}/v1/admin/users`, {
+      headers: { Authorization: "Bearer e2e-worker-token" },
+      data: { username: HOSTED_USERNAME, password: HOSTED_PASSWORD, role: "member" },
+    });
+    expect(createdResponse.status()).toBe(200);
+    const created = await createdResponse.json();
+    expect(created.recoveryCode).toMatch(/^[A-Z2-7]{16}$/);
+
+    const context = await browser.newContext({
+      reducedMotion: "reduce",
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    const browserErrors = [];
+    page.on("pageerror", (error) => browserErrors.push(`page: ${error.message}`));
+    page.on("console", (message) => {
+      if (message.type() === "error" && !message.text().startsWith("Failed to load resource")) {
+        browserErrors.push(`console: ${message.text()}`);
+      }
+    });
+
+    try {
+      await page.goto(BACKEND);
+      await page.waitForFunction(
+        () => document.documentElement.getAttribute("data-app-ready") === "true",
+        null,
+        { timeout: 45_000 },
+      );
+      await expect(page.getByTestId("hosted-auth-gate")).toBeVisible();
+      await expect(page.locator(".cf-shell")).toHaveCount(0);
+      await expect(page.getByTestId("sync-pulse")).toHaveCount(0);
+      expect(await page.evaluate(() => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "")).toBe("");
+
+      await choosePasswordMode(page, "Log in");
+      await fillStable(page.getByTestId("password-auth-username"), HOSTED_USERNAME);
+      await fillStable(page.getByTestId("password-auth-password"), HOSTED_PASSWORD);
+      await page.getByTestId("password-auth-submit").click();
+      await expect(page.getByTestId("hosted-auth-gate")).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.locator("#main")).toBeVisible();
+      await expect(page.getByTestId("sync-pulse")).toHaveAttribute("data-sync-state", "synced", { timeout: 30_000 });
+
+      const signedOutRefresh = await page.evaluate(
+        () => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "",
+      );
+      expect(signedOutRefresh).not.toBe("");
+
+      await nav(page, "/settings");
+      await page.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
+      await expect(page.locator(".cloud-tab")).toBeVisible();
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await expect(page.getByTestId("hosted-auth-gate")).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(".cf-shell")).toHaveCount(0);
+
+      const revokedSession = await request.post(`${BACKEND}/v1/auth/refresh`, {
+        headers: {
+          Cookie: `cashflux_refresh=${signedOutRefresh}; cashflux_csrf=e2e-csrf`,
+          "X-CashFlux-CSRF": "e2e-csrf",
+        },
+      });
+      expect(revokedSession.status()).toBe(401);
+
+      await choosePasswordMode(page, "Forgot password?");
+      await fillStable(page.getByTestId("password-auth-username"), HOSTED_USERNAME);
+      await fillStable(page.getByTestId("password-auth-password"), HOSTED_NEW_PASSWORD);
+      await fillStable(page.getByTestId("password-auth-recovery-input"), created.recoveryCode);
+      await page.getByTestId("password-auth-submit").click();
+      const replacement = (await page.getByTestId("password-auth-recovery-code").innerText()).trim();
+      expect(replacement).toMatch(/^[A-Z2-7]{16}$/);
+      expect(replacement).not.toBe(created.recoveryCode);
+      await page.getByTestId("password-auth-recovery-dismiss").click();
+      await expect(page.getByTestId("hosted-auth-gate")).toHaveCount(0, { timeout: 30_000 });
+      await expect(page.locator("#main")).toBeVisible();
+      await expect(page.getByTestId("sync-pulse")).toHaveAttribute("data-sync-state", "synced", { timeout: 30_000 });
+
+      const firstTimeContext = await browser.newContext({
+        reducedMotion: "reduce",
+        serviceWorkers: "block",
+      });
+      const firstTime = await firstTimeContext.newPage();
+      await firstTime.goto(`${BACKEND}/accounts`);
+      await firstTime.waitForFunction(
+        () => document.documentElement.getAttribute("data-app-ready") === "true",
+        null,
+        { timeout: 45_000 },
+      );
+      await expect(firstTime.getByTestId("hosted-auth-gate")).toBeVisible();
+      await expect(firstTime.locator(".cf-shell")).toHaveCount(0);
+      await expect(firstTime.getByTestId("pending-device-request")).toBeVisible();
+      expect(await firstTime.evaluate(() => window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "")).toBe("");
+      await firstTimeContext.close();
+
+      expect(browserErrors).toEqual([]);
+    } finally {
+      await context.close();
+      const deleted = await request.delete(`${BACKEND}/v1/admin/users/${encodeURIComponent(created.id)}`, {
+        headers: { Authorization: "Bearer e2e-worker-token" },
+      });
+      expect(deleted.status()).toBe(200);
     }
   });
 });

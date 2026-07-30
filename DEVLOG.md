@@ -29546,3 +29546,32 @@ password denial, CSRF and origin enforcement, role demotion, refresh rotation, l
 and bearer compatibility. The admin WASM build passes. The hermetic Chromium lifecycle passes
 1/1 in 2.0 minutes, exercising break-glass account creation, owner credential login, console
 sign-out, admin CRUD, client login, password recovery, sync, suspension/reinstatement, and deletion.
+
+## 2026-07-30 — C476: hosted routes wait behind a validated account session
+
+The portable `web/index.html` remains a normal local-first application. Only the full server injects
+`<meta name="cashflux-hosted-app" content="true">` while serving it, which gives the WASM an
+unambiguous synchronous deployment signal without hostname guesses or a discovery flash. Every
+registered route is wrapped in `HostedAuthGate`; an unmarked static/GitHub/offline build returns its
+route immediately, while a marked build mounts no financial shell until `AuthService.ListDevices`
+accepts a rotating account session (including one reactive refresh attempt).
+
+The gate points hosted preferences at the document origin, offers the existing username/password
+login and recovery form plus the explicit request-access flow, and links owners to `/console/`.
+Approval still creates no usable session until the requester sets credentials and acknowledges the
+one-time recovery code. A deep link such as `/accounts` therefore renders the gate rather than
+account data for a clean browser.
+
+Review also found that the Cloud settings sign-out path always called the OAuth cookie endpoint.
+Password/pairing sessions keep their refresh credential in browser storage, so that path cleared the
+device but left its server refresh family usable. Sign-out now calls `AuthService.Logout` for those
+sessions and clears local state only after the revocation attempt. The gRPC bridge also accepts the
+request's exact origin in addition to `CASHFLUX_SERVER_APP_ORIGIN`, matching HTTP CORS and allowing
+the server-hosted app and an explicitly configured external client to coexist.
+
+Validation: `go test ./internal/app ./internal/server ./internal/i18n -count=1`, fresh main/services
+WASM builds, and the combined Chromium suite with retries disabled (2/2 in 1.3 minutes: the original
+standalone lifecycle in 52.2s and the hosted lifecycle in 18.8s). The hosted test proves a clean
+`/accounts` deep link has no `.cf-shell` or sync UI, login reaches synced state, sign-out returns to
+the gate and makes the old refresh token return 401, recovery returns to a clean synced shell, and
+a separate first-time browser still sees only sign-in/request-access.

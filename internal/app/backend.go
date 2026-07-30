@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -261,6 +262,30 @@ func signOutBackendOAuth(endpoint, token, csrf string, onDone func()) {
 	opts.Set("headers", headers)
 	js.Global().Call("fetch", endpoint+"/v1/auth/logout", opts)
 	onDone()
+}
+
+// signOutBackendSession revokes the credential family that actually backs the
+// current client. Password/pairing sessions keep their refresh credential in
+// browser storage and must use AuthService.Logout; OAuth sessions retain the
+// existing cookie-backed HTTP logout path.
+func signOutBackendSession(endpoint, token, csrf string, onDone func()) {
+	refresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
+	if refresh == "" {
+		signOutBackendOAuth(endpoint, token, csrf, onDone)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		dialToken := strings.TrimSpace(token)
+		if dialToken == "" {
+			dialToken = "refresh"
+		}
+		var out backendrpc.LogoutResponse
+		_ = invokeWorkerRPC(ctx, normalizedBackendEndpoint(endpoint), dialToken,
+			backendrpc.MethodAuthLogout, backendrpc.LogoutRequest{RefreshToken: refresh}, &out)
+		onDone()
+	}()
 }
 
 func startBillingCheckout(endpoint, token, interval, provider string, onError func(string)) {

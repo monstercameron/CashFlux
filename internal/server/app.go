@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -49,6 +50,10 @@ func appHandler(cfg Config) http.Handler {
 				headerName = index
 			}
 			setAppAssetHeaders(w, headerName)
+			if path.Base(headerName) == "index.html" {
+				serveHostedAppIndex(w, r, root, headerName)
+				return
+			}
 			files.ServeHTTP(w, r)
 			return
 		}
@@ -64,11 +69,16 @@ func appHandler(cfg Config) http.Handler {
 			return
 		}
 		setAppAssetHeaders(w, "index.html")
-		serveAppFile(w, r, root, "index.html")
+		serveHostedAppIndex(w, r, root, "index.html")
 	})
 }
 
-func serveAppFile(w http.ResponseWriter, r *http.Request, root fs.FS, name string) {
+const hostedAppMeta = `<meta name="cashflux-hosted-app" content="true" />`
+
+// serveHostedAppIndex stamps only server-owned HTML with a marker the WASM can
+// inspect before rendering a route. The source web/index.html stays portable,
+// so GitHub Pages, local dev, and offline bundles remain normal ungated apps.
+func serveHostedAppIndex(w http.ResponseWriter, r *http.Request, root fs.FS, name string) {
 	file, err := root.Open(name)
 	if err != nil {
 		http.NotFound(w, r)
@@ -80,19 +90,26 @@ func serveAppFile(w http.ResponseWriter, r *http.Request, root fs.FS, name strin
 		http.NotFound(w, r)
 		return
 	}
-	seeker, ok := file.(readSeeker)
-	if !ok {
-		http.Error(w, "asset is not seekable", http.StatusInternalServerError)
+	body, err := fs.ReadFile(root, name)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
-	http.ServeContent(w, r, name, info.ModTime(), seeker)
+	body = injectHostedAppMeta(body)
+	http.ServeContent(w, r, name, info.ModTime(), bytes.NewReader(body))
 }
 
-// readSeeker is the narrow interface http.ServeContent needs. Files returned
-// by os.DirFS implement it without exposing an absolute filesystem path.
-type readSeeker interface {
-	Read([]byte) (int, error)
-	Seek(int64, int) (int64, error)
+func injectHostedAppMeta(body []byte) []byte {
+	if bytes.Contains(body, []byte(hostedAppMeta)) {
+		return body
+	}
+	for _, head := range [][]byte{[]byte("<head>"), []byte("<HEAD>")} {
+		if bytes.Contains(body, head) {
+			replacement := append(append([]byte(nil), head...), []byte(hostedAppMeta)...)
+			return bytes.Replace(body, head, replacement, 1)
+		}
+	}
+	return append([]byte(hostedAppMeta), body...)
 }
 
 func acceptsHTML(r *http.Request) bool {

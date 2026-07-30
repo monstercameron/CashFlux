@@ -87,7 +87,7 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	RegisterBillingServiceServer(grpcServer, newBillingService(store, cfg))
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
 	return grpctunnel.Wrap(grpcServer,
-		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
+		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
@@ -117,7 +117,7 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	RegisterSyncServiceServer(grpcServer, NewSyncServiceWithLimits(store, cfg.GRPCMaxStreamsPerUser, cfg.Metrics))
 	const customAuthEnabled = false // SyncService only — no AuthServiceServer registered on this bridge
 	tunnel := grpctunnel.Wrap(grpcServer,
-		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
+		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
@@ -207,7 +207,7 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	RegisterAuthServiceServer(grpcServer, pairingOnlyAuthServer{newAuthService(store, cfg)})
 	RegisterBlobServiceServer(grpcServer, newBlobService(store, cfg))
 	tunnel := grpctunnel.Wrap(grpcServer,
-		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return allowedOrigin(r.Header.Get("Origin"), cfg.AppOrigin) }),
+		grpctunnel.WithOriginCheck(func(r *http.Request) bool { return grpcBridgeOriginAllowed(r, cfg) }),
 		grpctunnel.WithReadLimitBytes(cfg.GRPCReadLimitBytes),
 		grpctunnel.WithKeepalive(cfg.GRPCKeepaliveInterval, cfg.GRPCIdleTimeout),
 		grpctunnel.WithMaxActiveConnections(cfg.GRPCMaxActiveConnections),
@@ -237,6 +237,17 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		})
 	})
 	return mux
+}
+
+// grpcBridgeOriginAllowed keeps an explicitly configured cross-origin client
+// working while also allowing a client served by this very server. The latter
+// is the hosted-app path and mirrors writeCORS's same-request-origin rule.
+func grpcBridgeOriginAllowed(r *http.Request, cfg Config) bool {
+	if r == nil {
+		return false
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	return allowedOrigin(origin, cfg.AppOrigin) || sameRequestOrigin(origin, r)
 }
 
 func grpcTokenValidator(cfg Config) TokenValidator {

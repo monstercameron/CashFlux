@@ -93,6 +93,7 @@ func Run() {
 	// (the dataset) or this store (the dataset blob + bootstrap keys).
 	browserstore.Init()
 	browserstore.RegisterJSBridge() // let vendored JS (music player) persist via IndexedDB too
+	configureHostedPrefs()
 
 	// Start with an empty in-memory store, then load the user's saved dataset from
 	// localStorage (or seed the sample on first run). Logs (os.Stderr) surface in
@@ -173,12 +174,13 @@ func Run() {
 	for _, route := range screens.All() {
 		route := route // capture per iteration
 		r.Register(uistate.RoutePath(route.Path), func(router.Attrs) *router.Element {
-			return ui.CreateElement(Shell, ShellProps{
+			content := ui.CreateElement(Shell, ShellProps{
 				Title:      uistate.T(route.Title),
 				Subtitle:   uistate.T(route.Subtitle),
 				ActivePath: route.Path,
 				View:       route.View,
 			})
+			return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 		})
 	}
 	// User-authored custom pages all ride one pattern route; the slug resolves the
@@ -192,13 +194,14 @@ func Run() {
 				title = p.Name
 			}
 		}
-		return ui.CreateElement(Shell, ShellProps{
+		content := ui.CreateElement(Shell, ShellProps{
 			Title:      title,
 			ActivePath: "/p/" + slug,
 			// Read the slug live (not the captured `slug`) so navigating between two
 			// custom pages renders the right one — see liveCustomPageSlug.
 			View: func() ui.Node { return screens.CustomPage(liveCustomPageSlug()) },
 		})
+		return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 	})
 	// Settings tabs are real, bookmarkable URLs ("/settings/cloud", etc.) rather
 	// than a one-shot in-memory deep-link var: one pattern route, same reasoning
@@ -216,13 +219,14 @@ func Run() {
 	// reconciler needs a changed key to know the content actually changed).
 	r.Register(uistate.RoutePath("/settings/:tab"), func(attrs router.Attrs) *router.Element {
 		tab, _ := attrs["tab"].(string)
-		return ui.CreateElement(Shell, ShellProps{
+		content := ui.CreateElement(Shell, ShellProps{
 			Title:      uistate.T("nav.settings"),
 			Subtitle:   uistate.T("screen.settingsSub"),
 			ActivePath: "/settings",
 			ContentKey: "/settings/" + tab,
 			View:       func() ui.Node { return screens.SettingsScreen() },
 		})
+		return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 	})
 	// C290: /privacy is a natural URL (and share-crawler target) for the privacy
 	// statement, which lives on the About screen. Register it as an explicit alias
@@ -231,17 +235,19 @@ func Run() {
 	// so it doesn't create a duplicate nav item; ActivePath points at /about so the
 	// rail highlights About.
 	r.Register(uistate.RoutePath("/privacy"), func(router.Attrs) *router.Element {
-		return ui.CreateElement(Shell, ShellProps{
+		content := ui.CreateElement(Shell, ShellProps{
 			Title:      uistate.T("nav.about"),
 			Subtitle:   uistate.T("screen.aboutSub"),
 			ActivePath: "/about",
 			View:       screens.About,
 		})
+		return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 	})
 	// Unknown paths fall back to the dashboard, still inside the Shell.
 	r.Register("*", func(router.Attrs) *router.Element {
 		home := screens.All()[0]
-		return ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), ActivePath: home.Path, View: home.View})
+		content := ui.CreateElement(Shell, ShellProps{Title: uistate.T(home.Title), Subtitle: uistate.T(home.Subtitle), ActivePath: home.Path, View: home.View})
+		return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 	})
 
 	r.Mount("#app")

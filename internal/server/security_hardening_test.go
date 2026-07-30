@@ -365,6 +365,31 @@ func TestWriteCORSAllowsSameOriginOperatorConsoleMutations(t *testing.T) {
 	}
 }
 
+func TestGRPCBridgeOriginAllowsConfiguredOrSameOriginOnly(t *testing.T) {
+	cfg := Config{AppOrigin: "https://app.example.com"}
+	for _, tc := range []struct {
+		name   string
+		target string
+		origin string
+		want   bool
+	}{
+		{name: "configured app", target: "https://api.example.com/grpc", origin: "https://app.example.com", want: true},
+		{name: "hosted same origin", target: "https://budget.example.com/grpc", origin: "https://budget.example.com", want: true},
+		{name: "hostile origin", target: "https://budget.example.com/grpc", origin: "https://evil.example.com", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.target, nil)
+			req.Header.Set("Origin", tc.origin)
+			if got := grpcBridgeOriginAllowed(req, cfg); got != tc.want {
+				t.Fatalf("grpcBridgeOriginAllowed() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	if grpcBridgeOriginAllowed(nil, cfg) {
+		t.Fatal("nil request was allowed")
+	}
+}
+
 // --- Right-to-erasure: DeleteAccount must not depend on FK cascade ------------
 
 // TestDeleteAccountPurgesEverythingWithoutCascade seeds a fully-populated account,

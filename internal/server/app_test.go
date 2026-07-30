@@ -19,7 +19,7 @@ func writeHostedAppFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for name, body := range map[string]string{
-		"index.html":         "<!doctype html><title>CashFlux hosted</title>",
+		"index.html":         "<!doctype html><html><head><title>CashFlux hosted</title></head></html>",
 		"services-worker.js": "self.onmessage = function () {};",
 		"app.css":            "body { color: green; }",
 		"bin/main.wasm":      "\x00asm",
@@ -46,6 +46,9 @@ func TestHostedAppServesRootDeepLinksAndAssets(t *testing.T) {
 			}
 			if !strings.Contains(rr.Body.String(), "CashFlux hosted") {
 				t.Fatalf("body = %q, want hosted app shell", rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), hostedAppMeta) {
+				t.Fatalf("body = %q, want hosted-app marker", rr.Body.String())
 			}
 			if got := rr.Header().Get("Cache-Control"); got != "no-cache" {
 				t.Fatalf("cache-control = %q, want no-cache", got)
@@ -77,6 +80,22 @@ func TestHostedAppServesRootDeepLinksAndAssets(t *testing.T) {
 	}
 	if got := rr.Header().Get("Cache-Control"); got != "public, max-age=3600" {
 		t.Fatalf("css cache-control = %q", got)
+	}
+}
+
+func TestInjectHostedAppMetaIsIdempotentAndHandlesMinimalHTML(t *testing.T) {
+	withHead := injectHostedAppMeta([]byte("<html><head><title>x</title></head></html>"))
+	if strings.Count(string(withHead), hostedAppMeta) != 1 ||
+		!strings.Contains(string(withHead), "<head>"+hostedAppMeta) {
+		t.Fatalf("head injection = %q", withHead)
+	}
+	again := injectHostedAppMeta(withHead)
+	if strings.Count(string(again), hostedAppMeta) != 1 {
+		t.Fatalf("idempotent injection = %q", again)
+	}
+	minimal := injectHostedAppMeta([]byte("<title>x</title>"))
+	if !strings.HasPrefix(string(minimal), hostedAppMeta) {
+		t.Fatalf("minimal injection = %q", minimal)
 	}
 }
 

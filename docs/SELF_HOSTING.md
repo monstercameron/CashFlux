@@ -80,17 +80,22 @@ an emergency/bootstrap credential, not the normal browser login. Existing
 `CASHFLUX_SERVER_ADMIN_USER_IDS` entries remain compatible, but role-based `owner` accounts are the
 preferred configuration.
 
-## Connect CashFlux Settings
+## Hosted Client Login
 
-After the stack is healthy, open CashFlux Settings and choose the self-hosted backend option.
+Open `https://<domain>/` directly. The full server marks the HTML as a hosted CashFlux application;
+the client selects its own origin automatically and does not render financial routes until it has
+validated a rotating account session.
 
-1. Set the server URL to `https://<domain>`; do not include `/grpc` or `/v1`.
-2. Paste the printed `CASHFLUX_SERVER_TOKEN` into the access token field.
-3. Use Test connection before saving. The app calls `/v1/version` for compatibility and derives
-   `wss://<domain>/grpc` for sync and AI proxy RPCs.
+- Existing users sign in with username/password or use **Forgot password?** with their saved
+  recovery code.
+- New users select **Request access**. No account or sync session exists until an owner approves
+  the request and the user finishes credentials plus recovery-code acknowledgement.
+- Sign-out revokes the server refresh family, clears the local session, stops sync, and returns to
+  the login gate.
 
-Keep the printed token private. The server stores only `CASHFLUX_SERVER_TOKEN_SHA256` in production config; the
-plaintext token belongs in the user's password manager and CashFlux Settings only.
+Do not paste `CASHFLUX_SERVER_TOKEN` into the hosted client. Keep it private for first-owner
+bootstrap and break-glass console access only. A separately hosted/offline CashFlux build can still
+connect through **Settings → Cloud** when that deployment model is intentional.
 
 ## Deploy Link Disclosure
 

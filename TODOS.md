@@ -6457,13 +6457,20 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   revocation, and a credential-first console with a disclosed break-glass fallback. Focused server
   tests cover role denial/demotion, cookie flags, CSRF/origin rejection, refresh, and logout; the
   real-browser lifecycle proves owner login plus admin CRUD, recovery, sync, suspension, and deletion.
-- [ ] **C476 [MAJOR][AUTH][CLIENT] Gate the hosted CashFlux application behind its clean
+- [x] **C476 [MAJOR][AUTH][CLIENT] Gate the hosted CashFlux application behind its clean
   account-access flow.** When the app is served by a full CashFlux server, unauthenticated visitors
   must see a focused sign-in/request-access/recovery surface before financial data is rendered.
   Successful password, approved-access, and recovery flows must persist the same-origin server
   session and enter the application; sign-out returns to the gate. Local-first development and
   standalone/offline builds must remain ungated. Browser coverage must prove that an unapproved
   visitor cannot sync, an approved user can log in and sync, and recovery returns to a clean sync.
+  Implemented a server-injected hosted-app marker and a route-level session gate that validates a
+  rotating account family before mounting the shell. The gate reuses password login/recovery and
+  approval-request flows, selects the same-origin backend automatically, and leaves portable
+  static builds untouched. Password-session sign-out now revokes the server family before clearing
+  local credentials. Same-origin gRPC remains accepted alongside a separately configured app
+  origin. Focused Chromium coverage proves no shell/sync UI for a clean deep link, login and
+  recovery to synced state, sign-out return to the gate, and rejection of the old refresh token.
 - [ ] **C477 [MAJOR][OPS] Deploy the same-origin CashFlux service at
   `https://budget.earlcameron.com`.** Package the server plus client/services/admin WASM artifacts
   under `/opt/CashFlux`, run it as a dedicated unprivileged `cashflux` systemd service on loopback,

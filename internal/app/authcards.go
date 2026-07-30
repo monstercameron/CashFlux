@@ -65,13 +65,14 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 // page.
 type PasswordAuthCardProps struct {
 	AllowRegistration bool
+	InitiallyExpanded bool
 }
 
 func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 	prefsAtom := uistate.UsePrefs()
 	noticeAtom := uistate.UseNotice()
 
-	expanded := uic.UseState(false)
+	expanded := uic.UseState(props.InitiallyExpanded)
 	mode := uic.UseState(string(passwordAuthLogin))
 	username := uic.UseState("")
 	password := uic.UseState("")

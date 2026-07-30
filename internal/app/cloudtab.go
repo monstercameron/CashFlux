@@ -333,7 +333,7 @@ func CloudConnectionPane() uic.Node {
 		p := prefsAtom.Get()
 		// Present the token the session is ACTUALLY using (a rotated access token
 		// outranks prefs.ServerToken), or the server has nothing to revoke.
-		signOutBackendOAuth(serverURL.Get(), sessionToken(), p.ServerCSRF, func() {
+		signOutBackendSession(serverURL.Get(), sessionToken(), p.ServerCSRF, func() {
 			// Drop the rotated pair too, not just prefs — see clearAuthSession. The
 			// sync toggle deliberately stays ON: signing out is "this device needs a
 			// new code", not "turn cloud sync off".
