@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/pages"
+	"github.com/monstercameron/CashFlux/internal/rpcworker"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/styles"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -78,6 +79,7 @@ func liveSettingsTab() string {
 // interactive.
 func Run() {
 	utils.DisableAllDebug()
+	_, rpcWorkerStartErr := rpcworker.StartDefault()
 
 	// Install the app design system (the former index.html <style> blocks, now authored
 	// as type-safe Go in internal/styles) into <head> before anything renders, so it is
@@ -97,6 +99,9 @@ func Run() {
 	// the browser console.
 	if err := appstate.Init(nil, false); err != nil {
 		panic(err)
+	}
+	if rpcWorkerStartErr != nil && appstate.Default != nil {
+		appstate.Default.Log().Warn("services worker could not start", "error", rpcWorkerStartErr)
 	}
 	// Initialize the workspace registry (migrates an existing single dataset into a
 	// "Default" workspace). The active workspace's data already lives in the

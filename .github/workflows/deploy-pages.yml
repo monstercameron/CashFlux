@@ -43,6 +43,7 @@ jobs:
           # -s -w strips the DWARF debug info + symbol table (smaller binary, no
           # effect on behavior); -trimpath drops absolute build paths.
           go build -ldflags="-s -w" -trimpath -o web/bin/main.wasm .
+          go build -ldflags="-s -w" -trimpath -o web/bin/services.wasm ./cmd/cashflux-services
 
       - name: Compress WebAssembly (precompressed siblings for C314)
         run: |
@@ -50,8 +51,10 @@ jobs:
           sudo apt-get install -y brotli
           # gzip: keep original (-k), maximum compression (-9).
           gzip -9 -k web/bin/main.wasm
+          gzip -9 -k web/bin/services.wasm
           # brotli: keep original (-k), maximum quality (-q 9).
           brotli -k -q 9 web/bin/main.wasm
+          brotli -k -q 9 web/bin/services.wasm
 
       - name: Copy Go wasm runtime glue
         run: |

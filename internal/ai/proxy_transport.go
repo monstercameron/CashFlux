@@ -6,13 +6,13 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
+	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
+	"github.com/monstercameron/CashFlux/internal/rpcworker"
 )
 
 func SendProxyChat(endpoint, token, model string, messages []Message, temperature float64, onResult func(string, Usage), onError func(string)) func() {
@@ -68,33 +68,30 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 		cancelContext()
 	}
 	go func() {
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
+		client := rpcworker.Default()
+		if client == nil {
+			var err error
+			client, err = rpcworker.StartDefault()
+			if err != nil {
+				if !cancelled {
+					onError("Couldn't start the backend service worker.")
+				}
+				return
+			}
+		}
+		stream, err := client.OpenServerStream(ctx, endpoint, token, method, req)
 		if err != nil {
 			if !cancelled {
 				onError("Couldn't reach the backend server.")
 			}
 			return
 		}
-		defer conn.Close()
-		stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, method, backendrpc.JSONCallOptions()...)
-		if err == nil {
-			err = stream.SendMsg(req)
-		}
-		if err == nil {
-			err = stream.CloseSend()
-		}
-		if cancelled {
-			return
-		}
-		if err != nil {
-			reportProxyError(err, onError)
-			return
-		}
+		defer stream.Cancel()
 		var content strings.Builder
 		var usage backendrpc.Usage
 		for {
 			var chunk backendrpc.CompletionChunk
-			err := stream.RecvMsg(&chunk)
+			err := stream.Recv(&chunk)
 			if cancelled {
 				return
 			}
@@ -120,8 +117,9 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 }
 
 func reportProxyError(err error, onError func(string)) {
-	if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-		onError(st.Message())
+	var rpcErr *rpcprotocol.Error
+	if errors.As(err, &rpcErr) && strings.TrimSpace(rpcErr.Message) != "" {
+		onError(rpcErr.Message)
 		return
 	}
 	onError(err.Error())

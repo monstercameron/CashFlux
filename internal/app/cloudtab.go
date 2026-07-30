@@ -547,18 +547,21 @@ func CloudConnectionPane() uic.Node {
 			// form (nobody has a password on a server that disables self-signup), the
 			// ask-an-admin-to-approve flow (redundant when the admin can just mint a
 			// code), and the raw token field — collapses behind a single "More ways to
-			// sign in" link rather than three competing top-level ones. Hidden
-			// entirely once signed in: none of it is an action a connected device has.
-			If(!commercial && !signedIn, Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
-				If(!activationOnly && showPassword, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-				If(!activationOnly && showPassword, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
+			// sign in" link rather than three competing top-level ones. A closed
+			// disclosure disappears once signed in. An OPEN raw-token editor stays
+			// mounted while its OnInput persists the token, however; otherwise the
+			// first keystroke would classify the session as signed in and detach the
+			// field (and its Test/Sync controls) from under the user.
+			If(!commercial && (!signedIn || advancedTokenOpen.Get()), Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
+				If(!signedIn && !activationOnly && showPassword, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
+				If(!signedIn && !activationOnly && showPassword, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
 				If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
 					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken),
 					IfElseValue(activationOnly, uistate.T("sync.moreWaysToggle"), uistate.T("sync.advancedTokenToggle"))))),
 				If(advancedTokenOpen.Get(), Fragment(
-					If(activationOnly, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-					If(activationOnly, uic.CreateElement(PasswordAuthCard)),
-					If(activationOnly, uic.CreateElement(PendingDeviceCard)),
+					If(!signedIn && activationOnly, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
+					If(!signedIn && activationOnly, uic.CreateElement(PasswordAuthCard)),
+					If(!signedIn && activationOnly, uic.CreateElement(PendingDeviceCard)),
 					tokenField,
 				)),
 			)),

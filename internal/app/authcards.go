@@ -11,7 +11,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -158,28 +157,21 @@ func PasswordAuthCard() uic.Node {
 			if token == "" {
 				token = "refresh"
 			}
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: token})
-			if err != nil {
-				submitting.Set(false)
-				notify(uistate.T("authCards.connectFailed"), true)
-				return
-			}
-			defer conn.Close()
-
 			var out backendrpc.TokenPairResponse
+			var err error
 			if registering {
-				err = conn.Invoke(ctx, backendrpc.MethodAuthRegister, backendrpc.RegisterRequest{
+				err = invokeWorkerRPC(ctx, pr.ServerURL, token, backendrpc.MethodAuthRegister, backendrpc.RegisterRequest{
 					Username:    u,
 					Password:    pw,
 					DeviceLabel: customSyncDeviceLabel(),
-				}, &out, backendrpc.JSONCallOptions()...)
+				}, &out)
 			} else {
-				err = conn.Invoke(ctx, backendrpc.MethodAuthLogin, backendrpc.LoginRequest{
+				err = invokeWorkerRPC(ctx, pr.ServerURL, token, backendrpc.MethodAuthLogin, backendrpc.LoginRequest{
 					Username:       u,
 					Password:       pw,
 					DeviceLabel:    customSyncDeviceLabel(),
 					IdempotencyKey: key,
-				}, &out, backendrpc.JSONCallOptions()...)
+				}, &out)
 			}
 			submitting.Set(false)
 			if err != nil {
@@ -370,19 +362,12 @@ func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 			if token == "" {
 				token = "refresh"
 			}
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: token})
-			if err != nil {
-				submitting.Set(false)
-				notify(uistate.T("authCards.connectFailed"), true)
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.TokenPairResponse
-			err = conn.Invoke(ctx, backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
+			err := invokeWorkerRPC(ctx, pr.ServerURL, token, backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
 				PairingCode:    normalized,
 				DeviceLabel:    customSyncDeviceLabel(),
 				IdempotencyKey: key,
-			}, &out, backendrpc.JSONCallOptions()...)
+			}, &out)
 			submitting.Set(false)
 			if err != nil {
 				notify(customSyncErrorMessage(err, uistate.T("authCards.linkFailed")), true)
@@ -489,16 +474,9 @@ func SetPasswordCard() uic.Node {
 		go func() {
 			ctx := context.Background()
 			pr := prefsAtom.Get().Normalize()
-			conn, err := dialAuthed(ctx, pr)
-			if err != nil {
-				submitting.Set(false)
-				errMsg.Set(uistate.T("authCards.connectFailed"))
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.SetPasswordResponse
-			err = conn.Invoke(ctx, backendrpc.MethodAuthSetPassword,
-				backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out, backendrpc.JSONCallOptions()...)
+			err := invokeWorkerRPC(ctx, pr.ServerURL, effectiveServerToken(pr), backendrpc.MethodAuthSetPassword,
+				backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out)
 			submitting.Set(false)
 			if err != nil {
 				errMsg.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingSetPasswordFailed")))

@@ -11,7 +11,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -53,19 +52,12 @@ func TryActivationHandoff() {
 		// Same-origin by construction: the code came from the page's own URL, so the
 		// server that minted it is the one serving this app.
 		origin := currentPageOrigin()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: origin, Token: "refresh"})
-		if err != nil {
-			logSyncError("activation handoff dial failed", err)
-			return
-		}
-		defer conn.Close()
-
 		var out backendrpc.TokenPairResponse
-		if err := conn.Invoke(ctx, backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
+		if err := invokeWorkerRPC(ctx, origin, "refresh", backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
 			PairingCode:    code,
 			DeviceLabel:    customSyncDeviceLabel(),
 			IdempotencyKey: newIdempotencyKey(),
-		}, &out, backendrpc.JSONCallOptions()...); err != nil {
+		}, &out); err != nil {
 			logSyncError("activation handoff redeem failed", err)
 			return
 		}

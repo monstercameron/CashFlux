@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A dedicated GWC 5 services WASM now owns every browser gRPC call.** CashFlux boots one
+  versioned Dedicated Worker whose `services.wasm` owns GoGRPCBridge connections, unary calls,
+  AI/pairing/workspace streams, cancellation, JSON codec/status work, blob stream chunking, and
+  connection cleanup. `main.wasm` communicates through correlated protocol messages and no longer
+  links gRPC, GoGRPCBridge, or `internal/syncbridge` (enforced by a dependency-graph test).
+  Workspace datasets and blob bodies use transferable `ArrayBuffer`s instead of another JSON/base64
+  boundary, and AI events are coalesced to a 4 KiB/16 ms budget. E2E, GitHub Pages, local
+  development, compression, and offline precache now produce both WASM artifacts. A disposable
+  real CashFlux backend E2E verifies exactly one ready worker and a successful workspace round trip.
 - **GWC 5 RPC-worker migration design and adversarial checklist.** Documented the complete
   browser gRPC inventory, two-artifact ownership boundary, versioned worker protocol, cancellation,
   token-rotation, streaming, transferable-binary, failure, packaging, and performance requirements.
@@ -44,6 +53,10 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **The advanced sync-token editor no longer disappears while a token is being typed.** Persisting
+  the first input marked the prefs as signed in and unmounted the still-open field plus its Test and
+  Sync buttons. GWC 5's render timing made the latent race deterministic. An actively open editor
+  now stays mounted; closed sign-in controls still disappear for established sessions.
 - **`pendingSyncCount` recursed into itself until the stack blew.** The cache-miss path returned
   `pendingSyncCount()` instead of `len(loadSyncQueue())`, so the first count taken before anything
   had populated the cache raised `RangeError: Maximum call stack size exceeded` and killed the wasm

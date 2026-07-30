@@ -1,3 +1,49 @@
+## 2026-07-29 — GWC 5 services worker: all browser gRPC left the render WASM
+
+Cam's requirement was architectural, not a `go func()` cleanup: long gRPC calls were hitching
+rendering, and Go goroutines inside one js/wasm instance still share the browser event loop. I first
+inventoried every live browser RPC, wrote an initial migration checklist, and then attacked it for
+cancellation leaks, cache skew, rotating-token stampedes, binary base64 churn, stream event floods,
+worker callback deadlocks, ambiguous writes, and weak E2E evidence. That analysis is preserved in
+`docs/GWC5_RPC_WORKER_MIGRATION.md`.
+
+The result is two artifacts. `main.wasm` owns UI/local state and speaks a versioned protocol to one
+Dedicated Worker. `services.wasm` owns the GoGRPCBridge tunnel pool, gRPC codec/status work, unary
+calls, AI/pairing/workspace streams, cancellation, and blob stream chunking/assembly. Dataset and
+blob bytes cross as transferable ArrayBuffers. AI chunks are combined until 4 KiB, 16 ms, or a done
+marker, so moving the transport does not replace gRPC callbacks with a `postMessage` storm.
+`GOOS=js GOARCH=wasm go list -deps .` is now an executable gate: the render artifact may not contain
+gRPC, GoGRPCBridge, or `internal/syncbridge`, while the services target must contain its transport
+dependencies.
+
+One adversarial refinement changed during implementation. The original checklist put refresh
+singleflight in the worker. That is wrong for CashFlux's actual threat: refresh tokens rotate and
+multiple tabs must not replay one. Each tab owns a separate Dedicated Worker, so worker-local
+singleflight cannot coordinate siblings. The existing Web Locks/persistence coordinator remains in
+the app; the RefreshToken gRPC itself runs in `services.wasm`, and a successful rotation resets the
+worker pool so old-token sockets and streams cannot linger.
+
+I also tried GWC's global `AsyncIngress` scheduling opt-in. It changed unrelated render timing and
+made the existing sync-token flow fail: typing the first character persisted a token, `signedIn`
+became true, and the component unmounted the still-open token editor before Playwright could click
+Sync. The trace proved the detach. I removed the broad scheduling opt-in and fixed the real component
+race by keeping an actively open credential editor mounted.
+
+Measured validation:
+
+- latest published GWC v5 module: v5.0.1, which is what `go.mod` resolves;
+- release artifacts: `main.wasm` 79,564,642 bytes; `services.wasm` 20,025,953 bytes;
+- `go test ./...` and `go vet ./...`: clean;
+- both js/wasm builds and the dependency-boundary tests: clean;
+- maintained all-route smoke + sync regressions + real-backend worker E2E: 5/5 passed;
+- the real E2E opened exactly one `/services-worker.js`, reached the explicit ready state, completed
+  a GoGRPCBridge workspace sync, and closed the tunnel cleanly.
+
+C465 deliberately retains the deeper fault-injection/Long Task matrix (forced worker death,
+cancel-table drain, delayed/high-frequency streams, and multi-megabyte blob latency). Those are
+useful next measurements, but they are not being backfilled as claims this implementation did not
+measure.
+
 ## 2026-07-25 (later) - Deferring was half the fix; the other half is yielding to input
 
 Cam's next console had the tell: `'requestIdleCallback' handler took 1478ms`. That is MY callback.

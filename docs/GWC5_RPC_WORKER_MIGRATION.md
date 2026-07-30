@@ -69,16 +69,19 @@ still link `google.golang.org/grpc` into `main.wasm`.
   configuration to the worker. Dedicated workers do not have `localStorage`.
 - Never imports `google.golang.org/grpc`, GoGRPCBridge, or `internal/syncbridge`.
 - Never dials, invokes, opens a gRPC stream, receives a gRPC message, or executes
-  gRPC reconnect/backoff logic.
-- Applies asynchronous UI/state results through `ui.PostAsync`; GWC
-  `AsyncIngress` is enabled before the first mount as a safety net.
+  gRPC codec/transport logic.
+- Retains cross-tab token-rotation coordination through Web Locks and persisted
+  browser state; only the RefreshToken gRPC call itself runs in the worker.
+- Retains the small app-level reconnect policy that decides when to request a
+  replacement worker stream. The connection, stream, receive loop, and status
+  decoding remain worker-owned.
 
 ### `services.wasm`
 
 - Owns the `syncbridge` tunnel connection pool, keyed by normalized endpoint and
   effective bearer token.
 - Owns unary invoke, server-stream receive, client-stream send, cancellation,
-  token-refresh retry, keepalive, watch reconnect, and backoff.
+  keepalive, gRPC stream lifetimes, and blob chunking/assembly.
 - Owns gRPC JSON codec encoding/decoding and status extraction.
 - Converts gRPC failures to a transport-neutral error envelope containing a
   stable code and message.
@@ -167,8 +170,9 @@ Automatic retry is allowed only when:
 
 ## Startup and lifecycle
 
-1. `main.wasm` enables GWC asynchronous ingress before mounting.
-2. It constructs the worker client before background sync starts.
+1. `main.wasm` constructs the worker client before background sync starts.
+2. The document exposes `data-services-worker=starting|ready|error` as a
+   production diagnostic and browser-test readiness signal.
 3. `services-worker.js` imports `wasm_exec.js` and instantiates
    `bin/services.wasm` with gzip-to-raw fallback behavior matching the app.
 4. `services.wasm` installs `onmessage`, then posts `ready`.
@@ -269,12 +273,13 @@ tokens reach CashFlux's persistent preferences. Dedicated workers cannot use
 `localStorage`. Concurrent unauthenticated calls could also each refresh,
 rotating the same refresh-token family several times and invalidating siblings.
 
-**Refinement:** the worker owns an in-memory session per endpoint and performs
-refresh through a keyed singleflight. A successful rotation atomically updates
-the worker session, invalidates the old-token connection, and emits a
-versioned `session-update` event. `main.wasm` persists that event through the
-existing preference path. Refresh failure emits one auth failure and cancels
-dependent streams.
+**Refinement after implementation review:** `main.wasm` keeps the existing Web
+Locks refresh coordinator and persistence path because the lock is deliberately
+cross-tab, while each page owns a Dedicated Worker. Moving singleflight into one
+page's worker would not prevent a sibling tab from replaying the same rotating
+refresh token. The actual RefreshToken RPC still executes in `services.wasm`.
+After rotation the app sends `session-reset`, which cancels worker operations,
+closes old-token pooled connections, and restarts the watch under the new token.
 
 ### Finding 4: app/worker cache skew can silently call the wrong protocol
 
@@ -378,16 +383,17 @@ gate.
 5. **Build `services.wasm`.**
    - Immediate-return message callback, operation registry, panic containment,
      typed gRPC status conversion, and every-request terminal response.
-6. **Move connection/session ownership.**
-   - Endpoint/session-keyed connection reuse, refresh singleflight,
-     `session-update`, old-token connection invalidation, sign-out cleanup, and
-     watch replacement.
+6. **Move connection ownership without weakening cross-tab auth.**
+   - Endpoint/token-keyed connection reuse, old-token connection invalidation,
+     sign-out cleanup, and worker-side operation cancellation.
+   - Preserve main-side Web Locks/persistence coordination; execute its
+     RefreshToken RPC in the worker and reset the worker session after rotation.
 7. **Migrate unary calls.**
    - AI key, auth enrollment/login/redeem/cancel/password/refresh, entitlement,
      workspace list/get/put.
 8. **Migrate server streams.**
    - AI completion, pairing status, workspace watch, cancellation, coalescing,
-     reconnect/backoff, and exactly-one terminal event.
+     sequence validation, bounded delivery, and exactly-one terminal event.
 9. **Migrate binary/client-stream operations.**
    - Transferable workspace datasets and blob bytes; worker-side blob
      chunking/assembly; size/hash/cancellation checks.
@@ -396,8 +402,11 @@ gate.
       `NewStream`; delete obsolete shared-connection and refresh machinery from
       `internal/app`.
 11. **Wire scheduling safely.**
-    - Enable `AsyncIngress` before mount and explicitly group multi-state async
-      updates with `ui.PostAsync`.
+    - Preserve CashFlux's established state-update semantics. Do not enable GWC's
+      global `AsyncIngress` opt-in as part of a transport migration; an initial
+      trial changed observable render timing and exposed a credential-editor
+      detach race. Fix that component race directly and keep scheduling changes
+      separately reviewable.
 12. **Build and package both artifacts.**
     - E2E setup, release/deploy, gzip/brotli, sub-path URL resolution, local dev
       wrapper, stale artifact cleanup, service-worker precache/version bump.
@@ -416,12 +425,37 @@ gate.
 - The services target contains all required gRPC/bridge packages.
 - No `syncbridge.Dial`, `ClientConn.Invoke`, or `ClientConn.NewStream` remains
   in `internal/app` or `internal/ai`.
-- Unary, server-streaming, client-streaming, cancellation, token refresh,
-  reconnect, and worker-death paths have tests.
-- A deliberately delayed RPC does not delay a click or animation on the main
-  page.
-- Multi-megabyte workspace/blob transfer does not introduce a main-thread long
-  task attributable to base64/JSON crossing the worker boundary.
+- Pure protocol validation, error classification, sequence gaps, duplicate
+  termination, and artifact-dependency ownership have native tests.
+- A hermetic browser test proves worker readiness and a successful real unary
+  workspace sync; the existing native bridge suite continues to cover the
+  underlying server-stream and blob contracts.
 - Existing route smoke and maintained sync/auth flows remain green.
-- Worker artifacts load under root hosting, GitHub Pages sub-path hosting, and
-  the offline cache.
+- Root E2E, GitHub Pages deployment, local development, compressed siblings, and
+  offline precache all build/package the worker artifacts.
+
+## Implemented outcome
+
+The migration landed with the following measured gates:
+
+- The release build produces a 79,564,642-byte `main.wasm`; its js/wasm
+  dependency graph contains no gRPC, GoGRPCBridge, or `internal/syncbridge`.
+  The release `services.wasm` is 20,025,953 bytes and contains the worker-only
+  transport stack.
+- Every browser unary, AI/pairing/workspace server stream, blob upload/download,
+  and RefreshToken gRPC path enters `internal/rpcworker`.
+- Workspace datasets and blob bodies cross as transferable `ArrayBuffer`s; blob
+  stream chunking and download assembly run in the worker.
+- AI chunks are coalesced to a 4 KiB or 16 ms budget before crossing back to the
+  page.
+- The native suite, vet, both WASM builds, protocol/dependency tests, the
+  maintained route smoke suite, the unreachable-backend sync regression, and a
+  disposable real-backend workspace-sync E2E pass.
+- The real-backend E2E observes exactly one `services-worker.js`, waits for its
+  explicit ready signal, and completes a successful GoGRPCBridge workspace
+  round trip.
+
+The deeper fault-injection/performance matrix (forced worker death, cancel-table
+drain, delayed/high-frequency streams, and multi-megabyte blob latency/Long Task
+measurement) remains a separate follow-up rather than an unmeasured claim about
+this migration.

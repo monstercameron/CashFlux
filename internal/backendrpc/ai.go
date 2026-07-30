@@ -9,9 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/encoding"
 )
 
 const (
@@ -164,11 +161,3 @@ func (JSONCodec) Unmarshal(data []byte, v any) error {
 	return nil
 }
 func (JSONCodec) Name() string { return "json" }
-
-func init() {
-	encoding.RegisterCodec(JSONCodec{})
-}
-
-func JSONCallOptions() []grpc.CallOption {
-	return []grpc.CallOption{grpc.ForceCodec(JSONCodec{})}
-}

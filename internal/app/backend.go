@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,17 +22,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/store"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 )
-
-// blobStreamChunkBytes is the size of each UploadBlob/DownloadBlob stream
-// message on the client side — must match the server's expectations only in
-// spirit (either side may chunk differently; the protocol reassembles by
-// concatenation), kept the same as the server's constant for symmetry.
-const blobStreamChunkBytes = 64 << 10
 
 const defaultBackendURL = "http://127.0.0.1:8081"
 
@@ -176,14 +166,9 @@ func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onErro
 	}
 	go func() {
 		ctx := context.Background()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
-		if err != nil {
-			onError("Couldn't reach the backend server.")
-			return
-		}
-		defer conn.Close()
 		var out backendrpc.SetKeyResponse
-		err = conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{Provider: "openai", Key: key}, &out, backendrpc.JSONCallOptions()...)
+		err := invokeWorkerRPC(ctx, endpoint, token, backendrpc.MethodAISetKey,
+			backendrpc.SetKeyRequest{Provider: "openai", Key: key}, &out)
 		if err == nil && out.Stored {
 			onDone()
 			return
@@ -192,11 +177,7 @@ func uploadOpenAIKeyToBackend(endpoint, token, key string, onDone func(), onErro
 			onError("Backend rejected the key upload.")
 			return
 		}
-		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-			onError(st.Message())
-			return
-		}
-		onError(err.Error())
+		onError(customSyncErrorMessage(err, "key upload failed"))
 	}()
 }
 
@@ -212,23 +193,14 @@ func removeOpenAIKeyFromBackend(endpoint, token string, onDone func(), onError f
 	}
 	go func() {
 		ctx := context.Background()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
-		if err != nil {
-			onError("Couldn't reach the backend server.")
-			return
-		}
-		defer conn.Close()
 		var out backendrpc.SetKeyResponse
-		err = conn.Invoke(ctx, backendrpc.MethodAISetKey, backendrpc.SetKeyRequest{Provider: "openai", Key: ""}, &out, backendrpc.JSONCallOptions()...)
+		err := invokeWorkerRPC(ctx, endpoint, token, backendrpc.MethodAISetKey,
+			backendrpc.SetKeyRequest{Provider: "openai", Key: ""}, &out)
 		if err == nil {
 			onDone()
 			return
 		}
-		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-			onError(st.Message())
-			return
-		}
-		onError(err.Error())
+		onError(customSyncErrorMessage(err, "key removal failed"))
 	}()
 }
 
@@ -489,31 +461,9 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 // refreshed token — since a half-sent client stream cannot be resumed
 // in place; retrying from the top is the correct (and only) recovery.
 func uploadBlobStream(ctx context.Context, pr prefs.Prefs, workspaceID, hash string, payload []byte, mime string, allowRetry bool) (int64, error) {
-	conn, err := dialAuthed(ctx, pr)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ClientStreams: true}, backendrpc.MethodBlobUploadBlob, backendrpc.JSONCallOptions()...)
-	if err == nil {
-		err = stream.SendMsg(&backendrpc.UploadBlobChunk{
-			Header: buildUploadBlobHeader(workspaceID, hash, int64(len(payload)), mime),
-		})
-	}
-	for i := 0; err == nil && i < len(payload); i += blobStreamChunkBytes {
-		end := i + blobStreamChunkBytes
-		if end > len(payload) {
-			end = len(payload)
-		}
-		err = stream.SendMsg(&backendrpc.UploadBlobChunk{Data: payload[i:end]})
-	}
-	if err == nil {
-		err = stream.CloseSend()
-	}
 	var resp backendrpc.UploadBlobResponse
-	if err == nil {
-		err = stream.RecvMsg(&resp)
-	}
+	err := uploadWorkerBlob(ctx, pr.ServerURL, effectiveServerToken(pr), backendrpc.MethodBlobUploadBlob,
+		buildUploadBlobHeader(workspaceID, hash, int64(len(payload)), mime), &resp, payload)
 	if err != nil {
 		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
 			return uploadBlobStream(ctx, uistate.LoadPrefs().Normalize(), workspaceID, hash, payload, mime, false)
@@ -557,30 +507,8 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 // its chunks. Retry semantics mirror uploadBlobStream: an Unauthenticated
 // failure gets one refresh-then-retry-the-whole-stream attempt.
 func downloadBlobStream(ctx context.Context, pr prefs.Prefs, workspaceID, hash string, allowRetry bool) ([]byte, error) {
-	conn, err := dialAuthed(ctx, pr)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodBlobDownloadBlob, backendrpc.JSONCallOptions()...)
-	if err == nil {
-		err = stream.SendMsg(buildDownloadBlobRequest(workspaceID, strings.TrimSpace(hash)))
-	}
-	if err == nil {
-		err = stream.CloseSend()
-	}
-	var out []byte
-	for err == nil {
-		var chunk backendrpc.DownloadBlobChunk
-		if recvErr := stream.RecvMsg(&chunk); recvErr != nil {
-			if recvErr == io.EOF {
-				break
-			}
-			err = recvErr
-			break
-		}
-		out = append(out, chunk.Data...)
-	}
+	out, err := downloadWorkerBlob(ctx, pr.ServerURL, effectiveServerToken(pr), backendrpc.MethodBlobDownloadBlob,
+		buildDownloadBlobRequest(workspaceID, strings.TrimSpace(hash)))
 	if err != nil {
 		if allowRetry && isAuthError(err) && refreshAccessToken(ctx, pr) {
 			return downloadBlobStream(ctx, uistate.LoadPrefs().Normalize(), workspaceID, hash, false)

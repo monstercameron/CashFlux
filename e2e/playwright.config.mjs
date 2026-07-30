@@ -13,6 +13,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = process.env.E2E_PORT || "8099";
+const RPC_PORT = process.env.E2E_RPC_PORT || "8198";
 // EXTERNAL mode: the app is already built and served elsewhere (e.g. a host
 // serve.go reached from inside the Playwright Docker container via
 // host.docker.internal). In that mode we skip globalSetup's wasm build and the
@@ -59,7 +60,7 @@ export default defineConfig({
   ],
   webServer: EXTERNAL
     ? undefined
-    : {
+    : [{
         command: `node e2e/serve.mjs web ${PORT}`,
         cwd: "..",
         url: BASE,
@@ -67,5 +68,13 @@ export default defineConfig({
         timeout: 120_000,
         stdout: "ignore",
         stderr: "pipe",
-      },
+      }, {
+        command: `node e2e/backend.mjs ${RPC_PORT} ${PORT}`,
+        cwd: "..",
+        url: `http://127.0.0.1:${RPC_PORT}/v1/version`,
+        reuseExistingServer: false,
+        timeout: 120_000,
+        stdout: "ignore",
+        stderr: "pipe",
+      }],
 });

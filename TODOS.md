@@ -6326,16 +6326,23 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   request total via one `ListUserUsage` call per listed user (N+1, deliberately not a SQL join — this
   package's target scale is one host's own small, admin-invited user set, not a multi-tenant SaaS
   list). 5 new tests. Verified via full native `go build`/`go vet`/`go test ./...`.
-- [~] **C464 [MAJOR][PERF][SYNC] Move every browser gRPC call into GWC 5's secondary
-  services WASM.** The render artifact must contain no gRPC/GoGRPCBridge/syncbridge dependency;
-  `services.wasm` owns connections, token-refresh singleflight, unary calls, AI/pairing/workspace
-  streams, blob client/server streams, cancellation, reconnect, and status decoding. The boundary
-  is a versioned Dedicated Web Worker protocol with readiness/fatal handling, correlated string
-  operation IDs, explicit context cancellation, exactly-one stream termination, bounded/coalesced
-  events, session-rotation events, and transferable `ArrayBuffer`s for datasets/blobs. Build,
-  deploy, development, service-worker caching, and E2E setup produce both WASM artifacts.
-  Acceptance is dependency-graph enforced and browser-measured: successful hermetic RPC/stream/blob
-  flows, worker-death/cancel/token-rotation coverage, plus delayed, high-frequency, and multi-MB
-  render-responsiveness probes with an on-main-thread control. Deep analysis, the rejected initial
-  checklist, adversarial findings, and the refined implementation order live in
+- [x] **C464 [MAJOR][PERF][SYNC] Move every browser gRPC call into GWC 5's secondary
+  services WASM — DONE (2026-07-29).** `main.wasm` now contains no
+  gRPC/GoGRPCBridge/syncbridge dependency (enforced by a js/wasm `go list -deps` test);
+  `services.wasm` owns the endpoint/token-keyed tunnel pool, unary calls,
+  AI/pairing/workspace streams, blob client/server streams, cancellation, codec work, and status
+  decoding. A versioned Dedicated Worker protocol supplies ready/fatal handling, correlated string
+  IDs, explicit cancellation, sequenced/bounded streams, 4 KiB/16 ms AI coalescing, and transferable
+  dataset/blob `ArrayBuffer`s. The existing cross-tab Web Locks coordinator correctly remains in
+  `main.wasm`, while its RefreshToken RPC executes in the worker and session reset closes old-token
+  connections. E2E/deploy/dev/offline paths build and package both artifacts. Measured release
+  artifacts: `main.wasm` 79,564,642 bytes; `services.wasm` 20,025,953 bytes; full native tests/vet,
+  both WASM builds, 40-route smoke, unreachable-sync regression, and a disposable real-backend
+  GoGRPCBridge workspace round trip all pass. Deep analysis and the adversarial refinements live in
   `docs/GWC5_RPC_WORKER_MIGRATION.md`.
+- [ ] **C465 [MAJOR][PERF][SYNC] Extend worker fault-injection and responsiveness coverage.**
+  Add deterministic worker-death and cancel-table-drain cases, delayed unary and high-frequency
+  stream controls, and multi-megabyte workspace/blob transfer probes that record Long Tasks and
+  input latency against an on-main-thread failing control. This is the soak/performance proof beyond
+  C464's successful real-backend sanity E2E; do not claim those measurements until the harness
+  exists.

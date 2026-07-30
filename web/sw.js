@@ -2,12 +2,13 @@
 // (live-reload friendly) yet loads offline from the last successful fetch.
 // Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
 // straight through. Bump CACHE on release to evict stale assets.
-const CACHE = "cashflux-v338";
+const CACHE = "cashflux-v339";
 const CORE = [
   // Precache the gzip binary (the loader's primary path) — ~4× smaller than the raw
   // .wasm, so the offline install cache shrinks with it. DecompressionStream is
   // available offline, so a cached .gz boots without the network.
-  "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm.gz", "./manifest.webmanifest",
+  "./", "./index.html", "./wasm_exec.js", "./bin/main.wasm.gz",
+  "./services-worker.js", "./bin/services.wasm.gz", "./manifest.webmanifest",
   "./favicon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "./chart.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
   "./marked.min.js", "./purify.min.js", "./d3.min.js",

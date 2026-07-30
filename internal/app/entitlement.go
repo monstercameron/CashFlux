@@ -6,11 +6,11 @@ package app
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
-	"google.golang.org/grpc/status"
+	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 )
 
 // checkCloudEntitlement calls AccountService.GetEntitlement (TODOS.md C431) —
@@ -32,20 +32,15 @@ func checkCloudEntitlement(endpoint, token string, onResult func(backendrpc.GetE
 	}
 	go func() {
 		ctx := context.Background()
-		conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: endpoint, Token: token})
-		if err != nil {
-			onError("Couldn't reach the backend server.")
-			return
-		}
-		defer conn.Close()
 		var out backendrpc.GetEntitlementResponse
-		err = conn.Invoke(ctx, backendrpc.MethodAccountGetEntitlement, backendrpc.GetEntitlementRequest{}, &out, backendrpc.JSONCallOptions()...)
+		err := invokeWorkerRPC(ctx, endpoint, token, backendrpc.MethodAccountGetEntitlement, backendrpc.GetEntitlementRequest{}, &out)
 		if err == nil {
 			onResult(out)
 			return
 		}
-		if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-			onError(st.Message())
+		var rpcErr *rpcprotocol.Error
+		if errors.As(err, &rpcErr) && strings.TrimSpace(rpcErr.Message) != "" {
+			onError(rpcErr.Message)
 			return
 		}
 		onError(err.Error())

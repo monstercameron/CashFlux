@@ -9,14 +9,12 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/syncbridge"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
-	"google.golang.org/grpc"
 )
 
 // pendingPhase tracks pendingDeviceWatcher's state machine.
@@ -85,18 +83,10 @@ func pendingDeviceWatcher() uic.Node {
 			// same placeholder trick PasswordAuthCard/DeviceLinkCard use
 			// satisfies syncbridge's client-side "a token is required"
 			// guard without being checked server-side.
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: "refresh"})
-			if err != nil {
-				phase.Set(string(pendingPhaseError))
-				errMsg.Set(uistate.T("authCards.connectFailed"))
-				return
-			}
-			defer conn.Close()
-
 			var reqOut backendrpc.RequestDevicePairingResponse
-			reqErr := conn.Invoke(ctx, backendrpc.MethodAuthRequestDevicePairing,
+			reqErr := invokeWorkerRPC(ctx, pr.ServerURL, "refresh", backendrpc.MethodAuthRequestDevicePairing,
 				backendrpc.RequestDevicePairingRequest{DeviceLabel: customSyncDeviceLabel()},
-				&reqOut, backendrpc.JSONCallOptions()...)
+				&reqOut)
 			if reqErr != nil {
 				phase.Set(string(pendingPhaseError))
 				errMsg.Set(customSyncErrorMessage(reqErr, uistate.T("authCards.pendingRequestFailed")))
@@ -105,20 +95,15 @@ func pendingDeviceWatcher() uic.Node {
 			deviceID.Set(reqOut.DeviceID)
 			phase.Set(string(pendingPhaseWaiting))
 
-			stream, err := conn.NewStream(ctx, &grpc.StreamDesc{ServerStreams: true}, backendrpc.MethodAuthWatchPairingStatus, backendrpc.JSONCallOptions()...)
-			if err == nil {
-				err = stream.SendMsg(&backendrpc.WatchPairingStatusRequest{DeviceID: reqOut.DeviceID})
-			}
-			if err == nil {
-				err = stream.CloseSend()
-			}
+			stream, err := openWorkerRPCStream(ctx, pr.ServerURL, "refresh", backendrpc.MethodAuthWatchPairingStatus,
+				backendrpc.WatchPairingStatusRequest{DeviceID: reqOut.DeviceID})
 			if err != nil {
 				phase.Set(string(pendingPhaseError))
 				errMsg.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingWatchFailed")))
 				return
 			}
 			var ev backendrpc.PairingStatusEvent
-			if err := stream.RecvMsg(&ev); err != nil {
+			if err := stream.Recv(&ev); err != nil {
 				if ctx.Err() != nil {
 					// The component unmounted (cancel ran) — not a real
 					// failure worth surfacing, just the watch ending because
@@ -153,13 +138,9 @@ func pendingDeviceWatcher() uic.Node {
 		}
 		go func() {
 			ctx := context.Background()
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: prefsAtom.Get().Normalize().ServerURL, Token: "refresh"})
-			if err != nil {
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.CancelDevicePairingResponse
-			_ = conn.Invoke(ctx, backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out, backendrpc.JSONCallOptions()...)
+			_ = invokeWorkerRPC(ctx, prefsAtom.Get().Normalize().ServerURL, "refresh",
+				backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out)
 		}()
 	})
 
@@ -169,19 +150,12 @@ func pendingDeviceWatcher() uic.Node {
 		phase.Set(string(pendingPhaseSettingPass)) // optimistic; reverted to approved on failure below
 		go func() {
 			ctx := context.Background()
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: pr.ServerURL, Token: "refresh"})
-			if err != nil {
-				phase.Set(string(pendingPhaseApproved))
-				notify(uistate.T("authCards.connectFailed"), true)
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.TokenPairResponse
-			err = conn.Invoke(ctx, backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
+			err := invokeWorkerRPC(ctx, pr.ServerURL, "refresh", backendrpc.MethodAuthRedeemPairingCode, backendrpc.RedeemPairingCodeRequest{
 				PairingCode:    code,
 				DeviceLabel:    customSyncDeviceLabel(),
 				IdempotencyKey: newIdempotencyKey(),
-			}, &out, backendrpc.JSONCallOptions()...)
+			}, &out)
 			if err != nil {
 				phase.Set(string(pendingPhaseApproved))
 				notify(customSyncErrorMessage(err, uistate.T("authCards.pendingRedeemFailed")), true)
@@ -197,13 +171,9 @@ func pendingDeviceWatcher() uic.Node {
 		phase.Set(string(pendingPhaseRejected))
 		go func() {
 			ctx := context.Background()
-			conn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: prefsAtom.Get().Normalize().ServerURL, Token: "refresh"})
-			if err != nil {
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.CancelDevicePairingResponse
-			_ = conn.Invoke(ctx, backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out, backendrpc.JSONCallOptions()...)
+			_ = invokeWorkerRPC(ctx, prefsAtom.Get().Normalize().ServerURL, "refresh",
+				backendrpc.MethodAuthCancelDevicePairing, backendrpc.CancelDevicePairingRequest{DeviceID: id}, &out)
 		}()
 	})
 
@@ -228,15 +198,9 @@ func pendingDeviceWatcher() uic.Node {
 		go func() {
 			ctx := context.Background()
 			pr := prefsAtom.Get().Normalize()
-			conn, err := dialAuthed(ctx, pr)
-			if err != nil {
-				setPwSubmitting.Set(false)
-				setPwErr.Set(uistate.T("authCards.connectFailed"))
-				return
-			}
-			defer conn.Close()
 			var out backendrpc.SetPasswordResponse
-			err = conn.Invoke(ctx, backendrpc.MethodAuthSetPassword, backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out, backendrpc.JSONCallOptions()...)
+			err := invokeWorkerRPC(ctx, pr.ServerURL, effectiveServerToken(pr), backendrpc.MethodAuthSetPassword,
+				backendrpc.SetPasswordRequest{Username: u, Password: pw}, &out)
 			setPwSubmitting.Set(false)
 			if err != nil {
 				setPwErr.Set(customSyncErrorMessage(err, uistate.T("authCards.pendingSetPasswordFailed")))

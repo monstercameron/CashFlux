@@ -7,11 +7,12 @@ package app
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"syscall/js"
 
-	"google.golang.org/grpc/status"
+	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 )
 
 // customSyncDeviceLabel returns a short, human-readable label for this
@@ -53,8 +54,9 @@ func newIdempotencyKey() string {
 // back to fallback when err carries none — mirroring the status.FromError
 // pattern already used in backend.go's uploadOpenAIKeyToBackend.
 func customSyncErrorMessage(err error, fallback string) string {
-	if st, ok := status.FromError(err); ok && strings.TrimSpace(st.Message()) != "" {
-		return st.Message()
+	var rpcErr *rpcprotocol.Error
+	if errors.As(err, &rpcErr) && strings.TrimSpace(rpcErr.Message) != "" {
+		return rpcErr.Message
 	}
 	if err != nil {
 		return fmt.Sprintf("%s: %v", fallback, err)
