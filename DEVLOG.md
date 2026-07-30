@@ -29690,3 +29690,20 @@ or distinguish the plaintext client value from the digest the server stores.
 hosted and offline clients. It names the HTTPS URL, plaintext token, Test connection step,
 `/v1/version` probe, `wss://<domain>/grpc` endpoint, and `CASHFLUX_SERVER_TOKEN_SHA256` storage
 boundary while explicitly keeping the static token out of the same-origin account-login client.
+
+## 2026-07-30 — C483: make security boundaries visible to code and tooling
+
+After `govulncheck` cleared, current `gosec` reached eight findings that the former CI run had never
+reported: three deterministic `math/rand` uses in the load generator, four taint paths from the
+PayPal base URL to HTTP requests, and one content-addressed blob write path.
+
+The load harness now owns a small SplitMix64 stream seeded through SHA-256, preserving reproducible
+plans and payloads without using a random API associated with credentials. PayPal URL construction
+now permits only its production/sandbox HTTPS hosts and three known API paths; loopback HTTP is
+available only with development mode, and server startup validates an explicitly configured base.
+The four `G704` annotations document that allowlist at the scanner sinks, backed by rejection tests.
+
+Blob reads and writes now use `os.Root`, so the operating system confines the hash-derived relative
+path below the configured blob directory even across symlinks and concurrent filesystem changes.
+Focused server/load-generator tests, vet, and the exact high-severity focused `gosec` invocation
+pass.

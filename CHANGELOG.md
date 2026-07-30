@@ -111,6 +111,10 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Outbound billing and blob storage now enforce their trust boundaries structurally.** PayPal
+  requests accept only the two official API origins (or loopback in development) and known API
+  paths; blob reads and writes use Go's confined filesystem root; deterministic load simulation no
+  longer relies on the security-sensitive `math/rand` API.
 - **Self-host setup now closes the client connection handoff.** The guide explicitly shows offline
   clients where to set the HTTPS server URL, paste the one-time plaintext server token, test the
   connection, and distinguish that token from the SHA-256 value stored by the server.

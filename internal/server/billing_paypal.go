@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -42,6 +43,32 @@ func paypalAPIBase(cfg Config) string {
 	return "https://api-m.sandbox.paypal.com"
 }
 
+func paypalAPIURL(cfg Config, path string) (string, error) {
+	switch path {
+	case "/v1/oauth2/token",
+		"/v1/billing/subscriptions",
+		"/v1/notifications/verify-webhook-signature":
+	default:
+		return "", fmt.Errorf("paypal api path is not allowed")
+	}
+
+	base, err := url.ParseRequestURI(paypalAPIBase(cfg))
+	if err != nil || base.Host == "" || base.User != nil || base.RawQuery != "" || base.Fragment != "" ||
+		(base.Path != "" && base.Path != "/") {
+		return "", fmt.Errorf("paypal api base url is invalid")
+	}
+	host := strings.ToLower(base.Hostname())
+	approvedPayPal := base.Scheme == "https" && base.Port() == "" &&
+		(host == "api-m.paypal.com" || host == "api-m.sandbox.paypal.com")
+	approvedDevelopment := cfg.DevMode && base.Scheme == "http" &&
+		(host == "127.0.0.1" || host == "::1" || host == "localhost")
+	if !approvedPayPal && !approvedDevelopment {
+		return "", fmt.Errorf("paypal api base url is not an approved endpoint")
+	}
+	base.Path = path
+	return base.String(), nil
+}
+
 // paypalManageURL maps the API base to the payer-facing subscription management
 // page (auto-payments), so Portal can hand the user somewhere to cancel/manage.
 func paypalManageURL(cfg Config) string {
@@ -70,7 +97,12 @@ func paypalPlanForInterval(cfg Config, interval string) (planID, plan string, er
 
 // paypalAccessToken fetches an OAuth2 client-credentials access token.
 func paypalAccessToken(ctx context.Context, cfg Config) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, paypalAPIBase(cfg)+"/v1/oauth2/token",
+	endpoint, err := paypalAPIURL(cfg, "/v1/oauth2/token")
+	if err != nil {
+		return "", err
+	}
+	// #nosec G704 -- paypalAPIURL restricts the destination to PayPal or loopback dev mode.
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
 		strings.NewReader("grant_type=client_credentials"))
 	if err != nil {
 		return "", err
@@ -79,6 +111,7 @@ func paypalAccessToken(ctx context.Context, cfg Config) (string, error) {
 	req.Header.Set("Authorization", "Basic "+basic)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
+	// #nosec G704 -- req.URL was produced by the strict paypalAPIURL allowlist.
 	resp, err := paypalHTTPClient.Do(req)
 	if err != nil {
 		return "", err
@@ -111,13 +144,19 @@ func paypalDoWithConfig(ctx context.Context, cfg Config, token, method, path str
 		}
 		reader = bytes.NewReader(raw)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, paypalAPIBase(cfg)+path, reader)
+	endpoint, err := paypalAPIURL(cfg, path)
+	if err != nil {
+		return 0, err
+	}
+	// #nosec G704 -- paypalAPIURL restricts both the destination and API path.
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// #nosec G704 -- req.URL was produced by the strict paypalAPIURL allowlist.
 	resp, err := paypalHTTPClient.Do(req)
 	if err != nil {
 		return 0, err

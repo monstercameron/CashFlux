@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -130,7 +129,7 @@ func originOf(serverURL string) string {
 
 // runClient plays one virtual client's schedule to completion or cancellation.
 func (d *Driver) runClient(ctx context.Context, log *slog.Logger, httpc *http.Client, rec *Recorder, plan *Plan, idx int, start time.Time) {
-	rng := rand.New(rand.NewSource(plan.Seed ^ int64(idx)*104729))
+	rng := newDeterministicRNG(plan.Seed ^ int64(idx)*104729)
 	deviceID := fmt.Sprintf("loadgen-%03d", idx)
 	wsID := plan.WorkspaceIDs[idx]
 
@@ -369,7 +368,7 @@ func blobPayload(size int, nonce int64) []byte {
 		size = 1
 	}
 	data := make([]byte, size)
-	rng := rand.New(rand.NewSource(nonce))
+	rng := newDeterministicRNG(nonce)
 	rng.Read(data)
 	return data
 }

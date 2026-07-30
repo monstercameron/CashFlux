@@ -944,18 +944,26 @@ func (s *Store) PutBlobContext(ctx context.Context, root string, data []byte, mi
 		CreatedAt: time.Now().UTC(),
 	}
 	defer s.observeDB("PutBlob", time.Now())
-	path, err := blobPath(root, hash)
+	relativePath, err := blobRelativePath(hash)
 	if err != nil {
 		return Blob{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
+	}
+	confinedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return Blob{}, fmt.Errorf("server store: blob root: %w", err)
+	}
+	defer confinedRoot.Close()
+	if err := confinedRoot.MkdirAll(filepath.Dir(relativePath), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
 	}
 	if err := ctx.Err(); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
 	}
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := os.WriteFile(path, data, 0o600); err != nil {
+	if _, err := confinedRoot.Stat(relativePath); errors.Is(err, os.ErrNotExist) {
+		if err := confinedRoot.WriteFile(relativePath, data, 0o600); err != nil {
 			return Blob{}, fmt.Errorf("server store: blob write: %w", err)
 		}
 	} else if err != nil {
@@ -981,7 +989,7 @@ func (s *Store) ReadBlob(root, hash string) ([]byte, error) {
 
 // ReadBlobContext reads content-addressed blob bytes from disk and observes cancellation around disk I/O.
 func (s *Store) ReadBlobContext(ctx context.Context, root, hash string) ([]byte, error) {
-	path, err := blobPath(root, hash)
+	relativePath, err := blobRelativePath(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -996,7 +1004,12 @@ func (s *Store) ReadBlobContext(ctx context.Context, root, hash string) ([]byte,
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("server store: blob read canceled: %w", err)
 	}
-	data, err := os.ReadFile(path)
+	confinedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, fmt.Errorf("server store: blob root: %w", err)
+	}
+	defer confinedRoot.Close()
+	data, err := confinedRoot.ReadFile(relativePath)
 	if err != nil {
 		return nil, fmt.Errorf("server store: blob read: %w", err)
 	}
@@ -2239,10 +2252,11 @@ WHERE day = ?`, dayKey).Scan(&stats.TodayRequests, &stats.TodayTokens); err != n
 }
 
 func blobPath(root, hash string) (string, error) {
-	if !validBlobHash(hash) {
-		return "", fmt.Errorf("server store: invalid blob hash")
+	relativePath, err := blobRelativePath(hash)
+	if err != nil {
+		return "", err
 	}
-	path := filepath.Join(root, hash[:2], hash[2:4], hash)
+	path := filepath.Join(root, relativePath)
 	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
 	if err != nil {
 		return "", fmt.Errorf("server store: blob path: %w", err)
@@ -2251,4 +2265,11 @@ func blobPath(root, hash string) (string, error) {
 		return "", fmt.Errorf("server store: blob path escapes root")
 	}
 	return path, nil
+}
+
+func blobRelativePath(hash string) (string, error) {
+	if !validBlobHash(hash) {
+		return "", fmt.Errorf("server store: invalid blob hash")
+	}
+	return filepath.Join(hash[:2], hash[2:4], hash), nil
 }

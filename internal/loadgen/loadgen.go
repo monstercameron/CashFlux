@@ -12,7 +12,6 @@ package loadgen
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"sort"
 	"time"
 )
@@ -178,7 +177,7 @@ func BuildPlan(s Scenario, clients int, duration time.Duration, seed int64, p Pr
 	for c := 0; c < clients; c++ {
 		// One independent, seeded stream per client keeps schedules stable
 		// even if the client count changes between runs.
-		rng := rand.New(rand.NewSource(seed + int64(c)*7919))
+		rng := newDeterministicRNG(seed + int64(c)*7919)
 		events := poissonEvents(rng, duration, opRates(p))
 		switch s {
 		case ScenarioStorm:
@@ -223,7 +222,7 @@ func opRates(p Profile) map[OpKind]float64 {
 
 // poissonEvents draws each op's arrivals as an independent Poisson process
 // (exponential inter-arrival times) over the run duration.
-func poissonEvents(rng *rand.Rand, duration time.Duration, rates map[OpKind]float64) []Event {
+func poissonEvents(rng *deterministicRNG, duration time.Duration, rates map[OpKind]float64) []Event {
 	var events []Event
 	// Iterate ops in a fixed order so the rng draw sequence is deterministic.
 	for _, op := range []OpKind{OpPush, OpPull, OpList, OpBlobPut, OpBlobGet, OpReconnect} {

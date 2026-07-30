@@ -6507,3 +6507,8 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   A dedicated connection section now walks separately hosted/offline clients through the HTTPS
   URL, plaintext token, connection test, version probe, WebSocket endpoint, and the distinction
   between the client token and the SHA-256 digest stored by the server.
+- [x] **C483 [SECURITY][CI] The current scanner exposes eight unmodeled trust boundaries.**
+  PayPal destinations and paths are now explicitly allowlisted, production config rejects an
+  unapproved billing origin, blob I/O is confined with `os.Root`, and the reproducible load
+  generator uses an isolated deterministic stream instead of `math/rand`. Focused `gosec`, server,
+  and load-generator checks are clean.

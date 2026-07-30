@@ -247,6 +247,11 @@ func (c Config) Validate() error {
 	if c.MasterKey != "" && !validAESKeyLength(len(c.MasterKey)) {
 		return fmt.Errorf("server: master key must be 16, 24, or 32 bytes")
 	}
+	if strings.TrimSpace(c.PayPalAPIBaseURL) != "" {
+		if _, err := paypalAPIURL(c, "/v1/oauth2/token"); err != nil {
+			return fmt.Errorf("server: %w", err)
+		}
+	}
 	if c.AIRequestMaxBytes < 0 || c.AIRequestsPerDay < 0 || c.AITokensPerDay < 0 ||
 		c.AIAlertRequestsPerDay < 0 || c.AIAlertTokensPerDay < 0 || c.AIUpstreamRetries < 0 {
 		return fmt.Errorf("server: ai limits must be non-negative")

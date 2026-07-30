@@ -42,11 +42,30 @@ func paypalTestConfig(base string) Config {
 		PayPalClientID:     "cid",
 		PayPalClientSecret: "csecret",
 		PayPalAPIBaseURL:   base,
+		DevMode:            true,
 		PayPalWebhookID:    "WH-1",
 		PayPalPlanAnnual:   "P-ANNUAL",
 		PayPalPlanMonthly:  "P-MONTHLY",
 		PayPalReturnURL:    "https://app/success",
 		PayPalCancelURL:    "https://app/cancel",
+	}
+}
+
+func TestPayPalAPIURLRejectsUnapprovedDestinations(t *testing.T) {
+	for _, base := range []string{
+		"http://169.254.169.254",
+		"https://paypal.example.com",
+		"https://api-m.paypal.com@evil.example",
+		"https://api-m.paypal.com/redirect",
+	} {
+		cfg := paypalTestConfig(base)
+		cfg.DevMode = false
+		if _, err := paypalAPIURL(cfg, "/v1/oauth2/token"); err == nil {
+			t.Errorf("paypalAPIURL accepted unapproved base %q", base)
+		}
+	}
+	if _, err := paypalAPIURL(paypalTestConfig("http://127.0.0.1:8080"), "/arbitrary"); err == nil {
+		t.Fatal("paypalAPIURL accepted an unapproved API path")
 	}
 }
 
