@@ -29430,3 +29430,17 @@ one-time code. Only **I've saved it** persists the session and starts sync. The 
 lifecycle proves a replacement code remains visible after reset, differs from the consumed code,
 and can be acknowledged before the authenticated pane replaces the form. The js/wasm app build and
 focused app tests pass.
+
+## 2026-07-30 — Stale discovery callbacks cannot erase auth
+
+Repeated sign-out/login transitions exposed a second independent way to lose the password form.
+Selecting the disposable remote server began a valid capability probe, but a slower probe against
+the old default address could finish afterward. Its failure overwrote the successful discovery
+state, causing the parent pane to remove password authentication while the user was entering
+recovery credentials.
+
+Each manual and same-origin discovery now captures a monotonically increasing generation. Address
+or segment changes invalidate every older callback, and only the latest success/failure may update
+the pane. The real-browser lifecycle repeatedly signs out, rediscovers the backend, resets the
+password, and continues through suspension, reinstatement, and deletion without the form
+disappearing. `go test ./internal/app` and the js/wasm build pass.

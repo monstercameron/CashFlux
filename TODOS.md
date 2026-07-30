@@ -6410,3 +6410,9 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   request scheme/host as a console origin in addition to the configured app origin, advertise
   PATCH in preflight, and continue rejecting every unrelated origin. A focused CORS test covers
   successful same-origin mutation and hostile cross-origin denial.
+- [x] **C472 [MAJOR][AUTH][CLIENT] Ignore stale backend-discovery results.** Signing out and
+  reselecting a real remote backend could start a successful probe while an older default-address
+  probe was still pending; the late failure then replaced the valid discovery result and removed
+  the password/recovery form. Give every probe a generation, invalidate it on address/segment
+  changes, and allow only the newest callback to update the pane. The live recovery lifecycle now
+  survives sign-out and rediscovery without losing the form.

@@ -71,6 +71,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Backend discovery no longer loses the password form to a stale probe.** Capability checks are
+  generation-scoped, so a late failure from an old/default address cannot overwrite a newer
+  successful remote-server result after sign-out or server selection.
 - **Operator-console account mutations now pass the server's CORS gate.** The full server accepts
   the console's exact same-origin POST/PATCH requests in addition to the separately configured
   CashFlux app origin, advertises PATCH during preflight, and still denies unrelated origins.

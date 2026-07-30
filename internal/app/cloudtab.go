@@ -125,6 +125,11 @@ func CloudConnectionPane() uic.Node {
 	discovery := uic.UseState(backendauth.Discovery{})
 	discoveryState := uic.UseState(discoveryIdle)
 	discoveryMsg := uic.UseState("")
+	// Every address/segment change can start an asynchronous capability probe.
+	// Only the newest probe may update the UI; otherwise a slow failure from the
+	// old/default address can erase a successful password form for the current
+	// server after sign-out.
+	discoveryGeneration := uic.UseRef(0)
 	advancedTokenOpen := uic.UseState(false)
 	billingInterval := uic.UseState("annual")
 	billingProvider := uic.UseState("stripe")
@@ -160,6 +165,8 @@ func CloudConnectionPane() uic.Node {
 	// every keystroke — see onURL below) so it never spams the network while
 	// someone is still typing. Never called for the Commercial segment.
 	runDiscovery := func() {
+		generation := discoveryGeneration.Get() + 1
+		discoveryGeneration.Set(generation)
 		url := strings.TrimSpace(serverURL.Get())
 		if url == "" {
 			discoveryState.Set(discoveryIdle)
@@ -167,9 +174,15 @@ func CloudConnectionPane() uic.Node {
 		}
 		discoveryState.Set(discoveryChecking)
 		testBackendConnection(url, serverToken.Get(), func(d backendauth.Discovery) {
+			if discoveryGeneration.Get() != generation {
+				return
+			}
 			discovery.Set(d)
 			discoveryState.Set(discoveryOK)
 		}, func(msg string) {
+			if discoveryGeneration.Get() != generation {
+				return
+			}
 			discoveryMsg.Set(strings.TrimSpace(msg))
 			discoveryState.Set(discoveryError)
 		})
@@ -182,9 +195,14 @@ func CloudConnectionPane() uic.Node {
 	// Local segment only; failure just falls through to the manual address
 	// field — the normal, non-embedded desktop-app case.
 	probeSameOrigin := func() {
+		generation := discoveryGeneration.Get() + 1
+		discoveryGeneration.Set(generation)
 		origin := currentPageOrigin()
 		discoveryState.Set(discoveryChecking)
 		testBackendConnection(origin, "", func(d backendauth.Discovery) {
+			if discoveryGeneration.Get() != generation {
+				return
+			}
 			serverURL.Set(origin)
 			p := prefsAtom.Get()
 			p.ServerURL = origin
@@ -192,6 +210,9 @@ func CloudConnectionPane() uic.Node {
 			discovery.Set(d)
 			discoveryState.Set(discoveryOK)
 		}, func(string) {
+			if discoveryGeneration.Get() != generation {
+				return
+			}
 			manualAddressOpen.Set(true)
 			discoveryState.Set(discoveryIdle)
 		})
@@ -220,6 +241,7 @@ func CloudConnectionPane() uic.Node {
 	// discovery result from the PREVIOUS segment's server rather than
 	// reinterpreting it under the new one.
 	onSelectSegment := func(v string) {
+		discoveryGeneration.Set(discoveryGeneration.Get() + 1)
 		segment.Set(v)
 		p := prefsAtom.Get()
 		switch v {
