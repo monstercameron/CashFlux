@@ -111,6 +111,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **CI and production transport dependencies are patched.** The minimum Go toolchain is now
+  `1.26.5` for the `crypto/tls` ECH privacy fix, and gRPC is now `1.82.1` for the xDS RBAC and
+  HTTP/2 transport fixes. `govulncheck ./...` reports no reachable vulnerabilities.
 - **Data backups no longer collide with binary rollbacks.** Native release rollback points now
   live in `/var/backups/cashflux-releases`, outside the `/var/backups/cashflux` data mirror, so the
   backup unit's exact `rsync --delete` can verify and mirror application backups without trying to

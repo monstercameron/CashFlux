@@ -29668,3 +29668,14 @@ Nginx configuration validates, the certificate is valid through 2026-10-28, and 
 journal has no warnings since the final deploy. GitHub webhook `659024087` now sends successful
 CashFlux `CI` workflow runs on `main` to the existing deployhook; its two prior targets are
 unchanged.
+
+## 2026-07-30 — C481: clear the production merge vulnerability gate
+
+The first post-merge `CI` run stopped at `govulncheck` before tests. Its exact reachable findings
+were `GO-2026-6061` in gRPC `1.81.1` (xDS RBAC and HTTP/2 transport) and `GO-2026-5856` in the Go
+`1.26.4` TLS stack. The application server does exercise the reported gRPC transport symbols, so
+this was not a suppressible transitive-only advisory.
+
+The module now requires Go `1.26.5` and gRPC `1.82.1`, the first fixed releases reported by the Go
+vulnerability database. The local toolchain auto-selected `1.26.5`; `go mod tidy` changed only the
+expected gRPC checksums, and a fresh `govulncheck ./...` reports zero reachable vulnerabilities.

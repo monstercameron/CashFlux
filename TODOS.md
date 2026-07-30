@@ -6499,3 +6499,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   first manual timer run created a valid database backup but `rsync --delete` failed rather than
   deleting root-owned `releases/` inside the destination. Rollback releases now use the sibling
   `/var/backups/cashflux-releases`; `/var/backups/cashflux` contains only the exact data mirror.
+- [x] **C481 [SECURITY][CI] Current vulnerability scan blocks the production merge.**
+  `GO-2026-6061` reached vulnerable gRPC `1.81.1` HTTP/2/xDS paths and `GO-2026-5856` reached the
+  Go `1.26.4` TLS stack. The module now requires gRPC `1.82.1` and Go `1.26.5`;
+  `govulncheck ./...` reports zero reachable vulnerabilities.

@@ -1,6 +1,6 @@
 module github.com/monstercameron/CashFlux
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/monstercameron/GoGRPCBridge v0.0.19
@@ -11,7 +11,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.44.0
 	golang.org/x/crypto v0.54.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
-	google.golang.org/grpc v1.81.1
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 )
 
