@@ -29444,3 +29444,23 @@ or segment changes invalidate every older callback, and only the latest success/
 the pane. The real-browser lifecycle repeatedly signs out, rediscovers the backend, resets the
 password, and continues through suspension, reinstatement, and deletion without the form
 disappearing. `go test ./internal/app` and the js/wasm build pass.
+
+## 2026-07-30 — Standalone auth lifecycle is hermetic and green
+
+Added a dedicated Playwright regression for the entire self-hosted password-account contract.
+Global setup now builds `main.wasm`, `services.wasm`, and `admin.wasm` plus matching runtime shims,
+so a clean checkout does not accidentally rely on an operator-console artifact left by local
+development. Playwright owns both the static client and a full disposable `cashflux-server`
+database for the run.
+
+The browser signs into the operator console with the configured static token; creates a viewer;
+captures the one-time recovery code; renames/promotes the user; signs into CashFlux; and requires
+first sync to settle without `workspace not found`. A second isolated browser logs in before the
+reset so recovery can prove that independent refresh family returns 401 afterward. The test also
+requires the old password and consumed code to fail, the new password to work, suspension to block
+login, reinstatement to restore it, deletion to empty the admin list, and post-delete login to fail.
+JavaScript/page errors fail the run; deliberate negative-auth HTTP responses are asserted through
+their user-visible error surfaces.
+
+Validation: external disposable-server pass 1/1 in 20.6s; final no-retry hermetic Chromium pass 1/1
+in 36.1s (31.0s test body), including fresh builds of all WASM artifacts.

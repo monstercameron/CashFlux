@@ -6397,13 +6397,18 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   When a later `GetWorkspace` proves the active account is empty, the client clears device-local
   sync metadata left by any previous account before forcing the seed push; that guarantees the
   create-before-blobs path runs and the queue can settle.
-- [ ] **C470 [MAJOR][AUTH][E2E] Lock the complete standalone basic-auth lifecycle with a real browser
+- [x] **C470 [MAJOR][AUTH][E2E] Lock the complete standalone basic-auth lifecycle with a real browser
   and real CashFlux server.** The hermetic pass must start a disposable full server, sign into the
   operator console with the static operator token, create and edit a user, register/login through
   CashFlux, save and use a recovery code, verify the old password/code/sessions fail after reset,
   verify the new password succeeds and sync reaches `Synced`, then suspend/reinstate and delete the
   account from the console. Assert no browser errors, no lost recovery card, no `workspace not found`,
   and no surviving account after deletion.
+  Implemented as `standalone-auth.spec.mjs`: global setup builds all three WASM artifacts, the
+  Playwright web servers own a disposable backend/database, and the test covers operator login and
+  account CRUD, clean first sync, a second-device session revoked by recovery, rotated password/code
+  rejection, suspend/reinstate, final deletion, and JavaScript/page-error absence. The no-retry
+  hermetic Chromium pass completes successfully from a clean generated-artifact state.
 - [x] **C471 [MAJOR][AUTH][ADMIN] Allow same-origin operator-console mutations.** The console's
   overview GET worked, but browser POST/PATCH requests carried the console's own `Origin` and were
   rejected whenever `CASHFLUX_APP_ORIGIN` pointed at the separate CashFlux app. Accept the exact

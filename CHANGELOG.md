@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The complete standalone password-auth lifecycle now has a hermetic browser regression.** A
+  disposable full server and freshly built client/services/operator WASM artifacts prove static
+  operator login, account create/edit, clean first sync, recovery-code password rotation,
+  second-device session revocation, old password/code rejection, suspend/reinstate, deletion, and
+  no surviving login or account. Runtime/page errors and the former `workspace not found` symptom
+  are explicit failures.
 - **Password accounts can now recover without email or an administrator.** The password sign-in
   card includes a Forgot password flow backed by a new rate-limited `ResetPassword` RPC. A saved
   one-time code atomically replaces the password and recovery hash, revokes older device sessions,
