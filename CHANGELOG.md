@@ -120,6 +120,13 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **The OpenAI key no longer disappears on hosted instances every time sync pulls.** Cloud pushes
+  redact the key on purpose — it must never leave the device — so the server's copy of the dataset
+  always carries an empty one. Pulling that copy replaced the whole dataset, settings included, and
+  silently erased the key the user had just entered. The assistant and the Smart+ statement import
+  then read an empty key and failed with messages about the network, while the same build kept
+  working perfectly on localhost, where nothing syncs. Remote imports now preserve the on-device
+  key; a key carried by an incoming dataset (a user's own full backup) still wins.
 - **Hosted production boot is now account-first instead of sample-first.** A browser with no
   authoritative local dataset keeps the financial shell unmounted while it asynchronously checks
   the signed-in account's server workspace; development and portable builds retain their helpful

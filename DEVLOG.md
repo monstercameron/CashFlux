@@ -1,3 +1,41 @@
+## 2026-07-30 — the hosted OpenAI key was being deleted by its own privacy rule
+
+Cam reported the assistant refusing to work on `budget.earlcameron.com` with a key set, then that
+Smart+ statement import was dead too, then — the detail that cracked it — that both worked on
+localhost. Two features failing together in one environment and neither failing in the other is an
+environment fact, not a feature bug.
+
+I chased two wrong answers first and both deserve recording, because both looked convincing. The
+first was CORS: probing api.openai.com from a browser origin showed authenticated POSTs to
+`/chat/completions` coming back without `Access-Control-Allow-Origin` while `GET /v1/models`
+succeeded, which explains the exact symptom — the model picker fills from the key, every chat dies.
+It was an artefact of testing with an invalid key: the responses I measured were all 401s, and the
+error path omits the header. A real key returns it. The second was `Cross-Origin-Embedder-Policy:
+require-corp`, which the hosted origin does send; running the identical fetch battery from
+`budget.earlcameron.com` and from a neutral origin showed no difference at all. Measuring both
+instead of asserting either is what kept those from becoming the fix.
+
+The real cause is a privacy rule eating its own feature. Every push to the backend goes through
+`ExportJSONRedacted`, which blanks `Settings.OpenAIKey` so the secret never leaves the device. The
+server's dataset therefore always has an empty key. Both pull paths in `sync_client.go` then called
+`app.ImportJSON`, which replaces all data — settings included — so the first sync after entering a
+key wiped it. `insights.go` and `documents.go` read that now-empty field and reported network
+trouble. Locally there is no sync, so the same binary worked, which is precisely why this survived.
+
+`importRemoteDataset` now wraps both pull sites: snapshot the on-device key, import, restore it if
+the incoming copy has none. A key present in the incoming dataset still wins, so a user's own
+manual export — which deliberately keeps the key — restores as written.
+
+Two adjacent defects found and deliberately not fixed here, one feature per commit: `documents.go`
+gates its AI actions on `key == "" && !useBackendAI` but has no backend branch at all, so with a
+server connected and no key it sails past its own "add your key" prompt and 401s; and the Settings
+model-list check hardcodes `api.openai.com` while the assistant honours the `OpenAIBaseURL`
+override, so the one control that says "your key works" tests an endpoint the assistant may not use.
+
+Note for whoever reads the history: the code fix itself landed inside `62b5016c` ("hydrate hosted
+accounts before mounting data") rather than its own commit — a concurrent lane committed a dirty
+tree that included these edits. This entry and the changelog line are the record it did not get.
+
 ## 2026-07-29 — GWC 5 services worker: all browser gRPC left the render WASM
 
 Cam's requirement was architectural, not a `go func()` cleanup: long gRPC calls were hitching
