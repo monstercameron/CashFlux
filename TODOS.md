@@ -6383,7 +6383,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   keys replay the same session/code without persisting the plaintext recovery secret. Focused tests
   cover rotation, old password/session rejection, used/replacement codes, enumeration-safe errors,
   short passwords, and idempotent replay.
-- [ ] **C469 [MAJOR][AUTH][SYNC] Preserve recovery credentials and seed a fresh account cleanly.**
+- [x] **C469 [MAJOR][AUTH][SYNC] Preserve recovery credentials and seed a fresh account cleanly.**
   Live registration succeeds, but `persistAuthSession` starts sync before the one-time recovery card
   can remain on screen; the ensuing reload loses the only plaintext recovery code. The same fresh
   account immediately reports `workspace not found` with one queued mutation because the client
@@ -6391,6 +6391,10 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   pull code already documents. Defer sync startup until the user confirms the recovery code is
   saved, and normalize missing-workspace pull behavior so first sync creates/uploads the local
   workspace without an error flash or stranded queue.
+  Registration and recovery now persist the session without starting the initial pull/flush until
+  the user acknowledges the one-time code. When a later `GetWorkspace` proves the active account
+  is empty, the client clears device-local sync metadata left by any previous account before
+  forcing the seed push; that guarantees the create-before-blobs path runs and the queue can settle.
 - [ ] **C470 [MAJOR][AUTH][E2E] Lock the complete standalone basic-auth lifecycle with a real browser
   and real CashFlux server.** The hermetic pass must start a disposable full server, sign into the
   operator console with the static operator token, create and edit a user, register/login through

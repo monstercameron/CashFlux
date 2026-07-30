@@ -71,6 +71,11 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Fresh password accounts now seed sync cleanly without losing their recovery code.** Registration
+  and password reset wait for the one-time code acknowledgement before starting sync. A missing
+  remote workspace now clears stale device-side server metadata before the forced upload, ensuring
+  the workspace row is created before artifact blobs and preventing the former `workspace not
+  found` error with a stranded mutation.
 - **The documented self-host operator token now opens the operator console.** Admin overview,
   user-list, detail, mutation, and dev-seed guards now share the existing constant-time operator
   policy already used by metrics/audit: a configured static server bearer is operator authority,

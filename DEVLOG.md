@@ -29375,6 +29375,19 @@ The console now has a dedicated **Create user** screen that holds the recovery c
 operator confirms it was saved, plus username/role editing on the existing user-detail screen.
 Focused server tests verify credential hashes, role persistence, collision rollback, and
 self-demotion. `go test ./internal/server ./pkg/embed` and the js/wasm console build pass.
+## 2026-07-30 — Fresh-account sync is an explicit seed, not a failed retry
+
+A browser can retain sync metadata for its active workspace while changing server identities.
+Signing that browser into a brand-new password account therefore did not look "first-ever" to the
+queue: the old `UpdatedAt` skipped the workspace-create preflight, artifact upload reached a row the
+new account did not own because it did not exist, and the UI reported `workspace not found`.
+
+`GetWorkspace(Found:false)` is authoritative proof that this account has no remote row. That branch
+now clears the stale hash, update timestamp, and version before forcing the local dataset upload, so
+the existing create-before-blobs invariant runs and the seed completes. Registration and recovery
+also defer initial sync until the user acknowledges the one-time recovery code, preventing a sync
+remount from destroying the only plaintext copy before it can be saved.
+
 ## 2026-07-30 — Password recovery completes the standalone auth loop
 
 Registration already generated and bcrypt-hashed a recovery code, but it was a dead-end credential:

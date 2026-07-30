@@ -611,6 +611,27 @@ func forceBackendResyncActiveWorkspace() {
 	}
 }
 
+// forceBackendSeedActiveWorkspace is the empty-account variant of
+// forceBackendResyncActiveWorkspace. Sync metadata lives on the device and a
+// user can sign into a brand-new server account while that workspace still
+// carries an UpdatedAt from a previous account. Once GetWorkspace has proved
+// this account has no row, clear that stale server identity as well as the
+// content hash so flushBackendSyncQueue performs its create-before-blobs seed
+// path instead of sending artifact blobs to a workspace that does not exist.
+func forceBackendSeedActiveWorkspace() {
+	r := loadRegistry()
+	w, ok := r.Active()
+	if !ok {
+		return
+	}
+	meta := loadSyncMeta(w.ID)
+	meta.Hash = ""
+	meta.UpdatedAt = ""
+	meta.Version = 0
+	saveSyncMeta(w.ID, meta)
+	forceBackendResyncActiveWorkspace()
+}
+
 func flushBackendSyncQueue() {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
@@ -1033,7 +1054,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// then only READS its data sits on "Synced" indefinitely while the server
 			// stays empty, which reads as sync being broken. Safe by construction —
 			// there is nothing on the server to lose an LWW race against.
-			forceBackendResyncActiveWorkspace()
+			forceBackendSeedActiveWorkspace()
 			return
 		}
 		// Same reason as the push path: hydrating decrypts, downloads blobs and
