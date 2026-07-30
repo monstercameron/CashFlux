@@ -7,9 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
-- **The complete Windows browser matrix can finish before CI cancels it.** The E2E job ceiling now
-  reflects the expanded hosted-auth, sync, accessibility, and route suite while retaining every
-  strict per-test timeout and assertion.
+- **The complete Windows browser matrix can finish reliably in CI.** Clean hosted runners now boot
+  one large Go/WASM app at a time instead of starving two concurrent instances, and the E2E job
+  ceiling reflects the expanded hosted-auth, sync, accessibility, and route suite. Every strict
+  per-test timeout and assertion remains intact; local development retains two workers.
 - **Fresh CashFlux servers can now create their first owner from the console.** An empty
   installation opens a one-time owner-registration screen gated by the configured break-glass
   key, creates a normal recoverable owner account, displays its recovery code exactly once, and

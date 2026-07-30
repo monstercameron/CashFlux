@@ -6527,6 +6527,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
 - [x] **C486 [BLOCKER][CI][OPS] The deploy-gating browser job is cancelled before its matrix can
   finish.** Two consecutive `main` runs passed the complete Linux build/security lane but hit the
   E2E job's 30-minute ceiling while Playwright was still processing retries, so the success-only
-  production webhook could never fire. Raise only the job orchestration ceiling to 60 minutes;
-  retain the suite's strict per-test, assertion, and web-server timeouts so hangs and regressions
-  still fail at their owning boundary.
+  production webhook could never fire. Logs showed two concurrent ~80 MB Go/WASM boots starving
+  each other and failing the shared readiness fixture before assertions. Serialize workers only on
+  CI and raise the job orchestration ceiling to 60 minutes; retain the suite's strict per-test,
+  assertion, and web-server timeouts so hangs and regressions still fail at their owning boundary.

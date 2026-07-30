@@ -31,10 +31,11 @@ export default defineConfig({
   // can flake transiently under worker contention; a test that fails twice is a
   // real failure, not noise.
   retries: process.env.CI ? 2 : 1,
-  // Cap workers: each test boots a full wasm app (CPU-heavy), so too many in
-  // parallel starve each other and skew render-timing-sensitive checks. Two keeps
-  // the suite fast without contention.
-  workers: 2,
+  // A clean GitHub Windows runner cannot reliably boot two ~80 MB Go/WASM app
+  // instances at once: both starve and fail the shared 45-second readiness gate
+  // before their test assertions run. Serialize CI for deterministic boots;
+  // local machines retain two workers for faster feedback.
+  workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]
     : [["list"], ["html", { open: "never" }]],
