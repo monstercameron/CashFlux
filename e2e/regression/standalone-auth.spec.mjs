@@ -164,7 +164,9 @@ test.describe("standalone basic-auth lifecycle", () => {
 
       // A fresh backend has exactly this one user. Open it, then prove both
       // editable identity fields persist before the user signs into CashFlux.
-      await admin.locator("tr.user-row").first().click();
+      await expect(admin.getByRole("columnheader", { name: "Account" })).toBeVisible();
+      await expect(admin.getByLabel(`Manage ${USERNAME}`)).toBeVisible();
+      await admin.getByLabel(`Manage ${USERNAME}`).click();
       await admin.locator("#username-input").fill(RENAMED_USERNAME);
       await admin.locator("#role-input").selectOption("member");
       await admin.getByRole("button", { name: "Save account" }).click();
@@ -177,7 +179,13 @@ test.describe("standalone basic-auth lifecycle", () => {
       // the destructive lifecycle checks below.
       await admin.locator("#role-input").selectOption("owner");
       await admin.getByRole("button", { name: "Save account" }).click();
-      await expect(admin.locator(".detail-card")).toContainText("owner");
+      await expect.poll(async () => {
+        const response = await request.get(`${BACKEND}/v1/admin/users?q=${encodeURIComponent(RENAMED_USERNAME)}`, {
+          headers: { Authorization: "Bearer e2e-worker-token" },
+        });
+        const body = await response.json();
+        return body.users?.[0]?.role || "";
+      }).toBe("owner");
       await admin.getByRole("button", { name: "Back to console" }).click();
       await admin.getByRole("button", { name: "Sign out and return to home" }).click();
       await expect(admin.getByTestId("admin-credential-signin")).toBeVisible();
@@ -190,7 +198,7 @@ test.describe("standalone basic-auth lifecycle", () => {
       await admin.getByTestId("admin-break-glass-token").fill("e2e-worker-token");
       await admin.getByTestId("admin-break-glass-signin").click();
       await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
-      await admin.locator("tr.user-row").first().click();
+      await admin.getByLabel(`Manage ${RENAMED_USERNAME}`).click();
       await expect(admin.getByRole("button", { name: "Suspend account" })).toBeVisible();
 
       // Remove the protected demo first so the new account has a real local

@@ -29595,3 +29595,22 @@ directory, verifies every required asset and a dry-run migration, then swaps and
 restart or same-origin asset check restores the prior release. Ten prior release directories remain
 available for manual rollback. The production README records first install, TLS, deploy-hook, and
 verification steps; registration remains closed in the host template.
+
+## 2026-07-30 — C478: local account identities in the operator console
+
+The first real production console pass found two valid local accounts and two completely blank
+identity cells. The server list model already selected and serialized `username`; the admin WASM's
+mirror omitted it and rendered only `email`, which is deliberately empty for password accounts.
+The same stale assumption survived in the column heading, search placeholder, accessible row name,
+and repository filter.
+
+The browser model now mirrors username/role, each row chooses username then email then id, the
+column is named Account, and search describes and queries username or email. The SQL keeps escaped
+literal LIKE behavior while applying the same pattern to both identity columns. Native coverage
+creates a no-email owner and proves case-insensitive username lookup returns its safe row, while
+the standalone Chromium lifecycle names and opens the local row instead of relying on its position.
+
+Validation: focused repository/admin tests pass, the operator WASM builds, and the combined
+standalone + hosted Chromium lifecycle passes 2/2 without retries in 1.3 minutes. The lifecycle now
+polls the admin API for the persisted owner role before attempting credential login; its former
+immediate DOM assertion could match the selected option before the asynchronous PATCH completed.

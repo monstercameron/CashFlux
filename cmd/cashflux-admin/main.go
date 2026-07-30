@@ -49,6 +49,8 @@ type adminUserRow struct {
 	ID                 string `json:"id"`
 	Provider           string `json:"provider"`
 	Email              string `json:"email"`
+	Username           string `json:"username,omitempty"`
+	Role               string `json:"role"`
 	CreatedAt          string `json:"createdAt"`
 	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
 	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
@@ -838,15 +840,15 @@ func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.
 			statCard("Today's tokens", fmt.Sprintf("%d", ov.TodayTokens)),
 		),
 		ui.CreateElement(pendingApprovals, pendingApprovalsProps{token: c.token}),
-		// Users toolbar: email search + page controls, then the clickable table
+		// Users toolbar: identity search + page controls, then the clickable table
 		// (usersTable lives in manage.go; rows are their own components so each can
 		// own an OnClick hook).
 		Div(css.Class("users-toolbar"),
 			Input(
 				Type("search"),
 				css.Class("users-search"),
-				Attr("placeholder", "Search by email…"),
-				Attr("aria-label", "Search users by email"),
+				Attr("placeholder", "Search by username or email…"),
+				Attr("aria-label", "Search users by username or email"),
 				Value(c.search),
 				OnInput(c.onSearchInput),
 				OnChange(c.onSearchInput),

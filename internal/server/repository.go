@@ -2037,9 +2037,10 @@ func (s *Store) ListUsers(limit, offset int) ([]AdminUserRow, error) {
 	return s.ListUsersFiltered(limit, offset, "")
 }
 
-// ListUsersFiltered is ListUsers with an optional case-insensitive email substring
-// filter. An empty search returns every user (the ListUsers behavior). The search
-// term's LIKE wildcards are escaped so an operator typing % or _ matches literally.
+// ListUsersFiltered is ListUsers with an optional case-insensitive username or
+// email substring filter. An empty search returns every user (the ListUsers
+// behavior). The search term's LIKE wildcards are escaped so an operator typing
+// % or _ matches literally.
 func (s *Store) ListUsersFiltered(limit, offset int, search string) ([]AdminUserRow, error) {
 	if limit <= 0 {
 		limit = 50
@@ -2076,9 +2077,9 @@ SELECT u.id, u.provider, u.email, u.created_at,
        COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, '')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
-WHERE u.email LIKE ? ESCAPE '\'
+WHERE u.email LIKE ? ESCAPE '\' OR u.username LIKE ? ESCAPE '\'
 ORDER BY u.created_at DESC, u.id
-LIMIT ? OFFSET ?`, pattern, limit, offset)
+LIMIT ? OFFSET ?`, pattern, pattern, limit, offset)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("server store: list users: %w", err)

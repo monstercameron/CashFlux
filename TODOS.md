@@ -6481,3 +6481,8 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   approval, recovery, first sync, logout/session revocation, health, backup, and service isolation.
   Native systemd/Nginx assets, maintenance timers, a watchdog, and an atomic rollback-capable
   updater now live under `deploy/production`; live DNS/TLS installation and production E2E remain.
+- [x] **C478 [MAJOR][ADMIN] Local username accounts render as blank rows in the operator console.**
+  Production review found the list response already carried `username`, but the WASM mirror and
+  row rendered only `email`; searching was also email-only. The console now displays username with
+  email/id fallback, labels rows by that identity, and searches either username or email. Native
+  repository coverage and the standalone browser lifecycle protect the local-account path.

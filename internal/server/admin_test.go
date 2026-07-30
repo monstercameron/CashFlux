@@ -217,9 +217,13 @@ func TestListUsers(t *testing.T) {
 	}
 }
 
-func TestListUsersFilteredByEmail(t *testing.T) {
+func TestListUsersFilteredByIdentity(t *testing.T) {
 	store := openTestStore(t)
 	seedAdminFixture(t, store) // alice/bob/carol/dave @example.com
+	local, err := store.CreateLocalUserWithRole("cashflux-owner", "password-hash", "recovery-hash", RoleOwner, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("CreateLocalUserWithRole: %v", err)
+	}
 
 	// Case-insensitive substring match on email.
 	rows, err := store.ListUsersFiltered(50, 0, "ALICE")
@@ -236,6 +240,15 @@ func TestListUsersFilteredByEmail(t *testing.T) {
 	}
 	if len(rows) != 4 {
 		t.Fatalf("search example.com len = %d, want 4", len(rows))
+	}
+	// Local username accounts have no email, so identity search must include the
+	// username column and return enough data for the console to label the row.
+	rows, err = store.ListUsersFiltered(50, 0, "FLUX-OWNER")
+	if err != nil {
+		t.Fatalf("ListUsersFiltered local username: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != local.ID || rows[0].Username != "cashflux-owner" || rows[0].Email != "" {
+		t.Fatalf("search local username = %+v, want cashflux-owner", rows)
 	}
 	// LIKE wildcards in the term are treated literally (no user contains a literal
 	// '%', so this must return nothing rather than matching everyone).

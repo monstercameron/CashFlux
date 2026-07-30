@@ -107,6 +107,10 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Local accounts are identifiable in the operator console.** User rows now render the local
+  username when email is empty, expose that identity in the row's accessible name, and can be
+  searched by username as well as email. The table/search copy now describes accounts rather than
+  implying every identity is an email address.
 - **Backend discovery no longer loses the password form to a stale probe.** Capability checks are
   generation-scoped, so a late failure from an old/default address cannot overwrite a newer
   successful remote-server result after sign-out or server selection.

@@ -423,6 +423,13 @@ type userRowProps struct {
 func userRow(p userRowProps) ui.Node {
 	ui.UseEffect(func() func() { ensureManageCSS(); return nil }, "cf-admin-css")
 	open := ui.UseEvent(func() { p.onOpen(p.user.ID) })
+	identity := strings.TrimSpace(p.user.Username)
+	if identity == "" {
+		identity = strings.TrimSpace(p.user.Email)
+	}
+	if identity == "" {
+		identity = p.user.ID
+	}
 	created := p.user.CreatedAt
 	if len(created) >= 10 {
 		created = created[:10]
@@ -439,9 +446,9 @@ func userRow(p userRowProps) ui.Node {
 		css.Class("user-row"),
 		Attr("role", "button"),
 		Attr("tabindex", "0"),
-		Attr("aria-label", "Manage "+p.user.Email),
+		Attr("aria-label", "Manage "+identity),
 		OnClick(open),
-		Td(Text(p.user.Email)),
+		Td(Text(identity)),
 		Td(Text(p.user.Provider)),
 		Td(Text(plan)),
 		Td(Text(status)),
@@ -459,7 +466,7 @@ func usersTable(users []adminUserRow, onOpen func(string)) ui.Node {
 			css.Class("users-table"),
 			Thead(
 				Tr(
-					Th(Text("Email")),
+					Th(Text("Account")),
 					Th(Text("Provider")),
 					Th(Text("Plan")),
 					Th(Text("Status")),
