@@ -18,7 +18,7 @@ Protected gRPC services:
 - `cashflux.v1.SyncService`
 - `cashflux.v1.AIService`
 
-The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/admin handlers reject missing or invalid bearer tokens before reading or returning data. The cross-tenant operator surfaces — `/metrics` and the global `/v1/audit` log — additionally require *operator* authority (the static server token, whose holder is the operator in self-host token mode, or an `CASHFLUX_SERVER_ADMIN_USER_IDS` admin); a regular authenticated Cloud user is denied metrics and gets only their own actor-scoped audit events.
+The gRPC bridge applies auth interceptors to unary and streaming calls. Token mode validates the configured bearer token or SHA-256 digest; OAuth mode validates signed short-lived access tokens. HTTP blob/admin handlers reject missing or invalid authentication before reading or returning data. Admin API routes accept an owner-only console cookie session or the static break-glass bearer; the explicit `CASHFLUX_SERVER_ADMIN_USER_IDS` list remains a compatibility authority. The cross-tenant operator surfaces — `/metrics` and the global `/v1/audit` log — additionally require operator authority. A regular authenticated user is denied metrics and gets only their own actor-scoped audit events.
 
 ## Authentication & Token Model (backend ↔ frontend)
 
@@ -34,7 +34,7 @@ Two auth modes share one binary:
 
 **Key separation.** Session JWTs are signed with a dedicated `CASHFLUX_SERVER_SESSION_KEY` (HMAC-SHA256), distinct from the `CASHFLUX_SERVER_MASTER_KEY` used for AES-GCM at-rest encryption of AI keys — so an encryption-key rotation does not invalidate sessions, and a leak of one secret does not compromise the other. `CASHFLUX_SERVER_SESSION_KEY_PREVIOUS` is accepted on verify only, for zero-downtime key rotation. When no dedicated key is set the signer falls back to the master key/token (non-breaking) and the server logs a warning in oauth mode.
 
-**Frontend surfaces.** The desktop/PWA app uses the bearer directly (self-host token, or a Cloud access token). The operator console (`/console/`) and the customer portal (`/portal/`) run in the browser; the console is token-gated for operators, the portal uses the OAuth session flow above. Cookies are `Secure` except on http loopback for local development (`requestIsSecure`).
+**Frontend surfaces.** The desktop/PWA app uses the bearer directly (self-host token, or a Cloud access token). The operator console (`/console/`) uses dedicated same-origin login/session/refresh/logout endpoints. Only an `owner` role, or an explicit compatibility admin id, may establish that browser session; the server rechecks the role on every request. Its access and rotating refresh credentials are `HttpOnly` + `SameSite=Strict` cookies, mutations require an exact same-origin `Origin` when supplied plus a double-submit CSRF header, and logout revokes the refresh family. The static server bearer remains available behind an explicit break-glass disclosure. The customer portal (`/portal/`) uses the OAuth session flow above. Cookies are `Secure` except on http loopback for local development (`requestIsSecure`).
 
 **Transport.** CORS is deny-by-default: only the configured `AppOrigin` (an https origin, or an http loopback for dev) is allowed; credentials are permitted only for that origin. Security headers (HSTS, `nosniff`, COOP/COEP, `frame-ancestors 'none'`) are set on every response. The gRPC websocket bridge enforces the same origin check.
 
@@ -63,7 +63,8 @@ section 7.14:
   rotation path.
 - Strict tenant isolation is enforced at the repository and service layers: workspace, blob, AI-key, usage, and
   audit queries are scoped by authenticated user id, with cross-user tests covering workspace and blob access.
-  The `/v1/audit` stream serves the *global* log only to operators (static server token or an admin); regular
+  The `/v1/audit` stream serves the *global* log only to operators (owner console session, static server token,
+  or an explicit compatibility admin); regular
   Cloud users get an actor-scoped read (`ListAuditEventsForActor`). `/metrics` requires operator authority. Both
   are covered by isolation tests (global-vs-actor-scoped audit, tenant-403/admin-200 metrics).
 - Session tokens are signed with a dedicated `CASHFLUX_SERVER_SESSION_KEY` separate from the AES master key, so

@@ -137,27 +137,41 @@ type adminPendingDecision struct {
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-// adminDo performs a bearer-authenticated request and returns the status and body.
+// adminDo performs an operator request and returns the status and body. A
+// non-empty token is the explicit break-glass bearer path. Otherwise the
+// browser sends the HttpOnly owner cookies; a 401 gets exactly one rotating
+// refresh attempt before the request is retried.
 func adminDo(token, method, url, body string) (int, []byte, error) {
-	var rdr io.Reader
-	if body != "" {
-		rdr = strings.NewReader(body)
+	for attempt := 0; attempt < 2; attempt++ {
+		var rdr io.Reader
+		if body != "" {
+			rdr = strings.NewReader(body)
+		}
+		req, err := http.NewRequest(method, url, rdr)
+		if err != nil {
+			return 0, nil, err
+		}
+		mutation := method != http.MethodGet && method != http.MethodHead
+		applyAdminRequestAuth(req, token, mutation)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0, nil, err
+		}
+		captureAdminCSRF(resp)
+		b, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return 0, nil, readErr
+		}
+		if resp.StatusCode == http.StatusUnauthorized && strings.TrimSpace(token) == "" && attempt == 0 && refreshAdminSession() {
+			continue
+		}
+		return resp.StatusCode, b, nil
 	}
-	req, err := http.NewRequest(method, url, rdr)
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(resp.Body)
-	return resp.StatusCode, b, nil
+	return http.StatusUnauthorized, nil, nil
 }
 
 func fetchUserDetail(token, id string) (*adminUserDetail, error) {

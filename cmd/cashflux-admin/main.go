@@ -80,6 +80,14 @@ type devCredsResp struct {
 	AdminToken string `json:"adminToken"`
 }
 
+type adminBrowserSession struct {
+	Authenticated bool   `json:"authenticated"`
+	UserID        string `json:"userId"`
+	Username      string `json:"username"`
+	Role          string `json:"role"`
+	ExpiresIn     int64  `json:"expiresIn"`
+}
+
 // ---------------------------------------------------------------------------
 // View state — top-level navigation
 // ---------------------------------------------------------------------------
@@ -147,30 +155,119 @@ func formatBytes(b int64) string {
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-// fetchAdminData fetches GET /v1/admin/overview and GET /v1/admin/users?limit=100
-// using a bearer token. Same-origin relative URLs are used so the SPA works
-// regardless of hostname.
-func fetchAdminData(token string) (ov *adminOverview, users []adminUserRow, hasMore bool, authErr bool, err error) {
-	// overview
-	req, e := http.NewRequest("GET", "/v1/admin/overview", nil)
-	if e != nil {
-		return nil, nil, false, false, e
+var adminCSRF string
+
+func adminCookieValue(name string) string {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return ""
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, e := http.DefaultClient.Do(req)
-	if e != nil {
-		return nil, nil, false, false, e
+	for _, part := range strings.Split(doc.Get("cookie").String(), ";") {
+		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if ok && key == name {
+			return value
+		}
+	}
+	return ""
+}
+
+func currentAdminCSRF() string {
+	if strings.TrimSpace(adminCSRF) != "" {
+		return adminCSRF
+	}
+	return adminCookieValue("cashflux_admin_csrf")
+}
+
+func captureAdminCSRF(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	if token := strings.TrimSpace(resp.Header.Get("X-CashFlux-CSRF")); token != "" {
+		adminCSRF = token
+	}
+}
+
+func applyAdminRequestAuth(req *http.Request, token string, mutation bool) {
+	if token = strings.TrimSpace(token); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if mutation {
+		if csrf := currentAdminCSRF(); csrf != "" {
+			req.Header.Set("X-CashFlux-CSRF", csrf)
+		}
+	}
+}
+
+func signInAdminCredentials(username, password string) (*adminBrowserSession, bool, error) {
+	body, _ := json.Marshal(map[string]string{"username": strings.TrimSpace(username), "password": password})
+	req, err := http.NewRequest(http.MethodPost, "/v1/admin/session/login", strings.NewReader(string(body)))
+	if err != nil {
+		return nil, false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, false, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return nil, nil, false, true, nil
+	captureAdminCSRF(resp)
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, true, nil
 	}
-	if resp.StatusCode != 200 {
-		return nil, nil, false, false, fmt.Errorf("overview: HTTP %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("sign in: HTTP %d", resp.StatusCode)
 	}
-	body, e := io.ReadAll(resp.Body)
+	var session adminBrowserSession
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		return nil, false, err
+	}
+	return &session, false, nil
+}
+
+func refreshAdminSession() bool {
+	req, err := http.NewRequest(http.MethodPost, "/v1/admin/session/refresh", nil)
+	if err != nil {
+		return false
+	}
+	applyAdminRequestAuth(req, "", true)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	captureAdminCSRF(resp)
+	return resp.StatusCode == http.StatusOK
+}
+
+func restoreAdminSession() bool {
+	code, _, err := adminDo("", http.MethodGet, "/v1/admin/session", "")
+	return err == nil && code == http.StatusOK
+}
+
+func signOutAdminSession() {
+	req, err := http.NewRequest(http.MethodPost, "/v1/admin/session/logout", nil)
+	if err == nil {
+		applyAdminRequestAuth(req, "", true)
+		if resp, doErr := http.DefaultClient.Do(req); doErr == nil {
+			resp.Body.Close()
+		}
+	}
+	adminCSRF = ""
+}
+
+// fetchAdminData fetches the overview and first users page. A non-empty token
+// is the explicit break-glass path; an empty token uses the HttpOnly owner
+// session cookies and transparently refreshes once on an expired access token.
+func fetchAdminData(token string) (ov *adminOverview, users []adminUserRow, hasMore bool, authErr bool, err error) {
+	code, body, e := adminDo(token, http.MethodGet, "/v1/admin/overview", "")
 	if e != nil {
 		return nil, nil, false, false, e
+	}
+	if code == http.StatusUnauthorized || code == http.StatusForbidden {
+		return nil, nil, false, true, nil
+	}
+	if code != http.StatusOK {
+		return nil, nil, false, false, fmt.Errorf("overview: HTTP %d", code)
 	}
 	var o adminOverview
 	if e := json.Unmarshal(body, &o); e != nil {
@@ -193,25 +290,15 @@ func fetchUsers(token, query string, offset int) (users []adminUserRow, hasMore 
 	if q := strings.TrimSpace(query); q != "" {
 		u += "&q=" + url.QueryEscape(q)
 	}
-	req, e := http.NewRequest("GET", u, nil)
+	code, body, e := adminDo(token, http.MethodGet, u, "")
 	if e != nil {
 		return nil, false, false, e
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, e := http.DefaultClient.Do(req)
-	if e != nil {
-		return nil, false, false, e
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+	if code == http.StatusUnauthorized || code == http.StatusForbidden {
 		return nil, false, true, nil
 	}
-	if resp.StatusCode != 200 {
-		return nil, false, false, fmt.Errorf("users: HTTP %d", resp.StatusCode)
-	}
-	body, e := io.ReadAll(resp.Body)
-	if e != nil {
-		return nil, false, false, e
+	if code != http.StatusOK {
+		return nil, false, false, fmt.Errorf("users: HTTP %d", code)
 	}
 	var ur adminUsersResp
 	if e := json.Unmarshal(body, &ur); e != nil {
@@ -224,25 +311,15 @@ func fetchUsers(token, query string, offset int) (users []adminUserRow, hasMore 
 // endpoint streams newline-delimited JSON (one AuditEvent per line), newest last;
 // this parses each line and returns them newest-first for display.
 func fetchAudit(token string, limit int) (events []auditEvent, authErr bool, err error) {
-	req, e := http.NewRequest("GET", fmt.Sprintf("/v1/audit?limit=%d", limit), nil)
+	code, body, e := adminDo(token, http.MethodGet, fmt.Sprintf("/v1/audit?limit=%d", limit), "")
 	if e != nil {
 		return nil, false, e
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, e := http.DefaultClient.Do(req)
-	if e != nil {
-		return nil, false, e
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+	if code == http.StatusUnauthorized || code == http.StatusForbidden {
 		return nil, true, nil
 	}
-	if resp.StatusCode != 200 {
-		return nil, false, fmt.Errorf("audit: HTTP %d", resp.StatusCode)
-	}
-	body, e := io.ReadAll(resp.Body)
-	if e != nil {
-		return nil, false, e
+	if code != http.StatusOK {
+		return nil, false, fmt.Errorf("audit: HTTP %d", code)
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
 		line = strings.TrimSpace(line)
@@ -539,21 +616,63 @@ func homeView(hasToken bool, onSignIn, onOpenConsole ui.Handler) ui.Node {
 	)
 }
 
-// loginView renders the token-entry screen.
-// devToken is non-empty only when the server returned a dev-mode token; the
-// prefill button is shown only in that case.
-func loginView(tokenVal, devToken string, onInput, onSignIn, onBack, onPrefill ui.Handler) ui.Node {
+// credentialLoginView is the production operator door. The static server
+// token is retained only behind the explicit break-glass disclosure.
+func credentialLoginView(
+	username, password, tokenVal, devToken string,
+	advanced bool,
+	onUsername, onPassword, onCredentialSignIn, onToggleAdvanced,
+	onToken, onTokenSignIn, onBack, onPrefill ui.Handler,
+) ui.Node {
 	return Div(
 		css.Class("login-page"),
 		Div(
 			css.Class("login-card"),
 			Div(css.Class("login-brand"), brandMark("")),
 			H1(css.Class("login-title"), Text("Sign in")),
-			P(css.Class("login-sub"), Text("Enter the admin token to access the operator console.")),
-			If(devToken != "",
-				Div(
-					css.Class("dev-banner"),
-					P(css.Class("dev-hint"), Text("Dev mode — local only")),
+			P(css.Class("login-sub"), Text("Use your CashFlux owner account to open the operator console.")),
+			Label(For("admin-username"), css.Class("login-label"), Text("Username")),
+			Input(
+				ID("admin-username"),
+				Type("text"),
+				Attr("autocomplete", "username"),
+				Attr("data-testid", "admin-username"),
+				css.Class("login-input"),
+				Placeholder("Username"),
+				Value(username),
+				OnInput(onUsername),
+			),
+			Label(For("admin-password"), css.Class("login-label"), Text("Password")),
+			Input(
+				ID("admin-password"),
+				Type("password"),
+				Attr("autocomplete", "current-password"),
+				Attr("data-testid", "admin-password"),
+				css.Class("login-input"),
+				Placeholder("Password"),
+				Value(password),
+				OnInput(onPassword),
+			),
+			Button(
+				Type("button"),
+				css.Class("btn btn-primary"),
+				Attr("data-testid", "admin-credential-signin"),
+				Attr("aria-label", "Sign in with owner credentials"),
+				OnClick(onCredentialSignIn),
+				Text("Sign in"),
+			),
+			Button(
+				Type("button"),
+				css.Class("btn btn-link"),
+				Attr("data-testid", "admin-break-glass-toggle"),
+				Attr("aria-expanded", fmt.Sprintf("%t", advanced)),
+				OnClick(onToggleAdvanced),
+				Text("Use a break-glass token"),
+			),
+			If(advanced, Div(
+				css.Class("dev-banner"),
+				P(css.Class("dev-hint"), Text("Advanced recovery access")),
+				If(devToken != "",
 					Button(
 						Type("button"),
 						css.Class("btn btn-dev"),
@@ -562,27 +681,25 @@ func loginView(tokenVal, devToken string, onInput, onSignIn, onBack, onPrefill u
 						Text("Prefill admin (dev)"),
 					),
 				),
-			),
-			Label(
-				For("admin-token"),
-				css.Class("login-label"),
-				Text("Admin token"),
-			),
-			Input(
-				ID("admin-token"),
-				Type("password"),
-				css.Class("login-input"),
-				Placeholder("Bearer token…"),
-				Value(tokenVal),
-				OnInput(onInput),
-			),
-			Button(
-				Type("button"),
-				css.Class("btn btn-primary"),
-				Attr("aria-label", "Sign in with the entered token"),
-				OnClick(onSignIn),
-				Text("Sign in"),
-			),
+				Label(For("admin-token"), css.Class("login-label"), Text("Administrator token")),
+				Input(
+					ID("admin-token"),
+					Type("password"),
+					Attr("data-testid", "admin-break-glass-token"),
+					css.Class("login-input"),
+					Placeholder("Bearer token"),
+					Value(tokenVal),
+					OnInput(onToken),
+				),
+				Button(
+					Type("button"),
+					css.Class("btn btn-secondary"),
+					Attr("data-testid", "admin-break-glass-signin"),
+					Attr("aria-label", "Sign in with the administrator token"),
+					OnClick(onTokenSignIn),
+					Text("Use token"),
+				),
+			)),
 			Button(
 				Type("button"),
 				css.Class("btn btn-link"),
@@ -613,7 +730,7 @@ func loadingView() ui.Node {
 func authErrView(onSignOut ui.Handler) ui.Node {
 	return Div(
 		css.Class("error-page"),
-		P(css.Class("error-msg"), Text("Not authorized — check the token.")),
+		P(css.Class("error-msg"), Text("Not authorized — sign in with a CashFlux owner account.")),
 		Button(
 			Type("button"),
 			css.Class("btn btn-secondary"),
@@ -827,12 +944,16 @@ func pageLabel(offset, count int) string {
 // ---------------------------------------------------------------------------
 
 // App is the root component for the CashFlux operator console SPA.
-// Navigation flow: Home → Login → Console (or Home directly to Console when a
-// stored token is present).
+// Navigation flow: loading → credential login → console. A valid owner cookie
+// session is restored on mount; a stored token is accepted only for the
+// explicit break-glass compatibility path.
 func App() ui.Node {
-	view := ui.UseState(screenHome)
+	view := ui.UseState(screenLoading)
+	usernameInput := ui.UseState("")
+	passwordInput := ui.UseState("")
 	tokenInput := ui.UseState("")
 	devToken := ui.UseState("") // non-empty only in dev mode
+	breakGlassOpen := ui.UseState(false)
 	overview := ui.UseState[*adminOverview](nil)
 	users := ui.UseState[[]adminUserRow](nil)
 	netErrMsg := ui.UseState("")
@@ -846,9 +967,6 @@ func App() ui.Node {
 	// leaving the overview stats untouched. Used by search/prev/next.
 	reloadUsers := func(query string, offset int) {
 		tok := lsGet()
-		if tok == "" {
-			return
-		}
 		go func() {
 			us, more, authErr, err := fetchUsers(tok, query, offset)
 			if authErr || err != nil {
@@ -865,9 +983,52 @@ func App() ui.Node {
 	handleTokenInput := ui.UseEvent(func(v string) {
 		tokenInput.Set(v)
 	})
+	handleUsernameInput := ui.UseEvent(func(v string) { usernameInput.Set(v) })
+	handlePasswordInput := ui.UseEvent(func(v string) { passwordInput.Set(v) })
+	handleToggleBreakGlass := ui.UseEvent(func() { breakGlassOpen.Set(!breakGlassOpen.Get()) })
 
-	// handleSignIn validates, sets loading, fetches, and transitions state.
-	handleSignIn := ui.UseEvent(func() {
+	// The primary sign-in path establishes an owner-only HttpOnly session.
+	handleCredentialSignIn := ui.UseEvent(func() {
+		username := strings.TrimSpace(usernameInput.Get())
+		password := passwordInput.Get()
+		if username == "" || password == "" {
+			return
+		}
+		view.Set(screenLoading)
+		go func() {
+			_, isAuthErr, err := signInAdminCredentials(username, password)
+			if isAuthErr {
+				view.Set(screenAuthErr)
+				return
+			}
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			lsRemove()
+			ov, us, more, isAuthErr, err := fetchAdminData("")
+			if isAuthErr {
+				view.Set(screenAuthErr)
+				return
+			}
+			if err != nil {
+				netErrMsg.Set(err.Error())
+				view.Set(screenNetErr)
+				return
+			}
+			passwordInput.Set("")
+			overview.Set(ov)
+			users.Set(us)
+			usersHasMore.Set(more)
+			userOffset.Set(0)
+			userSearch.Set("")
+			view.Set(screenReady)
+		}()
+	})
+
+	// The advanced sign-in path validates the explicit break-glass token.
+	handleTokenSignIn := ui.UseEvent(func() {
 		tok := strings.TrimSpace(tokenInput.Get())
 		if tok == "" {
 			return
@@ -896,21 +1057,21 @@ func App() ui.Node {
 
 	// handleSignOut clears stored state and returns to the home screen.
 	handleSignOut := ui.UseEvent(func() {
+		go signOutAdminSession()
 		lsRemove()
 		overview.Set(nil)
 		users.Set(nil)
+		usernameInput.Set("")
+		passwordInput.Set("")
 		tokenInput.Set("")
 		devToken.Set("")
-		view.Set(screenHome)
+		breakGlassOpen.Set(false)
+		view.Set(screenLogin)
 	})
 
 	// handleRefresh re-fetches using the stored token.
 	handleRefresh := ui.UseEvent(func() {
 		tok := lsGet()
-		if tok == "" {
-			view.Set(screenHome)
-			return
-		}
 		view.Set(screenLoading)
 		go func() {
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
@@ -945,26 +1106,30 @@ func App() ui.Node {
 
 	// handleBack returns from login to home.
 	handleBack := ui.UseEvent(func() {
+		usernameInput.Set("")
+		passwordInput.Set("")
 		tokenInput.Set("")
 		devToken.Set("")
+		breakGlassOpen.Set(false)
 		view.Set(screenHome)
 	})
 
 	// handlePrefill fills the token input with the dev-mode token.
 	handlePrefill := ui.UseEvent(func() {
 		tokenInput.Set(devToken.Get())
+		breakGlassOpen.Set(true)
 	})
 
 	// handleOpenConsole goes straight to the console using the stored token.
 	handleOpenConsole := ui.UseEvent(func() {
 		tok := lsGet()
-		if tok == "" {
-			view.Set(screenLogin)
-			return
-		}
 		tokenInput.Set(tok)
 		view.Set(screenLoading)
 		go func() {
+			if tok == "" && !restoreAdminSession() {
+				view.Set(screenLogin)
+				return
+			}
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				view.Set(screenAuthErr)
@@ -995,10 +1160,6 @@ func App() ui.Node {
 	handleCloseUser := func() {
 		manageUserID.Set("")
 		tok := lsGet()
-		if tok == "" {
-			view.Set(screenHome)
-			return
-		}
 		view.Set(screenLoading)
 		go func() {
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
@@ -1026,18 +1187,19 @@ func App() ui.Node {
 	// the entrance animations (visible page flicker + request spam).
 	ui.UseEffect(func() func() {
 		tok := lsGet()
-		if tok == "" {
-			return nil
-		}
 		tokenInput.Set(tok)
 		view.Set(screenLoading)
 		go func() {
+			if tok == "" && !restoreAdminSession() {
+				view.Set(screenLogin)
+				return
+			}
 			ov, us, more, isAuthErr, err := fetchAdminData(tok)
 			if isAuthErr {
 				// Token is stored but no longer valid; return to home.
 				lsRemove()
 				tokenInput.Set("")
-				view.Set(screenHome)
+				view.Set(screenLogin)
 				return
 			}
 			if err != nil {
@@ -1070,10 +1232,6 @@ func App() ui.Node {
 	// Audit-log open/close.
 	handleOpenAudit := ui.UseEvent(func() {
 		tok := lsGet()
-		if tok == "" {
-			view.Set(screenHome)
-			return
-		}
 		view.Set(screenLoading)
 		go func() {
 			evs, authErr, err := fetchAudit(tok, 200)
@@ -1128,7 +1286,12 @@ func App() ui.Node {
 			onNext:        onUsersNext,
 		})
 	case screenLogin:
-		return loginView(tokenInput.Get(), devToken.Get(), handleTokenInput, handleSignIn, handleBack, handlePrefill)
+		return credentialLoginView(
+			usernameInput.Get(), passwordInput.Get(), tokenInput.Get(), devToken.Get(),
+			breakGlassOpen.Get(),
+			handleUsernameInput, handlePasswordInput, handleCredentialSignIn, handleToggleBreakGlass,
+			handleTokenInput, handleTokenSignIn, handleBack, handlePrefill,
+		)
 	default: // screenHome
 		hasToken := lsGet() != ""
 		return homeView(hasToken, handleGoToLogin, handleOpenConsole)

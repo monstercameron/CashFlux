@@ -51,7 +51,7 @@ opening the Cloud settings page alone does not submit a request. The account bec
 after this sequence completes:
 
 1. The client selects **Request access** and waits.
-2. An operator opens `https://<domain>/console/`, signs in with the server's administrator token,
+2. An owner opens `https://<domain>/console/`, signs in with their CashFlux username and password,
    and approves or rejects the request under **Access requests**.
 3. After approval, the client confirms the matching verification code, chooses a username and
    password, and saves the one-time recovery code.
@@ -65,6 +65,20 @@ Keep `CASHFLUX_SERVER_REGISTRATION_OPEN=false` for an approval-gated server. To 
 anyone who can reach the server to create an account, set
 `CASHFLUX_SERVER_REGISTRATION_OPEN=true`; this removes the operator approval gate and should not be
 used on a public endpoint unless open signup is intentional.
+
+## Operator Console Login
+
+The console's normal sign-in uses an account whose CashFlux role is `owner`. It creates a
+same-origin browser session: the short-lived admin access cookie and rotating refresh cookie are
+`HttpOnly`, `SameSite=Strict`, and `Secure` on HTTPS. Console mutations additionally require the
+matching CSRF value and same-origin request proof. Signing out revokes the refresh family.
+
+For the first owner only, open **Use a break-glass token**, enter the private
+`CASHFLUX_SERVER_TOKEN`, and create or promote an owner account. Sign out, then use that owner's
+username and password for routine administration. Keep the static token offline afterward; it is
+an emergency/bootstrap credential, not the normal browser login. Existing
+`CASHFLUX_SERVER_ADMIN_USER_IDS` entries remain compatible, but role-based `owner` accounts are the
+preferred configuration.
 
 ## Connect CashFlux Settings
 

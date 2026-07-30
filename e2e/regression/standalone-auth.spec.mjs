@@ -130,7 +130,7 @@ test.describe("standalone basic-auth lifecycle", () => {
     browser,
     request,
   }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(360_000);
 
     const admin = await app.context().newPage();
     const browserErrors = [];
@@ -144,11 +144,10 @@ test.describe("standalone basic-auth lifecycle", () => {
     }
     try {
       await admin.goto(`${BACKEND}/console/`);
-      const landingSignIn = admin.getByRole("button", { name: "Sign in to the operator console" });
-      await expect(landingSignIn).toBeVisible();
-      await landingSignIn.click();
-      await admin.locator('input[placeholder*="Bearer token"]').fill("e2e-worker-token");
-      await admin.getByRole("button", { name: "Sign in with the entered token" }).click();
+      await expect(admin.getByTestId("admin-credential-signin")).toBeVisible();
+      await admin.getByTestId("admin-break-glass-toggle").click();
+      await admin.getByTestId("admin-break-glass-token").fill("e2e-worker-token");
+      await admin.getByTestId("admin-break-glass-signin").click();
       await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
 
       await admin.getByRole("button", { name: "Create a user account" }).click();
@@ -169,6 +168,27 @@ test.describe("standalone basic-auth lifecycle", () => {
       await expect(admin.locator(".status-banner")).toContainText("Account updated");
       await expect(admin.locator(".detail-card")).toContainText(RENAMED_USERNAME);
       await expect(admin.locator(".detail-card")).toContainText("member");
+
+      // Promote this account, prove the normal owner credential session can
+      // operate the console, then return to the static break-glass path for
+      // the destructive lifecycle checks below.
+      await admin.locator("#role-input").selectOption("owner");
+      await admin.getByRole("button", { name: "Save account" }).click();
+      await expect(admin.locator(".detail-card")).toContainText("owner");
+      await admin.getByRole("button", { name: "Back to console" }).click();
+      await admin.getByRole("button", { name: "Sign out and return to home" }).click();
+      await expect(admin.getByTestId("admin-credential-signin")).toBeVisible();
+      await admin.getByTestId("admin-username").fill(RENAMED_USERNAME);
+      await admin.getByTestId("admin-password").fill(OLD_PASSWORD);
+      await admin.getByTestId("admin-credential-signin").click();
+      await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
+      await admin.getByRole("button", { name: "Sign out and return to home" }).click();
+      await admin.getByTestId("admin-break-glass-toggle").click();
+      await admin.getByTestId("admin-break-glass-token").fill("e2e-worker-token");
+      await admin.getByTestId("admin-break-glass-signin").click();
+      await expect(admin.getByRole("heading", { name: "Operator Console" })).toBeVisible();
+      await admin.locator("tr.user-row").first().click();
+      await expect(admin.getByRole("button", { name: "Suspend account" })).toBeVisible();
 
       // Remove the protected demo first so the new account has a real local
       // dataset to seed. The account is intentionally empty on the backend.

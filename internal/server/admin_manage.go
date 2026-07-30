@@ -106,12 +106,27 @@ func adminAuthorize(cfg Config, store *Store, w http.ResponseWriter, r *http.Req
 		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
-	user, ok := httpBearerUser(r, cfg)
+	user, source, ok := adminRequestUser(r, cfg)
 	if !ok {
-		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+		writeErrorJSON(w, ErrorReasonUnauthenticated, "operator session is missing or invalid")
 		return AuthUser{}, false
 	}
-	if !httpOperatorAuthorized(user, cfg) {
+	if source == adminAuthCookie && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" && !sameRequestOrigin(origin, r) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "operator mutations require the console origin")
+			return AuthUser{}, false
+		}
+		if !validAdminCSRF(r) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
+			return AuthUser{}, false
+		}
+	}
+	authorized, _, err := adminOperatorAuthorized(user, cfg, store)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "role lookup failed")
+		return AuthUser{}, false
+	}
+	if !authorized {
 		auditFromRequest(r, store, user, action+".denied", "admin", resource)
 		writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 		return AuthUser{}, false

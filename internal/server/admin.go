@@ -35,22 +35,8 @@ type AdminUsersResponse struct {
 // handleAdminOverview serves GET /v1/admin/overview — admin-gated, audited.
 func handleAdminOverview(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !writeCORS(w, r, cfg) {
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
-			return
-		}
-		if store == nil {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
-			return
-		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := adminAuthorize(cfg, store, w, r, "admin.overview", "overview")
 		if !ok {
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
-			return
-		}
-		if !httpOperatorAuthorized(user, cfg) {
-			auditFromRequest(r, store, user, "admin.overview.denied", "admin", "overview")
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return
 		}
 		today := time.Now().UTC()
@@ -79,22 +65,8 @@ func handleAdminOverview(cfg Config, store *Store) http.HandlerFunc {
 // Defaults: limit=50, max=200. Returns no secrets, no AI ciphertext, no blob bytes.
 func handleAdminUsers(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !writeCORS(w, r, cfg) {
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
-			return
-		}
-		if store == nil {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
-			return
-		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := adminAuthorize(cfg, store, w, r, "admin.users", "users")
 		if !ok {
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
-			return
-		}
-		if !httpOperatorAuthorized(user, cfg) {
-			auditFromRequest(r, store, user, "admin.users.denied", "admin", "users")
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return
 		}
 		limit := 50

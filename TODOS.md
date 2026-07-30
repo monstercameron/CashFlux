@@ -6444,7 +6444,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   control-plane routes or assets. Container and release builds now produce/package the main and
   services WASM artifacts alongside the admin and portal apps. Focused tests cover root/deep-link
   loads, content types/cache policy, JSON discovery, reserved-route isolation, and traversal safety.
-- [ ] **C475 [MAJOR][AUTH][ADMIN] Give owners a normal credential-based operator-console
+- [x] **C475 [MAJOR][AUTH][ADMIN] Give owners a normal credential-based operator-console
   session.** Add same-origin admin login/session/refresh/logout endpoints backed by the existing
   password verifier and rotating session families. Only `owner` users (plus the existing explicit
   admin-ID compatibility list) may establish an operator session; member/viewer credentials must
@@ -6452,6 +6452,11 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   SameSite=Strict cookies, require same-origin/CSRF proof for cookie-authenticated mutations, and
   keep the static operator token only as an explicit break-glass path. Update the console to open
   on a clean username/password page, retry once after refresh, and sign out by revoking the family.
+  Implemented dedicated cookie-backed admin login/session/refresh/logout routes, owner-role checks
+  on every request, same-origin double-submit CSRF for mutations, refresh rotation, family
+  revocation, and a credential-first console with a disclosed break-glass fallback. Focused server
+  tests cover role denial/demotion, cookie flags, CSRF/origin rejection, refresh, and logout; the
+  real-browser lifecycle proves owner login plus admin CRUD, recovery, sync, suspension, and deletion.
 - [ ] **C476 [MAJOR][AUTH][CLIENT] Gate the hosted CashFlux application behind its clean
   account-access flow.** When the app is served by a full CashFlux server, unauthenticated visitors
   must see a focused sign-in/request-access/recovery surface before financial data is rendered.

@@ -89,6 +89,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		app = appHandler(cfg)
 	}
 	authLimiter := authRateLimitMiddleware(cfg.AuthRateLimitPerMinute, cfg)
+	adminAuthService := newAuthService(store, cfg)
 	// webhookMu serializes the check-apply-record critical section of every provider
 	// webhook so a replay is deduped and a failed apply is never marked "seen".
 	webhookMu := &sync.Mutex{}
@@ -154,6 +155,14 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /metrics", handleMetrics(cfg))
+	mux.HandleFunc("OPTIONS /v1/admin/session", handleCORSPreflight(cfg))
+	mux.Handle("GET /v1/admin/session", authLimiter(handleAdminSessionStatus(cfg, store)))
+	mux.HandleFunc("OPTIONS /v1/admin/session/login", handleCORSPreflight(cfg))
+	mux.Handle("POST /v1/admin/session/login", authLimiter(handleAdminSessionLogin(cfg, store, adminAuthService)))
+	mux.HandleFunc("OPTIONS /v1/admin/session/refresh", handleCORSPreflight(cfg))
+	mux.Handle("POST /v1/admin/session/refresh", authLimiter(handleAdminSessionRefresh(cfg, store, adminAuthService)))
+	mux.HandleFunc("OPTIONS /v1/admin/session/logout", handleCORSPreflight(cfg))
+	mux.Handle("POST /v1/admin/session/logout", authLimiter(handleAdminSessionLogout(cfg, store, adminAuthService)))
 	mux.HandleFunc("OPTIONS /v1/audit", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/audit", handleAuditEvents(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/usage", handleCORSPreflight(cfg))

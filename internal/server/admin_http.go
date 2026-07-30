@@ -17,17 +17,8 @@ type AdminUsageResponse struct {
 
 func handleAdminUsage(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !writeCORS(w, r, cfg) {
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
-			return
-		}
-		if store == nil {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
-			return
-		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := adminAuthorize(cfg, store, w, r, "admin.usage", "usage")
 		if !ok {
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
 		}
 		day := time.Now().UTC()

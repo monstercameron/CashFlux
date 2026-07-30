@@ -29524,3 +29524,25 @@ unit tests and fail in a real self-host install. The image and release helper no
 `main.wasm`, `services.wasm`, the operator console, the customer portal, and matching
 `wasm_exec.js`. Focused tests prove root and deep-link loads, JSON discovery, the hosted-app
 capability bit, WASM content type/cache behavior, missing-route isolation, and traversal safety.
+
+## 2026-07-30 — C475: owner credentials replace routine admin-token login
+
+The operator console now starts with a clean CashFlux username/password form. Dedicated
+`/v1/admin/session/login`, `/session`, `/refresh`, and `/logout` routes reuse the existing password
+verifier and rotating refresh families, but establish a browser session only for an `owner` role or
+an explicitly configured compatibility admin id. The server rechecks that authority for every
+cookie-authenticated admin request, so a demoted owner loses console access immediately.
+
+Admin access and refresh credentials are `HttpOnly` and `SameSite=Strict`, are `Secure` outside
+loopback development, and have narrowly scoped cookie paths. Cookie-authenticated mutations require
+the readable double-submit CSRF value and reject a supplied cross-origin `Origin`. Refresh rotates
+both the family credential and CSRF value; sign-out revokes the family. Failed member/viewer login
+revokes the newly created family before clearing cookies. The old static server token remains
+available only behind an explicit **Use a break-glass token** disclosure for initial owner bootstrap
+and recovery.
+
+Focused server tests cover cookie attributes, owner and compatibility authorization, member/bad
+password denial, CSRF and origin enforcement, role demotion, refresh rotation, logout revocation,
+and bearer compatibility. The admin WASM build passes. The hermetic Chromium lifecycle passes
+1/1 in 2.0 minutes, exercising break-glass account creation, owner credential login, console
+sign-out, admin CRUD, client login, password recovery, sync, suspension/reinstatement, and deletion.

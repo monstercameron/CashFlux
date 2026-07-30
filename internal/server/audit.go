@@ -56,9 +56,9 @@ func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, source, ok := adminRequestUser(r, cfg)
 		if !ok {
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing access credential")
 			return
 		}
 		afterID, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("afterId")), 10, 64)
@@ -69,7 +69,16 @@ func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
 		// log to any authenticated bearer, a cross-tenant leak in multi-tenant Cloud.
 		var events []AuditEvent
 		var err error
-		if httpOperatorAuthorized(user, cfg) {
+		operator, _, authErr := adminOperatorAuthorized(user, cfg, store)
+		if authErr != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "role lookup failed")
+			return
+		}
+		if source == adminAuthCookie && !operator {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "owner access required")
+			return
+		}
+		if operator {
 			events, err = store.ListAuditEvents(afterID, limit)
 		} else {
 			events, err = store.ListAuditEventsForActor(user.ID, afterID, limit)

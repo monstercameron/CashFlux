@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **CashFlux owners can now administer the server with normal credentials.** The operator console
+  opens on username/password sign-in and uses dedicated same-origin HttpOnly cookie sessions with
+  rotating refresh credentials, owner-role rechecks, strict origin/CSRF checks for mutations, and
+  family-revoking logout. Member/viewer logins are denied, while the static server token remains
+  available only through an explicit break-glass disclosure.
 - **The full server can now serve CashFlux itself at `/`.** `CASHFLUX_SERVER_APP_DIR` enables a
   traversal-safe SPA/static handler while `/grpc`, `/v1`, `/console/`, `/portal/`, legal, metrics,
   and health routes retain priority. `/v1/version` identifies a hosted deployment so the client can
