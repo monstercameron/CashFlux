@@ -29637,3 +29637,34 @@ Release rollback points now live in the sibling `/var/backups/cashflux-releases`
 root has one purpose and can keep exact-delete semantics; rollback retention remains independently
 managed by the updater. Existing rollback points are migrated once during the live rollout before
 the backup unit is rerun.
+
+## 2026-07-30 — C477 complete: `budget.earlcameron.com` production rollout
+
+DigitalOcean DNS now maps `budget.earlcameron.com` to the larger droplet. Nginx redirects HTTP,
+terminates an automatically renewed ECDSA certificate, preserves the `/grpc` WebSocket tunnel, and
+proxies to CashFlux on `127.0.0.1:8105`. The server runs at the exact pushed commit under the
+unprivileged `cashflux` account; `/etc/cashflux/cashflux.env` is `0640 root:cashflux`, state and
+data backups are `0700 cashflux:cashflux`, registration is closed, and the client/console/portal
+are served from the same origin.
+
+The live rollout itself found and fixed three gaps: blank local-account rows (C478), missing Go
+cache paths in transient systemd deploys (C479), and colliding binary/data backup roots (C480).
+After the fixes, the warm-cache systemd-run deployment completed in 21 seconds with verified
+pre-swap backup, migration dry-run, atomic restart, hosted marker, and browser-asset checks.
+`cashflux-backup.service` then exited successfully and an independent SHA-256 pass matched every
+manifest entry.
+
+Production Chromium passed 1/1 without retries in 56 seconds. It proved public readiness/version,
+closed registration, owner credential login to the console, disposable user CRUD, hosted
+username/password login and first sync, server-side refresh-family revocation on logout, recovery
+with a replacement one-time code, explicit access request and owner approval, credential setup,
+approved first sync, and cleanup. Integrated-browser review separately verified the clean hosted
+gate, synced owner client, corrected Account/username table, and destructive account confirmation.
+
+Isolation audit: CashFlux, ArticleFlux, the portfolio, deployhook, and Nginx are all active;
+CashFlux/portfolio/ArticleFlux/deployhook remain on loopback `8105/8095/9000/9500`, only Nginx owns
+80/443, `systemd-analyze security` rates CashFlux 3.3/OK, every maintenance timer is scheduled,
+Nginx configuration validates, the certificate is valid through 2026-10-28, and the CashFlux
+journal has no warnings since the final deploy. GitHub webhook `659024087` now sends successful
+CashFlux `CI` workflow runs on `main` to the existing deployhook; its two prior targets are
+unchanged.

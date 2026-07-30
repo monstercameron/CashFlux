@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Production auth has an opt-in disposable-account smoke.** The public-origin Playwright pass
+  verifies TLS/readiness, closed registration, owner-console credential login, account CRUD,
+  hosted login and sync, logout refresh-family revocation, password recovery, access
+  request/approval, credential setup, and first sync, with cleanup that removes every test account.
 - **Native same-origin production deployment.** Added the hardened systemd service, readiness
   watchdog, verified backup/retention/blob-GC timers, root-owned environment template, Nginx
   WebSocket/TLS vhost, and atomic build/backup/rollback updater used for

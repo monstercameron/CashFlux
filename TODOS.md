@@ -6471,7 +6471,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   local credentials. Same-origin gRPC remains accepted alongside a separately configured app
   origin. Focused Chromium coverage proves no shell/sync UI for a clean deep link, login and
   recovery to synced state, sign-out return to the gate, and rejection of the old refresh token.
-- [ ] **C477 [MAJOR][OPS] Deploy the same-origin CashFlux service at
+- [x] **C477 [MAJOR][OPS] Deploy the same-origin CashFlux service at
   `https://budget.earlcameron.com`.** Package the server plus client/services/admin WASM artifacts
   under `/opt/CashFlux`, run it as a dedicated unprivileged `cashflux` systemd service on loopback,
   persist state under `/var/lib/cashflux`, and keep secrets in a root-readable environment file.
@@ -6479,8 +6479,13 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   deployhook target without disturbing ArticleFlux or the portfolio. Registration must remain
   approval-gated. Production E2E must verify TLS, client and console login, account CRUD, request
   approval, recovery, first sync, logout/session revocation, health, backup, and service isolation.
-  Native systemd/Nginx assets, maintenance timers, a watchdog, and an atomic rollback-capable
-  updater now live under `deploy/production`; live DNS/TLS installation and production E2E remain.
+  Completed on the isolated `Earl-Cameron-dot-com` droplet: DNS/TLS and Nginx are live, CashFlux
+  runs unprivileged on loopback `:8105`, watchdog/backup/retention/blob-GC timers are enabled, the
+  verified backup mirror passes independent manifest checksums, and the existing services remain
+  active on their original ports. The opt-in production Chromium smoke passed 1/1 without retries,
+  covering owner console login, disposable CRUD, hosted login/sync, logout revocation, recovery,
+  request approval, credential setup, first sync, and cleanup. The GitHub `CI` workflow-run hook
+  targets the rollback-capable updater on `main`.
 - [x] **C478 [MAJOR][ADMIN] Local username accounts render as blank rows in the operator console.**
   Production review found the list response already carried `username`, but the WASM mirror and
   row rendered only `email`; searching was also email-only. The console now displays username with

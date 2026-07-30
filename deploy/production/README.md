@@ -113,3 +113,12 @@ journalctl -u cashflux-backup.service -n 30 --no-pager
 The production browser pass must also prove client login, console owner login,
 account CRUD, access request/approval, password recovery, first sync, and
 logout refresh-family revocation.
+
+`e2e/regression/production-auth.spec.mjs` is the opt-in destructive smoke that
+performs that pass with disposable accounts and removes them in `finally`.
+Provide the public origin, break-glass token, and owner credentials through
+`CASHFLUX_PRODUCTION_URL`, `CASHFLUX_PRODUCTION_TOKEN`,
+`CASHFLUX_PRODUCTION_OWNER_USERNAME`, and
+`CASHFLUX_PRODUCTION_OWNER_PASSWORD`, set `E2E_BASE_URL` to the same origin,
+then run that one spec with `e2e/playwright.config.mjs`. Never put the values in
+the repository or command history.
