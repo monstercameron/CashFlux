@@ -6531,3 +6531,14 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   each other and failing the shared readiness fixture before assertions. Serialize workers only on
   CI and raise the job orchestration ceiling to 60 minutes; retain the suite's strict per-test,
   assertion, and web-server timeouts so hangs and regressions still fail at their owning boundary.
+- [x] **C487 [BLOCKER][HOSTED][SYNC] A fresh production browser renders seeded sample data before
+  account hydration.** Hosted boot must remain empty and gated while account validation and the
+  first server pull run asynchronously. Existing plaintext data hydrates before the shell mounts;
+  encrypted data forces the user to enable App Lock with the matching passcode and admits the user
+  only after a successful decrypt. Wrong passcodes remain recoverable at the gate and cannot become
+  the local lock credential or overwrite the server. Development/portable builds retain their
+  first-run sample. Implemented an account-first hosted hydration state machine, suppressed the
+  temporary empty-store autosave, verified encrypted snapshots before installing App Lock, and
+  persisted pulled data under the lock before mounting the shell. A disposable full-server,
+  two-browser regression proves empty hosted boot, plaintext first sync, encrypted second-device
+  hydration, wrong-passcode rejection, no sample UI, and encrypted local persistence.

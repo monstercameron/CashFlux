@@ -310,6 +310,15 @@ CashFlux is **heavily configurable** so one app fits many ways of budgeting and 
   authenticated owner.
 - Public client account creation is closed by default. A client may request access, but an owner
   must approve the request before credentials can be created and sync can begin.
+- A server-hosted client boots account-first, never sample-first. On a browser with no local
+  household dataset it must keep the financial shell unmounted while it asynchronously validates
+  the account session and checks the server's active workspace. An existing server snapshot is
+  authoritative and must hydrate before any financial screen renders. If that snapshot is
+  end-to-end encrypted, the gate must require the same App Lock passcode used by the other device,
+  verify that it decrypts the snapshot, and enable App Lock before admitting the user. A wrong
+  passcode must neither become the device's lock credential nor replace the server snapshot.
+  Sample data remains a development/portable-build convenience and is never implicitly created by
+  a hosted production boot; an account with no server snapshot opens a genuinely empty workspace.
 - Operator browser sessions use same-origin HttpOnly credentials and CSRF protection. The static
   server token remains a deliberate break-glass and bootstrap credential, not a routine browser
   login.

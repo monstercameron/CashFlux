@@ -120,6 +120,13 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Hosted production boot is now account-first instead of sample-first.** A browser with no
+  authoritative local dataset keeps the financial shell unmounted while it asynchronously checks
+  the signed-in account's server workspace; development and portable builds retain their helpful
+  first-run sample. Plaintext snapshots hydrate before the UI opens. Encrypted snapshots force an
+  App Lock setup gate, validate the matching passcode against server ciphertext before saving it,
+  persist the pulled dataset encrypted on-device, and then mount without a reload. Wrong passcodes
+  neither become the device lock nor expose or overwrite server data.
 - **Slow active blob uploads now survive cleanup on Linux as well as Windows.** In-flight staging
   paths are registered while an upload owns them, so the stale-partial sweep skips live work on
   POSIX systems where unlinking an open file would otherwise succeed.

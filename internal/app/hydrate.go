@@ -19,14 +19,14 @@ const (
 )
 
 // decideHydrate chooses what to do on boot. A non-blank saved dataset is always
-// imported. Otherwise the sample is seeded ONLY on a true first run — once the app
-// has ever been seeded (seededBefore), an empty dataset means the user intentionally
-// cleared it, so the clean slate is preserved.
-func decideHydrate(datasetRaw string, seededBefore bool) hydrateAction {
+// imported. Otherwise the sample is seeded only on a true first run when the
+// distribution permits it. Server-hosted builds pass allowSample=false so their
+// empty store stays empty until the authoritative server workspace is checked.
+func decideHydrate(datasetRaw string, seededBefore, allowSample bool) hydrateAction {
 	if strings.TrimSpace(datasetRaw) != "" {
 		return hydrateImport
 	}
-	if seededBefore {
+	if seededBefore || !allowSample {
 		return hydrateEmpty
 	}
 	return hydrateSeed

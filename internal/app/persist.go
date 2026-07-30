@@ -199,20 +199,28 @@ func hydrateDataset() {
 	if cryptobox.IsEnvelope([]byte(raw)) {
 		hadLocalDataset = true
 		pendingEnvelopeRaw = raw
+		initializeHostedHydration(false)
 		return
 	}
 	seededBefore := browserstore.GetString(seededFlagKey) != ""
 	markSeeded := func() { browserstore.Set(seededFlagKey, "1") }
+	allowSample := !hostedDocument()
 
-	switch decideHydrate(raw, seededBefore) {
+	switch decideHydrate(raw, seededBefore, allowSample) {
 	case hydrateImport:
 		hadLocalDataset = true
 		if err := app.ImportJSON([]byte(raw)); err != nil {
-			app.Log().Error("dataset hydrate failed; seeding sample", "err", err)
+			app.Log().Error("dataset hydrate failed", "err", err)
 			hadLocalDataset = false
-			_ = app.LoadSample()
-			// Fallback to sample — show the banner so the user knows (L6).
-			uistate.SetSampleActive(true)
+			if allowSample {
+				_ = app.LoadSample()
+				// Portable/dev fallback to sample: show the banner so the user knows.
+				uistate.SetSampleActive(true)
+			} else {
+				// A hosted server is authoritative. Never invent a household when
+				// the local cache is unreadable; the account gate will pull it.
+				uistate.SetSampleActive(false)
+			}
 		}
 		// NOTE (C1): do NOT force the sample-active flag off here. Autosave persists
 		// the seeded sample as a real dataset, so a reload lands on hydrateImport
@@ -234,6 +242,9 @@ func hydrateDataset() {
 		hadLocalDataset = false
 		uistate.SetSampleActive(false)
 	}
+	// A hosted first boot (including a sample cached by an older build) must not
+	// mount financial screens until the account's server workspace is resolved.
+	initializeHostedHydration(hostedDocument() && (!hadLocalDataset || uistate.SampleActive()))
 }
 
 // hydrateAIKey folds the legacy standalone OpenAI-key entry into the single source of
@@ -312,6 +323,12 @@ func startDatasetAutosave() {
 	save := func() {
 		if suspendAutosave {
 			return // a workspace switch is rewriting storage; don't clobber it
+		}
+		if hostedHydrationRequired() {
+			// A hosted first boot owns no authoritative local dataset yet.
+			// Persisting the temporary empty store would make the next reload
+			// mistake it for user data and skip the required server check.
+			return
 		}
 		if pendingEnvelopeRaw != "" {
 			return // an encrypted dataset is awaiting unlock — never overwrite it

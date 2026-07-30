@@ -29,6 +29,43 @@ import (
 	"github.com/monstercameron/CashFlux/internal/workspace"
 )
 
+// importRemoteDataset replaces the local dataset with the server's copy WITHOUT
+// discarding the OpenAI key held on this device.
+//
+// Every push to the backend goes through ExportJSONRedacted (see persist.go and
+// the two upload sites below), which blanks Settings.OpenAIKey on the way out —
+// deliberately, so the secret never leaves the machine. The consequence is that a
+// server dataset can NEVER legitimately carry a key, so a straight ImportJSON —
+// "replaces all data", Settings included — silently wipes the one the user typed
+// here.
+//
+// That is invisible and it is total: on a hosted instance the key is entered,
+// saved, and then erased by the next pull, after which the assistant and the
+// Smart+ statement import both read an empty key and fail with messages about the
+// network. Locally there is no sync, so the same build works perfectly — which is
+// exactly how this hid.
+//
+// A key arriving in the incoming dataset still wins, so a user's own complete
+// backup (manual ExportJSON keeps the key) restores as written.
+func importRemoteDataset(app *appstate.App, dataset []byte) error {
+	keep := strings.TrimSpace(app.Settings().OpenAIKey)
+	if err := app.ImportJSON(dataset); err != nil {
+		return err
+	}
+	if keep == "" {
+		return nil
+	}
+	s := app.Settings()
+	if strings.TrimSpace(s.OpenAIKey) != "" {
+		return nil
+	}
+	s.OpenAIKey = keep
+	if err := app.PutSettings(s); err != nil {
+		app.Log().Error("restoring on-device OpenAI key after remote import", "err", err)
+	}
+	return nil
+}
+
 const syncMetaPrefix = "cashflux:sync-meta:"
 const syncDeviceIDKey = "cashflux:sync-device-id"
 const syncQueueKey = "cashflux:sync-queue"
@@ -1028,6 +1065,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	}
 	pullInFlight = true
 	pullMu.Unlock()
+	markHostedHydrationLoading()
 
 	go func() {
 		defer func() {
@@ -1044,6 +1082,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
+			markHostedHydrationError(customSyncErrorMessage(err, "CashFlux could not load your server data."))
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
@@ -1054,6 +1093,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// then only READS its data sits on "Synced" indefinitely while the server
 			// stays empty, which reads as sync being broken. Safe by construction —
 			// there is nothing on the server to lose an LWW race against.
+			markHostedHydrationReady()
 			forceBackendSeedActiveWorkspace()
 			return
 		}
@@ -1065,11 +1105,13 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
 			// the server keeps it, and onAppUnlocked re-pulls once the passcode is known.
 			setSyncStatus(syncStatus{State: "locked", Pending: pendingSyncCount(), Message: "unlock to sync encrypted data"})
+			markHostedHydrationLocked(resp.Dataset, "")
 			return
 		}
 		if err != nil {
 			logSyncError("backend artifact blob download failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "artifact blob download failed"), AuthFailed: isAuthError(err)})
+			markHostedHydrationError(customSyncErrorMessage(err, "CashFlux could not decrypt or download your server data."))
 			return
 		}
 		meta := loadSyncMeta(w.ID)
@@ -1077,6 +1119,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		remoteUpdatedAt, err := time.Parse(time.RFC3339Nano, resp.Workspace.UpdatedAt)
 		if err != nil {
 			logSyncError("backend sync timestamp parse failed", err)
+			markHostedHydrationError("CashFlux received an invalid server-data timestamp.")
 			return
 		}
 		// The seeded demo is not "local data" for the purposes of this decision. Once
@@ -1088,14 +1131,17 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// sample data is what the app invented, not what the user typed.
 		localIsUsers := hadLocalDataset && !uistate.SampleActive()
 		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, localIsUsers, remoteUpdatedAt, true) {
+			markHostedHydrationReady()
 			return
 		}
 		app := appstate.Default
 		if app == nil {
+			markHostedHydrationError("CashFlux could not open its local data store.")
 			return
 		}
-		if err := app.ImportJSON(dataset); err != nil {
+		if err := importRemoteDataset(app, dataset); err != nil {
 			logSyncError("backend sync import failed", err)
+			markHostedHydrationError("CashFlux could not import your server data.")
 			return
 		}
 		// What just replaced the local dataset is the account's real data, so the
@@ -1115,6 +1161,14 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// far louder signal that something arrived.)
 		noteSyncActivity()
 		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		if hostedHydrationRequired() {
+			// The financial shell is still unmounted. Persist the authoritative
+			// snapshot first, then release the hosted gate without a reload so the
+			// user's just-entered App Lock passcode remains in memory.
+			markHostedHydrationApplying()
+			saveSyncedDatasetThen(w.ID, dataset, meta, markHostedHydrationReady)
+			return
+		}
 		if reloadOnApply {
 			// The dataset and its sync metadata are one durability unit. Reloading
 			// after fire-and-forget IndexedDB writes could persist the dataset but
@@ -1123,8 +1177,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// in order, before allowing the document to reload.
 			saveSyncedDatasetThen(w.ID, dataset, meta, reloadPage)
 		} else {
-			lsSet(datasetStoreKey, string(dataset))
-			saveSyncMeta(w.ID, meta)
+			saveSyncedDatasetThen(w.ID, dataset, meta, nil)
 		}
 	}()
 }
@@ -1171,7 +1224,19 @@ func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, do
 		}
 		return
 	}
-	lsSetThen(datasetStoreKey, string(dataset), func() {
+	payload := dataset
+	if datasetEncryptionActive() {
+		payload, err = encryptDatasetSync(dataset, activePasscode)
+		if err != nil {
+			if app := appstate.Default; app != nil {
+				app.Log().Error("backend sync local encryption failed; snapshot not persisted", "err", err)
+			}
+			setSyncStatus(syncStatus{State: "error", Message: "could not encrypt synced data on this device"})
+			markHostedHydrationError("CashFlux decrypted your server data but could not protect it with App Lock on this device.")
+			return
+		}
+	}
+	lsSetThen(datasetStoreKey, string(payload), func() {
 		lsSetThen(syncMetaKey(workspaceID), string(data), done)
 	})
 }
@@ -1393,7 +1458,7 @@ func resolveConflictUseServer() {
 			setSyncStatus(syncStatus{State: "conflict"})
 			return
 		}
-		if err := app.ImportJSON(dataset); err != nil {
+		if err := importRemoteDataset(app, dataset); err != nil {
 			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server import failed", err)
 			return

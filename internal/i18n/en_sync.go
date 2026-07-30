@@ -48,6 +48,17 @@ var syncPageKeys = Catalog{
 	// on a device that has no lock set. Setting the matching passcode is the recovery.
 	"sync.lockedTitle": "This account's data is encrypted",
 	"sync.lockedHint":  "It was locked with a passcode on another device. Turn on the passcode lock here and enter that same passcode — this device can't read the data until it matches.",
+	// Hosted first-boot gate. The financial shell stays unmounted until this flow
+	// hydrates the account or confirms that the server is empty.
+	"hostedHydration.title":       "Opening your CashFlux",
+	"hostedHydration.intro":       "CashFlux is checking this account before it opens your budget. Sample data is never loaded on this server.",
+	"hostedHydration.loading":     "Checking the server for your existing data...",
+	"hostedHydration.verifying":   "Checking that App Lock passcode...",
+	"hostedHydration.applying":    "Decrypting and saving your synced data...",
+	"hostedHydration.lockedTitle": "Enable App Lock to decrypt your data",
+	"hostedHydration.lockedHint":  "This account was encrypted with App Lock on another device. Enter and confirm that same passcode. CashFlux verifies it against the server data before saving the lock on this device.",
+	"hostedHydration.enableLock":  "Enable App Lock and open my data",
+	"hostedHydration.retry":       "Try loading again",
 	// Reported after a sign-in finds workspaces this device didn't know about.
 	"sync.workspacesAdded": "Added %d workspace(s) from your account. Switch to one to load its data.",
 

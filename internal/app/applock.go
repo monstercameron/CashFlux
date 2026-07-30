@@ -43,9 +43,11 @@ func newSalt() string {
 	return hex.EncodeToString(b)
 }
 
-// enableAppLock sets a passcode (with a fresh salt) and persists it. Reports
-// whether it took (false for an empty passcode or RNG failure).
-func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
+// installAppLock persists an already-approved passcode as this device's App
+// Lock credential. It deliberately does not rewrite or push the current dataset:
+// callers such as hosted first-boot validate and hydrate the authoritative server
+// snapshot before there is any local dataset worth migrating.
+func installAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	salt := newSalt()
 	if salt == "" {
 		return false
@@ -61,10 +63,20 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	// used to unlock with the old credential (C282 lockout-safety invariant).
 	clearPasskey()
 	saveAppLock(c)
-	// Remember the passcode for the session so the dataset autosave can encrypt at
-	// rest immediately (C45), without waiting for a reload + unlock.
 	activePasscode = passcode
-	clearDatasetKeyCache() // the old passcode's derived keys are now wrong
+	clearDatasetKeyCache()
+	clearArtifactKeyCache()
+	return true
+}
+
+// enableAppLock sets a passcode (with a fresh salt) and persists it. Reports
+// whether it took (false for an empty passcode or RNG failure).
+func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
+	if !installAppLock(passcode, autoLockMinutes, hint) {
+		return false
+	}
+	// Remembering the passcode above lets the dataset autosave encrypt at rest
+	// immediately (C45), without waiting for a reload + unlock.
 	migrateDatasetAtRest() // encrypt the existing at-rest copy now
 	// A pull that hit an encrypted snapshot this device could not read parked on
 	// state "locked" with no way out: onAppUnlocked only runs from the passcode
@@ -87,6 +99,7 @@ func disableAppLock() {
 	saveAppLock(applock.Config{})
 	activePasscode = ""
 	clearDatasetKeyCache()
+	clearArtifactKeyCache()
 	migrateDatasetAtRest() // rewrite the at-rest copy as plaintext now
 }
 

@@ -29746,3 +29746,27 @@ job-level orchestration ceiling to 60 minutes and serializes CI browser workers.
 run's logs showed two concurrent ~80 MB Go/WASM boots starving each other: sixteen failures all
 stopped at the shared 45-second `data-app-ready` fixture before any feature assertion. Local
 development retains two workers; Playwright's per-test and assertion timeouts remain strict.
+
+## 2026-07-30 - Hosted boot resolves the account before mounting money screens
+
+The production symptom looked like a broken pull: a fresh browser logged in and displayed the
+demo household instead of the server's records. Transport was healthy. Boot had already seeded and
+autosaved the sample before authentication, while the real production snapshot was encrypted with
+App Lock. The later pull correctly refused to import ciphertext without the passcode, but its only
+recovery affordance lived in Settings behind the already-mounted financial shell.
+
+Hosted boot is now a separate policy rather than a variation of local-first boot. The server marker
+disables implicit sample creation, an empty temporary store cannot autosave, and the route gate
+keeps every financial component unmounted while the account session and active server workspace
+resolve asynchronously. A plaintext snapshot imports and persists before admission. An encrypted
+snapshot presents a required App Lock form; the candidate is checked against the downloaded
+envelope before its hash is stored locally, so a typo cannot become the device credential. After a
+match, the normal pull decrypts the dataset and any artifact blobs, persists the local copy as an
+envelope, and releases the gate without reloading away the in-memory passcode.
+
+The regression uses a disposable full server and two isolated Chromium contexts. The first proves
+hosted empty boot contains no sample, creates a uniquely named account, enables App Lock, and
+uploads the encrypted snapshot. The second proves its pre-login store remains absent, a wrong
+passcode leaves App Lock unset, the matching passcode reveals the exact account, the sample banner
+never appears, and the saved local dataset retains the cryptobox marker. The focused run passed in
+21 seconds; native hydration/App Lock/sync/i18n tests and the WASM build pass as well.
