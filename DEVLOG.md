@@ -29623,3 +29623,17 @@ Interactive root SSH had hidden the assumption by providing `HOME`; the deploy-h
 not. The updater now defaults `HOME`, a persistent module cache, and a separate build cache under
 `/var/cache`, while still honoring explicit operator overrides. This preserves warm unattended
 builds and makes the documented transient-service target behave like the manually proven path.
+
+## 2026-07-30 — C480: separate release rollback and data-backup roots
+
+The first explicit `cashflux-backup.service` run completed the application's consistent SQLite
+backup, then failed its mirror with rsync status 23. The updater had placed root-owned binary
+rollback directories under `/var/backups/cashflux/releases`, while the backup service intentionally
+uses `rsync --delete` to make `/var/backups/cashflux` an exact copy of the application's backup
+set. Rsync refused to delete those protected directories, which is safer than silently losing them
+but leaves the nightly unit failed.
+
+Release rollback points now live in the sibling `/var/backups/cashflux-releases`. The data mirror
+root has one purpose and can keep exact-delete semantics; rollback retention remains independently
+managed by the updater. Existing rollback points are migrated once during the live rollout before
+the backup unit is rerun.

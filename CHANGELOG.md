@@ -107,6 +107,10 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Data backups no longer collide with binary rollbacks.** Native release rollback points now
+  live in `/var/backups/cashflux-releases`, outside the `/var/backups/cashflux` data mirror, so the
+  backup unit's exact `rsync --delete` can verify and mirror application backups without trying to
+  remove root-owned release directories.
 - **Webhook deploys now have deterministic Go cache paths.** The native updater supplies its own
   `HOME`, `GOPATH`, module cache, and build cache defaults, so a clean transient systemd service
   builds exactly like an interactive root deployment instead of failing before compilation.

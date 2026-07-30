@@ -70,7 +70,7 @@ sudo /opt/CashFlux/deploy/production/update.sh --ref <tag-or-commit>
 ```
 
 The ten newest previous releases remain under
-`/var/backups/cashflux/releases`. Data backups remain under
+`/var/backups/cashflux-releases`. Data backups remain under
 `/var/lib/cashflux/backups` and are mirrored to `/var/backups/cashflux`.
 
 ## Deploy hook

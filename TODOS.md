@@ -6490,3 +6490,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   transient-systemd run backed up safely, then stopped before compilation because `HOME`, `GOPATH`,
   and `GOMODCACHE` were absent. The updater now owns deterministic module/build cache defaults,
   making the documented deploy-hook target self-contained.
+- [x] **C480 [OPS][BACKUP] Binary rollback points collide with the verified data mirror.** The
+  first manual timer run created a valid database backup but `rsync --delete` failed rather than
+  deleting root-owned `releases/` inside the destination. Rollback releases now use the sibling
+  `/var/backups/cashflux-releases`; `/var/backups/cashflux` contains only the exact data mirror.
