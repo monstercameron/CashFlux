@@ -29488,3 +29488,18 @@ Validation covers configuration/discovery, direct Register denial, authenticated
 rejection APIs, redeemability, recovery-hash persistence, WASM compilation, and a disposable
 full-server browser lifecycle through console approval, credentials, recovery, first sync, login,
 recovery rotation, rejection, and cleanup.
+## 2026-07-30 — Same-origin CashFlux production rollout: acceptance gates first
+
+The approved production target is one origin, `https://budget.earlcameron.com`, with the full
+CashFlux server serving both browser WASM artifacts and handling its own HTTP/gRPC APIs. The public
+root is the client, `/console/` is the operator surface, and neither should require someone to copy
+the server's static break-glass token into normal browser storage.
+
+I split the rollout into four independently verifiable features before touching implementation.
+C474 owns traversal-safe SPA hosting and same-origin discovery. C475 owns owner-only
+username/password console sessions with HttpOnly refresh credentials and CSRF protection. C476 owns
+the hosted-client authentication gate while preserving local-first/offline behavior. C477 owns the
+droplet boundary: an unprivileged service, loopback listener, Nginx TLS, persistent state, secrets,
+health checks, backups, deployhook integration, and production browser proof. This prevents a
+visually successful deployment from hiding the two failures that matter most here: an open sync
+endpoint or an operator console whose UI is clean but whose role enforcement is only client-side.

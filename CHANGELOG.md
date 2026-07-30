@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The production same-origin CashFlux rollout now has explicit acceptance gates.** C474-C477
+  specify server-hosted client assets, automatic same-origin backend discovery, owner-only
+  credential sessions for the operator console, a hosted-app login/request/recovery gate, and the
+  isolated systemd/Nginx/backup deployment required for `budget.earlcameron.com`.
 - **Full-server signup is now approval-gated by default.** New clients explicitly request access,
   operators approve or reject requests in the standalone console, and approved clients must set
   credentials and acknowledge a one-time recovery code before the session is persisted or sync

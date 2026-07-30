@@ -6432,3 +6432,33 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   before sync begins. Rejection/expiry must create no usable account or session. Cover discovery,
   direct-register denial, approval/rejection, recovery-code persistence, login, and clean first
   sync in a disposable real-server browser test.
+- [~] **C474 [MAJOR][HOSTING] Serve the CashFlux client from the full server for a true
+  same-origin deployment.** Add an explicit application-directory setting and a traversal-safe SPA
+  file handler at `/`, while preserving `/grpc`, `/v1`, `/console/`, `/portal/`, health, metrics,
+  status, and legal routes. HTML and service-worker responses must revalidate; WASM and static
+  assets must carry correct content types and safe cache policy. A hosted client must discover its
+  own origin as the backend without requiring a loopback URL or copied operator token. Prove direct
+  navigation, refresh fallback, assets, API discovery, and gRPC upgrade routing with focused tests.
+- [ ] **C475 [MAJOR][AUTH][ADMIN] Give owners a normal credential-based operator-console
+  session.** Add same-origin admin login/session/refresh/logout endpoints backed by the existing
+  password verifier and rotating session families. Only `owner` users (plus the existing explicit
+  admin-ID compatibility list) may establish an operator session; member/viewer credentials must
+  fail without retaining usable cookies. Store refresh credentials in Secure, HttpOnly,
+  SameSite=Strict cookies, require same-origin/CSRF proof for cookie-authenticated mutations, and
+  keep the static operator token only as an explicit break-glass path. Update the console to open
+  on a clean username/password page, retry once after refresh, and sign out by revoking the family.
+- [ ] **C476 [MAJOR][AUTH][CLIENT] Gate the hosted CashFlux application behind its clean
+  account-access flow.** When the app is served by a full CashFlux server, unauthenticated visitors
+  must see a focused sign-in/request-access/recovery surface before financial data is rendered.
+  Successful password, approved-access, and recovery flows must persist the same-origin server
+  session and enter the application; sign-out returns to the gate. Local-first development and
+  standalone/offline builds must remain ungated. Browser coverage must prove that an unapproved
+  visitor cannot sync, an approved user can log in and sync, and recovery returns to a clean sync.
+- [ ] **C477 [MAJOR][OPS] Deploy the same-origin CashFlux service at
+  `https://budget.earlcameron.com`.** Package the server plus client/services/admin WASM artifacts
+  under `/opt/CashFlux`, run it as a dedicated unprivileged `cashflux` systemd service on loopback,
+  persist state under `/var/lib/cashflux`, and keep secrets in a root-readable environment file.
+  Add Nginx TLS proxying, health/readiness checks, a verified backup/retention timer, and a
+  deployhook target without disturbing ArticleFlux or the portfolio. Registration must remain
+  approval-gated. Production E2E must verify TLS, client and console login, account CRUD, request
+  approval, recovery, first sync, logout/session revocation, health, backup, and service isolation.
