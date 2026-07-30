@@ -336,7 +336,12 @@ func createBlobPartial(root string) (path string, cleanup func(), err error) {
 	}
 	name := f.Name()
 	_ = f.Close()
-	return name, func() { _ = os.Remove(name) }, nil
+	cleanName := filepath.Clean(name)
+	activeBlobPartials.Store(cleanName, struct{}{})
+	return name, func() {
+		activeBlobPartials.Delete(cleanName)
+		_ = os.Remove(name)
+	}, nil
 }
 
 func blobUploadBlobHandler(srv any, stream grpc.ServerStream) error {

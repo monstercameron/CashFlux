@@ -111,6 +111,9 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Slow active blob uploads now survive cleanup on Linux as well as Windows.** In-flight staging
+  paths are registered while an upload owns them, so the stale-partial sweep skips live work on
+  POSIX systems where unlinking an open file would otherwise succeed.
 - **Outbound billing and blob storage now enforce their trust boundaries structurally.** PayPal
   requests accept only the two official API origins (or loopback in development) and known API
   paths; blob reads and writes use Go's confined filesystem root; deterministic load simulation no

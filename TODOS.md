@@ -6512,3 +6512,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   unapproved billing origin, blob I/O is confined with `os.Root`, and the reproducible load
   generator uses an isolated deterministic stream instead of `math/rand`. Focused `gosec`, server,
   and load-generator checks are clean.
+- [x] **C484 [SYNC][LINUX] Stale-partial cleanup can unlink an upload that is still active.**
+  Windows sharing rules masked the issue locally, but POSIX permits deleting an open upload file.
+  The server now registers every active staging path and the cleanup sweep skips those entries;
+  the Linux-failing scenario passes repeatedly and the full server suite remains green.

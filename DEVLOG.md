@@ -29707,3 +29707,17 @@ Blob reads and writes now use `os.Root`, so the operating system confines the ha
 path below the configured blob directory even across symlinks and concurrent filesystem changes.
 Focused server/load-generator tests, vet, and the exact high-severity focused `gosec` invocation
 pass.
+
+## 2026-07-30 — C484: protect active partial uploads on POSIX
+
+The next Linux CI failure was a real platform gap:
+`TestRunBlobCleanupOnOpenSlowUploadDoesNotBlockOtherReaping` deleted both stale-looking files instead
+of only the abandoned one. Windows prevents removal of an open file, but Linux unlinks it
+successfully; an upload quiet for longer than the cleanup age could therefore lose its staging
+pathname while still receiving data.
+
+`createBlobPartial` now registers its normalized staging path for the lifetime of the upload, and
+its cleanup unregisters before removing the file. `RunBlobCleanup` skips registered paths and keeps
+reaping unrelated abandoned partials. The cross-platform test now uses the real staging helper
+instead of depending on Windows sharing behavior; it passes 20 consecutive runs, followed by the
+complete server suite and vet.

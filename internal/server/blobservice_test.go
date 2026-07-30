@@ -377,6 +377,8 @@ func TestBlobServiceUploadRequiresAuthenticatedUser(t *testing.T) {
 // order would permanently block that abandoned partial from ever being
 // reaped, for as long as the slow upload's connection stays open (every
 // periodic sweep would hit the same busy file and abort at the same point).
+// The active-path registry provides the same protection on POSIX, where
+// removing an open file otherwise succeeds.
 func TestRunBlobCleanupOnOpenSlowUploadDoesNotBlockOtherReaping(t *testing.T) {
 	dataDir := t.TempDir()
 	partials := filepath.Join(dataDir, "blobs", "partials")
@@ -384,10 +386,13 @@ func TestRunBlobCleanupOnOpenSlowUploadDoesNotBlockOtherReaping(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	// Named to sort before the genuinely-abandoned partial below, so it's
-	// visited first in os.ReadDir's lexical order.
-	busyPath := filepath.Join(partials, "aaa-slow-but-active.partial")
-	f, err := os.OpenFile(busyPath, os.O_CREATE|os.O_WRONLY, 0o600)
+	// createBlobPartial registers the staging path as an in-flight upload.
+	busyPath, cleanup, err := createBlobPartial(filepath.Join(dataDir, "blobs"))
+	if err != nil {
+		t.Fatalf("create busy partial: %v", err)
+	}
+	defer cleanup()
+	f, err := os.OpenFile(busyPath, os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatalf("open busy partial: %v", err)
 	}
@@ -423,11 +428,10 @@ func TestRunBlobCleanupOnOpenSlowUploadDoesNotBlockOtherReaping(t *testing.T) {
 	}
 
 	// The still-open, still-in-progress upload's own staging file survived —
-	// proving it's Windows' sharing violation, not a successful sweep, that
-	// protected it; it was never meant to be reaped in the first place since
-	// the upload is still active.
+	// the active registry protected it; it was never meant to be reaped while
+	// the upload is active.
 	if _, statErr := os.Stat(busyPath); statErr != nil {
-		t.Fatalf("busy partial should still exist (open handle blocked its removal): %v", statErr)
+		t.Fatalf("busy partial should still exist (active registry blocked its removal): %v", statErr)
 	}
 }
 

@@ -9,8 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
+
+var activeBlobPartials sync.Map
 
 // RunBlobCleanup removes partial-upload artifacts under root's "blobs/partials"
 // directory whose modification time is older than before. It is the pure,
@@ -40,6 +43,9 @@ func RunBlobCleanup(ctx context.Context, dataDir string, before time.Time) (int,
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
+		if _, active := activeBlobPartials.Load(filepath.Clean(path)); active {
+			continue
+		}
 		if err := os.Remove(path); err != nil {
 			if os.IsNotExist(err) {
 				continue
