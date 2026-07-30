@@ -29326,3 +29326,24 @@ Measured validation:
 - hermetic two-client worker regression: 1/1 passed in 46.4s;
 - exact live dev-server regression (`8080` to `8198`): 1/1 passed in 33.9s;
 - live backend snapshot after deletion: version 7, zero accounts, new `workspace.put` audit event.
+## 2026-07-30 - Standalone basic-auth lifecycle baseline
+
+Ran the actual CashFlux client at `127.0.0.1:8080` against the full server at `127.0.0.1:8198`,
+plus the real operator console. The server health/database probes passed. A fresh username/password
+account registered, signed out, and logged back into the same account, confirming the core
+AuthService session path works.
+
+The browser pass also found five blocking gaps that source inspection alone understated:
+
+- the server's static bearer is accepted for ordinary token-mode traffic but receives 403 from the
+  console because the admin handlers ignore the existing static-token operator policy;
+- the standalone console has read/update-plan/suspend/revoke/delete controls but no account create
+  or username/role edit;
+- registration creates and hashes a recovery code, but no RPC or UI can redeem it;
+- the post-registration sync restart reloads the page before the one-time recovery card remains
+  visible, losing the only plaintext copy;
+- the new account immediately reports `workspace not found` and strands one queued mutation instead
+  of treating a missing workspace as first-sync initialization.
+
+C466-C470 split these into independently testable server authorization, CRUD, recovery, first-sync,
+and full real-browser acceptance tasks. No feature code was changed during this audit.

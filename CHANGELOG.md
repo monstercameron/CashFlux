@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A browser-backed standalone-auth gap inventory now defines the missing lifecycle before
+  implementation.** The live `8080` client and `8198` full server proved username/password
+  registration and repeat login, while also exposing five acceptance-gated gaps: the documented
+  static operator token cannot open the admin console, standalone admin CRUD lacks create/edit,
+  recovery codes have no reset door, signup reloads away the one-time recovery code, and a fresh
+  account starts with `workspace not found`. C466-C470 record the server, client, console, security,
+  and final real-browser proof required to call the basic-auth flow complete.
 - **A dedicated GWC 5 services WASM now owns every browser gRPC call.** CashFlux boots one
   versioned Dedicated Worker whose `services.wasm` owns GoGRPCBridge connections, unary calls,
   AI/pairing/workspace streams, cancellation, JSON codec/status work, blob stream chunking, and

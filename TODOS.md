@@ -6346,3 +6346,41 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   input latency against an on-main-thread failing control. This is the soak/performance proof beyond
   C464's successful real-backend sanity E2E; do not claim those measurements until the harness
   exists.
+- [ ] **C466 [MAJOR][AUTH][ADMIN] Make the standalone server's documented operator credential
+  actually open the operator console.** A live `e2e/backend.mjs 8198 8080` server is healthy and its
+  static bearer authenticates ordinary API/RPC traffic, but `/v1/admin/overview` returns 403 because
+  the admin handlers require `CASHFLUX_SERVER_ADMIN_USER_IDS` even in self-host token mode. This
+  contradicts the console's "Admin token" prompt and the security documentation's static-token
+  operator model. Reuse the existing constant-time `httpOperatorAuthorized` policy across every
+  admin overview/list/detail/mutation/dev-seed guard, while retaining deny-by-default behavior for
+  ordinary session users. Prove the static token works and a non-admin JWT remains forbidden.
+- [ ] **C467 [MAJOR][AUTH][ADMIN] Complete standalone account CRUD in the operator console.**
+  The console can list/detail/suspend/reinstate/revoke/delete and edit subscription state, but it
+  cannot create an account or update its username/role. Add audited admin endpoints and accessible
+  console controls to create a username/password account (returning its one-time recovery code
+  exactly once) and edit username/role. Validate collisions, password length, roles, request-size
+  bounds, self-demotion, and rollback/cleanup on partial create failure. The created user must be
+  able to log into the normal CashFlux Cloud settings immediately.
+- [ ] **C468 [MAJOR][AUTH][SECURITY] Implement real forgotten-password recovery.** Registration
+  stores a bcrypt recovery-code hash and shows a plaintext code once, but there is no ResetPassword
+  RPC or "Forgot password?" UI; `SetPassword` is authenticated-only and cannot recover a locked-out
+  user. Add a rate-limited, enumeration-resistant reset door that verifies username + recovery code,
+  atomically rotates password and recovery-code hashes, revokes every prior session, returns a new
+  signed-in token pair and replacement recovery code once, and supports idempotent retry. Add the
+  client recovery form and tests for wrong/used codes, short passwords, session revocation, replay,
+  and username timing-shape parity.
+- [ ] **C469 [MAJOR][AUTH][SYNC] Preserve recovery credentials and seed a fresh account cleanly.**
+  Live registration succeeds, but `persistAuthSession` starts sync before the one-time recovery card
+  can remain on screen; the ensuing reload loses the only plaintext recovery code. The same fresh
+  account immediately reports `workspace not found` with one queued mutation because the client
+  treats a missing initial workspace as a sync error instead of the empty-account seed case its own
+  pull code already documents. Defer sync startup until the user confirms the recovery code is
+  saved, and normalize missing-workspace pull behavior so first sync creates/uploads the local
+  workspace without an error flash or stranded queue.
+- [ ] **C470 [MAJOR][AUTH][E2E] Lock the complete standalone basic-auth lifecycle with a real browser
+  and real CashFlux server.** The hermetic pass must start a disposable full server, sign into the
+  operator console with the static operator token, create and edit a user, register/login through
+  CashFlux, save and use a recovery code, verify the old password/code/sessions fail after reset,
+  verify the new password succeeds and sync reaches `Synced`, then suspend/reinstate and delete the
+  account from the console. Assert no browser errors, no lost recovery card, no `workspace not found`,
+  and no surviving account after deletion.
