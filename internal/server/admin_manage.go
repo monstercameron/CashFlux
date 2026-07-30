@@ -4,11 +4,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // This file adds the admin *management* surface on top of the read-only overview/users
@@ -26,6 +29,8 @@ type AdminUserDetailResponse struct {
 	Provider           string `json:"provider"`
 	Email              string `json:"email"`
 	CreatedAt          string `json:"createdAt"`
+	Username           string `json:"username,omitempty"`
+	Role               string `json:"role"`
 	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
 	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
 	CurrentPeriodEnd   string `json:"currentPeriodEnd,omitempty"`
@@ -66,6 +71,54 @@ type AdminSetPlanRequest struct {
 	Status string `json:"status"`
 }
 
+// AdminCreateUserRequest is the operator-supplied identity for a new local
+// username/password account.
+type AdminCreateUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+// AdminCreateUserResponse returns the created account and its one-time recovery
+// code. The server stores only the bcrypt hash; callers must display the plaintext
+// exactly once.
+type AdminCreateUserResponse struct {
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	Role         string `json:"role"`
+	RecoveryCode string `json:"recoveryCode"`
+}
+
+// AdminUpdateUserRequest changes identity fields on an existing account. Blank
+// values are left unchanged.
+type AdminUpdateUserRequest struct {
+	Username string `json:"username"`
+	Role     string `json:"role"`
+}
+
+// adminAuthorize runs the shared admin gate for routes without an {id} target.
+func adminAuthorize(cfg Config, store *Store, w http.ResponseWriter, r *http.Request, action, resource string) (AuthUser, bool) {
+	if !writeCORS(w, r, cfg) {
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+		return AuthUser{}, false
+	}
+	if store == nil {
+		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+		return AuthUser{}, false
+	}
+	user, ok := httpBearerUser(r, cfg)
+	if !ok {
+		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+		return AuthUser{}, false
+	}
+	if !httpOperatorAuthorized(user, cfg) {
+		auditFromRequest(r, store, user, action+".denied", "admin", resource)
+		writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
+		return AuthUser{}, false
+	}
+	return user, true
+}
+
 // adminGuard runs the shared admin gate (CORS, store, bearer, operator authority)
 // and resolves the target user id from the {id} path value. In self-host token
 // mode the configured static bearer is the operator credential; session users
@@ -73,22 +126,8 @@ type AdminSetPlanRequest struct {
 // the error response and returns ok=false. action/resource label the audit entry
 // on denial.
 func adminGuard(cfg Config, store *Store, w http.ResponseWriter, r *http.Request, action, resource string) (AuthUser, string, bool) {
-	if !writeCORS(w, r, cfg) {
-		writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
-		return AuthUser{}, "", false
-	}
-	if store == nil {
-		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
-		return AuthUser{}, "", false
-	}
-	user, ok := httpBearerUser(r, cfg)
+	user, ok := adminAuthorize(cfg, store, w, r, action, resource)
 	if !ok {
-		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
-		return AuthUser{}, "", false
-	}
-	if !httpOperatorAuthorized(user, cfg) {
-		auditFromRequest(r, store, user, action+".denied", "admin", resource)
-		writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 		return AuthUser{}, "", false
 	}
 	target := strings.TrimSpace(r.PathValue("id"))
@@ -97,6 +136,119 @@ func adminGuard(cfg Config, store *Store, w http.ResponseWriter, r *http.Request
 		return AuthUser{}, "", false
 	}
 	return user, target, true
+}
+
+// handleAdminUserCreate serves POST /v1/admin/users. It creates a normal local
+// account that can immediately use AuthService.Login and returns a recovery code
+// once so the operator can hand the user both credentials out of band.
+func handleAdminUserCreate(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, ok := adminAuthorize(cfg, store, w, r, "admin.user.create", "users")
+		if !ok {
+			return
+		}
+		var req AdminCreateUserRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid request body")
+			return
+		}
+		req.Username = strings.TrimSpace(req.Username)
+		req.Role = strings.TrimSpace(req.Role)
+		if req.Role == "" {
+			req.Role = RoleMember
+		}
+		if req.Username == "" || req.Password == "" {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "username and password are required")
+			return
+		}
+		if len(req.Username) > maxUsernameLength {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, fmt.Sprintf("username must be at most %d characters", maxUsernameLength))
+			return
+		}
+		if len(req.Password) < minLocalPasswordLength {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, fmt.Sprintf("password must be at least %d characters", minLocalPasswordLength))
+			return
+		}
+		if !ValidRole(req.Role) {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "role must be one of: owner, member, viewer")
+			return
+		}
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "password hashing failed")
+			return
+		}
+		recoveryCode, err := generateRecoveryCode()
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "recovery code generation failed")
+			return
+		}
+		recoveryHash, err := bcrypt.GenerateFromPassword([]byte(recoveryCode), bcrypt.DefaultCost)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "recovery code hashing failed")
+			return
+		}
+		user, err := store.CreateLocalUserWithRole(req.Username, string(passwordHash), string(recoveryHash), req.Role, time.Now().UTC())
+		if errors.Is(err, ErrUsernameTaken) {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "username is already registered")
+			return
+		}
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "account creation failed")
+			return
+		}
+		auditFromRequest(r, store, admin, "admin.user.create", "user", user.ID)
+		writeJSON(w, AdminCreateUserResponse{
+			ID: user.ID, Username: user.Username, Role: user.Role, RecoveryCode: recoveryCode,
+		})
+	}
+}
+
+// handleAdminUserUpdate serves PATCH /v1/admin/users/{id}. Username and role are
+// updated atomically so a failed collision cannot partially change permissions.
+func handleAdminUserUpdate(cfg Config, store *Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admin, target, ok := adminGuard(cfg, store, w, r, "admin.user.update", "user")
+		if !ok {
+			return
+		}
+		var req AdminUpdateUserRequest
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid request body")
+			return
+		}
+		req.Username, req.Role = strings.TrimSpace(req.Username), strings.TrimSpace(req.Role)
+		if req.Username == "" && req.Role == "" {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "username or role is required")
+			return
+		}
+		if len(req.Username) > maxUsernameLength {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, fmt.Sprintf("username must be at most %d characters", maxUsernameLength))
+			return
+		}
+		if req.Role != "" && !ValidRole(req.Role) {
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "role must be one of: owner, member, viewer")
+			return
+		}
+		if target == admin.ID && req.Role != "" && req.Role != RoleOwner {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "an admin cannot demote their own account")
+			return
+		}
+		err := store.UpdateUserIdentity(target, req.Username, req.Role)
+		switch {
+		case errors.Is(err, ErrUsernameTaken):
+			writeErrorJSON(w, ErrorReasonInvalidArgument, "username is already registered")
+			return
+		case errors.Is(err, ErrUserNotFound):
+			writeErrorJSON(w, ErrorReasonNotFound, "user not found")
+			return
+		case err != nil:
+			writeErrorJSON(w, ErrorReasonInternal, "account update failed")
+			return
+		}
+		auditFromRequest(r, store, admin, "admin.user.update", "user", target)
+		writeJSON(w, AdminActionResponse{OK: true, Action: "update", UserID: target})
+	}
 }
 
 // handleAdminDevSeed serves POST /v1/admin/dev/seed — a DEV-ONLY helper that populates
@@ -110,22 +262,8 @@ func handleAdminDevSeed(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		// Own guard (not adminGuard, which requires an {id} path value this route lacks).
-		if !writeCORS(w, r, cfg) {
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
-			return
-		}
-		if store == nil {
-			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
-			return
-		}
-		admin, ok := httpBearerUser(r, cfg)
+		admin, ok := adminAuthorize(cfg, store, w, r, "admin.dev.seed", "dev")
 		if !ok {
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
-			return
-		}
-		if !httpOperatorAuthorized(admin, cfg) {
-			auditFromRequest(r, store, admin, "admin.dev.seed.denied", "admin", "dev")
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "admin access required")
 			return
 		}
 		existing, err := store.ListUsers(1, 0)
@@ -216,6 +354,8 @@ func handleAdminUserDetail(cfg Config, store *Store) http.HandlerFunc {
 		resp := AdminUserDetailResponse{
 			ID: u.ID, Provider: u.Provider, Email: u.Email,
 			CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339),
+			Username:  u.Username,
+			Role:      u.Role,
 		}
 		if suspended, err := store.IsUserSuspended(target); err == nil {
 			resp.Suspended = suspended

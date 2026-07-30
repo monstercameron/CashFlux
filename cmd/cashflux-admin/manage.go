@@ -46,7 +46,8 @@ const manageCSS = `
 .action-desc{color:#9aa0aa;font-size:13px}
 .field-row{display:flex;flex-direction:column;gap:.25rem}
 .field-row label{font-size:12px;color:#9aa0aa}
-.field-row input{background:#0f1115;border:1px solid rgba(255,255,255,0.14);border-radius:8px;color:#e8eaed;padding:.5rem .6rem;font-size:14px}
+.field-row input,.field-row select{background:#0f1115;border:1px solid rgba(255,255,255,0.14);border-radius:8px;color:#e8eaed;padding:.5rem .6rem;font-size:14px}
+.recovery-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:18px;letter-spacing:.08em;background:#0f1115;border:1px solid rgba(99,102,241,.45);border-radius:8px;padding:.75rem;word-break:break-all}
 .confirm-delete{display:flex;flex-direction:column;gap:.5rem}
 .confirm-delete span{color:#fca5a5;font-size:13px}
 .usage-list{display:flex;flex-direction:column;gap:.4rem}
@@ -79,6 +80,8 @@ type adminUserDetail struct {
 	Provider           string `json:"provider"`
 	Email              string `json:"email"`
 	CreatedAt          string `json:"createdAt"`
+	Username           string `json:"username"`
+	Role               string `json:"role"`
 	SubscriptionPlan   string `json:"subscriptionPlan"`
 	SubscriptionStatus string `json:"subscriptionStatus"`
 	CurrentPeriodEnd   string `json:"currentPeriodEnd"`
@@ -100,6 +103,13 @@ type adminUsageResp struct {
 	UserID string          `json:"userId"`
 	Days   int             `json:"days"`
 	Usage  []adminUsageRow `json:"usage"`
+}
+
+type adminCreateUserResp struct {
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	Role         string `json:"role"`
+	RecoveryCode string `json:"recoveryCode"`
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +216,34 @@ func postSuspend(token, id string, suspended bool) error {
 	return nil
 }
 
+func createAdminUser(token, username, password, role string) (*adminCreateUserResp, error) {
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password, "role": role})
+	code, responseBody, err := adminDo(token, "POST", "/v1/admin/users", string(body))
+	if err != nil {
+		return nil, err
+	}
+	if code != http.StatusOK {
+		return nil, fmt.Errorf("create user: HTTP %d", code)
+	}
+	var created adminCreateUserResp
+	if err := json.Unmarshal(responseBody, &created); err != nil {
+		return nil, err
+	}
+	return &created, nil
+}
+
+func patchUserIdentity(token, id, username, role string) error {
+	body, _ := json.Marshal(map[string]string{"username": username, "role": role})
+	code, _, err := adminDo(token, "PATCH", "/v1/admin/users/"+id, string(body))
+	if err != nil {
+		return err
+	}
+	if code != http.StatusOK {
+		return fmt.Errorf("update user: HTTP %d", code)
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Clickable users table (replaces the static table in readyView)
 // ---------------------------------------------------------------------------
@@ -272,6 +310,98 @@ func usersTable(users []adminUserRow, onOpen func(string)) ui.Node {
 	)
 }
 
+type createUserProps struct {
+	token   string
+	onClose func()
+}
+
+// createUserView creates a normal username/password account and holds the
+// one-time recovery code on screen until the operator explicitly confirms it
+// was saved.
+func createUserView(p createUserProps) ui.Node {
+	username := ui.UseState("")
+	password := ui.UseState("")
+	role := ui.UseState("member")
+	status := ui.UseState("")
+	submitting := ui.UseState(false)
+	created := ui.UseState[*adminCreateUserResp](nil)
+
+	ui.UseEffect(func() func() { ensureManageCSS(); return nil }, "cf-admin-css")
+	closeHandler := ui.UseEvent(p.onClose)
+	onUsername := ui.UseEvent(func(v string) { username.Set(v) })
+	onPassword := ui.UseEvent(func(v string) { password.Set(v) })
+	onRole := ui.UseEvent(func(v string) { role.Set(v) })
+	onSubmit := ui.UseEvent(func() {
+		u, pw, r := strings.TrimSpace(username.Get()), password.Get(), strings.TrimSpace(role.Get())
+		if u == "" || pw == "" {
+			status.Set("Username and password are required.")
+			return
+		}
+		submitting.Set(true)
+		status.Set("Creating account…")
+		go func() {
+			out, err := createAdminUser(p.token, u, pw, r)
+			submitting.Set(false)
+			if err != nil {
+				status.Set("Create failed: " + err.Error())
+				return
+			}
+			password.Set("")
+			created.Set(out)
+			status.Set("")
+		}()
+	})
+
+	var content ui.Node
+	if out := created.Get(); out != nil {
+		content = Div(css.Class("manage-col"),
+			Div(css.Class("action-card"),
+				H2(css.Class("section-title"), Text("Account created")),
+				Div(css.Class("action-desc"), Text("Give this recovery code to the user now. It is shown only once.")),
+				Div(css.Class("recovery-code"), Attr("aria-label", "One-time recovery code"), Text(out.RecoveryCode)),
+				detailRow("Username", out.Username),
+				detailRow("Role", out.Role),
+				Button(Type("button"), css.Class("btn btn-primary"), Attr("aria-label", "I saved the recovery code"), OnClick(closeHandler), Text("I saved the code")),
+			),
+		)
+	} else {
+		content = Div(css.Class("manage-col"),
+			Div(css.Class("action-card"),
+				Div(css.Class("action-desc"), Text("Create a username/password account that can sign into CashFlux immediately.")),
+				Div(css.Class("field-row"),
+					Label(Attr("for", "create-username"), Text("Username")),
+					Input(Attr("id", "create-username"), Type("text"), Value(username.Get()), Attr("autocomplete", "off"), OnInput(onUsername)),
+				),
+				Div(css.Class("field-row"),
+					Label(Attr("for", "create-password"), Text("Temporary password")),
+					Input(Attr("id", "create-password"), Type("password"), Value(password.Get()), Attr("autocomplete", "new-password"), OnInput(onPassword)),
+				),
+				Div(css.Class("field-row"),
+					Label(Attr("for", "create-role"), Text("Role")),
+					Select(Attr("id", "create-role"), OnChange(onRole),
+						Option(Value("owner"), Selected(role.Get() == "owner"), Text("Owner")),
+						Option(Value("member"), Selected(role.Get() == "member"), Text("Member")),
+						Option(Value("viewer"), Selected(role.Get() == "viewer"), Text("Viewer")),
+					),
+				),
+				Button(Type("button"), css.Class("btn btn-primary"), Disabled(submitting.Get()), OnClick(onSubmit),
+					IfElse(submitting.Get(), Text("Creating…"), Text("Create account"))),
+			),
+		)
+	}
+
+	return Div(css.Class("console-page"),
+		Div(css.Class("console-header"),
+			H1(css.Class("console-title"), Div(css.Class("brand-mark"), Text("C")), Text("Create user")),
+			If(created.Get() == nil, Div(css.Class("header-actions"),
+				Button(Type("button"), css.Class("btn btn-secondary"), Attr("aria-label", "Back to console"), OnClick(closeHandler), Text("← Back")),
+			)),
+		),
+		If(status.Get() != "", Div(css.Class("status-banner"), Attr("role", "status"), Text(status.Get()))),
+		content,
+	)
+}
+
 // ---------------------------------------------------------------------------
 // User detail + management view
 // ---------------------------------------------------------------------------
@@ -299,6 +429,8 @@ func manageView(p manageProps) ui.Node {
 	detail := ui.UseState[*adminUserDetail](nil)
 	usage := ui.UseState[[]adminUsageRow](nil)
 	status := ui.UseState("")
+	usernameInput := ui.UseState("")
+	roleInput := ui.UseState("member")
 	planInput := ui.UseState("")
 	statusInput := ui.UseState("")
 	confirmDelete := ui.UseState(false)
@@ -317,6 +449,12 @@ func manageView(p manageProps) ui.Node {
 				return
 			}
 			detail.Set(d)
+			usernameInput.Set(d.Username)
+			if strings.TrimSpace(d.Role) == "" {
+				roleInput.Set("member")
+			} else {
+				roleInput.Set(d.Role)
+			}
 			planInput.Set(d.SubscriptionPlan)
 			// Default the status picker to a real option so it reflects what will be
 			// sent — an empty status (no subscription yet) would otherwise show the
@@ -335,6 +473,20 @@ func manageView(p manageProps) ui.Node {
 
 	onPlanInput := ui.UseEvent(func(v string) { planInput.Set(v) })
 	onStatusInput := ui.UseEvent(func(v string) { statusInput.Set(v) })
+	onUsernameInput := ui.UseEvent(func(v string) { usernameInput.Set(v) })
+	onRoleInput := ui.UseEvent(func(v string) { roleInput.Set(v) })
+
+	saveIdentity := ui.UseEvent(func() {
+		status.Set("Saving account…")
+		go func() {
+			if err := patchUserIdentity(token, id, strings.TrimSpace(usernameInput.Get()), strings.TrimSpace(roleInput.Get())); err != nil {
+				status.Set("Account update failed: " + err.Error())
+				return
+			}
+			status.Set("Account updated.")
+			reload.Set(reload.Get() + 1)
+		}()
+	})
 
 	savePlan := ui.UseEvent(func() {
 		status.Set("Saving plan…")
@@ -402,6 +554,8 @@ func manageView(p manageProps) ui.Node {
 	} else {
 		summary = Div(css.Class("detail-card"),
 			detailRow("User ID", d.ID),
+			detailRow("Username", d.Username),
+			detailRow("Role", d.Role),
 			detailRow("Email", d.Email),
 			detailRow("Provider", d.Provider),
 			detailRow("Joined", trimDate(d.CreatedAt)),
@@ -484,6 +638,22 @@ func manageView(p manageProps) ui.Node {
 				H2(css.Class("section-title"), Text("Account")),
 				summary,
 				H2(css.Class("section-title"), Text("Actions")),
+				Div(css.Class("action-card"),
+					Div(css.Class("action-desc"), Text("Change the user's sign-in name or access role.")),
+					Div(css.Class("field-row"),
+						Label(Attr("for", "username-input"), Text("Username")),
+						Input(Attr("id", "username-input"), Type("text"), Value(usernameInput.Get()), OnInput(onUsernameInput)),
+					),
+					Div(css.Class("field-row"),
+						Label(Attr("for", "role-input"), Text("Role")),
+						Select(Attr("id", "role-input"), OnChange(onRoleInput),
+							Option(Value("owner"), Selected(roleInput.Get() == "owner"), Text("Owner")),
+							Option(Value("member"), Selected(roleInput.Get() == "member"), Text("Member")),
+							Option(Value("viewer"), Selected(roleInput.Get() == "viewer"), Text("Viewer")),
+						),
+					),
+					Button(Type("button"), css.Class("btn btn-primary"), OnClick(saveIdentity), Text("Save account")),
+				),
 				Div(css.Class("action-card"),
 					Div(css.Class("action-desc"), Text(planCardDesc)),
 					Div(css.Class("field-row"),

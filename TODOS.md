@@ -6357,13 +6357,17 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   Implemented by routing all standalone admin guards through `httpOperatorAuthorized`; the static
   token now opens overview/list/detail/mutations/dev-seed, while signed session users still require
   an explicit `CASHFLUX_SERVER_ADMIN_USER_IDS` match. Focused server tests cover both sides.
-- [ ] **C467 [MAJOR][AUTH][ADMIN] Complete standalone account CRUD in the operator console.**
+- [x] **C467 [MAJOR][AUTH][ADMIN] Complete standalone account CRUD in the operator console.**
   The console can list/detail/suspend/reinstate/revoke/delete and edit subscription state, but it
   cannot create an account or update its username/role. Add audited admin endpoints and accessible
   console controls to create a username/password account (returning its one-time recovery code
   exactly once) and edit username/role. Validate collisions, password length, roles, request-size
   bounds, self-demotion, and rollback/cleanup on partial create failure. The created user must be
   able to log into the normal CashFlux Cloud settings immediately.
+  Implemented with transactional `CreateLocalUserWithRole`/`UpdateUserIdentity`, audited
+  POST/PATCH admin routes, one-time recovery-code return, and new create/edit console screens.
+  Focused tests cover password verification, role persistence, duplicate usernames, atomic
+  collision rollback, and self-demotion protection; the console WASM builds cleanly.
 - [ ] **C468 [MAJOR][AUTH][SECURITY] Implement real forgotten-password recovery.** Registration
   stores a bcrypt recovery-code hash and shows a plaintext code once, but there is no ResetPassword
   RPC or "Forgot password?" UI; `SetPassword` is authenticated-only and cannot recover a locked-out

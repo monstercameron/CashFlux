@@ -27,6 +27,8 @@ type User struct {
 	Provider  string
 	Subject   string
 	Email     string
+	Username  string
+	Role      string
 	CreatedAt time.Time
 }
 
@@ -143,8 +145,10 @@ func (s *Store) GetUserByID(userID string) (User, bool, error) {
 	defer s.observeDB("GetUserByID", time.Now())
 	var u User
 	var created string
-	err := s.db.QueryRow(`SELECT id, provider, subject, email, created_at FROM users WHERE id = ?`, userID).
-		Scan(&u.ID, &u.Provider, &u.Subject, &u.Email, &created)
+	err := s.db.QueryRow(`
+SELECT id, provider, subject, email, COALESCE(username, ''), COALESCE(role, ''), created_at
+FROM users WHERE id = ?`, userID).
+		Scan(&u.ID, &u.Provider, &u.Subject, &u.Email, &u.Username, &u.Role, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, false, nil
 	}
@@ -154,6 +158,9 @@ func (s *Store) GetUserByID(userID string) (User, bool, error) {
 	u.CreatedAt, err = parseTime(created)
 	if err != nil {
 		return User{}, false, fmt.Errorf("server store: parse user time: %w", err)
+	}
+	if strings.TrimSpace(u.Role) == "" {
+		u.Role = RoleMember
 	}
 	return u, true, nil
 }

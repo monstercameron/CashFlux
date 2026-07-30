@@ -149,10 +149,12 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("GET /v1/admin/overview", handleAdminOverview(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/users", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/admin/users", handleAdminUsers(cfg, store))
+	mux.HandleFunc("POST /v1/admin/users", handleAdminUserCreate(cfg, store))
 	// Admin user-management surface (admin_manage.go): single-user detail, per-user usage
 	// analytics, and the account actions (set plan, revoke sessions, delete).
 	mux.HandleFunc("OPTIONS /v1/admin/users/{id}", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/admin/users/{id}", handleAdminUserDetail(cfg, store))
+	mux.HandleFunc("PATCH /v1/admin/users/{id}", handleAdminUserUpdate(cfg, store))
 	mux.HandleFunc("DELETE /v1/admin/users/{id}", handleAdminUserDelete(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/usage", handleCORSPreflight(cfg))
 	mux.HandleFunc("GET /v1/admin/users/{id}/usage", handleAdminUserUsage(cfg, store))

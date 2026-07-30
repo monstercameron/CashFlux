@@ -29359,3 +29359,19 @@ All standalone admin guards now use `httpOperatorAuthorized`: the static token p
 existing constant-time comparison, while JWT/session users still need an explicit admin-id listing.
 Tests prove the static token succeeds with an empty admin-id list and an otherwise-valid ordinary
 session JWT remains 403. Focused `go test ./internal/server` passes.
+## 2026-07-30 - Standalone operator account CRUD
+
+The standalone console previously stopped at support operations: list/detail, plans, session revoke,
+suspend, and delete. Account creation and identity edits existed only through `pkg/embed.Admin`, so
+the full `cashflux-server` could not perform the basic operator workflow its own console implied.
+
+Added audited `POST /v1/admin/users` and `PATCH /v1/admin/users/{id}` routes. Creation hashes the
+operator-supplied password, generates and hashes a one-time recovery code, assigns an explicit
+owner/member/viewer role, and returns only the plaintext recovery code once. The store now performs
+account+role creation and username+role updates transactionally; a duplicate username cannot leave a
+role change behind, and invalid roles never create a row. Self-demotion is rejected.
+
+The console now has a dedicated **Create user** screen that holds the recovery code until the
+operator confirms it was saved, plus username/role editing on the existing user-detail screen.
+Focused server tests verify credential hashes, role persistence, collision rollback, and
+self-demotion. `go test ./internal/server ./pkg/embed` and the js/wasm console build pass.

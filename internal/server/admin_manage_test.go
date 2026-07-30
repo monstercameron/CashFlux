@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // adminReq builds an admin-authenticated request against the test mux.
@@ -26,6 +28,95 @@ func adminReq(t *testing.T, mux http.Handler, method, path, adminToken, body str
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, r)
 	return w
+}
+
+func TestAdminCreateUserCanLogIn(t *testing.T) {
+	adminToken := "admin-secret"
+	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
+	w := adminReq(t, mux, http.MethodPost, "/v1/admin/users", adminToken,
+		`{"username":"priya","password":"correct-horse-battery","role":"viewer"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	var created AdminCreateUserResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if created.ID != "local:priya" || created.Username != "priya" || created.Role != RoleViewer {
+		t.Fatalf("created = %+v", created)
+	}
+	if strings.TrimSpace(created.RecoveryCode) == "" {
+		t.Fatal("recovery code is empty")
+	}
+	user, passwordHash, ok, err := store.GetLocalUserByUsername("priya")
+	if err != nil || !ok {
+		t.Fatalf("lookup created user: ok=%v err=%v", ok, err)
+	}
+	if user.ID != created.ID {
+		t.Fatalf("user id = %q, want %q", user.ID, created.ID)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte("correct-horse-battery")); err != nil {
+		t.Fatalf("created password did not verify: %v", err)
+	}
+	if role, err := store.UserRole(created.ID); err != nil || role != RoleViewer {
+		t.Fatalf("role = %q err=%v, want viewer", role, err)
+	}
+	if w := adminReq(t, mux, http.MethodPost, "/v1/admin/users", adminToken,
+		`{"username":"priya","password":"another-correct-password","role":"member"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("duplicate status = %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestAdminUpdateUserIdentityIsAtomic(t *testing.T) {
+	adminToken := "admin-secret"
+	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
+	first, err := store.CreateLocalUserWithRole("marcus", "bcrypt-hash", "recovery-hash", RoleMember, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	if _, err := store.CreateLocalUserWithRole("taken", "bcrypt-hash", "recovery-hash", RoleMember, time.Now().UTC()); err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	w := adminReq(t, mux, http.MethodPatch, "/v1/admin/users/"+first.ID, adminToken,
+		`{"username":"marcus-updated","role":"viewer"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+	updated, ok, err := store.GetUserByID(first.ID)
+	if err != nil || !ok {
+		t.Fatalf("get updated user: ok=%v err=%v", ok, err)
+	}
+	if updated.Username != "marcus-updated" || updated.Role != RoleViewer {
+		t.Fatalf("updated = %+v", updated)
+	}
+	w = adminReq(t, mux, http.MethodPatch, "/v1/admin/users/"+first.ID, adminToken,
+		`{"username":"taken","role":"owner"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("collision status = %d, want 400; body: %s", w.Code, w.Body.String())
+	}
+	afterCollision, _, err := store.GetUserByID(first.ID)
+	if err != nil {
+		t.Fatalf("get after collision: %v", err)
+	}
+	if afterCollision.Username != "marcus-updated" || afterCollision.Role != RoleViewer {
+		t.Fatalf("collision partially updated identity: %+v", afterCollision)
+	}
+}
+
+func TestAdminUpdateRejectsSelfDemotion(t *testing.T) {
+	adminToken := "admin-secret"
+	adminID := resolvedAdminID(adminToken)
+	mux, store := newAdminTestMux(t, adminID)
+	if err := store.UpsertUser(User{ID: adminID, Provider: "token", Subject: adminID, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("create admin row: %v", err)
+	}
+	if err := store.SetUserRole(adminID, RoleOwner); err != nil {
+		t.Fatalf("set owner role: %v", err)
+	}
+	w := adminReq(t, mux, http.MethodPatch, "/v1/admin/users/"+adminID, adminToken, `{"role":"member"}`)
+	if w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("status = %d, want 412; body: %s", w.Code, w.Body.String())
+	}
 }
 
 func TestAdminUserDetail(t *testing.T) {

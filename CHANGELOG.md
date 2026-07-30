@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The standalone operator console can now create and edit user accounts.** Operators can create
+  a username/password account with an owner/member/viewer role, receive its one-time recovery code,
+  and update username/role from the account detail screen. New audited POST/PATCH admin routes use
+  transactional store operations so collisions cannot leave a half-created or partially-edited
+  identity; created credentials are immediately compatible with normal CashFlux login.
 - **A browser-backed standalone-auth gap inventory now defines the missing lifecycle before
   implementation.** The live `8080` client and `8198` full server proved username/password
   registration and repeat login, while also exposing five acceptance-gated gaps: the documented

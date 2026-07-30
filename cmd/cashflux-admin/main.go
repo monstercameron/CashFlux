@@ -95,6 +95,7 @@ const (
 	screenNetErr                // network / other error
 	screenReady                 // data loaded, console visible
 	screenManage                // managing a single user (detail + actions)
+	screenCreate                // creating a username/password user
 	screenAudit                 // the global security audit log
 )
 
@@ -653,6 +654,7 @@ type readyViewControls struct {
 	hasMore       bool
 	onSignOut     ui.Handler
 	onRefresh     ui.Handler
+	onCreateUser  ui.Handler
 	onOpenUser    func(string)
 	onOpenAudit   ui.Handler
 	onSearchInput ui.Handler
@@ -687,6 +689,13 @@ func readyView(ov *adminOverview, users []adminUserRow, c readyViewControls) ui.
 					Attr("aria-label", "Refresh console data"),
 					OnClick(c.onRefresh),
 					Text("Refresh"),
+				),
+				Button(
+					Type("button"),
+					css.Class("btn btn-primary"),
+					Attr("aria-label", "Create a user account"),
+					OnClick(c.onCreateUser),
+					Text("Create user"),
 				),
 				Button(
 					Type("button"),
@@ -978,6 +987,7 @@ func App() ui.Node {
 		manageUserID.Set(id)
 		view.Set(screenManage)
 	}
+	handleOpenCreate := ui.UseEvent(func() { view.Set(screenCreate) })
 	// handleCloseUser leaves the management view and refreshes the console so any
 	// change (deleted account, new plan) is reflected in the list.
 	handleCloseUser := func() {
@@ -1090,6 +1100,8 @@ func App() ui.Node {
 		return netErrView(netErrMsg.Get(), handleSignOut)
 	case screenManage:
 		return ui.CreateElement(manageView, manageProps{token: lsGet(), userID: manageUserID.Get(), onClose: handleCloseUser})
+	case screenCreate:
+		return ui.CreateElement(createUserView, createUserProps{token: lsGet(), onClose: handleCloseUser})
 	case screenAudit:
 		return auditView(auditEvents.Get(), handleCloseAudit)
 	case screenReady:
@@ -1104,6 +1116,7 @@ func App() ui.Node {
 			hasMore:       usersHasMore.Get(),
 			onSignOut:     handleSignOut,
 			onRefresh:     handleRefresh,
+			onCreateUser:  handleOpenCreate,
 			onOpenUser:    handleOpenUser,
 			onOpenAudit:   handleOpenAudit,
 			onSearchInput: onUserSearchInput,

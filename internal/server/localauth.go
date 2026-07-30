@@ -33,6 +33,14 @@ var ErrUsernameTaken = errors.New("server store: username is already registered"
 // callers are expected to have already validated username/passwordHash are
 // non-empty and passwordHash is a bcrypt hash, not a raw password.
 func (s *Store) CreateLocalUser(username, passwordHash, recoveryCodeHash string, now time.Time) (User, error) {
+	return s.CreateLocalUserWithRole(username, passwordHash, recoveryCodeHash, RoleMember, now)
+}
+
+// CreateLocalUserWithRole creates a local account and assigns its role in one
+// transaction. It is the admin-create counterpart of CreateLocalUser; keeping the
+// insert and authorization role atomic prevents a partially-created account when
+// role persistence fails.
+func (s *Store) CreateLocalUserWithRole(username, passwordHash, recoveryCodeHash, role string, now time.Time) (User, error) {
 	if s == nil || s.db == nil {
 		return User{}, fmt.Errorf("server store: not configured")
 	}
@@ -40,20 +48,79 @@ func (s *Store) CreateLocalUser(username, passwordHash, recoveryCodeHash string,
 	if username == "" || strings.TrimSpace(passwordHash) == "" {
 		return User{}, fmt.Errorf("server store: username and password hash are required")
 	}
-	defer s.observeDB("CreateLocalUser", time.Now())
+	if !ValidRole(role) {
+		return User{}, fmt.Errorf("server store: unknown role %q", role)
+	}
+	defer s.observeDB("CreateLocalUserWithRole", time.Now())
 	id := localUserID(username)
 	now = now.UTC()
-	_, err := s.db.Exec(`
-INSERT INTO users(id, provider, subject, email, created_at, password_hash, recovery_code_hash, username)
-VALUES(?, 'local', ?, '', ?, ?, ?, ?)`,
-		id, username, formatTime(now), passwordHash, recoveryCodeHash, username)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return User{}, fmt.Errorf("server store: begin create local user: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`
+INSERT INTO users(id, provider, subject, email, created_at, password_hash, recovery_code_hash, username, role)
+VALUES(?, 'local', ?, '', ?, ?, ?, ?, ?)`,
+		id, username, formatTime(now), passwordHash, recoveryCodeHash, username, role)
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			return User{}, ErrUsernameTaken
 		}
 		return User{}, fmt.Errorf("server store: create local user: %w", err)
 	}
-	return User{ID: id, Provider: "local", Subject: username, CreatedAt: now}, nil
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("server store: commit create local user: %w", err)
+	}
+	return User{ID: id, Provider: "local", Subject: username, Username: username, Role: role, CreatedAt: now}, nil
+}
+
+// UpdateUserIdentity changes an existing account's username and/or role in one
+// transaction. Blank fields are left unchanged. Username collisions use
+// ErrUsernameTaken so HTTP/RPC callers can report a safe validation error.
+func (s *Store) UpdateUserIdentity(userID, username, role string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	userID, username, role = strings.TrimSpace(userID), strings.TrimSpace(username), strings.TrimSpace(role)
+	if userID == "" {
+		return fmt.Errorf("server store: user id is required")
+	}
+	if username == "" && role == "" {
+		return fmt.Errorf("server store: username or role is required")
+	}
+	if role != "" && !ValidRole(role) {
+		return fmt.Errorf("server store: unknown role %q", role)
+	}
+	defer s.observeDB("UpdateUserIdentity", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("server store: begin update user identity: %w", err)
+	}
+	defer tx.Rollback()
+	var exists int
+	if err := tx.QueryRow(`SELECT 1 FROM users WHERE id = ?`, userID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return ErrUserNotFound
+	} else if err != nil {
+		return fmt.Errorf("server store: look up user identity: %w", err)
+	}
+	if username != "" {
+		if _, err := tx.Exec(`UPDATE users SET username = ? WHERE id = ?`, username, userID); err != nil {
+			if isUniqueConstraintErr(err) {
+				return ErrUsernameTaken
+			}
+			return fmt.Errorf("server store: update username: %w", err)
+		}
+	}
+	if role != "" {
+		if _, err := tx.Exec(`UPDATE users SET role = ? WHERE id = ?`, role, userID); err != nil {
+			return fmt.Errorf("server store: update user role: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("server store: commit update user identity: %w", err)
+	}
+	return nil
 }
 
 // GetLocalUserByUsername looks up an account by its login username and its
