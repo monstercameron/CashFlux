@@ -120,6 +120,14 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Smart+ features that run through the server no longer fail with "invalid bearer token".** A
+  hosted session rotates its access token into browser storage, while `prefs.ServerToken` keeps the
+  static self-host value — and every Smart+ call site sent the prefs copy, so the server rejected it
+  as unauthenticated. Category suggestions, payee cleanup, rules, the smart strip and surface, the
+  credit and recurring reviews, allocation, the dashboard hero, the assistant, the lock-screen quote
+  and the statement text extraction all now resolve the live bearer the same way every other backend
+  call does. The token is resolved inside the connection constructor, so a new call site cannot
+  reintroduce the bug by passing the plausible-looking wrong field.
 - **The OpenAI key no longer disappears on hosted instances every time sync pulls.** Cloud pushes
   redact the key on purpose — it must never leave the device — so the server's copy of the dataset
   always carries an empty one. Pulling that copy replaced the whole dataset, settings included, and

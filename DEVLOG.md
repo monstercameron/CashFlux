@@ -1,3 +1,35 @@
+## 2026-07-30 — "invalid bearer token" was our own server, and the rule lived where the callers couldn't reach it
+
+Cam hit `invalid bearer token` on an AI category suggestion while statement import kept working with
+the same key. That string is not OpenAI's — OpenAI says "Incorrect API key provided". It is
+`internal/server/auth.go`, `codes.Unauthenticated`. So the failing call was going to HIS server, and
+the working one was going straight to OpenAI, which is why one feature looked broken and the other
+looked fine on the same credentials.
+
+`effectiveServerToken` in sync_client.go already documented the rule: a Custom Sync session rotates
+its bearer into browser storage, and that rotated value — not `prefs.ServerToken` — is what a backend
+RPC must send. Everything in internal/app obeyed it. Nothing in internal/screens did: all sixteen
+Smart+ proxy sites passed `pr.ServerToken` straight through. On a hosted instance that value is stale
+or empty, so the server rejected every one of them.
+
+The reason is structural and worth naming, because it will recur otherwise: internal/app imports
+internal/screens, so the screens CANNOT import internal/app. The rule was written down in the one
+package its callers had no way to reach, and sixteen call sites each independently did the plausible
+wrong thing. Fixing the sites without moving the rule would leave the same trap armed for the
+seventeenth.
+
+So `EffectiveServerToken` now lives in uistate — reachable from both sides — and internal/app's
+version delegates to it, keeping one definition. `resolveAIConn` resolves the token INSIDE the
+constructor rather than trusting its caller, which fixes its eight callers at a stroke and means a
+new screen cannot get it wrong by passing the field that looks right. The direct `SendProxyChat`
+sites (allocate, bills, dashboard hero, documents, insights, recurring review, lock quote) were
+rewired the same way.
+
+Worth noting for whoever reads the earlier entry today: this is a SECOND, independent defect on the
+same surface. The first deleted the OpenAI key on sync; this one sent the wrong bearer to the
+backend. They presented as one symptom — "the AI doesn't work on the hosted site" — and neither
+would have been found by fixing the other.
+
 ## 2026-07-30 — the hosted OpenAI key was being deleted by its own privacy rule
 
 Cam reported the assistant refusing to work on `budget.earlcameron.com` with a key set, then that

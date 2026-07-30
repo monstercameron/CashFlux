@@ -40,8 +40,20 @@ type smartAIConn struct {
 }
 
 // resolveAIConn builds the transport config from the app's settings + prefs.
+//
+// The token is resolved HERE rather than trusted from the caller. Every caller
+// passes prefs.ServerToken, which on a hosted (Custom Sync) instance is stale or
+// empty because the live bearer rotates into browser storage instead — so the
+// proxy call came back "invalid bearer token" while features that talk to OpenAI
+// directly kept working, which reads as an AI-key fault and is not one.
+// Resolving inside the constructor means no call site can get this wrong again.
 func resolveAIConn(app *appstate.App, backendActive bool, serverURL, serverToken string) smartAIConn {
-	return smartAIConn{Backend: backendActive, ServerURL: serverURL, ServerToken: serverToken, Key: app.Settings().OpenAIKey}
+	return smartAIConn{
+		Backend:     backendActive,
+		ServerURL:   serverURL,
+		ServerToken: uistate.EffectiveServerToken(serverToken),
+		Key:         app.Settings().OpenAIKey,
+	}
 }
 
 // sendSmartAIOn places one call on a specific model via the resolved transport.

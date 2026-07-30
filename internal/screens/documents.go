@@ -836,7 +836,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
 		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, msgs, 0.1, onResult, onError)
+			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, msgs, 0.1, onResult, onError)
 		} else {
 			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, msgs, 0.1, onResult, onError)
 		}
@@ -934,7 +934,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
 		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, msgs, 0.1, onResult, onError)
+			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, msgs, 0.1, onResult, onError)
 		} else {
 			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, msgs, 0.1, onResult, onError)
 		}

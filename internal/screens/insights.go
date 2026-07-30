@@ -346,7 +346,7 @@ func Insights() ui.Node {
 	// backend proxy path doesn't support tools yet, so it falls back to a plain reply.
 	sendTools := func(messages []ai.Message, tools []ai.Tool, onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
 		if useBackendAI {
-			return ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, chatTemp,
+			return ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp,
 				func(content string, u ai.Usage) { onResult(ai.Message{Role: ai.RoleAssistant, Content: content}, u) }, onErr)
 		}
 		// Route the tool loop through the Responses API: it's the only endpoint that
@@ -901,7 +901,7 @@ func Insights() ui.Node {
 		}
 		noErr := func(string) {}
 		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0, onName, noErr)
+			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0, onName, noErr)
 		} else {
 			ai.SendChat(key, aiBaseURL, model, messages, 0, onName, noErr)
 		}

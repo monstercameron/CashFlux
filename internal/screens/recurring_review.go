@@ -425,7 +425,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		done := func(c string, _ ai.Usage) { aiLoading.Set(false); aiText.Set(c) }
 		fail := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
 		if pr.BackendActive() {
-			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, model, messages, 0.4, done, fail)
+			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0.4, done, fail)
 		} else {
 			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, messages, 0.4, done, fail)
 		}

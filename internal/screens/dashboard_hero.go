@@ -529,7 +529,7 @@ func heroQuote(_ struct{}) ui.Node {
 			temp = 0
 		}
 		if useBackend {
-			ai.SendProxyChat(prefs.ServerURL, prefs.ServerToken, model, messages, temp, onOK, onErr)
+			ai.SendProxyChat(prefs.ServerURL, uistate.EffectiveServerToken(prefs.ServerToken), model, messages, temp, onOK, onErr)
 		} else {
 			ai.SendChat(aiKey, ai.DefaultBaseURL, model, messages, temp, onOK, onErr)
 		}

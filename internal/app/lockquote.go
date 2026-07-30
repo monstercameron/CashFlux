@@ -99,7 +99,7 @@ func refreshDailyLockQuote() {
 	}
 	onErr := func(string) { lockQuoteInFlight = false }
 	if useBackend {
-		ai.SendProxyChat(prefs.ServerURL, prefs.ServerToken, model, messages, 0.85, onOK, onErr)
+		ai.SendProxyChat(prefs.ServerURL, effectiveServerToken(prefs), model, messages, 0.85, onOK, onErr)
 	} else {
 		ai.SendChat(aiKey, ai.DefaultBaseURL, model, messages, 0.85, onOK, onErr)
 	}

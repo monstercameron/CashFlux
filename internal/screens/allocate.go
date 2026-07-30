@@ -293,7 +293,7 @@ func Allocate() ui.Node {
 			{Role: ai.RoleUser, Content: "Profile: " + profile.Get() + ". Ranked places to put new money:\n" + b.String()},
 		}
 		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, pr.ServerToken, aiModel, messages, 0.5,
+			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), aiModel, messages, 0.5,
 				func(c string, _ ai.Usage) { aiLoading.Set(false); aiResult.Set(c) },
 				func(e string) { aiLoading.Set(false); aiErr.Set(e) },
 			)

@@ -137,11 +137,11 @@ var (
 // effectiveServerToken returns the bearer token every backend RPC should use:
 // the locally rotated access token from a Custom Sync session when one
 // exists, otherwise the static token from prefs (self-host token mode).
+// One definition, in uistate, because the screens cannot import this package
+// (internal/app imports internal/screens) and every Smart+ feature over there
+// needs the same answer. See uistate.EffectiveServerToken.
 func effectiveServerToken(pr prefs.Prefs) string {
-	if t := strings.TrimSpace(lsGet(authAccessTokenKey)); t != "" {
-		return t
-	}
-	return pr.ServerToken
+	return uistate.EffectiveServerToken(pr.ServerToken)
 }
 
 // hasRotatableSession reports whether a Custom Sync refresh token is on
