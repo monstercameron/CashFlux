@@ -11,6 +11,7 @@ const (
 	MethodAuthRedeemPairingCode = "/cashflux.v1.AuthService/RedeemPairingCode"
 	MethodAuthRegister          = "/cashflux.v1.AuthService/Register"
 	MethodAuthLogin             = "/cashflux.v1.AuthService/Login"
+	MethodAuthResetPassword     = "/cashflux.v1.AuthService/ResetPassword"
 	MethodAuthRefreshToken      = "/cashflux.v1.AuthService/RefreshToken"
 	MethodAuthLogout            = "/cashflux.v1.AuthService/Logout"
 	MethodAuthListDevices       = "/cashflux.v1.AuthService/ListDevices"
@@ -67,6 +68,17 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Username       string `json:"username"`
 	Password       string `json:"password"`
+	DeviceLabel    string `json:"deviceLabel,omitempty"`
+	IdempotencyKey string `json:"idempotencyKey,omitempty"`
+}
+
+// ResetPasswordRequest consumes the account's current recovery code, replaces
+// both the password and recovery code, revokes every older device session, and
+// returns a fresh session plus the replacement one-time recovery code.
+type ResetPasswordRequest struct {
+	Username       string `json:"username"`
+	RecoveryCode   string `json:"recoveryCode"`
+	NewPassword    string `json:"newPassword"`
 	DeviceLabel    string `json:"deviceLabel,omitempty"`
 	IdempotencyKey string `json:"idempotencyKey,omitempty"`
 }

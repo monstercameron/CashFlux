@@ -24,6 +24,7 @@ var authInterceptorSkipMethods = map[string]bool{
 	backendrpc.MethodAuthRedeemPairingCode:    true,
 	backendrpc.MethodAuthRegister:             true,
 	backendrpc.MethodAuthLogin:                true,
+	backendrpc.MethodAuthResetPassword:        true,
 	backendrpc.MethodAuthRefreshToken:         true,
 	backendrpc.MethodAuthLogout:               true,
 	backendrpc.MethodAuthRequestDevicePairing: true,

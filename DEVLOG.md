@@ -29375,3 +29375,18 @@ The console now has a dedicated **Create user** screen that holds the recovery c
 operator confirms it was saved, plus username/role editing on the existing user-detail screen.
 Focused server tests verify credential hashes, role persistence, collision rollback, and
 self-demotion. `go test ./internal/server ./pkg/embed` and the js/wasm console build pass.
+## 2026-07-30 — Password recovery completes the standalone auth loop
+
+Registration already generated and bcrypt-hashed a recovery code, but it was a dead-end credential:
+there was no unauthenticated RPC or client screen able to consume it. `AuthService.ResetPassword`
+now verifies username plus recovery code through an enumeration-resistant bcrypt path, applies
+per-user and global attempt caps, rotates password and recovery hashes while revoking every old
+refresh family in one transaction, and issues the recovered device a fresh session. The client
+shows the replacement code before starting sync so the only plaintext copy survives long enough to
+be saved.
+
+Retries use a client idempotency key. The replacement recovery code is derived with an HMAC keyed
+by the server session secret, allowing the exact same response to be reconstructed after a timeout;
+the idempotency table stores the token response with its recovery code redacted. Tests prove old
+passwords, old refresh sessions, and consumed recovery codes fail, replacement codes work, unknown
+users and wrong codes return the same error shape, and retries return the same session and code.

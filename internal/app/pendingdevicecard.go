@@ -161,7 +161,7 @@ func pendingDeviceWatcher() uic.Node {
 				notify(customSyncErrorMessage(err, uistate.T("authCards.pendingRedeemFailed")), true)
 				return
 			}
-			persistAuthSession(prefsAtom, pr.ServerURL, out)
+			persistAuthSession(prefsAtom, pr.ServerURL, out, true)
 			phase.Set(string(pendingPhaseSettingPass))
 		}()
 	})

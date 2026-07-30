@@ -4,6 +4,9 @@ package server
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +34,7 @@ func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv authServiceServer) {
 			{MethodName: "RedeemPairingCode", Handler: authRedeemPairingCodeHandler},
 			{MethodName: "Register", Handler: authRegisterHandler},
 			{MethodName: "Login", Handler: authLoginHandler},
+			{MethodName: "ResetPassword", Handler: authResetPasswordHandler},
 			{MethodName: "RefreshToken", Handler: authRefreshTokenHandler},
 			{MethodName: "Logout", Handler: authLogoutHandler},
 			{MethodName: "ListDevices", Handler: authListDevicesHandler},
@@ -55,6 +59,7 @@ type AuthServiceServer interface {
 	RedeemPairingCode(context.Context, backendrpc.RedeemPairingCodeRequest) (backendrpc.TokenPairResponse, error)
 	Register(context.Context, backendrpc.RegisterRequest) (backendrpc.TokenPairResponse, error)
 	Login(context.Context, backendrpc.LoginRequest) (backendrpc.TokenPairResponse, error)
+	ResetPassword(context.Context, backendrpc.ResetPasswordRequest) (backendrpc.TokenPairResponse, error)
 	RefreshToken(context.Context, backendrpc.RefreshTokenRequest) (backendrpc.TokenPairResponse, error)
 	Logout(context.Context, backendrpc.LogoutRequest) (backendrpc.LogoutResponse, error)
 	ListDevices(context.Context, backendrpc.ListDevicesRequest) (backendrpc.ListDevicesResponse, error)
@@ -92,6 +97,7 @@ type authServer struct {
 	// "authorization" and "x-request-id" are set), so DeviceLabel/username is
 	// the best available signal.
 	loginLimiter    *fixedWindowLimiter
+	recoveryLimiter *fixedWindowLimiter
 	registerLimiter *fixedWindowLimiter
 	pairingLimiter  *fixedWindowLimiter
 
@@ -120,6 +126,7 @@ type authServer struct {
 	// pairingGlobalLimiter's doc comment above for the full rationale; the
 	// same trade-off (one server-wide guess budget) applies here.
 	registerGlobalLimiter *fixedWindowLimiter
+	recoveryGlobalLimiter *fixedWindowLimiter
 
 	// devicePairingLimiter/devicePairingGlobalLimiter guard
 	// RequestDevicePairing the same shape as pairingLimiter/
@@ -161,6 +168,8 @@ const pairingGlobalLimiterKey = "redeem-pairing-code:global"
 // see pairingGlobalLimiterKey.
 const registerGlobalLimiterKey = "register:global"
 
+const recoveryGlobalLimiterKey = "reset-password:global"
+
 // devicePairingGlobalLimiterKey is devicePairingGlobalLimiter's constant
 // bucket key — see pairingGlobalLimiterKey.
 const devicePairingGlobalLimiterKey = "request-device-pairing:global"
@@ -178,6 +187,7 @@ const (
 // username/device.
 const (
 	loginLimitPerMinute    = 10
+	recoveryLimitPerMinute = 5
 	registerLimitPerMinute = 5
 	pairingLimitPerMinute  = 10
 
@@ -200,6 +210,7 @@ const (
 	// time, not the deployment unbounded CPU no matter how many device labels
 	// they rotate through.
 	registerGlobalLimitPerMinute = 30
+	recoveryGlobalLimitPerMinute = 30
 
 	// devicePairingLimitPerMinute/devicePairingGlobalLimitPerMinute cap
 	// RequestDevicePairing the same shape as pairingLimitPerMinute/
@@ -228,10 +239,12 @@ func newAuthService(store *Store, cfg Config) *authServer {
 		store:                            store,
 		cfg:                              cfg,
 		loginLimiter:                     newFixedWindowLimiter(loginLimitPerMinute),
+		recoveryLimiter:                  newFixedWindowLimiter(recoveryLimitPerMinute),
 		registerLimiter:                  newFixedWindowLimiter(registerLimitPerMinute),
 		pairingLimiter:                   newFixedWindowLimiter(pairingLimitPerMinute),
 		pairingGlobalLimiter:             newFixedWindowLimiter(pairingGlobalLimitPerMinute),
 		registerGlobalLimiter:            newFixedWindowLimiter(registerGlobalLimitPerMinute),
+		recoveryGlobalLimiter:            newFixedWindowLimiter(recoveryGlobalLimitPerMinute),
 		devicePairingLimiter:             newFixedWindowLimiter(devicePairingLimitPerMinute),
 		devicePairingGlobalLimiter:       newFixedWindowLimiter(devicePairingGlobalLimitPerMinute),
 		watchPairingStatusLimiter:        newFixedWindowLimiter(watchPairingStatusLimitPerMinute),
@@ -506,6 +519,141 @@ func (s *authServer) Login(ctx context.Context, req backendrpc.LoginRequest) (ba
 	return out, nil
 }
 
+// ResetPassword consumes the account's current one-time recovery code. The
+// response deliberately matches Register: it starts a fresh session and shows
+// a replacement recovery code exactly once. Unknown usernames, wrong codes,
+// and already-used codes all take the same bcrypt path and return the same
+// error so this unauthenticated door cannot enumerate accounts.
+func (s *authServer) ResetPassword(ctx context.Context, req backendrpc.ResetPasswordRequest) (backendrpc.TokenPairResponse, error) {
+	if s == nil || s.store == nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
+	}
+	username := strings.TrimSpace(req.Username)
+	recoveryCode := strings.TrimSpace(req.RecoveryCode)
+	if username == "" || recoveryCode == "" || req.NewPassword == "" {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "username, recovery code, and new password are required")
+	}
+	if len(username) > maxUsernameLength {
+		return backendrpc.TokenPairResponse{}, status.Errorf(codes.InvalidArgument, "username must be at most %d characters", maxUsernameLength)
+	}
+	if len(req.NewPassword) < minLocalPasswordLength {
+		return backendrpc.TokenPairResponse{}, status.Errorf(codes.InvalidArgument, "password must be at least %d characters", minLocalPasswordLength)
+	}
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if len(idempotencyKey) > maxIdempotencyKeyLength {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "idempotency key is too long")
+	}
+	now := time.Now().UTC()
+	if !s.recoveryLimiter.allow(username, now) || !s.recoveryGlobalLimiter.allow(recoveryGlobalLimiterKey, now) {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.ResourceExhausted, "too many recovery attempts — try again in a minute")
+	}
+	user, recoveryHash, ok, err := s.store.GetLocalRecoveryByUsername(username)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account recovery failed")
+	}
+	route := backendrpc.MethodAuthResetPassword
+	requestHash := billingRequestHash(route, username, recoveryCode, req.NewPassword, req.DeviceLabel)
+	if ok && idempotencyKey != "" {
+		cached, found, err := s.store.GetIdempotencyResult(user.ID, route, idempotencyKey)
+		if err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency lookup failed")
+		}
+		if found {
+			if cached.RequestHash != requestHash {
+				return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "idempotency key was used for a different request")
+			}
+			var replay backendrpc.TokenPairResponse
+			if err := json.Unmarshal(cached.ResponseBody, &replay); err != nil {
+				return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency replay decode failed")
+			}
+			replay.RecoveryCode = deterministicRecoveryCode(s.cfg.SessionKey, user.ID, idempotencyKey)
+			return replay, nil
+		}
+	}
+	compareHash := []byte(recoveryHash)
+	if !ok {
+		compareHash = dummyRecoveryCodeHash
+	}
+	recoveryMatches := bcrypt.CompareHashAndPassword(compareHash, []byte(recoveryCode)) == nil
+	if !ok || !recoveryMatches {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "username or recovery code is incorrect")
+	}
+	if suspended, err := s.store.IsUserSuspended(user.ID); err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "suspension check failed")
+	} else if suspended {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "account is suspended")
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "password hashing failed")
+	}
+	var replacementCode string
+	if idempotencyKey != "" {
+		replacementCode = deterministicRecoveryCode(s.cfg.SessionKey, user.ID, idempotencyKey)
+	} else {
+		replacementCode, err = generateRecoveryCode()
+		if err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "recovery code generation failed")
+		}
+	}
+	replacementHash, err := bcrypt.GenerateFromPassword([]byte(replacementCode), bcrypt.DefaultCost)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "recovery code hashing failed")
+	}
+	rotated, err := s.store.RotateLocalRecovery(user.ID, recoveryHash, string(passwordHash), string(replacementHash), now)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "account recovery failed")
+	}
+	if !rotated {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "username or recovery code is incorrect")
+	}
+	access, refresh, familyID, err := s.issueSession(user.ID, now, req.DeviceLabel)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
+	}
+	s.auditActor(ctx, user.ID, "auth.password.reset", "user", user.ID)
+	out := backendrpc.TokenPairResponse{
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresInSeconds: int64(sessionAccessTTL.Seconds()),
+		DeviceID:         familyID,
+		RecoveryCode:     replacementCode,
+	}
+	if idempotencyKey != "" {
+		cached := out
+		cached.RecoveryCode = ""
+		body, err := json.Marshal(cached)
+		if err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "encode recovery response failed")
+		}
+		if err := s.store.PutIdempotencyResult(IdempotencyResult{
+			UserID:       user.ID,
+			Route:        route,
+			Key:          idempotencyKey,
+			RequestHash:  requestHash,
+			ResponseBody: body,
+			CreatedAt:    now,
+		}); err != nil {
+			return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "idempotency store failed")
+		}
+	}
+	return out, nil
+}
+
+// deterministicRecoveryCode makes an idempotent ResetPassword retry return
+// the same replacement code without persisting that plaintext secret. The
+// server session key is the HMAC key; the database retains only bcrypt's hash
+// and a cached token pair with RecoveryCode redacted.
+func deterministicRecoveryCode(sessionKey, userID, idempotencyKey string) string {
+	mac := hmac.New(sha256.New, []byte(sessionKey))
+	_, _ = mac.Write([]byte(backendrpc.MethodAuthResetPassword))
+	_, _ = mac.Write([]byte{0})
+	_, _ = mac.Write([]byte(userID))
+	_, _ = mac.Write([]byte{0})
+	_, _ = mac.Write([]byte(idempotencyKey))
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(mac.Sum(nil)[:10])
+}
+
 // RequestDevicePairing starts the admin-approved device-pairing bootstrap
 // (TODOS.md C454): an unauthenticated device — with no working credentials
 // yet — asks to be paired, and gets back an opaque id to watch
@@ -690,6 +838,8 @@ const maxUsernameLength = 128
 // call site) purely to burn the same wall-clock time bcrypt.CompareHashAndPassword
 // would take for a real account — it can never itself authenticate anyone.
 var dummyLoginPasswordHash = mustBcryptHash("cashflux-login-timing-mitigation-placeholder")
+
+var dummyRecoveryCodeHash = mustBcryptHash("cashflux-recovery-timing-mitigation-placeholder")
 
 // mustBcryptHash hashes password at bcrypt.DefaultCost, the same cost every
 // real account's password/recovery-code hash uses (see Register), and panics
@@ -931,6 +1081,21 @@ func authLoginHandler(srv any, ctx context.Context, dec func(any) error, interce
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthLogin}
 	handler := func(ctx context.Context, req any) (any, error) {
 		return srv.(AuthServiceServer).Login(ctx, req.(backendrpc.LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func authResetPasswordHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	var in backendrpc.ResetPasswordRequest
+	if err := dec(&in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ResetPassword(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: backendrpc.MethodAuthResetPassword}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return srv.(AuthServiceServer).ResetPassword(ctx, req.(backendrpc.ResetPasswordRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

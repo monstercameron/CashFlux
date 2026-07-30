@@ -27,6 +27,7 @@ type passwordAuthMode string
 const (
 	passwordAuthLogin    passwordAuthMode = "login"
 	passwordAuthRegister passwordAuthMode = "register"
+	passwordAuthRecover  passwordAuthMode = "recover"
 )
 
 // persistAuthSession is the single place every AuthService success handler in
@@ -38,7 +39,7 @@ const (
 // storeAuthTokenPair, which persists the rotating refresh token, arms the
 // proactive-refresh countdown, and cycles the backend watch onto the new
 // session.
-func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse) {
+func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse, startSync bool) {
 	p := prefsAtom.Get()
 	p.ServerURL = serverURL
 	p.ServerToken = strings.TrimSpace(pair.AccessToken)
@@ -54,7 +55,9 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	// in restartBackendSync. Without this, activating a device left sync inert until
 	// the next page reload — the cloud tab's OAuth path called this itself, and the
 	// code-redemption paths silently did not.
-	restartBackendSync()
+	if startSync {
+		restartBackendSync()
+	}
 }
 
 // PasswordAuthCard is the username/password sign-in surface (TODOS.md C422
@@ -68,6 +71,7 @@ func PasswordAuthCard() uic.Node {
 	mode := uic.UseState(string(passwordAuthLogin))
 	username := uic.UseState("")
 	password := uic.UseState("")
+	recoveryInput := uic.UseState("")
 	submitting := uic.UseState(false)
 	signedIn := uic.UseState(false)
 	// recoveryCode holds Register's one-time RecoveryCode so it can be shown
@@ -86,6 +90,8 @@ func PasswordAuthCard() uic.Node {
 	onMode := func(v string) {
 		mode.Set(v)
 		recoveryCode.Set("")
+		recoveryInput.Set("")
+		password.Set("")
 	}
 	onUsernameInput := uic.UseEvent(func(v string) {
 		username.Set(v)
@@ -93,6 +99,10 @@ func PasswordAuthCard() uic.Node {
 	})
 	onPasswordInput := uic.UseEvent(func(v string) {
 		password.Set(v)
+		idempotencyKey.Set("")
+	})
+	onRecoveryInput := uic.UseEvent(func(v string) {
+		recoveryInput.Set(v)
 		idempotencyKey.Set("")
 	})
 
@@ -124,8 +134,22 @@ func PasswordAuthCard() uic.Node {
 		u := normalizeUsername(username.Get())
 		pw := password.Get()
 		registering := passwordAuthMode(mode.Get()) == passwordAuthRegister
+		recovering := passwordAuthMode(mode.Get()) == passwordAuthRecover
 
 		if registering {
+			if err := validateRegisterCredentials(u, pw); err != nil {
+				notify(registerErrorMessage(err), true)
+				return
+			}
+		} else if recovering {
+			if u == "" {
+				notify(uistate.T("authCards.usernameRequired"), true)
+				return
+			}
+			if strings.TrimSpace(recoveryInput.Get()) == "" {
+				notify(uistate.T("authCards.recoveryRequired"), true)
+				return
+			}
 			if err := validateRegisterCredentials(u, pw); err != nil {
 				notify(registerErrorMessage(err), true)
 				return
@@ -165,6 +189,14 @@ func PasswordAuthCard() uic.Node {
 					Password:    pw,
 					DeviceLabel: customSyncDeviceLabel(),
 				}, &out)
+			} else if recovering {
+				err = invokeWorkerRPC(ctx, pr.ServerURL, token, backendrpc.MethodAuthResetPassword, backendrpc.ResetPasswordRequest{
+					Username:       u,
+					RecoveryCode:   strings.TrimSpace(recoveryInput.Get()),
+					NewPassword:    pw,
+					DeviceLabel:    customSyncDeviceLabel(),
+					IdempotencyKey: key,
+				}, &out)
 			} else {
 				err = invokeWorkerRPC(ctx, pr.ServerURL, token, backendrpc.MethodAuthLogin, backendrpc.LoginRequest{
 					Username:       u,
@@ -177,17 +209,26 @@ func PasswordAuthCard() uic.Node {
 			if err != nil {
 				if registering {
 					notify(customSyncErrorMessage(err, uistate.T("authCards.registerFailed")), true)
+				} else if recovering {
+					notify(customSyncErrorMessage(err, uistate.T("authCards.resetFailed")), true)
 				} else {
 					notify(customSyncErrorMessage(err, uistate.T("authCards.loginFailed")), true)
 				}
 				return
 			}
-			persistAuthSession(prefsAtom, pr.ServerURL, out)
+			// Registration and recovery must keep their one-time replacement
+			// code on screen before the initial sync can remount this card.
+			persistAuthSession(prefsAtom, pr.ServerURL, out, !registering && !recovering)
 			signedIn.Set(true)
 			password.Set("")
-			if registering {
+			recoveryInput.Set("")
+			if registering || recovering {
 				recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
-				notify(uistate.T("authCards.registerSuccess"), false)
+				if registering {
+					notify(uistate.T("authCards.registerSuccess"), false)
+				} else {
+					notify(uistate.T("authCards.resetSuccess"), false)
+				}
 			} else {
 				notify(uistate.T("authCards.loggedInAs", u), false)
 			}
@@ -198,12 +239,17 @@ func PasswordAuthCard() uic.Node {
 		signedIn.Set(false)
 		username.Set("")
 		password.Set("")
+		recoveryInput.Set("")
 		recoveryCode.Set("")
 		idempotencyKey.Set("")
 	})
-	onDismissRecovery := uic.UseEvent(func() { recoveryCode.Set("") })
+	onDismissRecovery := uic.UseEvent(func() {
+		recoveryCode.Set("")
+		restartBackendSync()
+	})
 
 	registering := passwordAuthMode(mode.Get()) == passwordAuthRegister
+	recovering := passwordAuthMode(mode.Get()) == passwordAuthRecover
 	code := recoveryCode.Get()
 
 	if !expanded.Get() {
@@ -243,6 +289,7 @@ func PasswordAuthCard() uic.Node {
 				Options: []ui.SegOption{
 					{Value: string(passwordAuthLogin), Label: uistate.T("authCards.modeLogin")},
 					{Value: string(passwordAuthRegister), Label: uistate.T("authCards.modeRegister")},
+					{Value: string(passwordAuthRecover), Label: uistate.T("authCards.modeRecover")},
 				},
 				Selected: mode.Get(),
 				OnSelect: onMode,
@@ -251,25 +298,34 @@ func PasswordAuthCard() uic.Node {
 				Attr("aria-label", uistate.T("authCards.usernameLabel")), Attr("data-testid", "password-auth-username"),
 				Placeholder(uistate.T("authCards.usernamePlaceholder")), Value(username.Get()), OnInput(onUsernameInput)),
 			Input(css.Class("set-input"), Type("password"),
-				Attr("autocomplete", IfElseValue(registering, "new-password", "current-password")),
+				Attr("autocomplete", IfElseValue(registering || recovering, "new-password", "current-password")),
 				Attr("aria-label", uistate.T("authCards.passwordLabel")), Attr("data-testid", "password-auth-password"),
-				Placeholder(IfElseValue(registering, uistate.T("authCards.passwordPlaceholderRegister"), uistate.T("authCards.passwordPlaceholderLogin"))),
+				Placeholder(IfElseValue(registering || recovering, uistate.T("authCards.passwordPlaceholderRegister"), uistate.T("authCards.passwordPlaceholderLogin"))),
 				Value(password.Get()), OnInput(onPasswordInput)),
+			If(recovering, Input(css.Class("set-input"), Type("text"), Attr("autocomplete", "one-time-code"),
+				Attr("aria-label", uistate.T("authCards.recoveryCodeLabel")), Attr("data-testid", "password-auth-recovery-input"),
+				Placeholder(uistate.T("authCards.recoveryCodePlaceholder")), Value(recoveryInput.Get()), OnInput(onRecoveryInput))),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "password-auth-submit"),
 				DisabledIf(submitting.Get()), OnClick(onSubmit),
-				passwordAuthSubmitLabel(registering, submitting.Get())),
+				passwordAuthSubmitLabel(registering, recovering, submitting.Get())),
 		)),
 	)
 }
 
 // passwordAuthSubmitLabel picks the submit button's label/busy text for the
 // current mode and in-flight state.
-func passwordAuthSubmitLabel(registering, submitting bool) string {
+func passwordAuthSubmitLabel(registering, recovering, submitting bool) string {
 	if registering {
 		if submitting {
 			return uistate.T("authCards.registering")
 		}
 		return uistate.T("authCards.registerSubmit")
+	}
+	if recovering {
+		if submitting {
+			return uistate.T("authCards.resetting")
+		}
+		return uistate.T("authCards.resetSubmit")
 	}
 	if submitting {
 		return uistate.T("authCards.loggingIn")
@@ -373,7 +429,7 @@ func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 				notify(customSyncErrorMessage(err, uistate.T("authCards.linkFailed")), true)
 				return
 			}
-			persistAuthSession(prefsAtom, pr.ServerURL, out)
+			persistAuthSession(prefsAtom, pr.ServerURL, out, true)
 			linked.Set(true)
 			// The Primary card unmounts the instant this succeeds — the pane hides
 			// every sign-in surface once a session exists — so the toast is the only

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Password accounts can now recover without email or an administrator.** The password sign-in
+  card includes a Forgot password flow backed by a new rate-limited `ResetPassword` RPC. A saved
+  one-time code atomically replaces the password and recovery hash, revokes older device sessions,
+  signs the recovered device in, and displays a replacement recovery code. Unknown users and bad
+  codes share a bcrypt timing/error path; idempotent retries reproduce the same secrets without
+  storing the plaintext recovery code.
 - **The standalone operator console can now create and edit user accounts.** Operators can create
   a username/password account with an owner/member/viewer role, receive its one-time recovery code,
   and update username/role from the account detail screen. New audited POST/PATCH admin routes use

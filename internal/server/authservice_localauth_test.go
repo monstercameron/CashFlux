@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,6 +79,116 @@ func TestAuthServerLogin(t *testing.T) {
 		t.Fatal("Login: expected an error for an unknown username")
 	} else if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("Login: expected Unauthenticated for unknown username, got %v", err)
+	}
+}
+
+func TestAuthServerResetPasswordRotatesCredentialsAndSessions(t *testing.T) {
+	s := newTestAuthServer(t)
+	ctx := context.Background()
+	registered, err := s.Register(ctx, backendrpc.RegisterRequest{
+		Username: "cam", Password: "correct-horse-battery", DeviceLabel: "old-device",
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	reset, err := s.ResetPassword(ctx, backendrpc.ResetPasswordRequest{
+		Username:     "cam",
+		RecoveryCode: registered.RecoveryCode,
+		NewPassword:  "new-correct-horse-battery",
+		DeviceLabel:  "recovered-device",
+	})
+	if err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+	if reset.AccessToken == "" || reset.RefreshToken == "" || reset.RecoveryCode == "" {
+		t.Fatalf("ResetPassword: expected session and replacement recovery code, got %+v", reset)
+	}
+	if reset.RecoveryCode == registered.RecoveryCode {
+		t.Fatal("ResetPassword: replacement recovery code must rotate")
+	}
+	if _, err := s.Login(ctx, backendrpc.LoginRequest{Username: "cam", Password: "correct-horse-battery"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("Login with old password: err = %v, want Unauthenticated", err)
+	}
+	if _, err := s.Login(ctx, backendrpc.LoginRequest{Username: "cam", Password: "new-correct-horse-battery"}); err != nil {
+		t.Fatalf("Login with new password: %v", err)
+	}
+	if _, err := s.RefreshToken(ctx, backendrpc.RefreshTokenRequest{RefreshToken: registered.RefreshToken}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("RefreshToken with pre-reset session: err = %v, want Unauthenticated", err)
+	}
+	if _, err := s.ResetPassword(ctx, backendrpc.ResetPasswordRequest{
+		Username: "cam", RecoveryCode: registered.RecoveryCode, NewPassword: "another-good-password",
+	}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("replay consumed recovery code: err = %v, want Unauthenticated", err)
+	}
+	if _, err := s.ResetPassword(ctx, backendrpc.ResetPasswordRequest{
+		Username: "cam", RecoveryCode: reset.RecoveryCode, NewPassword: "another-good-password",
+	}); err != nil {
+		t.Fatalf("ResetPassword with replacement code: %v", err)
+	}
+}
+
+func TestAuthServerResetPasswordDoesNotRevealUnknownUsername(t *testing.T) {
+	s := newTestAuthServer(t)
+	ctx := context.Background()
+	if _, err := s.Register(ctx, backendrpc.RegisterRequest{Username: "cam", Password: "correct-horse-battery"}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	_, wrongCodeErr := s.ResetPassword(ctx, backendrpc.ResetPasswordRequest{
+		Username: "cam", RecoveryCode: "WRONGCODE1234567", NewPassword: "new-correct-horse-battery",
+	})
+	_, unknownUserErr := s.ResetPassword(ctx, backendrpc.ResetPasswordRequest{
+		Username: "nobody", RecoveryCode: "WRONGCODE1234567", NewPassword: "new-correct-horse-battery",
+	})
+	if status.Code(wrongCodeErr) != codes.Unauthenticated || status.Code(unknownUserErr) != codes.Unauthenticated {
+		t.Fatalf("recovery errors = (%v, %v), want both Unauthenticated", wrongCodeErr, unknownUserErr)
+	}
+	if status.Convert(wrongCodeErr).Message() != status.Convert(unknownUserErr).Message() {
+		t.Fatalf("recovery errors reveal username existence: %q != %q", status.Convert(wrongCodeErr).Message(), status.Convert(unknownUserErr).Message())
+	}
+}
+
+func TestAuthServerResetPasswordIdempotentRetryReturnsSameSecrets(t *testing.T) {
+	s := newTestAuthServer(t)
+	ctx := context.Background()
+	registered, err := s.Register(ctx, backendrpc.RegisterRequest{Username: "cam", Password: "correct-horse-battery"})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	req := backendrpc.ResetPasswordRequest{
+		Username:       "cam",
+		RecoveryCode:   registered.RecoveryCode,
+		NewPassword:    "new-correct-horse-battery",
+		DeviceLabel:    "recovered-device",
+		IdempotencyKey: "reset-key-1",
+	}
+	first, err := s.ResetPassword(ctx, req)
+	if err != nil {
+		t.Fatalf("first ResetPassword: %v", err)
+	}
+	second, err := s.ResetPassword(ctx, req)
+	if err != nil {
+		t.Fatalf("retried ResetPassword: %v", err)
+	}
+	if second != first {
+		t.Fatalf("retried reset = %+v, want identical to first %+v", second, first)
+	}
+	cached, found, err := s.store.GetIdempotencyResult(localUserID("cam"), backendrpc.MethodAuthResetPassword, req.IdempotencyKey)
+	if err != nil || !found {
+		t.Fatalf("GetIdempotencyResult: found=%v err=%v", found, err)
+	}
+	if strings.Contains(string(cached.ResponseBody), first.RecoveryCode) {
+		t.Fatal("idempotency cache persisted plaintext recovery code")
+	}
+}
+
+func TestAuthServerResetPasswordRejectsShortPassword(t *testing.T) {
+	s := newTestAuthServer(t)
+	_, err := s.ResetPassword(context.Background(), backendrpc.ResetPasswordRequest{
+		Username: "cam", RecoveryCode: "SOMERECOVERYCODE", NewPassword: "short",
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("ResetPassword short password: err = %v, want InvalidArgument", err)
 	}
 }
 

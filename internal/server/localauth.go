@@ -158,6 +158,81 @@ FROM users WHERE username = ?`, username).
 	return user, passwordHash, true, nil
 }
 
+// GetLocalRecoveryByUsername returns the account and recovery-code hash used
+// by ResetPassword. A missing username and an account without recovery
+// credentials are intentionally indistinguishable to the caller.
+func (s *Store) GetLocalRecoveryByUsername(username string) (user User, recoveryHash string, ok bool, err error) {
+	if s == nil || s.db == nil {
+		return User{}, "", false, fmt.Errorf("server store: not configured")
+	}
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return User{}, "", false, nil
+	}
+	defer s.observeDB("GetLocalRecoveryByUsername", time.Now())
+	var created string
+	err = s.db.QueryRow(`
+SELECT id, provider, subject, email, created_at, recovery_code_hash
+FROM users WHERE username = ?`, username).
+		Scan(&user.ID, &user.Provider, &user.Subject, &user.Email, &created, &recoveryHash)
+	if errors.Is(err, sql.ErrNoRows) || strings.TrimSpace(recoveryHash) == "" {
+		return User{}, "", false, nil
+	}
+	if err != nil {
+		return User{}, "", false, fmt.Errorf("server store: get local recovery: %w", err)
+	}
+	user.CreatedAt, err = parseTime(created)
+	if err != nil {
+		return User{}, "", false, fmt.Errorf("server store: parse local recovery time: %w", err)
+	}
+	return user, recoveryHash, true, nil
+}
+
+// RotateLocalRecovery atomically installs a new password/recovery-code pair
+// and revokes every existing refresh-token family. expectedRecoveryHash makes
+// concurrent or replayed resets single-use: only the caller that verified the
+// still-current hash can win the conditional update.
+func (s *Store) RotateLocalRecovery(userID, expectedRecoveryHash, passwordHash, recoveryHash string, now time.Time) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" || strings.TrimSpace(expectedRecoveryHash) == "" ||
+		strings.TrimSpace(passwordHash) == "" || strings.TrimSpace(recoveryHash) == "" {
+		return false, fmt.Errorf("server store: user and credential hashes are required")
+	}
+	defer s.observeDB("RotateLocalRecovery", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("server store: begin recovery rotation: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`
+UPDATE users
+SET password_hash = ?, recovery_code_hash = ?
+WHERE id = ? AND recovery_code_hash = ?`,
+		passwordHash, recoveryHash, userID, expectedRecoveryHash)
+	if err != nil {
+		return false, fmt.Errorf("server store: rotate recovery credentials: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("server store: rotate recovery credential rows: %w", err)
+	}
+	if affected == 0 {
+		return false, tx.Commit()
+	}
+	if _, err := tx.Exec(`
+UPDATE refresh_tokens SET revoked_at = ?
+WHERE user_id = ? AND revoked_at = ''`, formatTime(now.UTC()), userID); err != nil {
+		return false, fmt.Errorf("server store: revoke sessions during recovery: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("server store: commit recovery rotation: %w", err)
+	}
+	return true, nil
+}
+
 // SetLocalCredentials attaches a login username and bcrypt password hash to
 // an EXISTING user row (looked up by userID, never creating a new one) — the
 // store half of SetPassword's pairing-bootstrap contract (TODOS.md C454):

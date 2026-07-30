@@ -163,6 +163,7 @@ message TokenPairResponse {
   string refresh_token = 2;
   int64 expires_in_seconds = 3;
   string device_id = 4;
+  string recovery_code = 5;
 }
 
 message RedeemPairingCodeRequest {
@@ -182,6 +183,14 @@ message LoginRequest {
   string password = 2;
   string device_label = 3;
   string idempotency_key = 4;
+}
+
+message ResetPasswordRequest {
+  string username = 1;
+  string recovery_code = 2;
+  string new_password = 3;
+  string device_label = 4;
+  string idempotency_key = 5;
 }
 
 message RefreshTokenRequest {
@@ -256,6 +265,7 @@ service AuthService {
   rpc RedeemPairingCode(RedeemPairingCodeRequest) returns (TokenPairResponse);
   rpc Register(RegisterRequest) returns (TokenPairResponse);
   rpc Login(LoginRequest) returns (TokenPairResponse);
+  rpc ResetPassword(ResetPasswordRequest) returns (TokenPairResponse);
   rpc RefreshToken(RefreshTokenRequest) returns (TokenPairResponse);
   rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);

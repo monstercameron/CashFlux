@@ -6368,7 +6368,7 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   POST/PATCH admin routes, one-time recovery-code return, and new create/edit console screens.
   Focused tests cover password verification, role persistence, duplicate usernames, atomic
   collision rollback, and self-demotion protection; the console WASM builds cleanly.
-- [ ] **C468 [MAJOR][AUTH][SECURITY] Implement real forgotten-password recovery.** Registration
+- [x] **C468 [MAJOR][AUTH][SECURITY] Implement real forgotten-password recovery.** Registration
   stores a bcrypt recovery-code hash and shows a plaintext code once, but there is no ResetPassword
   RPC or "Forgot password?" UI; `SetPassword` is authenticated-only and cannot recover a locked-out
   user. Add a rate-limited, enumeration-resistant reset door that verifies username + recovery code,
@@ -6376,6 +6376,13 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   signed-in token pair and replacement recovery code once, and supports idempotent retry. Add the
   client recovery form and tests for wrong/used codes, short passwords, session revocation, replay,
   and username timing-shape parity.
+  Implemented `AuthService.ResetPassword` across the canonical proto, generated contract, JSON
+  bridge, server, and password card. Recovery is rate-limited per username and globally, always
+  pays a bcrypt comparison for unknown users, conditionally rotates credentials and revokes older
+  refresh families in one transaction, and returns a fresh session plus replacement code. Retry
+  keys replay the same session/code without persisting the plaintext recovery secret. Focused tests
+  cover rotation, old password/session rejection, used/replacement codes, enumeration-safe errors,
+  short passwords, and idempotent replay.
 - [ ] **C469 [MAJOR][AUTH][SYNC] Preserve recovery credentials and seed a fresh account cleanly.**
   Live registration succeeds, but `persistAuthSession` starts sync before the one-time recovery card
   can remain on screen; the ensuing reload loses the only plaintext recovery code. The same fresh
