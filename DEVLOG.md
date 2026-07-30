@@ -29417,3 +29417,16 @@ configured app origin, and advertises PATCH for identity edits. This does not br
 other origins: the focused regression proves the console origin succeeds while a hostile origin
 against the same endpoint remains denied. `go test ./internal/server` and the live create/edit
 browser path pass.
+
+## 2026-07-30 — Recovery credentials survive the parent auth transition
+
+Deferring sync was necessary but not sufficient to preserve a one-time recovery code. The first
+implementation still persisted the new access token before showing the code. `CloudConnectionPane`
+therefore classified the account as signed in and unmounted `PasswordAuthCard`, taking its
+component-local recovery code with it even though no sync had started.
+
+Registration and password reset now keep the returned token pair in component memory alongside the
+one-time code. Only **I've saved it** persists the session and starts sync. The real-browser
+lifecycle proves a replacement code remains visible after reset, differs from the consumed code,
+and can be acknowledged before the authenticated pane replaces the form. The js/wasm app build and
+focused app tests pass.

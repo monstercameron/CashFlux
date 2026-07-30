@@ -78,6 +78,11 @@ func PasswordAuthCard() uic.Node {
 	// exactly once; there is no way to fetch it again afterward (TODOS.md
 	// C422 — the deliberate stand-in for email-based password reset).
 	recoveryCode := uic.UseState("")
+	// pendingPair holds Register/ResetPassword's fresh session only while the
+	// one-time recovery code is visible. Persisting it immediately would make
+	// CloudTab classify the page as signed in and unmount this card before the
+	// user can save the code.
+	pendingPair := uic.UseState(backendrpc.TokenPairResponse{})
 	// idempotencyKey is cleared whenever the username/password inputs change
 	// (a different logical request) and minted fresh the first time a submit
 	// with the current inputs is attempted, so retries of one submission
@@ -216,13 +221,10 @@ func PasswordAuthCard() uic.Node {
 				}
 				return
 			}
-			// Registration and recovery must keep their one-time replacement
-			// code on screen before the initial sync can remount this card.
-			persistAuthSession(prefsAtom, pr.ServerURL, out, !registering && !recovering)
-			signedIn.Set(true)
 			password.Set("")
 			recoveryInput.Set("")
 			if registering || recovering {
+				pendingPair.Set(out)
 				recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
 				if registering {
 					notify(uistate.T("authCards.registerSuccess"), false)
@@ -230,6 +232,8 @@ func PasswordAuthCard() uic.Node {
 					notify(uistate.T("authCards.resetSuccess"), false)
 				}
 			} else {
+				persistAuthSession(prefsAtom, pr.ServerURL, out, true)
+				signedIn.Set(true)
 				notify(uistate.T("authCards.loggedInAs", u), false)
 			}
 		}()
@@ -241,11 +245,16 @@ func PasswordAuthCard() uic.Node {
 		password.Set("")
 		recoveryInput.Set("")
 		recoveryCode.Set("")
+		pendingPair.Set(backendrpc.TokenPairResponse{})
 		idempotencyKey.Set("")
 	})
 	onDismissRecovery := uic.UseEvent(func() {
+		pair := pendingPair.Get()
+		pr := prefsAtom.Get().Normalize()
 		recoveryCode.Set("")
-		restartBackendSync()
+		pendingPair.Set(backendrpc.TokenPairResponse{})
+		persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
+		signedIn.Set(true)
 	})
 
 	registering := passwordAuthMode(mode.Get()) == passwordAuthRegister
