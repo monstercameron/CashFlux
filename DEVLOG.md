@@ -29293,3 +29293,36 @@ Validation used the actual development origins (`http://127.0.0.1:8080` to
 database check found one user, one workspace, one current snapshot, one history row, and the
 account marker inside the stored snapshot. The durable hermetic Playwright regression passed
 against its disposable backend as well.
+## 2026-07-30 - Cross-device deletes survive pull reloads and propagate automatically
+
+The create-and-pull worker E2E did not test the reverse mutation. A live user deletion exposed
+that the backend still held the account, so the regression was expanded to require the complete
+chain: client one creates and uploads an account, client two pulls it, client one deletes it,
+the four-second autosave uploads the empty account list, the backend publishes a workspace watch
+event, and client two automatically pulls and removes the account without either client pressing
+**Sync now** for the deletion.
+
+The first complete reproduction separated the failure precisely. Client one's deletion did reach
+the disposable backend: its snapshot advanced from version 3 to 4 with an empty `accounts` list.
+Client two received the watch event as well, proven by its lazy per-device sync ID being created,
+but it kept rendering the account. Its `cashflux:sync-meta:default` entry was missing.
+
+The initial pull imported the server dataset, called asynchronous IndexedDB writes for both the
+dataset and its sync metadata, and immediately reloaded the page. The dataset transaction happened
+to commit first; the metadata transaction lost the reload race. On the next watch-triggered pull,
+`ShouldApplyRemote` saw a real local dataset with no server timestamp and correctly protected it
+as potentially unsynced local work. That safety decision turned the missing metadata into permanent
+cross-device staleness.
+
+`saveSyncedDatasetThen` now commits the dataset first, then its server version/timestamp/hash, and
+only reloads after both IndexedDB transactions complete. The same ordered boundary is used when
+resolving a conflict with the server copy. The E2E also waits for the deferred sample banner before
+using the Cloud pane, eliminating a setup race where that late shell render replaced the toggle
+during a click.
+
+Measured validation:
+
+- `GOOS=js GOARCH=wasm go build` for the render artifact: pass;
+- hermetic two-client worker regression: 1/1 passed in 46.4s;
+- exact live dev-server regression (`8080` to `8198`): 1/1 passed in 33.9s;
+- live backend snapshot after deletion: version 7, zero accounts, new `workspace.put` audit event.

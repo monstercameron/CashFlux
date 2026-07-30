@@ -55,8 +55,11 @@ var perWorkspaceKeys = []string{
 
 func lsGet(key string) string { return browserstore.GetString(key) }
 func lsSet(key, val string)   { browserstore.Set(key, val) }
-func lsRemove(key string)     { browserstore.Remove(key) }
-func reloadPage()             { js.Global().Get("location").Call("reload") }
+func lsSetThen(key, val string, done func()) {
+	browserstore.SetThen(key, val, done)
+}
+func lsRemove(key string) { browserstore.Remove(key) }
+func reloadPage()         { js.Global().Get("location").Call("reload") }
 
 // loadRegistry reads the workspace registry from localStorage (empty when absent).
 func loadRegistry() workspace.Registry {

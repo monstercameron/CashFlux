@@ -1077,7 +1077,6 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			logSyncError("backend sync import failed", err)
 			return
 		}
-		lsSet(datasetStoreKey, string(dataset))
 		// What just replaced the local dataset is the account's real data, so the
 		// "you're viewing sample data" banner — and the "Start fresh" button sitting
 		// next to it — must not survive the hydrate. Nothing else in the sync path
@@ -1088,7 +1087,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
-		saveSyncMeta(w.ID, syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)})
+		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)}
 		// A remote snapshot actually landed on this device — real traffic, same as an
 		// accepted push. (Seen only when reloadOnApply is false; an applying pull that
 		// reloads the page takes the flash with it, which is fine — the reload is a
@@ -1096,7 +1095,15 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		noteSyncActivity()
 		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if reloadOnApply {
-			reloadPage()
+			// The dataset and its sync metadata are one durability unit. Reloading
+			// after fire-and-forget IndexedDB writes could persist the dataset but
+			// lose the metadata; the next watch event then looked like it would
+			// overwrite unsynced local work and was rejected forever. Commit both,
+			// in order, before allowing the document to reload.
+			saveSyncedDatasetThen(w.ID, dataset, meta, reloadPage)
+		} else {
+			lsSet(datasetStoreKey, string(dataset))
+			saveSyncMeta(w.ID, meta)
 		}
 	}()
 }
@@ -1129,6 +1136,23 @@ func saveSyncMeta(workspaceID string, meta syncMeta) {
 	if data, err := json.Marshal(meta); err == nil {
 		lsSet(syncMetaKey(workspaceID), string(data))
 	}
+}
+
+// saveSyncedDatasetThen persists a pulled dataset and the metadata that proves
+// where it came from before continuing. They must survive or fail as a reload
+// boundary together: a dataset without its server timestamp/hash is treated as
+// unsynced local work and correctly protected from later remote overwrites.
+func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, done func()) {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		if done != nil {
+			done()
+		}
+		return
+	}
+	lsSetThen(datasetStoreKey, string(dataset), func() {
+		lsSetThen(syncMetaKey(workspaceID), string(data), done)
+	})
 }
 
 // pendingCount caches the queue LENGTH so callers that only want a number never
@@ -1353,22 +1377,21 @@ func resolveConflictUseServer() {
 			logSyncError("conflict resolve-server import failed", err)
 			return
 		}
-		lsSet(datasetStoreKey, string(dataset))
 		// Deliberate same-tab dataset replacement: advance the cross-tab generation
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
-		saveSyncMeta(wID, syncMeta{
+		meta := syncMeta{
 			UpdatedAt: resp.Workspace.UpdatedAt,
 			Version:   resp.Workspace.Version,
 			Hash:      datasetHash(dataset),
-		})
+		}
 		// Only discard the stash after the import has succeeded — the user's local
 		// edit is recoverable until this point.
 		clearConflictBackup(wID)
 		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		uistate.PostNotice(uistate.T("sync.conflictResolvedUseServer"), false)
-		reloadPage()
+		saveSyncedDatasetThen(wID, dataset, meta, reloadPage)
 	}()
 }
 

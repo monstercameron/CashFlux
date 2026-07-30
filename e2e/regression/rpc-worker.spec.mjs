@@ -13,6 +13,12 @@ async function connectToBackend(app, { expectReload = false } = {}) {
   const toggle = app.locator('[role="switch"]').first();
   if ((await toggle.getAttribute("aria-checked")) !== "true") {
     await toggle.click();
+    // A concurrent discovery render can replace the toggle between pointer
+    // down and click. Retry through its keyboard contract against the current
+    // node instead of continuing with backend sync still disabled.
+    if ((await toggle.getAttribute("aria-checked")) !== "true") {
+      await toggle.press("Space");
+    }
   }
   await expect(toggle).toHaveAttribute("aria-checked", "true");
 
@@ -43,13 +49,22 @@ async function connectToBackend(app, { expectReload = false } = {}) {
 }
 
 test.describe("GWC 5 services worker", () => {
-  test.skip(!!process.env.E2E_BASE_URL, "the external visual-test server has no hermetic RPC backend");
+  test.skip(
+    !!process.env.E2E_BASE_URL && !process.env.E2E_LIVE_RPC,
+    "the external visual-test server has no hermetic RPC backend",
+  );
 
   test("stores a workspace through one worker and pulls it into a second client", async ({
     app,
     browser,
   }) => {
     test.setTimeout(120_000);
+    if (process.env.E2E_LIVE_RPC) {
+      // The normal regression clock is pinned to July 1 for deterministic UI
+      // fixtures. A persistent live backend can already hold a newer snapshot,
+      // so live-mode mutations must use the real current clock for honest LWW.
+      await app.clock.setFixedTime(new Date());
+    }
     await expect
       .poll(() => app.evaluate(() => document.documentElement.getAttribute("data-services-worker")))
       .toBe("ready");
@@ -103,10 +118,43 @@ test.describe("GWC 5 services worker", () => {
         .poll(() => second.workers().filter((worker) => worker.url().endsWith("/services-worker.js")).length)
         .toBe(1);
 
+      // The sample banner mounts after the app-ready marker. Wait for that
+      // deferred shell update before interacting with Settings; otherwise it
+      // can replace the Cloud pane halfway through a toggle click.
+      await expect(second.locator('[data-testid="sample-start-fresh"]')).toBeVisible();
       await connectToBackend(second, { expectReload: true });
       await nav(second, "/accounts");
       await expect(second.locator("#main")).toContainText(ACCOUNT_NAME, { timeout: 30_000 });
       await expect(second.locator('[data-testid="sample-data-banner"]')).toHaveCount(0);
+      const sourceDeviceID = await app.evaluate(() => window.cashfluxStoreGet("cashflux:sync-device-id"));
+      const secondDeviceID = await second.evaluate(() => window.cashfluxStoreGet("cashflux:sync-device-id"));
+      const secondSyncMeta = await second.evaluate(() => window.cashfluxStoreGet("cashflux:sync-meta:default"));
+      expect(sourceDeviceID).toBeTruthy();
+      // A pull-only client lazily creates its device id when its first watch
+      // event arrives; it has not pushed anything yet.
+      expect(secondDeviceID).toBeFalsy();
+      // This metadata must survive the pull-triggered reload. Without it the
+      // next remote update is misclassified as overwriting unsynced local work.
+      expect(secondSyncMeta).toBeTruthy();
+
+      // Deletion must follow the same automatic persistence path as creation:
+      // local mutation -> four-second autosave -> worker PutWorkspace -> watch
+      // event -> second client pull/reload. Do not click "Sync now" anywhere in
+      // this half; that would hide a broken automatic flush.
+      await nav(app, "/accounts");
+      const edit = app.locator('[data-testid^="edit-account-btn-"]').first();
+      const accountID = (await edit.getAttribute("data-testid")).replace("edit-account-btn-", "");
+      const accountRow = app.getByTestId(`acct-row-${accountID}`);
+      await accountRow.locator(".add-wrap > button").click();
+      await app.getByTestId(`delete-account-btn-${accountID}`).click();
+      await app.locator("#cf-dialog-confirm").click();
+      await expect(accountRow).toHaveCount(0);
+
+      // Client two's removal is the persistence oracle for the whole chain:
+      // autosave -> accepted worker RPC -> backend snapshot -> watch -> pull.
+      await expect(second.locator("#main")).not.toContainText(ACCOUNT_NAME, { timeout: 30_000 });
+      await nav(second, "/accounts");
+      await expect(second.locator('[data-testid^="acct-row-"]')).toHaveCount(0);
     } finally {
       await secondContext.close();
     }

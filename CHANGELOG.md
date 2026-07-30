@@ -53,6 +53,13 @@ and every commit updates this file under `Unreleased`.
   flagged: **visibilitychange 1/0/0 ms, focus 7/3/3 ms, online 4/2/1 ms**, from seconds.
 
 ### Fixed
+- **Pulled sync state now survives the reload that applies it.** The browser previously wrote the
+  pulled dataset and its server timestamp/hash to IndexedDB asynchronously, then immediately
+  reloaded. If the dataset committed but the metadata did not, the next cross-device watch event
+  was received but rejected as though it would overwrite unsynced local work. Dataset and sync
+  metadata now commit as one ordered reload boundary. The worker E2E covers create, isolated pull,
+  automatic account deletion, backend persistence, watch delivery, and removal in the second
+  client without clicking **Sync now**.
 - **The real worker-sync regression now proves persistence across isolated clients.** The test
   waits for the deferred sample-data prompt, starts with a clean dataset, creates a uniquely named
   account, observes the actual worker-backed sync queue complete, and then verifies that a second
