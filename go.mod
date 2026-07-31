@@ -3,9 +3,9 @@ module github.com/monstercameron/CashFlux
 go 1.26.5
 
 require (
-	github.com/monstercameron/GoGRPCBridge v0.0.19
+	github.com/monstercameron/GoGRPCBridge v1.1.1
 	github.com/monstercameron/GoWebComponents/v5 v5.0.1
-	github.com/ncruces/go-sqlite3 v0.35.0
+	github.com/ncruces/go-sqlite3 v0.35.2
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
@@ -24,7 +24,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
-	github.com/ncruces/go-sqlite3-wasm/v3 v3.1.35302 // indirect
+	github.com/ncruces/go-sqlite3-wasm/v3 v3.2.35303 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
