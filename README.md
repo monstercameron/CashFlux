@@ -12,6 +12,11 @@
 [![Built by AI agents](https://img.shields.io/badge/built%20by-AI%20agents-8A2BE2.svg)](#-built--maintained-by-ai-agents)
 [![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](./TODOS.md)
 
+> **See where your money moves.**
+> A budgeting app that runs entirely inside your browser tab and keeps your financial data on your
+> device. → **[Read the case study](https://www.earlcameron.com/projects/cashflux)** — what it does,
+> what it is built on, what was hard, and how finished it honestly is.
+
 A **local-first, household-aware budgeting suite** — accounts, transactions, budgets, goals, planning,
 reports, bills, subscriptions, a to-do list, and optional AI insights — that runs **entirely in your
 browser** and keeps your money data **on your device**. No account to create. No data sent anywhere
