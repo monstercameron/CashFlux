@@ -1,3 +1,23 @@
+## 2026-08-09 — Five repositories, one set of house rules
+
+Cam asked for uniform README / Code of Conduct / Contributing / MIT licence / Security across the
+five Flux projects. Auditing them first was worth it: the gaps were not where I would have guessed.
+
+CashFlux already had all five files, so the work here was consistency rather than absence. Two
+things came out of it that are worth recording.
+
+The Code of Conduct was an abridged 68-line version while CodeFlux carried the full 139-line
+Contributor Covenant 2.1. Standardising on the full text is the obvious half. The half that
+mattered is that ours named `mr.e.cameron@gmail.com` as the reporting address, in a public
+repository, indexed. Every other repo used GitHub's private vulnerability reporting, which needs no
+address at all. That is now the mechanism here too.
+
+The MIT licence said `Copyright (c) 2026 monstercameron` — the handle rather than the person.
+ArticleFlux's said `Cameron Earle Cameron`, which is a name mangled twice over. All five now read
+`Earl Cameron`, and the licence bodies were already byte-identical.
+
+CI and test quality across the five is the next pass, deliberately not this one.
+
 ## 2026-08-09 — The README had badges before it had a face
 
 Every Flux project got commissioned brand art; CashFlux's had been sitting in a zip. The README

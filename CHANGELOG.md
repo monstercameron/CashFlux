@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **The community health files now match the other Flux repositories.** `CODE_OF_CONDUCT.md` is
+  the full Contributor Covenant 2.1, identical across all five apart from the private-report URL,
+  and reporting moved from a personal email address to GitHub private advisories — the old file
+  published `mr.e.cameron@gmail.com` in a public repo. The MIT licence's copyright holder reads
+  `Earl Cameron` rather than the `monstercameron` handle.
+
 ### Added
 - **Brand artwork, and the README now leads with it.** `design/branding/` holds the CashFlux
   poster, mark, logo lockup and social card; the poster sits above the title. Only the poster is
