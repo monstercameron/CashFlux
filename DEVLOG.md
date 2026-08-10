@@ -1,3 +1,22 @@
+## 2026-08-09 — The README had badges before it had a face
+
+Every Flux project got commissioned brand art; CashFlux's had been sitting in a zip. The README
+opened with eleven shields and no image, which is a lot of metadata to read before learning what
+the thing looks like.
+
+The poster goes above the title, at 820px rather than full width, because a full-bleed marketing
+image at the top of a technical README reads as an ad. The dashboard screenshot stays where it
+was — it is evidence, and it earns its place further down next to the claim it supports.
+
+The logo lockup is committed but **not** displayed. It sets "Cash" in dark navy on a transparent
+background, so on GitHub's dark theme half the wordmark vanishes. That is the kind of thing that
+looks fine in the editor and broken to most readers, since dark is the default for a large share
+of them. The poster has its own light card baked in and reads correctly either way.
+
+Also folded in here: the repository's GitHub homepage field now points at the case study on
+earlcameron.com rather than at `budget.earlcameron.com`, which is a private, password-gated
+instance holding real financial data and not something to advertise from a public repo.
+
 ## 2026-07-30 — "invalid bearer token" was our own server, and the rule lived where the callers couldn't reach it
 
 Cam hit `invalid bearer token` on an AI category suggestion while statement import kept working with

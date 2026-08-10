@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="design/branding/cashflux-poster.webp" alt="CashFlux — see where your money moves" width="820">
+</p>
+
 # CashFlux
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)

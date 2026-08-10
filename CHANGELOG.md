@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Brand artwork, and the README now leads with it.** `design/branding/` holds the CashFlux
+  poster, mark, logo lockup and social card; the poster sits above the title. Only the poster is
+  rendered — the logo lockup sets "Cash" in dark navy on transparency and would half disappear in
+  GitHub's dark theme, so the mark and lockup are committed for reuse rather than displayed.
+
+### Added
 - **The complete Windows browser matrix can finish reliably in CI.** Clean hosted runners now boot
   one large Go/WASM app at a time instead of starving two concurrent instances, and the E2E job
   ceiling reflects the expanded hosted-auth, sync, accessibility, and route suite. Every strict
