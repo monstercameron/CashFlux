@@ -6599,8 +6599,12 @@ itself a defect this series retires.
 
 **Recommended build order:** phase A (pure logic + contracts, native-testable, no wasm — C488–C495)
 → phase B (bugs shippable against the CURRENT surface — C496–C498) → phase C (shared component —
-C499) → phase D (the merged surface — C500–C512). Phase A unblocks the highest-value parts of phases
-B and D; do not start the layout before it lands.
+C499) → phase E (SMART local categorization — C513–C515) → phase D (the merged surface — C500–C512).
+Phase A unblocks the highest-value parts of phases B and D; do not start the layout before it lands.
+**Phase E is listed after C but before D deliberately:** it is all pure Go with no UI, it decides
+what the surface actually displays (every suggestion, tier and confidence in phase D reads from
+C515's resolver), and every charge SMART resolves for free is one SMART+ is not paid to guess at.
+Building D first would mean wiring the UI to four ad-hoc suggestion sources and then rewiring it.
 
 > **Dedupe note:** C374 (review-inbox triage header + accept-all-high-confidence) and C375 (toolbar
 > density) are SUPERSEDED by C502/C504 and C500 respectively — close them as part of this series
@@ -6844,3 +6848,73 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   native checkbox (native renders near-invisibly on some OS/theme combinations), and QA CF-02
   established that `aria-disabled` on primary actions breaks automation — an unarmed control must
   explain itself rather than be disabled. AC: keyboard-only and screen-reader passes on both modes.
+
+### Phase E — SMART (local, non-LLM) categorization ★
+
+> **Terminology (Cam, 2026-08-15) — use these exactly, everywhere:**
+> **SMART = local and deterministic. No LLM, no network, no key, no cost.** It runs on the user's
+> own data and on shipped tables: rules, correction history, and the merchant dictionary below.
+> **SMART+ = LLM-based** (`internal/smartai` → OpenAI, bring-your-own-key or backend proxy). It
+> costs money, leaves the device, and is always behind an explicit consent step.
+> A feature that spends tokens is SMART+; a feature that cannot is SMART. Do not label local
+> heuristics "Smart+" in copy or ticket text, and do not name an LLM feature "Smart".
+> This split is what makes C504's design honest: **SMART fills the confident rows for free, and
+> SMART+ is only paid for the gaps SMART left.** Phase E is what makes the free half actually good,
+> so the paid half is asked to do less.
+
+- [ ] **C513 [MAJOR][SMART] Suggest a category from what the user did with similar charges before.**
+  ★ `internal/learntally` ALREADY does the core of this — a persisted payee→categoryID correction
+  tally with a `DefaultMinCount = 3` threshold (`internal/learntally/tally.go`, stored via
+  `internal/uistate/learntally_store.go`) — but it is wired into **quick-add only**
+  (`internal/app/quickadd.go`) and nothing else consults it. `AutoCategorizeTransaction`
+  (`appstate.go:1047`) is **rules-only**: it applies user-authored rules and has no notion of "you
+  filed this merchant as Groceries the last six times." Two pieces of work:
+  (a) **Generalize the key.** `learntally.NormalizePayee` lowercases and collapses whitespace on the
+  WHOLE payee, so `AMZN MKTP US*2H4RT9` and `AMZN MKTP US*8K1QP2` are different keys and a repeated
+  merchant never crosses the threshold — the exact case this feature exists for. Key the tally on
+  the C494 merchant grouping key (`payeealias.Resolver`-normalized), keeping the raw payee as a
+  secondary, higher-confidence key so an exact repeat still outranks a stem match.
+  (b) **Consult it everywhere**, not just quick-add: `AutoCategorizeTransaction`, the review inbox
+  (both modes), CSV/document import, and the bulk apply path.
+  Record evidence with the suggestion ("you filed 6 of 7 Amazon charges as Shopping › Household"),
+  since C503's context band and the no-black-boxes rule both need the *why*, not just the answer.
+  AC: pure package, table-driven tests; a merchant categorized 3+ times consistently is suggested on
+  the next import with its evidence string; a merchant with a split history (4 Groceries / 3 Dining)
+  reports LOW confidence rather than picking a winner. Closes the long-open **C33** ("no
+  self-learning from corrections") and feeds **C34** (live suggestion while typing).
+
+- [ ] **C514 [MAJOR][SMART] Ship a merchant dictionary and substring-match against it.** ★ New user,
+  empty history, no rules: today every one of their first 200 charges is uncategorized with zero
+  suggestions, and the only way out is spending money on SMART+. A shipped table of well-known
+  merchants → default category fixes the cold start for free. Build as a pure package
+  (`internal/merchantdict`), data separate from logic so the table can grow without touching the
+  matcher.
+  **Matching must not be naive `strings.Contains`.** Require token-boundary matches and prefer the
+  LONGEST match, or the table will misfire: `SP * THE FEED` contains "feed"; `SHELL OIL` vs a
+  merchant named "Shell Shocked"; `PAYPAL *STEAM GAMES` must resolve to Steam, not PayPal — payment
+  processors (`SQ *`, `PAYPAL *`, `TST*`, `CHECKCARD`) are PREFIXES to strip before matching, not
+  merchants to match. Normalize through the same C494 key so the dictionary, the history tally, and
+  the batch action all agree on what "this merchant" means.
+  Map to CATEGORY KINDS/names, not to the user's category IDs (which don't exist yet at first run):
+  resolve a dictionary hit onto the user's actual categories by name, and skip the suggestion when
+  they have no matching category rather than silently creating one.
+  Constraints: entries must be hand-authored or from a clearly licence-compatible source — do not
+  import a scraped or licensed merchant dataset. Keep the table's compiled size in check; the wasm
+  binary is already ~80 MB and CI has starved on concurrent boots (see C486), so measure the delta
+  and keep the data in one file that could later be lazy-loaded if it grows.
+  AC: pure package with table-driven tests including the processor-prefix and false-positive cases
+  above; a fresh household importing a typical statement gets a majority of charges suggested with
+  no key configured; measured wasm size delta recorded in the commit.
+
+- [ ] **C515 [MAJOR][SMART] One ranked resolver, so four suggestion sources don't fight.** With
+  rules (existing), history (C513), the dictionary (C514), and SMART+ (C504), four things can all
+  claim a category for the same charge and the UI has no way to rank them or say where an answer
+  came from. Build one pure resolver that returns an ordered result — **user rule > exact-payee
+  history > stem history > merchant dictionary > SMART+** — carrying `Source`, `Confidence`, and a
+  plain-English `Evidence` string. Everything downstream reads THIS, not the individual sources:
+  C488's confidence tiers, C502's tier grouping, C503's context band, and C504's "gaps your rules
+  left" count all become derivations of one function instead of four ad-hoc call sites.
+  A user rule always wins — an LLM must never override something the user explicitly told the app.
+  AC: pure package, table-driven tests over every precedence pair; the review inbox shows the source
+  of each suggestion; SMART+ is asked ONLY for charges the local sources could not resolve, which is
+  what makes C509's cost estimate small and honest.
