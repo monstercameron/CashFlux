@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The Dashboard net-worth trend widget no longer shows a headline figure above its own chart.**
+  Paged to a past month, the trend series anchors on that viewed period and can end before today
+  while the headline figure stays live (net worth is a position, not period activity) — so the
+  "current" number could sit above the chart's own plotted range. The range and the plotted series
+  now both extend to include the live figure when the anchored series falls short of it.
 - **Bill-due notifications no longer age into stale, contradictory alerts.** A due-date card's text
   was written once and never cleared once its cycle rolled over, so an old "due in N days" kept
   aging into a growing "overdue by N days" while a fresh notification for the next cycle could

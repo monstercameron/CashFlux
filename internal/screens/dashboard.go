@@ -1626,6 +1626,18 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 				high = m
 			}
 		}
+		// net is always the LIVE net worth (a position, not period activity — see
+		// the "netWorthAsOfToday" comment above), but the series anchors on the
+		// VIEWED period (periodChartAnchor in frameDataCtx) and ends short of today
+		// once the dashboard is paged to a past period. Without this, a paged-away
+		// dashboard could show a headline figure above the chart's own high — the
+		// range text silently understating where "now" actually sits.
+		if net.Amount < low.Amount {
+			low = net
+		}
+		if net.Amount > high.Amount {
+			high = net
+		}
 		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(low), fmtMoney(high))
 	}
 	// Plot in major units (dollars), not raw minor units (cents): feeding cents
@@ -1647,14 +1659,30 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		// C215: the final cutoff is next-month-start, so it captures the current
 		// month's data "so far" — label it as the current month + "(so far)" instead
 		// of the next month's name, which read as a confusing unlabeled partial point.
-		if i == len(series)-1 {
+		if i == len(series)-1 && m.Amount == net.Amount {
 			// The current partial month's point. "Jul '26 (so far)" was too wide for the
 			// last x-axis tick (it sits at the right edge, middle-anchored) and clipped to
 			// "Jul '26 (so f…". A short, distinct "Now" reads clearly as the live point and
 			// never collides with the prior "Jul '26" cutoff tick (task #6b).
+			// Guarded to the live figure: when the series is anchored on a past
+			// viewed period this point ISN'T today, and the true live point is
+			// appended separately below — labeling both "Now" would read as two
+			// different values both claiming to be the present moment.
 			label = uistate.T("dashboard.trendNow")
 		}
 		pts[i] = chartspec.Point{X: float64(i), Y: float64(m.Amount) / div, Label: label}
+	}
+	// When the series is anchored on a past viewed period (periodChartAnchor in
+	// frameDataCtx), it can end short of today while the headline `net` figure
+	// above stays live (a position, not period activity). Append the live value
+	// as a trailing point so the plotted axis (its domain is computed from these
+	// points in web/chart.js) never clips the figure it's captioned under.
+	if n := len(series); n > 0 && series[n-1].Amount != net.Amount {
+		pts = append(pts, chartspec.Point{
+			X:     float64(n),
+			Y:     float64(net.Amount) / div,
+			Label: uistate.T("dashboard.trendNow"),
+		})
 	}
 	yFmt := ".3~s" // compact SI w/ enough precision to keep narrow-range ticks distinct, e.g. "21.4k"
 	if currency.Symbol(net.Currency) == "$" {

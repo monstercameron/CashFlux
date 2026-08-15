@@ -1,3 +1,21 @@
+## 2026-08-14 — The headline figure that outgrew its own chart
+
+`periodChartAnchor` is deliberate: page the dashboard to June, and its trailing charts trend up to
+June, not silently to today. But the net-worth trend widget's headline number is intentionally
+*not* period-scoped — it's a position, always "as of now" (the same reasoning that makes the
+"this month" delta chip say "as of today" instead of a misleading period-relative figure once
+you've paged away). Put those two correct, separately-motivated decisions next to each other and
+they disagree: paged to a past month, the chart's last plotted point is that month's balance, while
+the number captioned above it is today's live net worth. If net worth grew since then — the common
+case — the headline sits above the top of its own chart, and the "Range" text under it (computed
+purely from the anchored series) doesn't even mention where "now" actually is.
+
+Fixed at the point where the two numbers actually meet: `trendFrame` in dashboard.go now folds the
+live `net` figure into both the range calculation and, when the anchored series doesn't already
+reach today, the plotted points themselves — appended as a trailing "Now" point. The original
+last-point's own "Now" label is now guarded to only apply when it truly is today's value, so paging
+away never produces two points both claiming to be the present moment.
+
 ## 2026-08-14 — A bill-due card that never learns its own bill got paid
 
 Reported as "stale and contradictory due-date alerts." The reproduction was simple once traced:
