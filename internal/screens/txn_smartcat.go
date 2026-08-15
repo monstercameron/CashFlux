@@ -69,15 +69,14 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 
 	cats := app.Categories()
 	catName := make(map[string]string, len(cats))
-	catIDByName := make(map[string]string, len(cats))
 	existingLower := make(map[string]bool, len(cats))
-	var catList strings.Builder
 	for _, c := range cats {
 		catName[c.ID] = c.Name
-		catIDByName[c.Name] = c.ID
 		existingLower[strings.ToLower(c.Name)] = true
-		catList.WriteString(c.Name + "\n")
 	}
+	// Qualified paths + kinds, shared by the prompt and the parser (C489/C490).
+	catalog := smartCatalog(cats)
+	catList := catalog.Prompt()
 
 	reset := func() {
 		scanned.Set(false)
@@ -132,7 +131,7 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 				loading.Set(false)
 				return
 			}
-			runSmartAI(aiConn, smartai.SuggestCategories(lines.String(), catList.String()),
+			runSmartAI(aiConn, smartai.SuggestCategories(lines.String(), catList),
 				func(text string) {
 					s := smartai.ParseCategorySuggestions(text, existingLower)
 					catSugs.Set(s)
@@ -178,13 +177,18 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 			loading.Set(false)
 			return
 		}
-		req := smartai.AutoCategorize(lines.String(), catList.String())
+		req := smartai.AutoCategorize(lines.String(), catList)
 		if wantCategorized {
-			req = smartai.Recategorize(lines.String(), catList.String())
+			req = smartai.Recategorize(lines.String(), catList)
 		}
 		runSmartAI(aiConn, req,
 			func(text string) {
-				parsed := smartai.ParseCategoryAssignments(text, len(sample), catIDByName)
+				incomeByRef := make(map[int]bool, len(sample))
+				for i, t := range sample {
+					incomeByRef[i+1] = t.Amount.Amount > 0
+				}
+				parsed := smartai.RejectSignMismatches(
+					smartai.ParseCategoryAssignments(text, len(sample), catalog), incomeByRef)
 				var rows []txnSmartCatAssign
 				for _, a := range parsed {
 					t := sample[a.Ref-1]
@@ -215,6 +219,17 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 					continue
 				}
 				c := domain.Category{ID: id.New(), Name: s.Name, Kind: domain.CategoryKind(s.Kind)}
+				// C491: a suggestion may nest under an EXISTING category. The
+				// parser only ever returns a parent the household already has,
+				// and it is matched case-insensitively here.
+				if s.ParentName != "" {
+					for _, p := range cats {
+						if strings.EqualFold(p.Name, s.ParentName) {
+							c.ParentID = p.ID
+							break
+						}
+					}
+				}
 				if err := app.PutCategory(c); err != nil {
 					uistate.PostNotice(err.Error(), true)
 					continue

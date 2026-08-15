@@ -391,8 +391,11 @@ const SuggestCategoriesSystem = "You propose NEW budget categories for a househo
 	"You are given a sample of their UNCATEGORIZED transactions and the list of categories they ALREADY have. " +
 	"Suggest up to 8 new categories that would cover these transactions and that do NOT already exist. " +
 	"Each is a short, broad, reusable Title Case name plus its kind (expense or income). " +
+	"A category may optionally sit INSIDE one of the existing categories — add its parent as a " +
+	"third field when that is a better fit than a new top-level category. " +
 	"Reply with ONE category per line in exactly this format and nothing else:\n" +
-	"Category Name | expense\n" +
+	"Category Name | expense | Parent Category\n" +
+	"Leave the parent field out entirely for a top-level category. " +
 	"Never repeat a category that already exists, never propose a name shorter than 3 characters, and skip anything too narrow or ambiguous."
 
 // SuggestCategories builds the SMART-T15 request from a sample of uncategorized
@@ -402,11 +405,16 @@ func SuggestCategories(txnContext, existingCategories string) Request {
 		User: "Existing categories:\n" + strings.TrimSpace(existingCategories) + "\n\nUncategorized transactions:\n" + strings.TrimSpace(txnContext)}
 }
 
-// SuggestedCategory is one parsed SMART-T15 suggestion: a new category name and
-// its kind ("expense" or "income").
+// SuggestedCategory is one parsed SMART-T15 suggestion: a new category name,
+// its kind ("expense" or "income"), and optionally the existing category it
+// should sit inside (C491).
 type SuggestedCategory struct {
 	Name string
 	Kind string
+	// ParentName is the EXISTING category this should be created under, or ""
+	// for a top-level category. Only ever a name the caller supplied — the model
+	// cannot invent a parent.
+	ParentName string
 }
 
 // ParseCategorySuggestions parses the model's "Name | kind" lines, dropping any
@@ -421,11 +429,20 @@ func ParseCategorySuggestions(answer string, existingLower map[string]bool) []Su
 		if line == "" {
 			continue
 		}
-		name, kind := line, "expense"
-		if n, k, ok := strings.Cut(line, "|"); ok {
-			name = strings.TrimSpace(n)
-			if kk := strings.ToLower(strings.TrimSpace(k)); kk == "income" || kk == "expense" {
+		// "Name | kind | Parent" — kind and parent are both optional.
+		fields := strings.Split(line, "|")
+		name, kind, parent := strings.TrimSpace(fields[0]), "expense", ""
+		if len(fields) > 1 {
+			if kk := strings.ToLower(strings.TrimSpace(fields[1])); kk == "income" || kk == "expense" {
 				kind = kk
+			}
+		}
+		if len(fields) > 2 {
+			// The parent must ALREADY exist: a model cannot conjure a hierarchy
+			// the household never agreed to. existingLower is the whitelist.
+			p := strings.Trim(strings.TrimSpace(fields[2]), "\"'`")
+			if existingLower[strings.ToLower(p)] {
+				parent = p
 			}
 		}
 		name = strings.Trim(strings.TrimSpace(name), "\"'`")
@@ -434,7 +451,7 @@ func ParseCategorySuggestions(answer string, existingLower map[string]bool) []Su
 			continue
 		}
 		seen[lower] = true
-		out = append(out, SuggestedCategory{Name: name, Kind: kind})
+		out = append(out, SuggestedCategory{Name: name, Kind: kind, ParentName: parent})
 		if len(out) >= 8 {
 			break
 		}
@@ -448,10 +465,14 @@ func ParseCategorySuggestions(answer string, existingLower map[string]bool) []Su
 // uncategorized transaction the model is confident about.
 const AutoCategorizeSystem = "You categorize a household's UNCATEGORIZED transactions. " +
 	"Each transaction is numbered. Use ONLY the categories provided — never invent one. " +
-	"For each transaction you are confident about, reply with its number and the single best-fitting category. " +
+	"Categories are given as full paths with their kind, e.g. \"Auto > Gas | expense\". " +
+	"Always reply with the FULL path exactly as given, never just the last part. " +
+	"Never give an expense transaction an income category, or the reverse. " +
+	"For each transaction, reply with its number, the category, and how confident you are " +
+	"(high, medium or low). " +
 	"Reply with ONE assignment per line in exactly this format and nothing else:\n" +
-	"3 => Category Name\n" +
-	"Skip anything ambiguous rather than guessing."
+	"3 => Auto > Gas | high\n" +
+	"Prefer a low-confidence answer over silence, but never guess wildly."
 
 // AutoCategorize builds the SMART-T16 request from a NUMBERED sample of
 // uncategorized transactions and the category-name list.
@@ -464,9 +485,13 @@ func AutoCategorize(txnContext, categoryList string) Request {
 // and propose a better existing category.
 const RecategorizeSystem = "You review a household's ALREADY-categorized transactions for likely MIS-categorizations. " +
 	"Each numbered transaction shows its current category. Use ONLY the categories provided. " +
-	"ONLY when a DIFFERENT category clearly fits better than the current one, reply with the transaction's number and that better category. " +
+	"Categories are given as full paths with their kind, e.g. \"Auto > Gas | expense\". " +
+	"Always reply with the FULL path exactly as given, never just the last part. " +
+	"Never give an expense transaction an income category, or the reverse. " +
+	"ONLY when a DIFFERENT category clearly fits better than the current one, reply with the " +
+	"transaction's number, that better category, and how confident you are (high, medium or low). " +
 	"Reply with ONE correction per line in exactly this format and nothing else:\n" +
-	"3 => Category Name\n" +
+	"3 => Auto > Gas | high\n" +
 	"Never suggest a transaction's current category, and skip anything you are not confident is wrong."
 
 // Recategorize builds the SMART-T17 request from a NUMBERED sample of already-
@@ -476,44 +501,85 @@ func Recategorize(txnContext, categoryList string) Request {
 		User: "Categories:\n" + strings.TrimSpace(categoryList) + "\n\nTransactions (numbered, with current category):\n" + strings.TrimSpace(txnContext)}
 }
 
-// CategoryAssignment is one parsed "N => Category" line: a 1-based reference into
-// the scanned transaction slice plus the resolved category.
+// CategoryAssignment is one parsed "N => Path | confidence" line: a 1-based
+// reference into the scanned transaction slice, the resolved category, and how
+// sure the model claimed to be.
 type CategoryAssignment struct {
 	Ref          int
 	CategoryID   string
-	CategoryName string
+	CategoryName string // the qualified path, e.g. "Auto > Gas"
+	Confidence   Confidence
+	// Income mirrors the resolved category's kind, so a caller can reject a
+	// sign mismatch without re-reading its category list.
+	Income bool
 }
 
-// ParseCategoryAssignments parses "N => Category Name" lines against the real
-// category list (name → id, case-insensitive). Refs outside [1, maxRef], unknown
-// categories, and duplicate refs are dropped — the model can never invent a
-// category or point past the sample. Capped at maxRef.
-func ParseCategoryAssignments(answer string, maxRef int, categoryIDByName map[string]string) []CategoryAssignment {
-	byLower := make(map[string]struct{ id, name string }, len(categoryIDByName))
-	for name, id := range categoryIDByName {
-		byLower[strings.ToLower(strings.TrimSpace(name))] = struct{ id, name string }{id, name}
-	}
+// ParseCategoryAssignments parses "N => Auto > Gas | high" lines against a
+// Catalog. Refs outside [1, maxRef], unknown categories, and duplicate refs are
+// dropped — the model can never invent a category or point past the sample.
+// A missing confidence marker reads as medium, so a terser reply still parses.
+// Capped at maxRef.
+func ParseCategoryAssignments(answer string, maxRef int, catalog Catalog) []CategoryAssignment {
 	var out []CategoryAssignment
 	seen := map[int]bool{}
 	for _, line := range strings.Split(answer, "\n") {
 		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
-		refStr, cat, ok := strings.Cut(line, "=>")
+		refStr, rest, ok := strings.Cut(line, "=>")
 		if !ok {
 			continue
 		}
 		ref := atoiSafe(strings.TrimSpace(refStr))
-		cat = strings.Trim(strings.TrimSpace(cat), "\"'`")
-		if ref < 1 || ref > maxRef || cat == "" || seen[ref] {
+		if ref < 1 || ref > maxRef || seen[ref] {
 			continue
 		}
-		hit, known := byLower[strings.ToLower(cat)]
+		// The confidence marker is the LAST pipe-separated field. Splitting from
+		// the right keeps category paths that themselves contain a pipe intact.
+		catPart, confPart := rest, ""
+		if i := strings.LastIndex(rest, "|"); i >= 0 {
+			catPart, confPart = rest[:i], rest[i+1:]
+		}
+		hit, known := catalog.Lookup(catPart)
 		if !known {
 			continue
 		}
 		seen[ref] = true
-		out = append(out, CategoryAssignment{Ref: ref, CategoryID: hit.id, CategoryName: hit.name})
+		out = append(out, CategoryAssignment{
+			Ref:          ref,
+			CategoryID:   hit.ID,
+			CategoryName: hit.Path,
+			Confidence:   parseConfidence(confPart),
+			Income:       hit.Income,
+		})
 		if len(out) >= maxRef {
 			break
+		}
+	}
+	return out
+}
+
+// RejectSignMismatches drops assignments whose category kind contradicts the
+// transaction's sign (C490): an expense charge handed an income category, or the
+// reverse. incomeByRef maps a 1-based Ref to whether that transaction is income.
+// A ref missing from the map is left alone — absence of information is not
+// evidence of a mismatch.
+func RejectSignMismatches(in []CategoryAssignment, incomeByRef map[int]bool) []CategoryAssignment {
+	out := in[:0:0]
+	for _, a := range in {
+		if want, known := incomeByRef[a.Ref]; known && want != a.Income {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// AtLeast filters assignments to those at or above a confidence floor — the
+// "accept all the safe ones" primitive (C488/C374).
+func AtLeast(in []CategoryAssignment, min Confidence) []CategoryAssignment {
+	out := in[:0:0]
+	for _, a := range in {
+		if a.Confidence >= min {
+			out = append(out, a)
 		}
 	}
 	return out

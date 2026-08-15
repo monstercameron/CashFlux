@@ -544,3 +544,24 @@ func smartAISection(settings smart.Settings, conn smartAIConn, hasProvider bool)
 		),
 	})
 }
+
+// smartCatalog builds the SMART+ category catalog for a request: every category
+// as a QUALIFIED path ("Auto > Gas") with its kind. Bare leaf names are
+// ambiguous the moment two parents own the same child, and a name-keyed
+// resolver silently resolves to whichever landed in the map last (C489), so the
+// prompt and the parser share this one construction.
+func smartCatalog(cats []domain.Category) smartai.Catalog {
+	nameByID := make(map[string]string, len(cats))
+	for _, c := range cats {
+		nameByID[c.ID] = c.Name
+	}
+	out := make([]smartai.Cat, 0, len(cats))
+	for _, c := range cats {
+		path := c.Name
+		if p, ok := nameByID[c.ParentID]; ok && c.ParentID != c.ID {
+			path = p + smartai.PathSep + c.Name
+		}
+		out = append(out, smartai.Cat{ID: c.ID, Path: path, Income: c.Kind == domain.KindIncome})
+	}
+	return smartai.NewCatalog(out)
+}

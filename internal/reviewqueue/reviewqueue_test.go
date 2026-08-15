@@ -56,10 +56,10 @@ func TestTransfersNeverQueued(t *testing.T) {
 
 func TestQueueOrderAndCount(t *testing.T) {
 	txns := []domain.Transaction{
-		txn("z", "", nil, dtu(2026, 6, 5)),          // newest
-		txn("m", "food", nil, dtu(2026, 6, 9)),      // clean — excluded
-		txn("a", "", []string{ReviewTag}, dtu(2026, 6, 1)), // oldest
-		txn("b", "", nil, dtu(2026, 6, 1)),          // same date as a → id tie-break
+		txn("z", "", nil, dtu(2026, 6, 5)),                                                       // newest
+		txn("m", "food", nil, dtu(2026, 6, 9)),                                                   // clean — excluded
+		txn("a", "", []string{ReviewTag}, dtu(2026, 6, 1)),                                       // oldest
+		txn("b", "", nil, dtu(2026, 6, 1)),                                                       // same date as a → id tie-break
 		{ID: "x", TransferAccountID: "y", Amount: money.New(-100, "USD"), Date: dtu(2026, 6, 8)}, // transfer — excluded
 	}
 	if got := Count(txns); got != 3 {

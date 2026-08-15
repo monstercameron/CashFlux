@@ -929,6 +929,11 @@ func (a *App) PutCategory(c domain.Category) error {
 	if is := validate.ValidateCategory(c); !is.OK() {
 		return is
 	}
+	// C495: parent existence, kind agreement and cycles need the whole set, so
+	// they are checked at the write seam rather than in the context-free rules.
+	if is := validate.ValidateCategoryInTree(c, a.Categories()); !is.OK() {
+		return is
+	}
 	if err := a.store.PutCategory(c); err != nil {
 		return err
 	}

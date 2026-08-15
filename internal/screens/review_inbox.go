@@ -234,13 +234,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		if !ok {
 			return
 		}
-		cats := app.Categories()
-		catIDByName := make(map[string]string, len(cats))
-		var catList strings.Builder
-		for _, c := range cats {
-			catIDByName[c.Name] = c.ID
-			catList.WriteString(c.Name + "\n")
-		}
+		catalog := smartCatalog(app.Categories())
 		// Capture the transaction AND the batch flag at CLICK time: the callback
 		// runs later, and the user's intent is what they set before pressing the
 		// button, not whatever the checkbox happens to hold when the reply lands.
@@ -249,9 +243,12 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		lines := "1 | " + strings.TrimSpace(cur.Payee+" — "+cur.Desc) + " | " + fmtMoney(cur.Amount)
 		aiLoading.Set(true)
 		aiErr.Set("")
-		runSmartAI(aiConn, smartai.AutoCategorize(lines, catList.String()),
+		// Reject a sign-mismatched answer before it can be written (C490).
+		incomeByRef := map[int]bool{1: curTxn.Amount.Amount > 0}
+		runSmartAI(aiConn, smartai.AutoCategorize(lines, catalog.Prompt()),
 			func(text string) {
-				parsed := smartai.ParseCategoryAssignments(text, 1, catIDByName)
+				parsed := smartai.RejectSignMismatches(
+					smartai.ParseCategoryAssignments(text, 1, catalog), incomeByRef)
 				if len(parsed) > 0 && parsed[0].CategoryID != "" {
 					applyReviewChoice(app, curTxn, parsed[0].CategoryID, batch)
 					alsoSimilar.Set(false)

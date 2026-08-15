@@ -39,7 +39,7 @@ func TestParseCategorySuggestionsCap(t *testing.T) {
 }
 
 func TestParseCategoryAssignments(t *testing.T) {
-	cats := map[string]string{"Groceries": "c1", "Dining Out": "c2"}
+	cats := NewCatalog([]Cat{{ID: "c1", Path: "Groceries"}, {ID: "c2", Path: "Dining Out"}})
 	answer := "" +
 		"1 => Groceries\n" +
 		"2. => Dining Out\n" + // tolerant of "2."

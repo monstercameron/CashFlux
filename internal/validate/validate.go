@@ -121,6 +121,54 @@ func ValidateCategory(c domain.Category) Issues {
 	if !c.Kind.Valid() {
 		is.add("kind", "is invalid")
 	}
+	// C495: a category cannot be its own parent. categorytree.Build only defends
+	// at RENDER time (it re-roots the offender), so without this the bad row
+	// persists happily and merely looks odd.
+	if c.ParentID != "" && c.ParentID == c.ID {
+		is.add("parentId", "cannot be the category itself")
+	}
+	return is
+}
+
+// ValidateCategoryInTree checks c against the categories that already exist:
+// the parent must be real, must share c's kind, and must not create a cycle.
+// ValidateCategory covers the context-free rules; this one needs the whole set,
+// so the write seam calls both.
+func ValidateCategoryInTree(c domain.Category, existing []domain.Category) Issues {
+	var is Issues
+	if c.ParentID == "" {
+		return is
+	}
+	byID := make(map[string]domain.Category, len(existing))
+	for _, e := range existing {
+		byID[e.ID] = e
+	}
+	parent, ok := byID[c.ParentID]
+	if !ok {
+		is.add("parentId", "names a category that does not exist")
+		return is
+	}
+	// An expense nested under income (or the reverse) would roll up into a total
+	// that means nothing.
+	if parent.Kind != c.Kind {
+		is.add("parentId", "must be the same kind as the category")
+	}
+	// Walk up from the proposed parent: reaching c means the edge closes a loop.
+	// Bounded by the number of categories, so a pre-existing cycle in the stored
+	// data cannot hang the walk.
+	seen := map[string]bool{c.ID: true}
+	for id, steps := c.ParentID, 0; id != "" && steps <= len(existing); steps++ {
+		if seen[id] {
+			is.add("parentId", "would create a loop in the category tree")
+			return is
+		}
+		seen[id] = true
+		next, ok := byID[id]
+		if !ok {
+			break
+		}
+		id = next.ParentID
+	}
 	return is
 }
 
