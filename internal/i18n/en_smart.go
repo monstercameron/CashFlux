@@ -16,7 +16,7 @@ var smartKeys = Catalog{
 	"smart.stripTitle": "Smart",
 	"smart.viewAll":    "View all",
 	// Collapsed "peek" bar (default) — a slim signal that there are alerts for the page.
-	"smart.collapse":       "Collapse",
+	"smart.collapse":           "Collapse",
 	"smart.triageSearch":       "Search findings…",
 	"smart.triageSevLabel":     "Urgency",
 	"smart.triageSevAll":       "All urgencies",
@@ -30,10 +30,10 @@ var smartKeys = Catalog{
 	"smart.triageSortAmount":   "Biggest amounts first",
 	"smart.triageSortPage":     "By page",
 	"smart.triageNoMatch":      "No findings match these filters.",
-	"smart.peekInsights":   "Smart insights",
-	"smart.peekTools":      "Smart tools",
-	"smart.peekAlertsAria": "%s smart insights for this page — click to show",
-	"smart.peekToolsAria":  "Smart tools for this page — click to show",
+	"smart.peekInsights":       "Smart insights",
+	"smart.peekTools":          "Smart tools",
+	"smart.peekAlertsAria":     "%s smart insights for this page — click to show",
+	"smart.peekToolsAria":      "Smart tools for this page — click to show",
 
 	// Empty-state helper (AffordanceEmptyState).
 	"smart.emptyHint": "Smart has a tip for this section:",

@@ -9669,14 +9669,17 @@ func registerGenerated() {
 		borderRadius("var(--radius-pill)"),
 		border("2px solid #121214"),
 	)
+	// The pinned modal footer hardcoded dark hexes, so in LIGHT mode it painted a
+	// black bar under a white panel — every FlushBody modal, not just one. Tokens
+	// resolve per theme; a literal cannot (the token-fallback landmine class).
 	rule(".modal-foot",
 		flexShrink("0"),
 		display("flex"),
 		justifyContent("flex-end"),
 		gap("0.5rem"),
 		padding("0.75rem 1rem"),
-		borderTop("1px solid #2a2a2c"),
-		background("#121214"),
+		borderTop("1px solid var(--border)"),
+		background("var(--bg-card)"),
 	)
 	// When a category/auto-budget list is the modal body's own scroll content (a direct
 	// child of .modal-scroll), drop its independent max-height/scroll so .modal-scroll is

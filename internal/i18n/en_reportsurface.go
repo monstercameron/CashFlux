@@ -21,10 +21,10 @@ var reportSurfaceKeys = Catalog{
 	"reports.exportTitle":  "Download this report's tables as CSV files, or save the page as a PDF",
 
 	// Sections
-	"reports.moneyFlow":           "Money flow",
-	"reports.zeroedSummary":       "%d categories had spending last period but none this period",
-	"reports.savingsTrendHint":    "Savings rate over the last %d periods.",
-	"reports.customFieldUnvalued": "Nothing this period has a %s value yet — set it on transactions in the ledger to see this breakdown.",
+	"reports.moneyFlow":               "Money flow",
+	"reports.zeroedSummary":           "%d categories had spending last period but none this period",
+	"reports.savingsTrendHint":        "Savings rate over the last %d periods.",
+	"reports.customFieldUnvalued":     "Nothing this period has a %s value yet — set it on transactions in the ledger to see this breakdown.",
 	"reports.customFieldMostUnvalued": "%d%% of spending has no %s value — the chart below shows only the classified transactions.",
 
 	// Metrics tile

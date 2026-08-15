@@ -16,11 +16,11 @@ var whatChangedKeys = Catalog{
 	"dashboard.wcViewTxnsTitle":    "Open the Transactions page",
 
 	// Row leads, one per finding kind.
-	"dashboard.wcLeadNet":      "Net worth change",
-	"dashboard.wcLeadCategory": "Top spending — %s",
-	"dashboard.wcLeadIncome":   "Income landed",
-	"dashboard.wcLeadLarge":    "Large expense — %s",
-	"dashboard.wcLeadNew":      "New merchant — %s",
+	"dashboard.wcLeadNet":       "Net worth change",
+	"dashboard.wcLeadCategory":  "Top spending — %s",
+	"dashboard.wcLeadIncome":    "Income landed",
+	"dashboard.wcLeadLarge":     "Large expense — %s",
+	"dashboard.wcLeadNew":       "New merchant — %s",
 	"dashboard.wcUncategorized": "Uncategorized",
 
 	// "Why" decomposition labels (joined with the amounts they explain).

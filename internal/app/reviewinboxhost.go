@@ -24,12 +24,15 @@ func ReviewInboxHost() uic.Node {
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title: uistate.T("review.title"),
-		Width: "min(92vw, 460px)",
-		// Sized to the taller step content (card + picker + suggestion + batch row +
-		// actions) so there's little dead space; the all-caught-up state centers.
-		Height:   "min(88vh, 500px)",
-		NoFooter: true,
-		OnClose:  func() { uistate.CloseReviewInbox() },
-		Back:     uic.CreateElement(screens.ReviewInboxBody, struct{}{}),
+		// C500: 90% of the viewport. A 460px column cannot host the bulk list, and
+		// both modes share ONE size so switching mode never resizes the container.
+		Width:  uiw.FlipFullW,
+		Height: uiw.FlipFullH,
+		// FlushBody lets the body pin its own action bar (.modal-foot) instead of
+		// letting it scroll off the bottom of a tall panel.
+		FlushBody: true,
+		NoFooter:  true,
+		OnClose:   func() { uistate.CloseReviewInbox() },
+		Back:      uic.CreateElement(screens.ReviewSurfaceBody, struct{}{}),
 	})
 }

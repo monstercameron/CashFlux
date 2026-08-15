@@ -67,13 +67,18 @@ func workingCount(txns []domain.Transaction, skips []string) int {
 // sameMerchantQueued counts OTHER queued (still-needing-review) transactions that
 // share a merchant key with the given one — the "N others from this payee" the
 // user can categorize in one action.
+// C498: both the COUNT shown and the batch that acts on it go through
+// reviewqueue.MerchantKey. They used to compare the raw descriptor with
+// strings.EqualFold while the card displayed the CLEANED name, so two charges
+// shown as "Amazon" did not batch together and the hint promised a grouping the
+// action would not honour.
 func sameMerchantQueued(txns []domain.Transaction, key, exceptID string) int {
 	if strings.TrimSpace(key) == "" {
 		return 0
 	}
 	n := 0
 	for _, t := range reviewqueue.Queue(txns) {
-		if t.ID != exceptID && strings.EqualFold(strings.TrimSpace(rawPayeeOf(t)), key) {
+		if t.ID != exceptID && reviewqueue.MerchantKey(t) == key {
 			n++
 		}
 	}
@@ -128,7 +133,7 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) int {
 			if !reviewqueue.Needs(t) {
 				continue
 			}
-			if strings.EqualFold(strings.TrimSpace(rawPayeeOf(t)), key) {
+			if reviewqueue.MerchantKey(t) == key {
 				t.CategoryID = catID
 				t.Tags = removeReviewTag(t.Tags)
 				if err := app.PutTransaction(t); err != nil {
@@ -371,12 +376,18 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 	}
 
 	work := workingCount(app.Transactions(), skipped.Get())
-	pos := total.Get() - work + 1
+	// C497: recount live rather than trusting the snapshot taken on open — a rule
+	// firing, a sync pull or another tab all change the queue underneath us.
+	liveTotal := reviewqueue.Count(app.Transactions()) + len(skipped.Get())
+	if liveTotal < work {
+		liveTotal = work
+	}
+	pos := liveTotal - work + 1
 	if pos < 1 {
 		pos = 1
 	}
-	if pos > total.Get() {
-		pos = total.Get()
+	if pos > liveTotal {
+		pos = liveTotal
 	}
 	left := work - 1
 	if left < 0 {
@@ -422,7 +433,7 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 	// "Also apply to N others from this merchant" — turns a repeated charge into a
 	// single action, so a 200-item backlog of the same payee clears fast.
 	var similarNode ui.Node
-	if sc := sameMerchantQueued(app.Transactions(), rawPayee, cur.ID); sc > 0 {
+	if sc := sameMerchantQueued(app.Transactions(), reviewqueue.MerchantKey(cur), cur.ID); sc > 0 {
 		cbArgs := []any{Type("checkbox"), OnChange(toggleSimilar)}
 		if alsoSimilar.Get() {
 			cbArgs = append(cbArgs, Attr("checked", "checked"))
@@ -456,10 +467,10 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		// Progress: count + "N left" and a slim track.
 		Div(css.Class("rvw-progress"),
 			Span(css.Class("rvw-progress-count"), Attr("data-testid", "review-progress"),
-				uistate.T("review.progress", pos, total.Get())+" · "+uistate.T("review.leftCount", left)+
+				uistate.T("review.progress", pos, liveTotal)+" · "+uistate.T("review.leftCount", left)+
 					reviewPaceSuffix(startedAt.Get(), pos-1, left)),
 			Div(css.Class("rvw-progress-track"),
-				Div(css.Class("rvw-progress-fill"), Attr("style", progressWidth(pos, total.Get()))),
+				Div(css.Class("rvw-progress-fill"), Attr("style", progressWidth(pos, liveTotal))),
 			),
 		),
 		rulesLink,

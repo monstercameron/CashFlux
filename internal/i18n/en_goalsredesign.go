@@ -9,9 +9,9 @@ package i18n
 // Registered at init time.
 var goalsRedesignKeys = Catalog{
 	// --- Full-width goal card: figures grid (scannable stat cells) ---
-	"goalsredesign.figToGo":    "To go",
-	"goalsredesign.figMonthly": "Monthly",
-	"goalsredesign.figTarget":  "Target date",
+	"goalsredesign.figToGo":      "To go",
+	"goalsredesign.figMonthly":   "Monthly",
+	"goalsredesign.figTarget":    "Target date",
 	"goalsredesign.figProjected": "Projected · %s growth",
 
 	// --- Optional contribution planner (opt-in disclosure) ---

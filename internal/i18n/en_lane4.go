@@ -64,10 +64,10 @@ var lane4Keys = Catalog{
 	// %s = "N new transactions", %d = duplicate count.
 	"documents.preflightCounts": "Ready to import %s. %d duplicates will be skipped.",
 	// %s ×4 = account name, balance before, balance after, signed net.
-	"documents.preflightBalance": "%s: %s → %s (%s).",
+	"documents.preflightBalance":  "%s: %s → %s (%s).",
 	"documents.preflightJumpWarn": "This is a big jump for this account — double-check the file (and its sign convention) before importing.",
 	// %d = duplicate count.
-	"documents.preflightWhyDups":  "Why are %d rows duplicates?",
+	"documents.preflightWhyDups":   "Why are %d rows duplicates?",
 	"documents.preflightDupLedger": "already in your ledger (same date, amount, and description)",
 	"documents.preflightDupBatch":  "repeated within this file",
 	// %d = how many more beyond the shown sample.
@@ -79,7 +79,7 @@ var lane4Keys = Catalog{
 	// %d = new-row count.
 	"documents.preflightImportNow": "Import %d rows",
 	// %s ×2 = balance before, balance after.
-	"documents.balanceMoved": "Balance moved %s → %s.",
+	"documents.balanceMoved":   "Balance moved %s → %s.",
 	"documents.historyHeading": "Recent imports",
 	"documents.historyHint":    "Each run's full result — Roll back restores your data to just before that import.",
 	"documents.historyKindCSV": "CSV import",
@@ -110,8 +110,8 @@ var lane4Keys = Catalog{
 
 	// #58 — receipt-to-transaction matching.
 	// %d = candidate count.
-	"documents.receiptMatchLead": "This receipt looks like %d charges already in your ledger — attach it instead of creating a duplicate:",
-	"documents.receiptMatchHint": "Attaching puts the receipt's category breakdown on the existing charge. \"Import\" below still creates a new transaction.",
+	"documents.receiptMatchLead":    "This receipt looks like %d charges already in your ledger — attach it instead of creating a duplicate:",
+	"documents.receiptMatchHint":    "Attaching puts the receipt's category breakdown on the existing charge. \"Import\" below still creates a new transaction.",
 	"documents.receiptMatchSameDay": "same day",
 	// %d = days between receipt and charge.
 	"documents.receiptMatchDaysApart": "%d days apart",

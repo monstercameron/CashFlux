@@ -10,7 +10,7 @@ var detail2Keys = Catalog{
 	// Recent-imports honesty (finding #2): a real per-import roll-back exists, but
 	// only while the run's safety snapshot is still in the capped ring — so the hint
 	// no longer promises it unconditionally, and names the always-available fallback.
-	"documents.historyHintHonest": "Each run's full result. Roll back restores your data to just before an import while its safety snapshot is still saved — otherwise undo right after importing with Ctrl+Z.",
+	"documents.historyHintHonest":   "Each run's full result. Roll back restores your data to just before an import while its safety snapshot is still saved — otherwise undo right after importing with Ctrl+Z.",
 	"documents.historyActivityLink": "Review changes in Activity",
 
 	// Retained-search chip (finding #3): a text filter carried in from earlier work

@@ -103,7 +103,6 @@ func registerUxbatch4() {
 		prop("min-width", "290px"),
 	)
 
-
 	// Settings → Alerts (review #29): the per-rule threshold input used a bare
 	// `.toggle-row`, which is `justify-content: space-between` — so the number input
 	// floated to the far right edge, a screen-width from its "$"/"days" label. Give

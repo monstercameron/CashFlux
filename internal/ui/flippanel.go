@@ -29,6 +29,12 @@ const (
 	FlipMediumW, FlipMediumH = "560px", "680px"
 	// FlipLarge — dense, multi-section or wide panels: global settings, add-account.
 	FlipLargeW, FlipLargeH = "760px", "720px"
+
+	// FlipFullW/H is the near-full-viewport tier for a panel that hosts a WORKING
+	// SURFACE rather than a form — the review inbox's bulk list (C500). Cam,
+	// 2026-08-15: bulk triage stays a modal, sized to 90% of the viewport, rather
+	// than being promoted to a route.
+	FlipFullW, FlipFullH = "90vw", "90vh"
 )
 
 // FlipPanelProps configures a FlipPanel overlay.

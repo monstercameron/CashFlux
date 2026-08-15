@@ -74,6 +74,7 @@ func Register() {
 	registerLane3Mobile()
 	registerTxnUpcoming()
 	registerReviewInboxSurface()
+	registerReviewSurface()
 	registerTxcFieldsSurface()
 	registerNotifySurface()
 	registerTodoPrioSurface()
