@@ -6576,3 +6576,240 @@ limits back to the client using gRPC's own rich-error convention instead of inve
   persisted pulled data under the lock before mounting the shell. A disposable full-server,
   two-browser regression proves empty hosted boot, plaintext first sync, encrypted second-device
   hydration, wrong-passcode rejection, no sample UI, and encrypted local persistence.
+
+---
+
+## RV series — Review-inbox redesign: dual-mode triage + Smart+ integration (Cam, 2026-08-15) ★
+
+Cam's brief: the Review-transactions modal is too restrictive. It needs **two modes** — a single-item
+focus mode and a bulk mode showing a larger list of items needing categories — a **strongly
+integrated Smart+ category matcher**, **sibling/related-transaction context** in single mode so the
+user decides informed, and a **quick way to add parent or child categories** without leaving for the
+categories page. The rest of this series is the gap analysis against the current implementation.
+
+**Key finding from the code read (2026-08-15):** a bulk Smart+ categorizer ALREADY EXISTS as a
+separate modal — `internal/screens/txn_smartcat.go` (`TxnSmartCatBody`, host `app.TxnSmartCatHost`,
+atom `uistate.UseTxnSmartCatOpen()`): 40-transaction scan in one AI call, multi-select checklist,
+bulk apply with `uistate.BulkSnapshot` undo, three-way `uiw.Segmented` mode control. The review
+inbox (`internal/screens/review_inbox.go`) is a single-item stepper that makes ONE AI call PER
+TRANSACTION. So this series is largely a **MERGE of two existing surfaces**, not a greenfield build,
+and the two surfaces currently write the same field through two different undo mechanisms
+(`postCategorizedUndo`/`auditview.CaptureNow` vs `undoAtom`/`BulkSnapshot`) — that duplication is
+itself a defect this series retires.
+
+**Recommended build order:** phase A (pure logic + contracts, native-testable, no wasm — C488–C495)
+→ phase B (bugs shippable against the CURRENT surface — C496–C498) → phase C (shared component —
+C499) → phase D (the merged surface — C500–C512). Phase A unblocks the highest-value parts of phases
+B and D; do not start the layout before it lands.
+
+> **Dedupe note:** C374 (review-inbox triage header + accept-all-high-confidence) and C375 (toolbar
+> density) are SUPERSEDED by C502/C504 and C500 respectively — close them as part of this series
+> rather than building both. WF1 (Unified Review Inbox) remains the strategic superset: this series
+> is the transaction-categorization slice of it, and its resolution vocabulary (C493) and
+> session-wide undo (C508) are deliberately WF1-shaped so the two converge instead of forking.
+
+**Discipline:** every ticket lands bottom-up per the SDLC rule (data model → services/logic with
+table-driven tests → persistence → state → UI last). All new copy goes through `en_*.go` keys — the
+screenlint ratchet is at **0** for the UI layer and stays there. Durable mode/pref changes go
+through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1 leading-edge fix).
+
+### Phase A — logic + contracts (pure Go, native tests, no `syscall/js`) ★
+
+- [ ] **C488 [MAJOR][SMARTAI] The category-assignment contract carries no confidence, so
+  "accept all high-confidence" is unbuildable.** ★ `smartai.CategoryAssignment` is
+  `{Ref, CategoryID, CategoryName}` (`internal/smartai/smartai.go:481`) and `AutoCategorizeSystem`
+  handles confidence only by OMISSION ("Skip anything ambiguous rather than guessing"). Nothing
+  downstream can rank, threshold, or bulk-accept. Extend the reply format to
+  `3 => Category Name | high` (high/medium/low), add `Confidence` to the struct, and parse it in
+  `ParseCategoryAssignments`. A missing token reads as medium so pre-existing behavior degrades
+  gracefully. AC: table-driven tests cover each level, a missing token, and a garbage token; no UI
+  in this ticket.
+- [ ] **C489 [MAJOR][SMARTAI] Flat category names collide once the tree is used, and the resolver
+  silently picks the wrong one.** ★ Both surfaces serialize categories as bare names
+  (`catList.WriteString(c.Name + "\n")`) and resolve model output through a
+  `catIDByName map[string]string` keyed by bare name — so "Gas" under Auto and "Gas" under Utilities
+  are one key, last-write-wins, and assignments land on the wrong category with no error. This gets
+  strictly worse as C499/C491 make child categories easy to create. Send QUALIFIED paths
+  ("Auto > Gas") in both `AutoCategorize` and `Recategorize`, and key the resolver by path.
+  AC: a test with duplicate leaf names under different parents resolves each to its correct ID.
+- [ ] **C490 [MAJOR][SMARTAI] Nothing stops an income category landing on an expense.** The
+  category list reaches the model with no kind marker, and `ParseCategoryAssignments` does not check
+  the assignment against the transaction's sign. `transaction_edit_form.go` already infers `Kind`
+  from `txn.IsIncome()` when quick-adding, so the app knows this matters. Mark each category's kind
+  in the prompt context and drop (or flag) sign-mismatched assignments at parse time. AC: an
+  expense transaction assigned an income category is rejected by the parser, with a test.
+- [ ] **C491 [MINOR][SMARTAI] Smart+ can only ever propose top-level categories.**
+  `smartai.SuggestedCategory` is `{Name, Kind}` with no ParentID (`smartai.go:407`), so SMART-T15
+  cannot suggest "Groceries > Costco". Add an optional parent to the reply format and the struct,
+  resolved against existing categories (never inventing a parent). AC: parser tests cover a parent
+  that exists, one that doesn't, and none given.
+- [ ] **C492 [MAJOR][REVIEW] Split transactions sit in the queue, and categorizing them is a silent
+  no-op.** ★ `reviewqueue.Needs` only asks `t.CategoryID == ""`, but `Splits` win over `CategoryID`
+  in EVERY analytics path — nine `if t.HasSplits()` branches across `internal/budgeting`
+  (attribution, envelope, flex, trueup, committed, drivers, unbudgeted) plus the budgets screens.
+  Receipt import produces exactly this shape (`documents.go:1044`). So a split transaction is queued
+  forever, and assigning it a category REMOVES it from the queue while changing zero dollars of
+  budget math — progress theatre. Bulk mode would do this 40 rows at a time. Decide and implement
+  the rule in `reviewqueue` (exclude fully-reconciled splits; queue only non-reconciling ones, with
+  a distinct reason), and add the missing `validate` rule for `Splits`/`CategoryID` consistency —
+  `internal/validate` has NO split rules today. AC: `reviewqueue` tests cover split-reconciling,
+  split-not-reconciling, and flat transactions.
+- [ ] **C493 [MAJOR][REVIEW] There is no durable way to say "I looked at this and it's fine."** ★
+  `Transaction.Reviewed` exists (`domain/entities.go:282`) and is read in six places — receipt
+  import, fingerprint merge, `transactions_widget.go`, `engineenv` — but **`reviewqueue` never reads
+  it**. The modal's `skipped` is in-memory `UseState` reset on reopen, so a skipped item re-blocks
+  the head of the queue next session. Give the queue a persisted resolution vocabulary — Confirm /
+  Snooze (with an until-date) / Dismiss — modelled WF1-shaped so the two converge. AC: a dismissed
+  item does not reappear after reload; a snoozed item reappears after its date; pure selection
+  tested natively.
+- [ ] **C494 [MAJOR][REVIEW] The queue is newest-first only and groups merchants by exact string.**
+  `reviewqueue.Queue` sorts by date. Add a confidence/priority ordering (consuming C488) and a
+  merchant GROUPING key built on `payeealias.Resolver` rather than raw-payee equality, so the group
+  the user sees is the group the batch acts on. AC: ordering and grouping are pure functions with
+  table-driven tests; `AMZN MKTP US*2H4` and `AMZN MKTP US*9K1` group together.
+- [ ] **C495 [MINOR][VALIDATE] Nothing rejects a self-parented or cyclic category.** `PutCategory`
+  validates through `validate.ValidateCategory`; `categorytree.Build` only defends at RENDER time
+  (dropping cycles, re-rooting dangling parents), so a bad `ParentID` can persist and merely render
+  oddly. Verify and, if absent, add self-parent and cycle rejection before C499 ships a UI that
+  writes `ParentID`. AC: validation tests for self-parent, a two-node cycle, and a missing parent.
+
+### Phase B — bugs in the CURRENT surface (ship independent of the redesign) ★
+
+- [ ] **C496 [MAJOR][REVIEW] "Also apply to N others" is ignored by the Smart+ and suggestion
+  buttons.** ★ *(found by Cam, 2026-08-15.)* `alsoSimilar.Get()` is read at exactly two places in
+  `review_inbox.go` — line 275 (inside `commit`) and line 422 (rendering the checkbox's own state).
+  `aiCategorize` (`:225-258`) and `applySuggest` (`:285-294`) both call the SINGLE-transaction
+  `assignReviewCategory` and never consult the flag, so checking the box and then clicking Smart+
+  categorizes exactly one transaction and "N left" drops by 1. It fails silently: both paths then
+  `seededFor.Set("~none~")`, whose reseed block clears the checkbox (`:348`), making a no-op look
+  like a completed batch. The undo toast is hardcoded `batch=1` on both paths, so undo at least
+  matches what actually happened. Fix by routing all three actions through ONE shared apply function
+  that reads the flag once and picks `assignReviewByMerchant` vs `assignReviewCategory` plus the
+  correctly pluralized `postCategorizedUndo`. AC: a regression test checks the batch count after
+  each of the three paths; a fourth action path cannot forget the flag.
+- [ ] **C497 [MINOR][REVIEW] The progress counter lies when the data changes underneath.** `total`
+  is captured once on open (`review_inbox.go:314`) and never updated, while `pos` is derived by
+  subtraction — so a rule firing, a sync pull, or another tab makes the progress bar and the pace
+  estimate wrong. Derive both from the live queue. AC: applying a rule mid-session leaves the
+  counter consistent.
+- [ ] **C498 [MINOR][REVIEW] The merchant batch matches on raw payee while the UI shows the cleaned
+  name.** `sameMerchantQueued` and `assignReviewByMerchant` both use
+  `strings.EqualFold(strings.TrimSpace(rawPayeeOf(t)), key)` — exact raw-string equality — but the
+  card displays `payeeclean.Suggest(rawPayee)`. Two charges shown as "Amazon" do not batch together.
+  Move both to the C494 grouping key **in the same change** (loosening only the hint would make it
+  promise a grouping the batch won't honor). AC: the count shown and the count written always agree.
+
+### Phase C — shared component
+
+- [ ] **C499 [MAJOR][UI] Extract one category picker with search and create-parent/create-child,
+  replacing four duplicates.** ★ Inline quick-add is copy-pasted in FOUR places —
+  `transaction_edit_form.go:260`, `budgetaddform.go:251`, `txn_smartcat.go:217`,
+  `chat_agent.go:943` — and **every one constructs `domain.Category{ID, Name, Kind}` with no
+  ParentID**, so every category ever created inline is top-level. There is no precedent to copy for
+  Cam's parent/child requirement. Build one `CategoryPicker` component: type-ahead search over
+  `categorytree.Flatten` (indented, so the tree is legible), create-as-top-level, and
+  create-as-child-of-selected. Kind inferred from the transaction's sign as the existing form does.
+  Replace all four call sites — a fifth copy is the wrong move. AC: all four sites use it; creating
+  a child sets `ParentID` and the new category is immediately selectable; Enter creates without
+  submitting an enclosing form and Escape cancels (the existing keyed behavior).
+
+### Phase D — the merged dual-mode surface ★
+
+- [ ] **C500 [MAJOR][REVIEW] Merge the two Smart+ categorization surfaces into one, with a single
+  undo path and one entry point.** ★ Today `review_inbox.go` and `txn_smartcat.go` are separate
+  modals writing the same field through two different undo mechanisms. Merge them behind a
+  `uiw.Segmented` mode control (the component already exists). **Container decision required:** the
+  current `FlipPanel` is `min(92vw, 460px)` x `min(88vh, 500px)` and cannot host a bulk list —
+  recommend promoting to a route rather than widening the panel, since bulk triage is a task you sit
+  in, not a dialog you dismiss. Reconcile the entry points (transactions toolbar Review button, the
+  smartcat opener, and the dashboard attention feed) so there is one obvious door. Supersedes C375.
+  AC: one surface, one undo mechanism, no orphaned modal left mounted.
+- [ ] **C501 [MAJOR][REVIEW] Single-item focus mode.** The existing stepper, kept as a mode: one
+  transaction, category picker (now C499), deterministic suggestion, Smart+ suggestion, confirm.
+  Reads its proposal from the batch scan result (C504) rather than making its own per-item AI call.
+  AC: behavior parity with today's flow plus the C496 batch fix.
+- [ ] **C502 [MAJOR][REVIEW] Bulk mode — a real list of items needing categories.** ★ NOT what
+  `txn_smartcat.go` does today: that is an AI-PROPOSALS checklist you cannot see before scanning,
+  with binary accept/reject rows and no manual assignment. Render `reviewqueue.Queue` itself as a
+  multi-select list (grouped by C494's merchant key, ordered by C488 confidence), overlay Smart+
+  proposals onto rows as suggested values, and allow per-row manual override via C499. Reuse the
+  transactions screen's selection machinery — `selected map[string]bool`, shift-click range via
+  `lastSelID`/`visibleOrder`, `selectAllFiltered`. Include the triage summary header from C374
+  (N high-confidence / N needs a look / N possible duplicates) and its one-click accept-all.
+  Supersedes C374. AC: 250 queued items are reviewable without opening another page; small-queue and
+  empty states are designed, not incidental.
+- [ ] **C503 [MAJOR][REVIEW] Sibling / linked-transaction context in single mode.** ★ Everything
+  needed is computed somewhere and read nowhere here: `app.TxnLinks()` (order-group, refund-pair,
+  bill-match, event-member — `domain/txnlink.go`), `dedupe.FindDuplicates`, `merchantstats.Compute`
+  + `DeltaVsTypical` for "is this charge normal for this merchant", `Transaction.Splits`, and the
+  other queued charges from the same merchant. Today the ONLY nod to relatedness is
+  `sameMerchantQueued` returning an INTEGER — the user is asked to trust "also apply to 7 others"
+  without seeing the 7. Render a context band; make the merchant siblings a visible, individually
+  deselectable list. AC: no batch action is offered whose members the user cannot inspect first.
+  *(Open question for Cam: "siblings" = related TRANSACTIONS, assumed here — or sibling CATEGORIES
+  in the tree, i.e. when Smart+ picks "Groceries", show the other children of its parent? Both are
+  buildable and the data exists for each; confirm before building.)*
+- [ ] **C504 [MAJOR][REVIEW] Strong Smart+ integration: scan once, step through, and page past 40.**
+  ★ Today the single-item path sends ONE transaction per call (`review_inbox.go:241`,
+  `lines := "1 | " + ...`) using the same `AutoCategorize`/`ParseCategoryAssignments` the bulk path
+  uses for 40 — roughly 40x the per-item token cost for identical work. And `smartCatScanCap = 40`
+  is hard with no paging: the scan loop breaks at 40 from the top, so re-scanning without applying
+  returns the same 40 and items 41+ are only reachable by applying the first batch. Make one batch
+  scan the shared source for both modes, add explicit paging ("scan the next 40"), and surface
+  per-row confidence from C488. **Consent decision required:** `txn_smartcat.go:49` is explicit that
+  "the scan is the consent step: nothing leaves the device until the user picks a mode and clicks
+  Scan" — auto-scanning on open silently repeals that. Decide deliberately; do not change it as a
+  side effect. AC: reviewing 120 items costs 3 AI calls, not 120.
+- [ ] **C505 [MAJOR][REVIEW] Some queue items must be resolvable WITHOUT a category.** Both modes
+  currently assume every resolution is a category assignment. It isn't: an unmatched transfer leg
+  reaches the queue because `IsTransfer()` is just `TransferAccountID != ""`, and its correct action
+  is "pair this as a transfer"; a refund's correct action is `TxnLinkRefundPair` so it nets against
+  its original instead of distorting the budget as spend; a multi-category charge needs "split
+  this" (see C492). Offer these as first-class row actions alongside Confirm/Snooze/Dismiss (C493).
+  AC: each non-category resolution removes the item from the queue for the right reason.
+- [ ] **C506 [MAJOR][REVIEW] Turn a batch into a rule — the exit from triage.** ★ The fastest way to
+  clear 250 items is to stop them entering the queue. `rulesuggest.Suggest` already computes
+  ready-made rules, `/rules` is a full workbench with backfill, and `createRuleFromTxn` already
+  prefills from a row — but the surface treats this as categorization only, offering just a quiet
+  cross-link. In bulk mode, where the user is already looking at a merchant-grouped set, add an
+  "always categorize <merchant> as <category>" affordance that creates the rule alongside the batch
+  apply. AC: one action both clears the visible batch and prevents the next one; the created rule is
+  visible in `/rules` with its backfill count.
+- [ ] **C507 [MAJOR][REVIEW] Keyboard-first triage.** ★ There are currently ZERO shortcuts
+  registered in the review body. WF1's acceptance metric is **median seconds per reviewed
+  transaction**, and a bulk list without keyboard flow is just slow with more rows visible. Add j/k
+  row navigation, number-key category assignment from the top suggestions, one-keypress confirm for
+  high-confidence rows, and space to toggle selection. AC: a full keyboard pass clears a
+  20-item queue with no pointer input; shortcuts are discoverable, not folklore.
+- [ ] **C508 [MAJOR][REVIEW] Session-wide multi-step undo.** Both existing paths are ONE level —
+  `lastBulk` on the transactions screen and `undoAtom` in smartcat each hold a single
+  `BulkSnapshot`, so applying 40 assignments and then doing one more thing discards the undo. At
+  bulk scale one-level undo is not enough to make users brave, and being brave is the point of
+  batching. Build on the `internal/history` diff-stack already wired to Ctrl+Z and `/activity` by
+  C364. AC: three successive bulk applies are individually reversible in order.
+- [ ] **C509 [MINOR][REVIEW] Estimate and cap the cost of a bulk scan before spending the user's
+  key.** Bulk Smart+ runs on a bring-your-own key with no estimate, no cap, and no cost display in
+  that modal — though C370 already built honest sub-cent formatting (`FormatCostUSD`) for chat, and
+  the WF-series requires SMART+ features be cost-capped. Show the estimate before the scan and the
+  actual after. AC: "scan 250 transactions" states its expected cost first; a configurable ceiling
+  blocks a runaway.
+- [ ] **C510 [MINOR][PERF] Precompute the bulk list's per-render index.** `reviewqueue.Queue` sorts
+  the full list every render, and `workingCount`/`sameMerchantQueued` each rebuild a map and rescan
+  `app.Transactions()` per render — free today because one item renders, O(n^2) once 250 rows each
+  compute sibling hints, duplicate candidates, and `merchantstats.Compute`. Build one index per
+  render and pass it down. AC: the surface holds its grade in the perf framework (all 46 pages
+  currently A) at a 250-item queue.
+- [ ] **C511 [MINOR][REVIEW] Decide where the mis-categorization (Recat) mode lives.** ★ *(Decision
+  ticket — blocks C500's information architecture.)* `smartCatRecat` (SMART-T17) finds LIKELY
+  MIS-CATEGORIZED transactions among already-categorized ones — arguably the higher-value mode once
+  the backlog is clear, since it is the only thing keeping category data honest over time. Cam's
+  brief covers only uncategorized items. If the merged surface handles only those, Recat is either
+  orphaned in the old modal (recreating exactly the two-surface split this series removes) or
+  becomes a third mode, turning a two-way focus toggle into a three-way job selector. Decide before
+  the layout is built.
+- [ ] **C512 [MINOR][A11Y] Bulk selection must be accessible.** Multi-select with shift-click range
+  selection needs an announced selection count, focus management across a mode switch, and labelled
+  row controls. Note the two existing constraints: rows use the branded `.cf-check` rather than a
+  native checkbox (native renders near-invisibly on some OS/theme combinations), and QA CF-02
+  established that `aria-disabled` on primary actions breaks automation — an unarmed control must
+  explain itself rather than be disabled. AC: keyboard-only and screen-reader passes on both modes.
