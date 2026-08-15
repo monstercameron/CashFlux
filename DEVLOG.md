@@ -1,3 +1,17 @@
+## 2026-08-14 — The factor most responsible for a bad score, missing from its own explanation
+
+`healthContribBar` answers "why this number?" with a segmented bar: each applicable factor's score
+× weight, rounded to a point contribution. Reasonable, except for the one case that matters most —
+a factor scoring at or near 0. `int(0 * weight + 0.5)` rounds to 0, and the loop building the bar's
+segments skipped anything with `pts <= 0`. So a household carrying debt payments well past the 43%
+critical line — the textbook case for a bad health score — would see every *other* factor named in
+the breakdown and nothing about the one actually dragging the number down. The bug applies to any
+factor scoring 0, not only debt; debt is just the one the report surfaced.
+
+Every applicable factor now stays in the legend regardless of its point contribution — a factor at
+0 shows "+0" honestly rather than vanishing. Only the visual bar segment stays conditional on
+`pts > 0`, since a genuinely 0%-wide sliver has nothing to render anyway.
+
 ## 2026-08-14 — The headline figure that outgrew its own chart
 
 `periodChartAnchor` is deliberate: page the dashboard to June, and its trailing charts trend up to

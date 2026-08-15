@@ -128,9 +128,12 @@ func healthContribBar(r healthscore.Result) ui.Node {
 			continue
 		}
 		pts := int(float64(f.Score)*f.Weight + 0.5)
-		if pts <= 0 {
-			continue
-		}
+		// A factor scoring near 0 (e.g. debt payments over the 43%-of-income
+		// critical line) rounds its point contribution down to 0 — that used to
+		// drop it from segs entirely, silently omitting the exact factor most
+		// responsible for a low score from its own "why this score" breakdown.
+		// Every applicable factor stays listed; only its BAR segment (which a 0%
+		// width can't render anyway) is conditional below.
 		segs = append(segs, seg{f.Label, pts, contribTone(f.Score)})
 	}
 	if len(segs) == 0 {
@@ -139,9 +142,11 @@ func healthContribBar(r healthscore.Result) ui.Node {
 	bars := make([]ui.Node, 0, len(segs))
 	legend := make([]ui.Node, 0, len(segs))
 	for _, s := range segs {
-		bars = append(bars, Div(ClassStr("hlt-contrib-seg "+s.tone),
-			Attr("title", fmt.Sprintf("%s +%d", s.label, s.pts)),
-			Style(map[string]string{"width": fmt.Sprintf("%d%%", s.pts)})))
+		if s.pts > 0 {
+			bars = append(bars, Div(ClassStr("hlt-contrib-seg "+s.tone),
+				Attr("title", fmt.Sprintf("%s +%d", s.label, s.pts)),
+				Style(map[string]string{"width": fmt.Sprintf("%d%%", s.pts)})))
+		}
 		legend = append(legend, Span(css.Class("hlt-contrib-key"),
 			Span(ClassStr("hlt-contrib-dot "+s.tone), Attr("aria-hidden", "true")),
 			Span(css.Class("hlt-contrib-name"), s.label),

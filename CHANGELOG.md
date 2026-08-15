@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The Financial Health "why this score" breakdown no longer silently drops a factor scoring 0.**
+  A factor's point contribution (score × weight) rounds down to 0 for a severe factor like a
+  debt-payment burden well over the critical line — and that used to filter it out of the
+  contribution bar and legend entirely, hiding the exact factor most responsible for a low score
+  from its own explanation. Every applicable factor now stays listed in the legend; only its bar
+  segment (which a 0%-width sliver can't render anyway) is conditional.
 - **The Dashboard net-worth trend widget no longer shows a headline figure above its own chart.**
   Paged to a past month, the trend series anchors on that viewed period and can end before today
   while the headline figure stays live (net worth is a position, not period activity) — so the
