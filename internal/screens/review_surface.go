@@ -14,14 +14,17 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/rules"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -198,6 +201,8 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		if len(sel) == 0 {
 			return
 		}
+		// Seal whatever came before into its own undo entry, so this batch does
+		// not merge with it.
 		auditview.CaptureNow()
 		total := 0
 		app.BulkMutate(func() {
@@ -213,6 +218,11 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 			}
 		})
 		if total > 0 {
+			// C508: seal THIS batch immediately too. Undo points are otherwise
+			// captured on the autosave tick, so two confirms inside one 4s window
+			// collapsed into a single entry and the earlier batch became
+			// unreachable — one-level undo wearing a multi-step coat.
+			auditview.CaptureNow()
 			uistate.PostUndoable(uistate.T("review.bulkApplied", total))
 			notice.Set(uistate.T("review.bulkApplied", total))
 		}
@@ -220,6 +230,49 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		uistate.BumpDataRevision()
 	}
 	applySelected := ui.UseEvent(doApply)
+
+	// C506: the fastest way to clear a queue is to stop charges entering it.
+	// One action both files the visible batch AND writes the rule that files the
+	// next one — the user is already looking at a merchant-grouped set, so the
+	// match text and the category are both already decided.
+	doMakeRules := func() {
+		sel := selected.Get()
+		if len(sel) == 0 {
+			return
+		}
+		made := 0
+		for _, r := range idx.Rows {
+			if !sel[r.Group.Key] || len(r.Group.Items) == 0 {
+				continue
+			}
+			cat := catFor(r)
+			if cat == "" {
+				continue
+			}
+			// Match on the CLEANED merchant name: the raw descriptor carries a
+			// per-charge reference, so a rule built from it would match exactly
+			// one transaction and never fire again.
+			match := strings.TrimSpace(r.Group.Merchant)
+			if match == "" {
+				continue
+			}
+			if err := app.PutRule(rules.Rule{
+				ID: id.New(), Match: match, SetCategoryID: cat, Order: 1000 + made,
+			}); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				continue
+			}
+			made++
+		}
+		if made > 0 {
+			notice.Set(uistate.T("review.rulesMade", made))
+			uistate.RequestPersist()
+		}
+		// Apply the batch too: making a rule should not leave the charges that
+		// prompted it sitting in the queue.
+		doApply()
+	}
+	makeRules := ui.UseEvent(doMakeRules)
 
 	selectTier := func(t reviewTier) {
 		m := make(map[string]bool, len(idx.Rows))
@@ -361,7 +414,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	if isBulk {
 		body, foot = reviewBulkView(app, idx, selected.Get(), openGroups.Get(), manual.Get(),
 			catFor, toggleGroup, toggleSelect, setManual, selReady, selLook,
-			applySelected, clearSel, notice.Get(), pr, clampFocus(focusRow.Get()))
+			applySelected, clearSel, makeRules, notice.Get(), pr, clampFocus(focusRow.Get()))
 	} else {
 		body, foot = reviewSingleView(app, idx, curRow, cur, catFor, setManual,
 			confirmOne, skipOne, dismissOne, notice.Get(), pr)
@@ -432,7 +485,7 @@ func reviewBulkView(
 	sel map[string]bool, openG map[string]bool, manual map[string]string,
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
-	selReady, selLook, applySel, clearSel any, notice string, pr prefs.Prefs, focused int,
+	selReady, selLook, applySel, clearSel, makeRules any, notice string, pr prefs.Prefs, focused int,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
 
@@ -464,6 +517,7 @@ func reviewBulkView(
 				uistate.T("review.selectAll", m))
 		}
 		tiers = append(tiers, Div(css.Class("rvs-tier "+tierMod(t)), Attr("data-tier", tierMod(t)),
+			Attr("role", "group"), Attr("aria-label", tierLabel(t)),
 			Div(css.Class("rvs-tier-head"),
 				Span(css.Class("rvs-tier-mark")),
 				Span(css.Class("rvs-tier-name"), tierLabel(t)),
@@ -498,7 +552,8 @@ func reviewBulkView(
 			Span(Span(css.Class("rvs-dot is-look")), uistate.T("review.legendMid")),
 			Span(Span(css.Class("rvs-dot is-none")), uistate.T("review.legendNone")),
 		),
-		If(notice != "", P(css.Class("rvs-notice"), Attr("data-testid", "review-notice"), notice)),
+		If(notice != "", P(css.Class("rvs-notice"), Attr("data-testid", "review-notice"),
+			Attr("role", "status"), Attr("aria-live", "polite"), notice)),
 		Fragment(nodesToAny(tiers)...),
 	)
 
@@ -519,9 +574,13 @@ func reviewBulkView(
 		confirm = uistate.T("review.confirmN", selCharges)
 	}
 	foot := Fragment(
-		Span(css.Class("rvs-foot-n"), Attr("data-testid", "review-selection"), label),
+		Span(css.Class("rvs-foot-n"), Attr("data-testid", "review-selection"),
+			Attr("role", "status"), Attr("aria-live", "polite"), label),
 		Span(css.Class("rvs-foot-sub"), sub),
 		Span(css.Class("rvs-foot-acts"),
+			If(selMerchants > 0,
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-makerule"),
+					OnClick(makeRules), uistate.T("review.makeRule"))),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-clear"),
 				OnClick(clearSel), uistate.T("review.clear")),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"),

@@ -251,3 +251,86 @@ test.describe("review surface: keyboard (C507)", () => {
     await expect(search).toHaveValue("jksdb");
   });
 });
+
+test.describe("review surface: rules from a batch (C506)", () => {
+  test("one action files the batch and writes the rule that files the next", async ({ app }) => {
+    await openReview(app);
+    const before = await readCharges(app);
+
+    // The action only appears once something is selected — a rule with no
+    // merchant behind it would have nothing to match on.
+    await expect(app.getByTestId("review-makerule")).toHaveCount(0);
+    await app.locator('[data-testid^="review-pick-"]').first().click();
+    const makeRule = app.getByTestId("review-makerule");
+    await expect(makeRule).toBeVisible();
+
+    const merchant = (await app.locator(".rvs-grp.is-sel .rvs-grp-name strong").first().textContent()).trim();
+    await makeRule.click();
+
+    // The charges that prompted the rule are cleared, not left behind.
+    await expect.poll(() => readCharges(app)).toBeLessThan(before);
+
+    // And the rule exists, matching the CLEANED merchant name — a rule built
+    // from the raw descriptor would carry a per-charge reference and fire once.
+    await closeReview(app);
+    await nav(app, "/rules");
+    await expect(app.locator("#main")).toContainText(merchant);
+  });
+});
+
+test.describe("review surface: accessibility (C512)", () => {
+  test("every control is named and state changes are announced", async ({ app }) => {
+    await openReview(app);
+
+    // A row of identical icon-only checkboxes is unusable without the merchant
+    // in the accessible name.
+    const pick = app.locator('[data-testid^="review-pick-"]').first();
+    const label = await pick.getAttribute("aria-label");
+    expect(label, "the select checkbox needs an accessible name").toBeTruthy();
+    expect(label).toMatch(/select .+ charges?/i);
+
+    const caret = app.locator('[data-testid^="review-expand-"]').first();
+    expect(await caret.getAttribute("aria-label")).toBeTruthy();
+    expect(await caret.getAttribute("aria-expanded")).toBe("false");
+
+    // The selection count changes with no focus movement, so it must announce.
+    const sel = app.getByTestId("review-selection");
+    expect(await sel.getAttribute("aria-live")).toBe("polite");
+    expect(await sel.getAttribute("role")).toBe("status");
+
+    // Tiers are named groups, not anonymous divs.
+    const tier = app.locator("[data-tier]").first();
+    expect(await tier.getAttribute("role")).toBe("group");
+    expect(await tier.getAttribute("aria-label")).toBeTruthy();
+
+    // Category selects carry a label too.
+    const cat = app.locator('[data-testid^="review-cat-"]').first();
+    expect(await cat.getAttribute("aria-label")).toBeTruthy();
+  });
+});
+
+test.describe("review surface: undo (C508, partial)", () => {
+  test("a bulk confirm is reversible", async ({ app }) => {
+    await openReview(app);
+    const start = await readCharges(app);
+
+    await app.locator('[data-testid^="review-pick-"]').first().click();
+    await app.getByTestId("review-apply").click();
+    await expect.poll(() => readCharges(app)).toBeLessThan(start);
+    const afterConfirm = await readCharges(app);
+
+    // Ctrl+Z reverses the batch.
+    await app.keyboard.press("Control+z");
+    await expect
+      .poll(() => readCharges(app), { message: "a bulk confirm must be reversible" })
+      .toBeGreaterThan(afterConfirm);
+
+    // MEASURED LIMITATION, not a passing grade: undoing a 122-charge batch
+    // restored it only PARTIALLY (127 -> 173 of an expected 249), and two
+    // confirms close together collapse toward one reachable entry. Undo points
+    // are captured on the autosave tick (internal/app/undo.go captureUndoPoint)
+    // and the stack is bounded at 4 MB, so a large changeset does not survive
+    // whole. Fixing it means changing the shared stack every screen depends on
+    // — tracked on C508 rather than asserted here as though it worked.
+  });
+});

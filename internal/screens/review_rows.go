@@ -81,7 +81,10 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 
 	return Div(css.Class(cls),
 		Div(css.Class("rvs-grp-row"),
+			// Named, not just testable: an icon-only checkbox in a list of 30
+			// merchants is unusable without the merchant in its accessible name.
 			Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "review-pick-"+key),
+				Attr("aria-label", uistate.T("review.pickAria", g.Merchant, len(g.Items))),
 				CheckedIf(props.Selected), OnClick(toggleSel)),
 			Div(css.Class("rvs-grp-main"),
 				Div(css.Class("rvs-grp-name"),
@@ -95,6 +98,7 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 				Select(selArgs...),
 				Span(css.Class("rvs-grp-total"), fmtMoney(money.Money{Amount: g.Total(), Currency: g.Items[0].Amount.Currency})),
 				Button(css.Class("rvs-caret"), Type("button"), Attr("aria-expanded", boolAttr(props.Open)),
+					Attr("aria-label", uistate.T("review.expandAria", g.Merchant)),
 					Attr("data-testid", "review-expand-"+key), OnClick(toggleOpen), "▸"),
 			),
 		),
