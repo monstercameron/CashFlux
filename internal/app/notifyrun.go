@@ -104,6 +104,13 @@ func runNotifyCatchUp() {
 	// warning left over from before the user marked an account a liability (where a
 	// zero balance is good — you owe nothing) or archived it, disappears on its own.
 	reconcileLowBalanceFeed(app)
+	// Self-heal: clear bill-due alerts whose encoded due date no longer matches
+	// the account's current computed due date. Without this, an old "due in N
+	// days" card ages forever into a growing "overdue by N days" (screens/
+	// notifications.go's live re-render never removes it) while a fresh
+	// notification for the NEXT cycle can arrive alongside it — a stale,
+	// contradictory pair pointing at the same bill.
+	reconcileBillDueFeed(app, now)
 
 	if len(out) == 0 {
 		return
@@ -437,6 +444,39 @@ func reconcileLowBalanceFeed(app *appstate.App) {
 			acctID = rest[:i]
 		}
 		return resolved[acctID]
+	})
+}
+
+// reconcileBillDueFeed drops persisted bill-due notifications whose encoded due
+// date no longer matches the account's current computed due date. Bills have no
+// explicit "paid" state — UpcomingAll simply recomputes the next due date each
+// run — so once a cycle rolls over, the old notification's due date is
+// superseded but nothing ever removed the card; screens/notifications.go's
+// live re-render only ages its text into a growing "overdue by N days", it
+// never clears it. Left alone, that aging card can sit beside a fresh
+// notification for the new cycle, reading as two contradictory alerts about
+// the same bill. An account with no current upcoming bill at all (paid off,
+// account archived/removed) has every one of its bill-due cards dropped too.
+func reconcileBillDueFeed(app *appstate.App, now time.Time) {
+	current := map[string]string{} // accountID -> "YYYY-MM-DD" of its current due date
+	for _, b := range bills.UpcomingAll(app.Accounts(), app.Recurring(), now) {
+		current[b.AccountID] = b.DueDate.Format("2006-01-02")
+	}
+	const prefix = "default-bill-due@"
+	uistate.RemoveFeedItems(func(it uistate.FeedItem) bool {
+		if !strings.HasPrefix(it.ID, prefix) || it.DueAt <= 0 {
+			return false
+		}
+		tgt := notify.ParseTarget(it.ID)
+		if tgt.Kind != notify.TargetAccount {
+			return false
+		}
+		want, ok := current[tgt.ID]
+		if !ok {
+			return true // no active upcoming bill for this account anymore — resolved
+		}
+		encoded := time.Unix(it.DueAt, 0).UTC().Format("2006-01-02")
+		return encoded != want
 	})
 }
 

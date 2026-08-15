@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Bill-due notifications no longer age into stale, contradictory alerts.** A due-date card's text
+  was written once and never cleared once its cycle rolled over, so an old "due in N days" kept
+  aging into a growing "overdue by N days" while a fresh notification for the next cycle could
+  arrive alongside it — two cards contradicting each other about the same bill. The catch-up runner
+  now reconciles bill-due feed items against each account's current computed due date on every boot.
+
 ### Changed
 - **The community health files now match the other Flux repositories.** `CODE_OF_CONDUCT.md` is
   the full Contributor Covenant 2.1, identical across all five apart from the private-report URL,

@@ -1,3 +1,22 @@
+## 2026-08-14 — A bill-due card that never learns its own bill got paid
+
+Reported as "stale and contradictory due-date alerts." The reproduction was simple once traced:
+`BillDueCandidates` keys each occurrence by account + due date, so once a cycle passes, nothing new
+fires for that same key — correct, idempotent. But nothing ever *removed* the old notification
+either. The Notification Center already had a nice touch for this: `notifyRow` re-derives "overdue
+by N days" live from the stored due date on every render, so the text itself never goes stale. What
+it can't fix is that the card is still *there* — a bill with no explicit "paid" state just gets its
+due date recomputed forward each boot, so the old occurrence and the new one can both be sitting in
+the feed at once, one saying "due in 4 days" and the other "overdue by 19 days," about the same
+loan.
+
+The fix mirrors a pattern already in the file: `reconcileLowBalanceFeed` clears low-balance alerts
+for accounts that no longer qualify (e.g. once reclassified as a liability). `reconcileBillDueFeed`
+does the same for bill-due cards — on every boot, it compares each card's encoded due date against
+the account's *current* computed due date and drops anything that no longer matches (a cycle
+rolled over) or whose account has no upcoming bill at all (paid off, archived). Runs alongside the
+existing low-balance reconcile, same shape, same place.
+
 ## 2026-08-09 — Five repositories, one set of house rules
 
 Cam asked for uniform README / Code of Conduct / Contributing / MIT licence / Security across the
