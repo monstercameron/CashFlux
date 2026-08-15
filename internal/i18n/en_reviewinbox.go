@@ -26,6 +26,14 @@ var reviewInboxKeys = Catalog{
 	"review.categorizeNext": "Categorize & next",
 	"review.chooseFirst":    "Choose a category first, then confirm.",
 
+	// Why a SMART (local, non-LLM) suggestion was made — C515 returns the evidence
+	// as data and it is phrased here. Never say "AI" for these: rules, history and
+	// the merchant dictionary all run on-device and cost nothing.
+	"review.whyRule":            "From a rule you wrote",
+	"review.whyHistoryExact":    "You filed this charge here %d of %d times",
+	"review.whyHistoryMerchant": "You filed %d of %d charges from this merchant here",
+	"review.whyDictionary":      "%s is a well-known merchant",
+
 	// Cross-link to /rules when ready-made rule suggestions exist (review #13/#18):
 	// filing many of the queue in one place beats one-at-a-time triage.
 	"review.rulesReadyOne":  "1 ready-made rule could file many of these",

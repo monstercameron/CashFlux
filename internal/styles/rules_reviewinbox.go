@@ -157,6 +157,17 @@ func registerReviewInboxSurface() {
 	rule(".rvw-suggest:hover",
 		background("color-mix(in srgb, var(--accent) 18%, transparent)"),
 	)
+	// The evidence behind a SMART suggestion ("you filed 6 of 7 here"). Subordinate
+	// to the category name but still legible: it is what lets the user judge the
+	// suggestion instead of trusting it, so it must not read as a tooltip.
+	rule(".rvw-suggest-why",
+		color("var(--text-dim)"),
+		fontWeight("400"),
+		fontSize("var(--type-12)"),
+		paddingLeft("0.4rem"),
+		borderLeft("1px solid color-mix(in srgb, var(--accent) 30%, transparent)"),
+		marginLeft("0.1rem"),
+	)
 
 	// The SMART (deterministic) suggestion and the SMART+ (AI) button sit on one
 	// wrapping row so they read as sibling quick-picks under the category select.

@@ -60,6 +60,20 @@ func IncrementLearnTally(payee, categoryID string) {
 	SaveLearnTally(t)
 }
 
+// RecordLearnTally loads the tally, records one correction under BOTH the exact
+// descriptor and the merchant stem (learntally.Record), and persists (C513).
+// Prefer this over IncrementLearnTally: the exact key alone never accumulates
+// for a merchant that stamps a reference on every charge, so those merchants
+// could otherwise never reach the suggestion threshold.
+func RecordLearnTally(payee, categoryID string) {
+	if categoryID == "" || learntally.NormalizePayee(payee) == "" {
+		return
+	}
+	t := LoadLearnTally()
+	t.Record(payee, categoryID)
+	SaveLearnTally(t)
+}
+
 // LoadLearnThreshold returns the user's persisted suggestion threshold.
 // Falls back to learntally.DefaultMinCount when no override is stored.
 func LoadLearnThreshold() int {

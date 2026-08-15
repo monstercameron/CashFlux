@@ -6679,8 +6679,10 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
 
 ### Phase B — bugs in the CURRENT surface (ship independent of the redesign) ★
 
-- [ ] **C496 [MAJOR][REVIEW] "Also apply to N others" is ignored by the Smart+ and suggestion
-  buttons.** ★ *(found by Cam, 2026-08-15.)* `alsoSimilar.Get()` is read at exactly two places in
+- [x] **C496 [MAJOR][REVIEW] "Also apply to N others" is ignored by the Smart+ and suggestion
+  buttons.** *(FIXED 2026-08-15: all three paths route through `applyReviewChoice`, which reads the
+  flag once; the SMART+ path captures the flag at CLICK time so a late reply honours the intent the
+  user actually expressed. e2e `smart_categorize.spec.mjs` asserts the queue drops by more than one.)* ★ *(found by Cam, 2026-08-15.)* `alsoSimilar.Get()` is read at exactly two places in
   `review_inbox.go` — line 275 (inside `commit`) and line 422 (rendering the checkbox's own state).
   `aiCategorize` (`:225-258`) and `applySuggest` (`:285-294`) both call the SINGLE-transaction
   `assignReviewCategory` and never consult the flag, so checking the box and then clicking Smart+
@@ -6882,6 +6884,11 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   the next import with its evidence string; a merchant with a split history (4 Groceries / 3 Dining)
   reports LOW confidence rather than picking a winner. Closes the long-open **C33** ("no
   self-learning from corrections") and feeds **C34** (live suggestion while typing).
+  *SHIPPED 2026-08-15.* `learntally.MerchantKey` routes through `payeealias.Normalize` and is
+  namespaced with `~` so both tiers share one persisted map; `Record` writes exact + stem, `Suggest`
+  returns `{CategoryID, Match, Count, Total}` with `Consistent()` for the majority test. Confirming
+  in the review inbox now teaches it (`uistate.RecordLearnTally`). `Increment` is untouched so
+  quick-add keeps working. Remaining: import and bulk-apply paths still do not consult it.
 
 - [ ] **C514 [MAJOR][SMART] Ship a merchant dictionary and substring-match against it.** ★ New user,
   empty history, no rules: today every one of their first 200 charges is uncategorized with zero
@@ -6905,6 +6912,13 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   AC: pure package with table-driven tests including the processor-prefix and false-positive cases
   above; a fresh household importing a typical statement gets a majority of charges suggested with
   no key configured; measured wasm size delta recorded in the commit.
+  *SHIPPED 2026-08-15 — `internal/merchantdict` (309 entries, hand-authored).* Matching runs on
+  `payeealias.Normalize` output, which already strips processor prefixes, so PAYPAL *STEAM GAMES
+  resolves to Steam; a token-boundary longest-match pass then stops "GAPING VOID" matching Gap and
+  "TARGETED THERAPY" matching Target. A test asserts no processor is ever a dictionary entry.
+  Entries map to canonical slugs with alias lists, resolved onto the household's real categories by
+  name — never invented. **Measured wasm delta for the entire Phase E feature set: +43.9 KB
+  (+0.055% of 78.4 MB)**, so the table is nowhere near needing lazy loading.
 
 - [ ] **C515 [MAJOR][SMART] One ranked resolver, so four suggestion sources don't fight.** With
   rules (existing), history (C513), the dictionary (C514), and SMART+ (C504), four things can all
@@ -6918,3 +6932,13 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   AC: pure package, table-driven tests over every precedence pair; the review inbox shows the source
   of each suggestion; SMART+ is asked ONLY for charges the local sources could not resolve, which is
   what makes C509's cost estimate small and honest.
+  *SHIPPED 2026-08-15 — `internal/catsuggest`.* Precedence confirmed by Cam and asserted by test:
+  **rule > history (exact, then merchant) > dictionary > SMART+**. `Source`/`Confidence` are ordered
+  constants so callers rank with `<`; evidence is returned as DATA (`Count`/`Total`/`Merchant`) and
+  phrased in `en_reviewinbox.go`, keeping the screenlint ratchet at 0. Guards that earned their
+  tests: a rule pointing at a deleted category falls through instead of writing a dangling id; an
+  income charge is never handed an expense category; a household with no matching category gets NO
+  suggestion rather than an invented one. **Measured over the sample dataset: 176 of 250 queued
+  charges (70%) resolve with zero rules and zero history, rising to 197 (79%) after learning a
+  single merchant** (`coverage_test.go`, which fails if cold-start coverage drops below 25%).
+  Remaining: wire into CSV/document import and the bulk apply path (currently the review inbox only).

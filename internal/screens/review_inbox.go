@@ -106,6 +106,9 @@ func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
 				uistate.BumpDataRevision()
 				return false
 			}
+			// Learn from the confirmation, so the next charge from this merchant
+			// is suggested locally instead of costing a SMART+ call (C513).
+			rememberReviewChoice(t, catID)
 			uistate.BumpDataRevision()
 			return true
 		}
@@ -134,6 +137,7 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) int {
 					}
 					continue
 				}
+				rememberReviewChoice(t, catID)
 				n++
 			}
 		}
@@ -237,7 +241,11 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			catIDByName[c.Name] = c.ID
 			catList.WriteString(c.Name + "\n")
 		}
-		curID := cur.ID
+		// Capture the transaction AND the batch flag at CLICK time: the callback
+		// runs later, and the user's intent is what they set before pressing the
+		// button, not whatever the checkbox happens to hold when the reply lands.
+		curTxn := cur
+		batch := alsoSimilar.Get()
 		lines := "1 | " + strings.TrimSpace(cur.Payee+" — "+cur.Desc) + " | " + fmtMoney(cur.Amount)
 		aiLoading.Set(true)
 		aiErr.Set("")
@@ -245,9 +253,8 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			func(text string) {
 				parsed := smartai.ParseCategoryAssignments(text, 1, catIDByName)
 				if len(parsed) > 0 && parsed[0].CategoryID != "" {
-					if assignReviewCategory(app, curID, parsed[0].CategoryID) {
-						postCategorizedUndo(app, parsed[0].CategoryID, 1)
-					}
+					applyReviewChoice(app, curTxn, parsed[0].CategoryID, batch)
+					alsoSimilar.Set(false)
 					seededFor.Set("~none~")
 				} else {
 					aiErr.Set(uistate.T("review.aiNoMatch"))
@@ -272,25 +279,22 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			return
 		}
 		commitErr.Set("")
-		if alsoSimilar.Get() {
-			if n := assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), v); n > 0 {
-				postCategorizedUndo(app, v, n)
-			}
-		} else if assignReviewCategory(app, cur.ID, v) {
-			postCategorizedUndo(app, v, 1)
-		}
+		applyReviewChoice(app, cur, v, alsoSimilar.Get())
 		alsoSimilar.Set(false)
 		seededFor.Set("~none~")
 	})
 	applySuggest := ui.UseEvent(func() {
-		if cur, ok := firstToReview(app.Transactions(), skipped.Get()); ok {
-			if sug := app.AutoCategorizeTransaction(cur); sug.CategoryID != "" {
-				if assignReviewCategory(app, cur.ID, sug.CategoryID) {
-					postCategorizedUndo(app, sug.CategoryID, 1)
-				}
-				seededFor.Set("~none~")
-			}
+		cur, ok := firstToReview(app.Transactions(), skipped.Get())
+		if !ok {
+			return
 		}
+		sug, has := reviewSuggestion(app, cur)
+		if !has || sug.CategoryID == "" {
+			return
+		}
+		applyReviewChoice(app, cur, sug.CategoryID, alsoSimilar.Get())
+		alsoSimilar.Set(false)
+		seededFor.Set("~none~")
 	})
 	skip := ui.UseEvent(func() {
 		if cur, ok := firstToReview(app.Transactions(), skipped.Get()); ok {
@@ -390,12 +394,16 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(selVal.Get() == c.ID), c.Name))
 	}
 
-	// One-click deterministic suggestion, when it beats the current state.
+	// One-click SMART suggestion (local: rule → history → merchant dictionary),
+	// with the evidence behind it so the user can judge rather than trust it.
 	var suggNode ui.Node
-	if sug := app.AutoCategorizeTransaction(cur); sug.CategoryID != "" && sug.CategoryID != cur.CategoryID {
-		suggNode = Button(css.Class("rvw-suggest"), Type("button"), Attr("data-testid", "review-suggest"), OnClick(applySuggest),
+	if sug, ok := reviewSuggestion(app, cur); ok && sug.CategoryID != cur.CategoryID {
+		why := reviewWhy(sug)
+		suggNode = Button(css.Class("rvw-suggest"), Type("button"), Attr("data-testid", "review-suggest"),
+			Attr("data-source", sug.Source.String()), OnClick(applySuggest),
 			uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)),
-			Span(uistate.T("review.suggested", reviewCatName(app, sug.CategoryID))))
+			Span(uistate.T("review.suggested", reviewCatName(app, sug.CategoryID))),
+			If(why != "", Span(css.Class("rvw-suggest-why"), Attr("data-testid", "review-suggest-why"), why)))
 	}
 
 	// SMART+ AI category button — asks the model to pick an existing category for
