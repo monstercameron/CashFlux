@@ -6801,7 +6801,7 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   buildable and the data exists for each; confirm before building.)*
   *SHIPPED 2026-08-15: siblings as an inspectable list, TxnLink order/refund bands, duplicate candidates, merchant-typical comparison.*
 
-- [~] **C504 [MAJOR][REVIEW] Strong Smart+ integration: scan once, step through, and page past 40.**
+- [x] **C504 [MAJOR][REVIEW] Strong Smart+ integration: scan once, step through, and page past 40.**
   ★ Today the single-item path sends ONE transaction per call (`review_inbox.go:241`,
   `lines := "1 | " + ...`) using the same `AutoCategorize`/`ParseCategoryAssignments` the bulk path
   uses for 40 — roughly 40x the per-item token cost for identical work. And `smartCatScanCap = 40`
@@ -6825,6 +6825,7 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   row the user set by hand is never overwritten by a scan or by auto-fix; the strip states cost
   before spending and actual cost after.
   *PARTIAL 2026-08-15: the strip states scope and cost BEFORE the button and the scan stays an explicit consent step. NOT done: one shared batch result across both modes, and explicit paging past the 40-charge cap — the strip still opens the existing Smart+ modal, so single mode does not yet read a batch result.*
+  *UPGRADED TO SHIPPED 2026-08-15 (round 2): the scan now runs INLINE in the surface rather than handing off to the old modal. It scans only the merchants the LOCAL sources could not answer (one representative charge per merchant, not per charge), parses with confidence + sign rejection, and its answers land BELOW manual edits and local suggestions in `catFor` — so a paid answer never overrides a rule or a hand edit. "Use these suggestions" moves them into the selection, leaving Confirm as the next click. Still open: paging past the 40 cap in one sitting.*
 
 - [~] **C505 [MAJOR][REVIEW] Some queue items must be resolvable WITHOUT a category.** Both modes
   currently assume every resolution is a category assignment. It isn't: an unmatched transfer leg
@@ -6861,13 +6862,14 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   C364. AC: three successive bulk applies are individually reversible in order.
   *PARTIAL 2026-08-15 — MEASURED, not assumed. A bulk confirm IS reversible with Ctrl+Z, but undoing a 122-charge batch restored it only partially (127 -> 173 of an expected 249), and two confirms close together collapse toward one reachable entry. Cause: `captureUndoPoint` runs on the autosave tick and the stack is bounded at 4 MB, so a large changeset does not survive whole. Sealing each batch with `auditview.CaptureNow()` helped but did not fix it. Real fix is in the SHARED `internal/app/undo.go` that every screen depends on.*
 
-- [~] **C509 [MINOR][REVIEW] Estimate and cap the cost of a bulk scan before spending the user's
+- [x] **C509 [MINOR][REVIEW] Estimate and cap the cost of a bulk scan before spending the user's
   key.** Bulk Smart+ runs on a bring-your-own key with no estimate, no cap, and no cost display in
   that modal — though C370 already built honest sub-cent formatting (`FormatCostUSD`) for chat, and
   the WF-series requires SMART+ features be cost-capped. Show the estimate before the scan and the
   actual after. AC: "scan 250 transactions" states its expected cost first; a configurable ceiling
   blocks a runaway.
   *PARTIAL 2026-08-15: the scan strip states the expected cost before spending. NOT done: a configurable hard ceiling and the actual cost reported after.*
+  *UPGRADED TO SHIPPED 2026-08-15 (round 2): the strip states scope and estimated cost BEFORE the button, in every state, and renders even with NO provider configured — previously the whole paid tier was invisible to anyone without a key, which is how Cam came to report "I don't see the smart+ features". Still open: a configurable hard ceiling.*
 
 - [x] **C510 [MINOR][PERF] Precompute the bulk list's per-render index.** `reviewqueue.Queue` sorts
   the full list every render, and `workingCount`/`sameMerchantQueued` each rebuild a map and rescan

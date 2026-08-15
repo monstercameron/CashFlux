@@ -25,10 +25,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -133,6 +135,12 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	cursor := ui.UseState(0)
 	focusRow := ui.UseState(0) // bulk: which merchant row the keyboard is on
 	notice := ui.UseState("")
+	// SMART+ scan state (C504). Proposals live apart from `manual` so a model
+	// answer is never mistaken for something the user chose by hand.
+	scanState := ui.UseState("idle")
+	scanErr := ui.UseState("")
+	aiProposals := ui.UseState(map[string]string{})
+	scanStats := ui.UseState([2]int{})
 
 	setMode := func(m string) { mode.Set(m); notice.Set("") }
 	onSingle := ui.UseEvent(func() { setMode(reviewModeSingle) })
@@ -171,6 +179,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		manual.Set(nm)
 	}
 	clearSel := ui.UseEvent(func() { selected.Set(map[string]bool{}) })
+	nav := router.UseNavigate()
 
 	if app == nil {
 		return Fragment()
@@ -190,6 +199,11 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		}
 		if r.HasSugg {
 			return r.Suggestion.CategoryID
+		}
+		// SMART+ is consulted LAST — only for what the free sources could not
+		// answer, which is what keeps the paid pass small (C515 precedence).
+		if v, ok := aiProposals.Get()[r.Group.Key]; ok {
+			return v
 		}
 		return ""
 	}
@@ -230,6 +244,103 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		uistate.BumpDataRevision()
 	}
 	applySelected := ui.UseEvent(doApply)
+
+	// ---- SMART+ scan (C504/C509) ---------------------------------------------
+	// Scanned set = merchants the LOCAL sources could not answer. Paying a model
+	// to re-derive what a rule already knows is the waste this avoids.
+	gapRows := make([]reviewRow, 0)
+	for _, r := range idx.Rows {
+		if !r.HasSugg {
+			gapRows = append(gapRows, r)
+		}
+	}
+	gapCharges := 0
+	for _, r := range gapRows {
+		gapCharges += len(r.Group.Items)
+	}
+
+	backendAI := pr.Normalize().BackendActive()
+	hasProvider := aiProviderConfigured(app, backendAI)
+	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+	catalog := smartCatalog(app.Categories())
+
+	doScan := func() {
+		if !hasProvider {
+			uistate.CloseReviewInbox()
+			nav.Navigate(uistate.RoutePath("/settings"))
+			return
+		}
+		if len(gapRows) == 0 || scanState.Get() == "scanning" {
+			return
+		}
+		// One representative charge per MERCHANT, not per charge: every charge in
+		// a group shares a payee, so asking about all of them buys nothing and
+		// costs linearly.
+		sample := gapRows
+		if len(sample) > smartCatScanCap {
+			sample = sample[:smartCatScanCap]
+		}
+		var lines strings.Builder
+		incomeByRef := make(map[int]bool, len(sample))
+		for i, r := range sample {
+			t := r.Group.Items[0]
+			lines.WriteString(strconv.Itoa(i+1) + " | " + strings.TrimSpace(r.Group.Merchant) +
+				" | " + fmtMoney(t.Amount) + "\n")
+			incomeByRef[i+1] = t.Amount.Amount > 0
+		}
+		scanState.Set("scanning")
+		scanErr.Set("")
+		runSmartAI(aiConn, smartai.AutoCategorize(lines.String(), catalog.Prompt()),
+			func(text string) {
+				parsed := smartai.RejectSignMismatches(
+					smartai.ParseCategoryAssignments(text, len(sample), catalog), incomeByRef)
+				out := map[string]string{}
+				for k, v := range aiProposals.Get() {
+					out[k] = v
+				}
+				filled := 0
+				for _, a := range parsed {
+					if a.Ref < 1 || a.Ref > len(sample) || a.CategoryID == "" {
+						continue
+					}
+					out[sample[a.Ref-1].Group.Key] = a.CategoryID
+					filled++
+				}
+				aiProposals.Set(out)
+				scanStats.Set([2]int{filled, len(sample) - filled})
+				scanState.Set("done")
+				uistate.BumpDataRevision()
+			},
+			func(e string) { scanErr.Set(e); scanState.Set("done"); uistate.BumpDataRevision() })
+	}
+	scan := ui.UseEvent(doScan)
+
+	// Accept the scan's answers: they move into `manual` (so they are applied and
+	// marked) and their merchants are selected, leaving Confirm as the next click.
+	useScan := ui.UseEvent(func() {
+		props := aiProposals.Get()
+		if len(props) == 0 {
+			return
+		}
+		nm := make(map[string]string, len(manual.Get())+len(props))
+		for k, v := range manual.Get() {
+			nm[k] = v
+		}
+		ns := make(map[string]bool, len(selected.Get())+len(props))
+		for k, v := range selected.Get() {
+			ns[k] = v
+		}
+		for k, v := range props {
+			// Never overwrite a hand edit with a model answer.
+			if _, edited := manual.Get()[k]; edited {
+				continue
+			}
+			nm[k], ns[k] = v, true
+		}
+		manual.Set(nm)
+		selected.Set(ns)
+		notice.Set(uistate.T("review.filledN", len(props)))
+	})
 
 	// C506: the fastest way to clear a queue is to stop charges entering it.
 	// One action both files the visible batch AND writes the rule that files the
@@ -414,7 +525,13 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	if isBulk {
 		body, foot = reviewBulkView(app, idx, selected.Get(), openGroups.Get(), manual.Get(),
 			catFor, toggleGroup, toggleSelect, setManual, selReady, selLook,
-			applySelected, clearSel, makeRules, notice.Get(), pr, clampFocus(focusRow.Get()))
+			applySelected, clearSel, makeRules, notice.Get(), pr, clampFocus(focusRow.Get()),
+			ui.CreateElement(reviewScanStrip, reviewScanStripProps{
+				Gaps: len(gapRows), GapCharges: gapCharges, State: scanState.Get(),
+				Filled: scanStats.Get()[0], Skipped: scanStats.Get()[1], Err: scanErr.Get(),
+				HasProvider: hasProvider, OnScan: scan, OnUse: useScan,
+				CanUse: len(aiProposals.Get()) > 0,
+			}))
 	} else {
 		body, foot = reviewSingleView(app, idx, curRow, cur, catFor, setManual,
 			confirmOne, skipOne, dismissOne, notice.Get(), pr)
@@ -486,6 +603,7 @@ func reviewBulkView(
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
 	selReady, selLook, applySel, clearSel, makeRules any, notice string, pr prefs.Prefs, focused int,
+	scanStrip ui.Node,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
 
@@ -546,7 +664,7 @@ func reviewBulkView(
 			Span(css.Class("rvs-unit"), uistate.T("review.decisions")),
 		),
 		P(css.Class("rvs-note"), uistate.T("review.collapseNote")),
-		ui.CreateElement(reviewScanStrip, reviewScanStripProps{Queued: idx.Total}),
+		scanStrip,
 		Div(css.Class("rvs-legend"),
 			Span(Span(css.Class("rvs-dot is-ready")), uistate.T("review.legendHigh")),
 			Span(Span(css.Class("rvs-dot is-look")), uistate.T("review.legendMid")),

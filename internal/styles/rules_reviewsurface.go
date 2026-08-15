@@ -12,10 +12,24 @@ package styles
 func registerReviewSurface() {
 	// ---- shell ---------------------------------------------------------------
 	rule(".rvs",
+		// --rvs-tail is the caret column plus its gap. The member rows reserve the
+		// SAME space on their right, so the money column lines up between a
+		// merchant and the charges inside it instead of staggering by 35px.
+		// The panel is mounted with FlushBody, which strips ITS padding so this
+		// body can pin its own footer. The gutter therefore has to live here —
+		// without it the rows and the keyboard hint sat flush against the panel
+		// edge, which is what read as "crooked".
+		customProp("--rvs-gutter", "1.35rem"),
+		customProp("--rvs-tail", "2.05rem"),
+		// --rvs-indent puts a charge's date under the merchant's name, not 3px off.
+		customProp("--rvs-indent", "2.8rem"),
 		display("flex"),
 		flexDirection("column"),
 		height("100%"),
 		minHeight("0"),
+	)
+	rule(".rvs-head .seg button",
+		whiteSpace("nowrap"),
 	)
 	rule(".rvs-head",
 		display("flex"),
@@ -23,7 +37,7 @@ func registerReviewSurface() {
 		gap("0.9rem"),
 		flexWrap("wrap"),
 		flex("none"),
-		paddingBottom("0.85rem"),
+		padding("0 var(--rvs-gutter) 0.85rem"),
 		borderBottom("1px solid var(--border)"),
 	)
 	rule(".rvs-kbd",
@@ -35,7 +49,7 @@ func registerReviewSurface() {
 		flex("1"),
 		minHeight("0"),
 		overflowY("auto"),
-		paddingTop("1.1rem"),
+		padding("1.1rem var(--rvs-gutter) 0"),
 	)
 	rule(".rvs-foot",
 		flex("none"),
@@ -43,7 +57,7 @@ func registerReviewSurface() {
 		alignItems("center"),
 		gap("0.9rem"),
 		flexWrap("wrap"),
-		paddingTop("0.8rem"),
+		padding("0.8rem var(--rvs-gutter)"),
 		marginTop("0.4rem"),
 		borderTop("1px solid var(--border)"),
 	)
@@ -261,6 +275,9 @@ func registerReviewSurface() {
 	rule(".rvs-caret",
 		background("none"),
 		border("0"),
+		width("1.35rem"),
+		flex("none"),
+		textAlign("center"),
 		color("var(--text-faint)"),
 		padding("0.2rem 0.35rem"),
 		lineHeight("1"),
@@ -271,7 +288,11 @@ func registerReviewSurface() {
 	rule(".rvs-grp.is-open .rvs-caret", transform("rotate(90deg)"))
 
 	rule(".rvs-members",
-		padding("0.1rem 0.4rem 0.7rem 2.6rem"),
+		padding("0.1rem 0.4rem 0.7rem"),
+		paddingLeft("var(--rvs-indent)"),
+		// + 0.4rem for the group row's own right padding, or the money column
+		// still lands 6px out.
+		paddingRight("calc(var(--rvs-tail) + 0.4rem)"),
 		background("var(--bg)"),
 	)
 	rule(".rvs-mem",
@@ -297,6 +318,7 @@ func registerReviewSurface() {
 	rule(".rvs-mem-amt",
 		fontWeight("500"),
 		textAlign("right"),
+		minWidth("92px"),
 		fontVariantNumeric("tabular-nums"),
 	)
 	rule(".rvs-more",
@@ -459,6 +481,7 @@ func registerReviewSurface() {
 		gridTemplateColumns("minmax(0, 1fr)"),
 		maxWidth("680px"),
 	)
+	ruleMedia("(max-width: 700px)", ".rvs", customProp("--rvs-gutter", "0.85rem"))
 	ruleMedia("(max-width: 900px)", ".rvs-grp-row",
 		gridTemplateColumns("26px 1fr"),
 		rowGap("0.55rem"),
@@ -472,16 +495,44 @@ func registerReviewSurface() {
 		minWidth("0"),
 		textAlign("left"),
 	)
-	ruleMedia("(max-width: 900px)", ".rvs-members", paddingLeft("1rem"))
+	ruleMedia("(max-width: 900px)", ".rvs-members", paddingLeft("1rem"), paddingRight("0.4rem"))
 	ruleMedia("(max-width: 560px)", ".rvs-big", fontSize("1.6rem"))
-	ruleMedia("(max-width: 560px)", ".rvs-kbd", display("none"))
+	ruleMedia("(max-width: 1024px)", ".rvs-kbd", display("none"))
 	ruleMedia("(max-width: 560px)", ".rvs-foot-acts",
 		marginLeft("0"),
 		width("100%"),
 	)
+	// Every cell placed EXPLICITLY. Auto-placement put the payee in the right-hand
+	// column and pushed the amount onto its own line — the row read as two
+	// unrelated fragments.
 	ruleMedia("(max-width: 560px)", ".rvs-mem",
 		gridTemplateColumns("1fr auto"),
-		rowGap("0.1rem"),
+		gridTemplateRows("auto auto"),
+		rowGap("0.05rem"),
+		prop("column-gap", "0.6rem"),
+	)
+	ruleMedia("(max-width: 560px)", ".rvs-mem-desc",
+		gridColumn("1"),
+		gridRow("1"),
+		color("var(--text)"),
+	)
+	ruleMedia("(max-width: 560px)", ".rvs-mem-date",
+		gridColumn("1"),
+		gridRow("2"),
+	)
+	ruleMedia("(max-width: 560px)", ".rvs-mem-amt",
+		gridColumn("2"),
+		gridRow("1 / span 2"),
+		alignSelf("center"),
+		minWidth("0"),
+	)
+	// The footer stacked into a right-aligned column, so the summary read as if it
+	// belonged to the buttons. Left-align it and let the actions sit on their own row.
+	ruleMedia("(max-width: 560px)", ".rvs-foot",
+		flexDirection("column"),
+		alignItems("stretch"),
+		textAlign("left"),
+		gap("0.4rem"),
 	)
 	ruleMedia("(max-width: 560px)", ".rvs-link-row",
 		gridTemplateColumns("70px 80px 1fr"),

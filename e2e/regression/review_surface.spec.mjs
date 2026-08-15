@@ -334,3 +334,30 @@ test.describe("review surface: undo (C508, partial)", () => {
     // — tracked on C508 rather than asserted here as though it worked.
   });
 });
+
+test.describe("review surface: Smart+ strip (C504/C509)", () => {
+  test("is visible and explains itself with no key configured", async ({ app }) => {
+    // A feature the user cannot see is a feature they do not have. The strip
+    // previously rendered ONLY when a provider was configured, so the paid tier
+    // was invisible to everyone who had not already bought in.
+    await openReview(app);
+    const strip = app.getByTestId("review-scan-strip");
+    await expect(strip).toBeVisible();
+    await expect(app.getByTestId("review-scan-title")).toContainText(/Smart\+/i);
+
+    // No key: it says what it would do and offers a way to enable it, rather
+    // than showing a Scan button that would fail.
+    await expect(strip).toContainText(/needs an OpenAI key/i);
+    await expect(strip).toContainText(/only ever runs when you ask/i);
+    await expect(app.getByTestId("review-scan-setup")).toBeVisible();
+    // And it must NOT offer to spend money that cannot be spent.
+    await expect(app.getByTestId("review-scan")).toHaveCount(0);
+  });
+
+  test("the strip states scope and cost before any spend", async ({ app }) => {
+    await openReview(app);
+    const strip = app.getByTestId("review-scan-strip");
+    // Whatever state it is in, the strip never claims to have already run.
+    expect(await strip.getAttribute("data-state")).toBe("idle");
+  });
+});

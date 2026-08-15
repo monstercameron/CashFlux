@@ -269,37 +269,84 @@ func absInt64(n int64) int64 {
 }
 
 // reviewScanStripProps drives the SMART+ scan strip.
-type reviewScanStripProps struct{ Queued int }
+type reviewScanStripProps struct {
+	// Gaps is how many merchants the LOCAL sources could not answer — the only
+	// thing a paid scan is worth running on.
+	Gaps int
+	// GapCharges is how many charges those merchants account for.
+	GapCharges int
+	// State is idle | scanning | done.
+	State string
+	// Filled/Skipped describe a finished scan.
+	Filled, Skipped int
+	// Err is a failed scan's message.
+	Err string
+	// HasProvider reports whether a key/proxy is configured.
+	HasProvider bool
+	OnScan      any
+	OnUse       any
+	CanUse      bool
+}
 
 // reviewScanStrip states the scope and cost of a SMART+ scan BEFORE the button
-// (C504/C509). The scan stays an explicit consent step: nothing leaves the
-// device until it is clicked.
+// (C504/C509), then reports what it actually did.
+//
+// It renders even with NO provider configured: a feature the user cannot see is
+// a feature they do not have, and the strip is where the paid tier explains
+// itself. The scan stays an explicit consent step — nothing leaves the device
+// until it is clicked.
 func reviewScanStrip(props reviewScanStripProps) ui.Node {
-	app := appstate.Default
-	pr := uistate.UsePrefs().Get()
-	backendAI := pr.Normalize().BackendActive()
-	hasProvider := app != nil && aiProviderConfigured(app, backendAI)
-	openSmart := ui.UseEvent(func() { uistate.UseTxnSmartCatOpen().Set(true) })
-	if !hasProvider {
-		return Fragment()
-	}
-	batch := props.Queued
+	// Rough, honest, stated before spending: ~120 tokens per charge at the cheap
+	// model rate. An approximate number up front beats an exact one afterwards.
+	batch := props.GapCharges
 	if batch > smartCatScanCap {
 		batch = smartCatScanCap
 	}
-	// Rough, honest, and stated before spending: ~120 tokens per charge at the
-	// cheap-model rate. Better an approximate number up front than an exact one
-	// after the money is gone.
 	cost := "$" + strconv.FormatFloat(float64(batch)*0.0007, 'f', 3, 64)
-	return Div(css.Class("rvs-smart"), Attr("data-testid", "review-scan-strip"),
+
+	title, sub := uistate.T("review.scanTitle"), uistate.T("review.scanSub", smartCatScanCap, cost)
+	var action ui.Node = Fragment()
+	cls := "rvs-smart"
+
+	switch {
+	case !props.HasProvider:
+		sub = uistate.T("review.scanNoKey")
+		action = Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-scan-setup"),
+			OnClick(props.OnScan), uistate.T("review.scanConnect"))
+	case props.Gaps == 0:
+		title = uistate.T("review.scanNoGaps")
+		sub = uistate.T("review.scanNoGapsSub")
+	case props.State == "scanning":
+		title = uistate.T("review.scanning", batch)
+		sub = uistate.T("review.scanningSub")
+		cls += " is-busy"
+	case props.State == "done":
+		cls += " is-done"
+		title = uistate.T("review.scanDone", props.Filled, props.Gaps)
+		sub = uistate.T("review.scanDoneSub", props.Skipped, cost)
+		if props.Err != "" {
+			title, sub = uistate.T("review.scanFailed"), props.Err
+			cls = "rvs-smart is-err"
+		}
+		if props.CanUse {
+			action = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+				Attr("data-testid", "review-scan-use"), OnClick(props.OnUse),
+				uistate.T("review.useSuggested"))
+		}
+	default:
+		action = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+			Attr("data-testid", "review-scan"), OnClick(props.OnScan),
+			uistate.T("review.scanBtn", batch))
+	}
+
+	return Div(css.Class(cls), Attr("data-testid", "review-scan-strip"),
+		Attr("data-state", props.State),
 		Span(css.Class("rvs-smart-mark"), "S+"),
 		Div(css.Class("rvs-smart-main"),
-			Div(css.Class("rvs-smart-t"), uistate.T("review.scanTitle")),
-			Div(css.Class("rvs-smart-sub"), uistate.T("review.scanSub", smartCatScanCap, cost)),
+			Div(css.Class("rvs-smart-t"), Attr("data-testid", "review-scan-title"), title),
+			Div(css.Class("rvs-smart-sub"), sub),
 		),
-		Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-			Attr("data-testid", "review-scan"), OnClick(openSmart),
-			uistate.T("review.scanBtn", batch)),
+		action,
 	)
 }
 
