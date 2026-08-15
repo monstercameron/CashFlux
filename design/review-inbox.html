@@ -95,6 +95,31 @@ button{font:inherit;color:inherit;cursor:pointer}
 .collapse .decisions b{color:var(--accent)}
 .collapse-note{margin:0 0 22px;color:var(--text-faint);font-size:12.5px;max-width:66ch}
 
+/* ---- Smart+ scan strip ---------------------------------------------------- */
+/* The scan is the consent step: nothing leaves the device until this is clicked
+   (internal/screens/txn_smartcat.go:49). So the cost and the scope are stated
+   BEFORE the button, never after. */
+.smart{border:1px solid var(--border);background:var(--bg-elev);padding:14px 16px;
+  margin:0 0 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.smart-mark{width:26px;height:26px;flex:none;display:grid;place-items:center;
+  border:1px solid var(--accent);color:var(--accent);font-size:13px;font-weight:600}
+.smart-main{flex:1;min-width:240px}
+.smart-t{font-size:13.5px;font-weight:600}
+.smart-sub{color:var(--text-faint);font-size:12.5px;margin-top:2px}
+.smart-acts{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.smart.is-done{background:var(--accent-dim);border-color:var(--accent)}
+.scanbar{height:3px;background:var(--border);overflow:hidden;margin-top:9px}
+.scanbar i{display:block;height:100%;width:35%;background:var(--accent);
+  animation:sweep 1.1s var(--ease) infinite}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(385%)}}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--text-faint);font-size:12px;
+  margin:-10px 0 20px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:8px;height:8px;border-radius:var(--radius-pill);display:block}
+.legend .l-hi{background:var(--accent)}
+.legend .l-mid{background:var(--brand)}
+.legend .l-no{background:var(--border)}
+
 /* ---- tiers ---------------------------------------------------------------- */
 .tier{margin-bottom:24px}
 .tier-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -126,15 +151,21 @@ button{font:inherit;color:inherit;cursor:pointer}
 .caret:hover{color:var(--text)}
 .grp.is-open .caret{transform:rotate(90deg)}
 
-.cat-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg-elev);
-  border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;
-  font-size:12.5px;white-space:nowrap}
-.cat-chip:hover{background:var(--hover)}
-.cat-chip .path{color:var(--text-faint)}
-.cat-chip.is-empty{color:var(--text-faint);border-style:dashed}
+/* Category is an editable control, not a label — switching one must not cost a
+   trip through a modal. The last option drops into the full picker for the
+   cases a flat list can't serve (creating a category, or a deep tree). */
+.cat-cell{display:flex;align-items:center;gap:8px}
+.cat-sel{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--text);font:inherit;font-size:12.5px;padding:5px 8px;max-width:210px;
+  transition:border-color var(--dur-fast) var(--ease)}
+.cat-sel:hover{background:var(--hover)}
+.cat-sel.is-empty{color:var(--text-faint);border-style:dashed}
+/* a category the user changed by hand — never silently overwritten by auto-fix */
+.cat-sel.is-mine{border-color:var(--accent)}
 .dot{width:6px;height:6px;border-radius:var(--radius-pill);background:var(--accent);flex:none}
 .tier[data-tier="look"] .dot{background:var(--brand)}
-.tier[data-tier="none"] .dot{display:none}
+.tier[data-tier="none"] .dot{background:var(--border)}
+.mem .cat-sel{max-width:170px}
 
 .members{display:none;padding:2px 8px 12px 48px;background:var(--bg)}
 .grp.is-open .members{display:block}
@@ -229,10 +260,22 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:8px 14px;font-size:13.5px;text-align:left}
 .opt:hover{background:var(--hover)}
 .opt.child{padding-left:32px}
+.opt.child::before{content:"";width:9px;height:9px;border-left:1px solid var(--border);
+  border-bottom:1px solid var(--border);margin:-6px 4px 0 -14px;flex:none}
 .opt .kid{color:var(--text-faint);font-size:12px;margin-left:auto}
-.opt-new{border-top:1px solid var(--border);color:var(--accent);margin-top:5px;padding-top:11px;
-  display:block}
-.opt-new small{color:var(--text-faint);display:block;font-size:11.5px;margin-top:1px}
+.opt .path{color:var(--text-faint)}
+.pop-empty{padding:16px 14px;color:var(--text-faint);font-size:12.5px}
+
+/* create-a-category block: name is already typed, so the only real decision
+   left is WHERE it goes — top level or inside an existing parent. */
+.mk{border-top:1px solid var(--border);background:var(--bg-elev);padding:12px 14px}
+.mk-t{font-size:12.5px;font-weight:600;margin-bottom:9px}
+.mk-t em{font-style:normal;color:var(--accent)}
+.mk-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mk-row label{font-size:12px;color:var(--text-dim)}
+.mk select{flex:1;min-width:140px;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);padding:7px 9px;font:inherit;font-size:12.5px}
+.mk-hint{color:var(--text-faint);font-size:11.5px;margin-top:8px}
 .pop-foot{border-top:1px solid var(--border);padding:9px 14px;color:var(--text-faint);font-size:11.5px}
 
 /* ---- responsive ----------------------------------------------------------- */
@@ -316,6 +359,27 @@ button{font:inherit;color:inherit;cursor:pointer}
         </div>
         <p class="collapse-note">Charges are grouped by merchant and sorted by how confident the
           matcher is. Confirm a whole merchant at once, or open one to change individual charges.</p>
+
+        <!-- Smart+ scan: consent, scope and cost stated before the button -->
+        <div class="smart" id="smart">
+          <span class="smart-mark">S+</span>
+          <div class="smart-main">
+            <div class="smart-t" id="smartT">Let Smart+ suggest categories</div>
+            <div class="smart-sub" id="smartS">It reads 40 charges at a time and can only pick
+              categories you already have. Costs about $0.03 on your own key.</div>
+            <div class="scanbar hide" id="scanbar"><i></i></div>
+          </div>
+          <div class="smart-acts" id="smartA">
+            <button class="btn btn-sm" id="smartOff">Not now</button>
+            <button class="btn btn-primary btn-sm" id="smartGo">Scan 40 charges</button>
+          </div>
+        </div>
+
+        <div class="legend" id="legend">
+          <span><i class="l-hi"></i> Sure enough to confirm in bulk</span>
+          <span><i class="l-mid"></i> Suggested, but check it</span>
+          <span><i class="l-no"></i> Smart+ skipped these rather than guess</span>
+        </div>
 
         <div class="tier" data-tier="ready">
           <div class="tier-head">
@@ -443,6 +507,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   <div class="pop" role="dialog" aria-label="Choose a category">
     <div class="pop-search"><input id="catSearch" placeholder="Search categories, or type a new name" autocomplete="off"></div>
     <div class="pop-list" id="catList"></div>
+    <div class="mk hide" id="mkBlock"></div>
     <div class="pop-foot">Enter picks the highlighted row &middot; Esc closes</div>
   </div>
 </div>
@@ -463,9 +528,12 @@ const GROUPS = [
   {tier:"look",  name:"Steam",        raw:"PAYPAL *STEAM GAMES", n:5, total:124.95, cat:"Entertainment", path:""},
   {tier:"look",  name:"Venmo",        raw:"VENMO PAYMENT 3264117", n:3, total:340.00, cat:"Shopping", path:""},
 
-  {tier:"none",  name:"Square merchant", raw:"CHECKCARD 0812 SQ *TH", n:2, total:47.00, cat:"", path:""},
-  {tier:"none",  name:"Card purchase",   raw:"POS DEBIT 4471", n:1, total:18.42, cat:"", path:""},
-  {tier:"none",  name:"Elan Financial",  raw:"ACH DEBIT ELAN FIN SVC", n:1, total:220.00, cat:"", path:""}
+  // `cat` = already suggested by your rules and past choices (no AI involved).
+  // `sugg` = what a Smart+ scan would propose for the rows rules couldn't do —
+  // that gap is the only thing the scan is being paid for.
+  {tier:"none",  name:"Square merchant", raw:"CHECKCARD 0812 SQ *TH", n:2, total:47.00, cat:"", path:"", sugg:"Dining out"},
+  {tier:"none",  name:"Card purchase",   raw:"POS DEBIT 4471", n:1, total:18.42, cat:"", path:"", sugg:""},
+  {tier:"none",  name:"Elan Financial",  raw:"ACH DEBIT ELAN FIN SVC", n:1, total:220.00, cat:"", path:"", sugg:"Utilities › Electric"}
 ];
 
 const CATS = [
@@ -479,12 +547,36 @@ const CATS = [
 const usd = n => "−$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const DAYS = ["02 Aug","05 Aug","06 Aug","09 Aug","11 Aug","13 Aug"];
 
+/* One <select> body, reused by every row: real categories as an indented tree,
+   then the escape hatch into the full picker. */
+function catOptions(sel){
+  let html = `<option value="" ${sel?"":"selected"}>Pick a category</option>`;
+  CATS.forEach(c => {
+    if (c.kids && c.kids.length){
+      html += `<optgroup label="${c.name}">`;
+      html += `<option value="${c.name}" ${sel===c.name?"selected":""}>${c.name} (all)</option>`;
+      c.kids.forEach(k => {
+        // The option TEXT carries the parent, not just the optgroup label: a
+        // closed select shows only the option, and a bare "Gas" is ambiguous
+        // once both Auto and Utilities have one (the C489 collision).
+        const v = `${c.name} › ${k}`;
+        html += `<option value="${v}" ${sel===v?"selected":""}>${v}</option>`;
+      });
+      html += `</optgroup>`;
+    } else {
+      html += `<option value="${c.name}" ${sel===c.name?"selected":""}>${c.name}</option>`;
+    }
+  });
+  return html + `<option value="__new">+ New category or sub-category…</option>`;
+}
+
 function groupNode(g){
   const el = document.createElement("div");
   el.className = "grp";
-  const chip = g.cat
-    ? `<span class="cat-chip"><span class="dot"></span>${g.cat}${g.path?` <span class="path">› ${g.path}</span>`:""}</span>`
-    : `<span class="cat-chip is-empty">Pick a category</span>`;
+  const value = g.cat ? (g.path ? `${g.cat} › ${g.path}` : g.cat) : "";
+  const cell = `<span class="cat-cell"><span class="dot"></span>
+    <select class="cat-sel${value?"":" is-empty"}" aria-label="Category for ${g.name}">
+      ${catOptions(value)}</select></span>`;
 
   // Vary the raw descriptor per row: real imports differ charge to charge, and a
   // column of identical strings would flatter the density judgement.
@@ -499,7 +591,8 @@ function groupNode(g){
       <span class="mem-date">${DAYS[k % DAYS.length]}</span>
       <span class="mem-desc">${rawAt(k)}</span>
       <span class="mem-amt money">${usd(g.total / g.n * (0.7 + (k%3)*0.3))}</span>
-      <button class="btn btn-sm">Change</button></label>`;
+      <select class="cat-sel${value?"":" is-empty"}" aria-label="Category for this charge">
+        ${catOptions(value)}</select></label>`;
   }
   if (g.n > 4) mem += `<button class="more">Show the other ${g.n - 4}</button>`;
 
@@ -511,7 +604,7 @@ function groupNode(g){
         <div class="grp-raw">${g.raw}</div>
       </div>
       <div class="grp-right">
-        ${chip}
+        ${cell}
         <span class="grp-total money">${usd(g.total)}</span>
         <button class="caret" aria-label="Show charges">&#9656;</button>
       </div>
@@ -524,7 +617,20 @@ function groupNode(g){
     el.querySelectorAll(".mem-chk").forEach(c => c.checked = e.target.checked);
     tally();
   };
-  el.querySelector(".cat-chip").onclick = openPicker;
+  // Changing a group's category cascades to its charges — the group row IS the
+  // bulk control. A charge changed individually keeps its own value (is-mine).
+  el.querySelectorAll(".cat-sel").forEach(s => s.onchange = () => {
+    if (s.value === "__new"){ s.value = s.dataset.prev || ""; openPicker(s); return; }
+    s.dataset.prev = s.value;
+    s.classList.toggle("is-empty", !s.value);
+    s.classList.add("is-mine");
+    if (s.closest(".grp-row")){
+      el.querySelectorAll(".members .cat-sel").forEach(m => {
+        if (m.classList.contains("is-mine")) return;   // don't clobber a hand edit
+        m.value = s.value; m.classList.toggle("is-empty", !s.value);
+      });
+    }
+  });
   return el;
 }
 
@@ -551,6 +657,53 @@ document.getElementById("barClear").onclick = () => {
   document.querySelectorAll(".grp-chk").forEach(c => { c.checked = false; c.dispatchEvent(new Event("change")); });
 };
 
+/* ---- Smart+ scan: idle -> scanning -> done, then auto-fix ----------------- */
+const smart = document.getElementById("smart");
+function smartScan(){
+  document.getElementById("smartT").textContent = "Reading 40 charges…";
+  document.getElementById("smartS").textContent =
+    "Only the payee, amount and your category names are sent. Nothing is stored.";
+  document.getElementById("scanbar").classList.remove("hide");
+  document.getElementById("smartA").classList.add("hide");
+  setTimeout(() => {
+    smart.classList.add("is-done");
+    document.getElementById("scanbar").classList.add("hide");
+    document.getElementById("smartT").textContent = "Smart+ filled 2 of the 3 gaps your rules left";
+    document.getElementById("smartS").textContent =
+      "It skipped 1 rather than guess. This scan cost $0.028 · 14 charges not read yet.";
+    document.getElementById("smartA").classList.remove("hide");
+    document.getElementById("smartA").innerHTML =
+      `<button class="btn btn-sm" id="smartMore">Scan the next 14</button>
+       <button class="btn btn-primary btn-sm" id="smartFix">Use these suggestions</button>`;
+    document.getElementById("smartFix").onclick = autoFix;
+    document.getElementById("smartMore").onclick = smartScan;
+  }, 1400);
+}
+/* Auto-fix only touches rows that are still EMPTY and that the user has not set
+   by hand — a suggestion your rules already made is not overwritten by the model,
+   and neither is your own choice. */
+function autoFix(){
+  let filled = 0, stillEmpty = 0;
+  document.querySelectorAll(".grp").forEach((el, i) => {
+    const g = GROUPS[i];
+    if (!g.sugg){ if (!g.cat) stillEmpty++; return; }     // Smart+ had no answer either
+    el.querySelectorAll(".cat-sel").forEach(s => {
+      if (s.classList.contains("is-mine") || s.value) return;
+      s.value = g.sugg; s.classList.remove("is-empty"); s.dataset.prev = g.sugg; filled++;
+    });
+    const chk = el.querySelector(".grp-chk");
+    if (!chk.checked){ chk.checked = true; chk.dispatchEvent(new Event("change")); }
+  });
+  document.getElementById("smartT").textContent =
+    `Filled ${filled} ${filled===1?"category":"categories"} from Smart+`;
+  document.getElementById("smartS").textContent = stillEmpty
+    ? `${stillEmpty} merchant${stillEmpty===1?"":"s"} still need you — Smart+ skipped ${stillEmpty===1?"it":"them"} rather than guess. Nothing is saved until you confirm.`
+    : "Nothing is saved until you confirm — undo stays available.";
+  document.getElementById("smartFix").disabled = true;
+}
+document.getElementById("smartGo").onclick = smartScan;
+document.getElementById("smartOff").onclick = () => smart.classList.add("hide");
+
 /* mode + theme */
 function setMode(isBulk){
   document.getElementById("bulk").classList.toggle("hide", !isBulk);
@@ -575,9 +728,13 @@ document.getElementById("theme").onclick = e => {
 const back = document.getElementById("popBack"), list = document.getElementById("catList"),
       search = document.getElementById("catSearch");
 
-function renderCats(q){
-  q = q.trim().toLowerCase();
+const mk = document.getElementById("mkBlock");
+let pickTarget = null;   // the <select> that opened the picker, or null for single mode
+
+function renderCats(raw){
+  const q = raw.trim().toLowerCase();
   list.innerHTML = "";
+  let shown = 0;
   CATS.forEach(c => {
     const kids = c.kids || [];
     const hitParent = c.name.toLowerCase().includes(q);
@@ -586,29 +743,70 @@ function renderCats(q){
       list.insertAdjacentHTML("beforeend",
         `<button class="opt" data-v="${c.name}"><span class="dot"></span>${c.name}
          ${kids.length?`<span class="kid">${kids.length} inside</span>`:""}</button>`);
-      (q ? hitKids : kids).forEach(k =>
+      shown++;
+      (q ? hitKids : kids).forEach(k => {
+        // Show the full path: "Gas" alone is ambiguous once Auto and Utilities
+        // both have one — the exact collision C489 fixes in the AI contract.
         list.insertAdjacentHTML("beforeend",
-          `<button class="opt child" data-v="${c.name} › ${k}">${k}</button>`));
+          `<button class="opt child" data-v="${c.name} › ${k}">${k}
+           <span class="path">in ${c.name}</span></button>`);
+        shown++;
+      });
     }
   });
-  if (q){
-    list.insertAdjacentHTML("beforeend",
-      `<button class="opt opt-new" data-v="${q}">Create &ldquo;${q}&rdquo; as a new category
-       <small>top level, alongside Groceries and Shopping</small></button>`);
-    list.insertAdjacentHTML("beforeend",
-      `<button class="opt opt-new" data-v="Shopping › ${q}">Create &ldquo;${q}&rdquo; inside Shopping
-       <small>becomes a sub-category you can budget separately</small></button>`);
+  if (!shown) list.insertAdjacentHTML("beforeend",
+    `<div class="pop-empty">No category matches “${raw.trim()}”. Make it below.</div>`);
+
+  list.querySelectorAll(".opt").forEach(o => o.onclick = () => apply(o.dataset.v));
+
+  // create block — the name is typed, so the only decision left is WHERE it goes
+  const name = raw.trim();
+  mk.classList.toggle("hide", !name);
+  if (name){
+    const parents = CATS.map(c => `<option value="${c.name}">inside ${c.name}</option>`).join("");
+    mk.innerHTML = `
+      <div class="mk-t">Make <em>${name}</em></div>
+      <div class="mk-row">
+        <select id="mkParent"><option value="">as a top-level category</option>${parents}</select>
+        <button class="btn btn-primary btn-sm" id="mkGo">Create</button>
+      </div>
+      <div class="mk-hint" id="mkHint">Top-level categories can hold sub-categories of their own.</div>`;
+    const parent = document.getElementById("mkParent"), hint = document.getElementById("mkHint");
+    parent.onchange = () => hint.textContent = parent.value
+      ? `Budgets and reports can roll “${name}” up into ${parent.value}, or track it on its own.`
+      : "Top-level categories can hold sub-categories of their own.";
+    document.getElementById("mkGo").onclick = () => {
+      const p = parent.value;
+      if (p){ const c = CATS.find(x => x.name === p); (c.kids = c.kids || []).push(name); }
+      else CATS.push({name});
+      apply(p ? `${p} › ${name}` : name);
+    };
   }
-  list.querySelectorAll(".opt").forEach(o => o.onclick = () => {
-    const lab = document.getElementById("pickedLabel");
-    lab.textContent = o.dataset.v;
-    lab.classList.remove("ph");
-    closePicker();
-  });
 }
-function openPicker(){ back.classList.add("is-open"); search.value = ""; renderCats(""); search.focus(); }
-function closePicker(){ back.classList.remove("is-open"); }
-document.getElementById("pickerOpen").onclick = openPicker;
+
+/* Write the choice back to whatever opened the picker. */
+function apply(v){
+  if (pickTarget){
+    if (![...pickTarget.options].some(o => o.value === v)){
+      pickTarget.insertAdjacentHTML("afterbegin", `<option value="${v}">${v}</option>`);
+    }
+    pickTarget.value = v;
+    pickTarget.classList.remove("is-empty");
+    pickTarget.classList.add("is-mine");
+    pickTarget.dataset.prev = v;
+  } else {
+    const lab = document.getElementById("pickedLabel");
+    lab.textContent = v;
+    lab.classList.remove("ph");
+  }
+  closePicker();
+}
+function openPicker(target){
+  pickTarget = target instanceof HTMLSelectElement ? target : null;
+  back.classList.add("is-open"); search.value = ""; renderCats(""); search.focus();
+}
+function closePicker(){ back.classList.remove("is-open"); pickTarget = null; }
+document.getElementById("pickerOpen").onclick = () => openPicker(null);
 search.oninput = () => renderCats(search.value);
 back.onclick = e => { if (e.target === back) closePicker(); };
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePicker(); });

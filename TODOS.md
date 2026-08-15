@@ -6712,6 +6712,13 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   Replace all four call sites — a fifth copy is the wrong move. AC: all four sites use it; creating
   a child sets `ParentID` and the new category is immediately selectable; Enter creates without
   submitting an enclosing form and Escape cancels (the existing keyed behavior).
+  *Designed 2026-08-15 (`design/review-inbox.html`):* the create block appears once a name is typed
+  and offers exactly ONE decision — a parent dropdown defaulting to "as a top-level category" —
+  because the name is already known by then. In bulk list rows the category is an inline `<select>`
+  grouped by parent (Cam, 2026-08-15: "the cats should be selects so I can manually switch") whose
+  last option, "+ New category or sub-category…", drops into this picker. The option TEXT must carry
+  the full path ("Auto › Gas"): a closed select shows only the option, so a bare "Gas" is ambiguous
+  once Auto and Utilities both have one — the same collision C489 fixes in the AI contract.
 
 ### Phase D — the merged dual-mode surface ★
 
@@ -6772,6 +6779,18 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   "the scan is the consent step: nothing leaves the device until the user picks a mode and clicks
   Scan" — auto-scanning on open silently repeals that. Decide deliberately; do not change it as a
   side effect. AC: reviewing 120 items costs 3 AI calls, not 120.
+  *Designed + approved 2026-08-15 (`design/review-inbox.html`):* **consent DECIDED — the scan stays
+  explicit**, presented as a strip above the list that states scope and cost BEFORE the button
+  ("reads 40 charges at a time", "about $0.03 on your own key", covering C509), then runs
+  idle → scanning → done in place. The framing that makes the feature legible: **rules and past
+  choices fill the confident rows, and Smart+ is only paid for the gaps they left** — so the strip
+  reports "filled 2 of the 3 gaps your rules left", not a headline count that double-counts work the
+  deterministic matcher already did. Its primary action is **"Use these suggestions"** (Cam,
+  2026-08-15: "add a button to use the auto fix cats"), which fills ONLY rows that are still empty
+  and never overwrites a hand edit or an existing rule-derived suggestion; it selects what it filled
+  so the next click is Confirm. Paging is a "Scan the next 14" secondary action. AC additions: a
+  row the user set by hand is never overwritten by a scan or by auto-fix; the strip states cost
+  before spending and actual cost after.
 - [ ] **C505 [MAJOR][REVIEW] Some queue items must be resolvable WITHOUT a category.** Both modes
   currently assume every resolution is a category assignment. It isn't: an unmatched transfer leg
   reaches the queue because `IsTransfer()` is just `TransferAccountID != ""`, and its correct action
