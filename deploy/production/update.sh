@@ -104,6 +104,15 @@ say "building browser applications"
 		-o "$build_dir/web/portal/portal.wasm" ./cmd/cashflux-portal
 )
 
+say "compressing browser wasm"
+# web/index.html's loadCompressed() fetches ./bin/main.wasm.gz FIRST (~4x
+# smaller over the wire) and only falls back to the raw main.wasm — which is
+# ~4x the download — if the .gz is missing or the browser lacks
+# DecompressionStream. This step used to be absent from the release build
+# entirely, so every production load silently took the slow, uncompressed
+# fallback path (BUG: missing compressed WASM asset, slow initial load).
+gzip -9 -k -f "$build_dir/web/bin/main.wasm"
+
 goroot="$("$go_bin" env GOROOT)"
 wasm_exec="$goroot/lib/wasm/wasm_exec.js"
 [ -f "$wasm_exec" ] || wasm_exec="$goroot/misc/wasm/wasm_exec.js"
@@ -124,6 +133,7 @@ for asset in \
 	web/index.html \
 	web/wasm_exec.js \
 	web/bin/main.wasm \
+	web/bin/main.wasm.gz \
 	web/bin/services.wasm \
 	web/admin/index.html \
 	web/admin/admin.wasm \
@@ -170,7 +180,7 @@ curl --fail --silent --show-error --max-time 30 \
 curl --fail --silent --show-error --max-time 30 \
 	http://127.0.0.1:8105/v1/version |
 	grep -q '"hostedApp":true'
-for path in /bin/main.wasm /bin/services.wasm /console/ /portal/; do
+for path in /bin/main.wasm /bin/main.wasm.gz /bin/services.wasm /console/ /portal/; do
 	code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 \
 		-H 'Accept: text/html' "http://127.0.0.1:8105$path")"
 	[ "$code" = 200 ] || { echo "$path returned HTTP $code" >&2; false; }

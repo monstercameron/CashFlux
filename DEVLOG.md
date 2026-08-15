@@ -1,3 +1,19 @@
+## 2026-08-14 — The release script that never built the thing it promised to serve
+
+`web/index.html`'s `loadCompressed()` is careful: fetch `./bin/main.wasm.gz`, decompress it in a
+stream so instantiation still overlaps the network, and only fall back to the ~4x-larger raw
+`main.wasm` if the browser lacks `DecompressionStream` or the `.gz` isn't there. That fallback
+exists so a missing `.gz` can never make boot *worse* than the uncompressed baseline — which is
+exactly the trap. `deploy/production/update.sh` built `main.wasm`, `services.wasm`, `admin.wasm`,
+and `portal.wasm`, verified each was present, and never once produced `main.wasm.gz`. Every real
+production load has been quietly taking the slow, uncompressed path since day one, and nothing
+about it *looked* broken — the app loaded fine, just carrying four times the payload it needed to.
+
+Added one line to the release build (`gzip -9 -k -f` on the built `main.wasm`), added the `.gz` to
+the release's required-asset check so a build fails loudly instead of shipping quietly-slow, and
+added it to the live-route verification alongside the routes the script already checks after
+restarting the service.
+
 ## 2026-08-14 — The factor most responsible for a bad score, missing from its own explanation
 
 `healthContribBar` answers "why this number?" with a segmented bar: each applicable factor's score

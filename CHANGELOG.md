@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Production deploys now ship the compressed wasm, so first load is ~4x smaller over the wire.**
+  `web/index.html` tries `main.wasm.gz` first and only falls back to the raw binary if it 404s —
+  but the release build script never produced the `.gz` at all, so every production load silently
+  took the slow path. `deploy/production/update.sh` now gzips `main.wasm` as part of the release
+  build and verifies both the asset and the live route before completing.
 - **The Financial Health "why this score" breakdown no longer silently drops a factor scoring 0.**
   A factor's point contribution (score × weight) rounds down to 0 for a severe factor like a
   debt-payment burden well over the critical line — and that used to filter it out of the
