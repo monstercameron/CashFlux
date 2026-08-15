@@ -1,3 +1,22 @@
+## 2026-08-14 — An answer that existed and never reached the screen
+
+Found during the Assistant deep-review, not reported: a chat bubble rendering completely empty —
+no error, no loading state, just a blank space where an answer should be. The chatTurn's `Text`
+field had real content the whole time; `AssistantBubble` renders an empty `<div id="cf-md-…">` and
+fills it via a `UseEffect` that calls `renderMarkdown(mdID, p.Text)`. That function did
+`document.getElementById(elemID)` once and quietly returned if the node wasn't there — and the
+effect's dependency is the message text, which doesn't change again for an already-rendered turn,
+so a lost race meant *permanently* empty, not eventually-empty. The failure mode only showed up
+reliably on a fresh `/assistant` load with several history turns mounting together — several
+`AssistantBubble` instances' effects firing while the chat-list's DOM append was still catching up.
+
+Fixed with a bounded retry: `renderMarkdownAttempt` reschedules itself via
+`requestAnimationFrame` up to 3 times before giving up, so the common case (element already there)
+costs nothing extra and the rare late-mount race gets a couple of frames to resolve itself.
+Verified against repeated fresh loads — the case that previously showed an empty bubble now shows
+all bubbles populated. A second, distinct empty-answer case survived this fix and didn't get
+cornered before time ran out on this pass — logged as L83b in TODOS.md rather than guessed at.
+
 ## 2026-08-14 — Fixing the corner didn't fix the middle
 
 An earlier pass already handled the `gwc dev` runner's floating status bubble: shepherd it from

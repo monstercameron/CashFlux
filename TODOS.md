@@ -3113,6 +3113,40 @@ polish), B20 (theme engine — the config home), GI0 (build blocker — gates th
 GM (modal flip), GX5 (toast), G9.1a (chart draw-in).
 
 
+### L83 — QA (deep control-by-control review, 2026-08-14): Assistant — investigate residual empty-answer chat bubbles
+Deep control-by-control pass over Dashboard / Transactions / Accounts / Budgets / Goals / To-do /
+Notifications / Assistant / Reports. Eight of nine screens came back clean (search/sort/filters,
+row-click editors, disclosures, triage tabs, snooze/mark-read, pagination all verified working —
+several apparent issues turned out to be test-harness artifacts: `.fill()` doesn't fire GWC's
+controlled-input events, `todo-quick-all`/`Hide done` needed a page-size bump to see past-page-1
+done tasks, etc.).
+
+- [x] **L83a — FIXED: `renderMarkdown` mount race in AssistantBubble.** `internal/screens/insights.go`
+  `renderMarkdown` called `document.getElementById(mdID)` and silently gave up if the node wasn't
+  there yet (`if !el.Truthy() { return }`), with no retry — and since the `UseEffect` dependency is
+  the message text, it never re-fires for the same content. On a fresh `/assistant` load with several
+  pre-seeded history turns mounting together, the effect could fire before that turn's chat-list DOM
+  append landed, leaving `.chat-agent-body` permanently empty even though the turn's `Text` field had
+  a real answer. Fixed: `renderMarkdown` now retries up to 3×, one `requestAnimationFrame` apart,
+  before giving up (`renderMarkdownAttempt`). Verified: a fresh load that previously showed an empty
+  bubble now shows all bubbles populated; re-tested across several fresh loads.
+- [ ] **L83b — STILL OPEN: a distinct empty-answer case survives the mount-race fix.** Across repeated
+  fresh `/assistant` loads (`page.goto` → wait ~1s → inspect), roughly 1 in 3 still shows exactly one
+  `.chat-agent-body` with genuinely empty text — this persisted after the L83a retry fix, so it isn't
+  the same mount-timing race (or 3 retries isn't enough headroom). Two live hypotheses, not yet
+  distinguished: (1) a seeded sample-data conversation legitimately has an empty `Text` on one turn
+  (a fixture bug, not a rendering bug), or (2) `sendText`'s `key == "" && !useBackendAI` guard
+  (insights.go ~line 514) is being bypassed in this dev sample-data environment because
+  `pr.BackendActive()` is true (a `CashFlux Cloud` ServerURL/token is pre-seeded), routing to
+  `ai.SendProxyChat` — which appears to resolve as a "successful" empty-content reply instead of
+  surfacing an error when the backend is unreachable, rather than tripping `onErr`. No network
+  request/failure was ever observed in the browser during repro (Playwright's `response`/
+  `requestfailed` listeners saw nothing), consistent with the proxy path running over the gRPC/
+  WebSocket bridge rather than plain `fetch`, which those listeners can't see. Next step: reproduce
+  directly against `ai.SendProxyChat` (internal/ai) with a genuinely unreachable ServerURL and confirm
+  whether it can resolve empty-success instead of erroring; if so, either surface that as an error to
+  the user or fall back to the "add your key" hint instead of a silent blank bubble.
+
 ## 0. Foundation & tooling (Phase 0)
 
 > ⚠️ OPS NOTE (2026-06-24) — if the app shows only the boot splash (blank `#app`, console

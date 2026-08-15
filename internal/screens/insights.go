@@ -1925,9 +1925,32 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 // renderMarkdown sets the element's sanitized, Markdown-rendered HTML using the
 // vendored marked + DOMPurify globals; falls back to the raw text when absent.
 func renderMarkdown(elemID, mdText string) {
+	renderMarkdownAttempt(elemID, mdText, 3)
+}
+
+// renderMarkdownAttempt is renderMarkdown with a bounded retry: the effect that
+// calls this can fire before the chat list's DOM append lands (several
+// AssistantBubble instances mounting together on first paint, e.g. a fresh
+// /assistant load with existing history), so getElementById can miss on the
+// first try. Without a retry the bubble stays permanently empty — the answer
+// exists in the turn's Text, it just never reaches the DOM — because the
+// effect's dependency (the text signature) never changes again to re-fire it.
+// Retrying across a couple of animation frames costs nothing once the element
+// is already there (first attempt always wins in the common case) and self-
+// heals the rare late-mount race.
+func renderMarkdownAttempt(elemID, mdText string, retriesLeft int) {
 	doc := js.Global().Get("document")
 	el := doc.Call("getElementById", elemID)
 	if !el.Truthy() {
+		if retriesLeft > 0 {
+			var cb js.Func
+			cb = js.FuncOf(func(this js.Value, args []js.Value) any {
+				cb.Release()
+				renderMarkdownAttempt(elemID, mdText, retriesLeft-1)
+				return nil
+			})
+			js.Global().Call("requestAnimationFrame", cb)
+		}
 		return
 	}
 	html := mdText

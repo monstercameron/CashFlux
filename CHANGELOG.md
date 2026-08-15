@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Assistant chat bubbles no longer render permanently blank on a busy first paint.**
+  `renderMarkdown` looked up its target element once and silently gave up if the DOM node wasn't
+  there yet — and since its effect only re-fires on a text change, a bubble that lost that race
+  stayed empty forever even though the turn's real answer text existed. Happens most on a fresh
+  `/assistant` load with several history turns mounting together. Now retries up to 3 animation
+  frames before giving up.
 - **The dev-runner's floating status bubble no longer sits on top of page content mid-scroll.**
   The existing fix repositions it bottom-right and reserves clearance at the very end of the page,
   but the fixed-position bubble still parked directly over whatever card happened to occupy that
