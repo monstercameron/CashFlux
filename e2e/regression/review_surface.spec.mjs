@@ -202,3 +202,52 @@ test.describe("review surface: category picker", () => {
     await expect(app.getByTestId("catpick")).toHaveCount(0);
   });
 });
+
+test.describe("review surface: keyboard (C507)", () => {
+  test("j/k move the focused merchant and space selects it", async ({ app }) => {
+    await openReview(app);
+    // The header must not advertise keys that do nothing.
+    await expect(app.getByTestId("review-kbd")).toContainText(/j \/ k/);
+
+    // data-focus on the root is the focused row index — assert on it rather than
+    // on a class inside the keyed list, and POLL: the wasm re-render is async, so
+    // reading straight after the keypress races it.
+    const focusIdx = async () =>
+      parseInt((await app.getByTestId("review-inbox").getAttribute("data-focus")) ?? "-1", 10);
+
+    await expect(app.locator(".rvs-grp.is-focus")).toHaveCount(1);
+    expect(await focusIdx()).toBe(0);
+
+    await app.keyboard.press("j");
+    await expect.poll(focusIdx, { message: "j should move to the next merchant" }).toBe(1);
+
+    await app.keyboard.press("k");
+    await expect.poll(focusIdx, { message: "k should move back" }).toBe(0);
+
+    // Exactly one row carries the marker, and it follows the index.
+    await expect(app.locator(".rvs-grp.is-focus")).toHaveCount(1);
+
+    // Space picks the focused merchant.
+    await app.keyboard.press(" ");
+    await expect(app.getByTestId("review-selection")).toContainText(/\d+ merchants? · \d+ charges?/);
+  });
+
+  test("1 and b switch modes from the keyboard", async ({ app }) => {
+    await openReview(app);
+    await app.keyboard.press("1");
+    await expect(app.getByTestId("review-payee")).toBeVisible();
+    await expect(app.getByTestId("review-kbd")).toContainText(/snoozes/);
+    await app.keyboard.press("b");
+    await expect(app.locator('[data-testid^="review-pick-"]').first()).toBeVisible();
+  });
+
+  test("typing in a field is never hijacked", async ({ app }) => {
+    await openReview(app);
+    await app.locator('[data-testid^="review-cat-"]').first().selectOption("__new__");
+    const search = app.getByTestId("catpick-search");
+    await search.fill("");
+    // "j", "k", "s", "d", "b" are all shortcuts — inside an input they are text.
+    await search.type("jksdb");
+    await expect(search).toHaveValue("jksdb");
+  });
+});

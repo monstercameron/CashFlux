@@ -128,6 +128,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	picker := ui.UseState("") // merchant key whose picker is open, "" = closed
 	manual := ui.UseState(map[string]string{})
 	cursor := ui.UseState(0)
+	focusRow := ui.UseState(0) // bulk: which merchant row the keyboard is on
 	notice := ui.UseState("")
 
 	setMode := func(m string) { mode.Set(m); notice.Set("") }
@@ -172,6 +173,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		return Fragment()
 	}
 	if !open.Get() {
+		ClearReviewKeys()
 		return Fragment()
 	}
 
@@ -191,7 +193,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 
 	// applySelected writes every selected group in ONE bulk mutation with a
 	// single undo point, so a 40-merchant confirm is one reversible step.
-	applySelected := ui.UseEvent(func() {
+	doApply := func() {
 		sel := selected.Get()
 		if len(sel) == 0 {
 			return
@@ -216,7 +218,8 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		}
 		selected.Set(map[string]bool{})
 		uistate.BumpDataRevision()
-	})
+	}
+	applySelected := ui.UseEvent(doApply)
 
 	selectTier := func(t reviewTier) {
 		m := make(map[string]bool, len(idx.Rows))
@@ -249,7 +252,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		cursor.Set(cursor.Get() + 1)
 		notice.Set("")
 	}
-	confirmOne := ui.UseEvent(func() {
+	doConfirm := func() {
 		if cur.ID == "" {
 			return
 		}
@@ -260,11 +263,12 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		}
 		applyReviewChoice(app, cur, cat, true)
 		advance()
-	})
+	}
+	confirmOne := ui.UseEvent(doConfirm)
 	// Single mode acts on a MERCHANT, not one charge: confirm already applies to
 	// the whole group, so snooze and dismiss do too. Acting on one charge of a
 	// 122-charge merchant left 121 behind and read as a broken button.
-	skipOne := ui.UseEvent(func() {
+	doSkip := func() {
 		// C493: a durable snooze, not an in-memory skip that vanishes on reload.
 		until := time.Now().AddDate(0, 0, 7)
 		for _, t := range curRow.Group.Items {
@@ -272,14 +276,57 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		}
 		uistate.BumpDataRevision()
 		advance()
-	})
-	dismissOne := ui.UseEvent(func() {
+	}
+	skipOne := ui.UseEvent(doSkip)
+	doDismiss := func() {
 		for _, t := range curRow.Group.Items {
 			uistate.DismissReviewItem(t.ID)
 		}
 		uistate.BumpDataRevision()
 		advance()
-	})
+	}
+	dismissOne := ui.UseEvent(doDismiss)
+
+	// ---- keyboard (C507) -----------------------------------------------------
+	// The hint in the header promises these; a surface that advertises keys it
+	// does not implement is worse than one with none.
+	clampFocus := func(n int) int {
+		if len(idx.Rows) == 0 {
+			return 0
+		}
+		if n < 0 {
+			return len(idx.Rows) - 1
+		}
+		if n >= len(idx.Rows) {
+			return 0
+		}
+		return n
+	}
+	keys := reviewKeyActions{
+		Bulk:   func() { setMode(reviewModeBulk) },
+		Single: func() { setMode(reviewModeSingle) },
+	}
+	if isBulkMode := mode.Get() == reviewModeBulk; isBulkMode {
+		keys.Next = func() { focusRow.Set(clampFocus(focusRow.Get() + 1)) }
+		keys.Prev = func() { focusRow.Set(clampFocus(focusRow.Get() - 1)) }
+		keys.Toggle = func() {
+			if r := clampFocus(focusRow.Get()); r < len(idx.Rows) {
+				toggleSelect(idx.Rows[r].Group.Key)
+			}
+		}
+		keys.Confirm = doApply
+	} else {
+		keys.Next = func() { cursor.Set(cursor.Get() + 1) }
+		keys.Prev = func() {
+			if cursor.Get() > 0 {
+				cursor.Set(cursor.Get() - 1)
+			}
+		}
+		keys.Confirm = doConfirm
+		keys.Skip = doSkip
+		keys.Dismiss = doDismiss
+	}
+	setReviewKeys(keys)
 
 	// ---- render --------------------------------------------------------------
 	if idx.Total == 0 {
@@ -292,6 +339,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	}
 
 	isBulk := mode.Get() == reviewModeBulk
+	kbdHint := uistate.T("review.keyboardHintSingle")
+	if isBulk {
+		kbdHint = uistate.T("review.keyboardHintBulk")
+	}
 	head := Div(css.Class("rvs-head"),
 		uiw.Segmented(uiw.SegmentedProps{
 			Label:    uistate.T("review.modeLabel"),
@@ -302,7 +353,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 			},
 			OnSelect: setMode,
 		}),
-		Span(css.Class("rvs-kbd"), uistate.T("review.keyboardHint")),
+		Span(css.Class("rvs-kbd"), Attr("data-testid", "review-kbd"), kbdHint),
 	)
 	_, _ = onSingle, onBulk
 
@@ -310,7 +361,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	if isBulk {
 		body, foot = reviewBulkView(app, idx, selected.Get(), openGroups.Get(), manual.Get(),
 			catFor, toggleGroup, toggleSelect, setManual, selReady, selLook,
-			applySelected, clearSel, notice.Get(), pr)
+			applySelected, clearSel, notice.Get(), pr, clampFocus(focusRow.Get()))
 	} else {
 		body, foot = reviewSingleView(app, idx, curRow, cur, catFor, setManual,
 			confirmOne, skipOne, dismissOne, notice.Get(), pr)
@@ -331,6 +382,11 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	}
 
 	return Div(css.Class("rvs"), Attr("data-testid", "review-inbox"),
+		// LOAD-BEARING, not diagnostic: without a changed prop on the root the
+		// reconciler skipped diffing the keyed merchant rows, so moving the
+		// keyboard focus updated no class. It doubles as the value a test can
+		// assert on without reaching into the list.
+		Attr("data-focus", strconv.Itoa(clampFocus(focusRow.Get()))),
 		head,
 		Div(css.Class("rvs-body"), body),
 		Div(css.Class("rvs-foot modal-foot"), foot),
@@ -376,7 +432,7 @@ func reviewBulkView(
 	sel map[string]bool, openG map[string]bool, manual map[string]string,
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
-	selReady, selLook, applySel, clearSel any, notice string, pr prefs.Prefs,
+	selReady, selLook, applySel, clearSel any, notice string, pr prefs.Prefs, focused int,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
 
@@ -387,6 +443,10 @@ func reviewBulkView(
 			continue
 		}
 		rows := make([]reviewRow, 0, m)
+		focusKey := ""
+		if focused >= 0 && focused < len(idx.Rows) {
+			focusKey = idx.Rows[focused].Group.Key
+		}
 		for _, r := range idx.Rows {
 			if r.Tier == t {
 				rows = append(rows, r)
@@ -413,7 +473,7 @@ func reviewBulkView(
 			Div(css.Class("rvs-groups"),
 				MapKeyed(rows, func(r reviewRow) any { return r.Group.Key }, func(r reviewRow) ui.Node {
 					return ui.CreateElement(reviewGroupRow, reviewGroupRowProps{
-						Row: r, App: app, Selected: sel[r.Group.Key], Open: openG[r.Group.Key],
+						Row: r, App: app, Selected: sel[r.Group.Key], Open: openG[r.Group.Key], Focused: r.Group.Key == focusKey,
 						CategoryID: catFor(r), Manual: manual[r.Group.Key] != "",
 						Prefs: pr, OnToggleOpen: toggleGroup, OnToggleSelect: toggleSelect,
 						OnCategory: setManual,

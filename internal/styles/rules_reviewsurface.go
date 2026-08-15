@@ -201,6 +201,12 @@ func registerReviewSurface() {
 		transition("background .12s ease"),
 	)
 	rule(".rvs-grp-row:hover", background("var(--bg-elev)"))
+	// The keyboard's current row. Distinct from selection: focus is where you
+	// are, selection is what you have chosen.
+	rule(".rvs-grp.is-focus .rvs-grp-row",
+		outline("2px solid var(--brand)"),
+		outlineOffset("-2px"),
+	)
 	rule(".rvs-grp.is-sel .rvs-grp-row",
 		background("color-mix(in srgb, var(--accent) 12%, transparent)"),
 		boxShadow("inset 3px 0 0 var(--accent)"),

@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 
 //go:build js && wasm
 
@@ -56,6 +56,15 @@ func wireKeyboardShortcuts() {
 		if (evBool(e, "metaKey") || evBool(e, "ctrlKey")) && !evBool(e, "altKey") && e.Get("code").String() == "KeyK" {
 			e.Call("preventDefault")
 			toggleCommandPalette()
+			return nil
+		}
+		// The review surface owns plain keys while it is open (C507): j/k move,
+		// space picks, Enter confirms, s snoozes, d dismisses, 1/b switch mode.
+		// Checked after the editable guard below would be too late — but the guard
+		// is repeated inside, so typing is still never hijacked.
+		if !evBool(e, "metaKey") && !evBool(e, "ctrlKey") && !evBool(e, "altKey") &&
+			!isEditableTarget(doc) && screens.HandleReviewKey(key) {
+			e.Call("preventDefault")
 			return nil
 		}
 		// Ctrl/Cmd+Z → undo; Ctrl/Cmd+Shift+Z → redo (C78). Placed before the

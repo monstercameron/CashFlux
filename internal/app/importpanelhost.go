@@ -36,7 +36,7 @@ func ImportPanelHost() uic.Node {
 		// and each source form carries its own explicit Import action.
 		FormID:    screens.ImportModalFormID,
 		SaveLabel: uistate.T("action.done"),
-		OnClose: func() { open.Set(false) },
-		Back:    uic.CreateElement(screens.ImportPanelBody, struct{}{}),
+		OnClose:   func() { open.Set(false) },
+		Back:      uic.CreateElement(screens.ImportPanelBody, struct{}{}),
 	})
 }

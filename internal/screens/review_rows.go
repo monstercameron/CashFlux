@@ -27,6 +27,7 @@ type reviewGroupRowProps struct {
 	App            *appstate.App
 	Selected       bool
 	Open           bool
+	Focused        bool
 	CategoryID     string
 	Manual         bool
 	Prefs          prefs.Prefs
@@ -62,6 +63,9 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 	}
 	if props.Open {
 		cls += " is-open"
+	}
+	if props.Focused {
+		cls += " is-focus"
 	}
 	countLabel := uistate.T("review.chargeCount", plural(len(g.Items), "charge"))
 
