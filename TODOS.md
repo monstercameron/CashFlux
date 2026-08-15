@@ -6718,16 +6718,28 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
 - [ ] **C500 [MAJOR][REVIEW] Merge the two Smart+ categorization surfaces into one, with a single
   undo path and one entry point.** ★ Today `review_inbox.go` and `txn_smartcat.go` are separate
   modals writing the same field through two different undo mechanisms. Merge them behind a
-  `uiw.Segmented` mode control (the component already exists). **Container decision required:** the
-  current `FlipPanel` is `min(92vw, 460px)` x `min(88vh, 500px)` and cannot host a bulk list —
-  recommend promoting to a route rather than widening the panel, since bulk triage is a task you sit
-  in, not a dialog you dismiss. Reconcile the entry points (transactions toolbar Review button, the
-  smartcat opener, and the dashboard attention feed) so there is one obvious door. Supersedes C375.
-  AC: one surface, one undo mechanism, no orphaned modal left mounted.
+  `uiw.Segmented` mode control (the component already exists). **Container DECIDED (Cam,
+  2026-08-15): it stays a `FlipPanel`, resized to 90% of the viewport** — not promoted to a route.
+  Today's panel is `min(92vw, 460px)` x `min(88vh, 500px)`; bulk needs `90vw` x `90vh`. The size
+  ladder in `internal/ui/flippanel.go:26` stops at `FlipLarge` 760x720, so add a `FlipFullW,
+  FlipFullH = "90vw", "90vh"` tier rather than passing raw strings (the props doc says to prefer a
+  standard size). Use `FlushBody` + a `.modal-foot` bar so the batch action bar is PINNED inside the
+  panel instead of scrolling off — the existing mechanism for exactly this, and it replaces the
+  mockup's viewport-fixed bar. Both modes share one panel size so switching mode never resizes the
+  container; single mode centres its content (see C501). Reconcile the entry points (transactions
+  toolbar Review button, the smartcat opener, and the dashboard attention feed) so there is one
+  obvious door. Supersedes C375. AC: one surface, one undo mechanism, no orphaned modal left
+  mounted; the footer stays pinned at every supported width.
+  *Mockup: `design/review-inbox.html` (2026-08-15) — open it before implementing.*
 - [ ] **C501 [MAJOR][REVIEW] Single-item focus mode.** The existing stepper, kept as a mode: one
   transaction, category picker (now C499), deterministic suggestion, Smart+ suggestion, confirm.
   Reads its proposal from the batch scan result (C504) rather than making its own per-item AI call.
-  AC: behavior parity with today's flow plus the C496 batch fix.
+  Because C500 fixes the panel at 90vh for both modes, ONE transaction can never fill it: lay the
+  focus card + assign block beside the C503 context band in two columns so the width is earned, and
+  centre the pair with `margin:auto` (not flex centring — auto margins still let a too-tall child
+  scroll from its top instead of clipping it). Collapses to one column under ~1100px. Progress and
+  the confirm/skip actions move into the pinned footer so they are always reachable.
+  AC: behavior parity with today's flow plus the C496 batch fix; no clipped content at 90vh.
 - [ ] **C502 [MAJOR][REVIEW] Bulk mode — a real list of items needing categories.** ★ NOT what
   `txn_smartcat.go` does today: that is an AI-PROPOSALS checklist you cannot see before scanning,
   with binary accept/reject rows and no manual assignment. Render `reviewqueue.Queue` itself as a

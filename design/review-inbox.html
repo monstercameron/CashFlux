@@ -15,7 +15,7 @@
   --border:#2a2a2c; --text:#f4f4f5; --text-dim:#b6b6be; --text-faint:#9a9aa2;
   --accent:#2e8b57; --accent-dim:#1f2c24; --brand:#7c83ff; --danger:#d8716f;
   --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-pill:999px;
-  --dur-fast:120ms; --dur:180ms; --ease:cubic-bezier(.2,0,0,1);
+  --dur-fast:120ms; --dur:180ms; --dur-slow:280ms; --ease:cubic-bezier(.2,0,0,1);
   --font-ui:Inter,-apple-system,"Segoe UI",Roboto,sans-serif;
   --font-display:Fraunces,"Iowan Old Style",Georgia,serif;
   color-scheme:dark;
@@ -27,46 +27,76 @@
   color-scheme:light;
 }
 *,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);
-  font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .money{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.hide{display:none !important}
 
-/* ---- shell ---------------------------------------------------------------- */
-.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 140px}
-.head{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;
-  padding-bottom:18px;border-bottom:1px solid var(--border)}
-.head-titles{flex:1 1 260px;min-width:0}
-h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.15;
-  margin:0 0 4px;letter-spacing:-.01em}
-.head-sub{margin:0;color:var(--text-dim);font-size:13px}
-.head-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* ---- the page underneath, dimmed — so 90% still reads as a modal ---------- */
+.behind{position:fixed;inset:0;padding:22px 26px;overflow:hidden;user-select:none}
+.behind h2{font-family:var(--font-display);font-size:21px;margin:0 0 14px;font-weight:600}
+.behind .fake-row{height:38px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;gap:18px;color:var(--text-faint);font-size:13px}
+.behind .fake-row span:last-child{margin-left:auto}
+
+/* ---- modal shell — FlipPanel at 90vw x 90vh ------------------------------- */
+.backdrop{position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.55);
+  display:grid;place-items:center;padding:0}
+.panel{width:90vw;height:90vh;display:flex;flex-direction:column;
+  background:var(--bg-card);border:1px solid var(--border);
+  box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden}
+
+.panel-head{display:flex;align-items:center;gap:16px;flex:none;
+  padding:13px 18px;border-bottom:1px solid var(--border);background:var(--bg-elev)}
+.panel-title{font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.005em}
+.panel-head .spacer{flex:1}
+.x{background:none;border:1px solid transparent;color:var(--text-dim);padding:5px 10px;
+  font-size:16px;line-height:1}
+.x:hover{background:var(--hover);color:var(--text)}
+
+/* FlushBody: the body scrolls, the footer stays pinned */
+.panel-body{flex:1;min-height:0;overflow:auto;padding:22px 26px}
+/* Single mode holds one transaction, so at a fixed 90vh it can never fill the
+   panel. Centre it with `margin:auto` on the child rather than flex centring —
+   auto margins still let a too-tall child scroll from its top instead of
+   clipping it. */
+.panel-body.is-single{display:flex}
+.panel-body.is-single > .single{margin:auto}
+.panel-foot{flex:none;border-top:1px solid var(--border);background:var(--bg-elev);
+  padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.foot-acts{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
+.foot-n{font-weight:600}
+.foot-sub{color:var(--text-faint);font-size:12.5px}
 
 /* segmented — mirrors uiw.Segmented */
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);
   overflow:hidden;background:var(--bg-card)}
-.seg button{background:none;border:0;padding:7px 15px;font-size:13px;color:var(--text-dim);
+.seg button{background:none;border:0;padding:6px 14px;font-size:13px;color:var(--text-dim);
   transition:background var(--dur-fast) var(--ease),color var(--dur-fast) var(--ease)}
 .seg button + button{border-left:1px solid var(--border)}
 .seg button:hover{background:var(--hover);color:var(--text)}
 .seg button[aria-pressed="true"]{background:var(--accent-dim);color:var(--text);font-weight:500}
-.icon-btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
-  padding:7px 11px;font-size:13px;color:var(--text-dim)}
-.icon-btn:hover{background:var(--hover);color:var(--text)}
+.btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:7px 13px;font-size:13px;transition:background var(--dur-fast) var(--ease)}
+.btn:hover{background:var(--hover)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+.btn-primary:hover{background:#35a065;border-color:#35a065}
+.btn-sm{padding:4px 9px;font-size:12px}
 
 /* ---- the signature line: the queue is not N charges, it's M decisions ------ */
-.collapse{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
-  margin:22px 0 6px;padding:0}
-.collapse b{font-family:var(--font-display);font-weight:600;font-size:34px;
+.collapse{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 6px}
+.collapse b{font-family:var(--font-display);font-weight:600;font-size:32px;
   line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .collapse .arrow{color:var(--text-faint);font-size:18px;transform:translateY(-2px)}
 .collapse .unit{color:var(--text-dim);font-size:13px}
 .collapse .decisions b{color:var(--accent)}
-.collapse-note{margin:0 0 24px;color:var(--text-faint);font-size:12.5px;max-width:62ch}
+.collapse-note{margin:0 0 22px;color:var(--text-faint);font-size:12.5px;max-width:66ch}
 
 /* ---- tiers ---------------------------------------------------------------- */
-.tier{margin-bottom:26px}
+.tier{margin-bottom:24px}
 .tier-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   padding:0 0 9px;border-bottom:1px solid var(--border);margin-bottom:2px}
 .tier-mark{width:3px;align-self:stretch;min-height:20px;background:var(--accent)}
@@ -75,36 +105,30 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
 .tier-name{font-weight:600;font-size:14px;letter-spacing:-.005em}
 .tier-count{color:var(--text-faint);font-size:12.5px}
 .tier-act{margin-left:auto}
-.btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
-  padding:7px 13px;font-size:13px;transition:background var(--dur-fast) var(--ease)}
-.btn:hover{background:var(--hover)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
-.btn-primary:hover{background:#35a065;border-color:#35a065}
-.btn-sm{padding:4px 9px;font-size:12px}
 
 /* ---- merchant group ------------------------------------------------------- */
 .grp{border-bottom:1px solid var(--border)}
-.grp-row{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;
+.grp-row{display:grid;grid-template-columns:26px 1fr auto;gap:14px;align-items:center;
   padding:11px 8px;transition:background var(--dur-fast) var(--ease)}
-.grp-row:hover{background:var(--bg-card)}
+.grp-row:hover{background:var(--bg-elev)}
 .grp.is-sel .grp-row{background:var(--accent-dim)}
 .grp-main{min-width:0}
 .grp-name{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
 .grp-name strong{font-weight:600;font-size:14px}
 .grp-n{color:var(--text-faint);font-size:12px}
-.grp-raw{margin-top:2px;color:var(--text-faint);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+.grp-raw{margin-top:2px;color:var(--text-faint);font-size:11.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.grp-right{display:flex;align-items:center;gap:12px;justify-content:flex-end;flex-wrap:wrap}
-.grp-total{font-size:14px;font-weight:500;min-width:82px;text-align:right}
+.grp-right{display:flex;align-items:center;gap:14px;justify-content:flex-end}
+.grp-total{font-size:14px;font-weight:500;min-width:92px;text-align:right}
 .caret{background:none;border:0;color:var(--text-faint);padding:4px 6px;line-height:1;
   transition:transform var(--dur-fast) var(--ease)}
 .caret:hover{color:var(--text)}
 .grp.is-open .caret{transform:rotate(90deg)}
 
-/* category chip = the proposed assignment, editable in place */
 .cat-chip{display:inline-flex;align-items:center;gap:7px;background:var(--bg-elev);
   border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;
-  font-size:12.5px;max-width:230px}
+  font-size:12.5px;white-space:nowrap}
 .cat-chip:hover{background:var(--hover)}
 .cat-chip .path{color:var(--text-faint)}
 .cat-chip.is-empty{color:var(--text-faint);border-style:dashed}
@@ -112,78 +136,47 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
 .tier[data-tier="look"] .dot{background:var(--brand)}
 .tier[data-tier="none"] .dot{display:none}
 
-/* member rows revealed on expand */
-.members{display:none;padding:2px 8px 12px 46px;background:var(--bg-card)}
+.members{display:none;padding:2px 8px 12px 48px;background:var(--bg)}
 .grp.is-open .members{display:block}
-.mem{display:grid;grid-template-columns:26px 78px 1fr auto auto;gap:12px;align-items:center;
+.mem{display:grid;grid-template-columns:26px 78px 1fr auto auto;gap:14px;align-items:center;
   padding:7px 0;border-top:1px solid var(--border);font-size:13px}
 .mem:first-child{border-top:0}
 .mem-date{color:var(--text-faint);font-size:12px}
 .mem-desc{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mem-amt{font-weight:500;min-width:74px;text-align:right}
+.mem-amt{font-weight:500;min-width:84px;text-align:right}
+.more{background:none;border:0;padding:5px 0;color:var(--brand);font-size:12.5px}
+.more:hover{text-decoration:underline}
 
 /* branded checkbox — native renders near-invisibly on some OS/theme pairs */
 .chk{appearance:none;width:16px;height:16px;border:1.5px solid var(--text-faint);
   border-radius:var(--radius-xs);background:var(--bg-card);display:grid;place-content:center;
-  cursor:pointer;transition:border-color var(--dur-fast) var(--ease)}
+  cursor:pointer;flex:none;transition:border-color var(--dur-fast) var(--ease)}
 .chk:hover{border-color:var(--text)}
 .chk:checked{background:var(--accent);border-color:var(--accent)}
 .chk:checked::after{content:"";width:9px;height:5px;border:2px solid #fff;border-top:0;
   border-right:0;transform:rotate(-45deg) translateY(-1px)}
-.chk:indeterminate{background:var(--accent-dim);border-color:var(--accent)}
-.chk:indeterminate::after{content:"";width:8px;height:2px;background:var(--accent)}
 
-/* ---- single-item mode ----------------------------------------------------- */
-.single{max-width:660px;margin:24px auto 0}
-.rail{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.rail-track{flex:1;height:3px;background:var(--border);overflow:hidden}
-/* display:block is load-bearing — height does not apply to an inline element,
-   so without it the fill is invisible and the rail reads as an empty track. */
-.rail-fill{display:block;height:100%;width:31%;background:var(--accent)}
-.rail-txt{color:var(--text-faint);font-size:12px;white-space:nowrap}
-.focus-card{border:1px solid var(--border);background:var(--bg-card);padding:18px 18px 16px}
+/* ---- single-item mode: two columns, so 90vw is earned not wasted ---------- */
+.single{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,400px);
+  gap:26px;max-width:1180px;margin:0 auto;align-items:start}
+.focus-card{border:1px solid var(--border);background:var(--bg-elev);padding:20px}
 .focus-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .tag{font-size:11px;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;
   border:1px solid var(--border);color:var(--text-dim)}
 .tag.is-uncat{border-color:var(--accent);color:var(--accent)}
 .focus-date{margin-left:auto;color:var(--text-faint);font-size:12.5px}
-.focus-payee{font-family:var(--font-display);font-size:23px;font-weight:600;letter-spacing:-.01em}
-.focus-raw{margin-top:3px;color:var(--text-faint);font-size:12px;
+.focus-payee{font-family:var(--font-display);font-size:26px;font-weight:600;letter-spacing:-.01em}
+.focus-raw{margin-top:4px;color:var(--text-faint);font-size:12px;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.focus-meta{display:flex;align-items:baseline;gap:14px;margin-top:12px;flex-wrap:wrap}
-.focus-amt{font-size:26px;font-weight:600;letter-spacing:-.02em}
+.focus-meta{display:flex;align-items:baseline;gap:14px;margin-top:14px;flex-wrap:wrap}
+.focus-amt{font-size:30px;font-weight:600;letter-spacing:-.02em}
 .focus-acct{color:var(--text-dim);font-size:13px}
 
-/* the context band — the reason single mode exists at all */
-.band{border:1px solid var(--border);border-top:0;background:var(--bg)}
-.band-head{display:flex;align-items:center;gap:10px;padding:10px 18px;
-  border-bottom:1px solid var(--border);color:var(--text-dim);font-size:12px;
-  letter-spacing:.03em;text-transform:uppercase}
-.ctx{padding:13px 18px;border-bottom:1px solid var(--border)}
-.ctx:last-child{border-bottom:0}
-.ctx-t{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:7px}
-.ctx-t strong{font-size:13px;font-weight:600}
-.ctx-t .why{color:var(--text-faint);font-size:12px}
-.sib{display:grid;grid-template-columns:26px 74px 1fr auto;gap:11px;align-items:center;
-  padding:5px 0;font-size:12.5px;color:var(--text-dim)}
-.sib .money{color:var(--text);font-weight:500}
-.more{background:none;border:0;padding:5px 0;color:var(--brand);font-size:12.5px}
-.more:hover{text-decoration:underline}
-/* grid, not flex — the amounts are a money column and must align regardless of
-   how long the label to their left is ("Remainder" vs "11 Aug"). */
-.link-row{display:grid;grid-template-columns:74px 84px 1fr;gap:10px;align-items:baseline;
-  font-size:12.5px;color:var(--text-dim);padding:4px 0}
-.link-row .money{color:var(--text);text-align:right}
-.rem{color:var(--danger)}
-.spark{display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:2px}
-.spark i{width:7px;background:var(--border);display:block}
-.spark i.now{background:var(--accent)}
-
-/* assign block */
-.assign{border:1px solid var(--border);border-top:0;background:var(--bg-card);padding:16px 18px}
+.assign{border:1px solid var(--border);border-top:0;background:var(--bg-elev);padding:18px 20px}
 .assign-lab{font-size:12px;color:var(--text-dim);margin-bottom:8px}
 .picker-open{width:100%;display:flex;align-items:center;justify-content:space-between;
-  gap:10px;background:var(--bg);border:1px solid var(--border);padding:10px 12px;font-size:13.5px;text-align:left}
+  gap:10px;background:var(--bg);border:1px solid var(--border);padding:11px 13px;
+  font-size:13.5px;text-align:left}
 .picker-open:hover{border-color:var(--text-faint)}
 .picker-open .ph{color:var(--text-faint)}
 .suggests{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -191,17 +184,41 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
   border:1px solid var(--accent);color:var(--text);padding:6px 11px;font-size:12.5px;
   border-radius:var(--radius-sm)}
 .sug:hover{background:var(--accent);color:#fff}
-.sug.alt{background:var(--bg-elev);border-color:var(--border);color:var(--text-dim)}
+.sug.alt{background:var(--bg-card);border-color:var(--border);color:var(--text-dim)}
 .sug.alt:hover{background:var(--hover);color:var(--text)}
-.actions{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
-.actions .btn{padding:9px 16px}
-.also{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:12.5px;color:var(--text-dim)}
+.also{display:flex;align-items:center;gap:9px;margin-top:14px;font-size:12.5px;color:var(--text-dim)}
 
-/* ---- category picker popover --------------------------------------------- */
-.pop-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:3000}
+/* the context band — the reason single mode exists at all */
+.band{border:1px solid var(--border);background:var(--bg)}
+.band-head{padding:11px 16px;border-bottom:1px solid var(--border);color:var(--text-dim);
+  font-size:11.5px;letter-spacing:.05em;text-transform:uppercase}
+.ctx{padding:14px 16px;border-bottom:1px solid var(--border)}
+.ctx:last-child{border-bottom:0}
+.ctx-t{margin-bottom:8px}
+.ctx-t strong{font-size:13px;font-weight:600;display:block}
+.ctx-t .why{color:var(--text-faint);font-size:12px}
+.link-row{display:grid;grid-template-columns:62px 80px 1fr;gap:10px;align-items:baseline;
+  font-size:12.5px;color:var(--text-dim);padding:4px 0}
+.link-row .money{color:var(--text);text-align:right}
+.rem{color:var(--danger)}
+.sib{display:grid;grid-template-columns:26px 62px 1fr auto;gap:10px;align-items:center;
+  padding:5px 0;font-size:12.5px;color:var(--text-dim)}
+.sib .money{color:var(--text);font-weight:500}
+.sib .sib-desc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spark{display:flex;align-items:flex-end;gap:3px;height:28px;margin-top:4px}
+.spark i{width:8px;background:var(--border);display:block}
+.spark i.now{background:var(--accent)}
+
+.rail-track{flex:1;height:3px;background:var(--border);overflow:hidden;min-width:120px}
+/* display:block is load-bearing — height does not apply to an inline element,
+   so without it the fill is invisible and the rail reads as an empty track. */
+.rail-fill{display:block;height:100%;width:31%;background:var(--accent)}
+
+/* ---- category picker popover (above the panel) ---------------------------- */
+.pop-back{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:3500}
 .pop-back.is-open{display:block}
 .pop{position:absolute;left:50%;top:12vh;transform:translateX(-50%);width:min(94vw,430px);
-  max-height:72vh;display:flex;flex-direction:column;background:var(--bg-card);
+  max-height:70vh;display:flex;flex-direction:column;background:var(--bg-card);
   border:1px solid var(--border);box-shadow:0 18px 48px rgba(0,0,0,.45)}
 .pop-search{padding:12px;border-bottom:1px solid var(--border)}
 .pop-search input{width:100%;background:var(--bg);border:1px solid var(--border);
@@ -210,57 +227,50 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
 .pop-list{overflow:auto;padding:5px 0}
 .opt{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;
   padding:8px 14px;font-size:13.5px;text-align:left}
-.opt:hover,.opt.is-hi{background:var(--hover)}
+.opt:hover{background:var(--hover)}
 .opt.child{padding-left:32px}
 .opt .kid{color:var(--text-faint);font-size:12px;margin-left:auto}
-.opt-new{border-top:1px solid var(--border);color:var(--accent);margin-top:5px;padding-top:11px}
+.opt-new{border-top:1px solid var(--border);color:var(--accent);margin-top:5px;padding-top:11px;
+  display:block}
 .opt-new small{color:var(--text-faint);display:block;font-size:11.5px;margin-top:1px}
 .pop-foot{border-top:1px solid var(--border);padding:9px 14px;color:var(--text-faint);font-size:11.5px}
 
-/* ---- sticky batch bar ----------------------------------------------------- */
-.bar{position:fixed;left:0;right:0;bottom:0;z-index:2000;transform:translateY(102%);
-  transition:transform var(--dur) var(--ease);
-  background:var(--bg-elev);border-top:1px solid var(--border)}
-.bar.is-up{transform:none}
-.bar-in{max-width:1180px;margin:0 auto;padding:13px 20px;display:flex;align-items:center;
-  gap:14px;flex-wrap:wrap}
-.bar-n{font-weight:600}
-.bar-sub{color:var(--text-faint);font-size:12.5px}
-.bar-acts{margin-left:auto;display:flex;gap:9px;flex-wrap:wrap}
-
-.hide{display:none !important}
-
 /* ---- responsive ----------------------------------------------------------- */
+@media (max-width:1100px){
+  .single{grid-template-columns:minmax(0,1fr);max-width:680px}
+}
 @media (max-width:900px){
-  .wrap{padding:20px 14px 150px}
-  .grp-row{grid-template-columns:26px 1fr;row-gap:9px}
-  .grp-right{grid-column:2;justify-content:flex-start}
+  .panel{width:96vw;height:94vh}
+  .panel-body{padding:18px 14px}
+  .grp-row{grid-template-columns:26px 1fr;row-gap:10px}
+  .grp-right{grid-column:2;justify-content:flex-start;flex-wrap:wrap}
   .grp-total{min-width:0;text-align:left}
-  .members{padding-left:20px}
+  .members{padding-left:22px}
   .mem{grid-template-columns:26px 1fr auto;row-gap:3px}
-  .mem-date{grid-column:2}
-  .mem-desc{grid-column:2}
 }
 @media (max-width:560px){
-  h1{font-size:22px}
-  .collapse b{font-size:27px}
-  .head-tools{width:100%}
-  .seg{flex:1}
-  .seg button{flex:1;padding:8px 10px}
-  .focus-payee{font-size:20px}
-  .sib,.mem{grid-template-columns:22px 1fr auto}
-  .sib .sib-date{display:none}
+  .panel{width:100vw;height:100vh;border:0}
+  .panel-head{flex-wrap:wrap;gap:10px}
+  .panel-head .seg{order:3;width:100%}
+  .panel-head .seg button{flex:1}
+  .collapse b{font-size:26px}
+  .focus-payee{font-size:21px}
+  .focus-amt{font-size:25px}
+  .panel-foot .foot-acts{margin-left:0;width:100%}
+  .panel-foot .foot-acts .btn{flex:1}
   /* The per-row Change button wraps to its own line here and reads as an
      orphan. Drop it — the row itself opens the picker at this width. */
   .mem .btn{display:none}
-  /* Every cell is placed explicitly: auto-placement stacked the checkbox on
-     top of the amount once the row became two rows tall. */
+  /* Every cell placed explicitly: auto-placement stacked the checkbox on top
+     of the amount once the row became two rows tall. */
   .mem{grid-template-rows:auto auto;row-gap:1px;padding:9px 0}
   .mem .chk{grid-column:1;grid-row:1 / span 2;align-self:center}
   .mem-date{grid-column:2;grid-row:1;font-size:11.5px}
   .mem-desc{grid-column:2;grid-row:2}
   .mem-amt{grid-column:3;grid-row:1 / span 2;align-self:center}
-  .link-row{grid-template-columns:64px 76px 1fr;gap:8px}
+  .sib{grid-template-columns:22px 1fr auto}
+  .sib .sib-date{display:none}
+  .link-row{grid-template-columns:56px 72px 1fr;gap:8px}
 }
 @media (prefers-reduced-motion:reduce){
   *{transition-duration:.01ms !important;animation-duration:.01ms !important}
@@ -268,139 +278,164 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header class="head">
-    <div class="head-titles">
-      <h1>Review transactions</h1>
-      <p class="head-sub">Everything imported since 28 July that still needs a category.</p>
-    </div>
-    <div class="head-tools">
+<!-- the transactions page underneath, so 90% still reads as a modal -->
+<div class="behind" aria-hidden="true">
+  <h2>Transactions</h2>
+  <div class="fake-row"><span>11 Aug</span><span>AMZN MKTP US*2H4RT9</span><span>−$84.32</span></div>
+  <div class="fake-row"><span>11 Aug</span><span>TRADER JOE'S #453 QPS</span><span>−$62.11</span></div>
+  <div class="fake-row"><span>10 Aug</span><span>SHELL OIL 57445208</span><span>−$48.90</span></div>
+  <div class="fake-row"><span>09 Aug</span><span>SQ *BLUE BOTTLE COFFE</span><span>−$6.75</span></div>
+  <div class="fake-row"><span>09 Aug</span><span>NETFLIX.COM 866-579-7172</span><span>−$22.99</span></div>
+  <div class="fake-row"><span>08 Aug</span><span>PAYPAL *STEAM GAMES</span><span>−$24.99</span></div>
+  <div class="fake-row"><span>08 Aug</span><span>VENMO PAYMENT 3264117</span><span>−$120.00</span></div>
+</div>
+
+<div class="backdrop">
+  <div class="panel" role="dialog" aria-modal="true" aria-label="Review transactions">
+
+    <div class="panel-head">
+      <span class="panel-title">Review transactions</span>
       <div class="seg" role="group" aria-label="Review mode">
         <button id="mSingle" aria-pressed="false">One at a time</button>
         <button id="mBulk" aria-pressed="true">Bulk</button>
       </div>
-      <button class="icon-btn" id="theme">Light</button>
-    </div>
-  </header>
-
-  <!-- ====================== BULK MODE ====================== -->
-  <section id="bulk">
-    <div class="collapse">
-      <span><b>54</b> <span class="unit">charges</span></span>
-      <span class="arrow">&rarr;</span>
-      <span class="decisions"><b>11</b> <span class="unit">decisions</span></span>
-    </div>
-    <p class="collapse-note">Charges are grouped by merchant and sorted by how confident the
-      matcher is. Confirm a whole merchant at once, or open one to change individual charges.</p>
-
-    <!-- tier 1 -->
-    <div class="tier" data-tier="ready">
-      <div class="tier-head">
-        <span class="tier-mark"></span>
-        <span class="tier-name">Ready to confirm</span>
-        <span class="tier-count">5 merchants &middot; 38 charges</span>
-        <span class="tier-act"><button class="btn btn-primary btn-sm" data-all="ready">Select all 5</button></span>
-      </div>
-      <div id="tier-ready"></div>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="theme">Light</button>
+      <button class="x" aria-label="Close">&#10005;</button>
     </div>
 
-    <!-- tier 2 -->
-    <div class="tier" data-tier="look">
-      <div class="tier-head">
-        <span class="tier-mark"></span>
-        <span class="tier-name">Worth a look</span>
-        <span class="tier-count">3 merchants &middot; 12 charges</span>
-        <span class="tier-act"><button class="btn btn-sm" data-all="look">Select all 3</button></span>
-      </div>
-      <div id="tier-look"></div>
+    <div class="panel-body">
+
+      <!-- ====================== BULK MODE ====================== -->
+      <section id="bulk">
+        <div class="collapse">
+          <span><b>54</b> <span class="unit">charges</span></span>
+          <span class="arrow">&rarr;</span>
+          <span class="decisions"><b>11</b> <span class="unit">decisions</span></span>
+        </div>
+        <p class="collapse-note">Charges are grouped by merchant and sorted by how confident the
+          matcher is. Confirm a whole merchant at once, or open one to change individual charges.</p>
+
+        <div class="tier" data-tier="ready">
+          <div class="tier-head">
+            <span class="tier-mark"></span>
+            <span class="tier-name">Ready to confirm</span>
+            <span class="tier-count">5 merchants &middot; 38 charges</span>
+            <span class="tier-act"><button class="btn btn-primary btn-sm" data-all="ready">Select all 5</button></span>
+          </div>
+          <div id="tier-ready"></div>
+        </div>
+
+        <div class="tier" data-tier="look">
+          <div class="tier-head">
+            <span class="tier-mark"></span>
+            <span class="tier-name">Worth a look</span>
+            <span class="tier-count">3 merchants &middot; 12 charges</span>
+            <span class="tier-act"><button class="btn btn-sm" data-all="look">Select all 3</button></span>
+          </div>
+          <div id="tier-look"></div>
+        </div>
+
+        <div class="tier" data-tier="none">
+          <div class="tier-head">
+            <span class="tier-mark"></span>
+            <span class="tier-name">No suggestion yet</span>
+            <span class="tier-count">3 merchants &middot; 4 charges</span>
+            <span class="tier-act"><button class="btn btn-sm">Ask Smart+ again</button></span>
+          </div>
+          <div id="tier-none"></div>
+        </div>
+      </section>
+
+      <!-- ====================== SINGLE MODE ====================== -->
+      <section id="single" class="single hide">
+        <div>
+          <div class="focus-card">
+            <div class="focus-top">
+              <span class="tag is-uncat">No category</span>
+              <span class="focus-date">Tue 11 Aug 2026</span>
+            </div>
+            <div class="focus-payee">Amazon</div>
+            <div class="focus-raw">AMZN MKTP US*2H4RT9 &nbsp;SEATTLE WA</div>
+            <div class="focus-meta">
+              <span class="focus-amt money">&minus;$84.32</span>
+              <span class="focus-acct">Chase Sapphire &middot; &middot;&middot;&middot;4471</span>
+            </div>
+          </div>
+          <div class="assign">
+            <div class="assign-lab">Category</div>
+            <button class="picker-open" id="pickerOpen">
+              <span class="ph" id="pickedLabel">Choose a category</span>
+              <span class="ph">&#9662;</span>
+            </button>
+            <div class="suggests">
+              <button class="sug"><span class="dot"></span>Shopping &rsaquo; Household</button>
+              <button class="sug alt">Ask Smart+</button>
+            </div>
+            <label class="also"><input class="chk" type="checkbox" checked>
+              Apply to the 11 other Amazon charges too</label>
+          </div>
+        </div>
+
+        <div class="band">
+          <div class="band-head">What else this charge is tied to</div>
+
+          <div class="ctx">
+            <div class="ctx-t">
+              <strong>Part of one order, split across 3 charges</strong>
+              <span class="why">order group &middot; you entered a $214.99 total</span>
+            </div>
+            <div class="link-row"><span>11 Aug</span><span class="money">&minus;$84.32</span><span>this charge</span></div>
+            <div class="link-row"><span>11 Aug</span><span class="money">&minus;$96.15</span><span>already Household</span></div>
+            <div class="link-row"><span>13 Aug</span><span class="money">&minus;$31.00</span><span>already Household</span></div>
+            <div class="link-row rem"><span>Remainder</span><span class="money">$3.52</span><span>not yet accounted for</span></div>
+          </div>
+
+          <div class="ctx">
+            <div class="ctx-t">
+              <strong>11 more Amazon charges are waiting</strong>
+              <span class="why">$346.88 in total &middot; untick any that don't belong</span>
+            </div>
+            <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">09 Aug</span><span class="sib-desc">AMZN MKTP *8K1QP2</span><span class="money">&minus;$23.14</span></label>
+            <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">06 Aug</span><span class="sib-desc">AMZN MKTP *4J0RT1</span><span class="money">&minus;$61.90</span></label>
+            <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">02 Aug</span><span class="sib-desc">AMZN MKTP *7C2XW8</span><span class="money">&minus;$18.44</span></label>
+            <button class="more">Show the other 8</button>
+          </div>
+
+          <div class="ctx">
+            <div class="ctx-t">
+              <strong>Bigger than usual for Amazon</strong>
+              <span class="why">typical charge is $36.10 &middot; this one is $48.22 above</span>
+            </div>
+            <div class="spark"><i style="height:34%"></i><i style="height:52%"></i><i style="height:30%"></i><i style="height:44%"></i><i style="height:38%"></i><i style="height:61%"></i><i style="height:41%"></i><i class="now" style="height:100%"></i></div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- tier 3 -->
-    <div class="tier" data-tier="none">
-      <div class="tier-head">
-        <span class="tier-mark"></span>
-        <span class="tier-name">No suggestion yet</span>
-        <span class="tier-count">3 merchants &middot; 4 charges</span>
-        <span class="tier-act"><button class="btn btn-sm">Ask Smart+ again</button></span>
-      </div>
-      <div id="tier-none"></div>
+    <!-- pinned footer (FlushBody + .modal-foot); content swaps per mode -->
+    <div class="panel-foot" id="footBulk">
+      <span class="foot-n" id="barN">Nothing selected</span>
+      <span class="foot-sub" id="barSub">Pick a merchant, or confirm a whole tier at once.</span>
+      <span class="foot-acts">
+        <button class="btn btn-sm">Always do this &mdash; make a rule</button>
+        <button class="btn btn-sm" id="barClear">Clear</button>
+        <button class="btn btn-primary btn-sm" id="barGo">Confirm</button>
+      </span>
     </div>
-  </section>
 
-  <!-- ====================== SINGLE MODE ====================== -->
-  <section id="single" class="single hide">
-    <div class="rail">
-      <span class="rail-txt">17 of 54</span>
+    <div class="panel-foot hide" id="footSingle">
+      <span class="foot-sub">17 of 54</span>
       <span class="rail-track"><span class="rail-fill"></span></span>
-      <span class="rail-txt">about 6 min left</span>
+      <span class="foot-sub">about 6 min left</span>
+      <span class="foot-acts">
+        <button class="btn btn-sm">It's a transfer, not a category</button>
+        <button class="btn btn-sm">Skip for now</button>
+        <button class="btn btn-primary btn-sm">Confirm and next</button>
+      </span>
     </div>
-
-    <div class="focus-card">
-      <div class="focus-top">
-        <span class="tag is-uncat">No category</span>
-        <span class="focus-date">Tue 11 Aug 2026</span>
-      </div>
-      <div class="focus-payee">Amazon</div>
-      <div class="focus-raw">AMZN MKTP US*2H4RT9 &nbsp;SEATTLE WA</div>
-      <div class="focus-meta">
-        <span class="focus-amt money">&minus;$84.32</span>
-        <span class="focus-acct">Chase Sapphire &middot; &middot;&middot;&middot;4471</span>
-      </div>
-    </div>
-
-    <div class="band">
-      <div class="band-head">What else this charge is tied to</div>
-
-      <div class="ctx">
-        <div class="ctx-t">
-          <strong>Part of one order, split across 3 charges</strong>
-          <span class="why">order group &middot; you entered a $214.99 total</span>
-        </div>
-        <div class="link-row"><span>11 Aug</span><span class="money">&minus;$84.32</span><span class="why">this charge</span></div>
-        <div class="link-row"><span>11 Aug</span><span class="money">&minus;$96.15</span><span class="why">already Household</span></div>
-        <div class="link-row"><span>13 Aug</span><span class="money">&minus;$31.00</span><span class="why">already Household</span></div>
-        <div class="link-row rem"><span>Remainder</span><span class="money">$3.52</span><span class="why">not yet accounted for</span></div>
-      </div>
-
-      <div class="ctx">
-        <div class="ctx-t">
-          <strong>11 more Amazon charges are waiting</strong>
-          <span class="why">$346.88 in total &middot; untick any that don't belong</span>
-        </div>
-        <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">09 Aug</span><span>AMZN MKTP US*8K1QP2</span><span class="money">&minus;$23.14</span></label>
-        <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">06 Aug</span><span>AMZN MKTP US*4J0RT1</span><span class="money">&minus;$61.90</span></label>
-        <label class="sib"><input class="chk" type="checkbox" checked><span class="sib-date">02 Aug</span><span>AMZN MKTP US*7C2XW8</span><span class="money">&minus;$18.44</span></label>
-        <button class="more">Show the other 8</button>
-      </div>
-
-      <div class="ctx">
-        <div class="ctx-t">
-          <strong>Bigger than usual for Amazon</strong>
-          <span class="why">typical charge is $36.10 &middot; this one is $48.22 above</span>
-        </div>
-        <div class="spark"><i style="height:34%"></i><i style="height:52%"></i><i style="height:30%"></i><i style="height:44%"></i><i style="height:38%"></i><i style="height:61%"></i><i style="height:41%"></i><i class="now" style="height:100%"></i></div>
-      </div>
-    </div>
-
-    <div class="assign">
-      <div class="assign-lab">Category</div>
-      <button class="picker-open" id="pickerOpen">
-        <span class="ph" id="pickedLabel">Choose a category</span>
-        <span class="ph">&#9662;</span>
-      </button>
-      <div class="suggests">
-        <button class="sug"><span class="dot"></span>Shopping &rsaquo; Household</button>
-        <button class="sug alt">Smart+ suggestion</button>
-      </div>
-      <label class="also"><input class="chk" type="checkbox" checked> Apply to the 11 other Amazon charges too</label>
-      <div class="actions">
-        <button class="btn btn-primary">Confirm and next</button>
-        <button class="btn">Skip for now</button>
-        <button class="btn">Not a category &mdash; it's a transfer</button>
-      </div>
-    </div>
-  </section>
+  </div>
 </div>
 
 <!-- ====================== CATEGORY PICKER ====================== -->
@@ -412,34 +447,21 @@ h1{font-family:var(--font-display);font-weight:600;font-size:26px;line-height:1.
   </div>
 </div>
 
-<!-- ====================== BATCH BAR ====================== -->
-<div class="bar" id="bar">
-  <div class="bar-in">
-    <span class="bar-n" id="barN">0 selected</span>
-    <span class="bar-sub" id="barSub">&mdash;</span>
-    <span class="bar-acts">
-      <button class="btn btn-sm">Always do this &mdash; make a rule</button>
-      <button class="btn btn-sm">Clear</button>
-      <button class="btn btn-primary btn-sm" id="barGo">Confirm</button>
-    </span>
-  </div>
-</div>
-
 <script>
 /* ---------------------------------------------------------------------------
    Sample data. Deliberately messy raw payees and realistic counts so density
    can be judged honestly — a mockup with three tidy rows proves nothing.
    --------------------------------------------------------------------------- */
 const GROUPS = [
-  {tier:"ready", name:"Amazon",        raw:"AMZN MKTP US*2H4RT9 / *8K1QP2 / *4J0RT1", n:12, total:431.20, cat:"Shopping", path:"Household"},
-  {tier:"ready", name:"Trader Joe's",  raw:"TRADER JOE'S #453 QPS", n:8, total:312.88, cat:"Groceries", path:""},
-  {tier:"ready", name:"Blue Bottle",   raw:"SQ *BLUE BOTTLE COFFE", n:9, total:58.14, cat:"Dining out", path:""},
-  {tier:"ready", name:"Shell",         raw:"SHELL OIL 57445208", n:6, total:284.66, cat:"Auto", path:"Gas"},
-  {tier:"ready", name:"Netflix",       raw:"NETFLIX.COM 866-579-7172", n:3, total:68.97, cat:"Subscriptions", path:""},
+  {tier:"ready", name:"Amazon",       raw:"AMZN MKTP US*2H4RT9 / *8K1QP2 / *4J0RT1", n:12, total:431.20, cat:"Shopping", path:"Household"},
+  {tier:"ready", name:"Trader Joe's", raw:"TRADER JOE'S #453 QPS", n:8, total:312.88, cat:"Groceries", path:""},
+  {tier:"ready", name:"Blue Bottle",  raw:"SQ *BLUE BOTTLE COFFE", n:9, total:58.14, cat:"Dining out", path:""},
+  {tier:"ready", name:"Shell",        raw:"SHELL OIL 57445208", n:6, total:284.66, cat:"Auto", path:"Gas"},
+  {tier:"ready", name:"Netflix",      raw:"NETFLIX.COM 866-579-7172", n:3, total:68.97, cat:"Subscriptions", path:""},
 
-  {tier:"look",  name:"The Feed",      raw:"SP * THE FEED", n:4, total:186.00, cat:"Health", path:""},
-  {tier:"look",  name:"Steam",         raw:"PAYPAL *STEAM GAMES", n:5, total:124.95, cat:"Entertainment", path:""},
-  {tier:"look",  name:"Venmo",         raw:"VENMO PAYMENT 3264117", n:3, total:340.00, cat:"Shopping", path:""},
+  {tier:"look",  name:"The Feed",     raw:"SP * THE FEED", n:4, total:186.00, cat:"Health", path:""},
+  {tier:"look",  name:"Steam",        raw:"PAYPAL *STEAM GAMES", n:5, total:124.95, cat:"Entertainment", path:""},
+  {tier:"look",  name:"Venmo",        raw:"VENMO PAYMENT 3264117", n:3, total:340.00, cat:"Shopping", path:""},
 
   {tier:"none",  name:"Square merchant", raw:"CHECKCARD 0812 SQ *TH", n:2, total:47.00, cat:"", path:""},
   {tier:"none",  name:"Card purchase",   raw:"POS DEBIT 4471", n:1, total:18.42, cat:"", path:""},
@@ -457,7 +479,7 @@ const CATS = [
 const usd = n => "−$" + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const DAYS = ["02 Aug","05 Aug","06 Aug","09 Aug","11 Aug","13 Aug"];
 
-function groupNode(g, i){
+function groupNode(g){
   const el = document.createElement("div");
   el.className = "grp";
   const chip = g.cat
@@ -467,12 +489,9 @@ function groupNode(g, i){
   // Vary the raw descriptor per row: real imports differ charge to charge, and a
   // column of identical strings would flatter the density judgement.
   const variants = g.raw.split(" / ");
-  const stem = variants[0].replace(/\S+$/, "").trim();      // "AMZN MKTP"
-  const rawAt = k => {
-    if (variants.length === 1) return g.raw;
-    if (k === 0) return variants[0];
-    return stem + " " + variants[1 + ((k - 1) % (variants.length - 1))];
-  };
+  const stem = variants[0].replace(/\S+$/, "").trim();
+  const rawAt = k => variants.length === 1 ? g.raw
+    : (k === 0 ? variants[0] : stem + " " + variants[1 + ((k - 1) % (variants.length - 1))]);
 
   let mem = "";
   for (let k = 0; k < Math.min(g.n, 4); k++){
@@ -509,34 +528,40 @@ function groupNode(g, i){
   return el;
 }
 
-GROUPS.forEach((g,i) => document.getElementById("tier-" + g.tier).appendChild(groupNode(g,i)));
+GROUPS.forEach(g => document.getElementById("tier-" + g.tier).appendChild(groupNode(g)));
 
-/* selection tally -> sticky bar */
 function tally(){
   let groups = 0, charges = 0, sum = 0;
   document.querySelectorAll(".grp").forEach((el, i) => {
     if (el.querySelector(".grp-chk").checked){ groups++; charges += GROUPS[i].n; sum += GROUPS[i].total; }
   });
-  const bar = document.getElementById("bar");
-  bar.classList.toggle("is-up", groups > 0);
-  document.getElementById("barN").textContent =
-    `${groups} merchant${groups===1?"":"s"} · ${charges} charge${charges===1?"":"s"}`;
-  document.getElementById("barSub").textContent = `${usd(sum)} · undo stays available`;
-  document.getElementById("barGo").textContent = `Confirm ${charges}`;
+  document.getElementById("barN").textContent = groups
+    ? `${groups} merchant${groups===1?"":"s"} · ${charges} charge${charges===1?"":"s"}`
+    : "Nothing selected";
+  document.getElementById("barSub").textContent = groups
+    ? `${usd(sum)} · undo stays available`
+    : "Pick a merchant, or confirm a whole tier at once.";
+  document.getElementById("barGo").textContent = groups ? `Confirm ${charges}` : "Confirm";
 }
 document.querySelectorAll("[data-all]").forEach(b => b.onclick = () => {
   document.querySelectorAll(`.tier[data-tier="${b.dataset.all}"] .grp-chk`)
     .forEach(c => { c.checked = true; c.dispatchEvent(new Event("change")); });
 });
+document.getElementById("barClear").onclick = () => {
+  document.querySelectorAll(".grp-chk").forEach(c => { c.checked = false; c.dispatchEvent(new Event("change")); });
+};
 
 /* mode + theme */
-const bulk = document.getElementById("bulk"), single = document.getElementById("single");
 function setMode(isBulk){
-  bulk.classList.toggle("hide", !isBulk);
-  single.classList.toggle("hide", isBulk);
+  document.getElementById("bulk").classList.toggle("hide", !isBulk);
+  document.getElementById("single").classList.toggle("hide", isBulk);
+  document.getElementById("footBulk").classList.toggle("hide", !isBulk);
+  document.getElementById("footSingle").classList.toggle("hide", isBulk);
   document.getElementById("mBulk").setAttribute("aria-pressed", isBulk);
   document.getElementById("mSingle").setAttribute("aria-pressed", !isBulk);
-  if (!isBulk) document.getElementById("bar").classList.remove("is-up"); else tally();
+  const body = document.querySelector(".panel-body");
+  body.classList.toggle("is-single", !isBulk);
+  body.scrollTop = 0;
 }
 document.getElementById("mBulk").onclick = () => setMode(true);
 document.getElementById("mSingle").onclick = () => setMode(false);
@@ -549,12 +574,10 @@ document.getElementById("theme").onclick = e => {
 /* category picker — search, pick, and create as parent OR child */
 const back = document.getElementById("popBack"), list = document.getElementById("catList"),
       search = document.getElementById("catSearch");
-let picked = "";
 
 function renderCats(q){
   q = q.trim().toLowerCase();
   list.innerHTML = "";
-  let shown = 0;
   CATS.forEach(c => {
     const kids = c.kids || [];
     const hitParent = c.name.toLowerCase().includes(q);
@@ -563,12 +586,9 @@ function renderCats(q){
       list.insertAdjacentHTML("beforeend",
         `<button class="opt" data-v="${c.name}"><span class="dot"></span>${c.name}
          ${kids.length?`<span class="kid">${kids.length} inside</span>`:""}</button>`);
-      shown++;
-      (q ? hitKids : kids).forEach(k => {
+      (q ? hitKids : kids).forEach(k =>
         list.insertAdjacentHTML("beforeend",
-          `<button class="opt child" data-v="${c.name} › ${k}">${k}</button>`);
-        shown++;
-      });
+          `<button class="opt child" data-v="${c.name} › ${k}">${k}</button>`));
     }
   });
   if (q){
@@ -579,11 +599,10 @@ function renderCats(q){
       `<button class="opt opt-new" data-v="Shopping › ${q}">Create &ldquo;${q}&rdquo; inside Shopping
        <small>becomes a sub-category you can budget separately</small></button>`);
   }
-  if (!shown && !q) list.innerHTML = `<div class="pop-foot">No categories yet. Type a name to make the first one.</div>`;
   list.querySelectorAll(".opt").forEach(o => o.onclick = () => {
-    picked = o.dataset.v;
-    document.getElementById("pickedLabel").textContent = picked;
-    document.getElementById("pickedLabel").classList.remove("ph");
+    const lab = document.getElementById("pickedLabel");
+    lab.textContent = o.dataset.v;
+    lab.classList.remove("ph");
     closePicker();
   });
 }
@@ -595,6 +614,7 @@ back.onclick = e => { if (e.target === back) closePicker(); };
 document.addEventListener("keydown", e => { if (e.key === "Escape") closePicker(); });
 
 setMode(true);
+tally();
 </script>
 </body>
 </html>
