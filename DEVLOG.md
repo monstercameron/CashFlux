@@ -1,3 +1,21 @@
+## 2026-08-14 — A button that was there, just under the header
+
+Reported as "visually enabled but not normally clickable" — the kind of description that's easy to
+wave off as a rendering hiccup until you reproduce it. Live in a real browser, scrolling a task row
+into view via `scrollIntoViewIfNeeded()` (the same mechanic `SetDeepLinkFocus` uses after the
+dashboard's "Remind me" nudge creates a task and jumps to it on `/todo`) landed the row's top edge
+flush with the viewport top — directly under the sticky topbar. `.todo-item` had no
+`scroll-margin-top` at all, so nothing pushed the scroll target down to clear the header. The Edit
+button was exactly where it should be, fully enabled, just painted underneath the topbar.
+
+The bento-todo dashboard widget already carries a `scroll-margin-top: 80px` for this exact class of
+row — but 80px is tuned to the desktop topbar height. Measured live at 390px wide, the topbar wraps
+to ~108px tall, so the same fix undershoots on mobile by nearly 30px — still enough to clip the
+row's actions. Bumped `.todo-item`'s own scroll-margin-top to 8.5rem (136px), matching the
+clearance `rules_reportsannual.go` already uses for the identical topbar-height problem elsewhere.
+Verified across desktop, narrow, and mobile viewports with the row's real button geometry, not just
+its bounding box.
+
 ## 2026-08-14 — The release script that never built the thing it promised to serve
 
 `web/index.html`'s `loadCompressed()` is careful: fetch `./bin/main.wasm.gz`, decompress it in a

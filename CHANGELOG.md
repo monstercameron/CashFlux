@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **A To-do row's Edit button can no longer land hidden under the sticky topbar.** A row scrolled
+  to the top (e.g. after the "Remind me" freshness nudge deep-links to a newly created task) could
+  come to rest flush under the topbar, which then visually covered the row's Edit/⋯ actions — the
+  button looked like a normal, enabled control but wasn't reachable there. `.todo-item` now carries
+  `scroll-margin-top`, sized for the taller topbar on mobile (measured ~108px) rather than the
+  80px the dashboard's bento-todo widget already used for the same problem.
 - **Production deploys now ship the compressed wasm, so first load is ~4x smaller over the wire.**
   `web/index.html` tries `main.wasm.gz` first and only falls back to the raw binary if it 404s —
   but the release build script never produced the `.gz` at all, so every production load silently

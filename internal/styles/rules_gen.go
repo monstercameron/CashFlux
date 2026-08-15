@@ -7249,6 +7249,18 @@ func registerGenerated() {
 		borderBottom("1px solid var(--border)"),
 		borderRadius("var(--radius-lg)"),
 		transition("background 0.12s ease"),
+		// A row scrolled to the top (e.g. the "Remind me" freshness nudge's
+		// SetDeepLinkFocus(`[id="`+task.ID+`"]`) landing on /todo, or any anchor
+		// jump/keyboard-focus scroll) can otherwise come to rest flush under the
+		// sticky topbar, which then visually covers .todo-actions — the Edit
+		// button looks like a normal, enabled control but sits underneath the
+		// header and isn't reachable by a click there (BUG: To-do row Edit
+		// control visually enabled but not normally clickable). 80px (the
+		// bento-todo widget's own scroll-margin-top, below) clears the DESKTOP
+		// topbar but the topbar wraps taller on mobile (~108px measured at
+		// 390px wide) and still covers the row there — 8.5rem matches the
+		// clearance rules_reportsannual.go already uses for the same problem.
+		prop("scroll-margin-top", "8.5rem"),
 	)
 	rule(".todo-item:last-child",
 		borderBottom("0"),
