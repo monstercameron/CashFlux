@@ -34,6 +34,21 @@ func registerUxbatch4() {
 		prop("left", "auto !important"),
 		prop("right", "18px !important"),
 		prop("bottom", "84px !important"),
+		// The clearance rule below only reserves space at the very END of a
+		// page's scroll — mid-scroll, the fixed corner still parks on top of
+		// whatever card/control happens to occupy that 50x50 spot (e.g. the
+		// dashboard's Monthly recap card), which reads as "overlaps content and
+		// controls" even on a page that's nowhere near its end. Ghost it at rest
+		// and restore full visibility only on hover/focus, so it never occludes
+		// what's under it except while the dev is actually looking at it.
+		prop("opacity", "0.35 !important"),
+		prop("transform", "scale(0.7) !important"),
+		prop("transform-origin", "bottom right"),
+		prop("transition", "opacity 0.15s ease, transform 0.15s ease !important"),
+	)
+	rule("#gwc-status-icon:hover, #gwc-status-icon:focus-visible",
+		prop("opacity", "1 !important"),
+		prop("transform", "scale(1) !important"),
 	)
 
 	// When that dev-runner bubble is present it parks at bottom:84px on the right,

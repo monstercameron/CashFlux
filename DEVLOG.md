@@ -1,3 +1,19 @@
+## 2026-08-14 — Fixing the corner didn't fix the middle
+
+An earlier pass already handled the `gwc dev` runner's floating status bubble: shepherd it from
+its default bottom-left (where it sat directly over the rail footer's privacy line) to bottom-right,
+and give `main.cf-scroll` extra bottom padding so it can never permanently cover end-of-page
+controls. That fix works exactly as designed — and it only ever addressed the *end* of a scrolled
+page. A `position: fixed` element parked in a corner doesn't know or care where the user has
+scrolled to; it sits over whatever happens to occupy that 50×50 spot right now. Live at the top of
+the dashboard — nowhere near "the end of the page" — the bubble was still parked directly on top of
+the Monthly Recap card's corner stat.
+
+Since it's a decoration a developer glances at rather than reads continuously, the fix is to make
+it recede rather than move: 35% opacity and 70% scale at rest, full size and opacity on
+hover/focus. It's still exactly as reachable when you go looking for it, and it stops reading as
+"something is covering my card" for the other 99% of the time it's just sitting there.
+
 ## 2026-08-14 — A button that was there, just under the header
 
 Reported as "visually enabled but not normally clickable" — the kind of description that's easy to

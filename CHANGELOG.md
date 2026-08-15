@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The dev-runner's floating status bubble no longer sits on top of page content mid-scroll.**
+  The existing fix repositions it bottom-right and reserves clearance at the very end of the page,
+  but the fixed-position bubble still parked directly over whatever card happened to occupy that
+  corner while scrolling through the middle of a page (dev-only; production has no bubble). It now
+  ghosts to 35% opacity / 70% scale at rest and restores full size on hover/focus.
 - **A To-do row's Edit button can no longer land hidden under the sticky topbar.** A row scrolled
   to the top (e.g. after the "Remind me" freshness nudge deep-links to a newly created task) could
   come to rest flush under the topbar, which then visually covered the row's Edit/⋯ actions — the
