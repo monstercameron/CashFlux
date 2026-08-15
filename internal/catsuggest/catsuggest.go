@@ -155,7 +155,13 @@ func Resolve(in Input) (Suggestion, bool) {
 	// 2. What the user did with this charge, or this merchant, before.
 	if in.Tally != nil {
 		if hs, ok := in.Tally.Suggest(desc, in.Threshold); ok {
-			if _, exists := byID[hs.CategoryID]; exists {
+			// The kind gate applies HERE too, not only to the dictionary. History
+			// is per-payee and blind to sign, so a refund (positive) from a
+			// merchant normally filed as an expense would otherwise inherit that
+			// expense category and quietly corrupt the income/expense split.
+			// Refunds are paired with their original charge (TxnLinkRefundPair),
+			// not represented by mis-typing a category.
+			if c, exists := byID[hs.CategoryID]; exists && c.Kind == in.wantKind() {
 				s := Suggestion{
 					CategoryID: hs.CategoryID,
 					Count:      hs.Count,

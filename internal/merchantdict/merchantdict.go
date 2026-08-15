@@ -223,16 +223,32 @@ func containsAtTokenBoundary(hay, need string) bool {
 // cleaning. Returns ok=false when nothing matches — an unknown merchant must
 // produce no suggestion rather than a bad one.
 func Lookup(rawPayee string) (Entry, bool) {
+	// TWO candidate forms, not one. payeealias.Normalize strips trailing
+	// reference numbers, which is right for "SHELL OIL 57445208" and wrong for a
+	// merchant whose NAME ends in digits: "Microsoft 365" normalized to
+	// "Microsoft", so that entry could never match anything at all. Trying the
+	// raw form too keeps those entries alive without weakening the cleaning.
 	clean := key(payeealias.Normalize(rawPayee))
-	if clean == "" {
-		return Entry{}, false
+	raw := key(rawPayee)
+
+	// Exact hits first, cleaned form preferred — it is the stronger signal.
+	for _, c := range [2]string{clean, raw} {
+		if c == "" {
+			continue
+		}
+		if e, ok := byKey[c]; ok {
+			return e, true
+		}
 	}
-	if e, ok := byKey[clean]; ok {
-		return e, true
-	}
-	for _, k := range byLength {
-		if containsAtTokenBoundary(clean, k) {
-			return byKey[k], true
+	// Then the longest token-boundary match, again cleaned form first.
+	for _, c := range [2]string{clean, raw} {
+		if c == "" {
+			continue
+		}
+		for _, k := range byLength {
+			if containsAtTokenBoundary(c, k) {
+				return byKey[k], true
+			}
 		}
 	}
 	return Entry{}, false

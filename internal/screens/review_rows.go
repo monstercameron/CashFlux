@@ -44,6 +44,7 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 	toggleOpen := ui.UseEvent(func() { props.OnToggleOpen(key) })
 	toggleSel := ui.UseEvent(func() { props.OnToggleSelect(key) })
 	onCat := ui.UseEvent(func(e ui.Event) { props.OnCategory(key, e.GetValue()) })
+	onNewCat := ui.UseEvent(func() { props.OnCategory(key, catSelectNew) })
 
 	g := props.Row.Group
 	kind := domain.KindExpense
@@ -96,6 +97,11 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 			Div(css.Class("rvs-grp-right"),
 				Span(css.Class("rvs-dot "+tierMod(props.Row.Tier))),
 				Select(selArgs...),
+				Button(css.Class("rvs-newcat"), Type("button"),
+					Attr("data-testid", "review-newcat-"+key),
+					Attr("aria-label", uistate.T("catpick.newOption")),
+					Attr("title", uistate.T("catpick.newOption")),
+					OnClick(onNewCat), "+"),
 				Span(css.Class("rvs-grp-total"), fmtMoney(money.Money{Amount: g.Total(), Currency: g.Items[0].Amount.Currency})),
 				Button(css.Class("rvs-caret"), Type("button"), Attr("aria-expanded", boolAttr(props.Open)),
 					Attr("aria-label", uistate.T("review.expandAria", g.Merchant)),

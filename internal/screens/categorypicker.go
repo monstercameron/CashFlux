@@ -59,7 +59,11 @@ func categoryOptions(cats []domain.Category, kind domain.CategoryKind) []catOpti
 	return out
 }
 
-// catSelectNew is the sentinel value of the picker's escape-hatch option.
+// catSelectNew is the signal a row sends to open the picker. It is NOT an option
+// inside the select: a <select> is a controlled input the browser also mutates,
+// so a sentinel option could be committed as the element's live value and left
+// displayed as though it were a category. The escape hatch is a separate button,
+// which cannot be selected by accident.
 const catSelectNew = "__new__"
 
 // categorySelectNodes renders the <option> set for an inline category select:
@@ -70,7 +74,6 @@ func categorySelectNodes(cats []domain.Category, kind domain.CategoryKind, selec
 	for _, o := range categoryOptions(cats, kind) {
 		out = append(out, Option(Value(o.ID), SelectedIf(selected == o.ID), o.Path))
 	}
-	out = append(out, Option(Value(catSelectNew), uistate.T("catpick.newOption")))
 	return out
 }
 

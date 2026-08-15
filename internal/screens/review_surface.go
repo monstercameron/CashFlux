@@ -131,6 +131,12 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	selected := ui.UseState(map[string]bool{})
 	openGroups := ui.UseState(map[string]bool{})
 	picker := ui.UseState("") // merchant key whose picker is open, "" = closed
+	// Bumped whenever the picker closes. A <select> is a CONTROLLED input the
+	// browser also mutates: choosing the "+ New category" sentinel sets the live
+	// value, and re-rendering the same node does not put it back, so the row was
+	// left displaying a sentinel that is not a category. Re-keying the rows on
+	// this counter recreates them and restores the real value.
+	pickerRev := ui.UseState(0)
 	manual := ui.UseState(map[string]string{})
 	cursor := ui.UseState(0)
 	focusRow := ui.UseState(0) // bulk: which merchant row the keyboard is on
@@ -429,6 +435,13 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		advance()
 	}
 	confirmOne := ui.UseEvent(doConfirm)
+	// Single mode's "new category" button targets whichever merchant is on
+	// screen; curRow is settled by this point.
+	newCatSingle := ui.UseEvent(func() {
+		if curRow.Group.Key != "" {
+			picker.Set(curRow.Group.Key)
+		}
+	})
 	// Single mode acts on a MERCHANT, not one charge: confirm already applies to
 	// the whole group, so snooze and dismiss do too. Acting on one charge of a
 	// 122-charge merchant left 121 behind and read as a broken button.
@@ -531,10 +544,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 				Filled: scanStats.Get()[0], Skipped: scanStats.Get()[1], Err: scanErr.Get(),
 				HasProvider: hasProvider, OnScan: scan, OnUse: useScan,
 				CanUse: len(aiProposals.Get()) > 0,
-			}))
+			}), pickerRev.Get())
 	} else {
 		body, foot = reviewSingleView(app, idx, curRow, cur, catFor, setManual,
-			confirmOne, skipOne, dismissOne, notice.Get(), pr)
+			confirmOne, skipOne, dismissOne, newCatSingle, notice.Get(), pr)
 	}
 
 	var pick ui.Node = Fragment()
@@ -603,7 +616,7 @@ func reviewBulkView(
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
 	selReady, selLook, applySel, clearSel, makeRules any, notice string, pr prefs.Prefs, focused int,
-	scanStrip ui.Node,
+	scanStrip ui.Node, rev int,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
 
@@ -643,7 +656,7 @@ func reviewBulkView(
 				Span(css.Class("rvs-tier-act"), act),
 			),
 			Div(css.Class("rvs-groups"),
-				MapKeyed(rows, func(r reviewRow) any { return r.Group.Key }, func(r reviewRow) ui.Node {
+				MapKeyed(rows, func(r reviewRow) any { return r.Group.Key + "#" + strconv.Itoa(rev) }, func(r reviewRow) ui.Node {
 					return ui.CreateElement(reviewGroupRow, reviewGroupRowProps{
 						Row: r, App: app, Selected: sel[r.Group.Key], Open: openG[r.Group.Key], Focused: r.Group.Key == focusKey,
 						CategoryID: catFor(r), Manual: manual[r.Group.Key] != "",
@@ -712,7 +725,7 @@ func reviewBulkView(
 func reviewSingleView(
 	app *appstate.App, idx reviewIndex, row reviewRow, cur domain.Transaction,
 	catFor func(reviewRow) string, setManual func(string, string),
-	confirmOne, skipOne, dismissOne any, notice string, pr prefs.Prefs,
+	confirmOne, skipOne, dismissOne, newCatBtn any, notice string, pr prefs.Prefs,
 ) (ui.Node, ui.Node) {
 	if cur.ID == "" {
 		return P(css.Class("rvs-note"), uistate.T("review.emptySub")), Fragment()

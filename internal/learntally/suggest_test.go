@@ -2,7 +2,10 @@
 
 package learntally
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestMerchantKeyCollapsesPerChargeReferences is the whole point of C513: the
 // exact-descriptor key can never accumulate for a merchant that stamps a
@@ -205,7 +208,12 @@ func TestMerchantKeysAreNamespaced(t *testing.T) {
 	if mk == NormalizePayee("Amazon") {
 		t.Error("merchant and exact keys must differ even when the payee is already clean")
 	}
-	if mk[0] != '~' {
-		t.Errorf("merchant key %q is not namespaced", mk)
+	// The namespace must be UNFORGEABLE, not merely distinct: an exact key can
+	// never begin with a space because NormalizePayee trims.
+	if !strings.HasPrefix(mk, " ") {
+		t.Errorf("merchant key %q is not namespaced with an unreachable prefix", mk)
+	}
+	if NormalizePayee("~amazon") == mk {
+		t.Error("a payee could forge the merchant namespace")
 	}
 }

@@ -272,6 +272,32 @@ func registerReviewSurface() {
 	rule(".rvs-cat:hover", background("var(--hover)"))
 	// A category the user set by hand is marked, and auto-fill never overwrites it.
 	rule(".rvs-cat[data-manual=\"true\"]", borderColor("var(--accent)"))
+	// The escape hatch into the category picker. A BUTTON, not an option inside
+	// the select: a sentinel option can be committed as the select's live value
+	// and left displayed as though it were a real category.
+	rule(".rvs-newcat",
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-sm)"),
+		color("var(--text-dim)"),
+		cursor("pointer"),
+		width("1.7rem"),
+		height("1.7rem"),
+		flex("none"),
+		lineHeight("1"),
+		fontSize("var(--type-14)"),
+	)
+	rule(".rvs-newcat:hover",
+		background("var(--hover)"),
+		color("var(--text)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".rvs-assign-row",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+	)
+	rule(".rvs-assign-row select", flex("1"), minWidth("0"))
 	rule(".rvs-caret",
 		background("none"),
 		border("0"),

@@ -16,15 +16,24 @@ import (
 // payeealias.Normalize collapses processor prefixes and trailing references, so
 // every Amazon charge lands on one key.
 //
-// Keys from this function are namespaced with a "~" prefix so they cannot
-// collide with the exact-descriptor keys written by Increment. Both live in one
-// Tally, which keeps the persisted shape unchanged.
+// Keys from this function are namespaced so they cannot collide with the
+// exact-descriptor keys written by Increment. Both live in one Tally, which
+// keeps the persisted shape unchanged.
+//
+// The prefix begins with a SPACE deliberately. NormalizePayee trims, so an exact
+// key can never start with one — which makes the namespace unforgeable. A marker
+// drawn from ordinary text (an earlier version used "~") is reachable: a payee
+// literally named "~amazon" would write an exact key that collides with the
+// merchant entry for Amazon and hijack its suggestion.
+const merchantPrefix = " merchant:"
+
+// MerchantKey returns the tally key for a merchant STEM.
 func MerchantKey(raw string) string {
 	clean := NormalizePayee(payeealias.Normalize(raw))
 	if clean == "" {
 		return ""
 	}
-	return "~" + clean
+	return merchantPrefix + clean
 }
 
 // Record files one correction under BOTH the exact descriptor and the merchant

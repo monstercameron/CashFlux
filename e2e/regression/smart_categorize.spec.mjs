@@ -16,6 +16,19 @@ async function closeReview(app) {
   await expect(app.getByTestId("review-inbox")).toHaveCount(0);
 }
 
+/**
+ * Select the first merchant AND wait for the footer to arm.
+ *
+ * Clicking Apply straight after the checkbox races the async wasm re-render:
+ * the handler reads an empty selection and returns without writing, so the
+ * queue never moves and the test fails for a reason that has nothing to do with
+ * the behaviour under test. This was the cause of three flaky specs.
+ */
+async function pickFirstMerchant(app) {
+  await app.locator('[data-testid^="review-pick-"]').first().click();
+  await expect(app.getByTestId("review-selection")).toContainText(/\d+ merchants? · \d+ charges?/);
+}
+
 async function openReview(app) {
   await nav(app, "/transactions");
   const btn = app.getByTestId("txn-review-btn");
@@ -85,7 +98,7 @@ test.describe("SMART categorization (local, no LLM)", () => {
     const before = await readTotal(app);
     expect(before).toBeGreaterThan(0);
 
-    await app.locator('[data-testid^="review-pick-"]').first().click();
+    await pickFirstMerchant(app);
     await app.getByTestId("review-apply").click();
     await expect.poll(() => readTotal(app)).toBeLessThan(before);
     const after = await readTotal(app);
