@@ -6864,7 +6864,7 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
 > SMART+ is only paid for the gaps SMART left.** Phase E is what makes the free half actually good,
 > so the paid half is asked to do less.
 
-- [ ] **C513 [MAJOR][SMART] Suggest a category from what the user did with similar charges before.**
+- [~] **C513 [MAJOR][SMART] Suggest a category from what the user did with similar charges before.**
   ★ `internal/learntally` ALREADY does the core of this — a persisted payee→categoryID correction
   tally with a `DefaultMinCount = 3` threshold (`internal/learntally/tally.go`, stored via
   `internal/uistate/learntally_store.go`) — but it is wired into **quick-add only**
@@ -6890,7 +6890,7 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   in the review inbox now teaches it (`uistate.RecordLearnTally`). `Increment` is untouched so
   quick-add keeps working. Remaining: import and bulk-apply paths still do not consult it.
 
-- [ ] **C514 [MAJOR][SMART] Ship a merchant dictionary and substring-match against it.** ★ New user,
+- [x] **C514 [MAJOR][SMART] Ship a merchant dictionary and substring-match against it.** ★ New user,
   empty history, no rules: today every one of their first 200 charges is uncategorized with zero
   suggestions, and the only way out is spending money on SMART+. A shipped table of well-known
   merchants → default category fixes the cold start for free. Build as a pure package
@@ -6920,7 +6920,7 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   name — never invented. **Measured wasm delta for the entire Phase E feature set: +43.9 KB
   (+0.055% of 78.4 MB)**, so the table is nowhere near needing lazy loading.
 
-- [ ] **C515 [MAJOR][SMART] One ranked resolver, so four suggestion sources don't fight.** With
+- [~] **C515 [MAJOR][SMART] One ranked resolver, so four suggestion sources don't fight.** With
   rules (existing), history (C513), the dictionary (C514), and SMART+ (C504), four things can all
   claim a category for the same charge and the UI has no way to rank them or say where an answer
   came from. Build one pure resolver that returns an ordered result — **user rule > exact-payee
