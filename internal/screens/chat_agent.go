@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/toolperm"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -41,9 +42,13 @@ type chatTool struct {
 }
 
 // approvalReq is a pending mutating tool awaiting the user's yes/no in the chat.
+// preview is the tool's own plain-English sentence; perm is the same call read
+// structurally (what it reads, what it changes, whether it can be undone) so the
+// card can be scanned rather than parsed (C388).
 type approvalReq struct {
 	tool    string
 	preview string
+	perm    toolperm.Permission
 	resp    chan bool
 }
 

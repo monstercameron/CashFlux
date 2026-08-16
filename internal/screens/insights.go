@@ -31,6 +31,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/toolcite"
+	"github.com/monstercameron/CashFlux/internal/toolperm"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -392,6 +394,11 @@ func Insights() ui.Node {
 		cancelFn.Set(closeDone)
 		var total ai.Usage
 
+		// C387: every tool this answer runs is recorded as it runs, so the reply can
+		// show what it was computed from. The tool's own result is kept verbatim —
+		// that is the evidence; a citation that only names a source proves nothing.
+		var sources []domain.ChatSource
+
 		go func() {
 			for step := 0; step < 6; step++ {
 				ch := make(chan agentStep, 1)
@@ -433,7 +440,7 @@ func Insights() ui.Node {
 					if strings.TrimSpace(text) == "" {
 						text = uistate.T("insights.emptyReply")
 					}
-					reply := chatTurn{ID: id.New(), Role: "assistant", Text: text, Usage: total}
+					reply := chatTurn{ID: id.New(), Role: "assistant", Text: text, Usage: total, Sources: sources}
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
 					// AG20: feed this turn's token spend into the per-conversation
 					// receipt (cost estimated from the resolved model).
@@ -453,7 +460,12 @@ func Insights() ui.Node {
 								preview = tool.preview(args)
 							}
 							resp := make(chan bool, 1)
-							pendingApproval.Set(&approvalReq{tool: tc.Function.Name, preview: preview, resp: resp})
+							pendingApproval.Set(&approvalReq{
+								tool:    tc.Function.Name,
+								preview: preview,
+								perm:    toolperm.For(tc.Function.Name, args),
+								resp:    resp,
+							})
 							var approved bool
 							select {
 							case approved = <-resp:
@@ -470,6 +482,10 @@ func Insights() ui.Node {
 						}
 						out = tool.run(args)
 					}
+					cite := toolcite.For(tc.Function.Name, args)
+					sources = append(sources, domain.ChatSource{
+						Tool: cite.Tool, Label: cite.Label, Scope: cite.Scope, Evidence: out,
+					})
 					msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, out))
 				}
 			}
@@ -644,7 +660,7 @@ func Insights() ui.Node {
 		for i, t := range ts {
 			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text,
 				Tokens: t.Usage.TotalTokens, PromptTokens: t.Usage.PromptTokens, CompletionTokens: t.Usage.CompletionTokens,
-				CreatedAt: time.Now()}
+				CreatedAt: time.Now(), Sources: t.Sources}
 		}
 		// Keep an AI-generated name once set, rather than re-deriving from the first line.
 		title, named := conversationTitle(ts), false
@@ -1067,7 +1083,7 @@ func Insights() ui.Node {
 				if t.Role == "afford" {
 					return ui.CreateElement(AffordResultBubble, affordResultBubbleProps{ID: t.ID, HTML: t.Text, OnDelete: deleteTurn})
 				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
+				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, Sources: t.Sources, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
 			},
 		),
 		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
@@ -1317,8 +1333,10 @@ func Insights() ui.Node {
 	}
 
 	approvalPreview := ""
+	approvalPerm := toolperm.Permission{}
 	if pa := pendingApproval.Get(); pa != nil {
 		approvalPreview = pa.preview
+		approvalPerm = pa.perm
 	}
 
 	noData := len(accounts) == 0 && len(txns) == 0
@@ -1412,6 +1430,7 @@ func Insights() ui.Node {
 				// Approval card: a mutating tool is paused waiting for the user's yes/no.
 				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
 					Preview:   approvalPreview,
+					Perm:      approvalPerm,
 					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
 					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
 				})),
@@ -1619,6 +1638,10 @@ type chatTurn struct {
 	Role  string // "user" | "assistant"
 	Text  string
 	Usage ai.Usage
+	// Sources are the tool runs this answer was computed from (C387). Empty on a
+	// user turn, on an answer the model gave without consulting anything, and on
+	// the deterministic local answers, which cite themselves in their own text.
+	Sources []domain.ChatSource
 }
 
 // asstVoiceButtonProps carries the callback the mic fills the composer with.
@@ -1846,6 +1869,7 @@ type asstBubbleProps struct {
 	Text     string
 	Usage    ai.Usage
 	Model    string
+	Sources  []domain.ChatSource // the tool runs this answer was computed from (C387)
 	OnPin    func(string) bool
 	OnDelete func(string)
 	OnRetry  func() // non-nil only on the latest assistant turn
@@ -1933,7 +1957,40 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
+		citationPanel(p.Text, p.Sources),
 		note,
+	)
+}
+
+// citationPanel renders "How I got this" under an answer: every tool the assistant
+// ran, and the result each one handed back (C387).
+//
+// It appears only when the answer makes a numeric claim AND something was actually
+// consulted. An answer with no figures has nothing to check, and an answer the model
+// gave from context alone would produce an empty panel that implies sourcing it
+// doesn't have. It is collapsed by default — the point is that the evidence is
+// THERE, not that it is in the way — and it is plain <details>, so it works before
+// any script runs and keyboard-opens for free.
+func citationPanel(reply string, sources []domain.ChatSource) ui.Node {
+	if len(sources) == 0 || !toolcite.Numeric(reply) {
+		return Fragment()
+	}
+	rows := make([]any, 0, len(sources))
+	for _, s := range sources {
+		src := toolcite.Source{Tool: s.Tool, Label: s.Label, Scope: s.Scope}
+		body := Fragment()
+		if strings.TrimSpace(s.Evidence) != "" {
+			body = Pre(css.Class("asst-cite-evidence"), strings.TrimSpace(s.Evidence))
+		}
+		rows = append(rows, Li(css.Class("asst-cite-item"),
+			P(css.Class("asst-cite-title"), src.Title()),
+			body,
+		))
+	}
+	list := append([]any{css.Class("asst-cite-list")}, rows...)
+	return Details(css.Class("asst-cite"), Attr("data-testid", "assistant-citations"),
+		Summary(css.Class("asst-cite-summary"), uistate.T("insights.citeSummary", len(sources))),
+		Ul(list...),
 	)
 }
 
@@ -2334,22 +2391,62 @@ func respondApproval(pa *approvalReq, ok bool) {
 
 type approvalCardProps struct {
 	Preview   string
+	Perm      toolperm.Permission
 	OnApprove func()
 	OnDecline func()
 }
 
 // ApprovalCard asks the user to approve or decline a pending mutating tool. Its own
 // component so its action hooks re-attach cleanly each time it mounts.
+//
+// The card leads with the tool's own sentence — that is what the assistant is
+// proposing, in its words — and puts the structured reading underneath: what it
+// will change, what it needs to look at to do so, and whether it can be undone
+// (C388). The order matters: the change comes first because that is what is being
+// consented to; the reads come second because they are the part people forget to
+// ask about; reversibility comes last because it decides how carefully to read the
+// first two.
 func ApprovalCard(p approvalCardProps) ui.Node {
 	approve := ui.UseEvent(Prevent(func() { p.OnApprove() }))
 	decline := ui.UseEvent(Prevent(func() { p.OnDecline() }))
-	return Div(css.Class(tw.RoundedXl, tw.Border, tw.BorderAmber50, tw.BgAmber10, tw.Px35, tw.Py25, tw.Mb2, tw.Text13),
-		P(css.Class(tw.FontSemibold), uistate.T("insights.approveTitle")),
-		P(css.Class(tw.Mt1), p.Preview),
-		Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(approve), uistate.T("insights.approve")),
-			Button(css.Class("btn"), Type("button"), OnClick(decline), uistate.T("insights.decline")),
+	return Div(css.Class("asst-approve"), Attr("data-testid", "assistant-approval"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("insights.approveTitle")),
+		P(css.Class("asst-approve-title"), uistate.T("insights.approveTitle")),
+		P(css.Class("asst-approve-preview"), p.Preview),
+		approvalEffects(p.Perm),
+		Div(css.Class("asst-approve-actions"),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "assistant-approve"), OnClick(approve), uistate.T("insights.approve")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "assistant-decline"), OnClick(decline), uistate.T("insights.decline")),
 		),
+	)
+}
+
+// approvalEffects renders the structured half of the approval card. It renders
+// nothing when the permission is empty, so a caller with no structured reading
+// (an older code path, a tool with no arguments yet) still shows a usable card.
+func approvalEffects(perm toolperm.Permission) ui.Node {
+	if len(perm.Writes) == 0 && len(perm.Reads) == 0 {
+		return Fragment()
+	}
+	rows := make([]any, 0, len(perm.Writes)+len(perm.Reads)+1)
+	for _, w := range perm.Writes {
+		rows = append(rows, Li(css.Class("asst-approve-effect", "is-write"),
+			Span(css.Class("asst-approve-dot"), Attr("aria-hidden", "true")), w.Line()))
+	}
+	for _, r := range perm.Reads {
+		rows = append(rows, Li(css.Class("asst-approve-effect", "is-read"),
+			Span(css.Class("asst-approve-dot"), Attr("aria-hidden", "true")), r.Line()))
+	}
+	undoKey := "insights.approveIrreversible"
+	undoCls := "asst-approve-undo is-permanent"
+	if perm.Reversible {
+		undoKey = "insights.approveReversible"
+		undoCls = "asst-approve-undo"
+	}
+	body := append([]any{css.Class("asst-approve-effects"), Attr("data-testid", "assistant-approval-effects")}, rows...)
+	return Fragment(
+		Ul(body...),
+		P(ClassStr(undoCls), Attr("data-testid", "assistant-approval-undo"), uistate.T(undoKey)),
 	)
 }
 

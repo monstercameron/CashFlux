@@ -6,6 +6,23 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **The assistant shows its work (C387).** An answer with a figure in it now carries a collapsed
+  "How I got this" panel listing every tool the assistant ran for that answer — what it looked at,
+  over what slice of the data, and the tool's own result verbatim. The result is the point: a
+  citation that only names a source proves nothing, so the panel hands back the rows and totals the
+  model was actually given. Sources are saved with the conversation, so a figure can still be
+  checked when the thread is reopened weeks later. The panel is absent when there is nothing to
+  check — an answer with no numbers, or one the model gave without consulting anything — because an
+  empty citation implies sourcing that isn't there.
+
+- **The approval card says what approving actually does (C388).** A mutating tool used to pause
+  behind a single prose sentence written by that tool. It now also shows the call read structurally:
+  what will change and how much of it, what has to be read to do that, and — last, because it
+  decides how carefully to read the rest — whether it can be undone from Activity. The table lives
+  in `internal/toolperm` as pure data, so a tool added without a permission entry shows an honest
+  "this changes something this app has not described" rather than a reassuring blank.
+
 ### Fixed
 - **Every money figure now names the window it covers (C342, C343).** The dashboard reported a 60%
   savings rate and /health reported 31%. Both were right — one is the selected period, the other is

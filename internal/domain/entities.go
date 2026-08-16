@@ -558,6 +558,21 @@ type ChatMessage struct {
 	PromptTokens     int       `json:"promptTokens,omitempty"`
 	CompletionTokens int       `json:"completionTokens,omitempty"`
 	CreatedAt        time.Time `json:"createdAt"`
+	// Sources are the tool runs the answer was computed from, kept so a figure can
+	// still be checked when the conversation is reopened weeks later. Additive and
+	// absent on messages saved before answers cited their work.
+	Sources []ChatSource `json:"sources,omitempty"`
+}
+
+// ChatSource is one tool run behind an assistant answer: what was consulted, over
+// what slice of the data, and the result the model was actually handed. Evidence is
+// the substance — a citation whose source cannot be read is only a claim about a
+// claim.
+type ChatSource struct {
+	Tool     string `json:"tool"`
+	Label    string `json:"label"`
+	Scope    string `json:"scope,omitempty"`
+	Evidence string `json:"evidence,omitempty"`
 }
 
 // Conversation is a saved Insights chat: an ordered list of messages with a title

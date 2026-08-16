@@ -789,4 +789,145 @@ func registerAssistantSurface() {
 	rule(".ask-aside .btn-link",
 		prop("white-space", "nowrap"),
 	)
+	registerApprovalCard()
+	registerCitations()
+}
+
+// registerCitations styles the "How I got this" panel under an answer (C387). It is
+// deliberately quiet: a dotted-underline summary that reads as a footnote, not a
+// second answer competing with the first. Opened, the evidence is monospaced —
+// these are rows and totals, and a proportional font makes columns of figures
+// harder to scan than the tool's own plain text already is.
+func registerCitations() {
+	rule(".asst-cite",
+		prop("margin", "0.4rem 0 0"),
+		prop("max-width", "44rem"),
+	)
+	rule(".asst-cite-summary",
+		prop("display", "inline-block"),
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("cursor", "pointer"),
+		prop("padding", "0.15rem 0"),
+		prop("border-bottom", "1px dotted var(--border)"),
+	)
+	rule(".asst-cite-summary:hover",
+		prop("color", "var(--text)"),
+	)
+	rule(".asst-cite-list",
+		prop("list-style", "none"),
+		prop("margin", "0.5rem 0 0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.6rem"),
+	)
+	rule(".asst-cite-item",
+		prop("border-left", "2px solid var(--border)"),
+		prop("padding-left", "0.7rem"),
+	)
+	rule(".asst-cite-title",
+		prop("font-size", "var(--type-12)"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text)"),
+		prop("margin", "0 0 0.25rem"),
+	)
+	// The evidence can be long, so it scrolls inside its own box rather than
+	// stretching the thread — and it wraps, because a tool result is prose with
+	// figures in it, not a code listing with meaningful line breaks.
+	rule(".asst-cite-evidence",
+		prop("font-family", "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"),
+		prop("font-size", "var(--type-11)"),
+		prop("line-height", "1.5"),
+		prop("color", "var(--text-dim)"),
+		prop("background", "var(--bg-card)"),
+		prop("border-radius", "var(--radius)"),
+		prop("padding", "0.5rem 0.6rem"),
+		prop("margin", "0"),
+		prop("max-height", "16rem"),
+		prop("overflow", "auto"),
+		prop("white-space", "pre-wrap"),
+		prop("word-break", "break-word"),
+	)
+}
+
+// registerApprovalCard styles the permission preview a mutating tool waits behind
+// (C388). It is deliberately the loudest thing in the thread — a raised card with
+// an accent spine — because it is the one moment the conversation stops and asks
+// for consent. The effects read as a checklist rather than a paragraph: changes
+// first in full-strength text, reads second in dimmed text, so the eye lands on
+// what is at stake before what is merely being looked at.
+func registerApprovalCard() {
+	rule(".asst-approve",
+		prop("border", "1px solid var(--border)"),
+		prop("border-left", "3px solid var(--accent)"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "var(--bg-elev)"),
+		prop("padding", "0.75rem 0.9rem"),
+		prop("margin", "0.5rem 0"),
+		prop("max-width", "44rem"),
+	)
+	rule(".asst-approve-title",
+		prop("font-size", "var(--type-12)"),
+		prop("font-weight", "600"),
+		prop("letter-spacing", "0.02em"),
+		prop("text-transform", "uppercase"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0 0 0.35rem"),
+	)
+	rule(".asst-approve-preview",
+		prop("font-size", "var(--type-14)"),
+		prop("line-height", "1.45"),
+		prop("color", "var(--text)"),
+		prop("margin", "0"),
+		prop("white-space", "pre-wrap"),
+	)
+	rule(".asst-approve-effects",
+		prop("list-style", "none"),
+		prop("margin", "0.6rem 0 0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.3rem"),
+	)
+	rule(".asst-approve-effect",
+		prop("display", "flex"),
+		prop("gap", "0.5rem"),
+		prop("align-items", "baseline"),
+		prop("font-size", "var(--type-13)"),
+		prop("line-height", "1.4"),
+	)
+	rule(".asst-approve-effect.is-write",
+		prop("color", "var(--text)"),
+	)
+	rule(".asst-approve-effect.is-read",
+		prop("color", "var(--text-dim)"),
+	)
+	// The dot is the only thing separating a change from a read at a glance, so it
+	// carries the accent on writes and stays quiet on reads.
+	rule(".asst-approve-dot",
+		prop("flex", "0 0 auto"),
+		prop("width", "0.4rem"),
+		prop("height", "0.4rem"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("background", "var(--text-faint)"),
+		prop("transform", "translateY(-0.15em)"),
+	)
+	rule(".asst-approve-effect.is-write .asst-approve-dot",
+		prop("background", "var(--accent)"),
+	)
+	rule(".asst-approve-undo",
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.55rem 0 0"),
+	)
+	rule(".asst-approve-undo.is-permanent",
+		prop("color", "var(--warn, #d9a23f)"),
+	)
+	rule(".asst-approve-actions",
+		prop("display", "flex"),
+		prop("gap", "0.5rem"),
+		prop("margin-top", "0.75rem"),
+		prop("flex-wrap", "wrap"),
+	)
 }

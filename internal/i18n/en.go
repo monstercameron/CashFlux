@@ -2779,8 +2779,11 @@ var english = Catalog{
 	// C388: the structured half of the approval card. The undo line is the last
 	// thing read before deciding, so it says plainly which of the two worlds
 	// this change lives in.
-	"insights.approveReversible":       "You can undo this from Activity afterwards.",
-	"insights.approveIrreversible":     "This one can't be undone — Activity will record it, but the removed rows are gone.",
+	"insights.approveReversible":   "You can undo this from Activity afterwards.",
+	"insights.approveIrreversible": "This one can't be undone — Activity will record it, but the removed rows are gone.",
+	// C387: the citation panel under an answer. The count is how many tools ran.
+	"insights.citeSummary":             "How I got this — %d source(s)",
+	"insights.citeEmpty":               "This answer came from the conversation, not from a lookup.",
 	"settings.webSearchTitle":          "Web search (chat)",
 	"settings.webSearchKeyPlaceholder": "Web search API key (optional)",
 	"settings.webSearchHint":           "Optional. The chat's web search uses a free, keyless engine by default; add a key here for paid or higher-limit access. Sent only with search requests.",
