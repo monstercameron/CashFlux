@@ -3130,7 +3130,7 @@ done tasks, etc.).
   a real answer. Fixed: `renderMarkdown` now retries up to 3×, one `requestAnimationFrame` apart,
   before giving up (`renderMarkdownAttempt`). Verified: a fresh load that previously showed an empty
   bubble now shows all bubbles populated; re-tested across several fresh loads.
-- [ ] **L83b — STILL OPEN: a distinct empty-answer case survives the mount-race fix.** Across repeated
+- [ ] **L83b — SUPERSEDED BY C516 (2026-08-16). Cam reported 479 completion tokens billed with an empty bubble, which rules out BOTH hypotheses below: the call succeeded and the model produced output. Continue on C516.** a distinct empty-answer case survives the mount-race fix. Across repeated
   fresh `/assistant` loads (`page.goto` → wait ~1s → inspect), roughly 1 in 3 still shows exactly one
   `.chat-agent-body` with genuinely empty text — this persisted after the L83a retry fix, so it isn't
   the same mount-timing race (or 3 retries isn't enough headroom). Two live hypotheses, not yet
@@ -6988,3 +6988,163 @@ through `uistate.RequestPersist()` (safe for single writes since the RH-PERSIST1
   charges (70%) resolve with zero rules and zero history, rising to 197 (79%) after learning a
   single merchant** (`coverage_test.go`, which fails if cold-start coverage drops below 25%).
   Remaining: wire into CSV/document import and the bulk apply path (currently the review inbox only).
+
+---
+
+## UF series — user feedback pass (Cam, 2026-08-16) ★
+
+Fourteen items from using the app. Each was checked against the code before filing, so several are
+smaller than they look (the mechanism already exists and is simply not surfaced) and two are larger
+(they need a data model that does not exist yet). Grouped by what they actually are.
+
+**Build order:** the live defect first (C516), then the three that are pure surfacing (C517, C518,
+C519), then the correctness/UX group, then the two modelling projects (C527, C528) which deserve a
+design pass before any code.
+
+### Live defects
+
+- [ ] **C516 [BLOCKER][AI] The assistant answers with a token line and no reply.** ★
+  *"the agent isn't working I only get 'Reply: 479 tokens out · 9,637 in (context) · cost
+  unavailable' and no agent response"*
+  This is the still-open **L83b** with decisive new evidence. L83b's two hypotheses were (a) a
+  seeded fixture with empty text or (b) an unreachable backend resolving as empty-success. Cam's
+  report rules both out: **479 completion tokens were billed**, so a real call succeeded and the
+  model genuinely produced output. An empty bubble alongside non-zero completion tokens means the
+  content is arriving somewhere the renderer does not read. Prime suspects, in order: the reply was
+  a `tool_calls` turn (`ai.WantsTools`) and the loop ended without running the follow-up text turn;
+  the content sits in a field the parser ignores (a reasoning or refusal field rather than
+  `message.content`); or the tool loop hit its iteration cap and returned the last empty assistant
+  message. Reproduce with the network mocked — `e2e/regression/smart_plus_scan.spec.mjs` has the
+  interception pattern, which exercises the real code without spending anything — and assert that a
+  `tool_calls` reply followed by a text turn renders. AC: no path can render a bubble with zero text
+  after a billed completion; if the loop cannot produce text it SAYS so rather than showing nothing.
+  Supersedes **L83b**.
+
+### Already built, just not surfaced
+
+- [ ] **C517 [MINOR][TXN] Filter by income vs spending.**
+  *"transaction filters need to respect sign, allow filtering for income or debits"*
+  The model ALREADY has this: `txnfilter.Criteria.Flow` ("in" keeps positive amounts, "out" keeps
+  negative), with chip labels (`transactions.chipFlowIn`/`chipFlowOut`) and matching logic already
+  written. It is only reachable through natural-language search (TX2) — there is no control in the
+  filter strip. Add one; no new filtering logic is needed. AC: a visible In/Out/Both control that
+  sets `Flow`, and the existing chip appears when it is set.
+
+- [ ] **C518 [MINOR][CAT] Sort category lists alphabetically.**
+  *"categories must be alpha/numeric sorted in the list"*
+  Pickers render `app.Categories()` in STORE order. `budgetCategoryPicker`
+  (`internal/screens/budgets_categories.go:264`) has no sort at all; only `budgets_flex.go:383` and
+  the categories screen sort today. Sort every category list by name from ONE shared helper —
+  `categorytree.Flatten` already orders siblings by name, so pickers that flatten get it free and
+  the flat lists are the outliers. Use a natural (alpha-numeric) comparison so "Category 10" sorts
+  after "Category 9". AC: every category picker in the app is ordered identically.
+
+- [ ] **C519 [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
+  *"What this budget tracks might not show all categories"*
+  Confirmed: `budgetCategoryPicker` skips every category whose `Kind != domain.KindExpense`
+  (`budgets_categories.go:268`), so income categories never appear and nothing tells the user they
+  were filtered out. Defensible for a spending budget, but not SILENTLY — and wrong for a household
+  that typed a category as income by mistake, or that wants to budget a refund-heavy category.
+  Either show them under an explanatory grouping or state the filter in the empty/search state.
+  Check alongside C518: an unsorted long list reads as "missing" even when it is complete.
+  AC: no category can be absent without the UI saying why.
+
+### Correctness and UX
+
+- [ ] **C520 [MAJOR][TXN] A mistaken income cannot be corrected back into a spend.** ★
+  *"I get 'Enter a positive amount.' at the bottom of the modal out of site … users should be
+  allowed to adjust mistaken incomes back into debits"*
+  Two separate bugs in one report.
+  (a) **The restriction is wrong.** `transaction_edit_form.go` parses the amount, rejects `amt <= 0`,
+  then re-applies the ORIGINAL sign (`if t.Amount.IsNegative() { amt = -amt }`). The sign is
+  therefore immutable: a charge imported as income can never be corrected to an expense without
+  deleting and re-entering it. Editing must allow the direction to change — that is what correcting
+  a mistake means.
+  (b) **The error is invisible.** It renders at the BOTTOM of a scrolling modal body, below the fold,
+  so the form appears to do nothing when Save is pressed. An error the user cannot see is the same as
+  no error at all. Put validation errors adjacent to the field (or pin them to the action bar) and
+  scroll/focus the offending field. AC: direction is editable; a rejected save always shows its
+  reason on screen without scrolling.
+
+- [ ] **C521 [MAJOR][BUDGET] The tracked-categories modal breaks the back stack.**
+  *"main page > edit budget modal > enter tracked cats modal > edit budget modal > main page"*
+  Opening "Edit what this budget tracks…" from inside the edit-budget modal should PUSH a second
+  layer and return to the edit form with its in-progress changes intact. Model it as a stack rather
+  than two independent modal atoms, and confirm the in-flight edit form is not remounted — unsaved
+  changes must survive the round trip. AC: the exact sequence above, with a change made in the edit
+  form BEFORE opening the tracked-categories layer, still present when that layer closes.
+
+- [ ] **C522 [MINOR][RECAT] The re-categorizer screen needs a design pass.**
+  *"the re categorizer screen needs to be visually inspected and its styling revised"*
+  `internal/screens/txn_smartcat.go` predates the review-surface work and still uses generic
+  `.row`/`.rows` classes with inline styles rather than the token-based styling the review modal now
+  uses. Inspect it in BOTH themes at 1440/820/420 — drive the app's real theme control, since poking
+  `data-theme` by hand yields a half-applied theme — then restyle to match. Per C511 this modal is
+  where Recat lives permanently, so it is worth doing properly.
+
+### New capability
+
+- [ ] **C523 [MAJOR][CAT] Merge two categories into one.**
+  *"on the category page, add a way to merge 2 categories into a new category"*
+  Nothing like this exists (`MergeCategories` is absent). A merge must move every reference, not just
+  transactions: `Transaction.CategoryID`, `CategorySplit.CategoryID`, budgets' `TrackedCategoryIDs`,
+  goals, rules' `SetCategoryID`, the correction tally (`internal/learntally`, keyed by category id)
+  and any child categories' `ParentID`. Build the reference sweep as a pure function with tests, then
+  a preview ("moves 128 transactions, 2 budgets and 3 rules") and a single undoable write. AC: after
+  a merge no reference to the retired id survives anywhere, proven by a test that scans the exported
+  JSON.
+
+- [ ] **C524 [MAJOR][REPORT] Show spend per category.**
+  *"we need either a page or a section somewhere to show spend per cat"*
+  There is no `SpendByCategory` anywhere. `internal/budgeting` already computes category spend for
+  budget rows (honouring splits and `ExcludeFromReports`), so the arithmetic exists — this is a
+  surface over it, not new maths, and it MUST reuse that path or the two will disagree. Needs a
+  period selector, parent/child rollup (`categorytree.Descendants`) and a drill-through into the
+  filtered ledger. AC: totals reconcile exactly with the budgets page for the same period.
+
+- [ ] **C525 [MAJOR][BUDGET] Budgets should match transactions by pattern, not only category.**
+  *"budgets should also be able to regex match individual transactions"*
+  A budget tracks category ids and tags today (`TrackedCategoryIDs`, `TrackedTags`). The rules engine
+  already has structured conditions (`rules.RuleCondition`) over payee/description/amount — reuse
+  that vocabulary rather than inventing a second matcher, and prefer the existing condition set over
+  raw regex unless raw regex is genuinely required (a user's bad regex must never be able to hang a
+  render). AC: a budget can track "anything matching X" with the same preview and conflict flags
+  rules already provide.
+
+- [ ] **C526 [MINOR][TXN][PERF] Virtualize the full transaction list.**
+  *"in transactions when viewing all transactions, lets make sure the list is virtualized"*
+  The ledger paginates (`internal/pagination`, `txnfilter.DefaultPageSize`) rather than virtualizing,
+  so "view all" renders every row. MEASURE FIRST: a CPU profile of one interaction on this page came
+  back **83% idle**, with the busy frames in `syscall/js` property writes — which says per-render
+  cost is DOM property application across the wasm boundary, not row count. Virtualization helps only
+  if row count dominates; establish that before building, or the work will not move the number.
+  Related: the app-wide render cost recorded in the 1.6.1 perf pass.
+
+### Needs a design pass before code
+
+- [ ] **C527 [MAJOR][DOMAIN] Money moved between the user's own accounts.** ★
+  *"need to figure out a way to handle money transfer between owned accounts"* and *"we need a
+  special flag for owned account transfers where the money isn't yet consumed"*
+  Partly modelled already: `Transaction.TransferAccountID` marks a transfer leg, `IsTransfer()`
+  keeps it out of income/expense totals, and `reviewqueue` skips transfers. Everything around it is
+  missing. An UNMATCHED leg has no counterpart, so by that definition it is not a transfer and lands
+  in the review queue as ordinary spend (already noted on C505); there is no pairing action; and
+  there is no state for money that has LEFT one account but not yet ARRIVED in the other — Cam's
+  "not yet consumed". That in-flight state is real (a card payment, an ACH in transit) and it moves
+  balances, safe-to-spend and runway, so it cannot be a cosmetic tag. Decide first: does an in-flight
+  transfer count against the source, the destination, neither, or both with a caveat? Write the
+  answer down, then model it, then surface it. AC: one answer, applied consistently everywhere a
+  balance is shown.
+
+- [ ] **C528 [MAJOR][DOMAIN] A usage model for statement-at-a-time bookkeeping.** ★
+  *"a big issue is how to keep this app in sync with the accounts if we use the monthly statements,
+  we need a model to handle this kinda usage pattern"*
+  The app assumes a continuously updated ledger. Someone importing one statement a month has a
+  fundamentally different shape: data arrives in batches, is authoritative for a CLOSED period, and
+  the balance between imports is stale-but-knowable rather than wrong. Today that user gets stale
+  balances with no framing, duplicate risk on overlapping statements, and freshness nudges they
+  cannot satisfy. This overlaps **WF4** (data-quality centre) and its per-account "expected update
+  cadence" — start there rather than inventing a parallel concept. Needs: a per-account statement
+  cadence, a notion of a period being closed (reconciled against a statement balance) versus open,
+  import-time reconciliation to the statement's closing balance, and honest labelling of any figure
+  derived from an open period. Design pass before code.
