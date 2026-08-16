@@ -915,10 +915,11 @@ type budgetRowProps struct {
 	Anchor            time.Time             // the view's period anchor (budgetView.Anchor); zero falls back to now (QA CF-05)
 	OnDelete          func(string)
 	OnRemoveRecurring func(string) // clear this budget's recurring cover (confirmed)
-	// OnDrill opens Transactions filtered to this budget's tracked categories
-	// (all of them, for a multi-category budget) AND windowed to the budget's
-	// current period (from/to inclusive ISO dates; task #14).
-	OnDrill     func(categoryIDs []string, from, to string)
+	// OnDrill opens Transactions filtered to this budget's whole spend SCOPE —
+	// tracked categories plus their descendants plus any tracked tags, the same
+	// set the bar counts (C585) — AND windowed to the budget's current period
+	// (from/to inclusive ISO dates; task #14).
+	OnDrill     func(scope budgeting.Scope, from, to string)
 	PeriodFrom  string // this budget's current-period start (inclusive ISO date)
 	PeriodTo    string // this budget's current-period end (inclusive ISO date)
 	OnViewTodos func() // open the To-dos page (shown when LinkedTodos > 0)

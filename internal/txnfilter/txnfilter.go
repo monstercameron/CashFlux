@@ -123,6 +123,17 @@ type Criteria struct {
 	// Uncategorized, when true, keeps only non-transfer transactions with no
 	// category — the "needs categorizing" quick-filter preset (TXC-3).
 	Uncategorized bool `json:"uncategorized,omitempty"`
+	// ScopeAny switches the category and tag dimensions from AND to OR: a
+	// transaction matches when it is in any selected category OR carries any
+	// selected tag, instead of having to satisfy both. Every other dimension
+	// (dates, member, account…) keeps its AND.
+	//
+	// It exists for the budget drill-through, because that is how a budget counts
+	// spend: a charge lands in a "#vacation" budget either by sitting in a tracked
+	// category or by carrying the tag. Filtering AND-wise would open a ledger
+	// missing exactly the charges the tag contributed, under a total that included
+	// them (C585). No user-facing control sets it — it is a scope the app builds.
+	ScopeAny bool `json:"scopeAny,omitempty"`
 	// Pagination (persisted with the rest). Page is 1-based; PageSize 0 means the
 	// default, PageSizeAll (negative) means "show all".
 	Page     int `json:"page,omitempty"`
@@ -332,6 +343,59 @@ func csvHas(csv, val string) bool {
 	return false
 }
 
+// matchesCategory reports whether a transaction belongs to a category selection.
+//
+// It answers for the WHOLE transaction: its own category, or — when it carries a
+// breakdown — any of its split lines' categories. That is the category-side
+// reading of the split contract (domain/category_split.go), the same one
+// budgeting.spentCovered and reports.categoryTotals use. Matching only the
+// parent's CategoryID is what let a split receipt count toward a budget's bar
+// while vanishing from the ledger that bar links to (C585).
+//
+// A transaction with splits keeps its own CategoryID as a fallback match, so a
+// breakdown never makes a row LESS findable than it was before it was split.
+func matchesCategory(t domain.Transaction, want func(categoryID string) bool) bool {
+	if want(t.CategoryID) {
+		return true
+	}
+	for _, s := range t.Splits {
+		if want(s.CategoryID) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesScopeAny evaluates the OR'd category-or-tag dimension used by the
+// budget drill-through: in one of the selected categories (whole or split), or
+// carrying one of the selected tags. With neither dimension set it matches
+// everything, so ScopeAny never narrows a filter that selected nothing.
+func matchesScopeAny(t domain.Transaction, c Criteria, singleTag string) bool {
+	catSel := c.Categories != "" || c.Category != ""
+	tagSel := c.Tags != "" || singleTag != ""
+	if !catSel && !tagSel {
+		return true
+	}
+	if catSel {
+		inCat := matchesCategory(t, func(id string) bool {
+			if c.Categories != "" {
+				return csvHas(c.Categories, id)
+			}
+			return id == c.Category
+		})
+		if inCat {
+			return true
+		}
+	}
+	if tagSel {
+		if c.Tags != "" {
+			return hasAnyTagCSV(t, c.Tags)
+		}
+		return hasTag(t, singleTag)
+	}
+	return false
+}
+
 // csvHasAccount reports whether any account id in csv matches the transaction's booked
 // account or its bill-linked account (mirroring the single Account filter's dual match).
 func csvHasAccount(csv string, t domain.Transaction) bool {
@@ -513,19 +577,27 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
 		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
 		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
-		// TODO(splits): matches only the whole-transaction category — a split line's
-		// category won't surface its transaction here, so a budget's drill-through can
-		// disagree with its splits-aware bar. See the split contract in
-		// domain/category_split.go; fix = also match any Splits[i].CategoryID.
-		case c.Categories != "" && !csvHas(c.Categories, t.CategoryID):
-		case c.Categories == "" && c.Category != "" && t.CategoryID != c.Category:
+		// The category dimension matches a split LINE's category too (the split
+		// contract in domain/category_split.go named this filter as a known gap):
+		// a receipt whose produce line is Groceries is a Groceries transaction, the
+		// budget bar already counts it that way, and a ledger that hides it makes a
+		// budget's own drill-through disagree with its bar (C585).
+		//
+		// ScopeAny switches this dimension and the tag dimension from AND to OR,
+		// because that is how a budget counts: a charge belongs to it if it is in a
+		// tracked category OR carries a tracked tag. Both are skipped here and
+		// evaluated together below.
+		case !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }):
+		case !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }):
 		case c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()):
 		case c.Members != "" && !csvHas(c.Members, t.MemberID):
 		case c.Members == "" && c.Member != "" && t.MemberID != c.Member:
 		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
 		case c.Sources == "" && c.Source != "" && string(t.Source) != c.Source:
-		case c.Tags != "" && !hasAnyTagCSV(t, c.Tags):
-		case c.Tags == "" && tagF != "" && !hasTag(t, tagF):
+		case !c.ScopeAny && c.Tags != "" && !hasAnyTagCSV(t, c.Tags):
+		case !c.ScopeAny && c.Tags == "" && tagF != "" && !hasTag(t, tagF):
+		// The OR'd category-or-tag scope, evaluated as one dimension.
+		case c.ScopeAny && !matchesScopeAny(t, c, tagF):
 		case hasMin && AbsAmount(t) < currency.MinorFromMajor(minMajor, t.Amount.Currency):
 		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
 		case !fromT.IsZero() && t.Date.Before(fromT):

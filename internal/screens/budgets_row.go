@@ -97,16 +97,21 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}))
 
 	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
+	// C585: the drill-through carries the budget's WHOLE spend scope — tracked
+	// categories, their descendants, and any tracked tags — the same set the bar
+	// counts against. Passing only TrackedCategoryIDs is what opened an empty
+	// ledger under a non-zero total for a parent-category budget whose spend all
+	// sat in its sub-categories.
+	drillScope := budgetDrillScope(s.Budget)
 	drill := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
-			// Pass EVERY tracked category so a multi-category budget drills to
-			// transactions in all of them, not just the primary one.
-			props.OnDrill(s.Budget.TrackedCategoryIDs(), props.PeriodFrom, props.PeriodTo)
+			props.OnDrill(drillScope, props.PeriodFrom, props.PeriodTo)
 		}
 	}))
-	// The drill affordances show whenever the budget tracks any category (a
-	// multi-category budget may have no single primary CategoryID).
-	canDrill := len(s.Budget.TrackedCategoryIDs()) > 0
+	// The drill affordances show whenever the budget counts anything at all (a
+	// multi-category budget may have no single primary CategoryID; a tag budget
+	// may count charges from any of them).
+	canDrill := !drillScope.IsEmpty()
 	// Edit and Top up open the shell-root flip modal (BudgetEditHost) rather than an
 	// inline row form: a row sits under transformed bento/tile ancestors, which threw an
 	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured. Edit is
@@ -172,7 +177,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Transactions drill navigates to the filtered ledger.
 	drillMenu := ui.UseEvent(Prevent(func() {
 		if props.OnDrill != nil {
-			props.OnDrill(s.Budget.TrackedCategoryIDs(), props.PeriodFrom, props.PeriodTo)
+			props.OnDrill(drillScope, props.PeriodFrom, props.PeriodTo)
 		}
 	}))
 	// Jump to the To-do list PRE-FILTERED to this budget's follow-ups (link=budget +
@@ -411,7 +416,6 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))),
 			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))),
-			If(props.Compact && canDrill, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu), uistate.T("nav.transactions"))),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
@@ -437,12 +441,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// compact is for reading fifteen budgets without scrolling (design critique #9).
 	if props.Compact {
 		crowCls := "budget-crow " + budgetRowStateClass(s, props.PaceOver)
-		var crowTitle ui.Node
-		if canDrill {
-			crowTitle = Button(css.Class("budget-crow-name budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill), title)
-		} else {
-			crowTitle = Span(css.Class("budget-crow-name"), title)
-		}
+		// C591: the name is a HEADING, not a second copy of the Transactions
+		// action. It used to be an unlabelled button that navigated to a filtered
+		// ledger — the same thing the row's Transactions control does, with none of
+		// the discoverability and nothing announcing it to a screen reader. One
+		// action, labelled, sits in the row's action cell beside the ⋯ menu.
+		crowTitle := Span(css.Class("budget-crow-name"), title)
 		var crowLeft, crowChip ui.Node
 		if lastMonthMode {
 			crowLeft = Span(ClassStr("budget-crow-left"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta)
@@ -481,7 +485,17 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			),
 			crowLeft,
 			crowChip,
-			kebabNode,
+			// One action cell: the labelled Transactions drill (icon + accessible
+			// name) and the ⋯ overflow, so the compact row keeps a one-click path to
+			// the ledger without the name pretending to be one (C591).
+			Div(css.Class("budget-crow-actions"),
+				If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
+					Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
+					Attr("aria-label", uistate.T("budgets.drillAria", title)),
+					Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
+					uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+				kebabNode,
+			),
 		)
 	}
 
@@ -611,12 +625,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Div(css.Class("budget-head"),
 			// The title gets the whole header line now (the spent/limit amount and the
 			// percent moved INTO the bar below), so a long budget name has room to breathe.
+			// C591: the card's title is a heading. It used to double as an
+			// unlabelled drill-through — the same navigation the footer's labelled
+			// "Transactions" button performs — so the page had two ways to do one
+			// thing, one of them invisible to anyone not hovering it.
 			Div(css.Class("budget-head-main"),
-				IfElse(canDrill,
-					Button(css.Class("row-desc budget-drill"), Type("button"), Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
-						Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0", "font": "inherit", "color": "inherit", "text-align": "left", "cursor": "pointer"}),
-						title),
-					Span(css.Class("row-desc"), title)),
+				Span(css.Class("row-desc"), title),
 			),
 		),
 		// Overline tag naming the bar as last month's, when the overlay is on.
@@ -803,6 +817,43 @@ func budgetRolloverBadgeFor(props budgetRowProps) ui.Node {
 		EffectiveCap: props.EffectiveCap,
 		CapMath:      props.EffectiveCapMath,
 	})
+}
+
+// budgetDrillScope resolves what a budget's "Transactions" drill-through should
+// show: exactly the set its spend total is computed over (C585). The descendant
+// expansion is the same categorytree.DescendantsOfAll call EvaluateRollup is
+// given, so the ledger and the bar cannot describe different sets.
+func budgetDrillScope(b domain.Budget) budgeting.Scope {
+	app := appstate.Default
+	if app == nil {
+		return budgeting.ScopeOf(b, nil)
+	}
+	return budgeting.ScopeOf(b, categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs()))
+}
+
+// budgetScopeFilter turns a budget's spend scope into a ledger filter that
+// selects exactly the transactions the scope counts.
+//
+// A single category uses the plain Category field so the ledger's category
+// dropdown still reflects the filter; more than one uses the multi-value
+// Categories. Tracked tags switch the filter to ScopeAny, because a budget
+// counts a charge that is in a tracked category OR carries a tracked tag — an
+// AND there would hide the very charges the tag contributed.
+func budgetScopeFilter(scope budgeting.Scope) uistate.TxFilter {
+	var f uistate.TxFilter
+	switch len(scope.CategoryIDs) {
+	case 0:
+		// nothing tracked by category — tags alone (or an unfiltered ledger)
+	case 1:
+		f.Category = scope.CategoryIDs[0]
+	default:
+		f.Categories = strings.Join(scope.CategoryIDs, ",")
+	}
+	if len(scope.Tags) > 0 {
+		f.Tags = strings.Join(scope.Tags, ",")
+		f.ScopeAny = true
+	}
+	return f
 }
 
 // budgetTopDriversFor computes the up-to-n largest charges driving a budget's spend

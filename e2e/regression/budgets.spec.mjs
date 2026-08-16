@@ -74,11 +74,16 @@ test.describe("budgets: density toggle", () => {
     // Cards become compact ledger rows; the card grid is gone.
     await expect(app.locator(".budget-clist .budget-crow").first()).toBeVisible();
     await expect(app.locator(".budget-grid")).toHaveCount(0);
-    // A compact row still reaches every action through its ⋯ menu — including the
-    // money moves (Top up / Cover and Transactions), which have no footer here.
+    // The compact row keeps a one-click, LABELLED path to the ledger in its own
+    // action cell (C591: the budget name is a heading again, so the drill has to
+    // be a control that says what it is), and everything configurational stays in
+    // the ⋯ menu.
     const bid = await firstBudgetId(app);
+    const drill = app.locator(`.budget-crow-actions [data-testid="budget-view-txns-${bid}"]`);
+    await expect(drill).toBeVisible();
+    await expect(drill).toHaveAttribute("aria-label", /see the transactions in/i);
+    await expect(app.locator(`[data-testid="budget-card-${bid}"] button.budget-crow-name`)).toHaveCount(0);
     await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
-    await expect(app.locator(`.add-menu [data-testid="budget-view-txns-${bid}"]`)).toBeVisible();
     await expect(app.locator(`.add-menu [data-testid="edit-budget-btn-${bid}"]`)).toBeVisible();
     await app.keyboard.press("Escape");
     // The choice persists across a reload (localStorage-backed).

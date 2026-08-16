@@ -83,6 +83,23 @@ and every commit updates this file under `Unreleased`.
   immediately on top of that. A budget and the category it creates are also one operation now
   (`appstate.CreateBudgetWithCategory`): a failed budget write takes its half-made category with it,
   and both are read back out of the store before the dialog is allowed to close.
+- **A budget's Transactions action opens the transactions its own total counts (C585).** The
+  Transportation budget reported `$1,100.00` spent and its drill-through said "No matching
+  transactions", because the bar counts the tracked categories plus their descendants plus anything
+  carrying a tracked tag, while the drill filtered to the parent category alone — and every one of
+  those charges sat in a sub-category. A second cause was already written down as a TODO and in the
+  split contract's "known gaps": the ledger's category filter matched only the parent transaction's
+  category, so a split receipt could feed a budget's bar and be invisible in the ledger that bar
+  links to. One function (`budgeting.ScopeOf`) now answers "what does this budget count", the bar
+  and the drill both read it, the filter matches split lines, and a new `ScopeAny` mode ORs the
+  category and tag dimensions the way a budget does. The ledger also names where the view came
+  from — "From the Transportation budget, including its sub-categories" — with one ✕ that drops the
+  whole scope.
+- **One labelled way into a budget's transactions (C591).** The budget's name was an unlabelled
+  button that navigated to the same filtered ledger as the row's "Transactions" action: one action
+  with two affordances, one of them invisible unless you happened to hover it, and nothing
+  announcing it to a screen reader. The name is a heading again in both densities, and the compact
+  row gained its own labelled Transactions control so it keeps a one-click path.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —
