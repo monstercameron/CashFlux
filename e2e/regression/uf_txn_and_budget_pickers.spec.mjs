@@ -42,8 +42,8 @@ test.describe("C517 · filtering by direction", () => {
   test("money-in leaves only income; money-out leaves only spending", async ({ app }) => {
     await openFilters(app);
     const flow = app.getByLabel(/money in or out/i).first();
-    const up = app.locator('[data-testid^="txn-row-"] td.td-amount.text-up');
-    const down = app.locator('[data-testid^="txn-row-"] td.td-amount.text-down');
+    const up = app.locator('tr[data-testid^="txn-row-"] td.td-amount.text-up');
+    const down = app.locator('tr[data-testid^="txn-row-"] td.td-amount.text-down');
 
     // Poll the WHOLE condition rather than asserting the two counts in sequence:
     // the list re-renders across the wasm boundary, so a moment exists where the
@@ -100,7 +100,7 @@ test.describe("C520 · a mistaken income can be corrected to a spend", () => {
     await nav(app, "/transactions");
     await openVia(
       app,
-      app.locator('[data-testid^="txn-row-"] .row-desc-text').first(),
+      app.locator('tr[data-testid^="txn-row-"] .row-desc-text').first(),
       app.getByTestId("txn-edit-amount"),
     );
   }

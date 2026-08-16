@@ -39,7 +39,7 @@ test.describe("gap features", () => {
 
   test("ledger rows carry explicit cleared / needs-review state markers", async ({ app }) => {
     await nav(app, "/transactions");
-    await expect(app.locator('[data-testid^="txn-row-"]').first()).toBeVisible();
+    await expect(app.locator('tr[data-testid^="txn-row-"]').first()).toBeVisible();
     // The sample ledger has both states; each marker explains itself on hover.
     const cleared = app.getByTestId("txn-cleared-badge").first();
     const review = app.getByTestId("txn-needsreview-badge").first();

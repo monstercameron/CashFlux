@@ -942,7 +942,7 @@ test.describe("migrated from the three-tab era", () => {
     // linkage half of the intent is still assertable here (the missing half is
     // recorded as a gap). The link itself must still round-trip.
     await nav(app, "/transactions");
-    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    const row = app.locator('tr[data-testid^="txn-row-"]').nth(6);
     await row.scrollIntoViewIfNeeded();
     await row.locator('[data-testid^="txn-kebab-"]').click();
     await row.locator('[data-testid="txn-marksub-open"]').click();

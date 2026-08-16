@@ -3,6 +3,7 @@
 package screenlint
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,6 +218,60 @@ func TestSplitDraftVerdictIsSharedNotReimplemented(t *testing.T) {
 		t.Error("the split editor no longer reads its verdict from internal/split.\n" +
 			"Classify/Saveable is what keeps the remainder line and the Save button from " +
 			"disagreeing about whether the draft is a valid split (C566).")
+	}
+}
+
+// TestRowSelectorIsQualifiedByTr keeps the ledger's row selector meaning ROWS.
+//
+// `[data-testid^="txn-row-"]` is how the whole suite picks a transaction row —
+// but several per-row CHILD controls share that prefix (tags, note, receipt), so
+// the bare prefix matches rows AND their contents interleaved in document order.
+// `.nth(6)` then stops meaning "the seventh row" and `.toHaveCount(1)` counts a
+// row plus its own glyphs. It bit for real when C563 put an Edit control on every
+// row: 25 rows, 58 matches, and splits.spec.mjs timed out waiting for a kebab
+// inside what it thought was a row.
+//
+// The prefix is load-bearing in the committed coverage manifest and in scratch
+// scripts, so the fix is not to rename the children — it is to require the `tr`
+// qualifier at every call site, which is correct regardless of what ids exist.
+func TestRowSelectorIsQualifiedByTr(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := filepath.Join(wd, "..", "..", "e2e", "regression")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Skipf("no e2e/regression directory (%v) — nothing to guard", err)
+	}
+	var offenders []string
+	checked := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".spec.mjs") {
+			continue
+		}
+		data, rerr := os.ReadFile(filepath.Join(dir, e.Name()))
+		if rerr != nil {
+			t.Fatalf("read %q: %v", e.Name(), rerr)
+		}
+		checked++
+		for i, line := range strings.Split(string(data), "\n") {
+			// The bare prefix, not preceded by the `tr` element qualifier.
+			for _, quote := range []string{`'[data-testid^="txn-row-"]`, "`[data-testid^=\"txn-row-\"]"} {
+				if strings.Contains(line, quote) {
+					offenders = append(offenders, fmt.Sprintf("%s:%d", e.Name(), i+1))
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no spec files scanned — this guard would pass vacuously")
+	}
+	if len(offenders) > 0 {
+		t.Errorf("unqualified ledger-row selector at %v.\n"+
+			"Use tr[data-testid^=\"txn-row-\"]. The bare prefix also matches per-row child "+
+			"controls (tags, note, receipt), so nth(i) and toHaveCount(n) silently stop "+
+			"counting rows.", offenders)
 	}
 }
 

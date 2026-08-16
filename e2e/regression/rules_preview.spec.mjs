@@ -40,7 +40,7 @@ test.describe("rules: affected-transactions preview + retroactive choice", () =>
     await app.locator('input[type="search"]').first().fill("Trattoria");
     // The row displays the cleaned description ("Dinner out"), not the payee —
     // the search matches on payee, and the category cell proves the write.
-    const firstRow = app.locator('[data-testid^="txn-row-"]').first();
+    const firstRow = app.locator('tr[data-testid^="txn-row-"]').first();
     await expect(firstRow).toContainText(/Auto loans/);
   });
 });

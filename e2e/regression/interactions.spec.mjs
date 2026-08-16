@@ -118,7 +118,7 @@ test.describe("payment linkage", () => {
   // (nth 6) avoids row 1, which sits under the sticky topbar/toolbar where the click
   // auto-scroll parks the menu item under the sticky chrome.
   async function openLinkModal(app, itemTestId) {
-    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    const row = app.locator('tr[data-testid^="txn-row-"]').nth(6);
     await row.scrollIntoViewIfNeeded();
     await row.locator('[data-testid^="txn-kebab-"]').click();
     const item = row.locator(`[data-testid="${itemTestId}"]`);
@@ -148,7 +148,7 @@ test.describe("payment linkage", () => {
     await expect(app.locator(`[data-testid="acct-bill-${acctId}"]`)).toBeVisible();
     await app.locator(`[data-testid="acct-bill-link-${acctId}"]`).click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
-    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+    await expect(app.locator('tr[data-testid^="txn-row-"]')).toHaveCount(1);
   });
 
   test("bill: a liability still shows the payment on the Debt page", async ({ app }) => {
@@ -168,7 +168,7 @@ test.describe("payment linkage", () => {
     await expect(app.locator(`[data-testid="debt-bill-${acctId}"]`)).toBeVisible();
     await app.locator(`[data-testid="debt-bill-link-${acctId}"]`).click();
     await expect(app.locator('#main[data-route="/transactions"]').first()).toBeVisible();
-    await expect(app.locator('[data-testid^="txn-row-"]')).toHaveCount(1);
+    await expect(app.locator('tr[data-testid^="txn-row-"]')).toHaveCount(1);
   });
 
   // MIGRATED to rhythm.spec.mjs — the subscription half of this pair read
@@ -214,7 +214,7 @@ test.describe("account filter includes linked payments", () => {
     const debtName = (await app.locator(".debt-name").first().innerText()).trim();
 
     await nav(app, "/transactions");
-    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    const row = app.locator('tr[data-testid^="txn-row-"]').nth(6);
     await row.scrollIntoViewIfNeeded();
     const rowId = await row.getAttribute("data-testid");
     await row.locator('[data-testid^="txn-kebab-"]').click();
@@ -266,7 +266,7 @@ test.describe("auto budget", () => {
 test.describe("bill auto-link rule", () => {
   test("linking a bill with auto-link creates a rule for future payments", async ({ app }) => {
     await nav(app, "/transactions");
-    const row = app.locator('[data-testid^="txn-row-"]').nth(6);
+    const row = app.locator('tr[data-testid^="txn-row-"]').nth(6);
     await row.scrollIntoViewIfNeeded();
     await row.locator('[data-testid^="txn-kebab-"]').click();
     await row.locator('[data-testid="txn-markbill-open"]').click();
