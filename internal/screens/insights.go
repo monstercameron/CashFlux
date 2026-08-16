@@ -81,12 +81,6 @@ func Insights() ui.Node {
 		}
 		return nil
 	}, "")
-	pickModel := func(v string) {
-		modelSel.Set(v)
-		s := app.Settings()
-		s.OpenAIModel = v
-		_ = app.PutSettings(s)
-	}
 	pickEffort := func(v string) {
 		effortSel.Set(v)
 		s := app.Settings()
@@ -264,6 +258,22 @@ func Insights() ui.Node {
 	// A mutating tool awaiting the user's approval in the thread (nil = none pending).
 	pendingApproval := ui.UseState((*approvalReq)(nil))
 
+	// C390: picking a model sticks to THIS conversation as well as to the household
+	// default, so returning to a long analytical thread does not quietly continue it
+	// on whatever model was last chosen in a different chat. Defined here rather
+	// than beside the other pickers because it needs the conversation's identity.
+	pickModel := func(v string) {
+		modelSel.Set(v)
+		s := app.Settings()
+		s.OpenAIModel = v
+		_ = app.PutSettings(s)
+		uistate.SetAgentModel(convID.Get(), v)
+	}
+	// pickBudget caps what this conversation may spend in total. It is a per-chat
+	// decision, not a global one: "don't let this exploration run away" is a
+	// different thing from "cap my month".
+	pickBudget := func(tokens int) { uistate.SetAgentBudget(convID.Get(), tokens) }
+
 	// railReady defers the periphery rail's heavy detectors (spend-anomaly + the four
 	// SMART anomaly detectors, each a full-transaction scan) to just after first paint.
 	// On the initial mount it's false, so the chat renders immediately without those
@@ -366,6 +376,14 @@ func Insights() ui.Node {
 	// done channel lets Cancel unblock the loop.
 	run := func(hist []chatTurn) {
 		errMsg.Set("")
+		// C390: a spent budget stops the conversation BEFORE the call, not after.
+		// A cap that only notices it was exceeded once the tokens are gone is a
+		// receipt, not a budget. The message says how to carry on, because the cap
+		// is the user's own and they are allowed to change their mind.
+		if uistate.AgentBudgetExhausted(convID.Get()) {
+			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(convID.Get()))))
+			return
+		}
 		loading.Set(true)
 		allTools := buildChatTools(app, base, rates)
 		// AG17: under aggregates-only, withhold the transaction/payee-detail read tools
@@ -454,7 +472,9 @@ func Insights() ui.Node {
 					out := "tool unavailable"
 					if tool, ok := byName[tc.Function.Name]; ok {
 						// Mutating tools pause for the user's approval in the thread.
-						if tool.mutates {
+						if !tool.mutates {
+							out = tool.run(args)
+						} else {
 							preview := tc.Function.Name
 							if tool.preview != nil {
 								preview = tool.preview(args)
@@ -479,8 +499,14 @@ func Insights() ui.Node {
 								msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
 								continue
 							}
+							// C389/AG20: an approved write runs under the assistant
+							// actor and takes its own undo point, so Activity shows
+							// who made the change and offers to take it back. Without
+							// this, a change the assistant made was indistinguishable
+							// in the log from one the household made by hand.
+							out = runAssistantWrite(tc.Function.Name, func() string { return tool.run(args) })
+							uistate.AddAgentActions(convID.Get(), []string{tc.Function.Name})
 						}
-						out = tool.run(args)
 					}
 					cite := toolcite.For(tc.Function.Name, args)
 					sources = append(sources, domain.ChatSource{
@@ -683,10 +709,18 @@ func Insights() ui.Node {
 			ts := make([]chatTurn, len(c.Messages))
 			for i, m := range c.Messages {
 				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text,
-					Usage: ai.Usage{PromptTokens: m.PromptTokens, CompletionTokens: m.CompletionTokens, TotalTokens: m.Tokens}}
+					Usage:   ai.Usage{PromptTokens: m.PromptTokens, CompletionTokens: m.CompletionTokens, TotalTokens: m.Tokens},
+					Sources: m.Sources}
 			}
 			turns.Set(ts)
 			convID.Set(cid)
+			// C390: resume this conversation on the model it was using, when it
+			// chose one. A thread reopened on a different model gives different
+			// answers to the same question, which reads as the assistant changing
+			// its mind rather than as the setting changing underneath it.
+			if m := uistate.AgentModel(cid); m != "" {
+				modelSel.Set(m)
+			}
 			convCreated.Set(c.CreatedAt)
 			input.Set("")
 			errMsg.Set("")
@@ -1275,10 +1309,20 @@ func Insights() ui.Node {
 		shareChars += len(t.Text)
 	}
 	shareEstTokens := shareChars / 4
+	// C390: this conversation's cap and what it has spent against it. Reading the
+	// tally revision keeps the readout live as turns land.
+	_ = uistate.UseAgentActionsRevision().Get()
+	_ = uistate.UseAgentTallyRevision().Get()
+	budgetCap := uistate.AgentBudget(convID.Get())
+	budgetUsed := uistate.AgentTokensUsed(convID.Get())
+	budgetLeft, budgetCapped := uistate.AgentBudgetRemaining(convID.Get())
 	chatControls := Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
 		Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
 		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
 		If(thinkingApplies, thinkPicker(thinkPickerProps{Effort: effortSel.Get(), OnPick: pickEffort})),
+		budgetPicker(budgetPickerProps{
+			Budget: budgetCap, Used: budgetUsed, Remaining: budgetLeft, Capped: budgetCapped, OnPick: pickBudget,
+		}),
 		privacyChip(privacyChipProps{Tier: tier, OnToggle: togglePrivacy}),
 		// Pre-send data-sharing preview: what the NEXT message will carry, with a
 		// rough token estimate, mirroring buildMessages' actual inputs.
@@ -2188,6 +2232,65 @@ func modelPickerComp(p modelPickerProps) ui.Node {
 			OnClick(onToggleAll),
 			IfElse(showAll.Get(), Text(uistate.T("assistant.fewerModels")), Text(uistate.T("assistant.moreModels"))))),
 	)
+}
+
+type budgetPickerProps struct {
+	Budget    int
+	Used      int
+	Remaining int
+	Capped    bool
+	OnPick    func(int)
+}
+
+// budgetPicker is the per-conversation spending cap and its remaining readout
+// (C390). Its own component so the select's change hook sits at a stable position.
+func budgetPicker(p budgetPickerProps) ui.Node { return ui.CreateElement(budgetPickerComp, p) }
+
+// budgetOptions are the caps offered. They are round numbers rather than dollar
+// amounts because the cap is enforced in tokens, and a dollar figure would be an
+// estimate presented as a limit — the one place an estimate does real harm.
+var budgetOptions = []int{0, 25000, 50000, 100000, 250000}
+
+func budgetPickerComp(p budgetPickerProps) ui.Node {
+	onChange := ui.UseEvent(func(e ui.Event) {
+		n := 0
+		if v := strings.TrimSpace(e.GetValue()); v != "" {
+			n, _ = strconv.Atoi(v)
+		}
+		p.OnPick(n)
+	})
+	// The readout answers the question the cap creates ("how much is left?"). An
+	// uncapped chat still shows what it has spent, because that is the number
+	// somebody looks at just before deciding to set a cap.
+	readout := uistate.T("assistant.budgetUsed", ai.FormatTokens(p.Used))
+	cls := "asst-budget-readout"
+	if p.Capped {
+		readout = uistate.T("assistant.budgetLeft", ai.FormatTokens(p.Remaining))
+		if p.Remaining == 0 {
+			cls += " is-spent"
+		}
+	}
+	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.budgetPick")),
+		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.budgetLabel")),
+		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.budgetPick")),
+			Attr("data-testid", "assistant-budget"), OnChange(onChange),
+			MapKeyed(budgetOptions,
+				func(n int) any { return n },
+				func(n int) ui.Node {
+					return Option(Value(strconv.Itoa(n)), SelectedIf(n == p.Budget), budgetOptionLabel(n))
+				},
+			),
+		),
+		Span(ClassStr(cls), Attr("data-testid", "assistant-budget-readout"), readout),
+	)
+}
+
+// budgetOptionLabel renders a cap as a short token figure, or the no-cap option.
+func budgetOptionLabel(n int) string {
+	if n == 0 {
+		return uistate.T("assistant.budgetNone")
+	}
+	return uistate.T("assistant.budgetOption", ai.FormatTokens(n))
 }
 
 type privacyChipProps struct {

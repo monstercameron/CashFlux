@@ -89,3 +89,28 @@ func TestSubCentCostKeepsPrecision(t *testing.T) {
 		t.Fatalf("CostPhrase = %q, want %q", cp, "~$0.004, 1,240 tokens")
 	}
 }
+
+func TestActionLabelReadsAsOneThingThatHappened(t *testing.T) {
+	for _, tc := range []struct {
+		kind string
+		want string
+	}{
+		{"add_transaction", "Transaction recorded"},
+		{"create_category", "Category created"},
+		{"delete_transaction", "Transaction deleted"},
+		{" add_task ", "Task added"},
+	} {
+		if got := ActionLabel(tc.kind); got != tc.want {
+			t.Errorf("ActionLabel(%q) = %q, want %q", tc.kind, got, tc.want)
+		}
+	}
+}
+
+func TestActionLabelDefersOnAnUnknownKind(t *testing.T) {
+	// "" tells the caller to print the raw tool name instead. In a per-action
+	// history, "some_new_tool" is more useful than a tidy "change applied" that
+	// says nothing about which change it was.
+	if got := ActionLabel("some_new_tool"); got != "" {
+		t.Fatalf("ActionLabel of an unknown kind = %q, want empty so the caller can fall back", got)
+	}
+}

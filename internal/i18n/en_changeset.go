@@ -25,6 +25,22 @@ var changesetKeys = Catalog{
 	"changeset.applied":     "Applied %d change(s).",
 	// --- AG20 cumulative session receipt ---
 	"changeset.sessionAria": "What the assistant did in this chat",
+	// --- C389 per-action history ---
+	// %d = how many individual changes the assistant has made this session.
+	"changeset.historySummary": "Every change, one by one (%d)",
+	"changeset.undoLast":       "Undo the last one",
+	"changeset.openActivity":   "See them in Activity",
+	// --- C390 per-conversation model + token cap ---
+	"assistant.budgetLabel": "Cap",
+	"assistant.budgetPick":  "Cap what this chat may spend in total",
+	"assistant.budgetNone":  "No cap",
+	// %s = a token figure, already formatted with thousands separators.
+	"assistant.budgetOption": "%s tokens",
+	"assistant.budgetUsed":   "%s used",
+	"assistant.budgetLeft":   "%s left",
+	// %s = the cap that was reached. It names the way out, because the cap is the
+	// user's own and changing their mind is a legitimate answer.
+	"insights.budgetSpent": "This chat has spent its %s-token cap. Raise the cap above, or start a new chat.",
 }
 
 func init() {

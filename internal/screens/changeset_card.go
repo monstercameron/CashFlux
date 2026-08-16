@@ -18,6 +18,7 @@ package screens
 import (
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/agentreceipt"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/changeset"
@@ -255,10 +256,75 @@ func AgentSessionReceipt(conversationID string) ui.Node {
 	if summary == "" {
 		return Fragment()
 	}
-	return Div(css.Class("t-caption", tw.TextDim, tw.Flex, tw.ItemsCenter, tw.Gap1),
-		Attr("role", "status"),
-		Attr("data-testid", "agent-session-receipt"),
-		Attr("aria-label", uistate.T("changeset.sessionAria")),
-		Span("🧾"), Span(summary),
+	return Div(css.Class("asst-receipt"),
+		Div(css.Class("t-caption", tw.TextDim, tw.Flex, tw.ItemsCenter, tw.Gap1),
+			Attr("role", "status"),
+			Attr("data-testid", "agent-session-receipt"),
+			Attr("aria-label", uistate.T("changeset.sessionAria")),
+			Span("🧾"), Span(summary),
+		),
+		ui.CreateElement(AgentActionHistory, agentActionHistoryProps{}),
 	)
+}
+
+// agentActionHistoryProps is empty: the history reads session state directly. It
+// exists so the component takes props like every other, and so a future filter
+// (per-conversation, per-day) has a place to arrive.
+type agentActionHistoryProps struct{}
+
+// AgentActionHistory lists the individual changes the assistant made this session
+// and offers to take back the most recent one (C389).
+//
+// Only the newest change gets an Undo button, and only while it is still the top
+// of the undo stack. That is not a limitation worked around — it is the honest
+// shape of a linear undo stack. A button offering to undo the third change of five
+// would either silently reverse the two after it or quietly do nothing, and both
+// are worse than a link to Activity, which is where a targeted correction actually
+// belongs. So: take back the last thing, or go look at the record.
+func AgentActionHistory(props agentActionHistoryProps) ui.Node {
+	_ = props
+	_ = uistate.UseAgentActionsRevision().Get()
+	nav := router.UseNavigate()
+	openActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
+	undo := ui.UseEvent(Prevent(func() {
+		if auditview.UndoFunc() {
+			uistate.DropLastAssistantAction()
+		}
+	}))
+
+	actions := uistate.AssistantActions()
+	if len(actions) == 0 {
+		return Fragment()
+	}
+	rows := make([]any, 0, len(actions))
+	// Newest first: the change most likely to need attention is the one just made.
+	for i := len(actions) - 1; i >= 0; i-- {
+		rows = append(rows, Li(css.Class("asst-act-item"),
+			Span(css.Class("asst-act-what"), assistantActionLabel(actions[i].Tool)),
+			Span(css.Class("asst-act-when"), actions[i].At.Format("15:04")),
+		))
+	}
+	list := append([]any{css.Class("asst-act-list"), Attr("data-testid", "agent-action-list")}, rows...)
+	canUndo := auditview.CanUndoFunc()
+	return Details(css.Class("asst-act"), Attr("data-testid", "agent-action-history"),
+		Summary(css.Class("asst-act-summary"), uistate.T("changeset.historySummary", len(actions))),
+		Ul(list...),
+		Div(css.Class("asst-act-actions"),
+			If(canUndo, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "agent-undo-last"),
+				OnClick(undo), uistate.T("changeset.undoLast"))),
+			Button(css.Class("btn btn-sm btn-link"), Type("button"), Attr("data-testid", "agent-open-activity"),
+				OnClick(openActivity), uistate.T("changeset.openActivity")),
+		),
+	)
+}
+
+// assistantActionLabel renders a tool name as what it did, reusing the receipt's
+// own vocabulary so the history and the summary above it agree. An unlisted tool
+// prints its own name rather than a vague "a change" — knowing which tool ran is
+// more useful than a tidy phrase that says nothing.
+func assistantActionLabel(tool string) string {
+	if label := agentreceipt.ActionLabel(tool); label != "" {
+		return label
+	}
+	return tool
 }

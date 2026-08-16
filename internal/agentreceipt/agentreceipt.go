@@ -65,6 +65,19 @@ func nounFor(kind string, n int) string {
 	return p.plural
 }
 
+// ActionLabel renders one op Kind as a single past-tense phrase, capitalised, for
+// listing individual actions rather than counting them ("Transaction recorded").
+// It returns "" for an unknown Kind so the caller can fall back to the raw name —
+// in a per-action history, knowing which tool ran beats a tidy phrase that says
+// nothing.
+func ActionLabel(kind string) string {
+	p, ok := kindPhrases[strings.TrimSpace(kind)]
+	if !ok {
+		return ""
+	}
+	return strings.ToUpper(p.singular[:1]) + p.singular[1:]
+}
+
 // Tally is the accumulated agent activity for one conversation: how many times
 // each op Kind ran, plus the running token and cost totals.
 type Tally struct {

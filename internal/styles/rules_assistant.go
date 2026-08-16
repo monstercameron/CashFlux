@@ -791,6 +791,84 @@ func registerAssistantSurface() {
 	)
 	registerApprovalCard()
 	registerCitations()
+	registerActionHistory()
+	registerBudgetReadout()
+}
+
+// registerBudgetReadout styles the per-conversation cap's remaining figure (C390).
+// It sits beside its select as a quiet number until the budget is spent, at which
+// point it takes the warning tone — that is the one moment it needs to be read.
+func registerBudgetReadout() {
+	rule(".asst-budget-readout",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-faint)"),
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("margin-left", "0.35rem"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".asst-budget-readout.is-spent",
+		prop("color", "var(--warn, #d9a23f)"),
+		prop("font-weight", "600"),
+	)
+}
+
+// registerActionHistory styles the per-action list under the session receipt
+// (C389). It borrows the citation panel's footnote treatment on purpose: both
+// answer "show me the detail behind that summary", and giving them one visual
+// language means learning the pattern once.
+func registerActionHistory() {
+	rule(".asst-receipt",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.25rem"),
+	)
+	rule(".asst-act",
+		prop("max-width", "44rem"),
+	)
+	rule(".asst-act-summary",
+		prop("display", "inline-block"),
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("cursor", "pointer"),
+		prop("padding", "0.15rem 0"),
+		prop("border-bottom", "1px dotted var(--border)"),
+	)
+	rule(".asst-act-summary:hover",
+		prop("color", "var(--text)"),
+	)
+	rule(".asst-act-list",
+		prop("list-style", "none"),
+		prop("margin", "0.4rem 0 0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+	)
+	rule(".asst-act-item",
+		prop("display", "flex"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text)"),
+		prop("padding", "0.2rem 0"),
+		prop("border-bottom", "1px solid var(--border)"),
+	)
+	rule(".asst-act-item:last-child",
+		prop("border-bottom", "none"),
+	)
+	// The time is a locator, not a fact worth reading — it recedes so the list
+	// scans as a column of what happened.
+	rule(".asst-act-when",
+		prop("flex", "0 0 auto"),
+		prop("color", "var(--text-faint)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".asst-act-actions",
+		prop("display", "flex"),
+		prop("gap", "0.5rem"),
+		prop("margin-top", "0.5rem"),
+		prop("flex-wrap", "wrap"),
+	)
 }
 
 // registerCitations styles the "How I got this" panel under an answer (C387). It is

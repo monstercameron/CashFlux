@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -73,4 +74,26 @@ func agToolsTrust(app *appstate.App, base string, rates currency.Rates) []chatTo
 			},
 		},
 	}
+}
+
+// runAssistantWrite runs one approved mutating tool under the assistant's identity
+// and takes an undo point for it (C389 / AG20).
+//
+// The changeset path (AG1) already did this, but a tool the model called directly
+// did not: the write landed in the audit log attributed to the household, and the
+// Activity screen could not tell a change the assistant made from one somebody
+// typed. That is precisely the attribution the trust story rests on, so it is done
+// here for every approved write, whichever path proposed it.
+//
+// The actor is cleared on the way out even if the tool panics, because a leaked
+// assistant tag would mis-attribute every subsequent hand-made edit in the session
+// — a worse failure than the one being fixed.
+func runAssistantWrite(tool string, run func() string) string {
+	auditview.SetSessionActor(auditview.ActorAssistant)
+	defer auditview.SetSessionActor("")
+	out := run()
+	// Capture while the tag is still set, so the undo point carries it.
+	auditview.CaptureNow()
+	uistate.NoteAssistantAction(tool)
+	return out
 }

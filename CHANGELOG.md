@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Every change the assistant makes is attributed, listed, and reversible (C389).** A change made
+  through the changeset card was already tagged "via assistant" in Activity and captured as its own
+  undo point. A tool the model called directly was not: the write landed in the audit log attributed
+  to the household, so a change the assistant made was indistinguishable from one somebody typed —
+  the exact attribution the trust story rests on. Approved writes now run under the assistant's
+  identity whichever path proposed them, and the session receipt expands into a per-action history:
+  what ran, in what order, with a link to Activity and an Undo on the most recent one. Only the most
+  recent, deliberately — the undo stack is a stack, and a button offering to undo the third change of
+  five would either silently reverse the two after it or quietly do nothing.
+
+- **A conversation can cap what it spends, and keeps the model it was using (C390).** The chat
+  header gains a per-chat token cap with a live remaining figure, checked BEFORE a send rather than
+  after — a limit that only notices it was exceeded once the tokens are gone is a receipt, not a
+  budget. The cap is per conversation because "don't let this exploration run away" is a different
+  decision from "cap my month", and it is set in tokens rather than dollars because tokens are what
+  is actually enforced; a dollar figure would be an estimate presented as a limit. Picking a model
+  now also sticks to that conversation, so reopening a long analytical thread doesn't quietly
+  continue it on whatever model was last chosen somewhere else.
+
 - **The assistant shows its work (C387).** An answer with a figure in it now carries a collapsed
   "How I got this" panel listing every tool the assistant ran for that answer — what it looked at,
   over what slice of the data, and the tool's own result verbatim. The result is the point: a
