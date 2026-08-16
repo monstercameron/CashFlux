@@ -151,14 +151,25 @@ test.describe("merging categories", { tag: "@prod" }, () => {
     // produces totals that quietly stop adding up.
     await app.evaluate(() => history.pushState({}, "", "/"));
     await app.reload();
+    // A cold single-worker CI runner boots this app materially slower than a warm
+    // local one — an 88 MB wasm binary has to be fetched, compiled and seeded
+    // again — so the readiness wait gets room rather than a number that happens
+    // to fit this machine.
     await app.waitForFunction(
       () => document.documentElement.getAttribute("data-app-ready") === "true",
       null,
-      { timeout: 45000 },
+      { timeout: 90_000 },
     );
     await nav(app, "/categories");
     await expect(app.locator('[data-testid^="cat-menu-btn-"]').first()).toBeVisible();
-    await expect(app.locator(".row-desc").filter({ hasText: new RegExp(`^${escapeRe(sourceName)}$`) })).toHaveCount(0);
+    // Poll rather than assert once: the list is still filling in right after a
+    // cold boot, and a single read can catch it mid-render.
+    await expect
+      .poll(
+        async () => await app.locator(".row-desc").filter({ hasText: new RegExp(`^${escapeRe(sourceName)}$`) }).count(),
+        { timeout: 20_000 },
+      )
+      .toBe(0);
   });
 
   test("a merge cannot be confirmed without both categories", async ({ app }) => {

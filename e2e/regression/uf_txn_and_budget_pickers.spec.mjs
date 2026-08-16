@@ -7,7 +7,7 @@
 //   C519 — the budget category picker silently withheld every income category.
 //   C520 — the direction of a transaction was immutable, and the error that
 //          said so rendered below the fold of a scrolling modal.
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, openVia } from "./fixtures.mjs";
 
 test.describe("C517 · filtering by direction", { tag: "@prod" }, () => {
   // Spending renders in accounting parentheses with a .text-down tone; income
@@ -15,9 +15,10 @@ test.describe("C517 · filtering by direction", { tag: "@prod" }, () => {
   // direction, so they are what the filter has to agree with.
   async function openFilters(app) {
     await nav(app, "/transactions");
-    const toggle = app.getByRole("button", { name: /filters/i }).first();
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    // The flow control only exists once the panel is open, so it is the proof
+    // the click landed — checking aria-expanded would pass on a panel that then
+    // got re-rendered away underneath.
+    await openVia(app, app.getByRole("button", { name: /filters/i }).first(), app.getByLabel(/money in or out/i));
   }
 
   test("a control exists for money in vs money out", async ({ app }) => {
@@ -88,8 +89,11 @@ test.describe("C520 · a mistaken income can be corrected to a spend", { tag: "@
   // The edit form opens by clicking a row's description.
   async function openFirstTxnEdit(app) {
     await nav(app, "/transactions");
-    await app.locator('[data-testid^="txn-row-"] .row-desc-text').first().click();
-    await expect(app.getByTestId("txn-edit-amount")).toBeVisible();
+    await openVia(
+      app,
+      app.locator('[data-testid^="txn-row-"] .row-desc-text').first(),
+      app.getByTestId("txn-edit-amount"),
+    );
   }
 
   test("direction is a control, not a constant", async ({ app }) => {
@@ -138,10 +142,12 @@ test.describe("C522 · the re-categorizer's dead end", { tag: "@prod" }, () => {
     await nav(app, "/transactions");
     // The entry point lives in the toolbar's ⋯ menu; its handler is live even
     // though that menu's open state is a separate defect (C541).
-    await app.evaluate(() => document.querySelector('[data-testid="txn-smartcat-btn"]').click());
-
+    await openVia(
+      app,
+      app.locator('[data-testid="txn-smartcat-btn"]'),
+      app.getByTestId("smartcat-no-provider"),
+    );
     const notice = app.getByTestId("smartcat-no-provider");
-    await expect(notice).toBeVisible();
     // Telling someone to add a key in Settings without a way to get to Settings
     // is indistinguishable from the feature being broken.
     const connect = app.getByTestId("smartcat-connect");

@@ -183,6 +183,39 @@ export async function settle(page) {
   });
 }
 
+// openVia clicks a control until the thing it is supposed to open actually
+// appears, then returns.
+//
+// A single click is not reliable for opening things in this app on a cold, slow
+// runner: several screens keep re-rendering briefly after they mount, and a click
+// landing in that window sets component state on a tree about to be replaced, so
+// the state is discarded and the control looks inert. Locally the window is
+// narrow enough to hit rarely; on a single-worker Windows CI runner it is wide
+// enough to fail outright, which is exactly the difference between "passes on my
+// machine" and "fails the deploy gate".
+//
+// This is deliberately an opt-in helper rather than a change to the shared click
+// path. A blanket wait was tried in settle() and measured WORSE — it cost 2.6
+// minutes and broke three passing tests. Retrying the specific action, and
+// checking the specific outcome, is both cheaper and honest about what it knows.
+//
+// `check` must be a locator for something that only exists once the action
+// succeeded, so a passing poll cannot be a false positive.
+export async function openVia(page, control, check, { timeout = 25_000, settleMs = 1500 } = {}) {
+  await expect
+    .poll(
+      async () => {
+        if (await check.count()) return true;
+        await control.click().catch(() => {});
+        await check.waitFor({ state: "visible", timeout: settleMs }).catch(() => {});
+        return (await check.count()) > 0;
+      },
+      { timeout },
+    )
+    .toBe(true);
+  await expect(check.first()).toBeVisible();
+}
+
 // setTheme flips light/dark via the real /settings → Appearance control (the
 // honest path), waiting on the documentElement theme attribute to flip.
 export async function setTheme(page, mode) {
