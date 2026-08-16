@@ -180,3 +180,49 @@ func NameChanged(cats []domain.Category, c domain.Category) bool {
 	}
 	return true
 }
+
+// FindByName returns every category holding the given name, ANYWHERE in the
+// tree, in the order they appear.
+//
+// FindSibling answers "is this name taken at this level?", which is the right
+// question for validation. This answers a different one the UI needs: "does a
+// category by this name already exist at all?" — because a household that has
+// "Auto > Auto loans" and is about to be handed a second, top-level "Auto loans"
+// experiences that as a duplicate, whatever the tree says.
+func FindByName(cats []domain.Category, name string) []domain.Category {
+	if Normalize(name) == "" {
+		return nil
+	}
+	var out []domain.Category
+	for _, c := range cats {
+		if EqualNames(c.Name, name) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// Path renders a category's full display path ("Auto > Auto loans"), so a
+// message about reusing a nested category can say WHICH one. Depth is bounded by
+// the category count, so a cycle in stored data cannot hang the walk.
+func Path(cats []domain.Category, c domain.Category) string {
+	byID := make(map[string]domain.Category, len(cats))
+	for _, x := range cats {
+		byID[x.ID] = x
+	}
+	parts := []string{c.Name}
+	seen := map[string]bool{c.ID: true}
+	for id, steps := c.ParentID, 0; id != "" && steps <= len(cats); steps++ {
+		if seen[id] {
+			break
+		}
+		seen[id] = true
+		p, ok := byID[id]
+		if !ok {
+			break
+		}
+		parts = append([]string{p.Name}, parts...)
+		id = p.ParentID
+	}
+	return strings.Join(parts, " > ")
+}

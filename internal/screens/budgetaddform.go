@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -68,20 +69,36 @@ func BudgetAddForm(props BudgetAddFormProps) ui.Node {
 	return ui.CreateElement(budgetAddForm, props)
 }
 
-// matchExpenseCategory returns the existing expense category whose name equals
-// name (case-insensitive, trimmed), or a zero Category when there is none. It
-// is the guard that keeps the "create a new category" default from silently
-// minting a duplicate of a category the household already has.
-func matchExpenseCategory(categories []domain.Category, name string) (domain.Category, bool) {
-	n := strings.ToLower(strings.TrimSpace(name))
-	if n == "" {
-		return domain.Category{}, false
+// matchTopLevelCategory returns the existing TOP-LEVEL category whose name
+// equals name, or a zero Category when there is none.
+//
+// This is the C536 replacement for matchExpenseCategory, which was wrong three
+// ways. It matched only expense-kind categories, so a same-named income category
+// was not a collision and a twin got minted. It compared names across the WHOLE
+// tree, so a "Gas" nested under "Auto" satisfied a request for a top-level "Gas"
+// and the budget silently attached to a category the user never meant — the
+// opposite failure, and the worse one because nothing said it happened. And its
+// callers handed it a category snapshot captured at render.
+//
+// catname.FindSibling answers all three: it is parent-scoped (a budget creates a
+// top-level category, so "" is the right parent), deliberately kind-blind, and
+// takes whatever slice the caller passes — so callers must pass a fresh read.
+func matchTopLevelCategory(categories []domain.Category, name string) (domain.Category, bool) {
+	// A top-level match is the unambiguous case: the budget would create a
+	// top-level category, and one by that name already exists.
+	if c, ok := catname.FindSibling(categories, "", name); ok {
+		return c, true
 	}
-	for _, c := range categories {
-		if c.Kind == domain.KindExpense && strings.ToLower(strings.TrimSpace(c.Name)) == n {
-			return c, true
-		}
+	// Otherwise look at the whole tree. A household holding "Auto > Auto loans"
+	// that is handed a second, top-level "Auto loans" experiences that as a
+	// duplicate whatever the tree says about levels — and parent-scoping alone
+	// let exactly that through. One match anywhere is unambiguous enough to
+	// reuse; the form names its full path so the user can see which it picked.
+	if all := catname.FindByName(categories, name); len(all) == 1 {
+		return all[0], true
 	}
+	// Two or more matches at different levels: do not guess. The budget gets a
+	// new top-level category and the form warns that similar names exist.
 	return domain.Category{}, false
 }
 
@@ -108,7 +125,14 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	// budget, so a transaction can be assigned to it immediately (closing the loop) —
 	// unless the typed name matches an existing category, which is then reused (no
 	// silent duplicates). The Advanced section still lets the user pick explicitly.
+	// The picker now defaults to an EXISTING category rather than to the create-new
+	// sentinel: creating one is opt-in (C535), so the default has to be something
+	// the household already has. Falls back to the sentinel only when there is
+	// nothing to pick, in which case the opt-in is forced on and says why.
 	defaultCat := budgetNewCatSentinel
+	if len(expenseCats) > 0 {
+		defaultCat = expenseCats[0].ID
+	}
 	if props.Seed.CategoryID != "" {
 		defaultCat = props.Seed.CategoryID
 	}
@@ -122,6 +146,12 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	limit := ui.UseState(props.Seed.LimitMajor)
 	catID := ui.UseState(defaultCat)
 	newCatName := ui.UseState("")
+	// C535: creating a category is now something you ASK for, not the default
+	// outcome of adding a budget. It used to be the default AND it lived behind
+	// the Advanced disclosure, so the common path minted a category named after
+	// the budget with nothing on screen offering the alternative.
+	createCat := ui.UseState(false)
+	toggleCreateCat := ui.UseEvent(func() { createCat.Set(!createCat.Get()) })
 	owner := ui.UseState(domain.GroupOwnerID)
 	period := ui.UseState(defaultPeriod)
 	rollover := ui.UseState(false)
@@ -237,14 +267,31 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		// creates one. Either way the duplicate-budget guard below applies to the
 		// resolved category, so the one-budget-per-(category, period, owner) rule can't
 		// be bypassed through the create-new path.
+		// C536(a): resolve against a FRESH read of the store, not the snapshot this
+		// component captured when it last rendered. budgetAddForm never subscribes
+		// to the data revision, so `categories` above can be arbitrarily stale —
+		// and the very same handler already re-reads app.Categories() thirty lines
+		// below for the also-track list, so one function was reading the category
+		// set two different ways. A stale read here means the guard cannot see a
+		// category created since the last render and mints a duplicate of it.
+		liveCats := app.Categories()
+		liveExpense := 0
+		for _, c := range liveCats {
+			if c.Kind == domain.KindExpense {
+				liveExpense++
+			}
+		}
 		finalCatID := catID.Get()
 		createdCatName := ""
-		if finalCatID == budgetNewCatSentinel {
+		if createCat.Get() || liveExpense == 0 || finalCatID == budgetNewCatSentinel || finalCatID == "" {
 			catName := strings.TrimSpace(newCatName.Get())
 			if catName == "" {
 				catName = strings.TrimSpace(name.Get())
 			}
-			if existing, ok := matchExpenseCategory(categories, catName); ok {
+			// Ticking "create" for a name that already exists REUSES it. The
+			// checkbox states an intent; the store states the truth, and minting a
+			// twin to honour the intent is the bug being fixed.
+			if existing, ok := matchTopLevelCategory(liveCats, catName); ok {
 				finalCatID = existing.ID
 			} else {
 				nc := domain.Category{ID: id.New(), Name: catName, Kind: domain.KindExpense}
@@ -305,8 +352,9 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		limit.Set("")
 		rollover.Set(false)
 		methodology.Set("")
-		catID.Set(budgetNewCatSentinel)
+		catID.Set(defaultCat)
 		newCatName.Set("")
+		createCat.Set(false)
 		alsoTrack.Set(map[string]bool{})
 		trackTags.Set("")
 		customVals.Set(map[string]string{})
@@ -372,13 +420,6 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 	}))
 
-	// The picker leads with "➕ Create a new category" (the default), then every existing
-	// expense category, so the common case (a budget for something new) is one step.
-	catOptions := []uiw.SelectOption{{Value: budgetNewCatSentinel, Label: uistate.T("budgets.newCategoryOption")}}
-	catOptions = append(catOptions, uiw.OptionsFrom(expenseCats,
-		func(c domain.Category) string { return c.ID },
-		func(c domain.Category) string { return c.Name },
-		catID.Get())...)
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
 	// Copy-an-existing-budget options (creation-time duplicate, G4). Leads with a
@@ -392,26 +433,73 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	// say so up front: reuse an existing same-named category, or create a new one. The
 	// same resolution feeds the limit suggestion, so it fires on the default path too
 	// (typing "Groceries" suggests from the Groceries category's history).
+	// A household with nothing to attach a budget to must still get a category,
+	// so the opt-in is forced on and says why rather than presenting an empty
+	// picker the user cannot satisfy.
+	mustCreateCat := len(expenseCats) == 0
+	wantNewCat := createCat.Get() || mustCreateCat
+
+	// The name the new category would take, and what actually happens to it. The
+	// hint is the honest outcome, not a restatement of the checkbox: ticking
+	// "create" for a name that already exists REUSES it rather than minting a
+	// twin, and the form has to say so before Add is pressed.
+	typedCatName := strings.TrimSpace(newCatName.Get())
+	if typedCatName == "" {
+		typedCatName = strings.TrimSpace(name.Get())
+	}
 	sugCatID := catID.Get()
+	if sugCatID == budgetNewCatSentinel {
+		sugCatID = ""
+	}
 	var catFateHint string
-	if catID.Get() == budgetNewCatSentinel {
-		catName := strings.TrimSpace(newCatName.Get())
-		if catName == "" {
-			catName = strings.TrimSpace(name.Get())
-		}
-		if catName != "" {
-			if existing, ok := matchExpenseCategory(categories, catName); ok {
-				sugCatID = existing.ID
-				catFateHint = uistate.T("budgets.catWillReuse", existing.Name)
-			} else {
-				catFateHint = uistate.T("budgets.catWillCreate", catName)
-			}
+	if wantNewCat && typedCatName != "" {
+		if existing, ok := matchTopLevelCategory(categories, typedCatName); ok {
+			sugCatID = existing.ID
+			// Name the FULL path, so reusing a nested category is visible rather
+			// than a surprise ("Uses your existing Auto > Auto loans category").
+			catFateHint = uistate.T("budgets.catWillReuse", catname.Path(categories, existing))
+		} else if dupes := catname.FindByName(categories, typedCatName); len(dupes) > 1 {
+			catFateHint = uistate.T("budgets.catAmbiguous", len(dupes), typedCatName)
+		} else {
+			catFateHint = uistate.T("budgets.catWillCreate", typedCatName)
 		}
 	}
 	var catFateNode ui.Node = Fragment()
 	if catFateHint != "" {
 		catFateNode = Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-cat-fate"), catFateHint)
 	}
+	// The existing-category picker: shown whenever the user is NOT creating one.
+	// It is in the essentials now, not behind Advanced — the category a budget
+	// watches is not an advanced detail, and hiding it is what let the old
+	// create-by-default behaviour run unseen.
+	existingCatOptions := uiw.OptionsFrom(expenseCats,
+		func(c domain.Category) string { return c.ID },
+		func(c domain.Category) string { return c.Name },
+		catID.Get())
+	// Control before consequence: the opt-in, then the field it governs. Putting
+	// the picker first meant that ticking the box revealed the new-category name
+	// field ABOVE the checkbox that had just revealed it, which reads backwards.
+	catRow := Div(css.Class("ba-full", "budget-cat-row"),
+		Label(css.Class("budget-cat-optin", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "budget-create-cat-label"),
+			Input(append([]any{Type("checkbox"), Attr("data-testid", "budget-create-cat"),
+				Attr("style", "flex-shrink:0"), OnChange(toggleCreateCat)},
+				append(checkedAttr(wantNewCat), checkboxDisabled(mustCreateCat)...)...)...),
+			Span(uistate.T("budgets.createCatOptIn"))),
+		If(mustCreateCat, Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-create-cat-forced"),
+			uistate.T("budgets.createCatForced"))),
+		If(!wantNewCat, labeledField(uistate.T("budgets.categoryLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   existingCatOptions,
+				Selected:  catID.Get(),
+				OnChange:  func(v string) { catID.Set(v) },
+				AriaLabel: uistate.T("budgets.categoryLabel"),
+				TestID:    "budget-existing-cat",
+			}))),
+		If(wantNewCat && !mustCreateCat, labeledField(uistate.T("budgets.newCategoryName"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
+				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName)))),
+		catFateNode,
+	)
 
 	// Suggest a limit from the resolved category's recent monthly spend (D6).
 	suggestion, _ := budgeting.SuggestLimit(sugCatID, txns, now, 6, rates)
@@ -501,8 +589,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				Div(css.Class("ba-full"),
 					labeledField(uistate.T("common.name"),
 						Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
-				// Where the category will land (reuse vs create) — the side effect, said out loud.
-				If(catFateHint != "", Div(css.Class("ba-full"), catFateNode)),
+				// Which category this budget watches, and whether one gets created.
+				// This used to live behind Advanced with "create a new category" as
+				// the silent default, which is how adding a budget minted twins.
+				catRow,
 				labeledField(uistate.T("budgets.limitLabel"),
 					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
 				labeledField(uistate.T("budgets.period"),
@@ -524,20 +614,6 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.varNameLabel"),
 							entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
-					// Category is full-width so its long "Create a new category" option isn't
-					// truncated, and the new-category name field sits directly beneath it.
-					Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.categoryLabel"),
-							uiw.SelectInput(uiw.SelectInputProps{
-								Options:   catOptions,
-								Selected:  catID.Get(),
-								OnChange:  func(v string) { catID.Set(v) },
-								AriaLabel: uistate.T("budgets.categoryLabel"),
-							}))),
-					If(catID.Get() == budgetNewCatSentinel, Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.newCategoryName"),
-							Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
-								Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName))))),
 					// Optional multi-category: track more existing categories in this one budget.
 					If(len(expenseCats) > 0, Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.catsAlsoTrack"),
@@ -614,4 +690,14 @@ func tmplReviewRow(props tmplReviewRowProps) ui.Node {
 		Span(css.Class("budget-tmpl-name"), props.Label),
 		Span(css.Class("budget-tmpl-amt"), props.AmountStr),
 	)
+}
+
+// checkboxDisabled returns the disabled attribute when the control has no real
+// choice to offer — a household with no categories must create one, and a
+// checkbox that looks clickable but is not is worse than one that says so.
+func checkboxDisabled(disabled bool) []any {
+	if disabled {
+		return []any{Disabled(true)}
+	}
+	return nil
 }

@@ -40,6 +40,8 @@ func Register() {
 	registerRecordSurface()
 	registerSystemSurface()
 	registerBudgetsSurface()
+	registerIncomeAllocation()
+	registerBudgetCatOptIn()
 	registerBudgetsRecurringSurface()
 	registerBudgetFlexSurface()
 	registerCoverAllSurface()

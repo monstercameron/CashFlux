@@ -213,3 +213,53 @@ func TestSortedDoesNotMutateInput(t *testing.T) {
 		t.Errorf("Sorted = %v", out)
 	}
 }
+
+// TestFindByNameSpansTheWholeTree is the counterpart to FindSibling: a household
+// that already has "Auto > Auto loans" and is handed a second, top-level "Auto
+// loans" experiences that as a duplicate, whatever the tree says about levels.
+func TestFindByNameSpansTheWholeTree(t *testing.T) {
+	cats := []domain.Category{
+		cat("auto", "Auto", "", domain.KindExpense),
+		cat("loans", "Auto loans", "auto", domain.KindExpense),
+		cat("food", "Food", "", domain.KindExpense),
+	}
+	got := FindByName(cats, "auto loans")
+	if len(got) != 1 || got[0].ID != "loans" {
+		t.Fatalf("FindByName = %+v, want the nested Auto loans", got)
+	}
+	if len(FindByName(cats, "nothing")) != 0 {
+		t.Error("an absent name must find nothing")
+	}
+	if len(FindByName(cats, "  ")) != 0 {
+		t.Error("a blank name must find nothing")
+	}
+	// Two categories can legitimately share a name at different levels; the
+	// caller decides what to do, so both are returned.
+	cats = append(cats, cat("loans2", "Auto loans", "", domain.KindExpense))
+	if got := FindByName(cats, "Auto Loans"); len(got) != 2 {
+		t.Errorf("FindByName = %d matches, want 2", len(got))
+	}
+}
+
+func TestPath(t *testing.T) {
+	cats := []domain.Category{
+		cat("auto", "Auto", "", domain.KindExpense),
+		cat("loans", "Auto loans", "auto", domain.KindExpense),
+		cat("orphan", "Orphan", "missing", domain.KindExpense),
+	}
+	if got := Path(cats, cats[1]); got != "Auto > Auto loans" {
+		t.Errorf("Path = %q, want %q", got, "Auto > Auto loans")
+	}
+	if got := Path(cats, cats[0]); got != "Auto" {
+		t.Errorf("Path = %q, want %q", got, "Auto")
+	}
+	// A dangling parent must not blow up or invent a segment.
+	if got := Path(cats, cats[2]); got != "Orphan" {
+		t.Errorf("Path with a missing parent = %q, want %q", got, "Orphan")
+	}
+	// A self-referencing parent must terminate.
+	selfy := cat("selfy", "Selfy", "selfy", domain.KindExpense)
+	if got := Path([]domain.Category{selfy}, selfy); got != "Selfy" {
+		t.Errorf("Path with a self-parent = %q, want %q", got, "Selfy")
+	}
+}

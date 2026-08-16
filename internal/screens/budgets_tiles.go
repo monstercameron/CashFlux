@@ -145,6 +145,19 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		leftLabel = uistate.T("budgets.histUnspent")
 	}
 	leftM := money.New(spendLimit-barSpent, v.Base)
+	// How far the whole plan runs past income, if at all. Drives the caveat pinned
+	// under the hero figure and the qualifier on its label.
+	var overIncome int64
+	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
+		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
+			overIncome = -ta
+		}
+	}
+	if overIncome > 0 && !v.LastMonthMode && !hist {
+		// "Left" alone claims the money is available. It is available in the
+		// budget; it is not available in the income.
+		leftLabel = uistate.T("budgets.leftInBudget")
+	}
 	over := barSpent > spendLimit
 	fillPct := 0
 	if spendLimit > 0 {
@@ -327,11 +340,26 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
 				),
 				Div(ClassStr("budget-loader-value is-hero "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
+				// When the plan runs past income, this figure is money left in a
+				// budget that was never affordable. Unqualified, it is the largest
+				// and greenest thing on the page and a skimmer reads it as slack —
+				// so the caveat travels WITH the number rather than sitting in
+				// smaller type further down.
+				If(overIncome > 0, Div(css.Class("budget-loader-caveat"), Attr("data-testid", "budgets-hero-over-income"),
+					uistate.T("budgets.leftOverIncomeNote", fmtMoney(money.New(overIncome, v.Base))))),
 			),
 		),
 	)
+	// C529/C530: the allocation read sits directly under the band on EVERY method,
+	// so configuring "Budget income" always changes something you can see. It
+	// renders nothing without an income figure, in which case basisBtn below stays
+	// as the call to action.
+	alloc := budgetIncomeAllocation(v, basisBtn, hist)
+	hasAlloc := v.BannerIncome+v.RolledOver > 0
+
 	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
 		band,
+		alloc,
 		Div(css.Class("budget-hero-cap"),
 			incomeActual,
 			Div(css.Class("budget-hero-side"),
@@ -342,7 +370,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				If(attnOver > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
 					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
 				toAssignChip,
-				basisBtn,
+				// Only a call to action while there is no basis yet — once one is
+				// set, the quiet "Change" in the allocation caption owns it, and two
+				// buttons for one action is clutter.
+				If(!hasAlloc, basisBtn),
 				ageChip,
 			),
 		),

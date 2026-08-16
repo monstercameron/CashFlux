@@ -6,7 +6,33 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **The /budgets hero answers "how much of my income have I budgeted?"** Configuring "Budget
+  income" used to change nothing visible on the default method: the basis fed the hero band's
+  denominator only under zero-based budgeting, and everywhere else it reached one faint caption.
+  A new allocation read sits under the band on EVERY method — the percentage of income the plan
+  claims, the figure it is a percentage of, and what that means in words, over a bar that fills
+  to the income tick and stripes anything past it.
+- **The plan running past income is stated where it can be seen.** On the sample household the
+  hero read "Budgeted $9,582.50" beside an income of $5,900 and said nothing; the largest, greenest
+  number on the page announced $6,962.50 "Left". That figure is money left in a budget that was
+  never affordable, so its label becomes "Left in budget" and the amount over income is pinned
+  directly beneath it.
+- **Creating a category when adding a budget is opt-in.** It was the default outcome AND it lived
+  behind the Advanced disclosure, so the common path minted a category named after the budget with
+  nothing on screen offering the alternative. The choice is now in the essentials: a picker for
+  what the budget watches, and a checkbox — off by default — that replaces it with a new category.
+  A household with no categories yet gets it ticked and told why.
+
 ### Fixed
+- **Naming a new category after one that already exists reuses it.** The old guard matched only
+  expense-kind categories and only at the top level, so a nested "Auto > Auto loans" did not stop a
+  second, top-level "Auto loans" — a duplicate to everyone but the code. Matching now spans the
+  tree, names the full path of what it reused, and says so when two categories already share the
+  name rather than guessing between them.
+- **The add-a-budget guard reads the store, not a stale snapshot.** It was handed a category list
+  captured at render, in a component that never subscribes to the data revision — while the same
+  submit handler re-read the store fresh thirty lines later for a different list.
 - **Category names are compared one way everywhere.** A new pure `catname` package owns the
   three questions that used to be answered independently in every screen that asked them:
   when two names are equal (case- and whitespace-insensitive, so "Eating  Out" is not a new
