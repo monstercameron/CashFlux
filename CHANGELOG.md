@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The Transactions audit fixes are covered by tests, not just by having been driven once.**
+  `e2e/regression/txn_audit.spec.mjs` locks down all thirteen acceptance criteria in a real browser,
+  each test reading BOTH the control and the thing it claims to control — the disagreement between
+  them was the bug, and a test that read only the label would have passed against the broken build.
+  The split editor's "is this draft saveable" rule moved out of view code into `internal/split`
+  (`Classify`/`Saveable`), and the ledger's period classification into `internal/txnscope`, both
+  table-driven-tested on native Go including the near-miss month cases. `internal/screenlint` gained
+  ratchets that fail if the specific shapes come back: a second period state on the ledger,
+  `/transactions` becoming period-aware again, a flat category picker built from bare leaf names, an
+  exclude-from-reports that stops confirming, a duplicate-review confirmation that claims to be
+  irreversible, or a split editor that recomputes its own verdict.
+
 - **CashFlux ships as a container.** `Dockerfile.server` now builds a distroless, non-root,
   linux/amd64 image; `deploy/production/compose.yaml` runs it on the droplet the same way
   AnimeFeedFlux and the portfolio already run; and `.github/workflows/release.yml` publishes it to
@@ -60,6 +72,17 @@ and every commit updates this file under `Unreleased`.
   without a trip to the Rules page. Hand-entered and reviewed rows are never marked.
 
 ### Fixed
+- **A budget you just added is still there after a refresh (C584).** Adding a budget wrote it to the
+  in-memory store and left it there: the dataset autosaved on a four-second ticker, and the
+  pagehide/visibilitychange backstop cannot help because the store is IndexedDB, whose writes are
+  asynchronous — a page that is closing has no time to finish one. Add a budget, reload straight
+  away, and it was simply gone. It was never specific to creating a new category; the
+  existing-category path lost the same write on the same timing, which is why the report read as
+  intermittent. The dataset now persists shortly after any mutation (the app's own data-revision
+  signal, one quiet tick later, so a burst of edits still costs one write), and the add form flushes
+  immediately on top of that. A budget and the category it creates are also one operation now
+  (`appstate.CreateBudgetWithCategory`): a failed budget write takes its half-made category with it,
+  and both are read back out of the store before the dialog is allowed to close.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

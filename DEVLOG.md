@@ -1,3 +1,121 @@
+## 2026-08-16 — The four seconds nobody was counting
+
+C584 read as a data-loss bug in one code path: "a budget created with a new category disappears
+after a refresh; the same flow using an existing category persists." Driving it in a real browser
+gave a different answer. Both paths lose the write. The existing-category path had simply been
+lucky with the clock.
+
+The mechanism is that the dataset autosaves on a four-second ticker, and the two events that were
+supposed to catch the gap — pagehide and visibilitychange — cannot. The store is IndexedDB; its
+writes are asynchronous; a page that is closing does not get to finish one. So every mutation in
+the app had a window of up to four seconds in which it existed only in memory. Nobody noticed
+because you have to reload inside that window, and the one moment a user reliably does is right
+after creating something they want to go and look at.
+
+The fix is not another RequestPersist sprinkled at the call site — that only covers whatever the
+author remembered. Every mutation already bumps the shared data-revision atom to re-render the
+screens, so that counter IS the app's "something changed" signal. A watcher waits for one quiet
+300ms tick after the revision stops moving and writes. A burst of edits (a bulk adjust, an
+auto-budget save) still costs one serialize, and the worst-case exposure drops from four seconds
+to about six hundred milliseconds. The add form flushes immediately on top of that, because that
+specific moment is the one the report was about.
+
+The other half of C584 was real and separate: the form wrote the category, then the budget. A
+budget write that failed after the category landed left an orphan category behind, and nothing
+verified either row could be read back before the dialog closed and reported success.
+`CreateBudgetWithCategory` makes them one operation — rollback on failure, read-back before
+returning — so "it said it saved" and "it saved" are the same statement.
+
+C585 turned out to have two causes, not one. The reported one: the Transportation budget showed
+$105.00 spent and its Transactions action opened an empty ledger, because the bar counts with
+`EvaluateRollup` (tracked categories PLUS descendants PLUS tracked tags) while the drill passed
+only `TrackedCategoryIDs` — and every one of those charges sat in the Gas sub-category. The second
+was sitting in a TODO in `txnfilter` and in the "known gaps" list in the split contract: the
+category filter matched only the parent transaction's CategoryID, so a split receipt could feed a
+budget's bar and be invisible in the ledger that bar links to. Both are now the same set by
+construction: `budgeting.ScopeOf` answers "what does this budget count", the bar and the drill both
+read it, and the filter is split-aware. Tags needed one new thing — `Criteria.ScopeAny`, which ORs
+the category and tag dimensions, because a budget counts a charge that is in a tracked category OR
+carries a tracked tag, and AND-ing them hides exactly the charges the tag contributed.
+
+C586 was the same disagreement one surface earlier. With "create a new category" ticked, the
+suggestion kept whatever the existing-category picker happened to hold, so a brand-new "Pet care"
+budget was told "you've averaged $1,100.00/mo here recently" — Transportation's history wearing
+another category's name. And `SuggestLimit` counted one category exactly, so even on the honest
+path it disagreed with the card it was sizing. It is scoped and split-aware now, and a new category
+says it has no history rather than borrowing someone else's.
+
+C591 and C596 are both cases of a control that described two different things depending on state.
+The budget name was an unlabelled button that navigated to the same filtered ledger as the row's
+Transactions action — one action, two affordances, one of them invisible unless you hovered it. The
+name is a heading again in both densities, and the compact row got its own labelled Transactions
+control so it keeps a one-click path. The density toggle swapped its label between "Compact list"
+and "Card view" while also setting aria-pressed, so it announced "Card view, pressed" while the
+compact list was on screen. One stable name, state in aria-pressed, and the tooltip carries what a
+click will do.
+
+C589: "Custom range" was a mode flag. Clicking it relabelled the pill "Jul 2026 – Jul 2026" while
+the window was still one month — a label for a range nobody had chosen — and each stepper click
+then mutated the live view, so every intermediate state on the way to "June through September" was
+applied and re-queried. The mode also lived in component state, so navigating away lost it while
+its effect stayed. It is a draft workflow now: the editor opens when the window IS a range or the
+user asks for one, the steppers move a draft, a sentence states the span and what it does and does
+not change ("each budget and goal keeps its own cadence"), and Apply is the only thing that touches
+the view.
+
+## 2026-08-16 — Testing the audit fixes, and what the tests found
+
+Cam asked for the C560–C572 work to be heavily tested. Writing the tests found three things the
+implementation pass had not, which is the argument for writing them.
+
+The first was a **false string still in the catalog**. My own new ratchet — "no duplicate-review
+confirmation may claim the action is irreversible" — failed immediately on
+`duplicates.deleteConfirm: "Delete this duplicate transaction? This can't be undone."` I had
+replaced its call site with a named, honest version and left the old key sitting in `en.go`. Dead
+copy is not harmless when it is also wrong: it is the string the next author reaches for. Deleted.
+
+The second was my own **guard being too narrow**. The exclude-from-reports ratchet bounded its scan
+to `toggleExclude`'s body and so never saw `applyExclude`, where the undo capture lives — it failed
+against correct code. A guard that fails on a correct implementation is worse than no guard,
+because the fix is to weaken it and nobody re-tightens it. Widened to the handler pair.
+
+The third was a **racy assertion I wrote myself**. The first C569 test sampled `aria-busy` in a
+loop after clicking a sort header. The busy window is deliberately short, so a sampling loop that
+happens to miss it reports "never busy" — a flake indistinguishable from the bug. Rewritten as a
+frame-polled `waitForFunction` armed BEFORE the click, asserting that `aria-busy` and the spinner
+are true in the SAME frame. That also strengthened it: a spinner without the busy attribute would
+announce nothing to assistive tech, and now that combination cannot pass.
+
+Two pieces of logic moved out of view code on the way, which is what made them testable at all.
+`internal/split`'s `Classify`/`Saveable` owns "is this draft a valid split", so the remainder line
+and the Save button read one verdict rather than two implementations of the same rule — the exact
+failure C566 was. And `internal/txnscope` already owned the period classification; its test file
+gained exhaustive properties over 2020–2031 rather than more hand-picked cases: every month
+round-trips as that month, stepping is reversible from every month, twelve steps advance exactly a
+year across both February lengths, and every day of a month anchors on its own month. Those are the
+statements that have to hold for the period label never to sit over rows from another month.
+
+The `txnfilter` preset-count tests got the assertion I actually wanted: rather than checking the
+counts against hand-computed constants, they check each chip's promised count against
+`len(Apply(txns, thatPresetsFilter))`. A count beside a filter is a promise about what pressing it
+yields, so the test states exactly that and cannot drift from the implementation's own arithmetic.
+
+The browser spec is thirteen describes, one per ticket, and the rule throughout is to read both
+sides in the same moment. "Stepping the period moves the label" is not the assertion — the
+assertion is that the label names June AND every visible row's date is in June AND the filter chips
+say 2026-06-01/30 AND the calendar caption says June. Reading only the label is what would have
+passed against the broken build.
+
+Writing it also surfaced a trap worth recording: a CLOSED overflow menu stays in the DOM wearing
+`hidden-menu`, so `getByTestId("txn-delete")` matches whether or not the menu is open. My first
+draft used menu items as the "did it open?" check for `openVia`, which therefore never clicked and
+then failed on visibility — eighteen tests failing for one wrong helper. Every popover assertion
+now keys off `.add-menu:not(.hidden-menu)`.
+
+The ratchets were mutation-checked rather than assumed: re-adding `/transactions` to `periodAware`
+fails the period guard, and reverting one picker to `c.Name` fails the qualified-path guard. Both
+pass again on revert. A guard nobody has seen fail is not yet a guard.
+
 ## 2026-08-16 — Three states that could never have agreed
 
 The rest of the Transactions audit (C560, C563, C564, C569, C571, C572). C560 is the one worth

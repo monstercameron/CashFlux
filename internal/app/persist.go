@@ -443,4 +443,41 @@ func startDatasetAutosave() {
 			save()
 		}
 	}()
+	go watchDataRevision(save)
+}
+
+// dataRevisionQuietTick is how long the revision watcher waits for the edits to
+// stop before it writes. One tick of quiet collapses a burst (a bulk adjust, an
+// auto-budget save, a fast sequence of inline edits) into a single write while
+// still landing well inside the window a user can reload in.
+const dataRevisionQuietTick = 300 * time.Millisecond
+
+// watchDataRevision persists the dataset shortly after every mutation instead of
+// waiting for the 4-second ticker (C584).
+//
+// The ticker alone leaves a just-saved budget — or account, or transaction —
+// unwritten for up to four seconds. The pagehide/visibilitychange handlers do not
+// rescue it: the store is IndexedDB, whose writes are asynchronous, so a page
+// that is closing cannot flush one. Add a budget and refresh straight away and it
+// is simply gone, which is exactly the "it appeared to succeed" report behind
+// C584 — and it was never specific to new categories; the existing-category path
+// loses the same write on the same timing.
+//
+// Every mutation path already bumps the shared data revision to re-render the
+// screens, so that counter is the app's own "something changed" signal and needs
+// no new instrumentation at each write site. The watcher waits for one quiet tick
+// so a burst of edits costs one serialize, not one per edit.
+func watchDataRevision(save func()) {
+	seen := uistate.CurrentDataRevision()
+	pending := false
+	for {
+		time.Sleep(dataRevisionQuietTick)
+		switch rev := uistate.CurrentDataRevision(); {
+		case rev != seen:
+			seen, pending = rev, true // still changing — let the burst finish
+		case pending:
+			pending = false
+			save()
+		}
+	}
 }
