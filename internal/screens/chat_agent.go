@@ -1443,6 +1443,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 	tools = append(tools, agToolsCapture(app, base, rates)...)
 	tools = append(tools, agToolsTax(app, base, rates)...)
 	tools = append(tools, agToolsDocQA(app, base, rates)...)
+	tools = append(tools, agToolsCoach(app, base, rates)...)
 	return tools
 }
 

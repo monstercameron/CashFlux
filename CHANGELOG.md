@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Goal coaching and negotiation prep, as proposals the assistant can offer (AG15, AG16).** Both are
+  read-only tools that produce something to decline — advice nobody asked for should not also be
+  advice they have to undo.
+
+  Goal coaching's hard part is restraint, so the package is written around its silences: a paused
+  goal is never nagged (pausing was a decision), a goal with no deadline cannot be behind (saying it
+  is invents a commitment nobody made), a goal coached in the last fortnight is left alone, and a
+  goal past its deadline gets no monthly-increase proposal because that is arithmetic pretending to
+  be advice. What is left says how far behind, what contribution would fix it, and how much more that
+  is — rounded UP, so a proposal never lands a penny short.
+
+  Negotiation prep is the honest local answer to a service that wants account access and a cut: the
+  leverage in these calls is almost entirely facts about you, and the household already has them. It
+  assembles tenure, the documented price rise and what the thing costs a year, in the order they
+  should be used, with a script short enough to read while nervous — including the pause after the
+  ask, which is the actual technique. It refuses to invent a competitor price, because one the
+  provider can disprove ends the call, and it says plainly when there is nothing to bargain with
+  rather than sending somebody into a call they cannot win.
+
 - **Merge categories into a new one (C549).** "Merge into…" only ever offered categories that already
   existed, so "merge these two into a new category" had no path at all. The target picker now has a
   "＋ New category…" entry with a name field; kind, parent and colour come from the source, so there
