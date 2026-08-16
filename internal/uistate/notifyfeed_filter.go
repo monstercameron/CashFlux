@@ -6,6 +6,8 @@
 
 package uistate
 
+import "sort"
+
 // FeedItem is one entry in the Notification Center (C75): the title/body of an
 // emitted notification, when it fired, whether the user has read it, the
 // severity level for visual differentiation (C267), and an optional snooze
@@ -141,4 +143,52 @@ func VisibleFeed(items []FeedItem, now int64) []FeedItem {
 		out = append(out, it)
 	}
 	return out
+}
+
+// ─── C345: order the feed the way a person triages it ────────────────────────
+
+// severityRank scores a feed item's severity for ordering; an unset severity is
+// info, as everywhere else in the center.
+func severityRank(sev string) int {
+	switch sev {
+	case "critical":
+		return 3
+	case "warning":
+		return 2
+	default:
+		return 1
+	}
+}
+
+// SortForAttention orders a feed the way a reader actually triages it: most
+// severe first, then most urgent within a tier, then most recent.
+//
+// The center used to sort by severity alone, leaving everything inside a tier in
+// whatever order the generators happened to emit it — so "due in 2 days" sat
+// below "due in 14 days" and the queue could only be read by scanning all of it
+// (V-sweep C345). Urgency is the due date when an item carries one: an overdue
+// bill outranks an upcoming one, and both outrank an item with no deadline at
+// all, which is dated news rather than a thing to do.
+//
+// now is unix seconds. The sort is stable, so items that tie keep their emitted
+// order and the feed never reshuffles between renders for no reason.
+func SortForAttention(items []FeedItem, now int64) {
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		if ra, rb := severityRank(a.Severity), severityRank(b.Severity); ra != rb {
+			return ra > rb
+		}
+		// A deadline beats no deadline; between two deadlines, sooner wins.
+		switch {
+		case a.DueAt > 0 && b.DueAt > 0:
+			if a.DueAt != b.DueAt {
+				return a.DueAt < b.DueAt
+			}
+		case a.DueAt > 0:
+			return true
+		case b.DueAt > 0:
+			return false
+		}
+		return a.At > b.At
+	})
 }

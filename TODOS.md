@@ -5176,11 +5176,21 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   rewrite that deletes the thing the demo was demonstrating is not a fix.
 
 ### Helpfulness / decision quality
-- [ ] **C345 [MAJOR][UX] /notifications is an ungrouped flood:** 14 near-identical "needs an
-  update" warnings + 8 "due soon" + 3 "large charge" as flat, same-weight cards, not sorted by
-  urgency ("due in 2 days" renders below "due in 14 days"), every one stamped "just now" (generated
-  on boot). Group by kind with a count + expand, order by urgency, keep the digest card. (The
-  digest already proves the grouping concept.)
+- [x] **C345 ✅ DONE (2026-08-16) — /notifications was an ungrouped flood.** Grouping had landed
+  since the audit (`notifGroupMin` collapses 3+ same-kind non-critical rows into one summary card
+  with a count and an expand, per rule kind), and C349 removed the 14 "needs an update" warnings at
+  the source by making the sample's balances fresh. The two live halves were the ordering and the
+  timestamps. **Ordering:** the feed sorted by severity ALONE, leaving everything inside a tier in
+  whatever order the generators emitted it — which is why "due in 2 days" sat below "due in 14
+  days". `uistate.SortForAttention` now ranks severity → urgency → recency, where urgency is the
+  due date an item carries: most overdue first, then soonest, and a dated item outranks an undated
+  one inside its tier (an alert with no deadline is dated news, not a thing to do by a date). The
+  sort is stable, so ties keep their emitted order and the feed never reshuffles for no reason.
+  **Timestamps:** the feed is rebuilt on boot, so every row was stamped "just now" — a column of
+  identical timestamps on the one surface whose job is ranking by how soon things matter. A
+  due-dated alert is now stamped with its DEADLINE ("overdue by 3 days" / "due tomorrow" / the date
+  itself past 30 days). Tests cover the ticket's exact ordering complaint, the dated-beats-undated
+  rule, stability, and the empty-severity-is-info default.
 - [ ] **C347 [MAJOR][UX] Subscription detection over-claims.** HOA dues, "Household & shopping",
   Gas, Pharmacy, Cigarettes are counted as subscriptions → "Monthly subscriptions $1,807.50 /
   SHARE OF SPENDING 97%", and the price tracker reports variable spend as hikes ("Date night went

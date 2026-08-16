@@ -250,3 +250,69 @@ func TestDueToday(t *testing.T) {
 		})
 	}
 }
+
+// ─── C345: the feed must read top-down ───────────────────────────────────────
+
+// TestSortForAttentionRanksSeverityThenUrgency is the ticket's exact complaint:
+// "due in 2 days" rendered below "due in 14 days", so the queue could only be
+// read by scanning all of it.
+func TestSortForAttentionRanksSeverityThenUrgency(t *testing.T) {
+	const day = int64(86400)
+	now := int64(1_800_000_000)
+	items := []uistate.FeedItem{
+		{ID: "bill-14d", Severity: "warning", At: now, DueAt: now + 14*day},
+		{ID: "large", Severity: "info", At: now},
+		{ID: "bill-2d", Severity: "warning", At: now, DueAt: now + 2*day},
+		{ID: "overdue", Severity: "critical", At: now, DueAt: now - 3*day},
+		{ID: "bill-overdue-more", Severity: "critical", At: now, DueAt: now - 9*day},
+		{ID: "stale", Severity: "warning", At: now},
+	}
+	uistate.SortForAttention(items, now)
+
+	var got []string
+	for _, it := range items {
+		got = append(got, it.ID)
+	}
+	want := []string{
+		"bill-overdue-more", // critical, most overdue
+		"overdue",           // critical
+		"bill-2d",           // warning with the nearest deadline
+		"bill-14d",          // warning, further out
+		"stale",             // warning with no deadline at all
+		"large",             // info
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("order = %v, want %v", got, want)
+		}
+	}
+}
+
+// A deadline beats no deadline inside a tier: an item with no due date is dated
+// news, not a thing to do by a date.
+func TestSortForAttentionPrefersDatedWork(t *testing.T) {
+	now := int64(1_800_000_000)
+	items := []uistate.FeedItem{
+		{ID: "news", Severity: "info", At: now},
+		{ID: "dated", Severity: "info", At: now - 1000, DueAt: now + 86400*40},
+	}
+	uistate.SortForAttention(items, now)
+	if items[0].ID != "dated" {
+		t.Errorf("order = %s first, want the dated item — a deadline outranks recency", items[0].ID)
+	}
+}
+
+// An unset severity is info, and ties keep their emitted order so the feed does
+// not reshuffle between renders for no reason.
+func TestSortForAttentionIsStableAndTreatsEmptyAsInfo(t *testing.T) {
+	now := int64(1_800_000_000)
+	items := []uistate.FeedItem{
+		{ID: "a", At: now},
+		{ID: "b", At: now},
+		{ID: "c", Severity: "info", At: now},
+	}
+	uistate.SortForAttention(items, now)
+	if items[0].ID != "a" || items[1].ID != "b" || items[2].ID != "c" {
+		t.Errorf("stable order broken: %s %s %s", items[0].ID, items[1].ID, items[2].ID)
+	}
+}

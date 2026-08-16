@@ -55,6 +55,12 @@ var vSweepKeys = Catalog{
 	// period actually came to. %s = last period's spend, %s = the "$X under" /
 	// "$X over" gap against this period's budget.
 	"budgets.priorPeriodOutcome": "Last period: %s (%s)",
+
+	// ── C345: a due-dated alert is stamped with its deadline ────────────────
+	// The feed is rebuilt on boot, so every row read "just now" — a column of
+	// identical timestamps on the one surface whose job is ranking by urgency.
+	// %d = whole days past the due date.
+	"notifications.overdueBy": "overdue by %d days",
 }
 
 func init() {

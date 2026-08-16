@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/notify"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -588,4 +589,28 @@ func notifyRow(props notifyRowProps) ui.Node {
 			),
 		),
 	)
+}
+
+// notifyDueLabel stamps a due-dated alert with its DEADLINE rather than with
+// when the generator happened to run (C345).
+//
+// The feed is rebuilt on boot, so every row's fire time was "just now" — a
+// column of identical timestamps carrying no information, on the one surface
+// whose job is to rank things by how soon they matter. A deadline is what the
+// reader is actually deciding against.
+func notifyDueLabel(dueAt, now int64, pr prefs.Prefs) string {
+	if over := uistate.OverdueDays(dueAt, now); over > 0 {
+		return uistate.T("notifications.overdueBy", over)
+	}
+	day := func(ts int64) int64 { return ts / 86400 }
+	switch d := int(day(dueAt) - day(now)); {
+	case d <= 0:
+		return uistate.T("bills.dueToday")
+	case d == 1:
+		return uistate.T("bills.dueTomorrow")
+	case d <= 30:
+		return uistate.T("bills.dueInDays", d)
+	default:
+		return pr.FormatDate(time.Unix(dueAt, 0))
+	}
 }

@@ -79,6 +79,18 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **The notification center reads top-down again (C345).** It sorted by severity alone, so
+  everything inside a tier stayed in whatever order the generators emitted it — "due in 2 days" sat
+  below "due in 14 days", and the queue could only be read by scanning all of it. Ordering is now
+  severity, then urgency, then recency: most overdue first, then soonest due, and an alert carrying a
+  deadline outranks one that doesn't, because an item with no due date is dated news rather than a
+  thing to do by a date. The sort is stable, so the feed doesn't reshuffle between renders.
+
+  Every row was also stamped "just now", because the feed is rebuilt on boot — a column of identical
+  timestamps on the one surface whose whole job is ranking things by how soon they matter. A
+  due-dated alert now carries its deadline instead: "overdue by 3 days", "due tomorrow", or the date
+  itself once it's more than a month out.
+
 - **The sample household adds up (C350).** Goals linked to the joint savings claimed $19,100 against
   $15,540 actually in the account. "Pay off Priya's student loan" showed $25,000 still to go beside a
   ledger balance of $18,800. And every shared account was owned by one person, so net-worth-by-member

@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -298,10 +297,10 @@ func notifListWidget(props notifProps) ui.Node {
 		visible = kept
 	}
 
-	// Prioritize by severity; stable sort keeps recency within each tier.
-	sort.SliceStable(visible, func(i, j int) bool {
-		return notifySeverityRank(visible[i].Severity) > notifySeverityRank(visible[j].Severity)
-	})
+	// Severity, then urgency, then recency (C345) — sorting by severity alone
+	// left "due in 2 days" below "due in 14 days" and made the queue readable
+	// only by scanning all of it.
+	uistate.SortForAttention(visible, now)
 
 	if len(feed) == 0 {
 		return notifListTile(P(css.Class("empty"), uistate.T("notifications.empty")))
@@ -350,9 +349,15 @@ func notifListWidget(props notifProps) ui.Node {
 	buildRow := func(it uistate.FeedItem) ui.Node {
 		id := it.ID
 		isRead := it.Read
+		// A due-dated alert is stamped with its DEADLINE, not with when the
+		// generator happened to run (C345): the feed is rebuilt on boot, so every
+		// row read "just now" and the timestamps carried no information at all.
 		timeStr := relativeTime(it.At, now)
 		if timeStr == "" {
 			timeStr = pr.FormatDate(time.Unix(it.At, 0))
+		}
+		if it.DueAt > 0 {
+			timeStr = notifyDueLabel(it.DueAt, now, pr)
 		}
 		return ui.CreateElement(notifyRow, notifyRowProps{
 			Item:    it,
