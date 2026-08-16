@@ -1113,6 +1113,19 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	if len(t.Tags) == 0 && len(r.SetTags) > 0 {
 		t.Tags = append([]string(nil), r.SetTags...)
 	}
+	// C373: the apply-once actions (member, reviewed, exclude), evaluated by the
+	// one shared predicate so entry-time and the two backfills cannot drift.
+	if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+		if ap.MemberID != "" {
+			t.MemberID = ap.MemberID
+		}
+		if ap.Reviewed {
+			t.Reviewed = true
+		}
+		if ap.ExcludeFromReports {
+			t.ExcludeFromReports = true
+		}
+	}
 	// C102: the rename action fires on entry too — previously only the
 	// "Apply to existing" backfill applied it, so a fresh transaction kept its
 	// raw description while an identical historical one got cleaned.
@@ -2286,6 +2299,15 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 			t.Desc = r.RenameDesc
 			changed = true
 		}
+		// C373: member / reviewed / exclude, through the shared apply-once rule.
+		if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+			if ap.MemberID != "" {
+				t.MemberID = ap.MemberID
+			}
+			t.Reviewed = t.Reviewed || ap.Reviewed
+			t.ExcludeFromReports = t.ExcludeFromReports || ap.ExcludeFromReports
+			changed = true
+		}
 		// The bill link applies independently of the category winner (first matching rule
 		// that sets it), and only onto unlinked transactions — never clobber a manual link.
 		if t.BillAccountID == "" {
@@ -2357,6 +2379,15 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 			t.BillAccountID = r.SetBillAccountID
 			changed = true
 		}
+		// C373: member / reviewed / exclude, through the shared apply-once rule.
+		if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+			if ap.MemberID != "" {
+				t.MemberID = ap.MemberID
+			}
+			t.Reviewed = t.Reviewed || ap.Reviewed
+			t.ExcludeFromReports = t.ExcludeFromReports || ap.ExcludeFromReports
+			changed = true
+		}
 		if !changed {
 			continue
 		}
@@ -2408,6 +2439,11 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 				func(rr rules.Rule) bool { return rr.SetBillAccountID != "" }); br != nil {
 				changed = true
 			}
+		}
+		// C373: the preview must agree with the apply about what counts as a
+		// change, or the blast-radius number it promises is not the one delivered.
+		if r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports).Any() {
+			changed = true
 		}
 		if !changed {
 			continue

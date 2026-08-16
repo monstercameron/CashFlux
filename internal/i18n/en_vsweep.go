@@ -157,6 +157,17 @@ var vSweepKeys = Catalog{
 	"rules.hitsEver":    "%d filed all-time",
 	"rules.hitsLastRun": "Last filed a transaction on %s",
 	"rules.hitsNoDate":  "Filed transactions before this app started recording when",
+
+	// ── C373: the three actions the benchmark audit found missing ───────────
+	// All three are apply-once: a rule fills a gap, it never reverses a person's
+	// explicit choice, so there is no "un-assign" or "un-review" to offer.
+	"rules.memberFieldLabel":   "Assign to",
+	"rules.memberNone":         "Don't assign anyone",
+	"rules.reviewedFieldLabel": "Mark reviewed (skip the review inbox)",
+	"rules.excludeFieldLabel":  "Exclude from reports (still counts in balances)",
+	"rules.memberMeta":         "assigns %s",
+	"rules.reviewedMeta":       "marks reviewed",
+	"rules.excludeMeta":        "excludes from reports",
 }
 
 func init() {

@@ -126,6 +126,15 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	categoryID := ui.UseState("")
 	tags := ui.UseState("")
 	billAcct := ui.UseState("")
+	// C373: the three actions the benchmark audit found missing. All three are
+	// apply-once — a rule fills a gap, it never reverses an explicit choice — so
+	// the form offers "assign to", "mark reviewed" and "exclude from reports"
+	// with no way to express the reverse, which would be a different feature.
+	memberID := ui.UseState("")
+	reviewedS := ui.UseState(false)
+	onReviewed := ui.UseEvent(func(e ui.Event) { reviewedS.Set(e.IsChecked()) })
+	excludeS := ui.UseState(false)
+	onExclude := ui.UseEvent(func(e ui.Event) { excludeS.Set(e.IsChecked()) })
 	errMsg := ui.UseState("")
 	// Retroactive choice at creation: saving alone applies to FUTURE activity
 	// only; ticking this also backfills the rule onto what it already matches
@@ -214,18 +223,22 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 
 	add := ui.UseEvent(Prevent(func() {
 		conds := collectConditions()
-		hasAction := categoryID.Get() != "" || billAcct.Get() != "" || strings.TrimSpace(tags.Get()) != ""
+		hasAction := categoryID.Get() != "" || billAcct.Get() != "" || strings.TrimSpace(tags.Get()) != "" ||
+			memberID.Get() != "" || reviewedS.Get() || excludeS.Get()
 		if errKey := validateRuleInput(match.Get(), len(conds) > 0, hasAction); errKey != "" {
 			errMsg.Set(uistate.T(errKey))
 			return
 		}
 		r := rules.Rule{
-			ID:               id.New(),
-			Match:            strings.TrimSpace(match.Get()),
-			SetCategoryID:    categoryID.Get(),
-			SetTags:          textutil.CommaFields(tags.Get()),
-			SetBillAccountID: billAcct.Get(),
-			Conditions:       conds,
+			ID:                    id.New(),
+			Match:                 strings.TrimSpace(match.Get()),
+			SetCategoryID:         categoryID.Get(),
+			SetTags:               textutil.CommaFields(tags.Get()),
+			SetBillAccountID:      billAcct.Get(),
+			SetMemberID:           memberID.Get(),
+			SetReviewed:           reviewedS.Get(),
+			SetExcludeFromReports: excludeS.Get(),
+			Conditions:            conds,
 			// New rules append to the END of the first-match-wins chain: with the
 			// zero Order they tie with existing rules and the store's ID tie-break
 			// silently jumped them to the TOP of precedence.
@@ -250,6 +263,9 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		categoryID.Set("")
 		tags.Set("")
 		billAcct.Set("")
+		memberID.Set("")
+		reviewedS.Set(false)
+		excludeS.Set(false)
 		cond1Enabled.Set(false)
 		cond1Field.Set("")
 		cond1Op.Set("")
@@ -312,6 +328,26 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				AriaLabel: uistate.T("rules.billAccountFieldLabel"),
 				TestID:    "rule-add-billacct-select",
 			})),
+		// C373: assign to a member, mark reviewed, exclude from reports. Each is
+		// apply-once — the form offers no way to express the reverse, because a
+		// standing instruction that un-assigns or un-reviews would be undoing a
+		// person's explicit choice on a schedule.
+		uiw.FormField(uistate.T("rules.memberFieldLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   ruleMemberOptions(app),
+				Selected:  memberID.Get(),
+				OnChange:  func(v string) { memberID.Set(v) },
+				AriaLabel: uistate.T("rules.memberFieldLabel"),
+				TestID:    "rule-add-member-select",
+			})),
+		Label(css.Class("cond-slot-header", "fg-span"),
+			Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "rule-add-reviewed"),
+				Checked(reviewedS.Get()), OnChange(onReviewed)),
+			Span(uistate.T("rules.reviewedFieldLabel"))),
+		Label(css.Class("cond-slot-header", "fg-span"),
+			Input(css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "rule-add-exclude"),
+				Checked(excludeS.Get()), OnChange(onExclude)),
+			Span(uistate.T("rules.excludeFieldLabel"))),
 
 		// C105: Up to 3 bounded condition slots. Each slot's On* handlers are
 		// registered at stable hook positions above, not inside a loop.

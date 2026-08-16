@@ -5502,11 +5502,28 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   actually land, not skipped duplicates. Tests: accumulation, the out-of-order credit, the no-op
   credit, and an end-to-end check that a dry run credits nothing while a real backfill credits twice
   and a no-op re-run adds nothing.
-- [ ] **C373 [MAJOR][RULES] Rule-action coverage audit vs the commercial benchmark.** Reviewer
-  benchmark set: rename, categorize, tag, member assignment, review status, exclude, split,
-  goal-link. Audit `internal/rules` action coverage and fill the gaps (member assignment, review
-  status, and goal-link are the suspected missing ones); each new action appears in the add-form
-  and in preview lines.
+- [x] **C373 ✅ DONE (2026-08-16) — Rule-action coverage audit vs the commercial benchmark.**
+  Audited all eight. **Shipping:** rename, categorize, tag (plus bill-link, which the benchmark set
+  doesn't list). **Filled:** member assignment (`SetMemberID`), review status (`SetReviewed`),
+  exclude (`SetExcludeFromReports`) — the ticket suspected member and review status; exclude was
+  missing too.
+  **Two are deliberately NOT filled, and that is the audit's answer rather than a shortfall.**
+  SPLIT is a feature, not a gap: it needs per-line percentages or amounts and a remainder policy,
+  none of which the rule form has a vocabulary for, and stubbing it would ship a control that
+  can't express the thing. GOAL-LINK has no target at all — a transaction carries no goal
+  reference; goals attach to accounts and categories — so it is a data-model question, not a
+  missing action, and inventing a field to satisfy an audit checklist would be the wrong way round.
+  **All three new actions are APPLY-ONCE**, matching the bill-link precedent: a rule may fill a gap
+  and may never reverse a person's explicit choice. A member is assigned only where there is none —
+  a standing instruction that silently changes whose spending something was is the failure mode
+  these exist to avoid — and the two flags only ever go false → true. The form offers no way to
+  express the reverse, which is a decision, not an omission, and there is a test saying so.
+  The semantics live in one shared `Rule.ApplyOnce` predicate rather than being spelled out at each
+  of the three firing seams (entry-time, full backfill, single-rule backfill), which is how the
+  bill-link's "only when empty" rule came to be repeated three times. `PreviewApplyRules` evaluates
+  the same predicate, so the blast-radius number it promises is the one the apply delivers. Each
+  action appears in the add-form and on the rule row's meta line — a rule whose only visible effect
+  is a category, while it silently assigns a member, is a rule the user cannot reason about.
 - [ ] **C374 [MAJOR][TXN] Review-inbox triage header.** Reviewer: "A 252-item review backlog lacks
   a visible triage summary or confidence breakdown." Header over the inbox: N auto-categorized
   high-confidence / N needs a look / N possible duplicates, with one-click "Accept all
@@ -9065,3 +9082,202 @@ was recreated before ending the pass.
   Reconcile the served bundle with the C619 implementation, or update the implementation/test if the
   contract changed. AC: stale rows are explicitly marked as pending and search completion is announced
   without making the user guess whether the query was accepted.
+
+---
+
+## TXN bug bash — static sweep of the transactions code (2026-08-16)
+
+Stage 1 of a staged bug bash of `/transactions` against the served build on `:8080`. This stage read
+the transaction code paths end to end across eight disjoint lanes (screen host, rows, edit form,
+splits, scope/calendar, filters, ledger money, persistence/export) and put every candidate through an
+adversarial verifier that had to reproduce the defect in the source before it was kept. 19 of 20
+candidates survived; the refuted one is not recorded here.
+
+Two scope notes for anyone picking these up. First, `internal/screens/transactions.go` and
+`internal/screens/transactions_row.go` are **dead code** — the live screen is `Transactions()` in
+`transactions_widget.go` — see C646; do not fix bugs there. Second, this stage overlaps the
+concurrent TR replay (C620–C628) only at the edges: C645 and the search-latency note in C650 sharpen
+C628 rather than repeat it, and the dangling-`TxnLink` candidate was dropped as already covered by
+C621.
+
+- [ ] **C629 [BLOCKER][TXN][TRANSFER][DATA] Editing one leg of a transfer silently desyncs the other leg.**
+  A transfer is stored as two independent rows (`CreateTransferPair`, `internal/appstate/transfer_ops.go:63`
+  writes an out-leg and an in-leg as two separate `PutTransaction` calls). The edit form's save path
+  (`internal/screens/transaction_edit_form.go:397`) only ever holds `t := txn` for the single leg named by
+  `props.TxnID` and calls `app.PutTransaction(t)`; neither it nor `appstate.PutTransaction` looks up the
+  paired leg. The form leaves both Amount and Date unconditionally editable for a transfer (only the
+  Direction control is hidden, line 718). So changing a transfer's amount or date from the ledger updates
+  one account and not the other: the two account balances stop agreeing, and the transfer stops netting to
+  zero. It also breaks the delete-both convenience, because `isReciprocalTransferLeg`
+  (`internal/appstate/appstate.go:2731`) matches legs on equal dates and exactly opposite amounts — an
+  edited leg no longer looks reciprocal, so deleting it silently orphans the counterpart.
+  Either edit both legs in one transaction, or make amount/date read-only on a transfer leg and route the
+  change through a transfer-aware editor.
+  AC: editing a transfer's amount or date keeps both legs reciprocal and both account balances correct;
+  deleting either leg afterwards still offers to remove the pair; covered by a test that edits a leg and
+  asserts the counterpart and both balances.
+
+- [ ] **C630 [BLOCKER][TXN][MONEY][FX] The upcoming strip's money total silently drops bills in another currency while still counting them.**
+  `internal/screens/txn_upcoming_strip.go:143` folds pending bills with
+  `else if sum, err := total.Add(b.Amount); err == nil { total = sum }`. `money.Add` returns a
+  currency-mismatch error whenever the operands differ (`internal/money/money.go:76`), and the `err == nil`
+  guard silently no-ops — but the bill was already counted into `pending` before the loop. A household with
+  accounts in more than one currency (supported per SPEC) therefore sees
+  "3 scheduled this month, $200.00 still to come" when the true figure includes a third bill in another
+  currency: a count and a total measured against different populations, with no warning and no log.
+  Every comparable rollup in the app already routes through `currency.ConvertBetween(...)` against the base
+  currency (budgets, goals, health analysis, merchant trend, payday preflight); this one does not.
+  AC: the strip's total either converts every pending bill through the FX table or states per-currency
+  subtotals; the count and the total always describe the same set.
+
+- [ ] **C631 [BLOCKER][MEMBERS][MONEY] Per-owner net worth adds liability balances instead of subtracting them.**
+  Adjacent surface, found while auditing the ledger math the transactions page reads.
+  `ledger.NetWorth` (`internal/ledger/ledger.go:186`) explicitly branches on `a.Class == domain.ClassLiability`
+  and subtracts `conv.Abs()`, precisely because a debt may be stored negative (the sample convention) or
+  positive (what the "amount you owe" add-account form produces). `ledger.NetByOwner`
+  (`internal/ledger/ledger.go:247`) has no `a.Class` check at all — it adds `conv` raw. A credit card added
+  through the normal Add Account flow (positive opening balance, per the form's own hint) is therefore
+  counted as an ASSET in the Members/Household rollup (`internal/screens/household.go:71`), while the
+  app's own household net-worth figure subtracts it. The two disagree by twice the liability balance.
+  AC: `NetByOwner` and `NetWorth` agree for every account class and both storage sign conventions, with a
+  table-driven test covering a positive-stored and a negative-stored liability.
+
+- [ ] **C632 [MAJOR][TXN][SPLIT][MONEY] Switching a split between Amounts and Percent unbalances an exactly balanced draft.**
+  `internal/screens/split_editor.go:108` converts each row independently with plain integer division —
+  `amt := txnAbsEarly * bp / split.PercentScale` (line 113) and
+  `bp := (absMinor(v)*split.PercentScale + txnAbsEarly/2) / txnAbsEarly` (line 129) — instead of the
+  largest-remainder distribution the rest of the split code uses (`split.ByPercents` / `split.ByWeights`,
+  `internal/split/percent.go`). Truncation is per row, so a draft that summed exactly to the parent before
+  the toggle is short by a cent or more after it, and the user is told their split no longer balances
+  despite changing nothing but the display mode.
+  AC: toggling Amounts ↔ Percent round-trips an exactly balanced split without changing the total; both
+  conversions go through the largest-remainder helpers.
+
+- [ ] **C633 [MAJOR][TXN][SPLIT][STATE] A split draft can be saved against the wrong transaction.**
+  `internal/screens/transaction_split_form.go:66` seeds the editor inside `ui.UseEffect(..., "mount")` — a
+  constant dependency, so it fires only on first mount. The split modal is not keyed on the transaction, so
+  opening a split on row A and then on row B reuses the same component instance without remounting; B's
+  editor keeps A's seeded draft, and saving writes A's split parts onto B.
+  Key the modal's child on `props.TxnID`, or add `props.TxnID` to the effect's dependencies.
+  AC: opening the split editor on a different transaction always shows that transaction's own state; a test
+  opens split on two rows in sequence and asserts the second shows no draft from the first.
+
+- [ ] **C634 [MAJOR][TXN][SPLIT][VALIDATION] A negative or zero split part is reported as balanced, then rejected on Save.**
+  The live remainder check at `internal/screens/split_editor.go:187` accumulates `total += absMinor(v)`, so a
+  negative entry contributes positively to the balance and never sets `parseErr`. The footer therefore says
+  the split balances and the Save button stays enabled, and only the click fails. The disabled state lies in
+  the user's favour, which is the worst direction for a money form.
+  AC: any part that parses to <= 0 marks the draft invalid in the same pass that computes the remainder, so
+  the footer, the Save button, and the save attempt all agree.
+
+- [ ] **C635 [MAJOR][TXN][DATE][TZ] The upcoming strip appears and disappears on the wrong side of local midnight.**
+  `internal/screens/txn_upcoming_strip.go:64` compares a raw wall-clock `now := time.Now()` against
+  `s.From`/`s.To`, which are UTC-midnight instants produced by `dateutil.DayStart`/`MonthStart`. For a user
+  west of UTC the absolute instant crosses the next UTC day hours before local midnight, so on the last day
+  of a month the whole "N scheduled this month, $X still to come" strip vanishes from mid-afternoon onward
+  while the month is still current. Normalise `now` to its calendar-date form before comparing, the way
+  `txncalendar.DayKey` is used elsewhere in this codebase.
+  AC: the strip's visibility changes exactly at the user's local midnight for every timezone; covered by a
+  test that pins a UTC-8 clock at 23:00 on the last day of a month.
+
+- [ ] **C636 [MAJOR][TXN][FILTER][UX] Filters arriving from Debt and Subscriptions are invisible and cannot be removed.**
+  `Criteria.ActiveFilters()` (`internal/txnfilter/txnfilter.go:245`) never reads `BillAccount` or
+  `Subscription`, so a filter set by the Debt page's "N payments" link
+  (`internal/screens/debt_tiles.go:437`) or by the Subscriptions page
+  (`internal/screens/subscriptions_screen.go:83`) narrows the ledger correctly but reports
+  `ActiveCount() == 0`. The user lands on a ledger showing a fraction of their transactions with the Filters
+  badge reading 0, no "Filtering by" chip, and nothing to click to get back — and because the toolbar
+  believes no filter is set, Clear-all and Save-view are inert too.
+  AC: every filter field that changes which rows are shown produces a removable chip and counts toward the
+  Filters badge; arriving from Debt or Subscriptions leaves a one-click way back to the full ledger.
+
+- [ ] **C637 [MAJOR][TXN][EXPORT][SECURITY] CSV export does not neutralise formula-prefixed cells.**
+  `internal/store/csv.go:39` writes `t.Payee` and `t.Desc` verbatim through `encoding/csv`. Go's writer
+  quotes commas, quotes, and newlines correctly, so the CSV structure is sound — but it does not touch a
+  leading `=`, `+`, `-`, or `@`. An imported or hand-entered payee beginning with `=` is executed as a
+  formula when the exported file is opened in Excel or Sheets, which is the ordinary reconciliation
+  workflow for this button (CWE-1236).
+  AC: exported cells beginning with a formula sigil are prefixed or quoted so no spreadsheet evaluates them,
+  and a round-trip import still yields the original text.
+
+- [ ] **C638 [MAJOR][TXN][EDIT][MONEY] An amount typed with a thousands separator is rejected with no explanation.**
+  `money.ParseMinor` (`internal/money/format.go:102`) validates with `allDigits(intPart)`, so `"1,234.56"`
+  fails as an invalid amount. `amountmath.ParseSigned` (`internal/amountmath/signed.go:74`) forwards the
+  error unchanged. Users copying an amount from a bank statement or typing naturally hit this on a field
+  that displays formatted money back to them, and the message does not name the separator as the cause.
+  AC: the amount field accepts a grouped number, or rejects it with a message that names the problem and
+  offers the accepted form.
+
+- [ ] **C639 [MAJOR][TXN][EDIT][PARITY] The edit form's amount field never got the arithmetic evaluation Quick-Add has.**
+  Quick-Add and the Split Editor evaluate typed arithmetic (`45.99*3` → `137.97`, TX16) via
+  `amountmath.EvalAmount`; the full edit form at `internal/screens/transaction_edit_form.go:714` does not
+  wire it up. The same expression that works when adding a transaction is an invalid amount when correcting
+  one, with no hint that the two fields differ.
+  AC: the edit form's amount field evaluates arithmetic exactly as Quick-Add does, or neither field does.
+
+- [ ] **C640 [MAJOR][TXN][STATUS] A reviewed transaction that is re-flagged loses its settlement detail.**
+  `statusDetail()` (`internal/screens/txn_status_column.go:62`) suppresses the cleared/reconciled suffix for
+  any row that is `Reviewed` but re-queued, contradicting the contract stated in the file's own comment.
+  Reachable by ordinary means: open an already-reviewed, cleared transaction and add the `needs-review` tag
+  in the free-text Tags field (`textutil.CommaFields` does no reserved-word filtering), and the Status
+  column stops telling the user the transaction is cleared while continuing to claim it needs review.
+  AC: the status cell states the review state and the settlement state independently; neither hides the
+  other.
+
+- [ ] **C641 [MINOR][TXN][MONEY] A large enough typed amount silently overflows instead of being rejected.**
+  `money.ParseMinor` computes `val := whole*pow10i(decimals) + frac` (`internal/money/format.go:145`) with no
+  overflow guard. `strconv.ParseInt` bounds `whole` at int64, but the multiply by 100 does not, so an amount
+  above roughly 9.2e16 minor units wraps and stores a value unrelated to what was typed — a wrong number
+  saved without an error. `amountmath.ParseSigned` adds no range check of its own.
+  AC: an amount too large to represent is rejected with a message naming the limit; covered by a boundary
+  test at and just past the int64 minor-unit maximum.
+
+- [ ] **C642 [MINOR][TXN][SPLIT][COPY] The even-split summary misdescribes a remainder of two cents or more.**
+  `internal/screens/split_screen.go:246` always phrases the rounding remainder as going to one person —
+  `(+$0.02 remainder to the first)` — but `split.Equal` spreads it one cent each across the first `rem`
+  members, which is what every other surface shows. The sentence contradicts the numbers beside it.
+  AC: the summary describes the distribution actually used, e.g. "$3.33 each, first 2 pay $3.34".
+
+- [ ] **C643 [MINOR][TXN][SCOPE][I18N] The scope bar's day and custom-range label ignores the date-format preference.**
+  `internal/screens/transactions_scopebar.go:30` hardcodes `Format("Jan 2, 2006")` for the Day and
+  custom-range cases, while every other date on the same page honours `prefs.DateStyle` through
+  `pr.FormatDate` (the calendar's day-pick notice at `transactions_calendar.go:128`, the upcoming strip's due
+  dates at `txn_upcoming_strip.go:122`). A user on ISO or EU format gets one US-formatted date in the
+  persistent, aria-live label above the ledger.
+  AC: the scope label formats dates through the user's preference like the rest of the page.
+
+- [ ] **C644 [MINOR][TXN][FILTER][COUNT] The "Needs review" chip count is case-sensitive but its filter is not.**
+  `internal/txnfilter/presetcounts.go:63` compares tags with exact equality against the lowercase constant,
+  while the filter the chip applies lowercases both sides (`txnfilter.go:601` and `hasTag`, `txnfilter.go:796`).
+  The tag editor stores free text unchanged (`transaction_edit_form.go:371`), so a transaction tagged
+  `Needs-Review` is missing from the count but present in the results: the chip says one number and clicking
+  it shows another.
+  AC: preset counts and the filters they trigger use one predicate; a mixed-case tag is counted and matched
+  identically.
+
+- [ ] **C645 [MINOR][TXN][SEARCH][UX] The search box shows two clear buttons side by side.**
+  The field is `<input type="search">` (`internal/ui/filtertoolbar.go:204`) with the app's own
+  `filter-clear-search` button rendered immediately beside it (:220), so Chrome draws its native clear glyph
+  inside the field and the app draws a second, differently-styled one just outside it. Confirmed on the
+  served build: two adjacent ✕ controls that look and act the same, one of which the app cannot style,
+  label, or keyboard-manage. Either drop the app's button or set `type="text"` and keep it.
+  AC: exactly one clear affordance is visible, and it is the app's own labelled control.
+
+- [ ] **C646 [MINOR][TXN][DEADCODE] `transactions.go` and `transactions_row.go` are unreachable and mislead reviewers.**
+  The live screen is `Transactions()` in `internal/screens/transactions_widget.go`, whose row renderer is
+  `txnFrameRow` (:1112). `transactionsLegacy()` (`internal/screens/transactions.go:42`) and `TransactionRow`
+  (`internal/screens/transactions_row.go:75`) are reachable only from each other and are kept compiling by
+  `var _ = transactionsLegacy` at `transactions_widget.go:37` — roughly 65 KB of dead screen code that reads
+  like the live ledger. It has already cost review effort: this bug bash spent a full lane on it before the
+  duplication was noticed.
+  AC: the legacy screen and row are deleted (or moved out of `screens/` with a comment saying what they are),
+  and no `var _ =` keep-alive remains.
+
+- [ ] **C647 [MINOR][TXN][TEST] Both pager instances share one set of data-testids.**
+  `internal/ui/datatable.go:171` renders the top and bottom pagers with the same `IDPrefix: "dt"`, so
+  `dt-prev`, `dt-next`, `dt-jump`, and the range label each resolve to two elements on any table with the top
+  pager active — confirmed live on /transactions (`dt-jump` count = 2). Not user-visible; it makes every
+  Playwright locator on the pager ambiguous unless the author remembers `.first()`, and is a plausible
+  contributor to the C627 jump-to-page report.
+  AC: the two pagers carry distinguishable testids (e.g. a `top`/`bottom` suffix) and a locator without a
+  position qualifier resolves to one element.

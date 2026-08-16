@@ -77,9 +77,29 @@ type Rule struct {
 	// that account (Transaction.BillAccountID) — so future/imported payments to a merchant
 	// auto-tie to the account the user first linked one to. Applied only when the
 	// transaction has no bill link yet (a manual link is never overwritten).
-	SetBillAccountID string          `json:",omitempty"`
-	Order            int             `json:",omitempty"` // precedence: lower runs first (first match wins)
-	Conditions       []RuleCondition `json:",omitempty"` // C105: structured conditions (ANDed); overrides Match when non-empty
+	SetBillAccountID string `json:",omitempty"`
+	// SetMemberID, SetReviewed and SetExcludeFromReports are the three actions the
+	// commercial-benchmark audit found missing (C373).
+	//
+	// All three are APPLY-ONCE, never-undo, matching the bill-link precedent
+	// above and for the same reason: a rule is a standing instruction, and a
+	// standing instruction that can silently reverse a person's explicit choice
+	// is a different and much worse thing. So a member is assigned only to a
+	// transaction that has none — a rule must never quietly reassign whose
+	// spending something was — and Reviewed/ExcludeFromReports only ever go from
+	// false to true.
+	//
+	// Two benchmark actions are deliberately absent rather than stubbed. SPLIT is
+	// a feature, not a gap: it needs percentages or amounts per line and a
+	// remainder policy, none of which the rule form has a vocabulary for.
+	// GOAL-LINK has no target: a transaction carries no goal reference at all —
+	// goals attach to accounts and categories — so it is a data-model question,
+	// not a missing action.
+	SetMemberID           string          `json:",omitempty"`
+	SetReviewed           bool            `json:",omitempty"`
+	SetExcludeFromReports bool            `json:",omitempty"`
+	Order                 int             `json:",omitempty"` // precedence: lower runs first (first match wins)
+	Conditions            []RuleCondition `json:",omitempty"` // C105: structured conditions (ANDed); overrides Match when non-empty
 	// HitCount and LastRunAt are the rule's DURABLE record of what it has
 	// actually done: how many transactions it has filed since it was created, and
 	// when it last filed one (C372).

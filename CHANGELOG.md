@@ -68,6 +68,23 @@ and every commit updates this file under `Unreleased`.
   do, and a preview that inflates the count would make the number worthless. The import path also
   credits only rows that actually land, not skipped duplicates.
 
+### Added
+- **Rules can assign a member, mark reviewed, and exclude from reports (C373).** An audit against the
+  commercial benchmark's eight actions found rename, categorize and tag already shipping and three
+  genuinely missing. Split and goal-link are deliberately not filled: split needs per-line amounts and
+  a remainder policy the rule form has no vocabulary for, and a transaction carries no goal reference
+  at all — that one is a data-model question, not a missing action, and inventing a field to satisfy a
+  checklist would be the wrong way round.
+
+  All three are apply-once. A rule may fill a gap and may never reverse an explicit choice, so a
+  member is assigned only where there is none — a standing instruction that silently changes whose
+  spending something was is exactly the failure these avoid — and the two flags only go false → true.
+  The form offers no way to express the reverse, and there is a test recording that as a decision.
+
+  The semantics live in one shared predicate rather than at each of the three places rules fire, which
+  is how the bill-link's "only when empty" rule came to be written three times. The dry-run preview
+  evaluates the same predicate, so the blast radius it promises is the one delivered.
+
 ### Fixed
 - **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
   /categories pointed at the top of a long report, because the report's numbered sections are not in

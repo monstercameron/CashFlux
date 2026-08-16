@@ -65,6 +65,11 @@ func Rules() ui.Node {
 	for _, c := range cats {
 		catName[c.ID] = c.Name
 	}
+	// C373: resolved once so a rule row can name its assign-to member.
+	memberName := make(map[string]string)
+	for _, m := range app.Members() {
+		memberName[m.ID] = m.Name
+	}
 	acctName := func(id string) string {
 		for _, a := range app.Accounts() {
 			if a.ID == id {
@@ -333,6 +338,7 @@ func Rules() ui.Node {
 				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, CategoryName: catName[r.SetCategoryID], CondLine: condLine(r),
+					MemberName: memberName[r.SetMemberID],
 					Precedence: i + 1,
 					Warning:    warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
 					OnDelete:       deleteRule,
@@ -575,7 +581,10 @@ type ruleRowProps struct {
 	// The list IS the ordering surface (C357): a separate read-only "Rule order"
 	// section restated the same sequence with less information, so the page
 	// looked like it held two notions of order.
-	Precedence     int
+	Precedence int
+	// MemberName is the resolved display name for the rule's assign-to action
+	// (C373); empty when the rule assigns nobody.
+	MemberName     string
 	Warning        string // non-empty when this rule never fires (shadowed)
 	MatchCount     int    // how many existing transactions this rule's phrase hits
 	MaxMatchCount  int    // the heaviest rule's count — anchors the weight bar
@@ -634,6 +643,18 @@ func RuleRow(props ruleRowProps) ui.Node {
 	// C102: surface the rename action in the read-only row so users can see it fires.
 	if r.RenameDesc != "" {
 		meta += " · " + uistate.T("rules.renameDescMeta", r.RenameDesc)
+	}
+	// C373: the apply-once actions read on the row too. A rule whose only visible
+	// effect is a category, while it also silently assigns a member, is a rule
+	// the user cannot reason about.
+	if props.MemberName != "" {
+		meta += " · " + uistate.T("rules.memberMeta", props.MemberName)
+	}
+	if r.SetReviewed {
+		meta += " · " + uistate.T("rules.reviewedMeta")
+	}
+	if r.SetExcludeFromReports {
+		meta += " · " + uistate.T("rules.excludeMeta")
 	}
 
 	// The rule's weight: how many transactions its phrase catches, as a figure
@@ -885,4 +906,16 @@ func ruleLastRunTitle(r rules.Rule) string {
 		return uistate.T("rules.hitsNoDate")
 	}
 	return uistate.T("rules.hitsLastRun", uistate.LoadPrefs().FormatDate(r.LastRunAt))
+}
+
+// ruleMemberOptions builds the member picker for a rule's "assign to" action
+// (C373): a leading "don't assign" option plus every household member.
+func ruleMemberOptions(app *appstate.App) []uiw.SelectOption {
+	ms := app.Members()
+	out := make([]uiw.SelectOption, 0, len(ms)+1)
+	out = append(out, uiw.SelectOption{Value: "", Label: uistate.T("rules.memberNone")})
+	for _, m := range ms {
+		out = append(out, uiw.SelectOption{Value: m.ID, Label: m.Name})
+	}
+	return out
 }
