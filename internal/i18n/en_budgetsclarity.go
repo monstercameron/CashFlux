@@ -42,6 +42,18 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C608: the year planner is reachable without horizontal scrolling ---
+	// A cell announced two bare amounts ("$1,100.00 $1,300.00") with no month, no
+	// budget and no way to tell which figure was which.
+	// %s = budget, %s = month and year, %s = actual/projected, %s = planned.
+	"budgets.gridCellAria":          "%s, %s: %s spent of %s planned",
+	"budgets.gridCellAriaProjected": "%s, %s: %s projected against %s planned",
+	"budgets.gridCellAriaShort":     "Underfunded by %s in this scenario.",
+	"budgets.gridWindowLabel":       "Months",
+	"budgets.gridWindowAll":         "Full year",
+	"budgets.gridWindowH1":          "Jan–Jun",
+	"budgets.gridWindowH2":          "Jul–Dec",
+
 	// --- C587: assigned against expected income vs funded by received income ---
 	// A plan can be 100% assigned against an expected $10,709.16 while $6,961.00
 	// has arrived; "fully assigned" then looks exactly like "fully funded".

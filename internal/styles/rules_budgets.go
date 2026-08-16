@@ -925,6 +925,44 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C608: the year planner's month-window control ---
+	// It replaces a sighted-only "scroll sideways" cue, so it has to look like a
+	// control rather than a hint: real buttons with a pressed state, in the flow
+	// above the grid where the cue used to sit.
+	rule(".budget-annualgrid-winbar",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.3rem"),
+		margin("0.35rem 0 0.5rem"),
+	)
+	rule(".budget-annualgrid-winlabel",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		marginRight("0.15rem"),
+	)
+	rule(".budget-annualgrid-win",
+		padding("0.2rem 0.55rem"),
+		fontSize("var(--type-12)"),
+		fontWeight("600"),
+		color("var(--text-dim)"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-pill)"),
+		cursor("pointer"),
+	)
+	rule(".budget-annualgrid-win:hover",
+		color("var(--text)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".budget-annualgrid-win.is-on",
+		color("var(--text)"),
+		background("color-mix(in srgb, var(--accent) 16%, transparent)"),
+		borderColor("var(--accent)"),
+	)
+
 	// --- C587: the "assigned but not funded" state ---
 	// Warn-toned, not danger: nothing is broken, the plan is simply ahead of the
 	// money. It sits directly under the allocation bar because that bar is what
@@ -1200,10 +1238,18 @@ func registerBudgetsSurface() {
 	// C545: the compact row's note marker, inline after the budget name. It is a
 	// marker first and a control second, so it carries no button chrome — muted,
 	// borderless, sized to the text it follows — and comes forward on hover/focus.
+	// flex: 1 1 0 — a ZERO basis, so the note asks for none of the row's width and
+	// simply grows into whatever the budget name leaves behind. Sizing it from its
+	// content instead (any `auto` basis) makes the name and the note compete: the
+	// name in a compact row has almost no slack, so even after weighting the shrink
+	// heavily the name still lost the fraction of a pixel that turns "Transportation"
+	// into "Transportati…" on a 2× display. With no deficit there is nothing to
+	// shrink, and the name is never charged for the note's presence.
 	rule(".budget-crow-notes",
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
+		flex("1 1 0"),
 		minWidth("0"),
 		padding("0"),
 		border("0"),
@@ -1212,26 +1258,14 @@ func registerBudgetsSurface() {
 		cursor("pointer"),
 		color("var(--muted)"),
 	)
-	// The note's text yields to the budget name: the name takes the width it needs
-	// first, and the note ellipsizes into whatever is left. Capped so a long note
-	// cannot push the name out of a row whose job is to be scannable.
+	// The note's text ellipsizes into whatever the name leaves behind.
 	rule(".budget-crow-notes .budget-crow-notes-text",
 		minWidth("0"),
-		maxWidth("22rem"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 		fontSize("var(--type-12)"),
 	)
-	// The name cell's non-name children are pinned by default so badges never wrap;
-	// the note is the one that MAY shrink, because it has an ellipsis to fall back on.
-	//
-	// The shrink factor is deliberately enormous. At plain `1` the note and the
-	// budget NAME shrink in proportion, which truncated "Transportation" to "Tran…"
-	// so that a note could keep four extra words — exactly backwards, since the name
-	// is what the row is scanned by. Weighted like this the note gives up all of its
-	// width first, and the name only starts to ellipsize once the note is gone.
-	rule(".budget-crow-head > .budget-crow-notes", flexShrink("999"))
 	// Narrow panes drop the note text and keep the icon: at that width the row has
 	// already given up its meter and its "left" phrase, so prose is the wrong thing
 	// to spend the remaining space on. The note is still one click away.

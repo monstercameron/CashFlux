@@ -61,6 +61,12 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	year := ui.UseState(props.Now.Year())
 	scenarioOn := ui.UseState(false)
 	incomeDelta := ui.UseState(int64(0))
+	// C608: which months are on screen. The grid is twelve columns wide and its
+	// only affordance for the rest was "Scroll sideways for the full year →" — a
+	// sighted-only nudge toward a scrollbar at the bottom of a tall table. Halving
+	// the window is what lets a narrow viewport, and a keyboard, reach every month
+	// without horizontal scrolling at all.
+	monthWin := ui.UseState(annualWinAll)
 
 	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	prevYear := ui.UseEvent(Prevent(func() { year.Set(year.Get() - 1) }))
@@ -69,6 +75,9 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	deltaLess := ui.UseEvent(Prevent(func() { incomeDelta.Set(incomeDelta.Get() - scenarioStepMinor) }))
 	deltaMore := ui.UseEvent(Prevent(func() { incomeDelta.Set(incomeDelta.Get() + scenarioStepMinor) }))
 	deltaReset := ui.UseEvent(Prevent(func() { incomeDelta.Set(0) }))
+	winAll := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinAll) }))
+	winH1 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH1) }))
+	winH2 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH2) }))
 
 	// The current-month column index for THIS displayed year (−1 when the displayed
 	// year is not the current year), computed without building the grid so the
@@ -165,18 +174,15 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 		header,
 		Div(css.Class("budget-annualgrid-head"), yearControls, scenarioBar),
 		annualGridLegend(fromMonth <= 11, scOn),
-		// Top-anchored scroll cue (E3): the wide 12-month matrix overflows a narrow
-		// (expanded-sidebar) pane, and the only scrollbar is at the very bottom of a
-		// tall grid — easy to miss. This quiet hint above the frame signals "there's
-		// more to the right"; CSS hides it once the pane is wide enough to fit the
-		// whole year (rules_qpassEannual.go). aria-hidden: a screen reader already
-		// reaches every cell, so this is a sighted-only nudge.
-		Div(css.Class("budget-annualgrid-scrollcue"), Attr("aria-hidden", "true"),
-			Span(uistate.T("budgets.annualGridScrollCue"))),
+		// C608: a month-window control, replacing the "scroll sideways" cue. The cue
+		// was aria-hidden and pointed at a scrollbar; this is a real control that
+		// makes the far half of the year reachable by keyboard, by screen reader and
+		// on a narrow pane, with no horizontal scrolling involved.
+		annualGridWindowBar(monthWin.Get(), winAll, winH1, winH2),
 		// Horizontal scroll lives INSIDE the card so the page body never scrolls sideways
 		// (the .budget-annualgrid-scroll frame owns overflow-x + max-width).
 		Div(css.Class("budget-annualgrid-scroll"),
-			annualGridTable(grid, props, fromMonth, perBudget, shortfalls)),
+			annualGridTable(grid, props, fromMonth, perBudget, shortfalls, monthWin.Get())),
 	)
 }
 
@@ -314,18 +320,28 @@ func gridColClass(i, current, fromMonth int) string {
 // column keep the month labels and budget names visible while scrolling; all styling
 // is class-driven (see rules_annualgrid.go / rules_annualgridplan.go), so cells read
 // as one designed grid.
-func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fromMonth int, perBudget map[string]budgetplan.MonthAmounts, shortfalls map[string][12]int64) ui.Node {
+func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fromMonth int, perBudget map[string]budgetplan.MonthAmounts, shortfalls map[string][12]int64, win string) ui.Node {
+	firstM, lastM := annualWindowRange(win)
 	// Header row: "Budget", the twelve months (current banded, future toned), "Total".
 	headCells := []ui.Node{
 		Th(css.Class("budget-annualgrid-corner"), Attr("scope", "col"),
 			uistate.T("budgets.annualGridBudgetCol")),
 	}
 	for i, name := range annualGridMonths {
-		th := Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth, fromMonth)), Attr("scope", "col"), name)
+		if i < firstM || i > lastM {
+			continue
+		}
+		// C608: the visible abbreviation is fine for a sighted reader scanning a
+		// row of columns; a screen reader needs the month and year, because a
+		// cell's own label references it.
+		full := annualMonthLabel(i, grid.Year)
+		th := Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth, fromMonth)),
+			Attr("scope", "col"), Attr("aria-label", full), Attr("title", full), name)
 		if i == grid.CurrentMonth {
 			// id anchors the scroll-into-view (C371).
 			th = Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth, fromMonth)),
-				Attr("scope", "col"), Attr("id", "budget-annualgrid-current"), name)
+				Attr("scope", "col"), Attr("id", "budget-annualgrid-current"),
+				Attr("aria-label", full), Attr("title", full), name)
 		}
 		headCells = append(headCells, th)
 	}
@@ -348,6 +364,7 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 			Row: row, CategoryIDs: catsByBudget[row.BudgetID], CurrentMonth: grid.CurrentMonth,
 			FromMonth: fromMonth, Year: grid.Year, Base: grid.Currency,
 			Projected: proj, Shortfall: shortfalls[row.BudgetID], OnCell: props.OnCell,
+			FirstMonth: firstM, LastMonth: lastM,
 		}))
 	}
 
@@ -358,6 +375,9 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 			uistate.T("budgets.annualGridTotalCol")),
 	}
 	for i := 0; i < 12; i++ {
+		if i < firstM || i > lastM {
+			continue
+		}
 		cls := "budget-annualgrid-td is-foot" + gridColClass(i, grid.CurrentMonth, fromMonth)
 		if i >= fromMonth && projColTotals[i] > 0 {
 			footCells = append(footCells, Td(ClassStr(cls),
@@ -377,15 +397,17 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 
 // annualGridRowProps is one budget's row in the annual grid.
 type annualGridRowProps struct {
-	Row          budgeting.AnnualGridRow
-	CategoryIDs  []string
-	CurrentMonth int
-	FromMonth    int
-	Year         int
-	Base         string
-	Projected    budgetplan.MonthAmounts // per-month projected minor units (future only)
-	Shortfall    [12]int64               // per-month scenario shortfall (0 = funded)
-	OnCell       func(categoryIDs []string, from, to string)
+	// FirstMonth / LastMonth bound the visible month window (C608).
+	FirstMonth, LastMonth int
+	Row                   budgeting.AnnualGridRow
+	CategoryIDs           []string
+	CurrentMonth          int
+	FromMonth             int
+	Year                  int
+	Base                  string
+	Projected             budgetplan.MonthAmounts // per-month projected minor units (future only)
+	Shortfall             [12]int64               // per-month scenario shortfall (0 = funded)
+	OnCell                func(categoryIDs []string, from, to string)
 }
 
 // annualGridRow is a per-row component so each cell's click handler lives at a
@@ -396,6 +418,9 @@ func annualGridRow(props annualGridRowProps) ui.Node {
 		Th(css.Class("budget-annualgrid-rowhead"), Attr("scope", "row"), row.Name),
 	}
 	for m := 0; m < 12; m++ {
+		if m < props.FirstMonth || m > props.LastMonth {
+			continue
+		}
 		cell := row.Cells[m]
 		from := time.Date(props.Year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 		to := time.Date(props.Year, time.Month(m+2), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
@@ -404,6 +429,10 @@ func annualGridRow(props annualGridRowProps) ui.Node {
 			Current: m == props.CurrentMonth, IsFuture: m >= props.FromMonth,
 			Projected: props.Projected[m], Shortfall: props.Shortfall[m], Base: props.Base,
 			From: from, To: to, OnCell: props.OnCell,
+			// C608: a cell's accessible name has to carry its own coordinates. As
+			// two bare figures it read "$1,100.00 $1,300.00" — no month, no budget,
+			// and no way to tell which number was which.
+			BudgetName: row.Name, MonthLabel: annualMonthLabel(m, props.Year),
 		}))
 	}
 	cells = append(cells, Td(css.Class("budget-annualgrid-td", "is-total"), fmtMoney(row.ActualTotal)))
@@ -422,6 +451,11 @@ type annualGridCellProps struct {
 	Base        string
 	From, To    string
 	OnCell      func(categoryIDs []string, from, to string)
+	// BudgetName / MonthLabel name the cell's coordinates for its accessible
+	// label — without them the button announced two amounts and nothing else
+	// (C608).
+	BudgetName string
+	MonthLabel string
 }
 
 // annualGridCell renders one cell as a button that drills to the month's filtered
@@ -462,17 +496,82 @@ func annualGridCell(props annualGridCellProps) ui.Node {
 		title = uistate.T("budgets.scenarioUnderTitle", fmtMoney(money.New(props.Shortfall, props.Base)))
 	}
 
+	// C608: the button's accessible name spells out its coordinates and says which
+	// figure is which. As two bare amounts it announced "$1,100.00 $1,300.00",
+	// leaving a screen-reader user to match a paired value to a column they cannot
+	// see and a keyboard user with no idea which month they had reached.
+	aria := uistate.T("budgets.gridCellAria", props.BudgetName, props.MonthLabel,
+		fmtMoney(props.Cell.Actual), fmtMoney(props.Cell.Plan))
+	if props.IsFuture && props.Projected > 0 {
+		aria = uistate.T("budgets.gridCellAriaProjected", props.BudgetName, props.MonthLabel,
+			fmtMoney(money.New(props.Projected, props.Base)), fmtMoney(props.Cell.Plan))
+	}
+	if props.Shortfall > 0 {
+		aria += " " + uistate.T("budgets.gridCellAriaShort", fmtMoney(money.New(props.Shortfall, props.Base)))
+	}
+	// The tooltip repeats the accessible name when there is nothing more specific
+	// to say, so hovering and listening give the same answer.
+	if title == "" {
+		title = aria
+	}
 	btn := Button(css.Class("budget-annualgrid-cell"), Type("button"),
 		Attr("data-testid", "annualgrid-cell-"+props.BudgetID+"-"+props.From),
+		Attr("aria-label", aria), Attr("title", title),
 		OnClick(click), primary,
 		Span(css.Class("budget-annualgrid-plan"), fmtMoney(props.Cell.Plan)),
 	)
-	if title != "" {
-		btn = Button(css.Class("budget-annualgrid-cell"), Type("button"),
-			Attr("data-testid", "annualgrid-cell-"+props.BudgetID+"-"+props.From), Attr("title", title),
-			OnClick(click), primary,
-			Span(css.Class("budget-annualgrid-plan"), fmtMoney(props.Cell.Plan)),
-		)
-	}
 	return Td(ClassStr(cls), btn)
+}
+
+// C608 — the year planner's month window.
+//
+// Twelve columns do not fit a narrow pane, and the grid's only answer was a
+// sighted-only "Scroll sideways for the full year →" pointing at a scrollbar
+// under a tall table. Halving the year is a control: reachable by keyboard,
+// announced to a screen reader, and it removes the horizontal scroll entirely
+// rather than signposting it.
+const (
+	annualWinAll = "all"
+	annualWinH1  = "h1"
+	annualWinH2  = "h2"
+)
+
+// annualWindowRange turns a window into inclusive month indices.
+func annualWindowRange(win string) (first, last int) {
+	switch win {
+	case annualWinH1:
+		return 0, 5
+	case annualWinH2:
+		return 6, 11
+	}
+	return 0, 11
+}
+
+// annualMonthLabel is a month's full name and year — what a cell's accessible
+// name references, and what a column header announces.
+func annualMonthLabel(m, year int) string {
+	if m < 0 || m > 11 {
+		return strconv.Itoa(year)
+	}
+	return time.Month(m+1).String() + " " + strconv.Itoa(year)
+}
+
+// annualGridWindowBar renders the month-window control. Handlers arrive from the
+// parent so they sit at stable hook positions.
+func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
+	opt := func(value, labelKey, testID string, on ui.Handler) ui.Node {
+		cls := "budget-annualgrid-win"
+		if win == value {
+			cls += " is-on"
+		}
+		return Button(ClassStr(cls), Type("button"), Attr("data-testid", testID),
+			Attr("aria-pressed", ariaBool(win == value)), OnClick(on), uistate.T(labelKey))
+	}
+	return Div(css.Class("budget-annualgrid-winbar"), Attr("data-testid", "annualgrid-window"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("budgets.gridWindowLabel")),
+		Span(css.Class("budget-annualgrid-winlabel", tw.TextFaint), uistate.T("budgets.gridWindowLabel")),
+		opt(annualWinAll, "budgets.gridWindowAll", "annualgrid-win-all", all),
+		opt(annualWinH1, "budgets.gridWindowH1", "annualgrid-win-h1", h1),
+		opt(annualWinH2, "budgets.gridWindowH2", "annualgrid-win-h2", h2),
+	)
 }

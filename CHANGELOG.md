@@ -418,6 +418,15 @@ and every commit updates this file under `Unreleased`.
   gap: scale every assignment down to the money in hand, arriving in the Adjust-all form pre-filled
   and previewed budget by budget, still requiring the reduction acknowledgement, still undoable. It
   renders nothing when the plan is funded.
+- **The year planner is usable without scrolling sideways, and its cells describe themselves
+  (C608).** Twelve columns overflowed a narrow pane, and the only affordance for the rest was an
+  `aria-hidden` "Scroll sideways for the full year →" pointing at a scrollbar under a tall table. Its
+  cells were buttons whose accessible name was two bare amounts — "$1,100.00 $1,300.00" — with no
+  month, no budget and no way to tell which figure was which. A Months control (Full year · Jan–Jun ·
+  Jul–Dec) now narrows the grid to a half that fits with no horizontal scroll at all, and every cell
+  announces "Groceries, March 2026: $1,100.00 spent of $1,300.00 planned" (or "projected against"
+  for a future month, plus any scenario shortfall). Column headers carry the full month and year the
+  cell labels refer to.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —
