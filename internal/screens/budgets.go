@@ -839,7 +839,14 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 					break
 				}
 			}
-			uistate.ConfirmModal(uistate.T("budgets.deleteConfirm", name), true, func(ok bool) {
+			// C597: the old copy read "This can't be undone", which is false —
+			// Ctrl+Z restores a deleted budget (verified in a browser). A
+			// confirmation that overstates the risk teaches people that
+			// confirmations are noise, the same defect C571 fixed for duplicates.
+			// It now says what actually happens to the transactions, and the shared
+			// impact line states the reach and the reversibility.
+			msg := uistate.T("budgets.deleteConfirmHonest", name) + " " + fundsImpactLine(budgeting.ImpactDeleteBudget)
+			uistate.ConfirmModal(msg, true, func(ok bool) {
 				if !ok {
 					return
 				}
@@ -860,7 +867,11 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 					break
 				}
 			}
-			uistate.ConfirmModal(uistate.T("budgets.removeRecurringConfirm", name), true, func(ok bool) {
+			// C597: a standing arrangement stops funding FUTURE periods; this one is
+			// already paid for. The shared line says so.
+			rmMsg := uistate.T("budgets.removeRecurringConfirm", name) + " " +
+				fundsImpactLine(budgeting.ImpactRemoveRecurringCover)
+			uistate.ConfirmModal(rmMsg, true, func(ok bool) {
 				if !ok {
 					return
 				}

@@ -512,7 +512,45 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		// in the dataset. Without it the note survives only until the next reload.
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()
+		// Say so. The row does change once you are looking at it, but at the instant
+		// of the click the user is looking at the modal, and a modal that just
+		// closes is what made a working save read as a broken one. The budget is
+		// named because notes are per-budget and several get written in a row.
+		uistate.PostNotice(uistate.T("budgets.notesSaved",
+			budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID))), false)
 		done()
+	}))
+
+	// removeNote clears the note after confirming. Emptying the field and pressing
+	// Save does the same thing, but that is a destructive gesture with no name —
+	// this is the named one.
+	removeNote := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			done()
+			return
+		}
+		title := budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID))
+		uistate.ConfirmModal(uistate.T("budgets.notesRemoveConfirm", title), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			for _, bb := range app.Budgets() {
+				if bb.ID != props.BudgetID {
+					continue
+				}
+				bb.Notes = ""
+				if err := app.PutBudget(bb); err != nil {
+					errS.Set(err.Error())
+					return
+				}
+				uistate.RequestPersist()
+				uistate.BumpDataRevision()
+				uistate.PostNotice(uistate.T("budgets.notesRemoved", title), false)
+				done()
+				return
+			}
+			errS.Set(uistate.T("budgets.notesSaveFailed"))
+		})
 	}))
 
 	submitTopup := ui.UseEvent(Prevent(func() {
@@ -627,16 +665,31 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 
 	// --- Notes: a free-text note on the budget. The textarea grows to fill the modal. ---
 	if props.Mode == uistate.BudgetEditModeNotes {
+		// The visible "Notes" label is gone: the modal title and the hint under it
+		// already say what this field is, so a third label repeated the same word a
+		// third time. The accessible name is carried on the field itself, so nothing
+		// is lost for a screen reader.
+		//
+		// Removing a note is an explicit control, offered only when there IS one,
+		// and separated from Cancel/Save so it cannot be hit while reaching for the
+		// primary action. It confirms first, because the text is not recoverable.
+		hasNote := strings.TrimSpace(b.Notes) != ""
+		var removeBtn ui.Node = Fragment()
+		if hasNote {
+			removeBtn = Button(css.Class("btn btn-link budget-notes-remove"), Type("button"),
+				Attr("data-testid", "budget-notes-remove"), OnClick(removeNote),
+				uistate.T("budgets.notesRemove"))
+		}
 		return Form(css.Class("acct-edit-form", "budget-notes-form"), OnSubmit(saveNotes),
 			Div(css.Class("modal-scroll", "budget-notes-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 					uistate.T("budgets.notesHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
-				labeledField(uistate.T("budgets.notesLabel"),
-					uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("budgets.notesPlaceholder"),
-						AriaLabel: uistate.T("budgets.notesLabel"), OnInput: onNotes})),
+				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("budgets.notesPlaceholder"),
+					AriaLabel: uistate.T("budgets.notesLabel"), Autofocus: true, OnInput: onNotes}),
 				errLine,
 			),
-			Div(css.Class("modal-foot"),
+			Div(css.Class("modal-foot", "budget-notes-foot"),
+				removeBtn,
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budget-notes-save"),
 					OnClick(saveNotes), uistate.T("action.save")),
@@ -723,6 +776,10 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 					uistate.T("budgets.coverHint", coverShortfallStr)),
+				// C597: covering moves LIMIT between budgets, permanently — a very
+				// different act from a one-month top-up, and the form never said so.
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cover-impact"),
+					Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactCover)),
 				// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
 				// this budget's context and re-evaluated each period when recurring.
 				labeledField(uistate.T("budgets.amountToMove"),
@@ -846,7 +903,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						},
 						OnSelect: func(v string) { topupPermanentS.Set(v == "perm") },
 					})),
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"), uistate.T(durHint)),
+				// C597: the duration hint plus the shared impact vocabulary — reach,
+				// whether other budgets are touched, that no account balance moves,
+				// and that it can be undone. Every funds-moving action on this page
+				// answers the same four questions in the same words.
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"),
+					uistate.T(durHint)+" "+fundsImpactLine(budgeting.TopUpImpact(topupPermanentS.Get(), selCount > 0))),
 				// Optional: fund the top-up by pulling from budgets that have room to give.
 				If(len(coverSrcs) > 0, Fragment(
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(topupCoverOpenS.Get())),

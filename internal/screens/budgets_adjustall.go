@@ -174,6 +174,11 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		Div(css.Class("modal-scroll"),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("budgets.adjustAllIntro")),
+			// C597: the same reach vocabulary the page's other funds-moving actions
+			// use, so "Adjust all" can be compared with them rather than read on its
+			// own terms.
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-impact"),
+				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactAdjustAll)),
 			labeledField(uistate.T("budgets.adjustAllFieldLabel"),
 				Fragment(
 					Div(css.Class("adjustall-field"),

@@ -42,6 +42,18 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C597: every funds-moving action explains its reach in the same words ---
+	// Assembled by screens.fundsImpactLine. Kept as fragments so six flows read
+	// identically instead of each inventing its own phrasing.
+	"budgets.impactThisPeriodOnly": "Changes this period only — next period is unaffected.",
+	"budgets.impactThisAndFuture":  "Changes this period and every one after it.",
+	"budgets.impactFutureOnly":     "Changes future periods; this one is unaffected.",
+	"budgets.impactOtherBudgets":   "Money comes out of the budgets you pick.",
+	"budgets.impactNoRealMoney":    "No account balances change — this is the plan, not the money.",
+	"budgets.impactReversible":     "You can undo this.",
+	// Delete: the transactions survive, which is the part people fear losing.
+	"budgets.deleteConfirmHonest": "Delete the \"%s\" budget? Its transactions stay exactly where they are — they just stop counting against a cap.",
+
 	// --- C609: a recurring date says what it is relative to ---
 	// "Next Jul 3, 2026" beside "Next Sep 1, 2026" said nothing about whether
 	// either had happened. %s = the formatted date.

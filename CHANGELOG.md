@@ -315,6 +315,17 @@ and every commit updates this file under `Unreleased`.
   schedule's future — so a July view showed "Next Jul 3, 2026" beside "Next Sep 1, 2026" and neither
   said which was which. Dates now read "Was due", "Due" or "Next due …, after this period", and only
   an overdue one is toned, because it is the only one asking for anything.
+- **Every funds-moving budget action explains its reach in the same words (C597).** Release unused
+  funds, Sweep leftovers, Delete budget, Top up, Cover and Adjust all have materially different
+  effects — one period or every period, one budget or several — and each explained itself in its own
+  vocabulary or not at all. `budgeting.FundsImpact` describes them once; every dialog now says
+  whether it changes this period or all of them, whether other budgets are touched, that **no account
+  balance moves** (nothing on this page spends real money — users routinely assume otherwise), and
+  whether it can be undone.
+- **"Delete the budget? This can't be undone" was false (C597).** Ctrl+Z restores it — verified in a
+  browser. The confirmation now says what actually happens: the transactions stay exactly where they
+  are and simply stop counting against a cap. A `screenlint` ratchet fails the build if any budgets
+  confirmation claims irreversibility again, extending the C571 guard to this surface.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

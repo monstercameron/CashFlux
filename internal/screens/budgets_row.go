@@ -139,7 +139,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			return
 		}
 		remaining := s.Remaining
-		uistate.ConfirmModal(uistate.T("budgets.releaseConfirm", fmtMoney(remaining), s.Budget.Name), false, func(ok bool) {
+		// C597: the same impact vocabulary every other funds-moving action uses.
+		msg := uistate.T("budgets.releaseConfirm", fmtMoney(remaining), s.Budget.Name) + " " +
+			fundsImpactLine(budgeting.ImpactRelease)
+		uistate.ConfirmModal(msg, false, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -268,6 +271,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	// Show "name · category" only when they add information (see budgetTitle).
 	title := budgetTitle(s.Budget.Name, props.Category)
+	// The note, and what to call the action that opens it. Every other item in the
+	// row's ⋯ menu is a verb phrase; "Notes" was the one noun, and it read the same
+	// whether it would create a note or overwrite one.
+	noteText := strings.TrimSpace(s.Budget.Notes)
+	hasNote := noteText != ""
+	notesLabel := uistate.T("budgets.notesAdd")
+	if hasNote {
+		notesLabel = uistate.T("budgets.notesEdit")
+	}
 	// One tooltip for the drill action, in BOTH densities. The two used to differ,
 	// and the compact one interpolated the primary category name — which is empty
 	// for a multi-category or tag-tracking budget, leaving "See all  transactions
@@ -423,7 +435,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), uistate.T("budgets.notesAction")),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Attr("aria-label", notesLabel+" — "+title), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), notesLabel),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
 			If(s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "budget-release-btn-"+s.Budget.ID), Title(uistate.T("budgets.releaseTitle")),
@@ -495,11 +507,17 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// thing to do.
 			Div(css.Class("budget-crow-head"),
 				crowTitle,
-				If(strings.TrimSpace(s.Budget.Notes) != "", Button(css.Class("budget-crow-notes"), Type("button"),
+				If(hasNote, Button(css.Class("budget-crow-notes"), Type("button"),
 					Attr("data-testid", "budget-notes-"+s.Budget.ID),
-					Attr("aria-label", uistate.T("budgets.notesAction")+" — "+title),
-					Title(strings.TrimSpace(s.Budget.Notes)), OnClick(openNotes),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+					Attr("aria-label", notesLabel+" — "+title),
+					Title(noteText), OnClick(openNotes),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+					// The note's own words, not just a glyph. /accounts retired exactly
+					// this glyph-plus-tooltip pattern for exactly this reason: a native
+					// tooltip never opens on keyboard focus and does not exist on touch,
+					// so the text was mouse-only. It ellipsizes after the budget name has
+					// taken the width it needs, and drops out entirely on narrow panes.
+					Span(css.Class("budget-crow-notes-text"), noteText))),
 				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 			),
 			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
@@ -529,15 +547,20 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
 	// card when the budget has a note — mirrors the /accounts notes affordance.
 	var notesNode ui.Node = Fragment()
-	hasNotes := strings.TrimSpace(s.Budget.Notes) != ""
-	if notes := strings.TrimSpace(s.Budget.Notes); notes != "" {
+	hasNotes := hasNote
+	if hasNote {
 		// Clicking the note opens the full note in the flip modal (handy when it's long) —
 		// the card shows a clamped preview.
+		//
+		// The accessible name carries the budget it belongs to. On a page listing a
+		// dozen budgets, an unqualified "Notes, button" repeated on every card left a
+		// screen-reader user unable to tell whose note was next without backing up to
+		// the heading.
 		notesNode = Button(ClassStr("acct-notes budget-notes"), Type("button"), Attr("data-testid", "budget-notes-"+s.Budget.ID),
-			Attr("aria-label", uistate.T("budgets.notesAction")),
+			Attr("aria-label", notesLabel+" — "+title),
 			Title(uistate.T("budgets.notesTitle")), OnClick(openNotes),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
-			Span(css.Class("acct-notes-text"), notes),
+			Span(css.Class("acct-notes-text"), noteText),
 		)
 	}
 
