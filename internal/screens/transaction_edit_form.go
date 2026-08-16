@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -298,21 +299,41 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 
 	save := ui.UseEvent(Prevent(func() {
 		t := txn
-		amt, err := money.ParseMinor(strings.TrimSpace(amountS.Get()), currency.Decimals(t.Amount.Currency))
-		if err != nil || amt <= 0 {
+		// The amount field holds a magnitude; the direction control holds the sign.
+		//
+		// C547: rejecting a typed minus was the last live piece of Cam's original
+		// report. C520 gave the form a Direction control, but the obvious way to
+		// turn an income back into a spend — type a minus in front of the number —
+		// still hit `amt <= 0` and produced "Enter an amount greater than zero",
+		// which reads as the app refusing to let you fix your own mistake. A typed
+		// minus is now read as intent: it sets the direction to OUT and the control
+		// follows, so the form never shows "Money in" over a stored expense.
+		want := amountmath.Out
+		if directionS.Get() == txnDirIn {
+			want = amountmath.In
+		}
+		amt, resolved, err := amountmath.ParseSigned(amountS.Get(), currency.Decimals(t.Amount.Currency), want)
+		if err != nil {
 			errMsg.Set(uistate.T("transactions.positiveAmount"))
 			return
 		}
-		// The amount field holds a magnitude; the direction control holds the sign.
 		// A transfer keeps whatever sign it already had — that is which leg of the
-		// move this row is, not a classification to flip.
+		// move this row is, not a classification to flip. Its direction control is
+		// not offered, so a typed sign has nothing to drive and is ignored here.
 		if t.IsTransfer() {
+			if amt < 0 {
+				amt = -amt
+			}
 			if t.Amount.IsNegative() {
 				amt = -amt
 			}
-		} else if directionS.Get() != txnDirIn {
-			amt = -amt
 		}
+		// NOTE: the direction control is synced AFTER the write, not here. Calling
+		// a state setter mid-handler re-renders the component while this closure is
+		// still running, and the rest of the save (including PutTransaction) can be
+		// lost — the save then does nothing at all, with no error and no toast.
+		// Compute now, write, then sync the control.
+		syncDirectionOut := !t.IsTransfer() && resolved != want
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateS.Get()))
 		if derr != nil {
 			errMsg.Set(uistate.T("transactions.invalidDate"))
@@ -348,6 +369,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				learn = t.Desc
 			}
 			uistate.IncrementLearnTally(learn, t.CategoryID)
+		}
+		// C547: now that the write has landed, bring the control into agreement
+		// with what was stored. Doing this earlier re-rendered the form mid-save
+		// and lost the write.
+		if syncDirectionOut {
+			directionS.Set(txnDirOut)
 		}
 		uistate.BumpDataRevision()
 		// #63: the saved confirmation names the consequence — where the account's
@@ -718,7 +745,15 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// Delete stays in the body (left-aligned, apart from the panel footer's
 		// Cancel/Save): the FlipPanel's pinned .set-foot owns Cancel + Save now (via
 		// FormID → native submit), fixing the old floating mid-panel button row.
-		Div(css.Class(tw.Flex, tw.Mt2, tw.Mb2),
+		//
+		// C580: but it is now STICKY to the foot of the scrolling body, the same
+		// treatment the error message got. In a plain block it sat at whatever depth
+		// the form happened to end — below the fold on a transaction with a merchant
+		// story, above it on a bare one — so the one destructive action in the dialog
+		// had no fixed place, while the two safe actions were pinned and always
+		// visible. Now it is always in view, always in the same spot, and separated
+		// from Save by the full width of the dialog.
+		Div(css.Class("txn-edit-danger"),
 			Button(css.Class("btn btn-del"), Type("button"), Attr("data-testid", "txn-edit-delete"), OnClick(del), uistate.T("action.delete")),
 		),
 	)

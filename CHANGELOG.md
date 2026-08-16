@@ -32,6 +32,13 @@ and every commit updates this file under `Unreleased`.
   can say exactly which commit it was built from.
 
 
+### Fixed
+- **The edit dialog's category picker is readable again.** "New category" sat beside the category
+  select and took more than half the row at the dialog's width, clipping it to "— No categ". The
+  select now claims a real minimum width and the button wraps beneath it when there isn't room for
+  both. Delete ends the form below a hairline, set apart from the fields it follows instead of
+  reading as one more control in the run.
+
 ### Changed
 - **One way to add a transaction, and it says what kind.** Three entry points — the top bar's "+",
   "Add something else", and "Add transaction" above the ledger — all opened the same neutral form,

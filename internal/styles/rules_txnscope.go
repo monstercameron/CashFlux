@@ -88,6 +88,37 @@ func registerTxnScope() {
 		padding("0"),
 	)
 
+	// --- The edit modal's destructive action is set apart (C580) ------------------
+	// Delete ends the form, below a hairline, with room around it — so it is not one
+	// more control in the run of fields, and a mis-aimed click on the last field
+	// cannot land on it.
+	//
+	// It is NOT sticky. Pinning it to the foot of the scrolling body was tried and
+	// reverted: `position:sticky; bottom:0` keeps the element in flow, so the band
+	// floated over the Note field and clipped the two settings after it. Making it a
+	// genuine footer control needs the FlipPanel footer itself, which means the
+	// modal HOST owning the delete handler — a larger change than this ticket, and
+	// one worth doing properly rather than approximating with an overlay.
+	rule(".txn-edit-danger",
+		display("flex"),
+		marginTop("1rem"),
+		paddingTop("0.75rem"),
+		borderTop("1px solid var(--border)"),
+	)
+
+	// --- The category picker gives the SELECT the width (C580) --------------------
+	// "New category" is a secondary action beside the control the field is actually
+	// for, and at the modal's two-column width it was taking more than half the row
+	// — leaving the select clipped to "— No categ". The select now claims a real
+	// minimum and the button wraps beneath it when there is not room for both.
+	rule(".txn-cat-row",
+		flexWrap("wrap"),
+	)
+	rule(".txn-cat-row .field",
+		flex("1 1 12rem"),
+		minWidth("12rem"),
+	)
+
 	// --- The one-hop return crumb (C581) ------------------------------------------
 	// A thin band under the top bar on the page a side trip landed on. Quiet — it is
 	// a thread back, not an alert — but the back control is a real button, because a
