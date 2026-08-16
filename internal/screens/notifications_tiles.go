@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/id"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -486,6 +487,12 @@ func resolveNotification(feedID string, r uistate.Resolution) {
 			return
 		}
 		uistate.PostNotice(uistate.T("notifications.resolvedUpdated"), false)
+	case uistate.ResolveTaskDone:
+		if err := app.CompleteTask(r.EntityID, id.New(), time.Now()); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("notifications.resolvedDone"), false)
 	default:
 		return
 	}

@@ -5,12 +5,11 @@
 package screens
 
 import (
-	"strings"
-
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/learntally"
+	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -98,7 +97,16 @@ func applyReviewChoice(app *appstate.App, cur domain.Transaction, categoryID str
 		return false
 	}
 	if batch {
-		n := assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), categoryID)
+		// C616: the key MUST be reviewqueue.MerchantKey, not the raw payee.
+		// assignReviewByMerchant matches on `reviewqueue.MerchantKey(t) == key`,
+		// and MerchantKey is payeealias.Normalize + lowercase — so passing the raw
+		// descriptor ("VENMO PAYMENT 1042778120") could never equal the normalized
+		// key of the very transaction it came from. Every single-mode confirm
+		// therefore matched ZERO rows, returned 0, and (since C553 made a failed
+		// write honest) reported "That didn't save" while the card sat still. Bulk
+		// worked the whole time because it passes the group's own MerchantKey.
+		// This is C498's raw-vs-cleaned mismatch, reintroduced on one call path.
+		n := assignReviewByMerchant(app, reviewqueue.MerchantKey(cur), categoryID)
 		if n > 0 {
 			postCategorizedUndo(app, categoryID, n)
 		}

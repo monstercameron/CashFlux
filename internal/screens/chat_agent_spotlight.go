@@ -62,10 +62,20 @@ func agToolsSpotlight(app *appstate.App, base string, rates currency.Rates) []ch
 						"don't describe a button you aren't sure exists."
 				}
 				navigateTo(target.Route)
-				uistate.PointAt(target.TestID, target.What)
+				uistate.PointAt(target.Route, target.TestID, target.What)
 				if target.TestID == "" {
 					return "Taken them to " + target.Route + ", which is where they " + target.What +
 						". Tell them what they're looking at in one sentence."
+				}
+				// Whether the control was actually FOUND is checked, not assumed. A
+				// renamed test id or a control hidden by a module toggle would
+				// otherwise have the assistant confidently announce a ring that is
+				// not on the screen, and the person then hunts for something that
+				// was never highlighted.
+				if !spotlightVisible(target.TestID) {
+					return "Taken them to " + target.Route + ", but the control to " + target.What +
+						" isn't on screen — it may be switched off in Settings. Say that, and describe " +
+						"where it would be, rather than claiming it's highlighted."
 				}
 				return "Taken them to " + target.Route + " and highlighted the control to " + target.What +
 					". Tell them it's highlighted and what to do next, in one sentence."

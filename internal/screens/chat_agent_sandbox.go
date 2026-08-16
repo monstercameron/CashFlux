@@ -9,6 +9,7 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -84,7 +85,12 @@ func agToolsSandbox(app *appstate.App, base string, rates currency.Rates) []chat
 				if !ok {
 					return "There's no account to run the scenario against."
 				}
-				minor := int64(a.MonthlyChange*100 + 0.5)
+				// math.Round, not int64(x*100+0.5): the conversion truncates TOWARD
+				// ZERO, so the +0.5 trick rounds the wrong way for every negative
+				// value — and negative is the documented common case here (a new or
+				// increased cost). -58.333 became -58.32, under-stating the scenario
+				// by a cent per month for up to sixty months.
+				minor := int64(math.Round(a.MonthlyChange * 100))
 				start := time.Now()
 				for i := 0; i < months; i++ {
 					if err := sandbox.App.PutTransaction(domain.Transaction{

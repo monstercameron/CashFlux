@@ -31,8 +31,18 @@ func rowStatusWord(p txnFrameRowProps) string {
 	// hides the ask is worse than the bare dot it replaced. The settled state is not
 	// lost — statusDetail puts it in the cell's tooltip and accessible name.
 	switch {
-	case !p.Reviewed && !p.IsTransfer:
+	// C618: "Needs review" is a claim about the REVIEW QUEUE — its own tooltip
+	// says "confirm it in the Review inbox". So it may only be said of a row the
+	// inbox actually holds. A rule-categorized charge (or one added without
+	// ticking "Mark as reviewed") has a category, so reviewqueue.Needs is false
+	// and no card exists for it; calling it "Needs review" sent people hunting a
+	// merchant group that was never in the dialog. It is unconfirmed instead —
+	// still an ask, still outranking settlement per C601, but an honest one with
+	// its own action (open the row) rather than a wrong destination.
+	case p.Queued && !p.IsTransfer:
 		return uistate.T("acctxn.legendNeedsReview")
+	case !p.Reviewed && !p.IsTransfer:
+		return uistate.T("transactions.statusUnconfirmed")
 	case p.Reconciled:
 		return uistate.T("acctxn.legendReconciled")
 	case p.Cleared:
@@ -71,7 +81,11 @@ func statusDetail(p txnFrameRowProps) string {
 // state of a healthy ledger and colouring every settled row would leave the one row
 // that needs a person with nothing to distinguish it.
 func statusToneClass(p txnFrameRowProps) string {
-	if !p.Reconciled && !p.Cleared && !p.Reviewed && !p.IsTransfer {
+	// C618: reserve the attention tint for a row the Review inbox is actually
+	// holding. "Not confirmed" is a softer state — the charge is filed, nobody has
+	// signed it off — and tinting it the same colour would put an alarm on rows
+	// that have no queue card to answer it, which is the noise this ticket is about.
+	if p.Queued && !p.IsTransfer {
 		return "txn-status-attention"
 	}
 	return "text-dim"

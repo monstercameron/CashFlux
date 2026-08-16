@@ -139,3 +139,41 @@ func TestRedactTakesTheTokenAfterAMarker(t *testing.T) {
 		t.Fatalf("a bearer token survived: %q", got)
 	}
 }
+
+func TestRedactCoversEveryCurrencyTheAppSupports(t *testing.T) {
+	// The first version listed three symbols, so a household on yen, rupees or
+	// francs had their amounts pass straight through a redactor that promised to
+	// remove them — a promise specific to the symbols its author thought of.
+	for _, msg := range []string{
+		"balance ¥150000 after sync", "budget over by ₹4,500", "total CHF 1200 owed", "1200 CHF owed",
+	} {
+		got := Redact(msg)
+		if !strings.Contains(got, "[amount]") {
+			t.Errorf("Redact(%q) = %q — the figure survived", msg, got)
+		}
+	}
+}
+
+func TestRedactSeesSecretsInsideCompositeFields(t *testing.T) {
+	// `key=value` is the shape a secret takes in a LOG LINE, which is the thing
+	// being pasted. Matching only whole whitespace-delimited fields missed exactly
+	// the format most likely to appear.
+	for _, msg := range []string{
+		"request failed apiKey=sk-proj-abcdefghijkl",
+		"header Authorization=Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6",
+		"config: token:sk-proj-zzzzzzzzzzzz",
+	} {
+		got := Redact(msg)
+		if strings.Contains(got, "sk-proj") || strings.Contains(got, "eyJhbGci") {
+			t.Errorf("Redact(%q) = %q — the secret survived", msg, got)
+		}
+	}
+}
+
+func TestAnOrdinaryWordStartingWithACurrencyLetterSurvives(t *testing.T) {
+	// 'R' is a currency symbol for rand, but only when digits follow it.
+	msg := "Rules engine failed to load"
+	if got := Redact(msg); got != msg {
+		t.Fatalf("an ordinary word was redacted: %q", got)
+	}
+}

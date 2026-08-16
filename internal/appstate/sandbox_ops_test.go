@@ -3,11 +3,13 @@
 package appstate
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
 func sandboxApp(t *testing.T) *App {
@@ -135,4 +137,45 @@ func abs(v float64) float64 {
 		return -v
 	}
 	return v
+}
+
+func TestASandboxWriteNeverFiresAWorkflow(t *testing.T) {
+	// The hole that made "nothing is saved" untrue: PutTransaction fires
+	// transaction-added workflows, and one of the actions a workflow can take
+	// reaches a package-level runner wired to the REAL app — with the real key and
+	// the real spend meter. Sixty synthetic transactions would have meant sixty
+	// live model calls, paid for, from a question the tool promised was discarded.
+	a := sandboxApp(t)
+	if err := a.PutWorkflow(workflow.Workflow{
+		ID: "w1", Name: "on every transaction", Enabled: true,
+		Trigger: workflow.Trigger{Kind: workflow.TriggerTxnAdded},
+		Actions: []workflow.Action{{Kind: workflow.ActionAgentRun, Prompt: "summarise"}},
+	}); err != nil {
+		t.Fatalf("PutWorkflow: %v", err)
+	}
+	prior := AgentRunner
+	fired := 0
+	AgentRunner = func(string, func(string)) { fired++ }
+	defer func() { AgentRunner = prior }()
+
+	sb, err := a.NewSandbox()
+	if err != nil {
+		t.Fatalf("NewSandbox: %v", err)
+	}
+	for i := 0; i < 5; i++ {
+		if err := sb.App.PutTransaction(domain.Transaction{
+			ID: fmt.Sprintf("hypo-%d", i), AccountID: "a1", Payee: "New flat", Desc: "Rent",
+			Amount: money.New(-180000, "USD"), Date: time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatalf("sandbox write: %v", err)
+		}
+	}
+	if fired != 0 {
+		t.Fatalf("a hypothetical fired %d real workflow run(s) — each one a paid model call", fired)
+	}
+	// The workflow itself must still exist in the sandbox; it is suspended, not
+	// deleted, so a scenario over a household WITH automations is still their data.
+	if len(sb.App.Workflows()) != 1 {
+		t.Fatalf("the sandbox lost the household's workflows: %d", len(sb.App.Workflows()))
+	}
 }

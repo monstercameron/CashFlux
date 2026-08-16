@@ -24,11 +24,13 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// catPathSep is the separator shown between a parent and its child. The option
-// TEXT must carry the parent, not just the optgroup label: a CLOSED select shows
-// only the option, and a bare "Gas" is ambiguous once Auto and Utilities both
-// have one — the same collision C489 fixes in the AI contract.
-const catPathSep = " › "
+// The option TEXT must carry the parent whenever a bare leaf would be ambiguous:
+// a CLOSED select shows only the option, and "Gas" says nothing once Auto and
+// Utilities both have one — the same collision C489 fixes in the AI contract.
+//
+// C619 kept that requirement and moved it to catname.Label, which applies it
+// app-wide and with ONE separator; this file's private " › " was the second
+// convention that made Review and the ledger disagree.
 
 // catOption is one row of the category list: a real category with its display
 // path and depth.
@@ -42,20 +44,21 @@ type catOption struct {
 // categoryOptions flattens the tree into display order (parent before children),
 // filtered to kind. Sorted deterministically by categorytree.Flatten.
 func categoryOptions(cats []domain.Category, kind domain.CategoryKind) []catOption {
-	nameByID := make(map[string]string, len(cats))
-	for _, c := range cats {
-		nameByID[c.ID] = c.Name
-	}
+	// C619: one naming rule for the whole app. This used to qualify EVERY nested
+	// category ("Transportation › Gas") while the ledger showed the bare leaf
+	// ("Gas"), so the same category read as two different things depending on the
+	// screen — and with a different separator than catname.Path used elsewhere.
+	// catname.Label qualifies only when the leaf name is genuinely ambiguous, so
+	// the label now depends on the DATA rather than on which surface is asking.
 	out := make([]catOption, 0, len(cats))
 	for _, f := range categorytree.Flatten(cats) {
 		if f.Category.Kind != kind {
 			continue
 		}
-		path := f.Category.Name
-		if p, ok := nameByID[f.Category.ParentID]; ok && f.Category.ParentID != f.Category.ID {
-			path = p + catPathSep + f.Category.Name
-		}
-		out = append(out, catOption{ID: f.Category.ID, Path: path, Depth: f.Depth, Kind: f.Category.Kind})
+		out = append(out, catOption{
+			ID: f.Category.ID, Path: catname.Label(cats, f.Category),
+			Depth: f.Depth, Kind: f.Category.Kind,
+		})
 	}
 	return out
 }

@@ -432,6 +432,14 @@ func Validate(wf Workflow) []string {
 			if strings.TrimSpace(a.Tag) == "" {
 				errs = append(errs, "An \"add tag\" action needs a tag.")
 			}
+		case ActionAgentRun:
+			// Every other action with a required field is checked here, and this
+			// one was not. A workflow saved with an empty prompt — through an
+			// import, a restore, or any editor that does not gate it — would run
+			// forever, do nothing, and never say so.
+			if strings.TrimSpace(a.Prompt) == "" {
+				errs = append(errs, "An \"ask the assistant\" action needs a question.")
+			}
 		case ActionTransfer:
 			if err := ValidateTransferAction(a, wf.Trigger.Kind); err != nil {
 				errs = append(errs, err.Error())

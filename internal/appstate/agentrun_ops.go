@@ -55,6 +55,15 @@ func (a *App) RunScheduledAgentPrompt(prompt string) bool {
 	}
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
+		// A schedule with no question is a misconfiguration, and a silent one is
+		// the worst kind: it fires on cadence forever, does nothing, and gives the
+		// household no way to discover why. Validate now rejects this at save, so
+		// reaching here means an older or imported workflow — which is exactly the
+		// case that needs telling.
+		a.log.Info("scheduled assistant run skipped (no question configured)")
+		if a.Notifier != nil {
+			a.Notifier("A scheduled question for the assistant has no question set — check the workflow.")
+		}
 		return false
 	}
 	if !a.hasAIProvider() {

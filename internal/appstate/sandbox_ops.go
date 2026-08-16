@@ -71,6 +71,21 @@ func (a *App) NewSandbox() (*Sandbox, error) {
 	// hypothetical workflow fires inside the sandbox, its notice does not surface
 	// as though it were about real money.
 	copyApp.Notifier = nil
+	// And it must never fire a workflow AT ALL.
+	//
+	// This is the hole that made "nothing is saved" untrue. PutTransaction fires
+	// transaction-added workflows, and one of the actions a workflow can take is
+	// "ask the assistant" — which reaches a package-level runner wired to the REAL
+	// app, with the real key and the real spend meter. A single what-if scenario
+	// writes up to sixty synthetic transactions, so a household with such a
+	// workflow enabled would have paid for sixty live model calls from one
+	// hypothetical question the tool promised was thrown away.
+	//
+	// Suspending triggers for the sandbox's whole life is the right shape: a
+	// hypothetical does not cause automations. The scenario is about what the
+	// FIGURES would be, and a workflow firing inside it would be modelling the
+	// automation rather than the money.
+	copyApp.triggersSuspended = true
 	// The copy shares the original's clock. Without this the two sides of the diff
 	// are evaluated at different instants, and every time-dependent figure —
 	// no-spend days, days until a bill, anything counting from "today" — drifts on

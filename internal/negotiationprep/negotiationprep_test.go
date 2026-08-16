@@ -135,8 +135,14 @@ func TestACallWithNothingToSayIsNotWorthMaking(t *testing.T) {
 }
 
 func TestASubscriptionWithARiseIsWorthTheCall(t *testing.T) {
+	// This used to pass with a SINGLE past charge, which is exactly the shape the
+	// review showed to be unsafe: one charge cannot establish a rise, and treating
+	// it as one is how an unrelated purchase becomes a quoted old price. A rise now
+	// needs a history that looks like a subscription.
 	p := Build(Subscription{Name: "Streamly", MonthlyMinor: 1899,
-		Charges: []Charge{charge(2026, time.July, 1299)}}, callNow, usd)
+		Charges: []Charge{
+			charge(2026, time.May, 1299), charge(2026, time.June, 1499), charge(2026, time.July, 1899),
+		}}, callNow, usd)
 	if !p.Worthwhile() {
 		t.Fatalf("a documented rise was not counted as leverage: %+v", p.Leverage)
 	}
@@ -193,4 +199,58 @@ func containsSubstring(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestAScatteredChargeHistoryIsNotQuotedAsAPriceRise(t *testing.T) {
+	// Amazon hosts a $9 subscription and a $340 purchase under the same payee.
+	// Taking the low one as "what you used to pay" produces a confident, specific,
+	// wrong sentence — read out loud to a rep who corrects it, ending the call.
+	p := Build(Subscription{
+		Name: "Amazon", MonthlyMinor: 1499,
+		Charges: []Charge{
+			charge(2025, time.March, 899),   // the subscription
+			charge(2025, time.April, 34000), // a television
+			charge(2026, time.August, 1499),
+		},
+	}, callNow, usd)
+	for _, l := range p.Leverage {
+		if strings.Contains(l.Point, "went up") {
+			t.Fatalf("a price rise was claimed from scattered charges: %q", l.Point)
+		}
+	}
+	if !containsSubstring(p.Gaps, "vary too much") {
+		t.Fatalf("gaps = %v, want the warning about mixed charges", p.Gaps)
+	}
+	for _, line := range p.Script {
+		if strings.Contains(line, "I was paying") {
+			t.Fatalf("the script quotes an old price it cannot support: %q", line)
+		}
+	}
+}
+
+func TestAConsistentSubscriptionHistoryStillQuotesTheRise(t *testing.T) {
+	// The guard must not refuse a genuine rise: three charges within a normal
+	// spread is a subscription that went up.
+	p := Build(Subscription{
+		Name: "Streamly", MonthlyMinor: 1899,
+		Charges: []Charge{
+			charge(2024, time.March, 1299), charge(2025, time.March, 1499), charge(2026, time.August, 1899),
+		},
+	}, callNow, usd)
+	if !containsSubstring(pointsOf(p), "went up") {
+		t.Fatalf("a genuine rise was refused: %v", pointsOf(p))
+	}
+}
+
+func TestTwoChargesAreNotEnoughToCallItARise(t *testing.T) {
+	// A line through two points fits anything.
+	p := Build(Subscription{
+		Name: "Newish", MonthlyMinor: 1899,
+		Charges: []Charge{charge(2026, time.July, 1299), charge(2026, time.August, 1899)},
+	}, callNow, usd)
+	for _, l := range p.Leverage {
+		if strings.Contains(l.Point, "went up") {
+			t.Fatalf("a rise was claimed from two charges: %q", l.Point)
+		}
+	}
 }

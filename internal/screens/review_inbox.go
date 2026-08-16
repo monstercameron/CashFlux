@@ -49,6 +49,11 @@ func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
 		if t.ID == txnID {
 			t.CategoryID = catID
 			t.Tags = removeReviewTag(t.Tags)
+			// C617: a confirmed decision IS the review. Clearing only the queue's
+			// inputs (category + tag) left `Reviewed` false, so the row vanished
+			// from the inbox while the ledger still badged it "Needs review" —
+			// the app disagreeing with itself about the same transaction.
+			t.Reviewed = true
 			if err := app.PutTransaction(t); err != nil {
 				uistate.PostNotice(err.Error(), true)
 				uistate.BumpDataRevision()
@@ -85,6 +90,7 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) int {
 			if reviewqueue.MerchantKey(t) == key {
 				t.CategoryID = catID
 				t.Tags = removeReviewTag(t.Tags)
+				t.Reviewed = true // C617: same rule as the single path — confirming IS reviewing.
 				if err := app.PutTransaction(t); err != nil {
 					if writeErr == nil {
 						writeErr = err

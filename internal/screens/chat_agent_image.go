@@ -9,6 +9,7 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -65,7 +66,11 @@ func agToolsImage(app *appstate.App, base string, rates currency.Rates) []chatTo
 				route := imageroute.Decide(imageroute.Reading{
 					Merchant: strings.TrimSpace(a.Merchant),
 					// The model reports major units; the app works in minor ones.
-					TotalMinor: int64(a.Total*100 + 0.5),
+					// math.Round for the same reason as the scenario tool: the
+					// conversion truncates toward zero, so the +0.5 trick rounds
+					// negatives the wrong way. Harmless here today (only the sign is
+					// read) and a landmine the moment the figure is used.
+					TotalMinor: int64(math.Round(a.Total * 100)),
 					LineItems:  a.LineItems,
 					Rows:       a.Rows,
 					Text:       a.Text,

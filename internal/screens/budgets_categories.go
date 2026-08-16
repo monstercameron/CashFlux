@@ -304,7 +304,7 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 				hiddenKinds++
 				continue
 			}
-			if q != "" && !strings.Contains(strings.ToLower(catname.Path(cats, c)), q) {
+			if q != "" && !strings.Contains(strings.ToLower(catname.Label(cats, c)), q) {
 				continue
 			}
 			shown = append(shown, c)
@@ -318,7 +318,7 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 	}
 	rows := MapKeyed(shown, keyOf, func(c domain.Category) ui.Node {
 		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
-			CategoryID: c.ID, CategoryName: catname.Path(allCats, c), Checked: props.Picked[c.ID],
+			CategoryID: c.ID, CategoryName: catname.Label(allCats, c), Checked: props.Picked[c.ID],
 			AlsoIn: otherBudget[c.ID], Meta: props.Meta[c.ID], OnToggle: props.OnToggle,
 		})
 	})

@@ -190,3 +190,32 @@ func TestALongScheduledQuestionIsTruncatedOnARuneBoundary(t *testing.T) {
 		t.Fatalf("summary is %d runes", len([]rune(e.Summary)))
 	}
 }
+
+func TestAnAgentRunWithoutAQuestionIsRejectedAtSave(t *testing.T) {
+	// Otherwise it fires on cadence forever, does nothing, and never says why.
+	errs := Validate(Workflow{
+		ID: "w", Name: "Friday review",
+		Trigger: Trigger{Kind: TriggerScheduled},
+		Actions: []Action{{Kind: ActionAgentRun}},
+	})
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "needs a question") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("errors = %v, want one about the missing question", errs)
+	}
+}
+
+func TestAnAgentRunWithAQuestionValidates(t *testing.T) {
+	errs := Validate(Workflow{
+		ID: "w", Name: "Friday review",
+		Trigger: Trigger{Kind: TriggerScheduled},
+		Actions: []Action{{Kind: ActionAgentRun, Prompt: "summarise my week"}},
+	})
+	if len(errs) != 0 {
+		t.Fatalf("errors = %v, want none", errs)
+	}
+}

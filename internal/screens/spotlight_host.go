@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -26,6 +27,12 @@ import (
 // wants.
 func SpotlightHost() ui.Node {
 	spot := uistate.UseSpotlight().Get()
+	// The current path, so the highlight can retire when the user leaves the
+	// screen it belongs to. Reading it during render (rather than subscribing)
+	// is enough: any navigation re-renders the shell this host is mounted in.
+	route := router.GetCurrentPath()
+	dismiss := ui.UseEvent(Prevent(func() { uistate.ClearSpotlight() }))
+
 	ui.UseEffect(func() func() {
 		clearSpotlightMarks()
 		if spot.Active() && spot.TestID != "" {
@@ -36,15 +43,30 @@ func SpotlightHost() ui.Node {
 		return clearSpotlightMarks
 	}, spot.Nonce)
 
+	// Navigating away puts the highlight away. Without this the note stayed fixed
+	// to the bottom of EVERY screen for the rest of the session, still claiming to
+	// point at a control that is no longer on the page — a permanent, confidently
+	// wrong statement about what the user is looking at.
+	ui.UseEffect(func() func() {
+		if spot.Active() && route != spot.Route {
+			uistate.ClearSpotlight()
+		}
+		return nil
+	}, route+"|"+spot.Route)
+
 	if !spot.Active() || spot.What == "" {
 		return Fragment()
 	}
 	// The label is a status rather than a dialog: it announces itself once to a
 	// screen reader and never steals focus, because focus belongs on the control
 	// being pointed at.
+	// It can also be dismissed outright: an instruction somebody has finished with
+	// should not need a navigation to get rid of.
 	return Div(css.Class("spot-note"), Attr("data-testid", "spotlight-note"),
 		Attr("role", "status"), Attr("aria-live", "polite"),
-		uistate.T("spotlight.pointing", spot.What))
+		Span(uistate.T("spotlight.pointing", spot.What)),
+		Button(css.Class("spot-note-x"), Type("button"), Attr("data-testid", "spotlight-dismiss"),
+			Attr("aria-label", uistate.T("action.close")), OnClick(dismiss), "×"))
 }
 
 // spotlightClass is the class added to the highlighted element. It is added to the
@@ -79,4 +101,14 @@ func clearSpotlightMarks() {
 	for i := 0; i < marked.Length(); i++ {
 		marked.Index(i).Get("classList").Call("remove", spotlightClass)
 	}
+}
+
+// spotlightVisible reports whether a control with the given test id is actually in
+// the document, so a caller can say "it's highlighted" only when it is.
+func spotlightVisible(testID string) bool {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return false
+	}
+	return doc.Call("querySelector", "[data-testid=\""+testID+"\"]").Truthy()
 }

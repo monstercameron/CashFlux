@@ -211,6 +211,38 @@ and every commit updates this file under `Unreleased`.
   wrong, and rewriting the same figure would log a change that did not happen.
 
 ### Fixed
+- **Seven more problems a second adversarial review found**, worst first:
+
+  **A what-if scenario could spend real money.** The sandbox's whole promise is that nothing escapes,
+  but writing a transaction fires transaction-added workflows — and one of the actions a workflow can
+  take is "ask the assistant", which reaches a runner wired to the REAL app with the real key. A
+  household with such a workflow enabled would have paid for up to sixty live model calls from one
+  hypothetical question. Triggers are now suspended for the sandbox's whole life: a hypothetical does
+  not cause automations.
+
+  **The spotlight's "pointing at X" note never went away.** It is fixed to the bottom of the viewport
+  and its clear function was never called from anywhere, so after one `show_me` it followed the user
+  onto every other screen for the rest of the session, still claiming to point at a control that was
+  no longer on the page. It now retires on navigation and can be dismissed outright — and the
+  assistant no longer claims a control is highlighted without checking that it is actually there.
+
+  **Negotiation prep could quote an unrelated purchase as an old price.** Charges are gathered by
+  merchant name, and Amazon hosts a subscription alongside one-off purchases; taking the cheapest as
+  "what you used to pay" produces a confident wrong sentence read aloud to a retention rep, which is
+  precisely the failure the package exists to prevent. A price rise is now claimed only when the
+  history looks like one recurring cost, and says plainly when it doesn't.
+
+  **Negative money rounded the wrong way.** `int64(x*100 + 0.5)` truncates toward zero, so the
+  half-up trick is backwards for negatives — the documented common case for a scenario's monthly
+  change. $58.333 became $58.32, per month, for up to sixty months.
+
+  **The "safe to paste publicly" diagnostic had two bypasses:** amounts in any currency but dollars,
+  pounds and euros passed straight through, and a secret fused into a `key=value` field — the shape
+  secrets actually take in a log line — matched neither check.
+
+  **A scheduled question with no question** was accepted at save and then ran forever doing nothing,
+  silently. It is rejected now, and an older one already saved says why it skipped.
+
 - **An alert rule without a label no longer shows its raw id in settings (C410).** Every shipped rule
   has real copy; an unmapped one used to render the literal "default-unusual" because the fallback
   handed the id to the translator, which returns unknown keys unchanged. It humanizes now, and a test

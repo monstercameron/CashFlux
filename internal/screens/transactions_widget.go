@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
+	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -784,6 +785,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
 			Reviewed:            txByID[rid].Reviewed,
+			Queued:              reviewqueue.Needs(txByID[rid]),
 			AutoCategory:        autoProv[rid].IsAutomatic(),
 			AutoCategoryWhy:     autoMarkWhy(autoProv[rid], srcCol.Str(i)),
 			Selected:            sel[rid],
@@ -995,6 +997,11 @@ type txnFrameRowProps struct {
 	// stronger chip than plain cleared.
 	Reconciled bool
 	Reviewed   bool
+	// Queued is reviewqueue.Needs(t): whether the Review inbox actually holds a
+	// card for this row. It is NOT the same question as Reviewed — a charge a rule
+	// categorized is unreviewed but unqueued — and conflating them is what let the
+	// ledger say "Needs review" about rows the inbox had never heard of (C618).
+	Queued bool
 	// AutoCategory marks a row whose category was filed by automation and which
 	// nobody has confirmed (C579). AutoCategoryWhy is the sentence explaining what
 	// filed it — naming the rule when one accounts for it — shown on the mark's
@@ -1172,10 +1179,19 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-cleared-badge"),
 			Attr("role", "img"), Attr("title", uistate.T("transactions.clearedBadgeTitle")),
 			Attr("aria-label", uistate.T("acctxn.legendCleared")), "✓")
-	case !props.Reviewed && !props.IsTransfer:
+	// C618: the glyph and the Status word must make the SAME claim, so this branch
+	// order mirrors rowStatusWord exactly. "•" carries the tooltip "confirm it in
+	// the Review inbox", which is only true of a row the inbox holds.
+	case props.Queued && !props.IsTransfer:
 		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-needsreview-badge"),
 			Attr("role", "img"), Attr("title", uistate.T("transactions.needsReviewBadgeTitle")),
 			Attr("aria-label", uistate.T("acctxn.legendNeedsReview")), "•")
+	case !props.Reviewed && !props.IsTransfer:
+		// Categorized but unconfirmed: an open circle, not the filled dot, so the
+		// two states are distinguishable at a glance as well as in words.
+		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-unconfirmed-badge"),
+			Attr("role", "img"), Attr("title", uistate.T("transactions.statusUnconfirmedTitle")),
+			Attr("aria-label", uistate.T("transactions.statusUnconfirmed")), "◦")
 	}
 
 	// XC1/XC2: link badges beside the description, mirroring the classic view.

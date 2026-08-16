@@ -659,6 +659,8 @@ func notifyResolveLabel(k uistate.ResolveKind) string {
 		return uistate.T("notifications.resolveMarkPaid")
 	case uistate.ResolveBalanceConfirmed:
 		return uistate.T("notifications.resolveMarkUpdated")
+	case uistate.ResolveTaskDone:
+		return uistate.T("notifications.resolveMarkDone")
 	}
 	return ""
 }

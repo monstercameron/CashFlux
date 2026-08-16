@@ -107,10 +107,22 @@ func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
 	first, lowest, ok := firstAndLowest(s.Charges)
 	if ok {
 		p.TenureMonths = wholeMonths(first, now)
-		if s.MonthlyMinor > lowest {
-			p.RiseMinor = s.MonthlyMinor - lowest
-			p.RisePercent = int(p.RiseMinor * 100 / lowest)
-		}
+	}
+	// A price rise is only claimed when the charges look like ONE recurring cost.
+	//
+	// The charges are gathered by matching the merchant's name, and a merchant like
+	// Amazon or Apple hosts a subscription alongside unrelated one-off purchases
+	// under the same payee. Taking the lowest of those as "what you used to pay"
+	// produces a confident, specific, wrong sentence — read out loud to a retention
+	// rep, who corrects it, and the call is over. Given that this package's whole
+	// job is to stop exactly that, the bar is that the history has to look like a
+	// subscription before it is quoted as one.
+	if ok && looksRecurring(s.Charges) && s.MonthlyMinor > lowest {
+		p.RiseMinor = s.MonthlyMinor - lowest
+		p.RisePercent = int(p.RiseMinor * 100 / lowest)
+	} else if ok && s.MonthlyMinor > lowest {
+		p.Gaps = append(p.Gaps, "The charges under this name vary too much to call it a price rise — "+
+			"some of them are probably other purchases. Don't quote an old price.")
 	}
 
 	// Strongest first: a documented price rise is the fact a provider is most
@@ -142,6 +154,48 @@ func Build(s Subscription, now time.Time, fmtMoney func(int64) string) Prep {
 
 	p.Script = buildScript(p, s, fmtMoney)
 	return p
+}
+
+// recurringSpreadLimit is how far the smallest and largest charge may differ and
+// still read as one recurring cost. A subscription's price moves in steps; a
+// merchant's one-off purchases scatter.
+const recurringSpreadLimit = 3
+
+// minChargesForRise is how many charges are needed before a "rise" means anything.
+// Two points is a line through any two numbers.
+const minChargesForRise = 3
+
+// looksRecurring reports whether a set of charges plausibly belongs to ONE
+// recurring cost rather than to a merchant the household also shops at.
+//
+// The test is deliberately blunt: enough charges to see a pattern, and a spread
+// narrow enough that they could be the same thing at different prices. It will
+// refuse some genuine rises, and that is the right way to be wrong — a missed
+// leverage point costs a slightly weaker call, while a fabricated one ends it.
+func looksRecurring(charges []Charge) bool {
+	amounts := make([]int64, 0, len(charges))
+	for _, c := range charges {
+		a := c.AmountMinor
+		if a < 0 {
+			a = -a
+		}
+		if a > 0 {
+			amounts = append(amounts, a)
+		}
+	}
+	if len(amounts) < minChargesForRise {
+		return false
+	}
+	low, high := amounts[0], amounts[0]
+	for _, a := range amounts {
+		if a < low {
+			low = a
+		}
+		if a > high {
+			high = a
+		}
+	}
+	return low > 0 && high <= low*recurringSpreadLimit
 }
 
 // buildScript writes what to say. It is short on purpose: a script somebody has to

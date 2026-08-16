@@ -889,6 +889,16 @@ func registerSpotlight() {
 	)
 	// The note names what was highlighted, so the ring explains itself instead of
 	// just glowing at somebody.
+	rule(".spot-note-x",
+		prop("border", "none"),
+		prop("background", "transparent"),
+		prop("color", "var(--text-faint)"),
+		prop("cursor", "pointer"),
+		prop("font-size", "1rem"),
+		prop("line-height", "1"),
+		prop("padding", "0 0 0 0.4rem"),
+		prop("pointer-events", "auto"),
+	)
 	rule(".spot-note",
 		prop("position", "fixed"),
 		prop("bottom", "1rem"),
@@ -902,6 +912,11 @@ func registerSpotlight() {
 		prop("color", "var(--text)"),
 		prop("font-size", "var(--type-13)"),
 		prop("box-shadow", "0 6px 24px rgba(0,0,0,0.18)"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.3rem"),
+		// The pill itself is inert so it never blocks the control it points at; the
+		// dismiss button re-enables pointer events for itself alone.
 		prop("pointer-events", "none"),
 	)
 }

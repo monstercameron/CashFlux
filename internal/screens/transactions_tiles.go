@@ -408,7 +408,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// Search gets a longer debounce than the numeric fields: it's the most-typed filter
 	// and re-filtering the whole ledger on each pause is the heaviest, so 400ms coalesces
 	// more keystrokes (including deliberate typing that pauses past the shorter delay).
-	onFilterText := func(v string) { debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) { x.Text = v }) }
+	// C619: the 400ms coalescing above is good for performance and bad for trust —
+	// during it the ledger still shows the PREVIOUS query's rows with nothing
+	// saying so, and people clicked them. Track the gap explicitly: pending goes up
+	// the moment a keystroke lands and comes down inside the debounced callback, so
+	// it spans exactly the window where what is on screen is out of date.
+	searchPending := ui.UseState(false)
+	onFilterText := func(v string) {
+		searchPending.Set(true)
+		debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) {
+			x.Text = v
+			searchPending.Set(false)
+		})
+	}
 	onFilterAmountMin := ui.UseEvent(func(v string) { debFilter("amtmin", func(x *uistate.TxFilter) { x.AmountMin = v }) })
 	onFilterAmountMax := ui.UseEvent(func(v string) { debFilter("amtmax", func(x *uistate.TxFilter) { x.AmountMax = v }) })
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
@@ -881,11 +893,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		},
 	})
 	toolbar := uiw.FilterToolbar(uiw.FilterToolbarProps{
-		Search:       f.Text,
-		SearchLabel:  uistate.T("transactions.searchPlaceholder"),
-		OnSearch:     onFilterText,
-		FiltersLabel: uistate.T("transactions.filters"),
-		FiltersTitle: uistate.T("transactions.filtersTitle"),
+		Search:        f.Text,
+		SearchLabel:   uistate.T("transactions.searchPlaceholder"),
+		OnSearch:      onFilterText,
+		SearchPending: searchPending.Get(),
+		FiltersLabel:  uistate.T("transactions.filters"),
+		FiltersTitle:  uistate.T("transactions.filtersTitle"),
 		ActiveAriaLabel: func(n int) string {
 			if n == 0 {
 				return uistate.T("transactions.filters")
@@ -1073,6 +1086,9 @@ func txnStatusLegend() ui.Node {
 		item("✓✓", uistate.T("acctxn.legendReconciled"), uistate.T("transactions.reconciledBadgeTitle"), "txn-legend-reconciled"),
 		item("✓", uistate.T("acctxn.legendCleared"), uistate.T("transactions.clearedBadgeTitle"), "txn-legend-cleared"),
 		item("•", uistate.T("acctxn.legendNeedsReview"), uistate.T("transactions.needsReviewBadgeTitle"), "txn-legend-review"),
+		// C618: the legend has to name both marks, or the new one reads as an
+		// unexplained glyph — which is the problem the legend exists to prevent.
+		item("◦", uistate.T("transactions.statusUnconfirmed"), uistate.T("transactions.statusUnconfirmedTitle"), "txn-legend-unconfirmed"),
 	)
 }
 
