@@ -219,3 +219,52 @@ func TestLiveAIRejectedKeyIsExplainedInPlainEnglish(t *testing.T) {
 	}
 	t.Logf("rejection reads: %v", err)
 }
+
+// The failure the adversarial review caught: a reasoning model returns reasoning
+// items with its tool call, and the Responses API rejects the FOLLOW-UP turn
+// unless those items are echoed back. A mocked upstream cannot prove this — only
+// OpenAI can say whether the second turn is accepted.
+func TestLiveAIAToolConversationSurvivesItsSecondTurn(t *testing.T) {
+	svc, ctx := liveService(t)
+	tools := []ai.Tool{ai.FunctionTool("spending_by_category",
+		"Total the user's spending per category for a month.",
+		json.RawMessage(`{"type":"object","properties":{"month":{"type":"string"}},"required":["month"]}`))}
+
+	first, err := svc.Chat(ctx, AIChatRequest{
+		Model: liveModel,
+		Messages: []ai.Message{
+			{Role: ai.RoleSystem, Content: "You have tools. Use them rather than guessing."},
+			{Role: ai.RoleUser, Content: "How much did I spend on groceries in August 2026?"},
+		},
+		Tools:           tools,
+		ReasoningEffort: "low",
+	})
+	if err != nil {
+		t.Fatalf("first turn: %v", err)
+	}
+	if len(first.ToolCalls) == 0 {
+		t.Fatalf("the model did not call the tool: %+v", first)
+	}
+	t.Logf("first turn: %d tool call(s), %d reasoning item(s)", len(first.ToolCalls), len(first.Reasoning))
+
+	// Now the turn that used to be rejected: echo the assistant's tool call back
+	// WITH its reasoning items, plus the result.
+	second, err := svc.Chat(ctx, AIChatRequest{
+		Model: liveModel,
+		Messages: []ai.Message{
+			{Role: ai.RoleSystem, Content: "You have tools. Use them rather than guessing."},
+			{Role: ai.RoleUser, Content: "How much did I spend on groceries in August 2026?"},
+			{Role: ai.RoleAssistant, ToolCalls: first.ToolCalls, ReasoningRaw: first.Reasoning},
+			ai.ToolResultMessage(first.ToolCalls[0].ID, first.ToolCalls[0].Function.Name, "Groceries: $312.40"),
+		},
+		Tools:           tools,
+		ReasoningEffort: "low",
+	})
+	if err != nil {
+		t.Fatalf("second turn rejected — this is the bug the review found: %v", err)
+	}
+	if !strings.Contains(second.Content, "312") {
+		t.Fatalf("second turn ignored the tool result: %q", second.Content)
+	}
+	t.Logf("second turn: %q", second.Content)
+}
