@@ -1,0 +1,17 @@
+[
+  {
+    "id": "cashflux-deploy",
+    "//": "Append this object to the existing /etc/webhook.conf array, alongside aff-deploy, ec-deploy and articleflux-deploy. Reloading the webhook service does not affect those targets.",
+    "//secret": "Generate with `openssl rand -hex 32`, put the SAME value in the repo's CASHFLUX_DEPLOY_HOOK_SECRET Actions secret, and keep it out of git.",
+    "execute-command": "/opt/CashFlux/deploy/production/autoupdate/cashflux-autoupdate.sh",
+    "command-working-directory": "/opt/CashFlux",
+    "response-message": "accepted",
+    "trigger-rule": {
+      "match": {
+        "type": "value",
+        "value": "REPLACE_WITH_SHARED_SECRET",
+        "parameter": { "source": "header", "name": "X-Cashflux-Deploy-Token" }
+      }
+    }
+  }
+]

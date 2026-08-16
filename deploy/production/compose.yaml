@@ -1,0 +1,107 @@
+# Production compose for CashFlux on the droplet.
+#
+# Deployed to /opt/CashFlux/deploy/production/compose.yaml. deploy-release.sh
+# rewrites the image tag in place, then runs `docker compose pull && up -d`.
+#
+# This replaces cashflux.service (systemd). The cutover is deliberately
+# conservative: the container listens on the SAME port nginx already proxies,
+# reads the SAME env file the systemd unit read, and mounts the SAME data
+# directory. Nothing outside this file has to change, and rolling back is
+# `systemctl start cashflux` after `docker compose down`.
+
+name: cashflux
+
+services:
+  app:
+    container_name: cashflux
+
+    # Pinned to an immutable tag, NEVER `latest`. `latest` makes "what is
+    # actually running?" unanswerable at the exact moment you need to know, and
+    # it is what makes rollback possible: put the previous tag back and pull.
+    # deploy-release.sh rewrites this line and records the outgoing tag in
+    # .previous-tag next to it.
+    image: ghcr.io/monstercameron/cashflux:v1.7.1
+
+    restart: unless-stopped
+
+    # 127.0.0.1 ONLY. Docker writes its own DNAT rules ahead of the host firewall
+    # chain, so "8105:8105" would publish this past ufw and put a household's
+    # entire financial history on the internet. The host-side bind address is the
+    # control; nginx is the only thing listening publicly.
+    #
+    # 8105 is the port nginx-budget.earlcameron.com.conf already proxies to, so
+    # the web tier needs no change and the cutover is invisible from outside.
+    ports:
+      - "127.0.0.1:8105:8105"
+
+    # BOX-SPECIFIC. The data directory below is a bind mount owned by the host's
+    # `cashflux` account (uid 993, gid 984 — read it with `id cashflux`), and a
+    # bind mount carries host ownership into the container unchanged. Running as
+    # the image's default 65532 would make every file in it unreadable. Verify
+    # this pair before a first deploy on any other machine.
+    user: "993:984"
+
+    # Secrets come from a host file at 0600, never from an ENV line in the image
+    # and never a literal here: an image layer is readable by anyone who can pull
+    # it, and this file is in git. It is the same file the systemd unit used, so
+    # the cutover needs no secret handling at all.
+    env_file:
+      - /etc/cashflux/cashflux.env
+
+    # These override the env file where its values are HOST paths that mean
+    # something different inside a container, and pin the listen address to the
+    # port published above.
+    environment:
+      CASHFLUX_SERVER_ADDR: ":8105"
+      CASHFLUX_SERVER_DATA_DIR: /var/lib/cashflux
+      CASHFLUX_SERVER_APP_DIR: /app/web
+      CASHFLUX_SERVER_CONSOLE_DIR: /app/web/admin
+      CASHFLUX_SERVER_PORTAL_DIR: /app/web/portal
+
+    volumes:
+      # A host BIND, not a named volume, and deliberately so. This directory
+      # already holds the live database and 33 backup generations; a bind carries
+      # them over 1:1 with no migration step, and a rollback to systemd sees
+      # byte-identical paths. A named volume would mean copying 88 MB of
+      # financial data as part of a cutover, which is a risk taken for nothing.
+      - /var/lib/cashflux:/var/lib/cashflux
+
+    # The deploy waits on this and fails the release if it never reports healthy.
+    # Without that gate the pipeline reports green while the container
+    # crash-loops — which is the exact failure that let production sit on a stale
+    # build while every push looked like it shipped.
+    #
+    # The probe is a subcommand of the binary rather than a curl/wget line
+    # because this image is distroless: it has no shell and no HTTP client.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/cashflux-server", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+    # Container-side equivalent of the systemd hardening cashflux.service had.
+    # Mandatory, not optional: this process holds a household's complete
+    # financial history and the keys that decrypt their AI credentials.
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: "1.0"
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
+
+    # Bounded logs. The droplet has 2 GB of RAM and a small disk; an unbounded
+    # json-file driver is how a box fills up quietly.
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "10"

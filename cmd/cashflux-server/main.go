@@ -10,10 +10,22 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/server"
+	"github.com/monstercameron/CashFlux/internal/version"
+)
+
+// commit and buildDate are stamped at build time by the release workflow via
+// -ldflags -X. They are declared here so that stamping actually lands: -X against
+// a symbol that does not exist fails SILENTLY, which would leave a running
+// container unable to say which source it was built from — the exact question
+// that matters when production and the repo disagree.
+var (
+	commit    = "unknown"
+	buildDate = "unknown"
 )
 
 func main() {
@@ -73,6 +85,41 @@ func main() {
 			os.Exit(1)
 		}
 		logger.Info("server retention complete", "audit_events_deleted", result.AuditEventsDeleted, "snapshot_history_deleted", result.SnapshotHistoryDeleted, "backup_directories_deleted", result.BackupDirectoriesDeleted)
+		return
+	}
+	// healthcheck asks the RUNNING server whether it is serving, and is the
+	// container's liveness probe. It exists as a subcommand rather than as a
+	// `wget` line in compose so the probe travels with the binary: it works on any
+	// base image (including a future distroless one with no shell), it needs no
+	// second tool to be present, and it asks the same version endpoint the client
+	// uses to decide whether it can talk to this server at all.
+	//
+	// This is what a deploy waits on. Without it the release reports green while
+	// the container crash-loops, which is the failure mode that let production sit
+	// on a stale build while every push looked like it shipped.
+	// `version` answers "what is actually running?" from inside the container,
+	// without a shell to poke around with.
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Printf("cashflux-server %s (commit %s, built %s)\n", version.Version, commit, buildDate)
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		addr := cfg.Addr
+		if strings.HasPrefix(addr, ":") {
+			addr = "127.0.0.1" + addr
+		}
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("http://" + addr + "/v1/version")
+		if err != nil {
+			logger.Error("healthcheck failed", "error", err)
+			os.Exit(1)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			logger.Error("healthcheck failed", "status", resp.StatusCode)
+			os.Exit(1)
+		}
+		fmt.Println("ok")
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "migrate-check" {

@@ -1,12 +1,47 @@
-FROM golang:1.26-alpine AS build
+# CashFlux server image.
+#
+# Two stages: a Go builder that compiles the server AND every WebAssembly bundle
+# the app serves, and a distroless runtime that carries nothing else. This is the
+# same shape AnimeFeedFlux and PersonalWebsiteMid2026 use on the droplet, so all
+# three services are operated the same way.
+#
+# Runtime is gcr.io/distroless/static:nonroot rather than alpine: the SQLite
+# driver is ncruces/go-sqlite3, which is pure Go, so CGO_ENABLED=0 leaves a
+# static binary with no libc to keep and no package manager, shell or sqlite CLI
+# to be exploited. Nothing in deploy/ shells into this image, so removing the
+# shell costs nothing operationally.
+#
+# IMPORTANT — the image is linux/amd64. The maintainer's machine is arm64
+# Windows; an image built natively there runs nowhere on the droplet. The release
+# workflow sets platforms explicitly and this file must stay arch-agnostic so it
+# can honour that.
+
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 
 WORKDIR /src
+
+# Dependencies first, on their own layer, so a source-only change does not
+# re-download the module graph.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
-RUN mkdir -p /src/web/bin /src/web/admin /src/web/portal \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/cashflux-server ./cmd/cashflux-server \
+
+# Stamped into the binary so a running container can say exactly what it is —
+# the question "what is actually deployed?" has to be answerable from the box,
+# not inferred from a tag someone remembers pushing.
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p /src/web/bin /src/web/admin /src/web/portal \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
+        -ldflags="-s -w -X github.com/monstercameron/CashFlux/internal/version.Version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
+        -o /out/cashflux-server ./cmd/cashflux-server \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/main.wasm . \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/services.wasm ./cmd/cashflux-services \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/admin/admin.wasm ./cmd/cashflux-admin \
@@ -15,20 +50,31 @@ RUN mkdir -p /src/web/bin /src/web/admin /src/web/portal \
     && cp /src/web/wasm_exec.js /src/web/admin/wasm_exec.js \
     && cp /src/web/wasm_exec.js /src/web/portal/wasm_exec.js
 
-FROM alpine:3.22
+# An empty, pre-owned data directory staged here because the runtime stage has no
+# shell to mkdir with. It also gives a NAMED volume correct ownership on first
+# use; the droplet uses a bind mount instead and overrides `user:` in compose to
+# match the host account that owns the data.
+RUN mkdir -p /out/emptydata && chown 65532:65532 /out/emptydata
 
-RUN apk add --no-cache sqlite && addgroup -S cashflux && adduser -S -G cashflux cashflux
-WORKDIR /app
-COPY --from=build /out/cashflux-server /usr/local/bin/cashflux-server
-COPY --from=build /src/web /app/web
-RUN mkdir -p /data && chown -R cashflux:cashflux /data
+FROM gcr.io/distroless/static:nonroot
 
-USER cashflux
+COPY --from=build --chown=65532:65532 /out/cashflux-server /usr/local/bin/cashflux-server
+COPY --from=build --chown=65532:65532 /src/web /app/web
+COPY --from=build --chown=65532:65532 /out/emptydata /data
+
+USER 65532:65532
 EXPOSE 8081
+
+# Defaults suit the self-host compose (docker-compose.selfhost.yml). Production
+# overrides ADDR and DATA_DIR in deploy/production/compose.yaml so the container
+# lands on the port nginx already proxies and the data directory that already
+# exists.
 ENV CASHFLUX_SERVER_ADDR=:8081
 ENV CASHFLUX_SERVER_DATA_DIR=/data
 ENV CASHFLUX_SERVER_APP_DIR=/app/web
 ENV CASHFLUX_SERVER_CONSOLE_DIR=/app/web/admin
 ENV CASHFLUX_SERVER_PORTAL_DIR=/app/web/portal
 
-ENTRYPOINT ["cashflux-server"]
+VOLUME ["/data"]
+
+ENTRYPOINT ["/usr/local/bin/cashflux-server"]

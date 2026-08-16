@@ -1,0 +1,122 @@
+# Build the CashFlux server image, publish it to ghcr.io, and tell the droplet
+# to pick it up.
+#
+# Build and notify live in ONE workflow on purpose. A `workflow_run` trigger
+# would be the tidier split, but pushes made with GITHUB_TOKEN do not trigger
+# further workflows, so a deploy chain waiting on one waits forever.
+#
+# The droplet is never given a tag to trust. This workflow only POSTs "something
+# new may exist" to a webhook; the box then decides for itself which tag to move
+# to, verifies the image is really published, and gates the rollout on the
+# container reporting healthy. That is why a compromised Actions run cannot
+# deploy an arbitrary image.
+name: Release image
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'yes' to build and publish from the current ref"
+        required: true
+        default: "no"
+
+concurrency:
+  group: release-image
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.confirm == 'yes'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA_TAG="sha-$(git rev-parse --short=7 HEAD)"
+          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${SHA_TAG}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          # The version baked into the binary must match the tag being published,
+          # or "what is running?" gets two different answers.
+          FILE_VERSION="$(sed -n 's/.*Version = "\(.*\)".*/\1/p' internal/version/version.go)"
+          if [[ "${GITHUB_REF}" == refs/tags/v* && "v${FILE_VERSION}" != "${VERSION}" ]]; then
+            echo "::error::tag ${VERSION} does not match internal/version/version.go (${FILE_VERSION})"
+            exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.server
+          # linux/amd64 explicitly. The maintainer's machine is arm64 Windows; an
+          # image built there runs nowhere on the droplet, and the default
+          # (builder's arch) is only correct by accident on a GitHub runner.
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/monstercameron/cashflux:${{ steps.meta.outputs.version }}
+            ghcr.io/monstercameron/cashflux:${{ steps.meta.outputs.sha_tag }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Notify only. No tag, no command and no payload the box will act on — the
+      # secret proves the request came from here, and the box decides the rest.
+      #
+      # Skipped rather than failed when the secret is absent, so publishing still
+      # works before the hook is wired up; the droplet's daily fallback timer
+      # picks the release up within a day either way.
+      - name: Trigger droplet deploy
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          HOOK_SECRET: ${{ secrets.CASHFLUX_DEPLOY_HOOK_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOOK_SECRET}" ]]; then
+            echo "::warning::CASHFLUX_DEPLOY_HOOK_SECRET is not set — skipping the deploy hook."
+            echo "The droplet's fallback timer will pick this release up within a day."
+            exit 0
+          fi
+          code="$(curl -sS -o /dev/stderr -w '%{http_code}' -X POST \
+            -H "X-Cashflux-Deploy-Token: ${HOOK_SECRET}" \
+            --max-time 30 \
+            https://budget.earlcameron.com/internal/deploy-hook || true)"
+          echo "deploy hook responded ${code}"
+          # 2xx means accepted. The rollout itself is gated on the box, so this
+          # step must not claim success for the DEPLOY, only for the request.
+          case "${code}" in
+            2*) echo "Deploy requested. Health gating happens on the droplet." ;;
+            *)  echo "::error::deploy hook rejected the request (${code})"; exit 1 ;;
+          esac

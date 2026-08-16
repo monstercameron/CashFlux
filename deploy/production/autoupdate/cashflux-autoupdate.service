@@ -1,0 +1,24 @@
+# Oneshot that moves CashFlux to the newest published release.
+#
+# Driven two ways: the webhook receiver runs it when a release workflow POSTs
+# /internal/deploy-hook, and cashflux-autoupdate.timer runs it daily as the
+# fallback for a webhook delivery that never arrives.
+#
+# Root, because it drives docker and writes the compose file. The script it runs
+# takes no arguments from the caller, so the webhook cannot influence what it
+# does beyond "go check".
+[Unit]
+Description=Update CashFlux to the newest published release
+Documentation=https://github.com/monstercameron/CashFlux
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/CashFlux/deploy/production/autoupdate/cashflux-autoupdate.sh
+# Generous: a cold pull of this image plus the health wait can legitimately take
+# several minutes on a 2 GB droplet.
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal

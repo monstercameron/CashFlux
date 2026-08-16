@@ -122,3 +122,86 @@ Provide the public origin, break-glass token, and owner credentials through
 `CASHFLUX_PRODUCTION_OWNER_PASSWORD`, set `E2E_BASE_URL` to the same origin,
 then run that one spec with `e2e/playwright.config.mjs`. Never put the values in
 the repository or command history.
+
+## Docker migration (in progress)
+
+CashFlux is moving from `cashflux.service` (systemd + a binary at
+`/opt/CashFlux/bin`) to a container pulled from `ghcr.io`, matching how
+AnimeFeedFlux and the portfolio already run on this droplet.
+
+The cutover is deliberately conservative. The container listens on **the same
+port** nginx already proxies (8105), reads **the same env file** the systemd unit
+read (`/etc/cashflux/cashflux.env`), and mounts **the same data directory**
+(`/var/lib/cashflux`, a bind — not a named volume — so the live database and its
+33 backup generations carry over 1:1). Nothing outside `compose.yaml` changes,
+and rollback is `docker compose down && systemctl start cashflux`.
+
+### How a release reaches the box
+
+1. Tag `vX.Y.Z` and push it. `.github/workflows/release.yml` builds
+   `Dockerfile.server` for **linux/amd64** (the maintainer's machine is arm64 —
+   an image built there runs nowhere here), pushes `ghcr.io/monstercameron/cashflux:vX.Y.Z`
+   plus a `sha-` tag, and refuses to publish if the tag disagrees with
+   `internal/version/version.go`.
+2. It then POSTs `https://budget.earlcameron.com/internal/deploy-hook` with a
+   shared-secret header. **No tag and no command travel with that request** — it
+   only says "something new may exist".
+3. nginx forwards it to the `webhook` daemon on 127.0.0.1:9309, which runs
+   `autoupdate/cashflux-autoupdate.sh`. That script decides for itself: newest
+   `v*` git tag, confirmed published via `docker manifest inspect`, else it
+   leaves the running version alone. A compromised Actions run can therefore ask
+   for a deploy but cannot choose what gets deployed.
+4. `deploy-release.sh` records the outgoing tag to `.previous-tag`, pins the new
+   one, pulls, restarts, and then **waits for the container to report healthy** —
+   failing loudly with the last 50 log lines if it does not. That gate is the
+   point: without it a deploy reports success while the container crash-loops.
+5. `cashflux-autoupdate.timer` runs the same check daily, so a lost webhook
+   delivery costs a day rather than going unnoticed.
+
+### First-time setup on the droplet
+
+```sh
+# 1. secret, shared with the repo's CASHFLUX_DEPLOY_HOOK_SECRET Actions secret
+openssl rand -hex 32
+
+# 2. append the cashflux-deploy object from autoupdate/webhook.conf.example
+#    to the existing /etc/webhook.conf array, then:
+systemctl reload webhook            # does not disturb the other targets
+
+# 3. nginx: the /internal/deploy-hook location is in
+#    nginx-budget.earlcameron.com.conf
+nginx -t && systemctl reload nginx
+
+# 4. autoupdate units
+install -m 0755 autoupdate/cashflux-autoupdate.sh /opt/CashFlux/deploy/production/autoupdate/
+install -m 0644 autoupdate/cashflux-autoupdate.{service,timer} /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now cashflux-autoupdate.timer
+```
+
+### The cutover itself
+
+```sh
+id cashflux                          # confirm 993:984 matches compose.yaml `user:`
+systemctl stop cashflux              # release the port and the SQLite WAL
+sh deploy-release.sh vX.Y.Z          # pull, start, health-gate
+curl -fsS https://budget.earlcameron.com/v1/version
+systemctl disable cashflux           # only once the container has proved itself
+```
+
+Stopping the systemd unit first is not optional: two processes must never hold
+the same SQLite database, and the port would collide anyway.
+
+### Rollback
+
+```sh
+sh deploy-release.sh "$(cat .previous-tag)"   # previous image
+# or, all the way back:
+docker compose -f compose.yaml down && systemctl start cashflux
+```
+
+### What is running right now?
+
+```sh
+docker inspect -f '{{.Config.Image}}' cashflux
+docker exec cashflux /usr/local/bin/cashflux-server version
+```

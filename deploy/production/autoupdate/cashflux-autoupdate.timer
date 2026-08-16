@@ -1,0 +1,19 @@
+# Fallback poll for a lost webhook delivery.
+#
+# Daily, not every few minutes. The webhook is the primary path and is
+# immediate; this exists only so a dropped delivery costs a day rather than
+# going unnoticed forever. A tight poll would hammer the registry and the git
+# remote to catch a rare failure.
+[Unit]
+Description=Daily check for a newer CashFlux release
+Documentation=https://github.com/monstercameron/CashFlux
+
+[Timer]
+OnCalendar=daily
+# Spread the load away from every other daily job on the box, and survive a
+# reboot that straddles the scheduled time.
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
