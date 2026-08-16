@@ -30,6 +30,34 @@ func registerTxnScope() {
 		boxShadow("inset 2px 0 0 0 var(--accent)"),
 	)
 
+	// --- The pending band, collapsed by default (C582) ----------------------------
+	// It stops being one big navigating button: the band is a summary you read, and
+	// the two things you might want to do with it — see the items, go to the
+	// schedule — are named controls inside it. Collapsed it is a single line.
+	rule(".txn-upcoming",
+		cursor("default"),
+		padding("0.4rem 0.85rem"),
+		marginBottom("0.5rem"),
+	)
+	rule(".txn-upcoming:hover, .txn-upcoming:focus-visible",
+		borderColor("var(--border)"),
+	)
+	rule(".txn-upcoming.is-collapsed .txn-upcoming-head",
+		marginBottom("0"),
+	)
+	// The disclosure sits at the far end of the summary line, where the eye lands
+	// after reading the fact — not before it.
+	rule(".txn-upcoming-disc",
+		marginLeft("auto"),
+		flexShrink("0"),
+		fontSize("var(--type-13)"),
+	)
+	rule(".txn-upcoming-link",
+		marginTop("0.35rem"),
+		fontSize("var(--type-13)"),
+		alignSelf("flex-start"),
+	)
+
 	// --- Count line + legend share one row (C575 / C582) --------------------------
 	// Both answer "how do I read the rows below", and every row of chrome above the
 	// ledger is a row the user scrolls past to reach what they came for. The count

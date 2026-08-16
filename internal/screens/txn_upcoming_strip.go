@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/billmatch"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnscope"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -36,6 +37,20 @@ func txnUpcomingStrip(struct{}) ui.Node {
 	openRecurring := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/recurring")) })
 	pr := uistate.UsePrefs().Get()
 	filterAtom := uistate.UseTxFilter()
+	// Hooks first and unconditionally, before any early return: the framework tracks
+	// hooks positionally, so a return above one shifts every later render's slots.
+	expanded := ui.UseState(uistate.KVGet(txnUpcomingOpenKV) == "1")
+	toggle := ui.UseEvent(Prevent(func() {
+		next := !expanded.Get()
+		expanded.Set(next)
+		v := "0"
+		if next {
+			v = "1"
+		}
+		uistate.KVSet(txnUpcomingOpenKV, v)
+		uistate.RequestPersist()
+	}))
+	open := expanded.Get()
 	if app == nil {
 		return Fragment()
 	}
@@ -113,14 +128,74 @@ func txnUpcomingStrip(struct{}) ui.Node {
 		rows = append(rows, Div(css.Class("txn-upcoming-row", tw.TextDim), Span(uistate.T("transactions.upcomingMore", extra))))
 	}
 
-	return Button(css.Class("txn-upcoming"), Type("button"),
+	// C582: collapsed by default. This band is a PLANNING tool sitting on top of a
+	// page whose job is scanning and correcting posted transactions, and at four
+	// lines it pushed the first ledger row past the halfway mark of a 900px viewport
+	// — the ledger arrived below the fold on the page named after it. What a user
+	// scanning transactions needs from it is one fact ("seven things are still to
+	// hit, worth $458"); the itemised preview is what they need once that fact
+	// interests them. So it is one line until asked, the choice is remembered, and
+	// expanding it is a single visible click.
+	//
+	// The whole band was also one big button that navigated away — a 130px click
+	// target over a summary, with no way to look without leaving. Navigation is now
+	// its own named link at the end of the expanded rows.
+	var total money.Money
+	for _, b := range pending {
+		if total.Currency == "" {
+			total = b.Amount
+		} else if sum, err := total.Add(b.Amount); err == nil {
+			total = sum
+		}
+	}
+	// The magnitude, not the accounting negative: "($1,767.00) still to come" reads
+	// as a credit. The itemised rows below keep the parenthesised outflow form,
+	// where a column of figures is being compared.
+	summary := uistate.T("transactions.upcomingSummary", len(pending), fmtMoney(total))
+
+	return Div(ClassStr("txn-upcoming"+collapsedClass(open)),
 		Attr("data-testid", "txn-upcoming-strip"),
-		Attr("title", uistate.T("transactions.upcomingTitle")),
-		OnClick(openRecurring),
 		Div(css.Class("txn-upcoming-head"),
-			Span(css.Class("txn-upcoming-heading"), uistate.T("transactions.upcomingHead", len(pending))),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote")),
+			Span(css.Class("txn-upcoming-badge"), uistate.T("transactions.upcomingBadge")),
+			Span(css.Class("txn-upcoming-heading"), summary),
+			If(open, Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote"))),
+			Button(css.Class("btn-link txn-upcoming-disc"), Type("button"),
+				Attr("data-testid", "txn-upcoming-toggle"),
+				Attr("aria-expanded", ariaBool(open)),
+				Attr("aria-label", discLabel(open, summary)),
+				OnClick(toggle), discText(open)),
 		),
-		Div(css.Class("txn-upcoming-rows"), rows),
+		If(open, Div(css.Class("txn-upcoming-rows"), rows,
+			Button(css.Class("btn-link txn-upcoming-link"), Type("button"),
+				Attr("data-testid", "txn-upcoming-schedule"),
+				Attr("title", uistate.T("transactions.upcomingTitle")),
+				OnClick(openRecurring), uistate.T("transactions.upcomingSeeSchedule")))),
 	)
+}
+
+// txnUpcomingOpenKV remembers whether the pending band is expanded, so the choice
+// survives navigation and reloads: a power user who wants the preview should not
+// have to re-open it on every visit, and a user who collapsed it should not find
+// it back on top of their ledger.
+const txnUpcomingOpenKV = "txn.upcomingOpen"
+
+func collapsedClass(open bool) string {
+	if open {
+		return " is-open"
+	}
+	return " is-collapsed"
+}
+
+func discText(open bool) string {
+	if open {
+		return uistate.T("transactions.upcomingHide")
+	}
+	return uistate.T("transactions.upcomingShow")
+}
+
+func discLabel(open bool, summary string) string {
+	if open {
+		return uistate.T("transactions.upcomingHideAria", summary)
+	}
+	return uistate.T("transactions.upcomingShowAria", summary)
 }

@@ -48,6 +48,14 @@ var txnScopeKeys = Catalog{
 	"transactions.confirmCategory":    "Confirm this category",
 	"transactions.confirmedCategory":  "Category confirmed — this row no longer reads as automatic.",
 
+	// The pending band above the ledger (C582), collapsed to one fact by default.
+	"transactions.upcomingSummary":     "%d scheduled this month, %s still to come",
+	"transactions.upcomingShow":        "Show them",
+	"transactions.upcomingHide":        "Hide",
+	"transactions.upcomingShowAria":    "Show the scheduled items — %s",
+	"transactions.upcomingHideAria":    "Hide the scheduled items — %s",
+	"transactions.upcomingSeeSchedule": "See the whole schedule",
+
 	// Shared toolbar controls whose labels were generic enough to be ambiguous
 	// once several clear/close controls sat next to each other.
 	"action.clearSearch":  "Clear search",

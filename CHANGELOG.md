@@ -20,6 +20,15 @@ and every commit updates this file under `Unreleased`.
   can say exactly which commit it was built from.
 
 
+### Changed
+- **The ledger gets the first viewport back.** The "Upcoming this month" band was four lines of
+  scheduled-but-unposted charges pinned above the table, and it pushed the first transaction row to
+  598px down a 900px screen — the ledger arrived below the fold on the page named after it. It is
+  now one line stating the fact a person scanning transactions needs ("7 scheduled this month,
+  $1,767.00 still to come") with a "Show them" disclosure; the choice is remembered. Nine rows now
+  fit in the first viewport instead of six. The band also stopped being one 130px button that
+  navigated away on any click — going to the schedule is a named link inside it.
+
 ### Added
 - **The ledger says what it is showing, in words, where you can see it.** The page put a review
   backlog ("Review inbox (249)"), quick-filter counts and a pager range ("1–25 of 3,227") side by
