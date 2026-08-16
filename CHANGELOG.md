@@ -21,6 +21,14 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Changed
+- **A transaction's state reads as a word, not a symbol you have to look up.** Reconciled, cleared
+  and needs-review were a ✓✓ / ✓ / • with a key above the table, so understanding one row meant
+  going and finding the key — and to a screen reader "✓✓" is "check check" and "•" is nothing at
+  all. A Status column now spells the state out, on by default, in a lane where a repeated value is
+  what a column is for. The Source column steps aside to pay for it (the provenance mark on the
+  category now carries that information); it is one click away in Columns. With the column on the
+  inline glyph and its key both step aside rather than saying the same thing twice; with it off they
+  return, and every glyph now has an accessible name.
 - **The ledger gets the first viewport back.** The "Upcoming this month" band was four lines of
   scheduled-but-unposted charges pinned above the table, and it pushed the first transaction row to
   598px down a 900px screen — the ledger arrived below the fold on the page named after it. It is

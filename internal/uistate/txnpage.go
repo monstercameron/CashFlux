@@ -67,12 +67,27 @@ type TxnCols struct {
 	Category bool `json:"category"`
 	Source   bool `json:"source"`
 	User     bool `json:"user"`
+	// Status spells the row's reconciled / cleared / needs-review state as a WORD
+	// (C578). The inline badge is a glyph, and a glyph needs a legend; a column is
+	// where a repeated value belongs, because that is what a column is for — and it
+	// costs the description cell nothing, which putting the word in the badge did.
+	Status bool `json:"status"`
 }
 
-// DefaultTxnCols shows every optional column (the ledger's historical layout, plus
-// the new User column).
+// DefaultTxnCols is the out-of-the-box column set.
+//
+// Status is ON and Source is OFF, which is a swap rather than an addition: the
+// ledger has no horizontal slack (it ends 22px short of the viewport at 1440px),
+// so a new column has to be paid for. Status is the better buy of the two. It
+// answers "is this row settled, and does it need me?" — the question the ledger
+// exists to answer — while Source answers "how did it get here?", which is now
+// carried by the provenance mark on the category and its explanation (C579).
+// Anyone who wants Source back gets it from Columns, and an existing install keeps
+// whatever it already chose: loadTxnCols overlays stored JSON on these defaults, so
+// a saved layout without a "status" key keeps its own Source setting and simply
+// gains the new column's default.
 func DefaultTxnCols() TxnCols {
-	return TxnCols{Amount: true, Account: true, Category: true, Source: true, User: true}
+	return TxnCols{Amount: true, Account: true, Category: true, Source: false, User: true, Status: true}
 }
 
 // UseTxnCols returns the shared atom holding the ledger's column visibility,

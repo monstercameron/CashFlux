@@ -48,6 +48,11 @@ var txnScopeKeys = Catalog{
 	"transactions.confirmCategory":    "Confirm this category",
 	"transactions.confirmedCategory":  "Category confirmed — this row no longer reads as automatic.",
 
+	// The Status column (C578): the row's state as a word, in a lane of its own.
+	"transactions.colStatus":      "Status",
+	"transactions.statusReviewed": "Reviewed",
+	"transactions.colStatusHint":  "Spells out reconciled / cleared / needs review, so the row's state reads without decoding the ✓ ✓✓ • markers.",
+
 	// The pending band above the ledger (C582), collapsed to one fact by default.
 	"transactions.upcomingSummary":     "%d scheduled this month, %s still to come",
 	"transactions.upcomingShow":        "Show them",

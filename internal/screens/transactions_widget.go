@@ -858,6 +858,14 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		if colVis.User {
 			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colUser"), Class: "td-user"})
 		}
+		// C578: the row's state as a WORD. Last of the data columns, next to the row
+		// actions, because it is the thing you read just before deciding to act on the
+		// row. No SortKey: the frame carries `cleared`, not the three-way state this
+		// column shows, so a header that sorted by it would order the rows by a
+		// different fact than the one printed in the cells.
+		if colVis.Status {
+			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colStatus"), Class: "td-status"})
+		}
 		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colActions")), Class: "td-actions"})
 		dtp := uiw.DataTableProps{
 			Class:       "txn-table",
@@ -1087,22 +1095,42 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		rowClass += " txn-excluded" // TXC-1: muted, marked out of budgets/reports
 	}
 
-	// Explicit state markers (beyond the row tint): a ✓ chip for cleared rows and
-	// a quiet dot for rows still awaiting review — the unified state read the
-	// local-first report asked for, kept small because thousands of rows carry it.
+	// Explicit state markers (beyond the row tint), inline beside the description.
+	//
+	// C578 asked for text labels here, and the first attempt put the word in the
+	// badge — which made 8 rows in 10 read "• NEEDS REVIEW" in a pill next to the
+	// merchant name, crowding the description into an ellipsis. The word belongs in
+	// the ledger, but not repeated inside the row's most-read cell: it is the Status
+	// COLUMN (below) that carries it, where a repeated value is what a column is FOR
+	// and it costs the description nothing.
+	//
+	// What stays here is the glyph — and, new, an accessible name for it. A bare
+	// "✓✓" reads as "check check" to a screen reader and a bare "•" reads as nothing
+	// at all, so the state was previously unavailable to anyone not looking at it.
+	// role=img makes the name authoritative rather than a hint an AT may drop on a
+	// generic span.
+	// …and when the Status column IS showing, the glyph is dropped entirely. It would
+	// be the same fact twice on one row, once in code and once in words, with the
+	// coded copy sitting inside the description — the cell the ledger can least
+	// afford to spend. The word wins; the glyph is what you get when the column is off.
 	var stateBadge ui.Node = Fragment()
 	switch {
+	case props.Vis.Status:
+		// the Status column says it in words
 	case props.Reconciled:
 		// #63: the strongest state — this cleared row falls at or before its
 		// account's reconciled-through date, so a statement has vouched for it.
 		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-reconciled-badge"),
-			Attr("title", uistate.T("transactions.reconciledBadgeTitle")), "✓✓")
+			Attr("role", "img"), Attr("title", uistate.T("transactions.reconciledBadgeTitle")),
+			Attr("aria-label", uistate.T("acctxn.legendReconciled")), "✓✓")
 	case props.Cleared:
 		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-cleared-badge"),
-			Attr("title", uistate.T("transactions.clearedBadgeTitle")), "✓")
+			Attr("role", "img"), Attr("title", uistate.T("transactions.clearedBadgeTitle")),
+			Attr("aria-label", uistate.T("acctxn.legendCleared")), "✓")
 	case !props.Reviewed && !props.IsTransfer:
 		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-needsreview-badge"),
-			Attr("title", uistate.T("transactions.needsReviewBadgeTitle")), "•")
+			Attr("role", "img"), Attr("title", uistate.T("transactions.needsReviewBadgeTitle")),
+			Attr("aria-label", uistate.T("acctxn.legendNeedsReview")), "•")
 	}
 
 	// XC1/XC2: link badges beside the description, mirroring the classic view.
@@ -1220,6 +1248,8 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 				If(props.AutoCategory, ui.CreateElement(txnAutoMark, txnAutoMarkProps{Why: props.AutoCategoryWhy}))))),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
+		If(props.Vis.Status, Td(ClassStr("td-status "+statusToneClass(props)),
+			Attr("data-testid", "txn-status-cell"), rowStatusWord(props))),
 		Td(ClassStr("td-actions"), OnClick(stop),
 			Button(css.Class("btn btn-icon txn-row-edit"), Type("button"),
 				Attr("data-testid", "txn-row-edit"),

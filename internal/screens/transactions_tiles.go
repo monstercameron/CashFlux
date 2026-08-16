@@ -958,10 +958,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
 	// cleared / needs review) are otherwise undecoded shape+color, so a small key
-	// spells each one out — labelled, not color-or-shape alone (a11y). Shown only when
-	// there are rows to carry the markers.
+	// spells each one out — labelled, not color-or-shape alone (a11y).
+	//
+	// It is shown only when the rows actually WEAR those markers. With the Status
+	// column on (the default since C578) each row says its state in words and the
+	// glyphs are gone, so a key to them would explain symbols that are not on screen
+	// — and cost a line of chrome above the ledger to do it.
+	//
+	// The hook is read into a local FIRST: `len(props.Shown) > 0 && !UseTxnCols()…`
+	// short-circuits, so on a render with no rows the hook would not run at all and
+	// every atom slot after it would shift.
+	statusColOn := uistate.UseTxnCols().Get().Status
 	var legend ui.Node = Fragment()
-	if len(props.Shown) > 0 {
+	if len(props.Shown) > 0 && !statusColOn {
 		legend = txnStatusLegend()
 	}
 	// Count and legend share one row (C582): they are both "how to read the rows
@@ -1014,20 +1023,25 @@ func TxnColumnsBody(_ struct{}) ui.Node {
 	category := ui.UseEvent(func() { c := colsAtom.Get(); c.Category = !c.Category; apply(c) })
 	source := ui.UseEvent(func() { c := colsAtom.Get(); c.Source = !c.Source; apply(c) })
 	user := ui.UseEvent(func() { c := colsAtom.Get(); c.User = !c.User; apply(c) })
+	status := ui.UseEvent(func() { c := colsAtom.Get(); c.Status = !c.Status; apply(c) })
 
-	row := func(label, testID string, on bool, onClick ui.Handler) ui.Node {
+	row := func(label, hint, testID string, on bool, onClick ui.Handler) ui.Node {
 		return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"padding": "0.35rem 0", "cursor": "pointer"}),
 			Input(Type("checkbox"), Attr("data-testid", testID), CheckedIf(on), OnClick(onClick)),
 			Span(label),
+			If(hint != "", Span(css.Class("muted", tw.Text12), Attr("title", hint), hint)),
 		)
 	}
 	return Div(css.Class(tw.FlexCol),
 		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("transactions.columnsHint")),
-		row(uistate.T("transactions.colAmount"), "col-toggle-amount", cols.Amount, amount),
-		row(uistate.T("transactions.colAccount"), "col-toggle-account", cols.Account, account),
-		row(uistate.T("transactions.colCategory"), "col-toggle-category", cols.Category, category),
-		row(uistate.T("transactions.colSource"), "col-toggle-source", cols.Source, source),
-		row(uistate.T("transactions.colUser"), "col-toggle-user", cols.User, user),
+		row(uistate.T("transactions.colAmount"), "", "col-toggle-amount", cols.Amount, amount),
+		row(uistate.T("transactions.colAccount"), "", "col-toggle-account", cols.Account, account),
+		row(uistate.T("transactions.colCategory"), "", "col-toggle-category", cols.Category, category),
+		row(uistate.T("transactions.colSource"), "", "col-toggle-source", cols.Source, source),
+		row(uistate.T("transactions.colUser"), "", "col-toggle-user", cols.User, user),
+		// C578: the one column whose purpose is not obvious from its name gets a line
+		// saying what it buys you — it is the alternative to decoding the row glyphs.
+		row(uistate.T("transactions.colStatus"), uistate.T("transactions.colStatusHint"), "col-toggle-status", cols.Status, status),
 	)
 }
 

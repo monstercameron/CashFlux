@@ -88,6 +88,29 @@ func registerTxnScope() {
 		padding("0"),
 	)
 
+	// --- Row status badges say what they mean (C578) ------------------------------
+	// Glyph and word sit on one line and never wrap or shrink: a status split across
+	// two lines, or clipped to "Needs rev…", is worse than the bare dot it replaced.
+	// The word is the quiet half — the glyph carries the scan, the word removes the
+	// need to go and look up what the glyph meant.
+	rule(".bento-ledger .txn-table th.td-status, .bento-ledger .txn-table td.td-status",
+		width("104px"),
+	)
+	rule(".txn-table .td-status",
+		fontSize("var(--type-13)"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	// Colour is the second signal, never the only one: the word carries the meaning
+	// and this only speeds the scan. Only the state that wants a person is tinted —
+	// colouring every settled row would leave the row that needs attention with
+	// nothing to set it apart.
+	rule(".txn-table .td-status.txn-status-attention",
+		color("var(--text)"),
+		fontWeight("500"),
+	)
+
 	// --- Category provenance mark (C579) ------------------------------------------
 	// Room for the mark. The Category column has been 90px since the uxbatch6 pass,
 	// which already clipped ordinary names ("Guilty ple…", "Uncatego…") before
