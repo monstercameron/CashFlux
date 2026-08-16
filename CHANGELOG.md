@@ -136,6 +136,20 @@ and every commit updates this file under `Unreleased`.
   the same here.
 
 ### Changed
+- **Discussing a flagged finding starts with the evidence, not with a question (AG8).** The Discuss
+  chip attached the flag's headline and left the assistant to work out what it meant — which bought
+  either a first reply asking what the user already knew ("which transaction do you mean?") or a
+  confident answer built from the headline alone. Both waste the one exchange somebody was willing to
+  have.
+
+  The app now looks first. The message carries the rows behind the flag, what that merchant normally
+  costs, and any recurring schedule that explains it, and asks for a verdict and one concrete next
+  step rather than a summary. Typical cost is the median, because the outlier under investigation
+  would otherwise redefine "typical" through a mean; a single past charge is not a history; transfers
+  are never evidence; and a finding the probe cannot anchor to a merchant or an account carries
+  nothing rather than a guess — an empty brief is honest, while one full of unrelated rows would make
+  the verdict worse than no brief at all.
+
 - **The budget-notes editor names its action, and a saved note is legible where it lives (C614).**
   A design pass on the feature C613 had just made work, after an adversarial critique of it.
 

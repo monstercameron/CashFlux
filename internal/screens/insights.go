@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
+	"github.com/monstercameron/CashFlux/internal/anomalyprobe"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/chatpolish"
@@ -673,6 +674,15 @@ func Insights() ui.Node {
 				b.WriteString(c.Detail)
 			}
 		}
+		// AG8: the gathered evidence follows the headline list, so the model reasons
+		// over the app's own figures rather than looking them up again — or, worse,
+		// answering from the headline alone.
+		for _, c := range atts {
+			if strings.TrimSpace(c.Brief) != "" {
+				b.WriteString("\n\n")
+				b.WriteString(c.Brief)
+			}
+		}
 		b.WriteString("\n\n")
 		b.WriteString(body)
 		return b.String()
@@ -1233,8 +1243,15 @@ func Insights() ui.Node {
 					return
 				}
 			}
+			// AG8: the app looks BEFORE the agent speaks. Attaching the headline
+			// alone bought either a first reply asking what the user already knew,
+			// or a confident answer built from the headline — both wasting the one
+			// exchange they were willing to have. The bubble now carries the rows
+			// behind the flag, what that merchant normally costs, and any recurring
+			// schedule that explains it, so the agent's job is the verdict.
 			ctxAttach.Set(append(append([]flagContext{}, cur...),
-				flagContext{ID: id.New(), Title: ins.Title, Detail: detail, Kind: ins.Feature}))
+				flagContext{ID: id.New(), Title: ins.Title, Detail: detail, Kind: ins.Feature,
+					Brief: investigateFlag(app, ins, base)}))
 			focusByID("cf-chat-input")
 		})
 
@@ -2113,6 +2130,54 @@ type flagContext struct {
 	Title  string
 	Detail string
 	Kind   string
+	// Brief is the evidence the app gathered about this flag before anyone asked
+	// (AG8): the rows behind it, what the merchant normally costs, any recurring
+	// schedule that explains it. It rides with the message but is never shown in
+	// the bubble — the bubble says WHICH flag is attached, and this says what is
+	// known about it.
+	Brief string
+}
+
+// investigateFlag gathers the evidence behind a flagged finding so the assistant
+// can open with a verdict instead of a question (AG8).
+//
+// It returns "" when there is nothing to gather — a finding the probe cannot
+// anchor to a merchant or an account. An empty brief is deliberate: filling one in
+// by guessing at relevance would make the model's verdict worse than no brief at
+// all.
+func investigateFlag(app *appstate.App, ins smart.Insight, base string) string {
+	cats := app.Categories()
+	catName := make(map[string]string, len(cats))
+	for _, c := range cats {
+		catName[c.ID] = c.Name
+	}
+	txns := app.Transactions()
+	payees := make([]string, 0, len(txns))
+	seen := map[string]bool{}
+	for _, t := range txns {
+		name := strings.TrimSpace(t.Payee)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		payees = append(payees, name)
+	}
+	finding := anomalyprobe.Finding{
+		Feature: ins.Feature,
+		Title:   ins.Title,
+		Detail:  ins.Detail,
+		Payee:   anomalyprobe.PayeeIn(ins.Title+" "+ins.Detail, payees),
+	}
+	if ins.HasAmount {
+		finding.AmountMinor = ins.Amount.Amount
+	}
+	ev := anomalyprobe.Gather(finding, txns, app.Recurring(), func(id string) string { return catName[id] }, time.Now())
+	if len(ev.Related) == 0 && ev.MerchantHistory == nil && ev.RecurringMatch == "" {
+		return ""
+	}
+	return ev.Brief(finding,
+		func(minor int64) string { return insightsMoneyFmt(minor, base) },
+		func(t time.Time) string { return uistate.LoadPrefs().FormatDate(t) })
 }
 
 // remediation is a one-click fix offered as an action chip for a flagged activity.
