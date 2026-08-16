@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -85,19 +86,22 @@ func rulePhrase(r rules.Rule) string {
 // follows it rather than inventing a second answer.
 var (
 	provCache map[string]txnprov.Provenance
-	provRev   = -1
-	provLen   = -1
+	provKey   = "\x00" // never equal to a real key
 )
 
 // txnAutoByID returns the rows whose category is automatic and unconfirmed, keyed
 // by transaction id and read O(1) while building a row.
 //
-// The scoped view is part of the key, not just the revision: filtering changes
-// which rows are classified without touching the data, so the row count is
-// checked too. It is a cheap guard against the common case (a filter narrows the
-// set); an exact-set key would cost more to build than the scan it saves.
+// The SCOPE is part of the cache key, not just the data revision: filtering
+// changes which rows are classified without touching the data, so a key of
+// revision alone would hand a narrowed view the previous view's answers. Row count
+// alone is not enough either — two different filters can leave the same number of
+// rows at the same revision, and then the second one gets the first one's map. The
+// first and last ids pin which rows these actually are, at a cost that does not
+// grow with the set, unlike hashing every id.
 func txnAutoByID(txns []domain.Transaction, rs []rules.Rule, dataRev int) map[string]txnprov.Provenance {
-	if dataRev == provRev && len(txns) == provLen && provCache != nil {
+	key := provenanceKey(txns, dataRev)
+	if key == provKey && provCache != nil {
 		return provCache
 	}
 	out := make(map[string]txnprov.Provenance, len(txns))
@@ -106,6 +110,18 @@ func txnAutoByID(txns []domain.Transaction, rs []rules.Rule, dataRev int) map[st
 			out[t.ID] = p
 		}
 	}
-	provCache, provRev, provLen = out, dataRev, len(txns)
+	provCache, provKey = out, key
 	return out
+}
+
+// provenanceKey identifies a scoped view cheaply: the data revision, how many rows
+// it holds, and which rows sit at its ends. Sorting reorders the same set and
+// changes the ends, so a re-sort recomputes — a small, rare cost, and the honest
+// side to err on when the alternative is showing one view's marks on another's rows.
+func provenanceKey(txns []domain.Transaction, dataRev int) string {
+	if len(txns) == 0 {
+		return strconv.Itoa(dataRev) + ":0"
+	}
+	return strconv.Itoa(dataRev) + ":" + strconv.Itoa(len(txns)) +
+		":" + txns[0].ID + ":" + txns[len(txns)-1].ID
 }
