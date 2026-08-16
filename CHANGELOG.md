@@ -24,6 +24,31 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **A bill and the payment that settles it are one row again (C340).** /bills listed "Student loan
+  payment · $320 · Jul 5" and "Priya's Student Loan · $320 · Jul 5" as two separate obligations, and
+  did the same for both car payments, inflating "Total due soon", the upcoming counts and the
+  calendar badges.
+
+  The rule that collapses them already existed. It was an opt-in wrapper, and three of its four
+  callers — the bills calendar, the pay-ahead planner, the payday preflight — had not applied it. A
+  correctness rule a caller can forget is not a rule, so the projection now collapses its own output
+  and there is nothing left to forget.
+
+  Underneath that, two different merge rules had grown with *opposite* survivors: one kept the
+  household's recurring flow and recorded the liability it absorbed, the other kept the liability's
+  statement row and recorded nothing. That is why /bills and the recurring agenda disagreed about
+  which identity a merged bill wears, and why only one of them could say what it covered. There is
+  one rule now. The surviving row is the household's own flow — it carries their label, its posting
+  mode, and the schedule "mark paid" advances — and it names the liability it settles ("covers
+  Priya's Student Loan"), so the collapse reads as a merge rather than as a bill that went missing.
+
+  Paid marks survive the change: a bill reports every identity it may have been recorded under, so a
+  mark made before this doesn't vanish, and unmarking clears both.
+
+  The merge key stays deliberately exact — same currency, same amount, same date, monthly cadence.
+  A weekly flow that happens to land on a statement date is a coincidence, and merging two unrelated
+  bills hides money owed, which is worse than listing one twice.
+
 - **Every money figure now names the window it covers (C342, C343).** The dashboard reported a 60%
   savings rate and /health reported 31%. Both were right — one is the selected period, the other is
   an average over the last three full months — and neither said so, which is indistinguishable from

@@ -5012,11 +5012,30 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   the actual period name. Guards: `TestEveryApplicableFactorNamesItsWindow` (a new factor must
   declare a window) + `TestHealthFactorsRenderTheirWindow` (the view can't stop showing it, and
   can't go back to gating on `f.Key == "savings"`).
-- [ ] **C340 [MAJOR][DATA-TRUST] /bills double-counts liability obligations.** Liability-derived
-  bills AND recurring flows list the same payment twice ("Student loan payment · $320 · Jul 5" +
-  "Priya's Student Loan ✦ · $320 · Jul 5"; both car payments likewise), inflating "Total due soon
-  $8,814.00", Upcoming-bills counts, and the calendar badges. Link the recurring flow to its
-  liability account (or dedupe on amount+date+account) and show one row with a "covers ✦" note.
+- [x] **C340 ✅ DONE (2026-08-16) — /bills double-counted liability obligations.** The collapse
+  rule (`bills.DedupeObligations`) had landed after the audit, but as an **opt-in wrapper** — and
+  three of its four callers never applied it. `OccurrencesWithin` returned the raw projection, so
+  the bills calendar, the pay-ahead planner and the payday preflight all still listed a liability's
+  statement bill AND the recurring flow that pays it, inflating "Total due soon", the counts, and
+  the calendar badges exactly as reported. Worse, `UpcomingAll` ran a SECOND dedupe with the
+  **opposite survivor** (it dropped the flow and kept the statement row, recording nothing about
+  what it absorbed), so /bills and the recurring agenda disagreed about which identity a merged
+  obligation wears. Fixed by making the projection dedupe itself — a correctness rule a caller can
+  forget is not a rule — and routing `UpcomingAll` through the same rule, so there is one merge and
+  one survivor: the household's own flow (its label, posting mode, and the schedule "mark paid"
+  advances), carrying the liability in `AnchorAccountID`. /bills now renders the "covers ✦" note
+  the ticket asked for. Paid-mark continuity is handled by `Bill.Identities()` — readers check both
+  ids and unmark clears both, so flipping the survivor doesn't make a ticked-off bill silently
+  reappear as unpaid. Tests: window totals and per-date counts on the reported student-loan case,
+  survivor identity agreement between `UpcomingAll` and `OccurrencesWithin`, `Identities()` on
+  merged and unmerged bills, and a false-positive guard (a weekly flow or a different amount
+  sharing a date must stay separate — merging unrelated bills is the worse failure). Ratchet:
+  `TestNoSurfaceProjectsRawBillOccurrences` blocks re-exporting an undeduped projection.
+  **Known residual:** the merge key is (currency, amount, date) + monthly cadence, deliberately
+  exact. A liability whose minimum payment drifts away from its recurring flow's amount (a rate
+  change) will list both again until one is corrected. Closing that needs an explicit
+  liability link on `domain.Recurring`, which is a schema change — filed as a follow-on rather than
+  loosened into fuzzy matching, because a false merge hides money owed.
 - [x] **C343 ✅ DONE (2026-08-16) — The global period control didn't visibly scope pages.**
   Two halves, one already closed by later work: **which surfaces obey the picker** was settled by
   the C560 ledger rework — `app/shell.go`'s `periodAware` map shows the pill on `/`, `/budgets`,

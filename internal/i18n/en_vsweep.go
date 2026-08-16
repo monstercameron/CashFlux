@@ -37,6 +37,14 @@ var vSweepKeys = Catalog{
 	// Tooltip on the period chip a windowed dashboard tile always wears — the
 	// mirror of the "Today" chip a current-state tile wears when paged away.
 	"widget.windowBadgeTitle": "This tile's figures cover the selected period",
+
+	// ── C340: one row for one real payment ──────────────────────────────────
+	// A liability's own statement bill and the recurring flow the household
+	// created to pay it are the same money. The surviving row names what it
+	// absorbed so the merge reads as a merge, not as a missing bill. %s is the
+	// liability account's name.
+	"bills.covers":     "covers %s",
+	"bills.coversHint": "This payment settles %s — its statement bill is shown here, not separately",
 }
 
 func init() {

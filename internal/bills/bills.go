@@ -145,20 +145,6 @@ func Upcoming(accounts []domain.Account, now time.Time) []Bill {
 // after now, bounded to avoid bad imported schedules looping forever.
 func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now time.Time) []Bill {
 	out := Upcoming(accounts, now)
-	// A recurring flow often models the SAME real payment as its target
-	// liability's own statement due-date (a car/mortgage/loan payment). Both the
-	// account-derived bill and the recurring flow would otherwise list separately
-	// and double-count the headline "total due" and "per year". Dedupe by
-	// (currency, amount, due day-of-month): a recurring flow matching a bill
-	// already surfaced from the accounts is the same obligation, so skip it and
-	// keep the account's ✦ representation.
-	billKey := func(cur string, minor int64, day int) string {
-		return cur + ":" + strconv.FormatInt(minor, 10) + ":" + strconv.Itoa(day)
-	}
-	seen := make(map[string]bool, len(out))
-	for _, b := range out {
-		seen[billKey(b.Amount.Currency, b.Amount.Amount, b.DueDate.Day())] = true
-	}
 	for _, r := range recurring {
 		if !r.Amount.IsNegative() {
 			continue
@@ -167,26 +153,42 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 		if !ok {
 			continue
 		}
-		amt := r.Amount.Abs()
-		// Only a MONTHLY recurring can duplicate a monthly liability statement; a
-		// weekly/quarterly flow that happens to share an amount+day is a coincidence,
-		// not the same obligation.
-		if r.Cadence == domain.CadenceMonthly && seen[billKey(amt.Currency, amt.Amount, due.Day())] {
-			continue // same obligation as an account-derived bill already listed
-		}
 		out = append(out, Bill{
-			AccountID: "recurring:" + r.ID,
+			AccountID: recurringAccountPrefix + r.ID,
 			Name:      r.Label,
-			Amount:    amt,
+			Amount:    r.Amount.Abs(),
 			DueDate:   due,
 			DaysUntil: daysBetween(now, due),
 			Autopay:   r.Autopay,
 		})
 	}
+	// One merge rule for the whole app (C340). This function used to run its own
+	// dedupe with the OPPOSITE survivor — it dropped the recurring flow and kept
+	// the liability's statement row — so /bills and the recurring agenda disagreed
+	// about which of the two identities a merged obligation wears, and only one of
+	// them recorded what it had absorbed. DedupeObligations keeps the household's
+	// own flow (its label, its posting mode, the schedule "mark paid" advances)
+	// and records the liability in AnchorAccountID, so the merged row keeps both
+	// identities' capabilities and can say what it covers.
+	out = DedupeObligations(out, recurring)
 	sort.Slice(out, func(i, j int) bool {
 		return billLess(out[i], out[j])
 	})
 	return out
+}
+
+// Identities returns every id this bill's occurrence may have been recorded
+// under: its own, plus the liability it absorbed when it is a merged obligation.
+//
+// Paid marks are keyed by (bill id, due date). When the merge rule changed which
+// of the two identities survives, marks recorded under the old one would have
+// silently vanished — a bill the household had ticked off reappearing as unpaid.
+// Readers check every identity; writers clear every identity.
+func (b Bill) Identities() []string {
+	if b.AnchorAccountID == "" || b.AnchorAccountID == b.AccountID {
+		return []string{b.AccountID}
+	}
+	return []string{b.AccountID, b.AnchorAccountID}
 }
 
 // AnnualAmounts returns the cadence-annualized cost of each recurring obligation,

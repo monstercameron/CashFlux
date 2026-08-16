@@ -216,3 +216,39 @@ func TestHealthFactorsRenderTheirWindow(t *testing.T) {
 			"read as a contradiction (C342)")
 	}
 }
+
+// ─── C340 dual-bill-identity ratchet ─────────────────────────────────────────
+
+// TestNoSurfaceProjectsRawBillOccurrences keeps the dedupe unforgettable.
+//
+// C340: a liability's statement bill and the recurring flow that pays it are one
+// real payment. The collapse existed, but as an opt-in wrapper — and three of its
+// four callers had not applied it, so /bills totalled "$8,814.00 due soon",
+// double-badged the calendar, and inflated every count built on the projection.
+// The projection now dedupes itself; this fails if a raw variant is exported for
+// a caller to forget again.
+func TestNoSurfaceProjectsRawBillOccurrences(t *testing.T) {
+	files := readInternal(t)
+	src, ok := files["bills/occurrences.go"]
+	if !ok {
+		t.Fatal("bills/occurrences.go not found")
+	}
+	if !strings.Contains(src, "return DedupeObligations(occurrencesRaw(") {
+		t.Error("OccurrencesWithin no longer dedupes its own output (C340)")
+	}
+	if strings.Contains(src, "func OccurrencesRaw") || strings.Contains(src, "func OccurrencesWithinRaw") {
+		t.Error("an undeduped projection has been exported — that is the shape three " +
+			"callers already got wrong once (C340)")
+	}
+	// UpcomingAll must use the same rule, not a second one with the opposite
+	// survivor (which is how /bills and the agenda came to disagree about which
+	// identity a merged obligation wears).
+	bl, ok := files["bills/bills.go"]
+	if !ok {
+		t.Fatal("bills/bills.go not found")
+	}
+	if !strings.Contains(bl, "out = DedupeObligations(out, recurring)") {
+		t.Error("UpcomingAll no longer routes through DedupeObligations — two merge rules " +
+			"with opposite survivors is what C340 was about")
+	}
+}

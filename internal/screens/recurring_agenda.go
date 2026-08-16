@@ -105,10 +105,9 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 
 	var items []agendaItem
 	// A liability's statement bill and the monthly recurring flow that pays it are
-	// ONE obligation — listing both double-counts the money owed. DedupeObligations
+	// ONE obligation — listing both double-counts the money owed. OccurrencesWithin
 	// collapses them onto the recurring row and records the liability as its anchor.
-	occurrences := bills.DedupeObligations(
-		bills.OccurrencesWithin(app.Accounts(), rewound, start, until), app.Recurring())
+	occurrences := bills.OccurrencesWithin(app.Accounts(), rewound, start, until)
 	for _, b := range occurrences {
 		amt, err := rates.Convert(b.Amount, base)
 		if err != nil {

@@ -1,3 +1,36 @@
+## 2026-08-16 — A rule a caller can forget is not a rule
+
+C340 looked closed. `bills.DedupeObligations` existed, it was well-documented, it had tests, and it
+did exactly what the ticket asked. The bug was still live on /bills.
+
+The reason is that it was a wrapper. `OccurrencesWithin` returned the raw projection and each
+caller was expected to wrap it. Four callers; one did. So the recurring agenda was correct and the
+bills calendar, the pay-ahead planner and the payday preflight were all still double-counting —
+which is the entire reported symptom, sitting behind a function whose doc comment describes the fix.
+
+Moving the dedupe inside the projection is the whole change, and the interesting part is what it
+uncovered. `UpcomingAll` had its own inline dedupe, written earlier, that resolved the same
+collision the other way: it dropped the recurring flow and kept the liability's statement row, and
+recorded nothing about the merge. So the app had two merge rules with opposite survivors, which is
+why /bills showed "Priya's Student Loan" where the agenda showed "Student loan payment", and why
+only the agenda could render an anchor chip.
+
+Picking a survivor is a real decision, not a coin flip. The recurring flow wins because it carries
+things the statement row does not: the household's own label, the posting mode, and the schedule
+that "mark paid" advances. The liability becomes an anchor on the surviving row, which is what lets
+/bills finally show the "covers ✦" note the ticket asked for.
+
+Flipping a survivor changes identity, and paid marks are keyed by identity, so this could have
+silently un-ticked bills people had already ticked. `Bill.Identities()` exists for that: readers
+check every id the occurrence may have been recorded under, and unmark clears all of them.
+
+The merge key stays exact — same currency, same amount, same date, monthly cadence. It is tempting
+to loosen it to the app's usual ±5%/±4-day tolerance, and there is a real residual case where a
+rate change drifts a minimum payment away from its flow and both rows return. But a false merge
+hides money owed, and that is the worse direction to be wrong in. The honest close for that case is
+an explicit liability link on the recurring, which is a schema change; it is filed rather than
+faked.
+
 ## 2026-08-16 — Two right answers look exactly like one wrong one
 
 C342 reads like an arithmetic bug: savings rate 60% on the dashboard, 31% on /health. It isn't. The

@@ -153,3 +153,152 @@ func TestRecurringIDFromAccount(t *testing.T) {
 		t.Error("a real account id must not read as recurring-derived")
 	}
 }
+
+// ─── C340: the dual bill identity must not escape any surface ────────────────
+
+// sampleObligation builds the shape the V-sweep found double-counted: a student
+// loan whose statement bill and monthly recurring flow are the same $320 on the
+// 5th.
+func sampleObligation() ([]domain.Account, []domain.Recurring) {
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	accounts := []domain.Account{{
+		ID: "sloan", Name: "Priya's Student Loan", Class: domain.ClassLiability,
+		Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3_800_000),
+		DueDayOfMonth: 5, MinPayment: usd(32_000),
+	}}
+	recurring := []domain.Recurring{{
+		ID: "rec-studentloan", Label: "Student loan payment", Amount: usd(-32_000),
+		Cadence: domain.CadenceMonthly, NextDue: onDay(2026, time.July, 5),
+		AccountID: "checking",
+	}}
+	return accounts, recurring
+}
+
+// TestOccurrencesWithinDedupesByDefault is the fix for C340.
+//
+// The dedupe existed but was an opt-in wrapper, and three of its four callers —
+// the bills calendar, the pay-ahead planner, the payday preflight — had simply
+// forgotten to apply it. "Total due soon" read $8,814.00, the calendar showed
+// two badges on the 5th, and the counts were inflated. A correctness rule a
+// caller can forget is not a rule, so the projection dedupes itself.
+func TestOccurrencesWithinDedupesByDefault(t *testing.T) {
+	accounts, recurring := sampleObligation()
+	now := onDay(2026, time.July, 1)
+	until := onDay(2026, time.September, 30)
+
+	got := OccurrencesWithin(accounts, recurring, now, until)
+
+	byDate := map[string]int{}
+	var total int64
+	for _, b := range got {
+		byDate[b.DueDate.Format("2006-01-02")]++
+		total += b.Amount.Amount
+	}
+	for date, n := range byDate {
+		if n != 1 {
+			t.Errorf("%s has %d obligations, want 1 — the statement bill and the flow that "+
+				"pays it are one payment (C340)", date, n)
+		}
+	}
+	// Jul 5, Aug 5, Sep 5 — three occurrences, $320 each, not six.
+	if len(got) != 3 {
+		t.Fatalf("got %d occurrences, want 3", len(got))
+	}
+	if want := int64(96_000); total != want {
+		t.Errorf("window total = %d, want %d (a double-count inflates every headline "+
+			"built on this list)", total, want)
+	}
+	for _, b := range got {
+		if b.AnchorAccountID != "sloan" {
+			t.Errorf("occurrence %s has anchor %q, want \"sloan\" — the merged row must keep "+
+				"the liability it absorbed", b.DueDate.Format("2006-01-02"), b.AnchorAccountID)
+		}
+		if b.Name != "Student loan payment" {
+			t.Errorf("survivor name = %q, want the household's own label", b.Name)
+		}
+	}
+}
+
+// TestUpcomingAllUsesTheSameMergeRule pins the survivor.
+//
+// UpcomingAll used to run its own dedupe with the OPPOSITE survivor: it dropped
+// the recurring flow and kept the liability's statement row, recording nothing
+// about what it had absorbed. So /bills and the recurring agenda disagreed about
+// which identity a merged obligation wears, and only one of them could say what
+// it covered.
+func TestUpcomingAllUsesTheSameMergeRule(t *testing.T) {
+	accounts, recurring := sampleObligation()
+	now := onDay(2026, time.July, 1)
+
+	got := UpcomingAll(accounts, recurring, now)
+	if len(got) != 1 {
+		t.Fatalf("got %d bills, want 1", len(got))
+	}
+	b := got[0]
+	if _, isRecurring := RecurringIDFromAccount(b.AccountID); !isRecurring {
+		t.Errorf("survivor is %q, want the recurring flow — it carries the household's "+
+			"label, its posting mode, and the schedule \"mark paid\" advances (C340)", b.AccountID)
+	}
+	if b.AnchorAccountID != "sloan" {
+		t.Errorf("anchor = %q, want \"sloan\"", b.AnchorAccountID)
+	}
+
+	// And the same merge the agenda sees.
+	merged := OccurrencesWithin(accounts, recurring, now, onDay(2026, time.July, 31))
+	if len(merged) != 1 || merged[0].AccountID != b.AccountID {
+		t.Errorf("UpcomingAll and OccurrencesWithin disagree about the surviving identity")
+	}
+}
+
+// TestIdentitiesCoverBothSidesOfAMerge protects paid marks across the change.
+//
+// Marks are keyed by (bill id, due date). Flipping which identity survives would
+// have made every mark recorded under the old one vanish — a bill the household
+// had ticked off silently reappearing as unpaid.
+func TestIdentitiesCoverBothSidesOfAMerge(t *testing.T) {
+	accounts, recurring := sampleObligation()
+	got := UpcomingAll(accounts, recurring, onDay(2026, time.July, 1))
+	ids := got[0].Identities()
+	if len(ids) != 2 {
+		t.Fatalf("Identities() = %v, want both the flow and the liability it absorbed", ids)
+	}
+	want := map[string]bool{"recurring:rec-studentloan": true, "sloan": true}
+	for _, id := range ids {
+		if !want[id] {
+			t.Errorf("unexpected identity %q", id)
+		}
+	}
+
+	// An unmerged bill has exactly one identity — no phantom second lookup.
+	plain := Bill{AccountID: "card"}
+	if ids := plain.Identities(); len(ids) != 1 || ids[0] != "card" {
+		t.Errorf("Identities() on an unmerged bill = %v, want [card]", ids)
+	}
+}
+
+// TestUnrelatedBillsOnTheSameDayStaySeparate is the false-positive guard.
+//
+// The merge key is deliberately exact — same currency, same amount, same date,
+// and the flow must repeat monthly. A weekly flow that coincides once, or a
+// different amount, is a coincidence and must survive as its own obligation.
+func TestUnrelatedBillsOnTheSameDayStaySeparate(t *testing.T) {
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	accounts := []domain.Account{{
+		ID: "card", Name: "Rewards Card", Class: domain.ClassLiability,
+		Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380_000),
+		DueDayOfMonth: 5, MinPayment: usd(22_000),
+	}}
+	recurring := []domain.Recurring{
+		// Same day, different amount — a real second obligation.
+		{ID: "rec-subs", Label: "Streaming & apps", Amount: usd(-3_800),
+			Cadence: domain.CadenceMonthly, NextDue: onDay(2026, time.July, 5)},
+		// Same day, same amount, but weekly — coincidence, not a statement mirror.
+		{ID: "rec-weekly", Label: "Weekly something", Amount: usd(-22_000),
+			Cadence: domain.CadenceWeekly, NextDue: onDay(2026, time.July, 5)},
+	}
+	got := UpcomingAll(accounts, recurring, onDay(2026, time.July, 1))
+	if len(got) != 3 {
+		t.Fatalf("got %d bills, want 3 — merging unrelated bills that share a date is a "+
+			"worse failure than listing two", len(got))
+	}
+}

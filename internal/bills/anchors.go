@@ -15,7 +15,7 @@ import (
 // payments settle; flows with no such anchor are absent.
 //
 // It exists so the two surfaces that need this judgment cannot drift apart. The
-// agenda already learns it as a side effect of DedupeObligations — collapsing a
+// agenda already learns it as a side effect of the occurrence dedupe — collapsing a
 // liability's own statement bill onto the recurring flow that pays it records
 // the liability in Bill.AnchorAccountID — and the roster's "Bills" lens asks the
 // same question of the same flows. Answering it twice, in two places, is how a
@@ -28,7 +28,7 @@ import (
 // reading it as the anchor makes "account-tied" mean "exists".
 func LiabilityAnchors(accounts []domain.Account, recurring []domain.Recurring, now, until time.Time) map[string]string {
 	out := map[string]string{}
-	merged := DedupeObligations(OccurrencesWithin(accounts, recurring, now, until), recurring)
+	merged := OccurrencesWithin(accounts, recurring, now, until)
 	for _, b := range merged {
 		if b.AnchorAccountID == "" {
 			continue

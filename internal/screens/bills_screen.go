@@ -267,12 +267,27 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 		if app == nil {
 			return
 		}
-		if err := app.UnmarkOccurrencePaid(b.AccountID, b.DueDate); err != nil {
+		// Clear EVERY identity: a legacy mark under the absorbed liability would
+		// otherwise keep the row reading "Paid" after an unmark (C340).
+		var uerr error
+		for _, oid := range b.Identities() {
+			if err := app.UnmarkOccurrencePaid(oid, b.DueDate); err != nil {
+				uerr = err
+			}
+		}
+		if err := uerr; err != nil {
 			notice.Set(notice.Get().With(err.Error(), true))
 			return
 		}
 		notice.Set(notice.Get().With(uistate.T("bills.unpaidLogged", b.Name), false))
 		rev.Set(rev.Get() + 1)
+	}
+
+	// C340: a merged obligation names the liability it absorbed, so the collapsed
+	// row is visible as a merge rather than as a missing bill.
+	acctName := make(map[string]string, len(app.Accounts()))
+	for _, a := range app.Accounts() {
+		acctName[a.ID] = a.Name
 	}
 
 	var total int64
@@ -283,7 +298,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			amt = money.New(b.Amount.Amount, base)
 		}
 		total += amt.Amount
-		isPaid := app.OccurrencePaid(b.AccountID, b.DueDate)
+		isPaid := billOccurrencePaid(app, b)
 		payOn := payOnFor(b)
 		billRows = append(billRows, billRowData{
 			Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate), IsPaid: isPaid,
@@ -291,6 +306,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			PlanActive: viewSmart && !sameDay(payOn, b.DueDate),
 			AheadTag:   aheadTagFor(b, isPaid),
 			Fit:        billFitFor(b),
+			CoversName: acctName[b.AnchorAccountID],
 		})
 	}
 
@@ -316,7 +332,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			if err != nil {
 				amt = money.New(b.Amount.Amount, base)
 			}
-			isPaid := app.OccurrencePaid(b.AccountID, b.DueDate)
+			isPaid := billOccurrencePaid(app, b)
 			billRows = append(billRows, billRowData{
 				Bill: b, Shown: amt, DueLabel: pr.FormatDate(b.DueDate),
 				IsPaid: isPaid,
@@ -324,6 +340,7 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 				PlanActive: true,
 				AheadTag:   aheadTagFor(b, isPaid),
 				Fit:        billFitFor(b),
+				CoversName: acctName[b.AnchorAccountID],
 			})
 		}
 		// The plan view lists by when you PAY (the actionable order), not by
@@ -707,6 +724,14 @@ type billRowData struct {
 	// Fit: the budget-fit verdict for this bill, or nil when it maps to no tracked
 	// budget. Computed once at build time so BillRow stays render-only.
 	Fit *billFitChip
+	// CoversName is the liability account this row's payment settles, when the row
+	// absorbed that account's own statement bill. Empty otherwise.
+	//
+	// The merge is why the list no longer shows "Student loan payment · $320" and
+	// "Priya's Student Loan · $320" as two obligations on the same day (C340) —
+	// and naming what was absorbed is what keeps the merge honest rather than a
+	// row quietly going missing.
+	CoversName string
 }
 
 // sameDay reports whether two times fall on the same calendar date.
@@ -816,6 +841,10 @@ func BillRow(props billRowProps) ui.Node {
 			If(d.AheadTag, Span(css.Class("rec-tag"), Attr("data-testid", "bill-payahead"), Attr("title", uistate.T("bills.payAheadHint")), uistate.T("bills.smartPayAhead"))),
 			// C154: paid chip — visible when this occurrence is marked paid.
 			If(d.IsPaid, Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"), Attr("title", uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))),
+			// C340: this row absorbed a liability's own statement bill — say whose,
+			// so the collapsed obligation is visible rather than merely absent.
+			If(d.CoversName != "", Span(css.Class("pill", tw.TextDim), Attr("data-testid", "bill-covers"),
+				Attr("title", uistate.T("bills.coversHint", d.CoversName)), uistate.T("bills.covers", d.CoversName))),
 			fitNode,
 		),
 		Span(css.Class("budget-amount"), fmtMoney(d.Shown)),
@@ -853,6 +882,22 @@ func BillRow(props billRowProps) ui.Node {
 
 // billUrgencyTone maps days-until-due to a tone class: danger when due today or
 // past, warn within three days, none otherwise (C57).
+// billOccurrencePaid reports whether a bill's occurrence is marked paid under
+// ANY of its identities (C340).
+//
+// A merged obligation now wears the household's recurring flow as its identity
+// and carries the liability it absorbed as its anchor. A mark recorded against
+// the old survivor would otherwise vanish — a bill the household had ticked off
+// silently reappearing as unpaid.
+func billOccurrencePaid(app *appstate.App, b bills.Bill) bool {
+	for _, id := range b.Identities() {
+		if app.OccurrencePaid(id, b.DueDate) {
+			return true
+		}
+	}
+	return false
+}
+
 func billUrgencyTone(n int) string {
 	switch {
 	case n <= 0:
