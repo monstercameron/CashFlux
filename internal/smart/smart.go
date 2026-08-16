@@ -234,6 +234,12 @@ type Insight struct {
 	HasAmount bool
 	// Action is an optional one-tap follow-up; nil means info-only.
 	Action *Action
+	// Confidence says what kind of claim this finding makes — a restatement of
+	// recorded data, or an inference that could be wrong (C391). Read it through
+	// ResolvedConfidence, which falls back to the feature's default; the zero
+	// value here means "the detector didn't say", not "certain".
+	Confidence    Confidence
+	confidenceSet bool
 }
 
 // WithAmount returns a copy of the insight carrying the given money figure as

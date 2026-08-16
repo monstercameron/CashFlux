@@ -12,10 +12,16 @@ var assistantKeys = Catalog{
 	"screen.assistantSub": "Chat, spending insights, and smart features — all in one place",
 
 	// Segmented tab labels.
-	"assistant.tabGroupLabel": "Assistant section",
-	"assistant.tabAsk":        "Ask",
-	"assistant.tabInsights":   "Insights",
-	"assistant.tabSmart":      "Smart",
+	"assistant.tabGroupLabel":  "Assistant section",
+	"assistant.tabAsk":         "Ask",
+	"assistant.tabInsights":    "Insights",
+	"assistant.tabAutomations": "Automations",
+	// C392: each tab states its own job under the bar. Two of the three names
+	// used to describe a technology rather than a question, which is why the
+	// three read as interchangeable.
+	"assistant.jobAsk":         "You have a question about your money.",
+	"assistant.jobInsights":    "Things the app noticed without being asked.",
+	"assistant.jobAutomations": "What's switched on to run by itself.",
 
 	// The Insights briefing surface — hero tile.
 	"assistant.heroTitle":       "This month",

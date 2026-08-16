@@ -41,6 +41,8 @@ var changesetKeys = Catalog{
 	// %s = the cap that was reached. It names the way out, because the cap is the
 	// user's own and changing their mind is a legitimate answer.
 	"insights.budgetSpent": "This chat has spent its %s-token cap. Raise the cap above, or start a new chat.",
+	// --- C391 confidence on inferred findings ---
+	"assistant.confidenceHint": "This one was worked out from a pattern, not read straight off your ledger — worth checking before you act on it.",
 }
 
 func init() {

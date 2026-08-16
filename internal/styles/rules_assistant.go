@@ -793,6 +793,45 @@ func registerAssistantSurface() {
 	registerCitations()
 	registerActionHistory()
 	registerBudgetReadout()
+	registerConfidenceChip()
+	registerTabJob()
+}
+
+// registerTabJob styles the one-line job statement under the hub's tab bar
+// (C392). It is set in the reading size rather than a caption size: it is the
+// sentence that decides which tab someone wants, so it has to be readable at the
+// moment of choosing rather than after squinting.
+func registerTabJob() {
+	rule(".asst-tab-job",
+		prop("font-size", "var(--type-13)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.45rem 0 0"),
+		prop("max-width", "44rem"),
+	)
+}
+
+// registerConfidenceChip styles the hedge on an inferred finding (C391). It is a
+// small outlined pill rather than a filled badge: the finding's own severity
+// already owns the colour on that row, and a second saturated mark would compete
+// with it for the same glance. "Worth a look" takes the warning tone because it is
+// the tier that most often turns out to be wrong.
+func registerConfidenceChip() {
+	rule(".insight-conf",
+		prop("align-self", "flex-start"),
+		prop("margin-top", "0.25rem"),
+		prop("display", "inline-block"),
+		prop("padding", "0.05rem 0.4rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("font-size", "var(--type-11)"),
+		prop("line-height", "1.5"),
+		prop("color", "var(--text-faint)"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".insight-conf.is-possible",
+		prop("border-color", "color-mix(in srgb, var(--warn, #d9a23f) 45%, var(--border))"),
+		prop("color", "var(--warn, #d9a23f)"),
+	)
 }
 
 // registerBudgetReadout styles the per-conversation cap's remaining figure (C390).

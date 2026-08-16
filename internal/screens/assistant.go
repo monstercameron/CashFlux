@@ -49,15 +49,26 @@ func Assistant() ui.Node {
 
 // AssistantHub is the registered component for the /assistant page. It owns
 // the tab state and renders one of three isolated panel components — Ask,
-// Insights, or Smart — via ui.CreateElement so each panel's hook tree is
+// Insights, or Automations — via ui.CreateElement so each panel's hook tree is
 // fully isolated from the tab-switching logic (GWC hook rule: no On* /
 // UseState in variable-length loops or conditional parent positions).
 //
-// Tab defaults to "ask" on first mount so returning users land in the AI
-// chat straight away.
+// The three tabs were previously Ask / Insights / Smart, which a reviewer read
+// as "conceptually overlapping" — and they were, because two of the three names
+// described a technology rather than a job. Each tab now answers a different
+// question, stated under the bar so the difference is on the page and not just
+// in the designer's head (C392):
+//
+//	Ask         — you have a question
+//	Insights    — the app noticed something you did not ask about
+//	Automations — what is running by itself
+//
+// Tab defaults to Ask on first mount so returning users land in the chat.
 func AssistantHub() ui.Node {
 	// The active tab is a shared atom so surfaces inside a tab can move the
-	// user to a sibling (the Ask rail's "See all in Insights" cross-link).
+	// user to a sibling (the Ask rail's "See all in Insights" cross-link), and
+	// so the /insights and /smart routes can open this hub on the right tab
+	// rather than rendering a second copy of the same surface (C359).
 	activeTab := uistate.UseAssistantTab()
 
 	tabBar := Div(css.Class(tw.Mt2, tw.Mb3),
@@ -66,11 +77,13 @@ func AssistantHub() ui.Node {
 			Selected: activeTab.Get(),
 			OnSelect: func(v string) { activeTab.Set(v) },
 			Options: []uiw.SegOption{
-				{Value: "ask", Label: uistate.T("assistant.tabAsk")},
-				{Value: "insights", Label: uistate.T("assistant.tabInsights")},
-				{Value: "smart", Label: uistate.T("assistant.tabSmart")},
+				{Value: uistate.AssistantTabAsk, Label: uistate.T("assistant.tabAsk")},
+				{Value: uistate.AssistantTabInsights, Label: uistate.T("assistant.tabInsights")},
+				{Value: uistate.AssistantTabAutomations, Label: uistate.T("assistant.tabAutomations")},
 			},
 		}),
+		P(css.Class("asst-tab-job"), Attr("data-testid", "assistant-tab-job"),
+			assistantTabJob(activeTab.Get())),
 	)
 
 	// Each branch is a ui.CreateElement call so the framework allocates a
@@ -78,11 +91,11 @@ func AssistantHub() ui.Node {
 	// unmounts the old panel and mounts the new one — hooks never bleed across.
 	var body ui.Node
 	switch activeTab.Get() {
-	case "insights":
+	case uistate.AssistantTabInsights:
 		body = ui.CreateElement(assistantInsightsDataPanel)
-	case "smart":
+	case uistate.AssistantTabAutomations:
 		body = ui.CreateElement(SmartHub)
-	default: // "ask"
+	default: // Ask
 		body = ui.CreateElement(Insights)
 	}
 
@@ -91,6 +104,50 @@ func AssistantHub() ui.Node {
 		tabBar,
 		body,
 	)
+}
+
+// assistantTabJob returns the one-line statement of what the active tab is for.
+// It sits under the tab bar rather than in a tooltip because the confusion it
+// answers ("which of these three do I want?") happens before anything is hovered.
+func assistantTabJob(tab string) string {
+	switch tab {
+	case uistate.AssistantTabInsights:
+		return uistate.T("assistant.jobInsights")
+	case uistate.AssistantTabAutomations:
+		return uistate.T("assistant.jobAutomations")
+	default:
+		return uistate.T("assistant.jobAsk")
+	}
+}
+
+// AssistantInsightsRoute opens the hub on its Insights tab. The /insights route
+// used to render the CHAT — the same component /assistant renders — so the two
+// URLs were the same page under different names, and the one called "insights"
+// showed the least analysis of the two. It now lands where its name promises.
+func AssistantInsightsRoute() ui.Node {
+	return ui.CreateElement(assistantRouteTo, assistantRouteProps{Tab: uistate.AssistantTabInsights})
+}
+
+// AssistantAutomationsRoute opens the hub on its Automations tab, so /smart and
+// the hub's third tab are one surface rather than two copies of the catalog.
+func AssistantAutomationsRoute() ui.Node {
+	return ui.CreateElement(assistantRouteTo, assistantRouteProps{Tab: uistate.AssistantTabAutomations})
+}
+
+type assistantRouteProps struct{ Tab string }
+
+// assistantRouteTo renders the hub with the tab preselected. The selection happens
+// in an effect rather than during render: setting an atom mid-render would fight
+// the render that is already in flight, and the hub reads the atom itself.
+func assistantRouteTo(p assistantRouteProps) ui.Node {
+	tab := uistate.UseAssistantTab()
+	ui.UseEffect(func() func() {
+		if tab.Get() != p.Tab {
+			tab.Set(p.Tab)
+		}
+		return nil
+	}, p.Tab)
+	return ui.CreateElement(AssistantHub)
 }
 
 // astTile wraps a tile body in the shared Widget chrome at an explicit bento

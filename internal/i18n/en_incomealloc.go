@@ -92,6 +92,24 @@ var incomeAllocKeys = Catalog{
 	// Shown when a note save matched no budget. Silence on a write is worse than
 	// an error: the note vanishes and nothing says why.
 	"budgets.notesSaveFailed": "Could not save the note — this budget no longer exists. Copy your text before closing.",
+	// C614: the notes editor names the ACTION, and names it by state. Every other
+	// item in the row's ⋯ menu is a verb phrase ("Edit budget", "Delete"); "Notes"
+	// was the one noun, and it read the same whether it would create a note or
+	// overwrite one. The dropped word "private" was worse than vague — a budget is
+	// shared by default and its note carries no per-member access of any kind, so
+	// the copy asserted something the data model does not do.
+	"budgets.notesAdd":  "Add a note",
+	"budgets.notesEdit": "Edit note",
+	// Removing a note is now an explicit act. It used to be reachable only by
+	// selecting the text, deleting it, and pressing Save — a destructive gesture
+	// with no name, which a user had to reverse-engineer.
+	"budgets.notesRemove":        "Remove note",
+	"budgets.notesRemoveConfirm": "Remove the note on %s? The text is not kept.",
+	// Confirmation at the moment of the write. These name the budget because notes
+	// are per-budget and several can be written in a row, so a bare "Note saved"
+	// leaves you unsure which card it landed on.
+	"budgets.notesSaved":   "Note saved on %s",
+	"budgets.notesRemoved": "Note removed from %s",
 	// C516: a completion that is billed but carries no text - a reasoning-only
 	// turn, a length cap hit before any visible text, or a filtered response.
 	// Rendering nothing made this indistinguishable from the assistant being

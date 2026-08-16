@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Findings say what kind of claim they are making (C391).** A SMART finding can be arithmetic over
+  rows the household typed in ("this budget is over by $40") or an inference that is sometimes wrong
+  ("these two look like duplicates"). Shown identically, the reliable ones get discounted at the same
+  rate as the speculative ones — the guesses trusted too much and the facts too little. Inferred
+  findings now carry a confidence hedge, and the arithmetic carries nothing: a tier chip on every row
+  would be wallpaper, so the chip's presence is itself the signal. `internal/smart` lists the
+  detectors that infer rather than the ones that don't, and a package test walks the catalog for any
+  detector whose own summary admits to predicting but which forgot to say so.
+
+### Changed
+- **The assistant's three tabs stop overlapping (C392, C359).** A reviewer read Ask / Insights /
+  Smart as "conceptually overlapping", and they were: two of the three names described a technology
+  rather than a job. They are now Ask (you have a question) / Insights (things the app noticed
+  without being asked) / Automations (what's switched on to run by itself), each stating its job
+  under the tab bar — the confusion happens before anything is hovered, so the answer can't live in
+  a tooltip. `/insights` and `/smart` were rendering second copies of surfaces the hub already had —
+  and `/insights` was rendering the CHAT, so the URL named after analysis showed the least of it.
+  Both now open the hub on the matching tab.
+
 - **Every change the assistant makes is attributed, listed, and reversible (C389).** A change made
   through the changeset card was already tagged "via assistant" in Activity and captured as its own
   undo point. A tool the model called directly was not: the write landed in the audit log attributed

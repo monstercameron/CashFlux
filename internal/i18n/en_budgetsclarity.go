@@ -42,6 +42,15 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C595: the card's explanatory captions live behind one disclosure ---
+	// The card stacked tracking, tags, committed, set-aside, target, coverage,
+	// owner, method, custom fields, pace and carry between the bar and the
+	// actions, so "how much is left?" competed with a dozen explanations of how it
+	// was arrived at. %s = the budget's title.
+	"budgets.detailsShow": "Details",
+	"budgets.detailsHide": "Hide details",
+	"budgets.detailsAria": "Details for %s",
+
 	// --- C608: the year planner is reachable without horizontal scrolling ---
 	// A cell announced two bare amounts ("$1,100.00 $1,300.00") with no month, no
 	// budget and no way to tell which figure was which.

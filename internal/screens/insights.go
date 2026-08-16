@@ -1066,7 +1066,7 @@ func Insights() ui.Node {
 		railPins = railPins[:3]
 	}
 	hubTab := uistate.UseAssistantTab()
-	openInsightsTab := ui.UseEvent(Prevent(func() { hubTab.Set("insights") }))
+	openInsightsTab := ui.UseEvent(Prevent(func() { hubTab.Set(uistate.AssistantTabInsights) }))
 	// Bespoke aside group (NOT a card): a small serif label with an accent tick, a
 	// "see all" link, and the clamped pin previews — margin notes, not tiles.
 	pinnedCard := Fragment()
@@ -2553,6 +2553,27 @@ func approvalEffects(perm toolperm.Permission) ui.Node {
 	)
 }
 
+// confidenceChip marks a finding that is an inference rather than a restatement of
+// recorded data (C391).
+//
+// It renders NOTHING on a finding that is simply arithmetic over the ledger. That
+// is the whole design: a tier chip on every row would be wallpaper, and wallpaper
+// is not read. The chip appears exactly where it changes what to do next — "these
+// two look like duplicates" deserves a second look in a way that "this budget is
+// over" does not — so its presence carries the meaning before its text is read.
+func confidenceChip(in smart.Insight) ui.Node {
+	c := in.ResolvedConfidence()
+	if !c.Hedged() {
+		return Fragment()
+	}
+	cls := "insight-conf"
+	if c == smart.ConfidencePossible {
+		cls += " is-possible"
+	}
+	return Span(ClassStr(cls), Attr("data-testid", "flag-confidence"),
+		Title(uistate.T("assistant.confidenceHint")), c.Label())
+}
+
 type suggestChipProps struct {
 	Q      string
 	OnPick func(string)
@@ -2643,6 +2664,7 @@ func SmartAnomalyInsightRow(p smartAnomalyInsightRowProps) ui.Node {
 			// finding instead (UI/UX tasks #37/#38).
 			Span(css.Class(tw.Text14, tw.FontMedium, tw.Truncate), Title(p.Insight.Title), p.Insight.Title),
 			Span(css.Class("muted", tw.Text13, tw.Truncate), Title(p.Insight.Detail), p.Insight.Detail),
+			confidenceChip(p.Insight),
 			Div(css.Class("insight-row-actions"),
 				// QA CF-22: every row's actions shared one accessible name ("Go to the
 				// source of this flag" ×15) — the name now carries the finding's title
