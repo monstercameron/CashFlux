@@ -195,6 +195,44 @@ author adding a sixth definition in a file nobody thinks to look at. Two of them
 shapes; the third asserts the wired call sites still import the seam, so the first two can't pass
 by protecting nothing.
 
+## 2026-08-16 — The assistant backlog, and what two adversarial passes cost me
+
+Thirty-odd assistant tickets in one sitting: the three blockers, W5's trust cluster, chat polish,
+the keyless answerer, the AI spend meter, the seven remaining AG tickets, PS7–PS10 and the R24
+audit. What I want to record is not the list — TODOS.md has that — but the two review passes, because
+they changed my estimate of how much I can trust my own confident work.
+
+The first review found seven things. One was severe and mine: the C551 tool-parity fix carried tools
+and tool calls across the proxy but not the REASONING ITEMS, which the Responses API requires
+alongside a tool call on the follow-up turn. Step one of every tool conversation would have worked
+and step two would have 400'd — on the shared key only, which is the path I had just finished
+claiming was now equal. I had a live test for step one and none for step two. That gap is the whole
+lesson: I tested the thing I had just built, not the thing it enables.
+
+The second review found seven more. The worst was worse. The what-if sandbox's guarantee is that
+nothing escapes, and I had built it carefully — separate App, separate store, JSON round trip,
+frozen baseline, shared clock. But writing a transaction fires transaction-added workflows, and one
+of the actions a workflow can now take is "ask the assistant", which reaches a package-level runner
+wired to appstate.Default. A household with such a workflow would have paid for up to sixty live
+model calls from one hypothetical question. Two features I wrote HOURS APART, each safe alone,
+composing into a money leak. Neither review pass would have found it by reading one file.
+
+The other findings share a shape. The composer's cost line priced every token at the input rate,
+because I fed a total into a field named PromptTokens. The spotlight's note never cleared, because I
+wrote ClearSpotlight and never called it. Negotiation prep would quote an unrelated Amazon purchase
+as an old price — in a package whose doc comment warns against exactly that. Negative money rounded
+toward zero. Each is the kind of thing that survives careful writing and dies instantly under
+somebody asking "what would make this wrong?".
+
+So: three lanes now, and I would keep all three. Table tests for the decisions (twelve new pure
+packages, every one testable without a browser). A live lane gated behind CASHFLUX_LIVE_AI that
+calls OpenAI for real, because every failure in this area was a failure of AGREEMENT with a provider
+and a mock only proves the code does what I expected. And an adversarial pass per batch, run by
+something that did not write the code, told to find what is wrong rather than to check whether it
+works.
+
+The cheapest of the three by far is the last one.
+
 ## 2026-08-16 — Proving it against the provider, not against my own mock
 
 Everything the AI work fixed today is a failure of AGREEMENT with a live provider:
