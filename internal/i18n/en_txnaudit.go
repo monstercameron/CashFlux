@@ -9,6 +9,14 @@ package i18n
 // quick-filter counts, and the grouped row menu. Kept in its own file (not en.go)
 // so the change stays additive and off the concurrent WIP file. Registered at init.
 var txnAuditKeys = Catalog{
+	// The ledger's header select-all checkbox. Three states, three sentences: it
+	// says how many rows it covers, and when only some are picked it says how many
+	// of how many — an unqualified "Select all" over a partial selection reads as
+	// "nothing here is selected".
+	"transactions.selectAllVisible":        "Select all %d transactions shown",
+	"transactions.clearAllVisible":         "Clear the %d selected transactions shown",
+	"transactions.selectAllVisiblePartial": "%d of %d shown transactions selected — select the rest",
+
 	// --- C560: one period, one view ---------------------------------------------
 	// The ledger's period bar. The label is derived from the ledger's own date
 	// range, so it can never disagree with the rows beneath it.

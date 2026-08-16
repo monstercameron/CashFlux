@@ -50,8 +50,12 @@ func TestApplySortByKeyAndDirection(t *testing.T) {
 	}{
 		{"date", Asc, "acb"},
 		{"date", Desc, "bca"},
-		{"amount", Asc, "abc"},
-		{"amount", Desc, "cba"},
+		// Amount sorts SIGNED, as the column displays it: b(-1200.00) < a(-4.50)
+		// < c(+2500.00). It used to order by magnitude, which put the small coffee
+		// first and left the header claiming an ascent the visible figures did not
+		// make.
+		{"amount", Asc, "bac"},
+		{"amount", Desc, "cab"},
 		{"payee", Asc, "acb"},
 		{"payee", Desc, "bca"},
 		{"category", Asc, "acb"}, // food < pay < rent
@@ -355,9 +359,10 @@ func TestApplyDateRange(t *testing.T) {
 }
 
 func TestApplySort(t *testing.T) {
-	// Largest absolute amount first: rent 1200, pay 2500, coffee 4.5 → c,b,a.
-	if got := Apply(sample(), Criteria{Sort: "amount"}); ids(got) != "cba" {
-		t.Errorf("amount sort = %q, want cba", ids(got))
+	// Amount defaults to descending, and descending means the highest signed
+	// figure first — pay +2500, coffee -4.50, rent -1200 → c,a,b.
+	if got := Apply(sample(), Criteria{Sort: "amount"}); ids(got) != "cab" {
+		t.Errorf("amount sort = %q, want cab", ids(got))
 	}
 	// Payee A–Z: Coffee shop, Payday, Rent → a,c,b.
 	if got := Apply(sample(), Criteria{Sort: "payee"}); ids(got) != "acb" {

@@ -654,7 +654,25 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 func compare(a, b domain.Transaction, key string, l Labels) int {
 	switch key {
 	case "amount":
-		switch x, y := AbsAmount(a), AbsAmount(b); {
+		// SIGNED, not magnitude. The Amount column displays a signed figure —
+		// ($620.00) in red beside $4,700.00 in green — so ordering it by absolute
+		// value means the header says "Amount ↑" while the visible numbers do not
+		// ascend. Every other column here sorts by what it displays; this one was
+		// the exception, and the mismatch is invisible: a −$4.50 and a +$4.50 row
+		// compared EQUAL and fell through to the id tiebreak.
+		//
+		// It also defeated the task the sort exists for. "Show me my biggest
+		// expenses" is sort-amount-ascending, and under magnitude ordering a
+		// $4,700 paycheck sat beside a $4,700 mortgage payment with no way to
+		// separate them by sorting. Size-regardless-of-direction is still
+		// reachable, and more precisely, by pairing this with the In/Out flow
+		// filter.
+		//
+		// Known limitation, unchanged by this: minor units are compared raw, so a
+		// multi-currency ledger orders by number-of-minor-units rather than by
+		// converted value. Fixing that needs the FX table and the base currency,
+		// which compare has no access to.
+		switch x, y := a.Amount.Amount, b.Amount.Amount; {
 		case x < y:
 			return -1
 		case x > y:
@@ -684,8 +702,14 @@ func compare(a, b domain.Transaction, key string, l Labels) int {
 	}
 }
 
-// AbsAmount returns the absolute minor-unit amount of a transaction (for sorting
-// by size regardless of income/expense sign).
+// AbsAmount returns the absolute minor-unit amount of a transaction — its SIZE,
+// with the income/expense direction discarded.
+//
+// It answers "how big is this?", which is the right question for the amount-range
+// filter (whose fields are magnitudes with a zero floor), the "Large" quick
+// filter, and the edit forms (which pair a magnitude field with a separate
+// direction control). It is NOT the right question for the Amount column's sort:
+// that column displays a signed figure, so it orders on the signed value.
 func AbsAmount(t domain.Transaction) int64 {
 	if a := t.Amount.Amount; a < 0 {
 		return -a

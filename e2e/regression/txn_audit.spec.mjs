@@ -504,6 +504,107 @@ test.describe("C568 — quick-filter counts describe the current view", () => {
   });
 });
 
+test.describe("the Amount column sorts by the figure it displays", () => {
+  test("ascending runs most-negative to most-positive, not by size", async ({ app }) => {
+    await nav(app, "/transactions");
+    // Sort by Amount ascending. The first click takes the column's default
+    // direction (descending), so click until the header reports ascending — read
+    // through evaluate so a second `.txn-table` on the page cannot trip strict mode.
+    const amountSort = () =>
+      app.evaluate(() => {
+        const th = [...document.querySelectorAll(".txn-table thead th")].find(
+          (h) => h.textContent.trim().startsWith("Amount"),
+        );
+        return th ? th.getAttribute("aria-sort") : null;
+      });
+    // The re-sort is deferred a macrotask so the busy state paints first, so a
+    // read taken straight after the click sees the PREVIOUS direction. Poll the
+    // header's own state and click only while it is not yet ascending; the column
+    // cycles none → descending → ascending, so this settles in two clicks.
+    const amountHeader = app
+      .locator(".txn-table thead th", { hasText: "Amount" })
+      .first()
+      .locator("button.th-sort");
+    await expect
+      .poll(async () => {
+        if ((await amountSort()) === "ascending") return "ascending";
+        await amountHeader.click().catch(() => {});
+        await app.waitForTimeout(800);
+        return amountSort();
+      }, { timeout: 30_000 })
+      .toBe("ascending");
+
+    // Read the displayed figures. Parentheses are the ledger's notation for money
+    // out, so "($620.00)" is -620 — the sort must agree with THAT reading.
+    const values = await app.evaluate(() =>
+      [...document.querySelectorAll('tr[data-testid^="txn-row-"] td.td-amount')].map((td) => {
+        const raw = td.textContent.trim();
+        const n = Number(raw.replace(/[^0-9.]/g, ""));
+        return /^\(/.test(raw) || raw.startsWith("-") ? -n : n;
+      }),
+    );
+    expect(values.length).toBeGreaterThan(2);
+    // Non-decreasing down the column. Under the old magnitude ordering a small
+    // expense preceded a large one and income was interleaved throughout.
+    const sorted = [...values].sort((a, b) => a - b);
+    expect(values, `column is not in ascending order: ${values.slice(0, 8)}`).toEqual(sorted);
+  });
+});
+
+test.describe("the header checkbox selects every row in view", () => {
+  test("it selects all shown rows, then clears them", async ({ app }) => {
+    await nav(app, "/transactions");
+    const box = app.getByTestId("txn-select-all-visible");
+    await expect(box).toBeVisible();
+    await expect(box).not.toBeChecked();
+
+    const rowBoxes = app.locator('tr[data-testid^="txn-row-"] input[type=checkbox]');
+    const shown = await rowBoxes.count();
+    expect(shown).toBeGreaterThan(1);
+
+    await box.click();
+    await expect(box).toBeChecked();
+    // Every row on screen, not merely some of them.
+    await expect
+      .poll(async () => {
+        let n = 0;
+        for (let i = 0; i < shown; i++) if (await rowBoxes.nth(i).isChecked()) n++;
+        return n;
+      }, { timeout: 15_000 })
+      .toBe(shown);
+    // And the bulk bar agrees about the count.
+    await expect(app.getByTestId("bulk-category-select")).toBeVisible();
+
+    // Clicking again clears them.
+    await box.click();
+    await expect(box).not.toBeChecked();
+    await expect
+      .poll(async () => {
+        let n = 0;
+        for (let i = 0; i < shown; i++) if (await rowBoxes.nth(i).isChecked()) n++;
+        return n;
+      }, { timeout: 15_000 })
+      .toBe(0);
+  });
+
+  test("a partial selection shows the middle state, not an empty box", async ({ app }) => {
+    await nav(app, "/transactions");
+    const rowBoxes = app.locator('tr[data-testid^="txn-row-"] input[type=checkbox]');
+    await rowBoxes.first().click();
+    const box = app.getByTestId("txn-select-all-visible");
+    // An unchecked box over a partial selection would claim nothing is selected;
+    // `indeterminate` is a property, so this is read off the element itself.
+    await expect
+      .poll(() => box.evaluate((el) => el.indeterminate), { timeout: 15_000 })
+      .toBe(true);
+    await expect(box).not.toBeChecked();
+    // From partial, one click completes the selection rather than clearing it.
+    await box.click();
+    await expect(box).toBeChecked();
+    await expect.poll(() => box.evaluate((el) => el.indeterminate)).toBe(false);
+  });
+});
+
 test.describe("C569 — the ledger says it is re-sorting", () => {
   test("aria-busy and the column spinner hold across the re-sort", async ({ app }) => {
     await nav(app, "/transactions");

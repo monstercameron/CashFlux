@@ -80,6 +80,15 @@ func registerTxnAudit() {
 		border("0"),
 	)
 
+	// --- The header select-all checkbox ----------------------------------------
+	// It sits in the header cell above the per-row boxes, so it aligns with them
+	// rather than centring in the cell like a column label would.
+	rule(".txn-table thead .txn-selectall-box",
+		display("block"),
+		margin("0"),
+		cursor("pointer"),
+	)
+
 	// --- C568: the quick-filter counts say what they count ---------------------
 	// A full-width note under the chips (flex-basis:100% breaks it onto its own line
 	// inside the wrapping preset row) rather than a tooltip, so the qualification is

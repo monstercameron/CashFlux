@@ -180,6 +180,68 @@ func TestPresetCountsMatchWhatApplyingThePresetProduces(t *testing.T) {
 	}
 }
 
+// The Amount column shows a signed figure, so it must ORDER by that figure. The
+// old magnitude comparison made a refund and the purchase it reverses compare
+// EQUAL, and interleaved income through a list someone sorted to find their
+// biggest expenses.
+func TestAmountSortIsSignedNotMagnitude(t *testing.T) {
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	day := func(d int) time.Time { return time.Date(2026, 8, d, 12, 0, 0, 0, time.UTC) }
+	txns := []domain.Transaction{
+		{ID: "spend-big", Desc: "Mortgage", Date: day(1), Amount: usd(-470000)},
+		{ID: "earn-big", Desc: "Paycheck", Date: day(2), Amount: usd(470000)},
+		{ID: "spend-small", Desc: "Coffee", Date: day(3), Amount: usd(-450)},
+		{ID: "earn-small", Desc: "Refund", Date: day(4), Amount: usd(450)},
+	}
+	order := func(c Criteria) []string {
+		out := []string{}
+		for _, t := range Apply(txns, c.Normalize()) {
+			out = append(out, t.ID)
+		}
+		return out
+	}
+
+	// Ascending reads down the column exactly as it is displayed: the biggest
+	// expense first, the biggest income last.
+	wantAsc := []string{"spend-big", "spend-small", "earn-small", "earn-big"}
+	if got := order(Criteria{Sort: "amount", Dir: Asc}); !equalIDs(got, wantAsc) {
+		t.Errorf("ascending = %v, want %v", got, wantAsc)
+	}
+	wantDesc := []string{"earn-big", "earn-small", "spend-small", "spend-big"}
+	if got := order(Criteria{Sort: "amount", Dir: Desc}); !equalIDs(got, wantDesc) {
+		t.Errorf("descending = %v, want %v", got, wantDesc)
+	}
+
+	// The precise old defect: ±the same figure compared equal and fell through to
+	// the id tiebreak, so "earn-big" preceded "spend-big" whatever the direction.
+	asc := order(Criteria{Sort: "amount", Dir: Asc})
+	iSpend, iEarn := indexOf(asc, "spend-big"), indexOf(asc, "earn-big")
+	if iSpend > iEarn {
+		t.Errorf("a -$4,700 expense sorted after a +$4,700 income ascending: %v", asc)
+	}
+}
+
+func equalIDs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func indexOf(ss []string, want string) int {
+	for i, s := range ss {
+		if s == want {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestCountPresetsToleratesAnUnconfiguredScope(t *testing.T) {
 	got := CountPresets(presetFixture(), Criteria{}, PresetScope{})
 	if got.NeedsReview != 0 || got.Large != 0 || got.ThisMonth != 0 {
