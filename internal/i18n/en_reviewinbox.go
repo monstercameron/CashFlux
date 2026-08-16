@@ -9,13 +9,22 @@ var reviewInboxKeys = Catalog{
 	"review.title":  "Review transactions",
 	"review.button": "Review inbox (%d)", // guided-triage entry; count = uncategorized + flagged (distinct from the filter chips below)
 
-	"review.progress":            "%d of %d",
-	"review.leftCount":           "%d left",
-	"review.reasonUncategorized": "Uncategorized",
-	"review.reasonFlagged":       "Flagged for review",
+	"review.progress":  "%d of %d",
+	"review.leftCount": "%d charges left",
+	// C600: these name WHY a charge is in the queue, and they are rendered inside
+	// "Queued: %s" so they read as a reason rather than a claim about the row as it
+	// stands. The old bare "Uncategorized" sat directly above a Category control
+	// already showing "Dining" — two labels about the same charge, contradicting
+	// each other, with nothing to say that one described the stored state and the
+	// other a pending suggestion.
+	"review.reasonLead":          "Queued: %s",
+	"review.reasonUncategorized": "no category yet",
+	"review.reasonFlagged":       "flagged for review",
 	"review.uncategorized":       "Uncategorized",
 
-	"review.categoryLabel": "Category",
+	// Names the pending decision, not the row's current state (C600).
+	"review.categoryLabel": "Category to assign",
+	"review.pendingNote":   "Nothing is saved until you confirm.",
 	"review.choose":        "Choose a category…",
 	"review.suggested":     "Suggested: %s", // one-click apply (SMART, deterministic)
 	"review.aiCategory":    "AI category",   // SMART+ (LLM picks an existing category)
@@ -25,6 +34,9 @@ var reviewInboxKeys = Catalog{
 
 	"review.categorizeNext": "Categorize & next",
 	"review.chooseFirst":    "Choose a category first, then confirm.",
+	// C553: shown beside the confirm when the write did not land, so the queue
+	// holding its position reads as a refusal with a reason rather than a freeze.
+	"review.commitFailed": "That didn't save — nothing was changed. Try again, or reload if it keeps failing.",
 
 	// Why a SMART (local, non-LLM) suggestion was made — C515 returns the evidence
 	// as data and it is phrased here. Never say "AI" for these: rules, history and
@@ -43,12 +55,18 @@ var reviewInboxKeys = Catalog{
 	"catpick.newOption":         "+ New category or sub-category…",
 
 	// Dual-mode review surface (C500–C512).
-	"review.modeLabel":          "Review mode",
-	"review.modeSingle":         "One at a time",
-	"review.modeBulk":           "Bulk",
-	"review.collapseNote":       "Charges are grouped by merchant and sorted by how confident the matcher is. Confirm a whole merchant at once, or open one to change individual charges.",
-	"review.charges":            "charges",
-	"review.decisions":          "decisions",
+	"review.modeLabel":    "Review mode",
+	"review.modeSingle":   "One at a time",
+	"review.modeBulk":     "Bulk",
+	"review.collapseNote": "Charges are grouped by merchant and sorted by how confident the matcher is. Confirm a whole merchant at once, or open one to change individual charges.",
+	// C602: the header reads "251 charges left → 11 merchants to decide", and the
+	// arrow carries "grouped into" as its accessible name. It used to be "251
+	// charges → 11 decisions", which states two numbers and leaves the
+	// relationship between them — and what a "decision" even is — to be inferred
+	// from the sentence one line below.
+	"review.charges":            "charges left",
+	"review.decisions":          "merchants to decide",
+	"review.groupedInto":        "grouped into",
 	"review.tierReady":          "Ready to confirm",
 	"review.tierLook":           "Worth a look",
 	"review.tierNone":           "No suggestion yet",
@@ -102,14 +120,19 @@ var reviewInboxKeys = Catalog{
 	"review.legendNone":    "Skipped rather than guess",
 
 	// Single-mode context band (C503).
-	"review.bandTitle":    "What else this charge is tied to",
-	"review.sibTitle":     "%d more charges from this merchant are waiting",
-	"review.linkOrder":    "Part of one order, split across %d charges",
-	"review.linkRefund":   "Paired with a refund",
-	"review.dupeTitle":    "Looks like %d copies of the same charge",
-	"review.typicalTitle": "Bigger than usual for this merchant",
-	"review.typicalSub":   "typical charge is %s · this one is %s above",
-	"review.reasonSplit":  "Split doesn't add up",
+	"review.bandTitle":  "What else this charge is tied to",
+	"review.sibTitle":   "%d more charges from this merchant are waiting",
+	"review.linkOrder":  "Part of one order, split across %d charges",
+	"review.linkRefund": "Paired with a refund",
+	"review.dupeTitle":  "Looks like %d copies of the same charge",
+	// C599: one heading and one sentence per DIRECTION. The single pair that used
+	// to be here asserted "bigger than usual" and "%s above" whatever the maths
+	// said, so a charge below the typical amount was announced as being over it.
+	"review.typicalTitleAbove": "Bigger than usual for this merchant",
+	"review.typicalSubAbove":   "typical charge is %s · this one is %s more",
+	"review.typicalTitleBelow": "Smaller than usual for this merchant",
+	"review.typicalSubBelow":   "typical charge is %s · this one is %s less",
+	"review.reasonSplit":       "split doesn't add up",
 
 	"review.whyRule":            "From a rule you wrote",
 	"review.whyHistoryExact":    "You filed this charge here %d of %d times",

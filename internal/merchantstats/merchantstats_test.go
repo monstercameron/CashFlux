@@ -33,6 +33,57 @@ func TestComputeTypicalAndDelta(t *testing.T) {
 	}
 }
 
+// C599: the four cases the guided-review card can be in. The signed variants are
+// the bug that produced "a $6.75 charge is $13.65 above a $6.90 typical" — a
+// caller holding a domain.Transaction has a negative amount for every expense,
+// and (−675) − 690 is neither the right size nor the right direction.
+func TestDeltaVsTypicalIgnoresTheSignOfTheCharge(t *testing.T) {
+	now := d(2026, 6, 15)
+	// Three $6.90 charges → typical 690.
+	s := Compute([]Charge{
+		{d(2026, 4, 3), 690}, {d(2026, 5, 3), 690}, {d(2026, 6, 3), 690},
+	}, now, time.Sunday)
+	if s.TypicalMinor != 690 {
+		t.Fatalf("typical = %d, want 690", s.TypicalMinor)
+	}
+
+	cases := []struct {
+		name string
+		in   int64
+		want int64
+	}{
+		{"below typical, magnitude", 675, -15},
+		{"below typical, signed expense", -675, -15},
+		{"equal to typical, magnitude", 690, 0},
+		{"equal to typical, signed expense", -690, 0},
+		{"above typical, magnitude", 900, 210},
+		{"above typical, signed expense", -900, 210},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := s.DeltaVsTypical(tc.in); got != tc.want {
+				t.Errorf("DeltaVsTypical(%d) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// With no baseline there is nothing to compare against, and a delta computed
+// against zero says "all of it is unusual" — so the caller is told to say nothing.
+func TestHasTypicalGuardsTheMissingBaseline(t *testing.T) {
+	now := d(2026, 6, 15)
+	if s := Compute(nil, now, time.Sunday); s.HasTypical() {
+		t.Error("no charges reported a usable baseline")
+	}
+	s := Compute([]Charge{{d(2026, 6, 1), 690}, {d(2026, 6, 8), 700}}, now, time.Sunday)
+	if !s.HasTypical() {
+		t.Error("two charges have a median and should report one")
+	}
+	if s.Enough {
+		t.Error("two charges are below MinCharges — Enough and HasTypical are different questions")
+	}
+}
+
 func TestComputeNotEnough(t *testing.T) {
 	now := d(2026, 6, 15)
 	s := Compute([]Charge{{d(2026, 6, 1), 500}, {d(2026, 6, 8), 600}}, now, time.Sunday)

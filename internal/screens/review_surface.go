@@ -469,7 +469,15 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 			notice.Set(uistate.T("review.chooseFirst"))
 			return
 		}
-		applyReviewChoice(app, cur, cat, true)
+		// C553: advance ONLY on a write that landed. This used to call advance()
+		// unconditionally, so a failed write moved to the next card while the
+		// transaction stayed uncategorized — the queue count fell, the card moved
+		// on, and a reload brought the item straight back. Holding position with a
+		// stated reason is the honest behavior.
+		if !applyReviewChoice(app, cur, cat, true) {
+			notice.Set(uistate.T("review.commitFailed"))
+			return
+		}
 		advance()
 	}
 	confirmOne := ui.UseEvent(doConfirm)
@@ -710,7 +718,13 @@ func reviewBulkView(
 		Div(css.Class("rvs-collapse"),
 			Span(css.Class("rvs-big"), Attr("data-testid", "review-total"), strconv.Itoa(idx.Total)),
 			Span(css.Class("rvs-unit"), uistate.T("review.charges")),
-			Span(css.Class("rvs-arrow"), "→"),
+			// C602: the arrow IS the relationship — one merchant group is one
+			// decision, and confirming it clears all of that merchant's charges. It
+			// carries the words so a screen reader hears the sentence and a sighted
+			// reader can hover it, rather than the two counts arriving unrelated.
+			Span(css.Class("rvs-arrow"), Attr("role", "img"),
+				Attr("aria-label", uistate.T("review.groupedInto")),
+				Attr("title", uistate.T("review.groupedInto")), "→"),
 			Span(css.Class("rvs-big is-accent"), strconv.Itoa(decisions)),
 			Span(css.Class("rvs-unit"), uistate.T("review.decisions")),
 		),
@@ -782,8 +796,13 @@ func reviewSingleView(
 		Div(
 			Div(css.Class("rvw-card"),
 				Div(css.Class("rvw-card-top"),
+					// C600: "Queued: no category yet" — a reason for being here, not a
+					// claim about the row. The bare word sat directly above a Category
+					// control that could already read "Dining" (a suggestion), so the card
+					// asserted two contradictory things about one charge with nothing to
+					// mark one as stored state and the other as a pending decision.
 					Span(css.Class("rvw-reason is-uncat"), Attr("data-testid", "review-reason"),
-						reviewReasonLabel(reason)),
+						uistate.T("review.reasonLead", reviewReasonLabel(reason))),
 					Span(css.Class("rvw-date"), pr.FormatDate(cur.Date)),
 				),
 				Div(css.Class("rvw-payee"), Attr("data-testid", "review-payee"), row.Group.Merchant),
@@ -799,6 +818,12 @@ func reviewSingleView(
 				Select(selArgs...),
 				If(row.HasSugg, Div(css.Class("rvs-why"), Attr("data-testid", "review-suggest-why"),
 					reviewWhy(row.Suggestion))),
+				// C600: the third axis. "Queued: no category yet" is the stored state
+				// and the select is the pending decision; this says the decision has
+				// not landed, which is what separates "has no category" from "has one
+				// nobody has confirmed". Shown only when something is actually pending.
+				If(catFor(row) != "", P(css.Class("rvs-pending"), Attr("data-testid", "review-pending-note"),
+					uistate.T("review.pendingNote"))),
 				If(reason == reviewqueue.ReasonSplitUnbalanced,
 					P(css.Class("rvs-warn"), Attr("data-testid", "review-split-warn"),
 						uistate.T("review.splitNeeded"))),

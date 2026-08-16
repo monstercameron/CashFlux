@@ -31,6 +31,11 @@ type ReturnTo struct {
 	// \"coffee\"" — because "Back" alone does not tell them what they are going back
 	// to, which is the whole complaint.
 	Label string
+	// TxnID is the row the trip started from, restored on return (C605). The filter
+	// brings the right LIST back; it does not bring back your place in it, and on a
+	// list of 122 rows that is most of what "where I was" means. Empty when the trip
+	// did not start from a particular row (the toolbar's Rules button).
+	TxnID string
 }
 
 const returnToAtomID = "nav:returnTo"

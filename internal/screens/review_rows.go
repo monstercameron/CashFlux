@@ -223,14 +223,25 @@ func reviewContextBand(props reviewContextBandProps) ui.Node {
 	}
 	if len(charges) >= 3 {
 		st := merchantstats.Compute(charges, time.Now(), time.Sunday)
-		if st.TypicalMinor != 0 {
+		// C599: no baseline, nothing to say. A delta measured against a zero typical
+		// is the whole charge, and phrasing it reads as "all of this is unusual".
+		if st.HasTypical() {
+			// DeltaVsTypical compares magnitudes; this used to hand it the SIGNED
+			// amount, so a $6.75 charge against a $6.90 typical came out as
+			// (−675) − 690 = −1365 and the card said "$13.65 above". Wrong size,
+			// wrong direction, and the heading asserted "bigger than usual" over a
+			// charge that was fifteen cents smaller.
 			delta := st.DeltaVsTypical(t.Amount.Amount)
 			if delta != 0 {
+				title, sub := "review.typicalTitleAbove", "review.typicalSubAbove"
+				if delta < 0 {
+					title, sub = "review.typicalTitleBelow", "review.typicalSubBelow"
+				}
 				blocks = append(blocks, Div(css.Class("rvs-ctx"), Attr("data-testid", "review-typical"),
 					Div(css.Class("rvs-ctx-t"),
-						Strong(uistate.T("review.typicalTitle")),
+						Strong(uistate.T(title)),
 						Span(css.Class("rvs-ctx-why"),
-							uistate.T("review.typicalSub",
+							uistate.T(sub,
 								fmtMoney(money.Money{Amount: st.TypicalMinor, Currency: t.Amount.Currency}),
 								fmtMoney(money.Money{Amount: absInt64(delta), Currency: t.Amount.Currency}))),
 					),

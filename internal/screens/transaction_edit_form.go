@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -315,7 +316,15 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 		amt, resolved, err := amountmath.ParseSigned(amountS.Get(), currency.Decimals(t.Amount.Currency), want)
 		if err != nil {
-			errMsg.Set(uistate.T("transactions.positiveAmount"))
+			// C561: the field is text now, so junk reaches here that type="number"
+			// used to swallow. "Enter an amount greater than zero" is the right
+			// answer for a zero and the WRONG one for "abc" — ParseSigned separates
+			// the two exactly so each can say what it means.
+			if errors.Is(err, amountmath.ErrZeroAmount) {
+				errMsg.Set(uistate.T("transactions.positiveAmount"))
+			} else {
+				errMsg.Set(uistate.T("transactions.amountNotANumber"))
+			}
 			return
 		}
 		// A transfer keeps whatever sign it already had — that is which leg of the
@@ -350,7 +359,8 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// Narrow on purpose (see txnprov.ConfirmsCategory): only a CHANGE to a real
 		// category counts, so fixing a typo in the amount does not silently vouch for
 		// a category the user never looked at.
-		if txnprov.ConfirmsCategory(txn, domain.Transaction{CategoryID: catS.Get()}) {
+		confirmsCat := txnprov.ConfirmsCategory(txn, domain.Transaction{CategoryID: catS.Get()})
+		if confirmsCat {
 			t.Reviewed = true
 		}
 		t.CategoryID = catS.Get()
@@ -359,6 +369,21 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			t.MemberID = memberS.Get()
 		}
 		t.Tags = textutil.CommaFields(tagsS.Get())
+		// C601: a confirmed category also leaves the review queue — exactly what the
+		// same decision does in the review surface, where assignReviewCategory has
+		// stripped this tag all along. The edit path did not, so correcting a flagged
+		// charge here recorded the fix and left the charge flagged: still queued,
+		// still in the "Flagged" quick filter, still counted in "Review inbox (N)",
+		// permanently. Two paths for one decision have to agree on what it means.
+		//
+		// It runs AFTER the form's tags are applied, not beside the Reviewed flag
+		// above — that line reassigns t.Tags wholesale from the field, so stripping
+		// earlier would be silently undone. (And tagsS is deliberately not written
+		// here: a state setter mid-handler re-renders the component while this
+		// closure is still running, and the rest of the save can be lost with it.)
+		if confirmsCat {
+			t.Tags = removeReviewTag(t.Tags)
+		}
 		t.Cleared = clearedS.Get()
 		t.Note = strings.TrimSpace(noteS.Get())
 		t.ExcludeFromReports = excludeS.Get()

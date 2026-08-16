@@ -219,6 +219,50 @@ expect literal `FROM golang:1.26-alpine AS build`, an alpine `adduser` line and 
 while `Dockerfile.server` deliberately uses `--platform=$BUILDPLATFORM` and a distroless nonroot
 runtime. The tests are stale against an intentional change, not a regression.
 
+## 2026-08-16 — C599–C605: two arithmetic bugs wearing UX clothes
+
+Seven tickets from the review/calendar/navigation sweep. Two of them turned out to be logic, not
+presentation, and both had been sitting in plain sight behind a plausible-looking sentence.
+
+**C599 is a sign error with a UI in front of it.** `merchantstats.TypicalMinor` is a median of
+`Charge.Minor`, which the package defines as positive magnitudes. `review_rows.go` handed
+`DeltaVsTypical` the transaction's SIGNED amount — negative for every expense — so a $6.75 coffee
+against a $6.90 typical computed (−675) − 690 = −1365, and the card announced "$13.65 above". Nearly
+the SUM of the two figures rather than their difference, in the wrong direction, under a heading
+that hardcoded "Bigger than usual". Two call sites, one line each, and the type system cannot tell a
+magnitude from a signed amount — so `DeltaVsTypical` now takes the magnitude of whatever it is
+given. The other call site already passed a magnitude and is unaffected. The copy split into
+above/below pairs, and a missing baseline says nothing at all rather than measuring against zero.
+
+**C601 was not a fixture problem.** The ticket reads as "the seeded bad-category charge was never
+corrected", and the obvious move is to edit `sample.go`. That would have deleted the case: this
+charge is the control the entire review surface demonstrates itself on. Driving the correction
+through the real workflow instead surfaced why it never stuck — `assignReviewCategory` strips the
+needs-review tag when a category is confirmed, and the EDIT form never did. Correcting a flagged
+charge from the ledger recorded the fix and left the charge flagged: still queued, still counted in
+"Review inbox (N)", forever. Two paths for one decision, disagreeing about what the decision meant,
+and only one of them tested. (Two notes for whoever revisits the ticket: the charge is
+`tx-coffee-anomaly-2026-06`, not `CF26-PIPE-S01`, and the seed carries no `#coffee` tag — the
+`rule-coffee` rule adds one when it runs. And "bad category" is doubtful: Dining for a coffee shop
+is defensible; what the seed marks is an unusual AMOUNT.)
+
+I nearly shipped a bad fix for C601. The first attempt stripped the tag next to the `Reviewed`
+assignment — thirty lines above where `t.Tags` is reassigned wholesale from the form field, so the
+strip would have been silently undone — and set the tags state atom mid-handler, which this file
+already carries a comment warning about: a setter mid-handler re-renders the component while the
+closure is still running and the rest of the save, `PutTransaction` included, can be lost. The
+correct spot is after the form's tags are applied, and the atom is left alone.
+
+**C600** was two true statements with no labels: the tier badge described stored state, the Category
+control showed a pending suggestion, and nothing said which was which. The badge now reads as a
+reason ("Queued: no category yet"), the control says "Category to assign", and a line under it
+separates the third axis — a decision that exists but has not been saved.
+
+**C605** extends the C581 crumb from "the right list" to "your place in it". The filter was already
+persisted, so returning restored the list; on 122 rows that still left the user hunting. The crumb
+now carries the originating row id and the ledger scrolls it to CENTER and focuses it — centre
+rather than into-view, because "into view" against a sticky header puts the row underneath it.
+
 ## 2026-08-16 — Seven things the second adversarial pass found
 
 Ran an adversarial reviewer over the whole C573–C583 body of work. Seven substantiated defects,

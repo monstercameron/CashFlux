@@ -75,7 +75,7 @@ test.describe("C583 — the human correction loop", () => {
 
     // ---- 3. CORRECT IT, INVENTING THE CATEGORY ON THE WAY ------------------
     // Opening the row is a visible affordance, not a guess.
-    await autoRow.locator("[data-testid=txn-row-edit]").click();
+    await autoRow.locator("[data-testid=txn-rowedit]").click();
     await expect(page.locator("[data-testid=txn-edit-form]")).toBeVisible({ timeout: 15_000 });
 
     // The dialog is a real dialog: named, modal, escapable.
@@ -200,7 +200,7 @@ test.describe("C583 — the human correction loop", () => {
     // stranded — the recovery path from "I opened the wrong row".
     const firstRow = page.locator(".txn-table tbody tr.row").first();
     const before = (await firstRow.innerText()).replace(/\s+/g, " ").trim();
-    await firstRow.locator("[data-testid=txn-row-edit]").click();
+    await firstRow.locator("[data-testid=txn-rowedit]").click();
     await expect(page.locator("[data-testid=txn-edit-form]")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
     await expect(page.locator("[data-testid=txn-edit-form]")).toBeHidden({ timeout: 10_000 });

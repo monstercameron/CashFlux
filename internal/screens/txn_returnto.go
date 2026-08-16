@@ -18,11 +18,16 @@ import (
 // hand-building a label, so "Rules from a row", "Rules from the toolbar" and "the
 // undo bar's Activity link" all describe the same thing the same way — and adding
 // a new destination is one call, not a new dialect.
-func txnLeaveFor(to string) {
+func txnLeaveFor(to string) { txnLeaveForRow(to, "") }
+
+// txnLeaveForRow is txnLeaveFor for a trip that started from a particular row, so
+// the return lands on that row rather than the top of the list (C605).
+func txnLeaveForRow(to, txnID string) {
 	uistate.SetReturnTo(uistate.ReturnTo{
 		From:  "/transactions",
 		To:    to,
 		Label: txnWorkingSetLabel(uistate.CurrentTxFilter()),
+		TxnID: txnID,
 	})
 }
 

@@ -33,6 +33,16 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Fixed
+- **Guided review's "bigger than usual" arithmetic.** It compared a transaction's SIGNED amount
+  against a median of magnitudes, so a $6.75 coffee against a $6.90 typical came out as
+  (−675) − 690 = −1365 and the card read "this one is $13.65 above" — wrong size, wrong direction,
+  and a heading asserting the charge was bigger when it was fifteen cents smaller. The comparison is
+  magnitude-to-magnitude, the heading and sentence follow the direction, and with no baseline the
+  card says nothing rather than measuring against zero.
+- **Correcting a flagged charge from the ledger now clears its flag.** The review surface strips the
+  needs-review tag when a category is confirmed; the edit form never did — so fixing a flagged
+  transaction from the ledger recorded the fix and left the charge queued, still counted in "Review
+  inbox (N)", permanently. Two paths for one decision now agree on what the decision means.
 - **A split transaction is no longer credited to a rule for a category it doesn't show.** Its
   category cell lists the split lines' categories, while the stored single category is whatever it
   held before it was split — so a row reading "Dining, Travel" could carry an "auto" mark naming a
@@ -66,6 +76,24 @@ and every commit updates this file under `Unreleased`.
   reading as one more control in the run.
 
 ### Changed
+- **The review card stops contradicting itself.** It showed the queue tier "Uncategorized" directly
+  above a Category control that could already read "Dining" — two labels about one charge, with
+  nothing marking one as stored state and the other as a pending suggestion. The tier now reads as
+  the reason it is queued ("Queued: no category yet"), the control is labelled "Category to assign",
+  and a line under it says nothing is saved until you confirm — so lacking a category, lacking a
+  human decision, and being grouped in a tier are three separate, readable facts.
+- **The review header explains its own arithmetic.** "251 charges → 11 decisions" left both what a
+  decision is and how the numbers relate to be inferred; it now reads "251 charges left → 11
+  merchants to decide", with the arrow carrying "grouped into".
+- **Calendar view says which month it is showing.** Under "All dates" the caption named the ledger's
+  scope and nothing named the month in the grid, so a wall of day numbers had no month anywhere on
+  screen. It reads "All dates · showing July 2026", leading and trailing squares announce the month
+  they belong to, and picking a day says what filter that just applied and how to widen it again.
+- **The "+" menu is sorted by job.** Eleven creation actions in one flat list put "Expense" at the
+  same weight as "New rule". Money that moved leads with no heading; "Plan & track" and "Set up"
+  separate what you open when a plan changes from what you configure once.
+- **Coming back from a rule lands on the row you left.** The crumb restored the filtered list; on a
+  122-row list that still meant hunting for your charge again. It now returns to the row itself.
 - **One way to add a transaction, and it says what kind.** Three entry points — the top bar's "+",
   "Add something else", and "Add transaction" above the ledger — all opened the same neutral form,
   so none of them told a first-time user what they were about to create. The ledger's button is now

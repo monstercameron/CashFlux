@@ -114,6 +114,12 @@ func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
 			// Learn from the confirmation, so the next charge from this merchant
 			// is suggested locally instead of costing a SMART+ call (C513).
 			rememberReviewChoice(t, catID)
+			// C553: PutTransaction writes the in-memory store; RequestPersist is
+			// what puts it in the dataset. Without this the card advanced and the
+			// queue count dropped, but a reload brought the transaction back
+			// Uncategorized — the write looked like it landed and had not. Same
+			// defect as C543 on the categories page, in a second surface.
+			uistate.RequestPersist()
 			uistate.BumpDataRevision()
 			return true
 		}
@@ -149,6 +155,11 @@ func assignReviewByMerchant(app *appstate.App, key, catID string) int {
 	})
 	if writeErr != nil {
 		uistate.PostNotice(writeErr.Error(), true)
+	}
+	// C553: persist the batch for the same reason the single path does — an
+	// in-memory write that never reaches the dataset is undone by a reload.
+	if n > 0 {
+		uistate.RequestPersist()
 	}
 	uistate.BumpDataRevision()
 	return n
@@ -255,7 +266,12 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 				parsed := smartai.RejectSignMismatches(
 					smartai.ParseCategoryAssignments(text, 1, catalog), incomeByRef)
 				if len(parsed) > 0 && parsed[0].CategoryID != "" {
-					applyReviewChoice(app, curTxn, parsed[0].CategoryID, batch)
+					// C553: an AI-proposed category that failed to save must not
+					// advance either — same rule as the manual confirm.
+					if !applyReviewChoice(app, curTxn, parsed[0].CategoryID, batch) {
+						commitErr.Set(uistate.T("review.commitFailed"))
+						return
+					}
 					alsoSimilar.Set(false)
 					seededFor.Set("~none~")
 				} else {
@@ -281,7 +297,14 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 			return
 		}
 		commitErr.Set("")
-		applyReviewChoice(app, cur, v, alsoSimilar.Get())
+		// C553: advance only on a write that landed. A failed write used to move
+		// the card on anyway, so the item looked resolved and came back on the
+		// next reload. assignReviewCategory posts the underlying reason as a
+		// notice; this states it beside the action that produced it.
+		if !applyReviewChoice(app, cur, v, alsoSimilar.Get()) {
+			commitErr.Set(uistate.T("review.commitFailed"))
+			return
+		}
 		alsoSimilar.Set(false)
 		seededFor.Set("~none~")
 	})
@@ -294,7 +317,12 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		if !has || sug.CategoryID == "" {
 			return
 		}
-		applyReviewChoice(app, cur, sug.CategoryID, alsoSimilar.Get())
+		// Same rule as the manual confirm (C553): accepting a suggestion that
+		// failed to save must not advance.
+		if !applyReviewChoice(app, cur, sug.CategoryID, alsoSimilar.Get()) {
+			commitErr.Set(uistate.T("review.commitFailed"))
+			return
+		}
 		alsoSimilar.Set(false)
 		seededFor.Set("~none~")
 	})
@@ -357,11 +385,14 @@ func ReviewInboxBody(_ struct{}) ui.Node {
 		seededFor.Set(cur.ID)
 	}
 
+	// C600: phrased as the REASON this charge is queued ("Queued: no category
+	// yet"), so it cannot be read as a claim about the row while the Category
+	// control beside it already shows a suggestion.
 	reason := reviewqueue.ReasonFor(cur)
-	reasonLabel := uistate.T("review.reasonUncategorized")
+	reasonLabel := uistate.T("review.reasonLead", uistate.T("review.reasonUncategorized"))
 	reasonMod := "is-uncat"
 	if reason == reviewqueue.ReasonFlagged {
-		reasonLabel = uistate.T("review.reasonFlagged")
+		reasonLabel = uistate.T("review.reasonLead", uistate.T("review.reasonFlagged"))
 		reasonMod = "is-flagged"
 	}
 

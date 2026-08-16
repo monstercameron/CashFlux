@@ -426,8 +426,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				uistate.SetRuleDraft(phrase, t.CategoryID)
 				// C581: writing a rule from a row is the deepest side trip the ledger
 				// offers — a different page, a form to fill, and the filtered view you
-				// were working through left behind. Leave a named way back.
-				txnLeaveFor("/rules")
+				// were working through left behind. Leave a named way back — to THIS
+				// row (C605), since that is the charge the trip was about.
+				txnLeaveForRow("/rules", id)
 				nav.Navigate(uistate.RoutePath("/rules"))
 				return
 			}
@@ -655,6 +656,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
 	// route-settle so the ledger paints as fast as before, then the chips fade in.
 	trendReady := useAfterSettle("txn-trend")
+	// C605: if the user came back here from a side trip that started on a row, land
+	// on that row. Unconditional hook, at a stable position.
+	useTxnFocusRow()
 
 	// Follow-up tasks linked to each transaction (open/total + the items behind them), so
 	// a row can surface a chip + hover popover. Built once from the task list, read O(1)
@@ -831,8 +835,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		// Header columns, built to match the row cells' conditional set exactly (same
 		// order): Select + Date + Description are always shown; the rest follow the
 		// user's column-visibility choice.
+		// The select column's header is a real control, not a screen-reader-only
+		// caption: one checkbox that selects or clears every row in view, sitting
+		// directly above the per-row boxes it commands. Its own component, so its
+		// hooks stay isolated from this variable-length column list.
 		cols := []uiw.Column{
-			{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colSelect"))},
+			{Head: ui.CreateElement(txnSelectAllHeader, txnSelectAllHeaderProps{Visible: visibleOrder})},
 			{Label: uistate.T("transactions.colDate"), SortKey: "date"},
 		}
 		if colVis.Amount {

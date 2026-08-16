@@ -132,6 +132,17 @@ func registerTxnScope() {
 		minWidth("12rem"),
 	)
 
+	// --- The review card's pending-decision note (C600) ---------------------------
+	// Quiet, directly under the category control it qualifies: the card now states
+	// three different things about one charge (why it is queued, what would be
+	// assigned, and that nothing has been), so the third has to read as a footnote
+	// to the second rather than a fourth competing label.
+	rule(".rvs-pending",
+		margin("0.25rem 0 0"),
+		fontSize("var(--type-12)"),
+		color("var(--text-dim)"),
+	)
+
 	// --- The one-hop return crumb (C581) ------------------------------------------
 	// A thin band under the top bar on the page a side trip landed on. Quiet — it is
 	// a thread back, not an alert — but the back control is a real button, because a

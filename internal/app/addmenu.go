@@ -95,6 +95,17 @@ func AddMenu() uic.Node {
 			Span(uistate.T(labelKey)),
 		)
 	}
+	// section is a group heading inside the menu (C604). Eleven creation actions in
+	// one flat list put "Expense" and "New rule" at identical weight, so the three
+	// things a person adds daily competed with eight they configure once. The
+	// headings sort them by JOB — money that moved, then the things it is measured
+	// against, then the people and automation behind it — and the separator each one
+	// draws is what stops the list reading as a single undifferentiated column.
+	// role=presentation: the heading is a label for the eye, and the items keep
+	// their own accessible names.
+	section := func(labelKey string) uic.Node {
+		return Div(css.Class("add-menu-section"), Attr("role", "presentation"), uistate.T(labelKey))
+	}
 	// aria-expanded reflects the popover state for assistive tech (this is a menu
 	// button, now icon-only — so it needs an explicit accessible name + hover title).
 	expanded := "false"
@@ -130,19 +141,31 @@ func AddMenu() uic.Node {
 			// three vocabularies for two underlying flows. Naming the direction here
 			// also means this path lands on a form that is already set up, exactly as
 			// the page's does.
+			// C604: money that moved, first and unheaded — the three things a person
+			// adds daily lead the menu, so the common case needs no reading at all.
 			item("addmenu.expense", icon.ArrowDown, func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }),
 			item("addmenu.income", icon.ArrowUp, func() { uistate.OpenQuickAddAs(uistate.QuickAddIncome) }),
 			// The transfer workflow, reachable from the global add path — not only
 			// from Accounts (2026-07-18 assessment: ledger-entry mental model).
 			item("addmenu.transfer", icon.Repeat, func() { transferOpen.Set(true) }),
+			// A whole statement or receipt at once — a different route in for the same
+			// kind of thing, which is why it sits with the transaction entries.
+			item("addmenu.document", icon.ScanLine, func() { nav.Navigate(uistate.RoutePath("/documents")) }),
+
+			// The things money is measured against: opened when a plan changes, not
+			// several times a day.
+			section("addmenu.sectionPlan"),
 			item("addmenu.account", icon.Accounts, func() { uistate.SetAddTarget("account") }),
 			item("addmenu.budget", icon.Budgets, func() { uistate.SetAddTarget("budget") }),
 			item("addmenu.goal", icon.Goals, func() { uistate.SetAddTarget("goal") }),
 			item("addmenu.task", icon.Todo, func() { uistate.SetAddTarget("task") }),
+
+			// Set up once and largely forgotten — the entries that were competing at
+			// the same weight as "Expense" and pushing it down the list.
+			section("addmenu.sectionSetup"),
 			item("addmenu.category", icon.Tag, func() { uistate.SetAddTarget("category") }),
 			item("addmenu.member", icon.Users, func() { uistate.SetAddTarget("member") }),
 			item("addmenu.rule", icon.Filter, func() { uistate.SetAddTarget("rule") }),
-			item("addmenu.document", icon.ScanLine, func() { nav.Navigate(uistate.RoutePath("/documents")) }),
 		),
 	)
 }

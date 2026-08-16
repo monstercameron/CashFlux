@@ -43,9 +43,15 @@ func ReturnBanner(props returnBannerProps) uic.Node {
 	goBack := uic.UseEvent(Prevent(func() {
 		c := crumbAtom.Get()
 		crumbAtom.Set(uistate.ReturnTo{})
-		if c.From != "" {
-			nav.Navigate(uistate.RoutePath(c.From))
+		if c.From == "" {
+			return
 		}
+		// C605: ask the destination to land on the row the trip started from. The
+		// filter alone restores the LIST; this restores the place in it.
+		if c.TxnID != "" {
+			uistate.SetTxnFocusRow(c.TxnID)
+		}
+		nav.Navigate(uistate.RoutePath(c.From))
 	}))
 	dismiss := uic.UseEvent(Prevent(func() { crumbAtom.Set(uistate.ReturnTo{}) }))
 

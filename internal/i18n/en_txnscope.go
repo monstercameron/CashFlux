@@ -63,6 +63,10 @@ var txnScopeKeys = Catalog{
 	// user meets one vocabulary wherever they start (C573).
 	"addmenu.expense": "Expense — money going out",
 	"addmenu.income":  "Income — money coming in",
+	// C604: headings that sort eleven creation actions by JOB. Money that moved
+	// leads and needs no heading; these two mark where the everyday stops.
+	"addmenu.sectionPlan":  "Plan & track",
+	"addmenu.sectionSetup": "Set up",
 
 	// The one-hop breadcrumb out of a cross-page correction (C581).
 	"returnTo.back":          "Back to %s",
@@ -72,6 +76,15 @@ var txnScopeKeys = Catalog{
 	"returnTo.labelSearch":   "Transactions, filtered to \"%s\"",
 	"returnTo.labelFiltered": "Transactions, with %s applied",
 	"returnTo.labelPlain":    "Transactions",
+
+	// Calendar month/year context (C603). Under "All dates" the caption named the
+	// ledger's scope and nothing named the month the GRID was drawing, so a wall of
+	// day numbers had no month anywhere on screen; and a leading/trailing square was
+	// dimmed but otherwise announced as a bare number.
+	"transactions.calShowingMonth":  "%s · showing %s",
+	"transactions.calDayOtherMonth": "%s — %s, not part of the month shown",
+	"transactions.calPicked":        "Showing %s only. Use the date bar above to widen it again.",
+	"transactions.calPickedFromAll": "Showing %s only. \"All dates\" in the bar above brings the rest back.",
 
 	// The Status column (C578): the row's state as a word, in a lane of its own.
 	"transactions.colStatus":      "Status",

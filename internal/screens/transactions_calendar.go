@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
@@ -67,12 +68,16 @@ type txnCalMonthCellProps struct {
 	DateKey string // YYYY-MM-DD, the filter value applied on click
 	Day     int
 	InMonth bool
-	Today   bool
-	NetStr  string
-	NetTone string
-	Count   int
-	Ghosts  []txncalendar.Ghost
-	OnPick  func(dateKey string)
+	// MonthName is the month this square belongs to ("June 2026"), used to name a
+	// leading/trailing day out loud (C603). A dimmed, disabled square is a visual
+	// signal only; the accessible name has to carry the same fact.
+	MonthName string
+	Today     bool
+	NetStr    string
+	NetTone   string
+	Count     int
+	Ghosts    []txncalendar.Ghost
+	OnPick    func(dateKey string)
 }
 
 // txnCalendarWidget renders the month-grid calendar view. Each in-month day is a
@@ -108,9 +113,25 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	}
 
 	// pickDay narrows the ledger to a single day and returns to the table view.
+	//
+	// C603: it also SAYS SO. Clicking a square changed the date filter and swapped
+	// the whole view out from under the user in one motion, with nothing naming the
+	// filter it had just applied — the ledger simply reappeared, shorter, for
+	// reasons the user had to reconstruct from the scope bar. The notice names the
+	// day now, and the scope bar's "All dates" is the way back.
 	pickDay := func(dateKey string) {
+		prevFrom, prevTo := f.From, f.To
 		setRange(dateKey, dateKey)
 		viewAtom.Set(uistate.TxnViewTable)
+		day := dateKey
+		if d, err := dateutil.ParseDate(dateKey); err == nil {
+			day = pr.FormatDate(d)
+		}
+		if prevFrom == "" && prevTo == "" {
+			uistate.PostNotice(uistate.T("transactions.calPickedFromAll", day), false)
+			return
+		}
+		uistate.PostNotice(uistate.T("transactions.calPicked", day), false)
 	}
 
 	// Weekday header row (localized short names in week-start order).
@@ -125,12 +146,17 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				DateKey: txncalendar.DayKey(day.Date),
 				Day:     day.Date.Day(),
 				InMonth: day.InMonth,
-				Today:   txncalendar.DayKey(day.Date) == todayKey,
-				NetStr:  calNetStr(day.Stat, props.Base),
-				NetTone: calNetTone(day.Stat),
-				Count:   day.Stat.Count,
-				Ghosts:  day.Ghosts,
-				OnPick:  pickDay,
+				// C603: which month this square actually belongs to. A leading or
+				// trailing day is dimmed and disabled, but its accessible name was the
+				// bare number — so "29, 30, 1, 2" read as one continuous month to
+				// anyone not seeing the dimming, and to everyone as an ambiguous grid.
+				MonthName: day.Date.Format("January 2006"),
+				Today:     txncalendar.DayKey(day.Date) == todayKey,
+				NetStr:    calNetStr(day.Stat, props.Base),
+				NetTone:   calNetTone(day.Stat),
+				Count:     day.Stat.Count,
+				Ghosts:    day.Ghosts,
+				OnPick:    pickDay,
 			}))
 		}
 	}
@@ -141,8 +167,17 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	// caption states the LEDGER'S scope, so a single day or a custom range reads as
 	// itself here too rather than as a bare month name beside a grid the rows do not
 	// fill. The testids stay on the caption and the grid so existing selectors resolve.
+	// C603: the caption states the ledger's scope — but under "All dates", or any
+	// range that is not exactly one month, that scope does not name the month the
+	// GRID is drawing, and the user is left reading a wall of day numbers with no
+	// month anywhere on screen. When the two differ, both are stated.
+	gridMonth := anchor.Format("January 2006")
+	caption := txnScopeLabel(scope)
+	if scope.Kind != txnscope.Month {
+		caption = uistate.T("transactions.calShowingMonth", caption, gridMonth)
+	}
 	nav := Div(css.Class("txn-cal-nav", "row"),
-		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), txnScopeLabel(scope)),
+		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), caption),
 	)
 
 	return uiw.Widget(uiw.WidgetProps{
@@ -215,12 +250,19 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	}
 
 	label := uistate.T("transactions.calDayLabel", strconv.Itoa(props.Day), props.NetStr)
+	// C603: a leading/trailing square names its own month and says it is not part
+	// of the month on show, so the grid's edges are unambiguous by reading as well
+	// as by dimming.
+	if !props.InMonth && props.MonthName != "" {
+		label = uistate.T("transactions.calDayOtherMonth", strconv.Itoa(props.Day), props.MonthName)
+	}
 	args := []any{
 		ClassStr(cls),
 		Type("button"),
 		Attr("data-date", props.DateKey),
 		Attr("data-testid", "txn-cal-day-"+props.DateKey),
 		Attr("aria-label", label),
+		Attr("title", label),
 	}
 	if props.InMonth {
 		args = append(args, OnClick(pick))

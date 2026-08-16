@@ -8322,7 +8322,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   edit path is missing `uistate.RequestPersist()` exactly as the notes path was. Worth fixing
   regardless of this ticket.
 
-- [ ] **C599 [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
+- [x] **C599 [DONE 2026-08-16 — a signed amount was compared against a median of magnitudes] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
   One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a
   typical `$6.90` charge. Compute anomaly deltas from the same current transaction and comparison set,
   format the sign and amount consistently, and suppress the insight when the comparison is incomplete.
@@ -8330,21 +8330,37 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   baseline; automated tests cover below-typical, equal-to-typical, above-typical, and missing-baseline
   cases.
 
-- [ ] **C600 [MAJOR][TXN][REVIEW][UX] Clarify review status versus assigned category.**
+- [x] **C600 [DONE 2026-08-16 — "Queued: no category yet" + "Category to assign" + a not-saved-yet line] [MAJOR][TXN][REVIEW][UX] Clarify review status versus assigned category.**
   The guided card showed the review tier `Uncategorized` while its Category control was already set to
   `Dining`. Separate queue state from category state with explicit labels such as “Needs review” and
   “Current category,” or remove the ambiguous tier label when a category is assigned.
   AC: a reviewer can tell whether a transaction lacks a category, lacks human confirmation, or is simply
   grouped in an uncategorized review tier without inferring from conflicting labels.
 
-- [ ] **C601 [MAJOR][TXN][DATA][FIXTURE] Resolve the known-bad coffee transaction through the correction workflow.**
+- [x] **C601 [DONE 2026-08-16 — not a fixture bug: the edit path never cleared the needs-review tag] [MAJOR][TXN][DATA][FIXTURE] Resolve the known-bad coffee transaction through the correction workflow.**
   `CF26-PIPE-S01 known-bad coffee control` remains in `Dining` and `Needs review` despite being the
   seeded bad-category case. Correct it through the intended review/edit path, preserve its `#coffee`
   tag and other fields, and verify the result after reload and search.
   AC: the transaction has the intended category, no unrelated fields change, the review state reflects
   the completed decision, and the known-bad regression test proves the correction persists.
 
-- [ ] **C602 [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
+  **What it actually was, 2026-08-16.** Not a fixture problem, and the seed is unchanged — this
+  charge is the control the whole review surface demonstrates itself on, so "fixing" it in
+  `sample.go` would delete the case rather than prove the workflow. Driving the correction through
+  the real path surfaced why it never stuck: `assignReviewCategory` strips the needs-review tag when
+  a category is confirmed, and the EDIT form never did. Correcting a flagged charge from the ledger
+  recorded the fix and left the charge flagged — still queued, still counted in "Review inbox (N)",
+  permanently. Both paths now agree. `e2e/regression/known_bad_coffee.spec.mjs` corrects it at
+  runtime and asserts the category changed, no other field moved, the flag cleared, and all of it
+  survived a reload plus a fresh search.
+
+  **Two premises in this ticket do not match the code**, worth knowing before reopening it: the
+  charge is `tx-coffee-anomaly-2026-06`, not `CF26-PIPE-S01`, and the seed gives it no `#coffee`
+  tag (the `rule-coffee` rule adds one when it runs, so a tag seen in the UI came from there). Its
+  seeded category is Dining, which for a coffee shop is defensible — what the seed marks as odd is
+  the AMOUNT ($68, described as "Coffee — $68?!"), not the category.
+
+- [x] **C602 [DONE 2026-08-16 — "251 charges left → grouped into → 11 merchants to decide"] [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
   The review dialog presents `251 charges → 11 decisions`, but does not immediately explain whether a
   decision represents a merchant group, a bulk action, or an individual charge. Show both the remaining
   charge count and decision/group count with labels and update them consistently after selection,
@@ -8352,7 +8368,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a reviewer can predict how one confirmation changes each count before committing it, and the
   counts remain consistent between one-at-a-time and bulk modes.
 
-- [ ] **C603 [MAJOR][TXN][CALENDAR][UX] Add explicit month and year context to Calendar view.**
+- [x] **C603 [DONE 2026-08-16 — the caption names the grid's month; adjacent days name theirs] [MAJOR][TXN][CALENDAR][UX] Add explicit month and year context to Calendar view.**
   Calendar view under `All dates` showed a grid of day numbers without a prominent month/year heading,
   making adjacent-month days and the current scope ambiguous. Display the active month or range, mark
   leading/trailing days as belonging to adjacent months, and make the relationship between Calendar
@@ -8360,16 +8376,70 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: users can identify the month represented by every visible day, and selecting a day clearly states
   the resulting date filter and provides a direct way back to the prior range.
 
-- [ ] **C604 [MAJOR][TXN][NAV][UX] Split and relabel the overloaded Add something else menu.**
+- [x] **C604 [DONE 2026-08-16 — money that moved leads; Plan & track / Set up below it] [MAJOR][TXN][NAV][UX] Split and relabel the overloaded Add something else menu.**
   One menu combines expense, income, transfer, account, budget, goal, task, category, member, rule,
   and document creation. Group entries by job, prioritize transaction creation, and use clearer labels
   or separate entry points for financial records versus planning/configuration objects.
   AC: a first-time user can find Expense, Income, and Transfer immediately, while less frequent setup
   actions remain discoverable without competing at the same hierarchy level.
 
-- [ ] **C605 [MAJOR][TXN][NAV][WORKFLOW] Preserve transaction context when opening Rules and other linked surfaces.**
+- [x] **C605 [DONE 2026-08-16 — with C581; the crumb now returns to the ROW, not just the list] [MAJOR][TXN][NAV][WORKFLOW] Preserve transaction context when opening Rules and other linked surfaces.**
   The Rules button navigates away from the transaction task without an obvious return context. Preserve
   the originating search, filters, period, selected transaction, and review mode; provide a visible
   “Back to transaction” action or breadcrumb on linked pages, including rule creation from a row menu.
   AC: a user can inspect or create a rule and return to the same transaction working set without
   reconstructing the query or losing their place in the review queue.
+
+- [ ] **C606 [CRITICAL][BUDGETS][TOPUP][CORRECTNESS] Show truly available source funds when funding a top-up.**
+  The top-up source list showed Groceries `$354.85 available` even though its card had only `$76.56 left`,
+  and Zero-Based Buffer showed `$59.16 available` while only `$20.16` was free. Either the source list
+  is exposing the full limit under an unsafe “available” label, or it is allowing a transfer beyond free
+  funds. Calculate withdrawable amounts from the same rollover, spent, top-up, and committed-fund model
+  as the card; prevent overdraw or explain the source semantics explicitly.
+  AC: every source amount matches the amount that can actually be moved, the preview shows the post-top-up
+  source balances, and saving cannot silently make a source budget overspent.
+
+- [ ] **C607 [MAJOR][BUDGETS][PERIOD][DATA] Apply the selected budget period to supporting modules.**
+  While the page was showing the ended `Jul 2026` period, Edit tracking said “Figures show this month so
+  far” and displayed current-month transaction counts; the Unbudgeted spending section also said “this
+  month” and listed current-looking amounts. Use the selected period consistently in tracking counts,
+  unbudgeted spending, helper text, and totals, or label current-month/current-date modules separately.
+  AC: changing the budget period updates every supporting figure to the same scope, and historical-period
+  views never mix current-month numbers without an explicit scope label.
+
+- [ ] **C608 [MAJOR][BUDGETS][YEAR-PLANNER][RESPONSIVE][UX] Make the year planner usable without horizontal-scroll discovery.**
+  The expanded year planner presents a very wide Jan–Dec table and only tells users “Scroll sideways for
+  the full year.” Cell buttons expose paired values such as `$1,100.00 $1,300.00` without an accessible
+  month-specific label. Add responsive grouping or a month selector, sticky budget/month headers, and
+  accessible labels explaining actual, planned, projected, and total values.
+  AC: keyboard, screen-reader, and narrow-viewport users can inspect every month and understand each cell
+  without relying on horizontal scrolling or visually matching a paired value to a column.
+
+- [ ] **C609 [MINOR][BUDGETS][RECURRING][DATES][UX] Clarify recurring-date scope on historical budget periods.**
+  The July budget page displayed recurring entries with labels such as “Next Jul 3, 2026” alongside future
+  September dates, but did not say whether “Next” means next occurrence from today, next occurrence inside
+  the selected budget period, or the schedule’s next stored date. Label the reference date and distinguish
+  past-in-period, next-in-period, and next-from-today states.
+  AC: users can tell whether a recurring item is overdue, already occurred in the selected period, or is
+  upcoming relative to today; date labels remain correct when moving between budget periods.
+
+- [ ] **C610 [CRITICAL][NAV][ROUTER] The browser Back button changes the URL without changing the page.** ★
+  *Found 2026-08-16 while verifying C588's "returning preserves the same budget period" acceptance
+  criterion — the round trip through Allocate never came back.*
+  After ANY in-app navigation (a rail link, a router.Navigate from a card action), pressing Back
+  moves `location.pathname` to the previous route while `#main[data-route]` stays on the one you
+  were already looking at. Reproduced in a real browser: `/budgets` → click Goals in the rail →
+  route `/goals`, URL `/goals` ✔ → browser Back → URL `/budgets`, **screen still `/goals`** ✘.
+  Forward then lands on `/goals` and happens to look right, which is how this has stayed hidden.
+  The same popstate mechanism works fine when the PREVIOUS navigation was a bare `history.pushState`
+  (the e2e `nav()` helper's path), so the trigger is specifically the framework router's own
+  Navigate — after it runs, its popstate handler no longer re-resolves the location.
+  Why it is critical: the user is looking at one page under another page's URL. A reload, a share,
+  a bookmark or a deep link at that moment all disagree with the screen, and Back — the most-used
+  navigation control in any browser — is simply broken app-wide.
+  Not root-caused. Start at `router.setupHistoryListener` / `renderFromListener` in GoWebComponents
+  v5.0.1 (`lastListenerRenderSig` coalescing looks like the first thing to rule out: if Navigate
+  leaves the signature equal to the location Back returns to, the listener render is skipped as a
+  duplicate). Reproduce with the probe shape above before theorising.
+  AC: after any in-app navigation, Back and Forward change the rendered screen to match the URL, and
+  `#main[data-route]` always equals `location.pathname`.

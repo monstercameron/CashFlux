@@ -112,9 +112,29 @@ func Compute(charges []Charge, now time.Time, weekStart time.Weekday) Stats {
 	return s
 }
 
-// DeltaVsTypical returns how much a charge of txnMinor (magnitude, base minor)
-// runs above (+) or below (−) the merchant's typical amount.
-func (s Stats) DeltaVsTypical(txnMinor int64) int64 { return txnMinor - s.TypicalMinor }
+// HasTypical reports whether there is a baseline to compare against. Without one
+// there is no comparison to state, and a caller that phrases one anyway is
+// comparing against zero — which reads as "this whole charge is unusual".
+func (s Stats) HasTypical() bool { return s.TypicalMinor != 0 }
+
+// DeltaVsTypical returns how much a charge runs above (+) or below (−) the
+// merchant's typical amount, in base minor units.
+//
+// The argument's SIGN IS IGNORED. TypicalMinor is a median of Charge.Minor, which
+// this package defines as positive magnitudes, so the comparison is only
+// meaningful magnitude-to-magnitude — and a caller holding a domain.Transaction
+// has a signed amount, negative for every expense. Passing it produced
+// (−675) − 690 = −1365: a $6.75 coffee reported as $13.65 away from a $6.90
+// typical, in the wrong direction and nearly the sum of the two rather than the
+// difference (C599). Both live call sites are one line each, so the type system
+// cannot tell them apart; taking the magnitude here means no caller can get it
+// wrong, and a caller that already passes a magnitude is unaffected.
+func (s Stats) DeltaVsTypical(txnMinor int64) int64 {
+	if txnMinor < 0 {
+		txnMinor = -txnMinor
+	}
+	return txnMinor - s.TypicalMinor
+}
 
 // median returns the integer median of xs (which need not be sorted). Empty → 0.
 func median(xs []int64) int64 {
