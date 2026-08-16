@@ -25,11 +25,22 @@ import (
 // completion, which clears the atom.
 func BudgetEditHost() uic.Node {
 	edit := uistate.UseBudgetEdit()
+	// Read BEFORE the early return: hooks are positional, so one behind a
+	// conditional return shifts every hook after it on the renders that take the
+	// other branch.
+	childOpen := uistate.UseBudgetCategoriesEdit().Get() != ""
 	e := edit.Get()
 	if e.ID == "" || e.Mode == "" {
 		return Fragment()
 	}
-	closeModal := func() { uistate.CloseBudgetEdit() }
+	// C521: closing the editor also leaves the tracked-categories page, so
+	// reopening never lands on a sub-page the user did not ask for.
+	closeModal := func() {
+		if childOpen {
+			uistate.SetBudgetCategoriesEdit("")
+		}
+		uistate.CloseBudgetEdit()
+	}
 
 	// All budget editors are Medium (the top-up grew a duration picker + optional
 	// fund-from-budgets checklist, so it's no longer the short Small form).

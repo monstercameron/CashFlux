@@ -370,6 +370,12 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				If(attnOver > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
 					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
 				toAssignChip,
+				// C524: spend-per-category already exists in full on /reports — a
+				// magnitude histogram, prior-period deltas, sparklines and a
+				// drill-through per bar. Cam asked for it because nothing pointed
+				// at it. A link is the fix; a second surface would be a second set
+				// of numbers to disagree with the first.
+				spendReportLink(),
 				// Only a call to action while there is no basis yet — once one is
 				// set, the quiet "Change" in the allocation caption owns it, and two
 				// buttons for one action is clutter.
@@ -2022,4 +2028,18 @@ func sortBudgetStatuses(sts []budgeting.Status, key string) {
 			return strings.ToLower(sts[i].Budget.Name) < strings.ToLower(sts[j].Budget.Name)
 		})
 	}
+}
+
+// spendReportLink points at the existing per-category spend report rather than
+// duplicating it.
+//
+// No fragment: the report's numbered sections (including "04 · Categories
+// reviewed") are not in the DOM at load, so "#rpta-04" would scroll nowhere and
+// read as a broken link. Deep-linking to the section needs the report to grow a
+// stable anchor first — noted on C524 rather than faked here.
+func spendReportLink() ui.Node {
+	return A(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+		Href(uistate.RoutePath("/reports")),
+		Attr("data-testid", "budgets-see-spend"), Title(uistate.T("budgets.seeSpendTitle")),
+		Span(uistate.T("budgets.seeSpend")))
 }

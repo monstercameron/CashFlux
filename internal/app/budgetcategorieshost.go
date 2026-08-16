@@ -18,7 +18,12 @@ import (
 // tile transform that would clip it. The Back body owns its own Save/Cancel (NoFooter).
 func BudgetCategoriesHost() uic.Node {
 	open := uistate.UseBudgetCategoriesEdit()
-	if open.Get() == "" {
+	// C521: when the budget editor is open, the picker renders as a page INSIDE it
+	// rather than as a second panel — so this host stands down and there is exactly
+	// one modal, one Escape and one backdrop. Other entry points (a budget row's
+	// "Edit tracking") still get the standalone panel.
+	editOpen := uistate.UseBudgetEdit().Get().ID != ""
+	if open.Get() == "" || editOpen {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{

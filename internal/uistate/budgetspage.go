@@ -58,6 +58,14 @@ func SetBudgetEdit(e BudgetEdit) {
 	if budgetEditCaptured {
 		capturedBudgetEdit.Set(e)
 	}
+	// C521: the tracked-categories view is a PAGE of the editor, so opening or
+	// closing the editor always returns to its first page. Doing this here rather
+	// than in the panel's close handler is deliberate — FlipPanel captures that
+	// handler in a ref, so a guard written there can run against a stale closure
+	// and the editor reopens on a sub-page nobody asked for.
+	if budgetCatsEditCaptured {
+		capturedBudgetCatsEdit.Set("")
+	}
 }
 
 // CloseBudgetEdit clears the budget-editor atom (dismisses the modal).

@@ -7068,7 +7068,7 @@ design pass before any code.
   scroll/focus the offending field. AC: direction is editable; a rejected save always shows its
   reason on screen without scrolling.
 
-- [ ] **C521 [MAJOR][BUDGET] The tracked-categories modal breaks the back stack.**
+- [x] **C521 [MAJOR][BUDGET] The tracked-categories modal breaks the back stack.**
   *"main page > edit budget modal > enter tracked cats modal > edit budget modal > main page"*
   Opening "Edit what this budget tracks…" from inside the edit-budget modal should PUSH a second
   layer and return to the edit form with its in-progress changes intact. Model it as a stack rather
@@ -7109,6 +7109,11 @@ design pass before any code.
   means nothing on /budgets or /categories points at it. Fix that instead — a "See where it went"
   link from the budgets hero and from the categories page, deep-linking to the reports section — and
   do NOT build a second spend-by-category surface, which would inevitably disagree with the first.
+  **Shipped 2026-08-16 (partial):** a "See where it went" link now sits on both /budgets and
+  /categories. It lands on /reports WITHOUT a fragment, because the report's numbered sections are
+  not in the DOM at page load — "#rpta-04" scrolls nowhere and reads as a broken link. Remaining:
+  give the report a stable anchor (or a section query param) so the link can land on the categories
+  breakdown rather than the top of a long document.
 
 - [ ] **C525 [MAJOR][BUDGET] Budgets should match transactions by pattern, not only category.**
   *"budgets should also be able to regex match individual transactions"*

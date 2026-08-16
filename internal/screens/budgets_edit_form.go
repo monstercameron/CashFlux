@@ -130,12 +130,21 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	rolloverCapS := ui.UseState(strconv.Itoa(b.RolloverCapPeriods)) // BG5: rollover cap, "0" = no cap
 	methodologyS := ui.UseState(b.Methodology)
 	// C1 (one editor per concept): tracked categories are managed ONLY in the dedicated
-	// searchable modal — this closes the edit form and opens it, instead of embedding a
-	// second, slightly-different picker here.
+	// searchable modal, rather than by embedding a second, slightly-different picker here.
+	//
+	// C521: it opens ON TOP of this form rather than replacing it. Closing this form
+	// first destroyed the component, and with it every unsaved edit — so changing the
+	// name, stepping into the tracked categories, and coming back lost the name. It
+	// also left no way back: the return trip was main page → edit → categories →
+	// main page, with the edit form skipped.
+	//
+	// Layering rather than lifting the draft into atoms is deliberate: the form holds
+	// a dozen fields, and a component that never unmounts cannot lose them.
+	catsOpen := uistate.UseBudgetCategoriesEdit()
 	openCats := ui.UseEvent(Prevent(func() {
-		done()
-		uistate.SetBudgetCategoriesEdit(props.BudgetID)
+		catsOpen.Set(props.BudgetID)
 	}))
+	closeCats := ui.UseEvent(Prevent(func() { catsOpen.Set("") }))
 	// C6: the engine-facing variable name is plumbing most edits never touch — it lives
 	// behind this disclosure rather than between Name and Limit.
 	advEditOpen := ui.UseState(false)
@@ -818,6 +827,32 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	advEditLabel := uistate.T("budgets.advancedShow")
 	if advEditOpen.Get() {
 		advEditLabel = uistate.T("budgets.advancedHide")
+	}
+
+	// C521: the tracked-categories editor is a SECOND PAGE of this panel, not a
+	// second panel.
+	//
+	// It used to close this form and open its own modal, which destroyed this
+	// component and every unsaved edit with it — change the name, step into the
+	// categories, come back, and the name was gone. It also left no way back: the
+	// return trip was main page → edit → categories → main page, skipping the form.
+	//
+	// Layering two FlipPanels was tried first and does not work: each registers its
+	// own document-level Escape handler and captures its close callback in a ref, so
+	// one press closes both and no guard on the parent can prevent it. Keeping ONE
+	// panel and swapping its body means there is one Escape, one backdrop, an
+	// explicit Back, and a component that never unmounts — so nothing can be lost.
+	if catsOpen.Get() == props.BudgetID {
+		return Div(css.Class("acct-edit-form", "budget-edit"),
+			Div(css.Class("modal-scroll"),
+				Div(css.Class("budget-cats-back"),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budget-cats-back"),
+						OnClick(closeCats), uistate.T("budgets.editCatsBack")),
+					Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.editCatsBackHint")),
+				),
+				ui.CreateElement(BudgetCategoriesBody, struct{}{}),
+			),
+		)
 	}
 
 	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),

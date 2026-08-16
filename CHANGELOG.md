@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Edit what this budget tracks…" is a page of the budget editor, not a replacement for it.**
+  Stepping in and back now returns to the form with every unsaved change intact, and the way back
+  is an explicit "← Back to budget" that says so. It used to close the editor before opening the
+  category picker, which destroyed the form and everything typed into it, and left the return trip
+  going straight to the budgets page.
+- **"See where it went" links from /budgets and /categories to the per-category spend report.**
+  That report already existed in full — a magnitude histogram, prior-period deltas, sparklines and
+  a drill-through per bar — and nothing pointed at it.
+
 - **Merge two categories into one.** Pick the category to fold away and the one that survives; the
   panel states exactly what will move ("Moves 5 things into Groceries — 3 transactions, 2 recurring")
   before you press anything. Every reference moves: whole-transaction categories, individual split

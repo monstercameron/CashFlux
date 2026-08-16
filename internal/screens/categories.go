@@ -533,7 +533,7 @@ func Categories() ui.Node {
 			)))),
 		rptTile("cats-expense", "1 / span 4",
 			rptSection("sec-cats-expense", uistate.T("categories.expenseTitle"),
-				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), smartCatBtn(), mergeBtn(), sortToggleBtn(), addCatBtn()),
+				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), spendReportLink(), smartCatBtn(), mergeBtn(), sortToggleBtn(), addCatBtn()),
 				catTreeBody(expenseFlats, uistate.T("categories.expenseEmpty"), uistate.T("categories.addFirstExpense")))),
 		rptTile("cats-income", "1 / span 4",
 			rptSection("sec-cats-income", uistate.T("categories.incomeTitle"),

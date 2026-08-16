@@ -77,9 +77,17 @@ var incomeAllocKeys = Catalog{
 	"categories.mergeMenu":      "Merge into…",
 	"categories.mergeMenuTitle": "Fold this category into another one, moving everything that points at it",
 	// %s = the category being folded away.
-	"categories.mergeTitle":        "Merge “%s” into",
-	"categories.mergeDesc":         "Everything filed under it moves to the category you pick, and it stops existing. Nothing is deleted.",
-	"categories.mergeConfirm":      "Merge",
+	"categories.mergeTitle":   "Merge “%s” into",
+	"categories.mergeDesc":    "Everything filed under it moves to the category you pick, and it stops existing. Nothing is deleted.",
+	"categories.mergeConfirm": "Merge",
+	// C524: the per-category spend report already exists in full — a magnitude
+	// histogram, prior-period deltas, sparklines and a drill-through per bar.
+	// These point at it rather than duplicating it into a second set of numbers.
+	"budgets.seeSpend":      "See where it went",
+	"budgets.seeSpendTitle": "Spending broken down by category, with last period alongside",
+	// C521: the tracked-categories page inside the budget editor.
+	"budgets.editCatsBack":         "← Back to budget",
+	"budgets.editCatsBackHint":     "Your other changes are still here.",
 	"categories.mergeOpen":         "Merge categories…",
 	"categories.mergeTitleAny":     "Merge one category into another",
 	"categories.mergeChooseSource": "Choose the category to fold away",
