@@ -7241,3 +7241,74 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   Decide first — either income categories stay out of budgets (and C519 says so plainly), or an
   income budget means a target to HIT rather than a cap not to exceed, which is a different
   evaluation and a different row. Blocks/blocked-by **C519**.
+
+---
+
+## Adding a budget mints duplicate categories (Cam, 2026-08-16) ★
+
+*"also when creating budgets, it seems to create categories with the same name, perhaps make that an
+opt in check box"*
+
+**Why it happens.** The add-a-budget form defaults its category picker to `budgetNewCatSentinel` —
+"create a new category" — and on submit names that category after the BUDGET when no explicit name
+was typed (`budgetaddform.go:242-257`). Creating a category is therefore the DEFAULT outcome of
+adding a budget, not a choice. There is a guard, `matchExpenseCategory`
+(`budgetaddform.go:71-86`), whose doc comment calls itself "the guard that keeps the 'create a new
+category' default from silently minting a duplicate" — but it is the only duplicate-name check in
+the entire app and it has three holes (C536). Nothing at the write seam backs it up: `PutCategory`
+runs `ValidateCategory` + `ValidateCategoryInTree` (`appstate.go:925-942`) and neither has any
+notion of a name collision, so a duplicate is always accepted (C537).
+
+Cam's fix is the right one and it is the cheap one: stop creating categories by default.
+
+- [ ] **C535 [MAJOR][BUDGET] Make "create a category for this budget" an explicit opt-in.** ★
+  *Cam's request.* Replace the "create a new category" DEFAULT with a checkbox that is **off** by
+  default, and pre-select the best-matching existing expense category instead. Creating a category
+  becomes something the user asks for, which removes the whole failure class rather than patching
+  the guard.
+  Two constraints the current design is protecting, which the change must not break. First, the
+  reason the default exists: the form comment says a fresh category means "a transaction can be
+  assigned to it immediately (closing the loop)" — so a first-run household with NO expense
+  categories must still get one. Handle that by checking the box automatically (and saying why) when
+  nothing matches, rather than by keeping the old default. Second, the duplicate-BUDGET guard is
+  deliberately skipped whenever a category was just created (`budgetaddform.go:261` —
+  `createdCatName == "" && …`); once creation is opt-in and rare, that branch should be re-examined,
+  because a reused category must always be checked and today the skip is load-bearing.
+  The form already computes the answer for its `budget-cat-fate` hint ("will reuse Groceries" /
+  "will create Groceries", `:390-413`) — the checkbox should be driven by the SAME resolution so the
+  hint and the behaviour cannot diverge. AC: adding a budget with the box unticked never writes a
+  category; with it ticked and a name that already exists, the form says so before submit.
+
+- [ ] **C536 [MAJOR][BUDGET] The duplicate-category guard has three holes.** ★
+  `matchExpenseCategory` is the only thing standing between the default path and a duplicate, and it
+  misses in three ways.
+  (a) **Stale snapshot.** It is passed `categories`, captured at render (`budgetaddform.go:99`), and
+  `budgetAddForm` never subscribes to `uistate.UseDataRevision()` — so it does not re-render when
+  the store changes. The very same submit handler re-reads `app.Categories()` FRESH thirty lines
+  later for the "also track" list (`:279`), so one function reads the category set two different
+  ways. Any category created since this component last rendered is invisible to the guard, and
+  because a create also skips the duplicate-budget check, that path yields a duplicate category AND
+  a second budget on it.
+  (b) **Expense-kind only.** The match requires `c.Kind == domain.KindExpense`, so a same-named
+  income or savings category does not count as a collision and a twin is minted.
+  (c) **Name-only, parent-blind.** It compares normalized names across the WHOLE tree with no regard
+  for parent, so "Gas" under "Auto" satisfies a top-level "Gas" and the budget silently attaches to
+  whichever one happens to sort first in the store. That is the opposite failure — reusing the wrong
+  category rather than duplicating — and it is worse, because it is invisible.
+  Fix all three together: resolve against a fresh read, across all kinds, with the parent path part
+  of the identity. AC: a table test over (existing tree, typed name) → resolved id, covering a
+  same-named child, a same-named income category, and a category created after the form mounted.
+
+- [ ] **C537 [MAJOR][CAT] Nothing prevents duplicate category names anywhere else.**
+  Eight code paths create categories — `budgetaddform.go:251`, `budgets_flex.go:417`,
+  `categoryaddform.go:67`, `categorypicker.go:98` (the review inbox's "+"), `chat_agent.go:943`,
+  `dataedit_forms.go:274`, `transaction_edit_form.go:260`, `txn_smartcat.go:233` — and only the
+  first checks for a collision. `PutCategory` validates the category in isolation and in the tree,
+  but has no name-uniqueness rule at all, so every other path writes a duplicate without comment.
+  Decide the rule ONCE and put it at the write seam where it cannot be forgotten: names unique among
+  SIBLINGS (two "Gas" categories under different parents are legitimate; two under the same parent
+  are not) is the rule that matches how the tree is displayed. Callers that want reuse then ask for
+  it explicitly rather than each re-implementing the check. Note this interacts with **C523**
+  (merge categories) — merge is the repair tool for duplicates that already exist, and users will
+  reach for it the moment this is enforced, so the two want to ship near each other. AC: the write
+  seam rejects a sibling-name collision; every one of the eight paths either reuses or reports it.
