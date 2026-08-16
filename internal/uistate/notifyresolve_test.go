@@ -66,3 +66,22 @@ func TestResolutionForRefusesToGuess(t *testing.T) {
 		}
 	}
 }
+
+// C403: a to-do reminder resolves by completing the to-do.
+func TestResolutionForTaskReminder(t *testing.T) {
+	r := uistate.ResolutionFor("default-task-reminder@t-42@2026-08-18")
+	if r.Kind != uistate.ResolveTaskDone {
+		t.Fatalf("Kind = %q, want %q", r.Kind, uistate.ResolveTaskDone)
+	}
+	if r.EntityID != "t-42" {
+		t.Errorf("EntityID = %q, want %q", r.EntityID, "t-42")
+	}
+	if !r.Resolvable() {
+		t.Error("a task reminder should offer a direct action")
+	}
+	// A malformed key resolves to nothing rather than to a task id that would
+	// complete the wrong to-do.
+	if got := uistate.ResolutionFor("default-task-reminder@2026-08-18"); got.Resolvable() {
+		t.Errorf("a key with no task id resolved to %+v", got)
+	}
+}

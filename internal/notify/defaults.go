@@ -50,5 +50,10 @@ func DefaultRules() []Rule {
 		{ID: "default-low-balance", Event: EventLowBalance, Enabled: true, Channels: inApp, Threshold: defaultLowBalanceMinor},
 		{ID: "default-paycheck", Event: EventPaycheckLanded, Enabled: true, Channels: inApp, Threshold: defaultPaycheckMinor},
 		{ID: "default-unusual", Event: EventUnusualCharge, Enabled: true, Channels: inApp, Threshold: defaultUnusualFloorMinor},
+		// C403: a to-do's own reminder offset had no delivery channel — it fed the
+		// attention digest and nothing else, so a task set to remind three days
+		// early reminded nobody. No threshold: the lead time is per-task, which is
+		// the whole point of the feature.
+		{ID: "default-task-reminder", Event: EventTaskReminder, Enabled: true, Channels: inApp},
 	}
 }

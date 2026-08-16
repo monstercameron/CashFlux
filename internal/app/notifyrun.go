@@ -92,6 +92,18 @@ func runNotifyCatchUp() {
 			return copytext.Of("notify.budgetNearTitle", uistate.T("notify.budgetNearTitle", name), name),
 				copytext.Of("notify.budgetNearBody", uistate.T("notify.budgetNearBody"))
 		})...)
+	cands = append(cands, notifyfeed.TaskReminderCandidates("default-task-reminder", app.Tasks(), 0, now,
+		func(taskTitle string, days int) (title, body copytext.Text) {
+			switch {
+			case days < 0:
+				body = copytext.Of("notify.taskBodyOverdue", uistate.T("notify.taskBodyOverdue", -days), -days)
+			case days == 0:
+				body = copytext.Of("notify.taskBodyToday", uistate.T("notify.taskBodyToday"))
+			default:
+				body = copytext.Of("notify.taskBody", uistate.T("notify.taskBody", days), days)
+			}
+			return copytext.Of("notify.taskTitle", uistate.T("notify.taskTitle", taskTitle), taskTitle), body
+		})...)
 	cands = append(cands, digestCandidates(app, now, ruleCfg)...)
 	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
 	cands = append(cands, unusualChargeCandidates(app, now, ruleCfg)...)

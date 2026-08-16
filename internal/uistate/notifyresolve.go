@@ -35,12 +35,15 @@ const (
 	ResolveBillPaid ResolveKind = "bill-paid"
 	// ResolveBalanceConfirmed confirms an account's balance as of today.
 	ResolveBalanceConfirmed ResolveKind = "balance-confirmed"
+	// ResolveTaskDone completes the to-do a reminder is about (C403).
+	ResolveTaskDone ResolveKind = "task-done"
 )
 
 // Resolution is what a notification can be resolved by, and against what.
 type Resolution struct {
 	Kind ResolveKind
-	// EntityID is the account (balance) or bill (payment) the alert is about.
+	// EntityID is the account (balance), bill (payment), or task (completion)
+	// the alert is about.
 	EntityID string
 	// Occurrence is the due date a bill resolution applies to; zero otherwise.
 	// A bill alert is about ONE occurrence, and marking "the bill" paid without
@@ -69,6 +72,13 @@ func ResolutionFor(id string) Resolution {
 			return Resolution{}
 		}
 		return Resolution{Kind: ResolveBillPaid, EntityID: occurrence[:i], Occurrence: due}
+	case "default-task-reminder":
+		// "<taskID>@<YYYY-MM-DD>" — the task is everything before the last @.
+		i := strings.LastIndex(occurrence, "@")
+		if i <= 0 {
+			return Resolution{}
+		}
+		return Resolution{Kind: ResolveTaskDone, EntityID: occurrence[:i]}
 	case "default-stale":
 		// "<accountID>@<weekKey>" — the account is everything before the last @.
 		i := strings.LastIndex(occurrence, "@")

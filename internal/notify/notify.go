@@ -44,6 +44,10 @@ const (
 	EventLowBalance       Event = "low-balance"       // an asset account's balance dropped below a floor
 	EventPaycheckLanded   Event = "paycheck-landed"   // an expected income/paycheck transaction just arrived
 	EventUnusualCharge    Event = "unusual-charge"    // a charge is unusually large vs the same payee's own history
+	// EventTaskReminder is a to-do reaching its reminder lead time (C403). The
+	// task already carries its own per-task offset; this is the channel that
+	// finally delivers it, rather than it only reaching the attention digest.
+	EventTaskReminder Event = "task-reminder"
 )
 
 // Severity ranks a notification for ordering and styling in the center.

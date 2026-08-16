@@ -1,3 +1,29 @@
+## 2026-08-16 — a reminder that reminded nobody (C403)
+
+The per-task reminder offset shipped a while back: set a to-do to remind three days early and the
+field takes the 3. `taskrecur.ReminderDue` reads it correctly. The problem was that the only caller
+was the needs-attention digest — a panel you have to already be looking at. So the feature was, in
+practice, "the digest will highlight this task slightly earlier, if you visit the digest." The user
+stated an intent about WHEN to be told and the app had no way to tell them.
+
+The fix is small because the notify layer was built for exactly this: a new `task-reminder` event, a
+default in-app rule, and one generator in `notifyfeed`. The two decisions worth recording:
+
+**The occurrence key is `<taskID>@<due>`.** That makes the reminder idempotent across app opens for
+free, re-arms when a recurrence spawns a successor with a new due date, and — because
+`uistate.ResolutionFor` already parses feed IDs back into an entity — makes "Mark done" a resolution
+the notification itself can offer. C409 built that seam last week for bills and stale balances; a
+third kind cost four lines. The seam earned itself.
+
+**Reminders expire at thirty days past due.** Without a cutoff, every abandoned to-do becomes a
+permanent critical alert, and a feed with permanent alerts in it is a feed people stop reading. A
+task months overdue is backlog, and backlog belongs on the board, not in the alert stream.
+
+One shared-worktree note: a concurrent session's commit swept two of my in-flight files
+(`notifications.go`, `notifications_tiles.go`) into its own change, so HEAD briefly referenced a
+`ResolveTaskDone` constant that hadn't landed yet. Committed the rest immediately to close it. This
+is the cost of `git add -A` in a worktree several sessions share.
+
 ## 2026-08-16 — the journey found the bug the unit tests could not
 
 C598 asked for one end-to-end pass through a zero-based month, and the value turned out to be

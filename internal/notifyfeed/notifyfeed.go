@@ -22,7 +22,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
+	"github.com/monstercameron/CashFlux/internal/taskrecur"
 )
+
+// defaultTaskStaleDays is how far past due a to-do keeps reminding before it is
+// treated as backlog rather than a reminder.
+const defaultTaskStaleDays = 30
 
 // defaultBillWindow is how many days ahead a bill is considered "due soon" when
 // the rule doesn't specify its own window.
@@ -125,6 +130,69 @@ func BillDueCandidates(
 		})
 	}
 	return out
+}
+
+// TaskReminderCandidates produces a notify.Candidate for each open to-do that
+// has reached its own reminder lead time (per taskrecur.ReminderDue) and is not
+// yet more than staleAfterDays past due. Each occurrence is keyed by the task's
+// due date, so a task reminds once per due date and again after a recurrence
+// spawns the next one. A task due today or already overdue is critical;
+// otherwise it is a warning. text renders the localized title and body from the
+// task title and days until due (negative when overdue). Candidates are tagged
+// with ruleID.
+//
+// C403: the per-task reminder offset existed and drove only the attention
+// digest, so "remind me three days before" reminded nobody who wasn't already
+// looking at the digest. The offset is the user's stated intent about WHEN to be
+// told; this is the channel that finally tells them.
+func TaskReminderCandidates(
+	ruleID string,
+	tasks []domain.Task,
+	staleAfterDays int,
+	now time.Time,
+	text func(taskTitle string, daysUntil int) (title, body copytext.Text),
+) []notify.Candidate {
+	if staleAfterDays <= 0 {
+		staleAfterDays = defaultTaskStaleDays
+	}
+	var out []notify.Candidate
+	for _, t := range tasks {
+		if !taskrecur.ReminderDue(t, now) {
+			continue
+		}
+		days := daysBetween(now, t.Due)
+		// A task months overdue is not a reminder, it is a backlog. Nagging about
+		// it forever trains the reader to ignore the whole feed.
+		if days < -staleAfterDays {
+			continue
+		}
+		sev := notify.SeverityWarning
+		if days <= 0 {
+			sev = notify.SeverityCritical
+		}
+		title, body := text(t.Title, days)
+		out = append(out, notify.Candidate{
+			RuleID:        ruleID,
+			Event:         notify.EventTaskReminder,
+			OccurrenceKey: t.ID + "@" + t.Due.Format("2006-01-02"),
+			At:            now,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
+			Severity:      sev,
+		})
+	}
+	return out
+}
+
+// daysBetween is whole calendar days from now to due (negative when due has
+// passed), computed on date boundaries so a due time of 09:00 and a now of 17:00
+// on the same day is 0 days, not -1.
+func daysBetween(now, due time.Time) int {
+	n := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	d := time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, now.Location())
+	return int(d.Sub(n).Hours() / 24)
 }
 
 // BackupCandidates returns a gentle "back up your data" reminder as a one-element

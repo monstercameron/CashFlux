@@ -204,6 +204,13 @@ var vSweepKeys = Catalog{
 	// ── C409: resolve an alert from the alert ───────────────────────────────
 	"notifications.resolveMarkPaid":    "Mark paid",
 	"notifications.resolveMarkUpdated": "Mark updated",
+	"notifications.resolveMarkDone":    "Mark done",
+	"settings.alert.taskReminder":      "To-do reminders",
+	"notifications.resolvedDone":       "To-do marked done.",
+	"notify.taskTitle":                 "To-do: %s",
+	"notify.taskBody":                  "Due in %d days.",
+	"notify.taskBodyToday":             "Due today.",
+	"notify.taskBodyOverdue":           "Overdue by %d days.",
 	"notifications.resolvedPaid":       "Marked paid.",
 	"notifications.resolvedUpdated":    "Balance confirmed as of today.",
 }

@@ -204,6 +204,8 @@ func alertLabelKey(ruleID string) string {
 		return "settings.alert.paycheckLanded"
 	case "default-unusual":
 		return "settings.alert.unusualCharge"
+	case "default-task-reminder":
+		return "settings.alert.taskReminder"
 	default:
 		return ""
 	}

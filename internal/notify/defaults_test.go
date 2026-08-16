@@ -6,8 +6,8 @@ import "testing"
 
 func TestDefaultRules(t *testing.T) {
 	rules := DefaultRules()
-	if len(rules) != 9 {
-		t.Fatalf("got %d default rules, want 9", len(rules))
+	if len(rules) != 10 {
+		t.Fatalf("got %d default rules, want 10", len(rules))
 	}
 
 	seenID := map[string]bool{}

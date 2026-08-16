@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **To-do reminders are actually delivered (C403).** A task's `ReminderLeadDays` — "remind me three
+  days before" — fed only the needs-attention digest, so a user who set an offset and then didn't
+  open the digest was reminded by nothing. `notifyfeed.TaskReminderCandidates` turns every open task
+  that has reached its own lead time into a notification candidate on a new `task-reminder` event
+  with a default in-app rule, so the offset reaches the feed and the browser notification path the
+  other nine alert types already use. Keyed by task ID plus due date, so a reminder fires once per
+  due date and again after a recurrence spawns the next occurrence, and it stops nagging thirty days
+  past due — a task months overdue is a backlog item, not a reminder, and a feed that never forgets
+  is a feed nobody reads. Due today or overdue is critical, otherwise a warning. The alert has its
+  own on/off row in Settings, and — because the occurrence key names the task — the notification
+  offers **Mark done** as its primary action, completing the to-do (and spawning its successor)
+  without a trip to the to-do board.
 - **The trust and reference work from the competitive teardown (PS7, PS9, PS10).**
 
   **A capability sheet the assistant cannot outgrow.** Piggy's "the AI can only ever save your
