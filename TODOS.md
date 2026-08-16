@@ -7047,7 +7047,9 @@ design pass before any code.
   that typed a category as income by mistake, or that wants to budget a refund-heavy category.
   Either show them under an explanatory grouping or state the filter in the empty/search state.
   Check alongside C518: an unsorted long list reads as "missing" even when it is complete.
-  AC: no category can be absent without the UI saying why.
+  AC: no category can be absent without the UI saying why. **Blocked by C534:** unhiding income
+  categories without deciding what an income budget MEANS ships a budget that can never accrue
+  (matchesScope requires IsExpense), so C534 must be answered in the same change.
 
 ### Correctness and UX
 
@@ -7148,3 +7150,94 @@ design pass before any code.
   cadence, a notion of a period being closed (reconciled against a statement balance) versus open,
   import-time reconciliation to the statement's closing balance, and honest labelling of any figure
   derived from an open period. Design pass before code.
+
+---
+
+## Budget-income basis — the "Budget income" control does not reach the hero (Cam, 2026-08-16) ★
+
+*"I click budget income, I select my income category ($7k), save but the bar at the top shows
+incorrect values Spent $1,977.53 / Budgeted $3,350.00 / Jul 2026 · Unspent $1,372.47 … also perhaps
+it should show budgeted/income to see how much of the income was budgeted"*
+
+**What is actually happening.** The three figures are internally consistent — $3,350.00 − $1,977.53
+= $1,372.47 exactly — so nothing is being miscomputed. The problem is that NONE of them moved,
+because the income basis he just saved is not an input to any of them on his method.
+
+`budgets_tiles.go:126-132` picks the band's denominator: it is `v.TotalLimit` (the sum of the
+budgets' own limits) unless the method is zero-based, in which case it becomes
+`v.BannerIncome + v.RolledOver`. `budgeting.ParseMethodology` defaults to **`MethodSimple`**, and
+"Jul 2026 · Unspent" is the closed-period label — so he is on Simple, viewing a past month, and the
+band is showing spent-of-budgeted with the $7,000 nowhere in it. Meanwhile the "Budget income"
+button (`budgets.basisButton`, `budgets_tiles.go:100-103`) is rendered unconditionally, with a
+comment stating it is "present in every method, so simple/envelope users can set which income funds
+the budget just like zero-based users". The button is in every method; its EFFECT is not.
+
+So: one live gap (C529), Cam's suggestion (C530), and four correctness issues found while tracing it.
+
+- [ ] **C529 [MAJOR][BUDGET] Saving an income basis changes nothing visible on the default method.** ★
+  Under `MethodSimple` (the DEFAULT) the basis feeds only the sinking-fund pool check
+  (`budgets_tiles.go:222`), the over-assignment rail (`:361`) and one quiet `.budget-sub` line
+  (`budgets-income-actual`, `:288-301`). Under `MethodEnvelope` it feeds NOTHING at all. The
+  headline band never reads it outside zero-based. A control that saves successfully and produces no
+  visible change is indistinguishable from a broken one — which is exactly how it was reported.
+  Fix by making the basis reach the hero on every method that offers the button (see C530), or by
+  hiding/disabling the button where it genuinely has no effect and saying why. Do NOT leave it
+  offered-but-inert. AC: on each of the four methods, saving a basis either changes something in the
+  hero or the button is not offered.
+
+- [ ] **C530 [MAJOR][BUDGET] Show how much of income is budgeted.** ★
+  *Cam's own suggestion, and the right answer to C529.* The band answers "how much of my budget have
+  I spent". It does not answer "how much of my income have I budgeted" — which is the question the
+  "Budget income" control implies you just configured. Zero-based already answers it (the To-assign
+  chip, `:252-255`, and the allocation bar); Simple and Envelope have no equivalent. Add a
+  budgeted-of-income read for those methods: the honest denominator is `BannerIncome`, the numerator
+  `TotalLimit + SavingsAssigned` (the same pair `budgeting.ToAssign` already uses, so the two views
+  cannot disagree). Decide deliberately whether this is a second band, a marker on the existing one,
+  or a chip — the band is a shared cross-page component (`.budget-loader`, mirrored by the Goals and
+  To-do headline tiles), so it cannot be restructured for /budgets alone. Note it must stay honest
+  in a CLOSED month: "you budgeted 48% of July's income" is a fact, "you have $3,650 left to assign"
+  is not. AC: with a basis set on Simple, the hero states the budgeted-of-income relationship, and
+  the figure reconciles with the over-assignment rail.
+
+- [ ] **C531 [MAJOR][BUDGET] The modal previews one month and the page uses another.** ★
+  The basis modal computes its running total from `now`
+  (`budgets_tiles.go:955` → `PeriodRange(monthly, now, …)`), while the page computes the same figure
+  from the VIEW WINDOW's anchor (`budgets.go:615-623`, `ms` derived from `anchor`). Whenever the
+  user is not looking at the current month these are different windows over different data — Cam's
+  case exactly: the modal averaged from August while the page averaged from July. The number he
+  approved in the modal is therefore not the number the page would use even after C529 is fixed.
+  Both must resolve the basis through ONE call with ONE anchor, and the modal should say which month
+  it is previewing. AC: a test that opens the basis modal with the period set to a past month and
+  asserts the previewed total equals the page's `BannerIncome`.
+
+- [ ] **C532 [MINOR][BUDGET] The income basis ignores sub-categories.**
+  `ZeroBasedIncome` matches the chosen sources with `allowed[t.CategoryID]` — an EXACT id test
+  (`internal/budgeting/income.go:152`). Everywhere else in budgets, tracked categories are expanded
+  with `categorytree.DescendantsOfAll` before matching. So checking a parent income category (e.g.
+  "Salary" with "Salary — Employer A" beneath it) counts none of the child deposits, and the source
+  list itself (`computeIncomeSources`, `budgets.go:709`) is FLAT — it shows every income category
+  with no parent/child structure, so there is no way to tell from the list that the parent will not
+  roll up. Either expand descendants like the rest of budgets does, or render the tree so the
+  distinction is visible. AC: whichever is chosen, the rows' amounts and the running total agree
+  with it and neither double-counts a parent and its child.
+
+- [ ] **C533 [MINOR][BUDGET] The income basis ignores splits.**
+  Income is bucketed by the transaction's own `CategoryID` and split lines are not decomposed
+  (documented at `income.go:120`). A deposit split across two income categories therefore lands
+  wholly on the parent transaction's category, or nowhere if it has none. Consistent with
+  `reports.IncomeByCategory` today, so fixing it means fixing both together or the modal's rows stop
+  summing to the total. Low priority — it only bites households that split deposits — but it should
+  be a stated limitation rather than silence. AC: split income is either attributed per line
+  everywhere or named as unsupported in the modal.
+
+- [ ] **C534 [MAJOR][BUDGET] A budget tracking an income category can never accrue.**
+  `matchesScope` opens with `if !t.IsExpense() { return false }`
+  (`internal/budgeting/budgeting.go:57-60`), so a budget whose tracked category is income-kind has
+  `Spent` permanently $0 while its limit still lands in `totalLimit` (`budgets.go:574-575`) — it
+  would inflate "Budgeted" by its full amount and never fill. This is latent ONLY because the
+  budget category picker silently filters non-expense categories (**C519**), so today it cannot be
+  reached from the UI. That makes it a HARD dependency: unhiding income categories in the picker
+  without deciding what an income budget means ships a budget that is broken by construction.
+  Decide first — either income categories stay out of budgets (and C519 says so plainly), or an
+  income budget means a target to HIT rather than a cap not to exceed, which is a different
+  evaluation and a different row. Blocks/blocked-by **C519**.
