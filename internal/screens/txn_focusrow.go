@@ -40,17 +40,37 @@ func useTxnFocusRow() {
 		if doc.IsNull() || doc.IsUndefined() {
 			return nil
 		}
+		// Retried across a few frames rather than tried once. The table paints in
+		// stages — the frame is hydrated, the rows render, deferred chips mount — and
+		// a single rAF after the effect regularly lands before the row exists. One
+		// missed frame would make the whole feature look unimplemented.
+		//
+		// It gives up after ~1s. The case it cannot serve is the virtualized "All"
+		// view (pageSize <= 0 and more than txnVirtualizeThreshold rows), where only
+		// the rows near the current scroll offset exist in the DOM at all and a row
+		// far down the list will never appear on its own. Restoring that needs the
+		// row's INDEX to drive the virtual scroller, which the table has and this does
+		// not — worth doing, not worth faking. On every paged view (the default 25,
+		// and any explicit size) the persisted filter restores the page too, so the
+		// row is on it.
+		const tries = 60
+		attempt := 0
 		var cb js.Func
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			cb.Release()
 			row := doc.Call("querySelector", "[data-testid=\"txn-row-"+id+"\"]")
 			if !row.Truthy() {
-				// The row is not in the current page or the filter no longer matches
-				// it. Nothing to do — and nothing to say: the user asked to go back to
-				// a list, and they have it.
+				attempt++
+				if attempt < tries {
+					js.Global().Call("requestAnimationFrame", cb)
+					return nil
+				}
+				cb.Release()
 				return nil
 			}
+			cb.Release()
 			opts := js.Global().Get("Object").New()
+			// CENTER, not "nearest": the ledger's header is sticky, so scrolling a row
+			// just into view parks it underneath the header — present, and invisible.
 			opts.Set("block", "center")
 			opts.Set("behavior", "auto")
 			row.Call("scrollIntoView", opts)

@@ -502,6 +502,13 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			// exists to prevent, reproduced one code path over.
 			if txnprov.ConfirmsCategory(t, domain.Transaction{CategoryID: target.CategoryID}) {
 				t.Reviewed = true
+				// C601, third path: and it leaves the review queue. The single-row save
+				// above strips this tag and assignReviewCategory always has; this bulk
+				// sibling did not, so a flagged charge swept up by "Recategorize them"
+				// kept its flag — still queued, still counted in "Review inbox (N)" —
+				// after the user had explicitly decided it. Three code paths write this
+				// one decision and all three now mean the same thing by it.
+				t.Tags = removeReviewTag(t.Tags)
 			}
 			t.CategoryID = target.CategoryID
 			if err := app.PutTransaction(t); err != nil {

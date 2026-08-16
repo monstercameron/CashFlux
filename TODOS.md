@@ -8419,6 +8419,13 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   seeded category is Dining, which for a coffee shop is defensible — what the seed marks as odd is
   the AMOUNT ($68, described as "Coffee — $68?!"), not the category.
 
+  **Left deliberately narrow.** Clearing the review flag is gated on the category actually CHANGING
+  (`txnprov.ConfirmsCategory`). A charge that is flagged but already correctly categorized, opened
+  in the edit form and saved without touching the category, keeps its flag — the review surface's
+  confirm buttons are the control that clears it in that case, and the tag is visible and editable
+  in the form's Tags field. Widening the rule to "any save clears the flag" would let someone
+  correcting a typo in an amount silently discharge a review someone else asked for.
+
 - [x] **C602 [DONE 2026-08-16 — "251 charges left → grouped into → 11 merchants to decide"] [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
   The review dialog presents `251 charges → 11 decisions`, but does not immediately explain whether a
   decision represents a merchant group, a bulk action, or an individual charge. Show both the remaining
@@ -8443,6 +8450,11 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   actions remain discoverable without competing at the same hierarchy level.
 
 - [x] **C605 [DONE 2026-08-16 — with C581; the crumb now returns to the ROW, not just the list] [MAJOR][TXN][NAV][WORKFLOW] Preserve transaction context when opening Rules and other linked surfaces.**
+  **One case it does not serve, 2026-08-16.** In the VIRTUALIZED "All" view (rows-per-page set to
+  All, above 100 rows) only the rows near the current scroll offset exist in the DOM, so a return to
+  a row far down the list finds nothing and silently does nothing. Restoring that needs the row's
+  INDEX to drive the virtual scroller — the table has it, `useTxnFocusRow` does not. Every paged
+  view is fine: the persisted filter restores the page as well, so the row is on it.
   The Rules button navigates away from the transaction task without an obvious return context. Preserve
   the originating search, filters, period, selected transaction, and review mode; provide a visible
   “Back to transaction” action or breadcrumb on linked pages, including rule creation from a row menu.
