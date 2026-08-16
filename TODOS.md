@@ -7124,7 +7124,7 @@ design pass before any code.
   render). AC: a budget can track "anything matching X" with the same preview and conflict flags
   rules already provide.
 
-- [ ] **C526 [MINOR][TXN][PERF] Virtualize the full transaction list.**
+- [ ] **C526 [DEFERRED ON EVIDENCE — measured 2026-08-16; virtualization has nothing to fix at the row counts the UI actually produces] [MINOR][TXN][PERF] Virtualize the full transaction list.**
   *"in transactions when viewing all transactions, lets make sure the list is virtualized"*
   The ledger paginates (`internal/pagination`, `txnfilter.DefaultPageSize`) rather than virtualizing,
   so "view all" renders every row. MEASURE FIRST: a CPU profile of one interaction on this page came
@@ -7132,6 +7132,20 @@ design pass before any code.
   cost is DOM property application across the wasm boundary, not row count. Virtualization helps only
   if row count dominates; establish that before building, or the work will not move the number.
   Related: the app-wide render cost recorded in the 1.6.1 perf pass.
+
+  **Measured 2026-08-16 on the sample household (5,235 transactions).** Driving the page with its
+  own controls, a sort-and-relayout takes a **median 28 ms at 29 rows and 38 ms at 51 rows** — 1.8x
+  the rows for 1.36x the time, and both far below the ~100 ms threshold where an interaction stops
+  feeling immediate. More to the point: **the ledger never rendered more than 51 rows**, even with
+  the page-size control set to "All", because the view is also date-scoped. So "view all
+  transactions" does not put thousands of rows in the DOM, and a virtualizer would be optimising a
+  list that does not exist.
+  This agrees with the CPU profile from the 1.6.1 perf pass (83% idle, busy frames in `syscall/js`
+  property writes): per-render cost is DOM property application across the wasm boundary, roughly
+  proportional to how many attributes change, not to how many rows exist.
+  **Next step is not to build this.** It is to find the flow where Cam actually sees a long list —
+  clearing the date scope, a saved view, or an export preview — and measure THAT. Building a
+  virtualizer against the measured numbers above would move nothing.
 
 ### Needs a design pass before code
 
