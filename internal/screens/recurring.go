@@ -575,9 +575,15 @@ func rhyFindingsSection(rv rhythmView, acts rhyActions) ui.Node {
 	if len(rows) == 0 {
 		return rhySection("sec-findings", "", "", nil, creep)
 	}
-	body := append([]any{}, rows...)
-	body = append(body, creep)
-	return rhySection("sec-findings", uistate.T("rhythm.findingsTitle"), "", nil, Div(body...))
+	// role="list" wraps ONLY the finding rows: each declares role="listitem", which
+	// ARIA requires to have a list parent, and a list may not own anything else — so
+	// the price-creep block stays a sibling rather than becoming a stray non-item
+	// inside it. Latent until now: the strip only renders when the engine actually
+	// produces a finding, so the a11y baseline recorded zero while the seeded data
+	// happened to produce none.
+	listArgs := append([]any{Attr("role", "list")}, rows...)
+	return rhySection("sec-findings", uistate.T("rhythm.findingsTitle"), "", nil,
+		Fragment(Div(listArgs...), creep))
 }
 
 // rhyToolbar is the quiet utilities row: Add recurring (primary), Post due, the
