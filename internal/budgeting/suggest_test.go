@@ -4,6 +4,7 @@ package budgeting
 
 import (
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -77,5 +78,76 @@ func TestSuggestLimitEdges(t *testing.T) {
 	}
 	if got, _ := SuggestLimit("food", nil, now, 6, rates); got != 0 {
 		t.Errorf("no transactions = %d, want 0", got)
+	}
+}
+
+// --- C586: the estimate must describe the same scope the budget's card does ---
+
+// A parent-category budget's card rolls up its sub-categories; an estimate that
+// counted only charges booked directly to the parent produced a second, smaller
+// number for the same budget.
+func TestSuggestLimitInCoversDescendants(t *testing.T) {
+	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	txns := []domain.Transaction{
+		{ID: "1", CategoryID: "gas", Amount: money.New(-6000, "USD"), Date: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)},
+		{ID: "2", CategoryID: "autoloan", Amount: money.New(-4000, "USD"), Date: time.Date(2026, time.June, 20, 0, 0, 0, 0, time.UTC)},
+		{ID: "3", CategoryID: "transport", Amount: money.New(-1000, "USD"), Date: time.Date(2026, time.June, 25, 0, 0, 0, 0, time.UTC)},
+	}
+
+	parentOnly, err := SuggestLimit("transport", txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("SuggestLimit: %v", err)
+	}
+	if parentOnly != 1000 {
+		t.Errorf("parent-only estimate = %d, want 1000", parentOnly)
+	}
+
+	scoped, err := SuggestLimitIn(map[string]bool{"transport": true, "gas": true, "autoloan": true}, txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("SuggestLimitIn: %v", err)
+	}
+	if scoped != 11000 {
+		t.Errorf("scoped estimate = %d, want 11000 (the whole rollup, matching the card)", scoped)
+	}
+}
+
+// A split receipt contributes each LINE to its own category, exactly as
+// budgeting.spentCovered counts it — never the whole charge to the parent.
+func TestSuggestLimitInAttributesSplitLines(t *testing.T) {
+	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	txns := []domain.Transaction{{
+		ID: "receipt", CategoryID: "shopping", Amount: money.New(-12000, "USD"),
+		Date: time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC),
+		Splits: []domain.CategorySplit{
+			{CategoryID: "groceries", Amount: money.New(-8000, "USD")},
+			{CategoryID: "household", Amount: money.New(-4000, "USD")},
+		},
+	}}
+
+	got, err := SuggestLimitIn(map[string]bool{"groceries": true}, txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("SuggestLimitIn: %v", err)
+	}
+	if got != 8000 {
+		t.Errorf("estimate = %d, want 8000 (only the groceries line)", got)
+	}
+}
+
+// A category with no history has no estimate to give — 0, so the form can say
+// "no history yet" instead of borrowing another category's average (C586).
+func TestSuggestLimitInBrandNewCategory(t *testing.T) {
+	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	txns := []domain.Transaction{
+		{ID: "1", CategoryID: "transport", Amount: money.New(-110000, "USD"), Date: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)},
+	}
+	got, err := SuggestLimitIn(map[string]bool{"petcare": true}, txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("SuggestLimitIn: %v", err)
+	}
+	if got != 0 {
+		t.Errorf("estimate for a brand-new category = %d, want 0", got)
 	}
 }

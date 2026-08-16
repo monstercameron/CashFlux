@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/catname"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -293,6 +294,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		}
 		finalCatID := catID.Get()
 		createdCatName := ""
+		// C584: the category is only PREPARED here, never written. It is saved
+		// together with the budget below, as one operation that either lands
+		// completely or leaves nothing behind — writing it here is what left an
+		// orphan category when the budget write then failed.
+		var newCat *domain.Category
 		if createCat.Get() || liveExpense == 0 || finalCatID == budgetNewCatSentinel || finalCatID == "" {
 			catName := strings.TrimSpace(newCatName.Get())
 			if catName == "" {
@@ -305,10 +311,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				finalCatID = existing.ID
 			} else {
 				nc := domain.Category{ID: id.New(), Name: catName, Kind: domain.KindExpense}
-				if err := app.PutCategory(nc); err != nil {
-					errMsg.Set(err.Error())
-					return
-				}
+				newCat = &nc
 				finalCatID = nc.ID
 				createdCatName = catName
 			}
@@ -355,11 +358,17 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		if tags := parseTrackedTags(trackTags.Get()); len(tags) > 0 {
 			b.TrackedTags = tags
 		}
-		if err := app.PutBudget(b); err != nil {
+		// C584: budget and category are ONE write. It rolls back a half-made pair
+		// and reads the result back from the store before returning, so the dialog
+		// can only close on a budget that actually exists.
+		if err := app.CreateBudgetWithCategory(newCat, b); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
 		uistate.BumpDataRevision() // surface the new budget (and category) immediately
+		// Flush to storage now rather than waiting for the autosave. A new budget is
+		// exactly the moment a user leaves the page or reloads to go look at it.
+		uistate.RequestPersist()
 		// Reset fields.
 		name.Set("")
 		ev.Reset()
@@ -428,6 +437,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			return
 		}
 		uistate.BumpDataRevision()
+		uistate.RequestPersist() // C584: a whole budget set is not worth losing to a fast reload
 		uistate.PostUndoable(uistate.T("budgets.tmplApplied", plural(n, "budget")))
 		if props.OnDone != nil {
 			props.OnDone()
@@ -463,6 +473,15 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	}
 	sugCatID := catID.Get()
 	if sugCatID == budgetNewCatSentinel {
+		sugCatID = ""
+	}
+	// C586: with "create a new category" ticked, the estimate must describe the
+	// category this budget will actually watch. It used to keep whatever the
+	// existing-category picker happened to hold — so a brand-new "Pet care"
+	// budget was told "you've averaged $1,100.00/mo here recently", which was
+	// Transportation's history under another category's name. A new category has
+	// no history, and the form says so instead of borrowing someone else's.
+	if wantNewCat {
 		sugCatID = ""
 	}
 	var catFateHint string
@@ -519,7 +538,35 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	)
 
 	// Suggest a limit from the resolved category's recent monthly spend (D6).
-	suggestion, _ := budgeting.SuggestLimit(sugCatID, txns, now, 6, rates)
+	//
+	// C586: the average covers the category AND its sub-categories, which is the
+	// scope the resulting budget's card will report against. Suggesting from the
+	// parent alone gave a figure the new budget's own bar would immediately
+	// contradict. It also names the scope, so a rolled-up estimate is never
+	// mistaken for one category's spending.
+	sugCovers := map[string]bool{}
+	if sugCatID != "" {
+		sugCovers = categorytree.DescendantsOfAll(categories, []string{sugCatID})
+		sugCovers[sugCatID] = true
+	}
+	suggestion, _ := budgeting.SuggestLimitIn(sugCovers, txns, now, 6, rates)
+	suggestScope := ""
+	if suggestion > 0 && len(sugCovers) > 1 {
+		for _, c := range categories {
+			if c.ID == sugCatID {
+				suggestScope = uistate.T("budgets.suggestScoped", uistate.T("budgets.scopeNoteCats", catname.Path(categories, c)))
+				break
+			}
+		}
+	}
+	// With a brand-new category chosen, say plainly that there is nothing to
+	// average — silence there reads as "we found nothing worth telling you".
+	var suggestNote ui.Node = Fragment()
+	if wantNewCat && suggestion == 0 && typedCatName != "" {
+		suggestNote = Div(css.Class("ba-full"),
+			Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-none"),
+				uistate.T("budgets.suggestNoHistory")))
+	}
 
 	// Owner-scope consequence: picking a member silently made the budget individual;
 	// say what the choice means right under the picker.
@@ -640,6 +687,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
 				)),
+				// Where a rolled-up average came from, so it is never read as one
+				// category's spending (C586).
+				If(suggestScope != "", Div(css.Class("ba-full"),
+					Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-scope"), suggestScope))),
+				suggestNote,
 				// Advanced: identity + tracking + ownership details most adds never touch.
 				Div(css.Class("ba-full"),
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-add-advanced"),
