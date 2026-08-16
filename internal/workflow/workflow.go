@@ -77,6 +77,16 @@ const (
 	// Loop-safe: only valid on TriggerScheduled; DedupeKey prevents double-execution
 	// within the same period.
 	ActionTransfer ActionKind = "transfer"
+	// ActionAgentRun asks the assistant a saved question on a schedule (AG5), e.g.
+	// "every Friday, summarise my week and flag anything weird". The result lands
+	// as a conversation the household can open, NOT as an applied change: a
+	// scheduled run happens while nobody is watching, and an unattended agent that
+	// can act is a different product with a different risk. Prompt carries the
+	// question.
+	//
+	// Loop-safe by construction: it writes only a conversation, so it can never
+	// trigger the transaction events other workflows fire on.
+	ActionAgentRun ActionKind = "agentRun"
 )
 
 // ReviewTag is the tag ActionFlagReview adds.
@@ -107,6 +117,10 @@ type Action struct {
 	// auto-completes when the condition holds against a later data event. Empty
 	// leaves the task manual.
 	ResolveCondition string `json:"resolveCondition,omitempty"`
+	// Prompt is the question ActionAgentRun asks the assistant. It goes through
+	// Expand like the other free-text fields, so a scheduled question can carry
+	// live figures ("we spent {{spend_mtd}} this month — is that unusual?").
+	Prompt string `json:"prompt,omitempty"`
 }
 
 // Context is what a workflow is evaluated against: numeric variables (the engine
@@ -154,6 +168,9 @@ type Effect struct {
 	// ResolveCondition carries an ActionCreateTask's self-resolve condition
 	// through to the apply layer (XC8), which stamps it onto the created task.
 	ResolveCondition string `json:"resolveCondition,omitempty"`
+	// Prompt carries an ActionAgentRun's question, already expanded, through to
+	// the apply layer (AG5).
+	Prompt string `json:"prompt,omitempty"`
 }
 
 // Run is the audit record of one workflow execution: what it did (or would do, if
@@ -264,7 +281,7 @@ func Expand(s string, ctx Context) string {
 func planAction(a Action, ctx Context) Effect {
 	e := Effect{Kind: a.Kind, Title: Expand(a.Title, ctx), Notes: Expand(a.Notes, ctx),
 		Message: Expand(a.Message, ctx), CategoryID: a.CategoryID, Tag: a.Tag, TxnID: ctx.TxnID,
-		ResolveCondition: a.ResolveCondition}
+		ResolveCondition: a.ResolveCondition, Prompt: Expand(a.Prompt, ctx)}
 	switch a.Kind {
 	case ActionCreateTask:
 		e.Summary = "Create task: " + fallback(e.Title, "(untitled)")
@@ -283,6 +300,8 @@ func planAction(a Action, ctx Context) Effect {
 		e.Summary = "Post all due autopost recurring transactions"
 	case ActionFlagBudgetOver:
 		e.Summary = "Create tasks for budgets over their limit"
+	case ActionAgentRun:
+		e.Summary = "Ask the assistant: " + fallback(truncateForSummary(e.Prompt), "(no question)")
 	case ActionTransfer:
 		e.TransferFromAccountID = a.TransferFromAccountID
 		e.TransferToAccountID = a.TransferToAccountID
@@ -294,6 +313,20 @@ func planAction(a Action, ctx Context) Effect {
 		e.Summary = "Unknown action: " + string(a.Kind)
 	}
 	return e
+}
+
+// summaryPromptLimit is how much of a scheduled question the run log quotes. A
+// summary is a label, not a transcript; the whole prompt is on the workflow.
+const summaryPromptLimit = 60
+
+// truncateForSummary shortens a prompt for a one-line summary, cutting on a rune
+// boundary so a multi-byte character never splits into mojibake.
+func truncateForSummary(s string) string {
+	r := []rune(s)
+	if len(r) <= summaryPromptLimit {
+		return s
+	}
+	return string(r[:summaryPromptLimit]) + "…"
 }
 
 // IsScheduledWorkflowDue reports whether a scheduled workflow's NextRun is on or

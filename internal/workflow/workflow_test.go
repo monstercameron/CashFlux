@@ -2,7 +2,10 @@
 
 package workflow
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMatch(t *testing.T) {
 	wf := Workflow{Trigger: Trigger{Kind: TriggerTxnAdded}}
@@ -142,5 +145,48 @@ func TestValidate(t *testing.T) {
 		Actions: []Action{{Kind: ActionCreateTask}}}
 	if errs := Validate(noTitle); len(errs) == 0 {
 		t.Error("createTask without title should be invalid")
+	}
+}
+
+func TestAgentRunPlansAReadableSummary(t *testing.T) {
+	e := planAction(Action{Kind: ActionAgentRun, Prompt: "Summarise my week"}, Context{})
+	if e.Prompt != "Summarise my week" {
+		t.Fatalf("prompt = %q", e.Prompt)
+	}
+	if !strings.Contains(e.Summary, "Summarise my week") {
+		t.Fatalf("summary = %q", e.Summary)
+	}
+}
+
+func TestAgentRunPromptExpandsAgainstLiveFigures(t *testing.T) {
+	// A scheduled question can carry the numbers it is asking about, the same way
+	// a scheduled notification can.
+	e := planAction(Action{Kind: ActionAgentRun, Prompt: "We spent {{spend}} — unusual?"},
+		Context{Vars: map[string]float64{"spend": 312}})
+	if strings.Contains(e.Prompt, "{{") {
+		t.Fatalf("prompt was not expanded: %q", e.Prompt)
+	}
+	if !strings.Contains(e.Prompt, "312") {
+		t.Fatalf("prompt = %q, want the live figure", e.Prompt)
+	}
+}
+
+func TestAnAgentRunWithNoQuestionSaysSoRatherThanLookingEmpty(t *testing.T) {
+	e := planAction(Action{Kind: ActionAgentRun}, Context{})
+	if !strings.Contains(e.Summary, "no question") {
+		t.Fatalf("summary = %q", e.Summary)
+	}
+}
+
+func TestALongScheduledQuestionIsTruncatedOnARuneBoundary(t *testing.T) {
+	// A summary is a label, not a transcript — and cutting mid-rune would print
+	// mojibake in the run log.
+	long := strings.Repeat("héllo wörld ", 20)
+	e := planAction(Action{Kind: ActionAgentRun, Prompt: long}, Context{})
+	if strings.Contains(e.Summary, "�") {
+		t.Fatalf("summary split a rune: %q", e.Summary)
+	}
+	if len([]rune(e.Summary)) > summaryPromptLimit+40 {
+		t.Fatalf("summary is %d runes", len([]rune(e.Summary)))
 	}
 }

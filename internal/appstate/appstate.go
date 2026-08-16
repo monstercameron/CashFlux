@@ -24,6 +24,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -467,11 +468,28 @@ func (a *App) Accounts() []domain.Account {
 		return v
 	})
 }
+
+// Categories returns every category, ordered naturally by name.
+//
+// C518/C544: the ordering lives HERE, at the single seam every reader passes
+// through, rather than in each screen that draws a list. It was previously in
+// store order (i.e. insertion order), and the screens disagreed about what to
+// do with that — most sorted nothing, two sorted with a raw byte comparison, so
+// "Zoo" came before "apple" and "Item 10" before "Item 9". A long list in an
+// arbitrary order does not read as unsorted, it reads as INCOMPLETE, which is
+// what produced the "the picker is missing my categories" report.
+//
+// Sorting at the accessor means a new picker is correct by default rather than
+// correct only if its author remembered. Nothing may depend on store order:
+// insertion order is arbitrary, and every ordered consumer either wants names
+// (this) or the tree (categorytree.Flatten, which re-sorts siblings anyway).
+// The result is cached per store revision, so the sort runs once per mutation,
+// not once per render.
 func (a *App) Categories() []domain.Category {
 	return a.reads.categories.get(a.store.Rev(), func() []domain.Category {
 		v, err := a.store.ListCategories()
 		a.logErr("categories", err)
-		return v
+		return catname.Sorted(v)
 	})
 }
 func (a *App) Transactions() []domain.Transaction {
@@ -1924,6 +1942,10 @@ func (a *App) applyEffect(e workflow.Effect) {
 		}
 	case workflow.ActionFlagBudgetOver:
 		a.applyFlagBudgetOver()
+	case workflow.ActionAgentRun:
+		// AG5: the scheduled question lands as a conversation to read, never as an
+		// applied change — see agentrun_ops.go for why.
+		a.RunScheduledAgentPrompt(e.Prompt)
 	case workflow.ActionTransfer:
 		// DedupeKey guard: if a prior run already carried this DedupeKey for any
 		// effect, the period transfer has already executed — skip to prevent double

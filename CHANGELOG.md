@@ -28,6 +28,21 @@ and every commit updates this file under `Unreleased`.
   unit-tested on native Go instead of only observable through a browser.
 
 ### Added
+- **A question can be put on a schedule (AG5).** "Every Friday, summarise my week and flag anything
+  weird" was blocked on two things: the workflow action model had no way to express it, and the
+  scheduled executor had no way to reach the chat loop. Both are done — workflows gain an "Ask the
+  assistant" action whose prompt expands against live figures, and the executor places the call.
+
+  Two deliberate limits. A scheduled run produces a CONVERSATION, not an applied change: it happens
+  while nobody is watching, and an unattended agent that can act on its own conclusions is a
+  different product with a different risk. And it runs WITHOUT tools — the tool loop's safety rests
+  on somebody being there to approve a mutating call, so rather than filter the tool list and hope,
+  the run gets a context-only conversation it cannot act from. The conversation is created with the
+  question in it BEFORE the answer arrives, so a run that fails mid-flight still leaves a legible
+  trace rather than nothing at all, and a household with no key gets a notice rather than a schedule
+  that quietly does nothing every Friday. Each run is booked against the spend meter under its own
+  name, so a schedule that costs money weekly is visible as one.
+
 - **An end-to-end journey through a zero-based month (C598).**
   The other budgets specs check controls. This one checks whether they COMPOSE, in one continuous
   scenario: switch the household to zero-based, read expected income against what has arrived,

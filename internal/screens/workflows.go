@@ -653,7 +653,8 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		k := workflow.ActionKind(draftKind.Get())
 		txnOnly := k == workflow.ActionSetCategory || k == workflow.ActionAddTag || k == workflow.ActionFlagReview
 		if (txnOnly && v != string(workflow.TriggerTxnAdded)) ||
-			(k == workflow.ActionTransfer && v == string(workflow.TriggerTxnAdded)) {
+			(k == workflow.ActionTransfer && v == string(workflow.TriggerTxnAdded)) ||
+			(k == workflow.ActionAgentRun && v == string(workflow.TriggerTxnAdded)) {
 			draftKind.Set(string(workflow.ActionCreateTask))
 		}
 	})
@@ -684,6 +685,9 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		case workflow.ActionNotify:
 			a.Message = strings.TrimSpace(draftText.Get())
 			return a, a.Message != ""
+		case workflow.ActionAgentRun:
+			a.Prompt = strings.TrimSpace(draftText.Get())
+			return a, a.Prompt != ""
 		case workflow.ActionAddTag:
 			a.Tag = strings.TrimSpace(draftText.Get())
 			return a, a.Tag != ""
@@ -820,6 +824,20 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		)
 	case workflow.ActionApplyRules, workflow.ActionFlagReview, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 		paramControl = P(css.Class("muted"), uistate.T("workflows.noParam"))
+	case workflow.ActionAgentRun:
+		// A question needs room to be written; the one-line box the other text
+		// actions use turns a two-sentence prompt into a scrolling slit. The note
+		// under it states the two things that surprise people: it costs a call, and
+		// the answer waits in the assistant rather than arriving as a change.
+		paramControl = Fragment(
+			Label(css.Class("fld-field"),
+				Span(css.Class("fld-lbl"), uistate.T("workflows.agentPromptLabel")),
+				Textarea(css.Class("field"), Attr("rows", "3"),
+					Attr("placeholder", uistate.T("workflows.agentPromptPlaceholder")),
+					Attr("aria-label", uistate.T("workflows.agentPromptLabel")),
+					Value(draftText.Get()), OnInput(onDraftText))),
+			P(css.Class("wf-hint"), uistate.T("workflows.agentRunHint")),
+		)
 	default: // createTask / notify / addTag
 		paramControl = Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
 			Attr("aria-label", uistate.T("workflows.actionText")),
@@ -996,6 +1014,11 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				Option(Value(string(workflow.ActionFlagBudgetOver)), SelectedIf(draftKind.Get() == string(workflow.ActionFlagBudgetOver)), uistate.T("workflows.actFlagBudgetOver")),
 				If(trigger.Get() != string(workflow.TriggerTxnAdded),
 					Option(Value(string(workflow.ActionTransfer)), SelectedIf(draftKind.Get() == string(workflow.ActionTransfer)), uistate.T("wfs.actTransfer"))),
+				// AG5: a saved question for the assistant. Offered on scheduled and
+				// manual triggers only — asking on every transaction would place a
+				// paid call per row, which is a bill, not a feature.
+				If(trigger.Get() != string(workflow.TriggerTxnAdded),
+					Option(Value(string(workflow.ActionAgentRun)), SelectedIf(draftKind.Get() == string(workflow.ActionAgentRun)), uistate.T("workflows.actAgentRun"))),
 			)),
 		Div(css.Class("wf-param"), paramControl),
 		P(css.Class("wf-hint"), uistate.T("wfs.tmplHint")),
@@ -1392,6 +1415,8 @@ func actionLabel(a workflow.Action) string {
 		return uistate.T("workflows.actApplyRules")
 	case workflow.ActionNotify:
 		return uistate.T("workflows.actNotify") + ": " + a.Message
+	case workflow.ActionAgentRun:
+		return uistate.T("workflows.actAgentRun") + ": " + a.Prompt
 	case workflow.ActionSetCategory:
 		return uistate.T("workflows.actSetCategory")
 	case workflow.ActionAddTag:
