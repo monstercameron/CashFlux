@@ -734,6 +734,12 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 			Fragment(
 				body,
 				savingsSummary,
+				// C348: the page shows the same subscriptions three times — here, in
+				// "Renewing soon", and in "Recent price changes". Repetition is fine
+				// when the reader knows it IS repetition and can get to the other
+				// view; it reads as duplication when the sections sit silently side
+				// by side. Say what has been lifted out, and link to it.
+				subsCrossLinks(len(soon), len(changes)),
 			),
 		)),
 		// #52: the review inbox — every needs-review detection with its evidence
@@ -753,6 +759,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 				// per-row detail.
 				netChangeSummary(netChangeDelta, base),
 				Div(css.Class("rows rec-cardrows"), changeRows),
+				subsBackLink(),
 			),
 		))),
 		If(len(soon) > 0, recurTile("subs-soon", recurSection("sec-subs-soon", uistate.T("subs.renewingSoon"), nil,
@@ -992,8 +999,16 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 		// not a subscription) live behind a per-row ⋯ kebab so the row reads as a
 		// subscription, not a wall of five buttons (review #20). Nothing here is
 		// destructive-styled — cancelling a detected subscription is reversible.
+		// C348: "Remind me" fades in on hover / keyboard focus rather than resting
+		// on every row. A twenty-row list carrying two resting buttons each is
+		// forty controls competing with the twenty numbers the page is about; the
+		// ledger already reveals its secondary actions this way. The kebab stays
+		// at rest — it is the row's only route to the rarer actions, and hiding
+		// the way IN to a menu is a different problem from hiding the menu.
 		actions = Div(css.Class("sub-actions"),
-			Button(css.Class("btn btn-sm"), Type("button"), Title(uistate.T("subs.remindTitle")), OnClick(remind), uistate.T("subs.remind")),
+			Button(css.Class("btn btn-sm btn-reveal"), Type("button"), Title(uistate.T("subs.remindTitle")),
+				Attr("aria-label", uistate.T("subs.remindTitle")+" — "+s.Name),
+				OnClick(remind), uistate.T("subs.remind")),
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "sub-menu-" + slug,
 				AriaLabel:    uistate.T("subs.moreActions") + " — " + s.Name,
@@ -1286,4 +1301,32 @@ func SubsDetectAcctTypeRow(props subsDetectAcctTypeRowProps) ui.Node {
 		),
 		Text(props.Label),
 	)
+}
+
+// subsCrossLinks names what the page has lifted out of the main list into its
+// own sections, and links to each (C348).
+//
+// The sweep read /subscriptions as "triple-listing the same rows". It does list
+// them more than once, deliberately — a renewal in three days and a price rise
+// are both worth their own section. What made it read as duplication rather than
+// emphasis is that the sections said nothing about each other, so the second
+// sighting of a row looked like a bug. Naming the overlap costs one line and
+// turns three lists into one page.
+func subsCrossLinks(soon, changes int) ui.Node {
+	if soon == 0 && changes == 0 {
+		return Fragment()
+	}
+	return P(css.Class("subs-xlink", tw.TextFaint), Attr("data-testid", "subs-xlinks"),
+		If(soon > 0, A(Href("#sec-subs-soon"), Attr("data-testid", "subs-xlink-soon"),
+			uistate.T("subs.xlinkSoon", soon))),
+		If(soon > 0 && changes > 0, Text(" · ")),
+		If(changes > 0, A(Href("#sec-subs-changes"), Attr("data-testid", "subs-xlink-changes"),
+			uistate.T("subs.xlinkChanges", changes))),
+	)
+}
+
+// subsBackLink returns the reader to the full list from a derived section.
+func subsBackLink() ui.Node {
+	return P(css.Class("subs-xlink", tw.TextFaint),
+		A(Href("#sec-subs"), Attr("data-testid", "subs-xlink-back"), uistate.T("subs.xlinkBack")))
 }

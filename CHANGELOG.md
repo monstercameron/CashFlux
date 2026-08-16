@@ -150,6 +150,20 @@ and every commit updates this file under `Unreleased`.
   in `internal/toolperm` as pure data, so a tool added without a permission entry shows an honest
   "this changes something this app has not described" rather than a reassuring blank.
 
+### Changed
+- **/subscriptions stops reading as three unrelated lists (C348).** The same subscriptions appear in
+  the main list, in "Renewing soon" and in "Recent price changes". That repetition is deliberate — a
+  renewal in three days and a price rise each deserve their own section — but the sections never
+  mentioned each other, so a second sighting of a row looked like a bug rather than emphasis. The
+  main list now names what has been lifted out of it and links to each section, and the sections link
+  back.
+
+  "Remind me" also stops resting on every row, fading in on hover or keyboard focus the way the
+  ledger's secondary actions do; twenty rows carrying two resting buttons each is forty controls
+  competing with the twenty numbers the page is about. It stays visible whenever the row has focus
+  inside it, and unconditionally on touch. The ⋯ menu deliberately keeps resting: hiding the way in
+  to a menu is a different problem from hiding the menu.
+
 ### Fixed
 - **/allocate's criterion meters stop reading as rates (C353).** "Pay down Mortgage · RETURNS 27%"
   sat beside a 4.1% mortgage, and "RETURNS 100%" appeared on a card. Those are normalized ranking

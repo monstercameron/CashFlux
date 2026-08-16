@@ -5253,9 +5253,20 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   scores — so moving either scale without the other fails.
 
 ### Page composition / IA (new, concrete — beyond open R-items)
-- [ ] **C348 [MINOR][UX] /subscriptions triple-lists the same rows** (main list, price changes,
-  renewing soon) with 4 same-weight buttons per row at rest (~64 resting controls). Hover-reveal
-  secondary actions (R47 pattern already used on /transactions) and cross-link sections.
+- [x] **C348 ✅ DONE (2026-08-16) — /subscriptions triple-listed rows with a wall of controls.**
+  The four-buttons-per-row half had landed since the audit (review #20 moved mark-cancelled,
+  how-to-cancel, web search and not-a-subscription behind a per-row ⋯), leaving two resting
+  controls. "Remind me" now fades in on hover or keyboard focus like the ledger's secondary
+  actions — a twenty-row list carrying two resting buttons each is forty controls competing with
+  the twenty numbers the page is about. It stays visible on `:focus-within` so it is never
+  keyboard-unreachable, and unconditionally under `(hover: none)`, where there is no hover to
+  reveal it on. The kebab deliberately does NOT reveal: hiding the way IN to a menu is a different
+  problem from hiding the menu.
+  **On the triple-listing:** the repetition is right — a renewal in three days and a price rise
+  each deserve their own section. What made it read as duplication is that the sections never
+  mentioned each other, so a second sighting of a row looked like a bug. The main list now names
+  what has been lifted out ("3 of these renew within a week →", "1 changed price recently →") and
+  the derived sections link back, which costs one line and turns three lists into one page.
 - [ ] **C357 [MINOR][UX] /rules quick-add ships placeholder condition labels** — literal
   "Condition 1 / Condition 2 / Condition 3" with unthemed native checkboxes — and the bottom "Rule
   order" flowchart duplicates the drag-list above it. Real, plain-English condition labels; themed

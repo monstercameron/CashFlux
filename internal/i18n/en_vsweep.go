@@ -92,6 +92,14 @@ var vSweepKeys = Catalog{
 	"credit.pageTitle":         "Credit habits",
 	"credit.ringLabel":         "Credit-habits score: %d out of 100 — %s",
 	"detail6.creditScoreLabel": "Credit-habits score (CashFlux estimate — not a bureau score)",
+
+	// ── C348: name the overlap between the page's three lists ───────────────
+	// The same subscriptions appear here, in "Renewing soon" and in "Recent
+	// price changes". That repetition is deliberate; what made it read as
+	// duplication is that the sections never mentioned each other. %d = a count.
+	"subs.xlinkSoon":    "%d of these renew within a week →",
+	"subs.xlinkChanges": "%d changed price recently →",
+	"subs.xlinkBack":    "← Back to all subscriptions",
 }
 
 func init() {
