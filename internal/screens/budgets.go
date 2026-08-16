@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/periodage"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/safespend"
@@ -47,18 +48,22 @@ type budgetView struct {
 	Method         budgeting.Methodology
 	Statuses       []budgeting.Status
 	CatName        map[string]string
-	PaceOver       map[string]string                // budgetID → projected overspend (in-progress only)
-	PaceMark       map[string]budgetPaceMark        // budgetID → even-pace tick + caption (BG3, in-progress only)
-	RollCarry      map[string]string                // budgetID → previous-period carry phrase
-	RollNeg        map[string]bool                  // budgetID → carry is negative
-	RollEffCap     map[string]string                // budgetID → effective cap (when it differs from the base limit)
-	RollEffCapMath map[string]string                // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
-	ProratedRest   map[string]string                // budgetID → even-pace amount left
-	EnvAvail       map[string]string                // budgetID → envelope balance (envelope method)
-	EnvNeg         map[string]bool                  // budgetID → envelope overdrawn
-	EnvDebtStart   map[string]string                // budgetID → BG5 "starts <month> down $X" when overdrawn
-	Covered        map[string]bool                  // budgetID → received cover money this period
-	EffMethod      map[string]budgeting.Methodology // budgetID → resolved method (override or global)
+	PaceOver       map[string]string         // budgetID → projected overspend (in-progress only)
+	PaceMark       map[string]budgetPaceMark // budgetID → even-pace tick + caption (BG3, in-progress only)
+	RollCarry      map[string]string         // budgetID → previous-period carry phrase
+	RollNeg        map[string]bool           // budgetID → carry is negative
+	RollEffCap     map[string]string         // budgetID → effective cap (when it differs from the base limit)
+	RollEffCapMath map[string]string         // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
+	ProratedRest   map[string]string         // budgetID → even-pace amount left
+	EnvAvail       map[string]string         // budgetID → envelope balance (envelope method)
+	EnvNeg         map[string]bool           // budgetID → envelope overdrawn
+	EnvDebtStart   map[string]string         // budgetID → BG5 "starts <month> down $X" when overdrawn
+	Covered        map[string]bool           // budgetID → received cover money this period
+	// EarlyPeriod marks budgets whose own period is too young to score (C344).
+	// Three days in, nothing has been broken yet, and a card that renders that as
+	// "On track" is making a claim about the calendar, not about the household.
+	EarlyPeriod map[string]bool
+	EffMethod   map[string]budgeting.Methodology // budgetID → resolved method (override or global)
 	// PeriodFrom / PeriodTo map each budget to its CURRENT evaluation window as
 	// inclusive ISO dates, so drill-throughs (e.g. the attention strip's "View
 	// spending") can scope the ledger to the same period the figures describe
@@ -383,6 +388,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	rollEffCapMath := map[string]string{}
 	proratedRest := map[string]string{}
 	covered := map[string]bool{}
+	earlyPeriod := map[string]bool{}
 	committedMap := map[string]budgetCommitted{}
 	periodFrom := map[string]string{}
 	periodTo := map[string]string{}
@@ -495,9 +501,17 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		if hasBC {
 			committedMap[b.ID] = bc
 		}
+		// C344: while this budget's period is too young to read, the card stops
+		// claiming a verdict and shows last period's outcome instead — so the
+		// last-period figures are computed whenever the overlay is on OR the
+		// period has barely started.
+		budgetEarly := periodage.Of(bs, be, now).Early()
+		if budgetEarly {
+			earlyPeriod[b.ID] = true
+		}
 		// Last-month spend overlay (planning): what was actually spent in this budget's
 		// categories LAST period, and how that lines up against this month's budget.
-		if showLastMonth {
+		if showLastMonth || budgetEarly {
 			ps, pe := budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
 			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
 				lastTotalSpent += prev.Spent.Amount
@@ -684,7 +698,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		Base: base, Method: method, Statuses: statuses, CatName: catName,
 		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap, RollEffCapMath: rollEffCapMath,
 		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EnvDebtStart: envDebtStart, Covered: covered, EffMethod: effMethod,
-		OverCount: overCount, NearCount: nearCount,
+		EarlyPeriod: earlyPeriod,
+		OverCount:   overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
 		SavingsBudgeted: savingsBudgeted, SavingsMoved: savingsMoved,
@@ -919,11 +934,21 @@ type budgetRowProps struct {
 	LastMonthOver     bool                  // last month's spend exceeded this month's budget → danger tone
 	LastMonthPct      int                   // last month's spend as % of this month's budget (uncapped) — the "%" figure
 	LastMonthFill     int                   // same, clamped 0..100 — the bar width
-	LinkedTodos       int                   // count of to-dos linked to this budget (Task.RelatedType=budget); 0 hides the link
-	Committed         budgetCommitted       // XC4 committed-vs-free split (+ XC3 set-aside note); zero value hides it
-	HasCommitted      bool                  // whether Committed carries a figure to render
-	Compact           bool                  // compact density: render the one-line row instead of the full card
-	Anchor            time.Time             // the view's period anchor (budgetView.Anchor); zero falls back to now (QA CF-05)
+	// PeriodEarly: this budget's period has barely started, so the row must not
+	// render a verdict about it (C344). It shows what the period is instead, with
+	// last period's outcome as the thing actually worth reading.
+	PeriodEarly bool
+	// PriorSpent / PriorDelta are last period's outcome, shown as the honest
+	// reading while PeriodEarly holds. Distinct from the LastMonth* fields, which
+	// drive the opt-in overlay that takes the whole tile over.
+	PriorSpent        string
+	PriorDelta        string
+	PriorOver         bool
+	LinkedTodos       int             // count of to-dos linked to this budget (Task.RelatedType=budget); 0 hides the link
+	Committed         budgetCommitted // XC4 committed-vs-free split (+ XC3 set-aside note); zero value hides it
+	HasCommitted      bool            // whether Committed carries a figure to render
+	Compact           bool            // compact density: render the one-line row instead of the full card
+	Anchor            time.Time       // the view's period anchor (budgetView.Anchor); zero falls back to now (QA CF-05)
 	OnDelete          func(string)
 	OnRemoveRecurring func(string) // clear this budget's recurring cover (confirmed)
 	// OnDrill opens Transactions filtered to this budget's whole spend SCOPE —

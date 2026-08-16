@@ -1,3 +1,36 @@
+## 2026-08-16 — "On track" on the third of the month
+
+C344 lists three symptoms and they share one cause: a period-to-date figure being compared or scored
+as though the period were over. Every budget card says "On track" because no budget has been broken
+in three days. /health scores budget adherence at 100% for the same reason. The reports line
+("spending is down 66%") was comparing three days against thirty-one.
+
+The interesting failure is not the arithmetic, it is what the arithmetic does to trust. An app that
+opens every month by telling you things are excellent has spent the credibility it needs in the one
+month things aren't. The reading is worthless AND it is actively expensive.
+
+`internal/periodage` draws the line once. The threshold is deliberately a fraction of the period
+rather than the ticket's suggested "until ~day 5": a weekly budget on day 5 is nearly over, and
+holding it to a monthly budget's calendar would be the same category of mistake in the opposite
+direction. A tenth of a period is roughly where one large or one missing charge stops dominating.
+
+/health's fix is a fallback to the last completed period, which is what the savings factor already
+does — it averages three FULL months precisely so a score doesn't lurch when a month opens. Making
+budget adherence agree with that was a two-line change once the window was a value the model
+carried. The important half was making the tile SAY it fell back. A fallback the reader cannot see
+is not more honest than the wrong number; it is just wrong differently.
+
+The /budgets half had a trap in it. The page already computes last period's spend for an opt-in
+"Last month's spend" overlay, and reusing that data for the early-period reading meant the row's
+`lastMonthMode` flag — derived from whether the field is populated — would have flipped every card
+into full overlay mode on the 1st of the month. Same data, two very different presentations; they
+needed separate fields, and a helper that gates the overlay on the actual toggle rather than on
+whether the numbers happen to exist.
+
+The /reports symptom turned out to be already gone. `reports.spendUp` and `reports.spendDown` are
+orphan catalog keys with no call site — that surface became the Annual Review, which compares whole
+years and has no partial-period problem. Worth checking before building a fix for it.
+
 ## 2026-08-16 — A rule a caller can forget is not a rule
 
 C340 looked closed. `bills.DedupeObligations` existed, it was well-documented, it had tests, and it

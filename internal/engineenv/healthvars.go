@@ -19,9 +19,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/periodage"
 	"github.com/monstercameron/CashFlux/internal/reports"
 )
 
@@ -130,12 +132,27 @@ func healthInputs(d Data, bals map[string]money.Money) healthscore.Inputs {
 		}
 	}
 
-	// Budget adherence: share of budgets within their limit this period. Mirrors
-	// the dashboard's budget evaluation (rollup over sub-categories).
+	// Budget adherence: share of budgets within their limit. Mirrors the
+	// dashboard's budget evaluation (rollup over sub-categories).
+	//
+	// C344: three days into a month NO budget has been broken yet, so scoring the
+	// current period there returned a confident 100% — "excellent" as a statement
+	// about the calendar rather than about the household. While the period is too
+	// young to read, this scores the LAST COMPLETED one instead and says so, the
+	// same way the savings factor deliberately excludes the partial month.
 	if len(d.Budgets) > 0 {
+		in.BudgetAdherenceWindow = healthscore.WindowCurrentPeriod
+		measureAt := d.Now
+		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, d.Now, d.WeekStart)
+		if age := periodage.Of(ms, me, d.Now); age.Early() {
+			// One instant before the current period opened lands inside the last
+			// completed one, whatever each budget's own cadence turns out to be.
+			measureAt = age.Start.Add(-time.Nanosecond)
+			in.BudgetAdherenceWindow = healthscore.WindowPriorPeriod
+		}
 		total, within := 0, 0
 		for _, b := range d.Budgets {
-			bs, be := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
+			bs, be := budgeting.PeriodRange(b.Period, measureAt, d.WeekStart)
 			st, berr := budgeting.EvaluateRollup(b, d.Transactions, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
 			if berr != nil {
 				continue

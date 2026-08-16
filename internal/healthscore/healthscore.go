@@ -72,6 +72,12 @@ type Inputs struct {
 	// BudgetAdherencePct is the share of budgets within their limit. Applies iff HasBudgets.
 	BudgetAdherencePct int
 	HasBudgets         bool
+	// BudgetAdherenceWindow names which period the caller measured adherence
+	// over. Three days into a month every budget is trivially within its limit,
+	// so scoring the current period there reads "100% — excellent" when the
+	// honest answer is "ask again next week" (C344). A caller that falls back to
+	// the last completed period says so here; the zero value is the current one.
+	BudgetAdherenceWindow Window
 
 	// AggUtilizationPct is aggregate revolving utilization (total card balance ÷ total
 	// limit), as a whole percent. Applies iff HasCredit.
@@ -133,6 +139,9 @@ const (
 	WindowCurrentPeriod Window = "currentPeriod"
 	// WindowAsOfToday is a position read right now, not an average of anything.
 	WindowAsOfToday Window = "asOfToday"
+	// WindowPriorPeriod is the last COMPLETED period — what a surface falls back
+	// to while the current one is too young to read.
+	WindowPriorPeriod Window = "priorPeriod"
 )
 
 // Step is one prioritized, plain-English action drawn from the weakest factors.
@@ -186,6 +195,15 @@ type factorDef struct {
 // dimensions. Re-normalization over applicable factors still distributes weight
 // correctly whenever any factor is absent.
 
+// budgetWindow reports which period the budget-adherence factor was measured
+// over, defaulting to the current one when the caller did not say.
+func budgetWindow(in Inputs) Window {
+	if in.BudgetAdherenceWindow != "" {
+		return in.BudgetAdherenceWindow
+	}
+	return WindowCurrentPeriod
+}
+
 // Evaluate runs the deterministic model. The overall score is the weighted average
 // of applicable factor scores, with inapplicable factors dropped and their weight
 // redistributed proportionally across the rest (so the weights of applicable factors
@@ -215,7 +233,7 @@ func Evaluate(in Inputs) Result {
 		},
 		{
 			key: "budget", label: "Budget adherence", target: "100% on track", weight: 0.10,
-			window:     WindowCurrentPeriod,
+			window:     budgetWindow(in),
 			applicable: in.HasBudgets, rawScore: clampPct(in.BudgetAdherencePct),
 			value:     fmt.Sprintf("%d%%", clampPct(in.BudgetAdherencePct)),
 			targetMet: clampPct(in.BudgetAdherencePct) >= 100,

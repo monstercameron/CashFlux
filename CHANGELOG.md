@@ -43,6 +43,27 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **A period that has barely started no longer reports itself as going well (C344).** On day 3 of a
+  month every budget card read "$0.00 / 0% / On track" and /health scored "Budget adherence 100%".
+  Neither is a lie about the data; both are lies about the question. Nothing had happened yet, and a
+  surface that renders "nothing yet" as "doing great" is one people learn to ignore — which costs it
+  the month it has something real to say.
+
+  `internal/periodage` now answers "how far into this period are we, and is that far enough to mean
+  anything?" in one place, so every surface draws the line identically. The threshold is a fraction
+  of the period rather than a day count, so a weekly budget isn't held to a monthly budget's
+  calendar.
+
+  /health's budget-adherence factor used to score the current period, where three days in nothing
+  has been broken yet. It now falls back to the last completed period while the current one is too
+  young — the same deliberate choice the savings factor already made — and the tile says that it did,
+  because a silent fallback is a different kind of wrong answer.
+
+  Budget cards stop claiming a verdict about a period that hasn't run. They read "Period just
+  started" with a neutral bar, and show last period's outcome underneath, which is the only reading
+  worth anything at that point. That is distinct from the opt-in "Last month's spend" overlay, which
+  takes the whole tile over; cards don't silently flip into it on the 1st.
+
 - **A bill and the payment that settles it are one row again (C340).** /bills listed "Student loan
   payment · $320 · Jul 5" and "Priya's Student Loan · $320 · Jul 5" as two separate obligations, and
   did the same for both car payments, inflating "Total due soon", the upcoming counts and the

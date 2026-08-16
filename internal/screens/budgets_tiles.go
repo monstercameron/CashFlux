@@ -1903,9 +1903,15 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					RolloverCarry: v.RollCarry[s.Budget.ID], RolloverNeg: v.RollNeg[s.Budget.ID], EffectiveCap: v.RollEffCap[s.Budget.ID], EffectiveCapMath: v.RollEffCapMath[s.Budget.ID],
 					ProratedRest: v.ProratedRest[s.Budget.ID], EffectiveMethod: v.EffMethod[s.Budget.ID],
 					Covered:        v.Covered[s.Budget.ID],
-					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
-					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
-					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring,
+					LastMonthSpent: lastMonthOverlay(v, s.Budget.ID).Spent, LastMonthDelta: lastMonthOverlay(v, s.Budget.ID).Delta, LastMonthOver: lastMonthOverlay(v, s.Budget.ID).Over,
+					LastMonthPct: lastMonthOverlay(v, s.Budget.ID).Pct, LastMonthFill: lastMonthOverlay(v, s.Budget.ID).Fill,
+					// C344: last period's outcome as a quiet reading beside a period
+					// too young to judge — NOT the opt-in overlay, which takes the
+					// whole tile over.
+					PeriodEarly: v.EarlyPeriod[s.Budget.ID],
+					PriorSpent:  v.LastMonth[s.Budget.ID].Spent, PriorDelta: v.LastMonth[s.Budget.ID].Delta,
+					PriorOver: v.LastMonth[s.Budget.ID].Over,
+					OnDelete:  cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring,
 					OnDrill:    func(scope budgeting.Scope, from, to string) { drillFrom(s, scope, from, to) },
 					PeriodFrom: v.PeriodFrom[s.Budget.ID], PeriodTo: v.PeriodTo[s.Budget.ID],
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
@@ -2077,4 +2083,18 @@ func spendReportLink() ui.Node {
 		Href(uistate.RoutePath("/reports")),
 		Attr("data-testid", "budgets-see-spend"), Title(uistate.T("budgets.seeSpendTitle")),
 		Span(uistate.T("budgets.seeSpend")))
+}
+
+// lastMonthOverlay returns a budget's last-period figures ONLY when the
+// "Last month's spend" overlay is on.
+//
+// The figures themselves are also computed for a period too young to judge
+// (C344), where they are shown as a quiet reading rather than as the tile's
+// headline — so reading the map directly would silently switch every card into
+// overlay mode on the 1st of the month.
+func lastMonthOverlay(v budgetView, budgetID string) budgetLastMonth {
+	if !v.LastMonthMode {
+		return budgetLastMonth{}
+	}
+	return v.LastMonth[budgetID]
 }

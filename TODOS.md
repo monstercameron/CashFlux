@@ -5052,10 +5052,30 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   stamps "over the year" instead of printing a bare arrow (C341). Guard:
   `TestBadgeMapsAreDisjointAndReal` — no tile may claim to be both current-state and windowed, and
   a windowed id that matches no real tile fails rather than silently never rendering.
-- [ ] **C344 [MAJOR][UX] Early-period distortions read as broken.** On day 3 of a period: /budgets
-  shows every card "$0.00 / 0% / On track", /reports announces "Spending is down 66% versus the
-  previous period", /health scores "Budget adherence 100%". Pro-rate comparisons, or add explicit
-  "period just started" framing + show last period's outcome until ~day 5.
+- [x] **C344 ✅ DONE (2026-08-16) — Early-period distortions read as broken.** New pure seam
+  `internal/periodage`: `Of(start, end, now)` reports how far a period has run (`Elapsed`, `Day`,
+  `Days`, `Complete`), `Early()` says whether that is far enough for a period-to-date figure to be
+  worth comparing or scoring, and `Prorate` / `ProrateWindow` give the honest comparison where one
+  exists (compare a 10%-elapsed period against the FIRST 10% of the reference, not against all of
+  it). The threshold is a FRACTION (`EarlyFraction = 0.1`, ~day 3–4 of a month) rather than the
+  ticket's suggested day count, so a weekly budget isn't held to a monthly budget's calendar.
+  Wired: **/health** — budget adherence scored the current period, so on day 3 it returned a
+  confident 100% ("nothing broken yet" rendered as "excellent"); it now falls back to the last
+  COMPLETED period while the current one is too young, mirroring the savings factor's deliberate
+  exclusion of the partial month, and `healthscore.Window` gained `WindowPriorPeriod` so the tile
+  SAYS it fell back (a silent fallback is just a different lie). **/budgets** — a card no longer
+  claims "On track" on a period that hasn't run; it reads "Period just started" with a neutral bar,
+  and last period's outcome appears inline underneath, which is the only reading worth anything at
+  that point. That reuses the existing last-period computation but deliberately NOT the opt-in
+  "Last month's spend" overlay (which takes the whole tile over) — `lastMonthOverlay()` keeps the
+  two apart so cards don't silently flip into overlay mode on the 1st.
+  The /reports half of the ticket was already gone: `reports.spendUp`/`spendDown` ("Spending is
+  down 66% versus the previous period") are orphan catalog keys with no call site — that surface
+  became the Annual Review, which compares whole years. Tests: `periodage` table tests (day/length
+  phrasing, the day-3-vs-day-5 boundary, short periods leaving Early sooner, degenerate and
+  inverted periods, prorate and prorate-window), plus `engineenv` tests proving a budget blown last
+  month reads 0% on day 2 (not 100%) and that the fallback steps aside by day 20 — a permanent
+  fallback would be its own defect.
 
 ### High-visibility bugs (fix-now class)
 - [x] **C335 ✅ DONE (2026-07-03) — Raw i18n keys render in the shell + setup wizard.** Root cause:

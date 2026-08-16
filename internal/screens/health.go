@@ -86,6 +86,8 @@ func healthWindowLabel(w healthscore.Window) string {
 		return uistate.T("healthx.windowCurrentPeriod")
 	case healthscore.WindowAsOfToday:
 		return uistate.T("healthx.windowAsOfToday")
+	case healthscore.WindowPriorPeriod:
+		return uistate.T("healthx.windowPriorPeriod")
 	}
 	return ""
 }

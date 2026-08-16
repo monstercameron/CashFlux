@@ -34,6 +34,7 @@ var vSweepKeys = Catalog{
 	"healthx.windowTrailing3mo":   "Averaged over the last 3 full months",
 	"healthx.windowCurrentPeriod": "This period so far",
 	"healthx.windowAsOfToday":     "As of today",
+	"healthx.windowPriorPeriod":   "Last completed period — this one has barely started",
 	// Tooltip on the period chip a windowed dashboard tile always wears — the
 	// mirror of the "Today" chip a current-state tile wears when paged away.
 	"widget.windowBadgeTitle": "This tile's figures cover the selected period",
@@ -45,6 +46,15 @@ var vSweepKeys = Catalog{
 	// liability account's name.
 	"bills.covers":     "covers %s",
 	"bills.coversHint": "This payment settles %s — its statement bill is shown here, not separately",
+
+	// ── C344: a period too young to judge says so ───────────────────────────
+	// Budget card status while barely any of the period has run. "On track" on
+	// day 3 is a claim about the calendar, not about the household.
+	"budgets.periodJustStarted": "Period just started",
+	// The reading that IS worth something while the period is young: what last
+	// period actually came to. %s = last period's spend, %s = the "$X under" /
+	// "$X over" gap against this period's budget.
+	"budgets.priorPeriodOutcome": "Last period: %s (%s)",
 }
 
 func init() {
