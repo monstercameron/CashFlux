@@ -13,7 +13,7 @@ async function openBudgets(app) {
   await expect(app.getByTestId("budgets-status-strip")).toBeVisible();
 }
 
-test.describe("income allocation read", () => {
+test.describe("income allocation read", { tag: "@prod" }, () => {
   test("the hero answers 'how much of my income is budgeted' on the default method", async ({ app }) => {
     await openBudgets(app);
 
@@ -114,7 +114,7 @@ test.describe("income allocation read", () => {
   });
 });
 
-test.describe("adding a budget no longer mints a category behind your back", () => {
+test.describe("adding a budget no longer mints a category behind your back", { tag: "@prod" }, () => {
   async function openAddBudget(app) {
     await nav(app, "/budgets");
     const add = app.getByTestId("budgets-add-btn").or(app.getByRole("button", { name: /add budget/i })).first();

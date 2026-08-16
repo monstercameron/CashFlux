@@ -4,7 +4,7 @@
 // reboot — the boot path where the prefs atom used to seed from an empty store.
 import { test, expect, nav } from "./fixtures.mjs";
 
-test.describe("budgets: income-basis modal persists selections", () => {
+test.describe("budgets: income-basis modal persists selections", { tag: "@prod" }, () => {
   // Cam report 2026-07-17: "Income to budget with doesn't persist when making a
   // selection". Locks the whole loop: pick a basis in the modal, Save, and the
   // choice must (a) drive the page's income figure immediately and (b) survive
@@ -42,7 +42,7 @@ test.describe("budgets: income-basis modal persists selections", () => {
   });
 });
 
-test.describe("budgets: income basis survives a passcode-locked reboot", () => {
+test.describe("budgets: income basis survives a passcode-locked reboot", { tag: "@prod" }, () => {
   // Cam 2026-07-17 root cause: with an app-lock passcode, the dataset is an
   // encrypted envelope at boot, the lock screen renders first, and the prefs
   // atom seeded from an EMPTY store (defaults). hydrateFromPasscode imported

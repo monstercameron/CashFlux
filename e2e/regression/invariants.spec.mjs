@@ -14,7 +14,7 @@ const CORE_TOKENS = [
   "--font-ui", "--font-display",
 ];
 
-test("core theme tokens are defined and non-empty in both themes", async ({ app }) => {
+test("core theme tokens are defined and non-empty in both themes", { tag: "@prod" }, async ({ app }) => {
   for (const mode of ["dark", "light"]) {
     await setTheme(app, mode);
     const missing = await app.evaluate((tokens) => {
@@ -26,7 +26,7 @@ test("core theme tokens are defined and non-empty in both themes", async ({ app 
   await setTheme(app, "dark");
 });
 
-test("no route scrolls the page body horizontally", async ({ app }) => {
+test("no route scrolls the page body horizontally", { tag: "@prod" }, async ({ app }) => {
   test.setTimeout(300_000);
   const overflow = [];
   for (const [route] of ROUTES) {

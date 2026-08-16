@@ -28,7 +28,7 @@ function nameField(app) {
   return app.locator('[class*="flip"] input[type="text"]').first();
 }
 
-test.describe("editing a budget and its tracked categories", () => {
+test.describe("editing a budget and its tracked categories", { tag: "@prod" }, () => {
   test("stepping into tracked categories keeps the panel and the unsaved edits", async ({ app }) => {
     await openBudgetEdit(app);
 

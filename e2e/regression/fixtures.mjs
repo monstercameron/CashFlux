@@ -162,6 +162,16 @@ export async function mainText(page) {
 // axe (which snapshot the DOM once, with no retry) need this so they don't score
 // a half-rendered page differently under parallel CPU load. Deterministic: it
 // waits on real completion signals, not a fixed delay.
+//
+// A MutationObserver "quiet period" was tried here and REVERTED, recorded so it
+// is not retried blind. The theory was sound — screens keep re-rendering after
+// data-app-ready flips, and a click landing in that window sets state on a tree
+// about to be replaced. The measurement was not: it added 2.6 minutes to the
+// deploy gate and turned three passing tests into failures, most likely because
+// its page.evaluate races a re-render that destroys the execution context. That
+// is a worse failure mode than the flake it was meant to cure. Flakes here are
+// handled by Playwright's retries; the fix for the underlying re-render belongs
+// in the app (see C541), not in a blanket wait.
 export async function settle(page) {
   await page.evaluate(async () => {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;

@@ -9,7 +9,7 @@
 //          said so rendered below the fold of a scrolling modal.
 import { test, expect, nav } from "./fixtures.mjs";
 
-test.describe("C517 · filtering by direction", () => {
+test.describe("C517 · filtering by direction", { tag: "@prod" }, () => {
   // Spending renders in accounting parentheses with a .text-down tone; income
   // renders plain with .text-up. Those classes are the ledger's own statement of
   // direction, so they are what the filter has to agree with.
@@ -65,7 +65,7 @@ test.describe("C517 · filtering by direction", () => {
   });
 });
 
-test.describe("C519 · the budget picker explains what it withholds", () => {
+test.describe("C519 · the budget picker explains what it withholds", { tag: "@prod" }, () => {
   test("income categories are absent, and the picker says why", async ({ app }) => {
     await nav(app, "/budgets");
     // Use the page own Add control, not a name match — the global add menu has a
@@ -84,7 +84,7 @@ test.describe("C519 · the budget picker explains what it withholds", () => {
   });
 });
 
-test.describe("C520 · a mistaken income can be corrected to a spend", () => {
+test.describe("C520 · a mistaken income can be corrected to a spend", { tag: "@prod" }, () => {
   // The edit form opens by clicking a row's description.
   async function openFirstTxnEdit(app) {
     await nav(app, "/transactions");
@@ -133,7 +133,7 @@ test.describe("C520 · a mistaken income can be corrected to a spend", () => {
   });
 });
 
-test.describe("C522 · the re-categorizer's dead end", () => {
+test.describe("C522 · the re-categorizer's dead end", { tag: "@prod" }, () => {
   test("the no-provider notice offers the action it names", async ({ app }) => {
     await nav(app, "/transactions");
     // The entry point lives in the toolbar's ⋯ menu; its handler is live even

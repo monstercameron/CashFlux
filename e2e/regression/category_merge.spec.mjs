@@ -75,7 +75,7 @@ async function openMergePanel(app) {
   return panel;
 }
 
-test.describe("merging categories", () => {
+test.describe("merging categories", { tag: "@prod" }, () => {
   test("the panel asks for both categories and states what will move", async ({ app }) => {
     await openMergePanel(app);
 

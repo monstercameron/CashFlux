@@ -4,7 +4,7 @@
 // per-page interaction checks live in interactions.spec.mjs.
 import { test, expect, ROUTES, nav, mainText, setTheme } from "./fixtures.mjs";
 
-test.describe("all-routes smoke", () => {
+test.describe("all-routes smoke", { tag: "@prod" }, () => {
   // One comprehensive sweep over every route — deliberately a single test (one
   // boot/seed) rather than 46 re-booting tests. It does real work, so it gets a
   // generous budget (CI runners are slower than local).

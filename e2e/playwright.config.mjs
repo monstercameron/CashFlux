@@ -35,6 +35,11 @@ export default defineConfig({
   // instances at once: both starve and fail the shared 45-second readiness gate
   // before their test assertions run. Serialize CI for deterministic boots;
   // local machines retain two workers for faster feedback.
+  // A clean GitHub Windows runner cannot reliably boot two ~80 MB Go/WASM app
+  // instances at once: both starve and fail the shared 45-second readiness gate
+  // before their assertions run. That constraint is why the full suite could not
+  // simply be parallelised out of its timeout, and why the CI lanes shard across
+  // separate runners instead.
   workers: process.env.CI ? 1 : 2,
   reporter: process.env.CI
     ? [["list"], ["html", { open: "never" }], ["github"]]
@@ -56,7 +61,25 @@ export default defineConfig({
     reducedMotion: "reduce",
     launchOptions: { args: ["--disable-gpu"] },
   },
+  // Two lanes, because one lane was doing two incompatible jobs.
+  //
+  //   prod  — the DEPLOY GATE. Every test tagged @prod, and nothing else. It has
+  //           to be fast enough to finish and stable enough to be believed,
+  //           because the droplet's deploy hook fires on this workflow
+  //           succeeding: a gate that times out does not fail loudly, it
+  //           silently stops shipping (see deploy/production/README.md).
+  //   chromium — the FULL suite, for development and the nightly run. Free to be
+  //           slow, free to be exhaustive, free to include the specs that are
+  //           currently red for known reasons.
+  //
+  // Membership is by tag rather than by file so a big spec can contribute its
+  // load-bearing case to the gate without dragging its long tail along.
   projects: [
+    {
+      name: "prod",
+      grep: /@prod/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+    },
     { name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
   ],
   webServer: EXTERNAL

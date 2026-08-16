@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **CI now gates on a fast, trustworthy subset instead of the whole suite.** Tests carry a `@prod`
+  tag; the `prod` Playwright project runs those and nothing else, and that is what the deploy hook
+  keys off. The full 312-test suite moved to a nightly `E2E full suite` workflow that reports without
+  blocking releases. Membership in the gate is "can this ship?" — the app boots, every route renders
+  in both themes, the cross-cutting invariants hold, and the most recently changed money behaviour
+  still works.
+
 ### Fixed
 - **Production deploys were silently not happening.** The droplet's deploy hook fires when the `CI`
   workflow SUCCEEDS on main, and the Playwright lane had grown past its 60-minute ceiling, so every

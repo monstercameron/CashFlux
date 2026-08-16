@@ -18,7 +18,7 @@ async function openAddBudget(app) {
   await expect(app.getByTestId("budget-direction")).toBeVisible();
 }
 
-test.describe("what a budget measures", () => {
+test.describe("what a budget measures", { tag: "@prod" }, () => {
   test("a budget is a spending cap unless you say otherwise", async ({ app }) => {
     await openAddBudget(app);
     // The zero value IS the historical spending cap, so every budget in every

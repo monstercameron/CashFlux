@@ -64,34 +64,37 @@ jobs:
           go build -o /dev/null ./cmd/cashflux-portal
 
   e2e:
-    name: E2E regression (Playwright) ${{ matrix.shard }}/4
+    name: E2E deploy gate (@prod) ${{ matrix.shard }}/2
     # Runs on Windows so the committed coverage/a11y/-win32 visual baselines match
     # the runner's rendering. globalSetup builds the wasm; Playwright serves it and
     # drives Chromium. Visual pixel-diffs are a local gate (skipped in CI).
     runs-on: windows-latest
-    # SHARDED, because this lane was not merely slow — it was silently breaking
-    # production deploys.
+    # This is the DEPLOY GATE, and it runs the @prod subset — not the whole suite.
     #
-    # The suite is 312 tests across 38 files, and playwright.config.mjs pins CI to
-    # ONE worker (a clean Windows runner cannot boot two ~80 MB wasm app instances
-    # without both starving the readiness gate) with 2 retries. Raising the ceiling
-    # from 30 to 60 minutes bought time once; the suite grew past that too, and the
-    # run then concluded "cancelled" rather than "failure".
+    # The droplet's deploy hook fires when this workflow SUCCEEDS on main
+    # (deploy/production/README.md). A gate that cannot finish therefore does not
+    # fail loudly, it silently stops shipping: the full 312-test suite outgrew a
+    # 30-minute ceiling, then outgrew the 60-minute one it was raised to, and each
+    # run concluded "cancelled". Every push still looked like it went out while
+    # budget.earlcameron.com sat on an old build for days.
     #
-    # That is the part that mattered. The deploy hook on the droplet fires on the
-    # `CI` workflow SUCCEEDING on main (deploy/production/README.md), so a lane
-    # that never finishes means production silently stops updating while every
-    # push still looks like it went out. budget.earlcameron.com sat on 1.6.1
-    # through a whole release train for exactly this reason.
+    # Splitting the job in two fixes the incentive rather than buying time again.
+    # The gate answers one question — is it safe to ship? — with the smallest set
+    # that can answer it: the app boots and every route renders, the cross-cutting
+    # invariants hold, and the behaviour changed most recently still works. The
+    # exhaustive suite moves to e2e-full.yml, which runs nightly and on demand and
+    # is free to be slow, and free to stay red on a known issue without holding
+    # releases hostage.
     #
-    # Sharding keeps the single-worker constraint that the runner actually
-    # requires and buys parallelism from separate runners instead, so each shard
-    # finishes well inside its budget and the workflow can reach "success".
+    # Sharded two ways because playwright.config.mjs pins CI to ONE worker for a
+    # real reason (a clean Windows runner cannot boot two ~80 MB wasm instances
+    # without both starving the readiness gate), so parallelism has to come from
+    # separate runners.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    timeout-minutes: 45
+        shard: [1, 2]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -125,9 +128,9 @@ jobs:
         if: matrix.shard == 1
         run: pwsh tools/wasm-test.ps1
 
-      - name: Run regression suite (shard ${{ matrix.shard }} of 4)
+      - name: Run deploy gate (shard ${{ matrix.shard }} of 2)
         working-directory: e2e
-        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/4
+        run: npx playwright test --project=prod --shard=${{ matrix.shard }}/2
 
       - name: Upload Playwright report on failure
         if: failure()

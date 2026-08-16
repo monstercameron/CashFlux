@@ -1,0 +1,66 @@
+# The exhaustive Playwright suite — everything, including the specs the deploy
+# gate deliberately leaves out.
+#
+# It lives apart from CI on purpose. The droplet's deploy hook fires when the CI
+# workflow succeeds on main, so anything slow or known-red inside CI stops
+# releases without saying so. That is exactly what happened: the full suite grew
+# past its job ceiling, every run concluded "cancelled", and production quietly
+# stopped updating while each push still looked like it shipped.
+#
+# So this lane is free to be slow and free to be red. It reports; it does not gate.
+name: E2E full suite
+
+on:
+  schedule:
+    # 07:00 UTC — after the working day in America/New_York, so a red result is
+    # waiting in the morning rather than interrupting the evening.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  e2e-full:
+    name: E2E full (Playwright) ${{ matrix.shard }}/4
+    runs-on: windows-latest
+    # Sharded four ways for the same reason CI is sharded two: the config pins CI
+    # to one worker per runner because a clean Windows runner cannot boot two
+    # ~80 MB wasm app instances without both starving the readiness gate.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: e2e
+        run: npx playwright install chromium
+
+      - name: Run full suite (shard ${{ matrix.shard }} of 4)
+        working-directory: e2e
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/4
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-full-shard-${{ matrix.shard }}
+          path: e2e/playwright-report
+          retention-days: 7

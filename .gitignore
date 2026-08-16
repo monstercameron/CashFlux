@@ -79,3 +79,14 @@ temp/
 # files under here, and the e2e helper leaves a data dir behind. Neither is source.
 /internal/server/blobs/
 /cashflux-portal/
+
+# Scratch and build artifacts that live in this worktree but must never be
+# committed. They were swept in once by a `git add -A`, which is exactly why the
+# project rule is to commit named paths: concurrent sessions share this tree, so
+# "everything that changed" is not the same as "everything I changed".
+.rv-real.mjs
+aff-login-probe.js
+cashflux-portal
+UsersmrecaAppDataLocalTempclaude*/
+*.db-shm
+*.db-wal

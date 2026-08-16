@@ -70,3 +70,28 @@ On Windows/PowerShell, set the env var separately: `$env:UPDATE_COVERAGE=1; npx 
   five layers gate CI).
 - **color-contrast** is excluded from the a11y gate — axe re-scores it against live
   backgrounds and it flakes run-to-run; it's covered by visual review instead.
+
+
+## Two lanes: the deploy gate and the full suite
+
+`prod` is the DEPLOY GATE. It runs only tests tagged `@prod`, and the droplet's
+deploy hook fires when the `CI` workflow succeeds — so this lane has to be fast
+enough to finish and stable enough to be believed. A gate that times out does not
+fail loudly; it silently stops shipping.
+
+```sh
+npx playwright test --project=prod     # the gate, ~12 min
+npx playwright test --project=chromium # everything, slow, may be red
+```
+
+Add a test to the gate by tagging its `describe` (or the test itself):
+
+```js
+test.describe("what a budget measures", { tag: "@prod" }, () => { /* … */ })
+```
+
+Only put a test in the gate once you have seen it pass. Membership is "can this
+ship?", not "is this important" — the app boots and every route renders, the
+cross-cutting invariants hold, and the behaviour changed most recently works.
+Everything else belongs in the full suite, which runs nightly via
+`.github/workflows/e2e-full.yml` and reports without blocking a release.
