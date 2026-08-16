@@ -199,6 +199,31 @@ the same SQLite database, and the port would collide anyway.
 docker compose -f compose.yaml down && systemctl start cashflux
 ```
 
+### Known trap: the pinned tag is a local edit
+
+`deploy-release.sh` rewrites the `image:` line in
+`/opt/CashFlux/deploy/production/compose.yaml`, and that file lives INSIDE the
+git checkout — so `git status` on the box shows it permanently modified, and a
+`git reset --hard` silently reverts the pin to whatever the repo committed.
+
+Nothing in the automated path does that (the autoupdate script only `git fetch`es),
+and the next run self-heals by re-deploying the newest tag. But a human running
+`git reset --hard` on the box will appear to downgrade the pin.
+
+The clean fix is the one AnimeFeedFlux uses: keep the git checkout and the deploy
+directory separate (`/opt/animefeedflux-src` versus `/opt/animefeedflux`), so the
+mutated compose file is not inside a git tree at all. Worth doing before a second
+service adopts this layout.
+
+### Known trap: moving a tag
+
+Re-pointing an existing tag wedges this box until the next fetch forces it —
+plain `git fetch --tags` refuses with "would clobber existing tag" and exits
+non-zero, which used to kill the autoupdate script on its first line while the
+webhook still answered `200 accepted`. The script now fetches with
+`--force --prune-tags` for exactly this reason. Prefer cutting a new version over
+moving a tag anyway.
+
 ### What is running right now?
 
 ```sh
