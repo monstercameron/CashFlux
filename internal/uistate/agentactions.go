@@ -87,8 +87,10 @@ type conversationLimit struct {
 	budget int
 }
 
-// conversationLimits holds each conversation's overrides. A conversation with no
-// entry uses the household default from Settings and has no cap.
+// conversationLimits holds each conversation's overrides for this session. The
+// durable copy lives on domain.Conversation and is restored into here when a
+// conversation is opened — this map is the fast path the render reads, not the
+// record. A conversation with no entry uses the household default and has no cap.
 var conversationLimits = map[string]conversationLimit{}
 
 // SetAgentModel remembers which model a conversation is using, so switching away
@@ -178,4 +180,21 @@ func bumpAgentActions() {
 	if agentActionsRevCaptured {
 		capturedAgentActionsRev.Set(capturedAgentActionsRev.Get() + 1)
 	}
+}
+
+// AgentCostSoFar returns the conversation's accumulated dollar cost and whether a
+// cost is known at all.
+//
+// It reads the SAME tally the receipt reads, rather than re-deriving a figure from
+// the token total. Re-deriving is where the composer's cost line went wrong: it fed
+// the conversation's whole token count in as PROMPT tokens, which priced every
+// output token at the (4–8× cheaper) input rate and understated the running spend
+// by a multiple. The tally is fed the properly-split cost per turn, so there is
+// exactly one correct number and both places now read it.
+func AgentCostSoFar(conversationID string) (float64, bool) {
+	t := agentTallies[conversationID]
+	if t == nil {
+		return 0, false
+	}
+	return t.CostUSD, t.HasCost
 }

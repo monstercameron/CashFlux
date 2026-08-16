@@ -40,6 +40,9 @@ var changesetKeys = Catalog{
 	"assistant.budgetLeft":   "%s left",
 	// %s = the cap that was reached. It names the way out, because the cap is the
 	// user's own and changing their mind is a legitimate answer.
+	// The last-resort message when the tool loop itself fails. It says what to do,
+	// because the alternative the user faces otherwise is reloading the page.
+	"insights.loopFailed":  "Something went wrong while I was working on that. Your data is untouched — try asking again.",
 	"insights.budgetSpent": "This chat has spent its %s-token cap. Raise the cap above, or start a new chat.",
 	// --- C391 confidence on inferred findings ---
 	// --- G2-C7 chat polish: rename, search, export, edit-and-resend, feedback ---

@@ -205,3 +205,27 @@ func TestMonthOfNormalisesToUTC(t *testing.T) {
 		t.Fatalf("MonthOf = %v, want July in UTC", got)
 	}
 }
+
+func TestAnUnpricedCallMakesTheVerdictUnknownNotComfortable(t *testing.T) {
+	// The recorded cost is a floor when any call ran on a model with no known
+	// price. A household could be well past its cap while the priced-only figure
+	// still looks fine — calling that "comfortable" defeats the point of the cap.
+	l := &Ledger{}
+	l.Record(Entry{Feature: "assistant", At: at(2026, time.August, 1), Tokens: 100, CostUSD: 1.0, HasCost: true})
+	l.Record(Entry{Feature: "assistant", At: at(2026, time.August, 2), Tokens: 90000}) // unpriced model
+	s := l.Month(at(2026, time.August, 10))
+	if got := s.PaceAgainst(10, at(2026, time.August, 10)); got != PaceUnknown {
+		t.Fatalf("pace = %v, want unknown while part of the spend cannot be priced", got)
+	}
+}
+
+func TestAnAlreadyExceededCapIsStillReportedWhenSomeCallsAreUnpriced(t *testing.T) {
+	// Past the cap on the priced calls ALONE is true whatever the rest cost, so
+	// this verdict stays safe to give.
+	l := &Ledger{}
+	l.Record(Entry{Feature: "assistant", At: at(2026, time.August, 1), Tokens: 100, CostUSD: 20, HasCost: true})
+	l.Record(Entry{Feature: "assistant", At: at(2026, time.August, 2), Tokens: 50})
+	if got := l.Month(at(2026, time.August, 10)).PaceAgainst(5, at(2026, time.August, 10)); got != PaceExceeded {
+		t.Fatalf("pace = %v, want exceeded", got)
+	}
+}

@@ -461,6 +461,17 @@ func Insights() ui.Node {
 		var sources []domain.ChatSource
 
 		go func() {
+			// Last line of defence. Everything below runs in a goroutine, and an
+			// unrecovered panic in a Go/wasm goroutine ends the whole program — the
+			// entire app, not the chat. A failure here becomes a message in the
+			// thread instead.
+			defer func() {
+				if r := recover(); r != nil {
+					loading.Set(false)
+					streaming.Set("")
+					errMsg.Set(uistate.T("insights.loopFailed"))
+				}
+			}()
 			for step := 0; step < 6; step++ {
 				ch := make(chan agentStep, 1)
 				// Each fragment lands in the live-answer atom, which the thread
@@ -522,6 +533,12 @@ func Insights() ui.Node {
 					app.RecordAISpend("assistant", model, total)
 					return
 				}
+				// This turn asked for tools, so whatever text it streamed was a
+				// preamble to that decision, not an answer. Clearing it here rather
+				// than at the top of the next step stops it hanging over the tool
+				// run — and, for a mutating tool, over the approval card, where a
+				// stale half-sentence reads as part of what is being approved.
+				streaming.Set("")
 				msgs = append(msgs, r.msg)
 				for _, tc := range r.msg.ToolCalls {
 					args := json.RawMessage(tc.Function.Arguments)
@@ -529,7 +546,7 @@ func Insights() ui.Node {
 					if tool, ok := byName[tc.Function.Name]; ok {
 						// Mutating tools pause for the user's approval in the thread.
 						if !tool.mutates {
-							out = tool.run(args)
+							out = runReadTool(tc.Function.Name, func() string { return tool.run(args) })
 						} else {
 							preview := tc.Function.Name
 							if tool.preview != nil {
@@ -790,7 +807,15 @@ func Insights() ui.Node {
 				break
 			}
 		}
-		_ = app.PutConversation(domain.Conversation{ID: cid, Title: title, Named: named, Messages: msgs, CreatedAt: created, UpdatedAt: time.Now()})
+		_ = app.PutConversation(domain.Conversation{
+			ID: cid, Title: title, Named: named, Messages: msgs,
+			CreatedAt: created, UpdatedAt: time.Now(),
+			// C390: the conversation's own model and cap ride with it, so they
+			// survive the reload — the moment they matter is coming back to a long
+			// thread tomorrow, which is exactly when a session-only value is gone.
+			Model:       uistate.AgentModel(cid),
+			TokenBudget: uistate.AgentBudget(cid),
+		})
 		bump()
 	}
 
@@ -830,6 +855,15 @@ func Insights() ui.Node {
 			// chose one. A thread reopened on a different model gives different
 			// answers to the same question, which reads as the assistant changing
 			// its mind rather than as the setting changing underneath it.
+			// The saved values are restored into session state first, so the
+			// pickers and the send-time budget check read the same thing whether
+			// the conversation was opened this session or last week.
+			if c.Model != "" {
+				uistate.SetAgentModel(cid, c.Model)
+			}
+			if c.TokenBudget > 0 {
+				uistate.SetAgentBudget(cid, c.TokenBudget)
+			}
 			if m := uistate.AgentModel(cid); m != "" {
 				modelSel.Set(m)
 			}
@@ -1349,8 +1383,10 @@ func Insights() ui.Node {
 	// to ask again.
 	composerMeta := Fragment()
 	if !noAI {
+		sessionCost, sessionCostOK := uistate.AgentCostSoFar(convID.Get())
 		composerMeta = ui.CreateElement(composerStatus, composerStatusProps{
-			Model: model, Tokens: budgetUsed, Capped: budgetCapped, Remaining: budgetLeft,
+			Model: model, Tokens: budgetUsed, CostUSD: sessionCost, HasCost: sessionCostOK,
+			Capped: budgetCapped, Remaining: budgetLeft,
 		})
 	}
 	composer := Fragment(inputRow, composerMeta)
@@ -2255,8 +2291,13 @@ func UserBubble(p userBubbleProps) ui.Node {
 }
 
 type composerStatusProps struct {
-	Model     string
-	Tokens    int
+	Model  string
+	Tokens int
+	// CostUSD is the conversation's accumulated cost from the shared tally, and
+	// HasCost is false when the model's pricing is unknown. Passed in rather than
+	// derived here so this line and the receipt can never disagree.
+	CostUSD   float64
+	HasCost   bool
 	Capped    bool
 	Remaining int
 }
@@ -2274,7 +2315,12 @@ func composerStatus(p composerStatusProps) ui.Node {
 	spend := Fragment()
 	if p.Tokens > 0 {
 		text := uistate.T("assistant.spentTokens", ai.FormatTokens(p.Tokens))
-		if cost, ok := ai.EstimateCostUSD(p.Model, ai.Usage{PromptTokens: p.Tokens}); ok && cost > 0 {
+		// The cost comes from the same tally the receipt below uses, which is fed
+		// each turn's real input/output split. Deriving it here from the token
+		// TOTAL is what this line did first, and it priced every output token at
+		// the input rate — several times cheap on a reasoning model, and a second
+		// figure on screen disagreeing with the receipt's.
+		if cost, ok := p.CostUSD, p.HasCost; ok && cost > 0 {
 			text = uistate.T("assistant.spentTokensCost", ai.FormatTokens(p.Tokens), ai.FormatCostUSD(cost))
 		}
 		spend = Span(css.Class("asst-status-spend"), Attr("data-testid", "assistant-session-spend"), text)

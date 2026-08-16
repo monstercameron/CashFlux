@@ -130,6 +130,10 @@ type AICompletion struct {
 	// "tool_calls"). It travels with every completion so a short or empty answer can
 	// say why it is short rather than looking like a failure with no explanation.
 	FinishReason string `json:"finishReason,omitempty"`
+	// Reasoning carries the Responses API's reasoning items back to the caller,
+	// which MUST echo them alongside the tool call on the next turn or the API
+	// rejects that turn.
+	Reasoning []json.RawMessage `json:"reasoning,omitempty"`
 }
 
 func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
@@ -269,7 +273,10 @@ func parseResponsesUpstream(data []byte) (AICompletion, error) {
 	if len(msg.ToolCalls) > 0 {
 		finish = ai.FinishToolCalls
 	}
-	return AICompletion{Content: msg.Content, Usage: usage, ToolCalls: msg.ToolCalls, FinishReason: finish}, nil
+	return AICompletion{
+		Content: msg.Content, Usage: usage, ToolCalls: msg.ToolCalls,
+		FinishReason: finish, Reasoning: msg.ReasoningRaw,
+	}, nil
 }
 
 func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompletion, error) {
@@ -438,6 +445,13 @@ func (s *AIService) completeStreaming(ctx context.Context, up aiUpstream, onDelt
 		s.auditAIUsageAlerts(ctx, day, previous, next)
 		s.metrics.ObserveAIProxy(int64(completion.Usage.TotalTokens))
 		if streamErr != nil {
+			// A stream that dropped part-way never produced an answer, so it does
+			// not keep its slot against the daily cap — the same rule the
+			// whole-answer path applies to its own failures. Without this, a run of
+			// flaky-network drops burns a household's day of requests while
+			// answering nothing. The TOKENS above are still recorded: those were
+			// billed whether or not an answer arrived.
+			release()
 			return AICompletion{}, status.Error(codes.Internal, streamErr.Error())
 		}
 		return completion, nil

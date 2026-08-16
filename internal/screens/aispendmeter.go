@@ -138,6 +138,14 @@ func aiSpendPaceNote(summary aispend.Summary, capUSD float64) ui.Node {
 	if pace == aispend.PaceNoCap || pace == aispend.PaceComfortable {
 		return Fragment()
 	}
+	// A month containing calls on an unpriced model cannot be judged against a cap
+	// at all: the recorded figure is a floor, and the real total could be anywhere
+	// above it. Saying so is the only honest option — the alternative is a
+	// reassuring verdict computed from a number that is knowingly incomplete.
+	if pace == aispend.PaceUnknown {
+		return P(css.Class("ai-meter-pace"), Attr("data-testid", "ai-spend-pace"), Attr("role", "status"),
+			uistate.T("aispend.paceUnknown", ai.FormatCostUSD(capUSD)))
+	}
 	key, cls := "aispend.paceTight", "ai-meter-pace"
 	switch pace {
 	case aispend.PaceOverPace:

@@ -6,6 +6,7 @@ package ai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -66,6 +67,9 @@ func rpcMessages(messages []Message) []backendrpc.Message {
 			ToolCalls:  rpcToolCalls(msg.ToolCalls),
 			ToolCallID: msg.ToolCallID,
 			Name:       msg.Name,
+			// The reasoning items that produced a tool call have to travel with it:
+			// the Responses API rejects a turn that echoes the call without them.
+			Reasoning: msg.ReasoningRaw,
 		})
 	}
 	return out
@@ -170,15 +174,17 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 		var content strings.Builder
 		var usage backendrpc.Usage
 		var toolCalls []backendrpc.ToolCall
+		var reasoning []json.RawMessage
 		var finish string
 		// A turn that only asks for tools carries no text, so "finished with nothing"
 		// is a real answer here rather than a failure — the caller decides what to do
 		// with an empty message that has tool calls attached.
 		finished := func() {
 			onResult(Message{
-				Role:      RoleAssistant,
-				Content:   content.String(),
-				ToolCalls: toolCallsFromRPC(toolCalls),
+				Role:         RoleAssistant,
+				Content:      content.String(),
+				ToolCalls:    toolCallsFromRPC(toolCalls),
+				ReasoningRaw: reasoning,
 			}, rpcUsage(usage))
 		}
 		for {
@@ -204,6 +210,9 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 			}
 			if len(chunk.ToolCalls) > 0 {
 				toolCalls = append(toolCalls, chunk.ToolCalls...)
+			}
+			if len(chunk.Reasoning) > 0 {
+				reasoning = append(reasoning, chunk.Reasoning...)
 			}
 			if chunk.FinishReason != "" {
 				finish = chunk.FinishReason

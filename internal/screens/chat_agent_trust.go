@@ -8,6 +8,7 @@ package screens
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -88,12 +89,39 @@ func agToolsTrust(app *appstate.App, base string, rates currency.Rates) []chatTo
 // The actor is cleared on the way out even if the tool panics, because a leaked
 // assistant tag would mis-attribute every subsequent hand-made edit in the session
 // — a worse failure than the one being fixed.
-func runAssistantWrite(tool string, run func() string) string {
+func runAssistantWrite(tool string, run func() string) (out string) {
 	auditview.SetSessionActor(auditview.ActorAssistant)
 	defer auditview.SetSessionActor("")
-	out := run()
+	// A tool runs with arguments the MODEL wrote — unvalidated JSON shaped by
+	// something outside this program. An unrecovered panic in a Go/wasm goroutine
+	// takes down the whole page, not just the chat, so one malformed argument
+	// reaching one nil map would black out the entire app and cost the user
+	// everything unsaved. The tool's failure is reported to the model as a tool
+	// result instead, which is a thing the conversation already knows how to
+	// handle.
+	defer func() {
+		if r := recover(); r != nil {
+			out = fmt.Sprintf("The %s tool failed: %v", tool, r)
+		}
+	}()
+	out = run()
 	// Capture while the tag is still set, so the undo point carries it.
 	auditview.CaptureNow()
 	uistate.NoteAssistantAction(tool)
 	return out
+}
+
+// runReadTool runs one read-only tool with the same panic guard as a write, minus
+// the audit and undo bookkeeping a read does not need.
+//
+// Read tools take model-written arguments too, so they crash the page just as
+// readily as a write does — the guard belongs on both paths, not only the one that
+// happens to change something.
+func runReadTool(tool string, run func() string) (out string) {
+	defer func() {
+		if r := recover(); r != nil {
+			out = fmt.Sprintf("The %s tool failed: %v", tool, r)
+		}
+	}()
+	return run()
 }

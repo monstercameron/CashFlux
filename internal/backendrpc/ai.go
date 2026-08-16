@@ -80,6 +80,15 @@ type Message struct {
 	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
 	ToolCallID string     `json:"toolCallId,omitempty"`
 	Name       string     `json:"name,omitempty"`
+	// Reasoning carries the Responses API's reasoning output items verbatim.
+	//
+	// It has to cross the wire even though nothing on this side reads it: for a
+	// reasoning model, the items that produced a tool call MUST be echoed back
+	// alongside that call on the next turn or the Responses API rejects the whole
+	// request. Dropping them here would break step two of every tool conversation
+	// on the proxy path — which is nearly every question, since the assistant is
+	// instructed to look figures up rather than recall them.
+	Reasoning []json.RawMessage `json:"reasoning,omitempty"`
 }
 
 type Usage struct {
@@ -107,10 +116,11 @@ type VisionRequest struct {
 }
 
 type Completion struct {
-	Content      string     `json:"content"`
-	Usage        Usage      `json:"usage"`
-	ToolCalls    []ToolCall `json:"toolCalls,omitempty"`
-	FinishReason string     `json:"finishReason,omitempty"`
+	Content      string            `json:"content"`
+	Usage        Usage             `json:"usage"`
+	ToolCalls    []ToolCall        `json:"toolCalls,omitempty"`
+	FinishReason string            `json:"finishReason,omitempty"`
+	Reasoning    []json.RawMessage `json:"reasoning,omitempty"`
 }
 
 type CompletionChunk struct {
@@ -118,7 +128,10 @@ type CompletionChunk struct {
 	Usage        Usage      `json:"usage,omitempty"`
 	ToolCalls    []ToolCall `json:"toolCalls,omitempty"`
 	FinishReason string     `json:"finishReason,omitempty"`
-	Done         bool       `json:"done,omitempty"`
+	// Reasoning carries the reply's reasoning items back to the caller, which must
+	// return them with the next turn — see Message.Reasoning.
+	Reasoning []json.RawMessage `json:"reasoning,omitempty"`
+	Done      bool              `json:"done,omitempty"`
 }
 
 type Workspace struct {

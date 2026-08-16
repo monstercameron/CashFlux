@@ -28,6 +28,10 @@ var aispendKeys = Catalog{
 	"aispend.paceOver":     "At this rate you'll reach about %s this month — past your %s limit.",
 	"aispend.paceExceeded": "You've passed your %s limit for this month.",
 
+	// %s = the cap. Shown when part of the month's spend ran on a model with no
+	// known price, so no honest verdict against the cap is possible.
+	"aispend.paceUnknown": "Some of this month ran on a model we have no pricing for, so we can't tell you how it's tracking against your %s limit.",
+
 	"aispend.capNone":  "Set a monthly limit",
 	"aispend.capSet":   "Monthly limit: %s",
 	"aispend.capClear": "No limit",

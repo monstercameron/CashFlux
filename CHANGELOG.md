@@ -18,6 +18,40 @@ and every commit updates this file under `Unreleased`.
   category, and mixed kinds are refused the way the merge panel already refuses them.
 
 ### Fixed
+- **Seven problems an adversarial review of this work found.** In severity order:
+
+  **Reasoning items were dropped crossing the proxy**, which would have broken step two of nearly
+  every tool conversation on the shared server key — the parity fix's own headline case. The
+  Responses API requires the reasoning items that produced a tool call to be echoed back alongside
+  it; they lived only in memory on the direct path and had nowhere to sit on the wire. They now
+  travel both ways, and a test drives a two-step tool conversation to prove step two is accepted.
+
+  **The composer's running cost was several times too low.** It fed the conversation's whole token
+  count in as PROMPT tokens, pricing every output token at the input rate — 4–8× cheap on a
+  reasoning model — and produced a second figure on screen disagreeing with the receipt's. Both now
+  read the one tally that is fed each turn's real input/output split.
+
+  **A panicking tool took the whole app down.** Tools run with arguments the model wrote, and an
+  unrecovered panic in a Go/wasm goroutine ends the entire page, not just the chat. Reads and writes
+  are both guarded now, and the tool loop has a last-resort recover that turns a crash into a message
+  in the thread.
+
+  **The spend meter's pace verdict treated a floor as a total** — a month with calls on an unpriced
+  model could be well past its cap while the priced-only figure still read "comfortable". That case
+  now says plainly that it cannot tell, which is the only honest answer available.
+
+  **Per-conversation model and cap were lost on reload**, despite a comment promising otherwise. The
+  moment they matter is returning to a long thread the next day, which is exactly when a
+  session-only value is gone; both now persist with the conversation.
+
+  **A streamed preamble hung over the tool run and the approval card** — a half-sentence about a
+  decision already made, sitting above the change being consented to. It clears when the turn asks
+  for tools rather than when the next one starts.
+
+  **A dropped stream kept its reserved daily request slot**, so a run of flaky-network failures could
+  burn a household's day of requests while answering nothing. It releases now, like every other
+  failure path; the tokens are still recorded, because those were billed either way.
+
 - **Merging a category no longer leaves two kinds of reference behind (C548).** The learn-from-
   corrections tally and any saved chart filtering on `cat:<id>` both survived a merge still pointing
   at the retired category — so SMART kept proposing a category that no longer exists, and a saved

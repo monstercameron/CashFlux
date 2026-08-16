@@ -590,6 +590,15 @@ type Conversation struct {
 	Messages  []ChatMessage `json:"messages,omitempty"`
 	CreatedAt time.Time     `json:"createdAt"`
 	UpdatedAt time.Time     `json:"updatedAt"`
+	// Model is the model this conversation was using, so reopening a long
+	// analytical thread continues it on the same one rather than on whatever was
+	// last picked elsewhere. Empty means the household default. It persists with
+	// the conversation because the moment it matters — coming back to a thread
+	// tomorrow — is precisely the moment a session-only choice would be gone.
+	Model string `json:"model,omitempty"`
+	// TokenBudget caps what this conversation may spend in total, in tokens. 0 is
+	// no cap.
+	TokenBudget int `json:"tokenBudget,omitempty"`
 }
 
 // DocumentKind is the source type of an imported document.

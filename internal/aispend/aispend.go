@@ -212,6 +212,12 @@ const (
 	PaceOverPace
 	// PaceExceeded means the cap has already been passed.
 	PaceExceeded
+	// PaceUnknown means the month contains calls whose price is not known, so the
+	// recorded cost is a floor and NO honest verdict against a cap is possible.
+	// It is a distinct state rather than an optimistic Comfortable: a household
+	// running an unpriced model could be well past its cap while the priced-only
+	// total still looks fine, and reporting that as comfortable defeats the cap.
+	PaceUnknown
 )
 
 // tightBand is how close to the cap a projection has to be to read as tight.
@@ -240,7 +246,15 @@ func (s Summary) PaceAgainst(capUSD float64, now time.Time) Pace {
 		return PaceNoCap
 	}
 	if s.CostUSD >= capUSD {
+		// Already past the cap on the priced calls alone — true whatever the
+		// unpriced ones cost, so this verdict is safe to give either way.
 		return PaceExceeded
+	}
+	if !s.Complete() {
+		// Below the cap on what can be priced, but some calls could not be priced
+		// at all. The real total is unknown and could be anywhere above this, so
+		// the honest answer is that there isn't one.
+		return PaceUnknown
 	}
 	projected, ok := s.ProjectSpend(now)
 	if !ok {

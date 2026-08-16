@@ -258,3 +258,58 @@ func TestAIProxyAcceptsContentlessAssistantToolCallTurn(t *testing.T) {
 		t.Fatalf("Chat rejected a valid tool conversation: %v", err)
 	}
 }
+
+// The failure the proxy path would otherwise hit on step two of every tool
+// conversation. A reasoning model returns reasoning items alongside its tool
+// call, and the Responses API rejects the NEXT turn unless those items are echoed
+// back with the call. They therefore have to survive the round trip through the
+// proxy — out to the caller, and back in with the follow-up.
+func TestReasoningItemsSurviveTheRoundTripSoStepTwoIsAccepted(t *testing.T) {
+	var sent map[string]any
+	svc, ctx := newProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		sent, _ = decodeResponsesRequest(string(raw))
+		_, _ = w.Write([]byte(`{"status":"completed","output":[` +
+			`{"type":"reasoning","id":"rs_1","summary":[]},` +
+			`{"type":"function_call","call_id":"call_1","name":"list_transactions","arguments":"{}"}` +
+			`],"usage":{"input_tokens":10,"output_tokens":5}}`))
+	})
+	tools := []ai.Tool{ai.FunctionTool("list_transactions", "list them", json.RawMessage(`{"type":"object"}`))}
+
+	// Step one: the model asks for a tool, and hands back reasoning items with it.
+	first, err := svc.Chat(ctx, AIChatRequest{
+		Model:    "gpt-5.4-mini",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "what did we spend?"}},
+		Tools:    tools,
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if len(first.Reasoning) != 1 {
+		t.Fatalf("reasoning items returned = %d, want 1 — without them step two is rejected", len(first.Reasoning))
+	}
+
+	// Step two: the caller returns the assistant turn WITH those items, plus the
+	// tool result. They must reach OpenAI ahead of the function_call.
+	if _, err := svc.Chat(ctx, AIChatRequest{
+		Model: "gpt-5.4-mini",
+		Messages: []ai.Message{
+			{Role: ai.RoleUser, Content: "what did we spend?"},
+			{Role: ai.RoleAssistant, ToolCalls: first.ToolCalls, ReasoningRaw: first.Reasoning},
+			ai.ToolResultMessage("call_1", "list_transactions", "total $312"),
+		},
+		Tools: tools,
+	}); err != nil {
+		t.Fatalf("second Chat: %v", err)
+	}
+	input, _ := sent["input"].([]any)
+	if len(input) != 4 {
+		t.Fatalf("input items = %d, want user + reasoning + function_call + result: %v", len(input), sent["input"])
+	}
+	if item, _ := input[1].(map[string]any); item["type"] != "reasoning" {
+		t.Fatalf("input[1] = %v, want the reasoning item ahead of the call", input[1])
+	}
+	if item, _ := input[2].(map[string]any); item["type"] != "function_call" {
+		t.Fatalf("input[2] = %v, want the function call", input[2])
+	}
+}

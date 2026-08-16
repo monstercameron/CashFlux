@@ -114,6 +114,7 @@ func (s *AIService) ChatRPC(ctx context.Context, req backendrpc.ChatRequest) (ba
 		Usage:        rpcUsage(out.Usage),
 		ToolCalls:    rpcToolCalls(out.ToolCalls),
 		FinishReason: out.FinishReason,
+		Reasoning:    out.Reasoning,
 	}, nil
 }
 
@@ -173,6 +174,7 @@ func (s *AIService) ChatStreamRPC(req backendrpc.ChatRequest, stream grpc.Server
 		Usage:        rpcUsage(completion.Usage),
 		ToolCalls:    rpcToolCalls(completion.ToolCalls),
 		FinishReason: completion.FinishReason,
+		Reasoning:    completion.Reasoning,
 		Done:         true,
 	}); err != nil {
 		statusCode = status.Code(err).String()
@@ -205,11 +207,12 @@ func aiMessages(messages []backendrpc.Message) []ai.Message {
 	out := make([]ai.Message, 0, len(messages))
 	for _, msg := range messages {
 		out = append(out, ai.Message{
-			Role:       msg.Role,
-			Content:    msg.Content,
-			ToolCalls:  aiToolCalls(msg.ToolCalls),
-			ToolCallID: msg.ToolCallID,
-			Name:       msg.Name,
+			Role:         msg.Role,
+			Content:      msg.Content,
+			ToolCalls:    aiToolCalls(msg.ToolCalls),
+			ToolCallID:   msg.ToolCallID,
+			Name:         msg.Name,
+			ReasoningRaw: msg.Reasoning,
 		})
 	}
 	return out
