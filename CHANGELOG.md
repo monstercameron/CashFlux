@@ -47,6 +47,10 @@ and every commit updates this file under `Unreleased`.
   that merely happened to be red — the loudest thing in the footer, for the action that should be
   the quietest. The danger tone was a decision; that weight was a cascade accident.
 
+  A third round closed the mirror case: leaving an EMPTY note empty changed nothing, so announcing
+  "Note removed" there was the same untruth pointed the other way. The message is now chosen from
+  what actually changed, not from the new value alone.
+
 ### Added
 - **An AI spend meter, and starter questions that name what's true today (EC-15, EC-16).** Every AI
   surface already showed an estimate before a call and a token line after it, but nothing added them

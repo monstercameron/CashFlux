@@ -295,6 +295,21 @@ test.describe("budgets: notes modal", () => {
     await expect(app.locator("body")).toContainText(/Note removed from/);
     await expect(app.locator(`[data-testid="budget-notes-${bid}"]`)).toHaveCount(0);
   });
+
+  // The mirror of the case above: leaving an empty note empty changed nothing, so
+  // claiming a removal would be the same kind of untruth in the opposite direction.
+  test("saving an empty editor on a budget with no note claims nothing", async ({ app }) => {
+    await nav(app, "/budgets");
+    const bid = await firstBudgetId(app);
+    await expect(app.locator(`[data-testid="budget-notes-${bid}"]`)).toHaveCount(0);
+    await openBudgetMenu(app, bid);
+    await menuItem(app, bid, "budget-notes-btn").click();
+    await app.waitForTimeout(650);
+    await app.getByTestId("budget-notes-save").click();
+    await app.waitForTimeout(1400);
+    await expect(app.locator("body")).not.toContainText(/Note removed from/);
+    await expect(app.locator("body")).not.toContainText(/Note saved on/);
+  });
 });
 
 test.describe("budgets: formulas modal", () => {

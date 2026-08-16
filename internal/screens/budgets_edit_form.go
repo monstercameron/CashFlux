@@ -491,6 +491,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			if bb.ID != props.BudgetID {
 				continue
 			}
+			had := strings.TrimSpace(bb.Notes) != ""
 			bb.Notes = next
 			if err := app.PutBudget(bb); err != nil {
 				errS.Set(err.Error())
@@ -504,12 +505,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			// is looking at the modal, and a modal that just closes is what made a
 			// working save read as a broken one. The budget is named because notes
 			// are per-budget and several get written in a row.
-			title := budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID))
-			key := "budgets.notesSaved"
-			if next == "" {
-				key = "budgets.notesRemoved"
+			// Report what actually changed. Opening the editor on a budget with no
+			// note and closing it with Save leaves an empty note empty — announcing
+			// "Note removed" there would claim a deletion that never happened, which
+			// is the same class of untruth as the "Note saved" this replaced.
+			switch title := budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID)); {
+			case next == "" && had:
+				uistate.PostNotice(uistate.T("budgets.notesRemoved", title), false)
+			case next != "":
+				uistate.PostNotice(uistate.T("budgets.notesSaved", title), false)
 			}
-			uistate.PostNotice(uistate.T(key, title), false)
 			done()
 			return
 		}
