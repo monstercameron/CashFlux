@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 )
 
 // ─── C349: the demo must look healthy whenever it is loaded ──────────────────
@@ -165,5 +166,161 @@ func TestShiftMonthsClampsShortMonths(t *testing.T) {
 	}
 	if got := shiftMonths(jan31, 0); !got.Equal(jan31) {
 		t.Errorf("a zero shift changed the date: %s", got.Format(time.DateOnly))
+	}
+}
+
+// ─── C350: the demo has to add up ────────────────────────────────────────────
+//
+// The sample is what every screenshot, every reviewer and every first run sees,
+// so an internal contradiction in it is not a fixture bug — it is the product
+// appearing to be wrong. Three were live: goals claiming more money than the
+// account they were linked to held, payoff goals disagreeing with the loans they
+// were about, and "Joint" accounts owned by one person so "Group (shared)" read
+// $0.00 on the net-worth-by-member breakdown.
+
+// TestGoalsDoNotClaimMoreThanTheirAccountHolds pins the first.
+func TestGoalsDoNotClaimMoreThanTheirAccountHolds(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	bals, err := ledger.Balances(ds.Accounts, ds.Transactions)
+	if err != nil {
+		t.Fatalf("balances: %v", err)
+	}
+	claimed := map[string]int64{}
+	for _, g := range ds.Goals {
+		if g.AccountID == "" {
+			continue
+		}
+		claimed[g.AccountID] += g.CurrentAmount.Amount
+	}
+	if len(claimed) == 0 {
+		t.Fatal("no account-linked goals — this guard would pass vacuously")
+	}
+	for id, sum := range claimed {
+		held := bals[id].Amount
+		if sum > held {
+			t.Errorf("goals linked to %s claim %d saved, but the account holds %d — "+
+				"the demo shows more money earmarked than exists (C350)", id, sum, held)
+		}
+	}
+}
+
+// TestPayoffGoalsAgreeWithTheirLoans pins the second: "Pay off Priya's student
+// loan" showed $25,000 still to go beside a ledger balance of $18,640.
+func TestPayoffGoalsAgreeWithTheirLoans(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	bals, err := ledger.Balances(ds.Accounts, ds.Transactions)
+	if err != nil {
+		t.Fatalf("balances: %v", err)
+	}
+	abs := func(v int64) int64 {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	for _, tc := range []struct{ goalID, acctID string }{
+		{"goal-studentloan", "acct-studentloan"},
+		{"goal-car", "acct-carloan-marcus"},
+	} {
+		var g domain.Goal
+		for _, cand := range ds.Goals {
+			if cand.ID == tc.goalID {
+				g = cand
+			}
+		}
+		if g.ID == "" {
+			t.Errorf("%s missing", tc.goalID)
+			continue
+		}
+		remaining := g.TargetAmount.Amount - g.CurrentAmount.Amount
+		owed := abs(bals[tc.acctID].Amount)
+		if remaining != owed {
+			t.Errorf("%s says %d still to go; %s owes %d — a payoff goal that disagrees "+
+				"with its own loan makes both numbers unreadable (C350)",
+				tc.goalID, remaining, tc.acctID, owed)
+		}
+	}
+}
+
+// TestSharedAccountsAreOwnedByTheHousehold pins the third.
+func TestSharedAccountsAreOwnedByTheHousehold(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	shared := 0
+	for _, a := range ds.Accounts {
+		if a.Scope != domain.ScopeShared {
+			continue
+		}
+		shared++
+		if a.OwnerID != domain.GroupOwnerID {
+			t.Errorf("%q is shared but owned by %q — net worth by member then reports "+
+				"\"Group (shared) $0.00\" while a joint account sits under one person (C350)",
+				a.Name, a.OwnerID)
+		}
+	}
+	if shared == 0 {
+		t.Fatal("no shared accounts — this guard would pass vacuously")
+	}
+}
+
+// Every spending row carries a member, or the by-member breakdown is a single
+// "(unassigned)" bar.
+func TestEverySpendingRowIsAttributed(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	unattributed := 0
+	for _, tx := range ds.Transactions {
+		if tx.Amount.Amount >= 0 || tx.TransferAccountID != "" {
+			continue
+		}
+		if tx.MemberID == "" {
+			unattributed++
+		}
+	}
+	if unattributed > 0 {
+		t.Errorf("%d spending rows have no member — Spending-by-member reads "+
+			"\"(unassigned)\" for all of it (C350)", unattributed)
+	}
+}
+
+// ─── C351: demo content should not editorialize ──────────────────────────────
+//
+// "Cigarettes" as a 240-transaction habit under a category called "Guilty
+// pleasures" is what a reviewer screenshots. The detectors need a small,
+// frequent, cash-paid habit to find; they do not need it to be that one.
+func TestDemoContentStaysNeutral(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	banned := []string{"Cigarette", "cigarette", "Smoke Shop", "Guilty pleasure", "Cheap ", "worthless"}
+	check := func(where, text string) {
+		for _, b := range banned {
+			if strings.Contains(text, b) {
+				t.Errorf("%s contains %q: %q — neutral demo content reads better in "+
+					"screenshots, reviews and first runs (C351)", where, b, text)
+			}
+		}
+	}
+	for _, tx := range ds.Transactions {
+		check("transaction desc", tx.Desc)
+		check("transaction payee", tx.Payee)
+		for _, tg := range tx.Tags {
+			check("transaction tag", tg)
+		}
+	}
+	for _, c := range ds.Categories {
+		check("category name", c.Name)
+	}
+	for _, b := range ds.Budgets {
+		check("budget name", b.Name)
+	}
+
+	// And the habit itself must survive the rewording — the small-leaks
+	// detectors, the tag report and its budget all depend on it existing.
+	habit := 0
+	for _, tx := range ds.Transactions {
+		if tx.CategoryID == "cat-vices" {
+			habit++
+		}
+	}
+	if habit < 200 {
+		t.Errorf("only %d everyday-extras charges — the neutral rewrite must keep the "+
+			"habit, not delete it", habit)
 	}
 }

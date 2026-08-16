@@ -229,7 +229,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 		catGifts      = "cat-gifts"
 		catTravel     = "cat-travel"
 		catBizExp     = "cat-business-expense"
-		catVices      = "cat-vices"          // the guilty-pleasure noise: cigarettes, cheap cosmetics
+		catVices      = "cat-vices"          // the small-leaks noise: coffee runs, small beauty buys
 		catInvestLoss = "cat-investing-loss" // realized trading losses (WSB)
 		catFees       = "cat-fees"
 		// Expense sub-categories (nested, to exercise the category tree)
@@ -584,33 +584,36 @@ func SampleDatasetAt(now time.Time) Dataset {
 			})
 		}
 
-		// --- "Guilty pleasure" noise (varies month to month) ---
-		// Marcus's cigarettes: a few small convenience-store buys a month, paid in
-		// cash, with wandering payees, days, and prices so it looks like real habit
-		// spending rather than a clean recurring line.
-		smokeShops := []string{"Quik Mart", "7-Eleven", "Smoke Shop", "Gas-N-Go"}
-		smokes := 2 + int(vr("smoken", i, 3)) // 2..4 packs a month
+		// --- Everyday-extras noise (varies month to month) ---
+		// Marcus's coffee-and-snack run: a few small convenience-store buys a month,
+		// paid in cash, with wandering payees, days, and prices so it looks like real
+		// habit spending rather than a clean recurring line. It exists to give the
+		// small-leaks detectors, the tag report and the "Everyday extras" budget
+		// something real to find — the demo needs a habit worth noticing, not a
+		// judgment about the household (C351).
+		cornerShops := []string{"Quik Mart", "7-Eleven", "Corner Deli", "Gas-N-Go"}
+		runs := 2 + int(vr("smoken", i, 3)) // 2..4 stops a month
 		if gap {
-			smokes += 2 // the layoff months were stressful
+			runs += 2 // the layoff months were stressful
 		}
-		for s := range smokes {
+		for s := range runs {
 			day := min(3+s*7+int(i%4), 28)
 			dt := date(y, m, day)
 			add(domain.Transaction{
 				ID: fmt.Sprintf("tx-%s-smokes-%d", tag, s), AccountID: cash, Date: dt,
-				Payee: smokeShops[(i+s)%len(smokeShops)], Desc: "Cigarettes", CategoryID: catVices,
+				Payee: cornerShops[(i+s)%len(cornerShops)], Desc: "Coffee & snacks", CategoryID: catVices,
 				Amount: usd(-(1050 + (int64(s)+v)%4*130)), MemberID: marcus, Cleared: cleared(dt),
-				Tags: []string{"cigarettes"},
+				Tags: []string{"coffee-run"},
 			})
 		}
-		// Priya's cheap cosmetics: impulse Amazon orders, small and frequent.
+		// Priya's small beauty orders: impulse Amazon buys, small and frequent.
 		cosmetics := 1 + int((i/2)%3) // 1..3 orders a month
 		for c := range cosmetics {
 			day := min(5+c*9+int(i%3), 27)
 			dt := date(y, m, day)
 			add(domain.Transaction{
 				ID: fmt.Sprintf("tx-%s-cosmetics-%d", tag, c), AccountID: card, Date: dt,
-				Payee: "Amazon", Desc: "Cheap cosmetics", CategoryID: catVices,
+				Payee: "Amazon", Desc: "Skincare & beauty", CategoryID: catVices,
 				Amount: usd(-(800 + (int64(c)*3+v)%5*460)), MemberID: priya, Cleared: cleared(dt),
 				Tags: []string{"cosmetics", "amazon"},
 			})
@@ -672,7 +675,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 				dt := date(y, m, 27)
 				add(domain.Transaction{
 					ID: "tx-" + tag + "-wsb-loss", AccountID: wsb, Date: dt, Payee: "Robinhood",
-					Desc: tickers[(i+3)%len(tickers)] + " — expired worthless", CategoryID: catInvestLoss,
+					Desc: tickers[(i+3)%len(tickers)] + " — expired out of the money", CategoryID: catInvestLoss,
 					Amount: usd(-(6000 + v*11000)), MemberID: marcus, Cleared: cleared(dt), Tags: []string{"wsb", "loss-porn"},
 				})
 			}
@@ -837,20 +840,20 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: priya, Name: "Priya Hartley", Color: "#f472b6"},
 		},
 		Accounts: []domain.Account{
-			{ID: checking, Name: "Joint Checking", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(650000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 95, ExpectedReturnAPR: 0.1, Custom: map[string]any{"last4": "4821"}},
-			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(1050000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
+			{ID: checking, Name: "Joint Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(650000), BalanceAsOf: asOf, LiquidityScore: 100, StabilityScore: 95, ExpectedReturnAPR: 0.1, Custom: map[string]any{"last4": "4821"}},
+			{ID: hysa, Name: "Joint Savings (HYSA)", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(1050000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 90, StabilityScore: 98, ExpectedReturnAPR: 4.2},
 			{ID: k401, Name: "Marcus's 401(k)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(850000), BalanceAsOf: date(2026, time.March, 31), LiquidityScore: 40, StabilityScore: 55, ExpectedReturnAPR: 7.5},
 			{ID: roth, Name: "Roth IRA", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(220000), BalanceAsOf: date(2026, time.March, 31), LiquidityScore: 45, StabilityScore: 60, ExpectedReturnAPR: 7.0},
 			{ID: bizchk, Name: "Priya's Business Checking", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: usd(15000), BalanceAsOf: date(2026, time.June, 26), LiquidityScore: 100, StabilityScore: 80, ExpectedReturnAPR: 0.1},
 			{ID: wsb, Name: "Stonks (Fun Money)", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(40000), BalanceAsOf: date(2026, time.June, 25), LiquidityScore: 50, StabilityScore: 15, ExpectedReturnAPR: 4.0, Custom: map[string]any{}},
-			{ID: cash, Name: "Cash Wallet", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(9000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 100, StabilityScore: 80},
-			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(30400000), BalanceAsOf: date(2026, time.June, 30), LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
-			{ID: mortgage, Name: "Mortgage", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: date(2026, time.July, 1), InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
+			{ID: cash, Name: "Cash Wallet", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeCash, Currency: "USD", OpeningBalance: usd(9000), BalanceAsOf: date(2026, time.June, 2), LiquidityScore: 100, StabilityScore: 80},
+			{ID: home, Name: "Condo (2 bed / 1 bath)", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeProperty, Currency: "USD", OpeningBalance: usd(30400000), BalanceAsOf: date(2026, time.June, 30), LiquidityScore: 5, StabilityScore: 80, ExpectedReturnAPR: 3.5, Custom: map[string]any{}},
+			{ID: mortgage, Name: "Mortgage", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: date(2026, time.July, 1), InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans"},
 			{ID: carM, Name: "Marcus's Car Loan", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 15), InterestRateAPR: 7.4, DueDayOfMonth: 15, MinPayment: usd(62000), Lender: "Apex Auto Finance"},
 			{ID: carP, Name: "Priya's Car Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-2600000), BalanceAsOf: date(2026, time.June, 17), InterestRateAPR: 6.9, DueDayOfMonth: 17, MinPayment: usd(48000), Lender: "Apex Auto Finance"},
 			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 5), InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing"},
-			{ID: card, Name: "Rewards Credit Card", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: date(2026, time.June, 22), CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
-			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: marcus, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: date(2026, time.June, 20), CreditLimit: eur(300000), InterestRateAPR: 19.9, Lender: "Wise"},
+			{ID: card, Name: "Rewards Credit Card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: date(2026, time.June, 22), CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
+			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: date(2026, time.June, 20), CreditLimit: eur(300000), InterestRateAPR: 19.9, Lender: "Wise"},
 		},
 		Categories: []domain.Category{
 			{ID: catSalary, Name: "Salary", Kind: domain.KindIncome, Color: "#22c55e"},
@@ -883,7 +886,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: catGifts, Name: "Gifts & Charity", Kind: domain.KindExpense, Color: "#fda4af"},
 			{ID: catTravel, Name: "Travel", Kind: domain.KindExpense, Color: "#2dd4bf"},
 			{ID: catBizExp, Name: "Business expenses", Kind: domain.KindExpense, Color: "#a3a3a3"},
-			{ID: catVices, Name: "Guilty pleasures", Kind: domain.KindExpense, Color: "#737373"},
+			{ID: catVices, Name: "Everyday extras", Kind: domain.KindExpense, Color: "#737373"},
 			{ID: catInvestLoss, Name: "Investing losses", Kind: domain.KindExpense, Color: "#9f1239"},
 			{ID: catFees, Name: "Fees & Charges", Kind: domain.KindExpense, Color: "#94a3b8"},
 		},
@@ -897,7 +900,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: "bud-baby", Name: "Baby & Childcare", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catBaby, Period: domain.PeriodMonthly, Limit: usd(40000)},
 			{ID: "bud-shopping", Name: "Shopping", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catShopping, Period: domain.PeriodMonthly, Limit: usd(20000)},
 			{ID: "bud-subs", Name: "Subscriptions", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catSubs, Period: domain.PeriodMonthly, Limit: usd(4000)},
-			{ID: "bud-vices", Name: "Guilty pleasures", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catVices, Period: domain.PeriodMonthly, Limit: usd(6000)},
+			{ID: "bud-vices", Name: "Everyday extras", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catVices, Period: domain.PeriodMonthly, Limit: usd(6000)},
 			{ID: "bud-fun", Name: "Entertainment", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catEntertain, Period: domain.PeriodWeekly, Limit: usd(2500)},
 			{ID: "bud-travel", Name: "Travel", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTravel, Period: domain.PeriodQuarterly, Limit: usd(60000)},
 			// A cross-category TAG budget (precision tracking): no category of its own — it
@@ -912,17 +915,17 @@ func SampleDatasetAt(now time.Time) Dataset {
 				Notes: "Cross-category lifestyle cap — counts anything tagged splurge, vacation, date-night, or big-purchase, whatever the category."},
 		},
 		Goals: []domain.Goal{
-			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(1150000), TargetDate: date(2029, time.June, 1), AccountID: hysa, ExpectedReturnBips: 500, Notes: "Aim for a 20% down payment on ~$400k so we skip PMI. Down-payment fund sits in the HYSA / a conservative index — assume ~5%/yr. Once the baby's here we'll want a 3rd bedroom and a real yard — start touring open houses in the spring."},
+			{ID: "goal-house", Name: "Trade up to a bigger family home", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(8000000), CurrentAmount: usd(750000), TargetDate: date(2029, time.June, 1), AccountID: hysa, ExpectedReturnBips: 500, Notes: "Aim for a 20% down payment on ~$400k so we skip PMI. Down-payment fund sits in the HYSA / a conservative index — assume ~5%/yr. Once the baby's here we'll want a 3rd bedroom and a real yard — start touring open houses in the spring."},
 			// Virtual allocation ("earmarks"): the Hartleys have mentally reserved part of their
 			// savings + checking toward the baby and emergency funds WITHOUT moving the money —
 			// so the Goals page shows partly-earmarked coverage and the Earmarks tab has real data.
-			{ID: "goal-baby", Name: "Baby fund (due " + babyDueLabel + ")", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(280000), TargetDate: date(2026, time.December, 1), AccountID: hysa,
+			{ID: "goal-baby", Name: "Baby fund (due " + babyDueLabel + ")", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(320000), TargetDate: date(2026, time.December, 1), AccountID: hysa,
 				Allocations: []domain.GoalAllocation{{AccountID: hysa, Amount: usd(300000)}, {AccountID: checking, Amount: usd(200000)}}},
 			{ID: "goal-emergency", Name: "Emergency fund (3 months)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1500000), CurrentAmount: usd(480000), TargetDate: date(2027, time.June, 1), AccountID: hysa,
 				Notes:       "The 2023 layoff drained us to $7,500 — never again. 3 months = ~$15k. Bump the auto-transfer to $400/mo once the car loan's gone.",
 				Allocations: []domain.GoalAllocation{{AccountID: hysa, Amount: usd(250000)}}},
-			{ID: "goal-studentloan", Name: "Pay off Priya's student loan", Scope: domain.ScopeIndividual, OwnerID: priya, TargetAmount: usd(3400000), CurrentAmount: usd(900000), TargetDate: date(2029, time.December, 1)},
-			{ID: "goal-car", Name: "Pay off Marcus's car loan", Scope: domain.ScopeIndividual, OwnerID: marcus, TargetAmount: usd(3800000), CurrentAmount: usd(600000), TargetDate: date(2030, time.January, 1)},
+			{ID: "goal-studentloan", Name: "Pay off Priya's student loan", Scope: domain.ScopeIndividual, OwnerID: priya, TargetAmount: usd(3800000), CurrentAmount: usd(1920000), TargetDate: date(2029, time.December, 1)},
+			{ID: "goal-car", Name: "Pay off Marcus's car loan", Scope: domain.ScopeIndividual, OwnerID: marcus, TargetAmount: usd(3800000), CurrentAmount: usd(1116000), TargetDate: date(2030, time.January, 1)},
 		},
 		Tasks: []domain.Task{
 			{ID: "task-card", Title: "Pay down the credit card balance", Notes: "We're carrying a balance — pay more than the minimum this month.", Status: domain.StatusOpen, Priority: domain.PriorityHigh, Due: date(2026, time.June, 22), RelatedType: domain.RelatedAccount, RelatedID: card, MemberID: marcus, Source: domain.SourceManual},
@@ -1017,9 +1020,9 @@ func SampleDatasetAt(now time.Time) Dataset {
 		},
 		SavedInsights: []domain.SavedInsight{
 			{ID: "insight-dining", Text: "Dining is your biggest leak: it runs roughly $250–$400 over the $300 monthly budget almost every month — about $3,500/year you could redirect to the baby fund or the car loan.", CreatedAt: date(2026, time.May, 2)},
-			{ID: "insight-runway", Text: "Your emergency fund only covers about 1.5 months of expenses right now. With the baby due in " + babyDueMonth + ", building this toward three months is the most important near-term move.", CreatedAt: date(2026, time.June, 5)},
+			{ID: "insight-runway", Text: "Most of your cushion is sitting in checking, earning nothing. Moving the balance above one month of expenses into the HYSA would fund the rest of the emergency goal and start earning ~4%, without changing anything you actually spend. With the baby due in " + babyDueMonth + ", that is the easiest money on the table.", CreatedAt: date(2026, time.June, 5)},
 			{ID: "insight-debt", Text: "Between the two car loans, the student loan, and the card, debt payments are over $1,600/month. Paying the card down first (25% APR) saves the most interest.", CreatedAt: date(2026, time.June, 6)},
-			{ID: "insight-jobloss", Text: "You've lived this before: when Marcus was laid off in " + layoffLabel + ", checking bottomed out near $1,200 and you drew down savings for months. Today the fund covers about 1.5 months of expenses — with the baby due in " + babyDueMonth + ", growing it toward three months is the single most protective move.", CreatedAt: date(2026, time.June, 8)},
+			{ID: "insight-jobloss", Text: "You've lived this before: when Marcus was laid off in " + layoffLabel + ", checking bottomed out near $1,200 and you drew down savings for months. The cushion is in much better shape now — the thing that has not changed is the debt load, which is what turned four months out of work into a year of catching up.", CreatedAt: date(2026, time.June, 8)},
 			{ID: "insight-uncategorized", Text: "There are dozens of imported transactions with raw bank names (VENMO, PAYPAL, ZELLE, STEAM…) still uncategorized. Adding three or four rules — or running the Smart+ scan — would clean most of them up and make every report more accurate.", CreatedAt: date(2026, time.June, 20)},
 			{ID: "insight-streak", Text: "The spring-2024 brokerage streak (+$13,300 over four months) worked out because you took profits — the $8,000 you moved to savings is most of what later covered the car down payments. The habit worth keeping is the cash-out, not the streak.", CreatedAt: date(2026, time.June, 14)},
 		},

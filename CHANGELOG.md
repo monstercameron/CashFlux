@@ -62,6 +62,31 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **The sample household adds up (C350).** Goals linked to the joint savings claimed $19,100 against
+  $15,540 actually in the account. "Pay off Priya's student loan" showed $25,000 still to go beside a
+  ledger balance of $18,800. And every shared account was owned by one person, so net-worth-by-member
+  filed the joint checking, the condo, the mortgage and the card under Marcus and reported "Group
+  (shared) $0.00". The demo is what every screenshot and every reviewer sees, so a contradiction in
+  it does not read as a fixture bug — it reads as the product being wrong.
+
+  Payoff goals now derive from the loans they are about: target is the original principal, progress
+  is what has actually been repaid, so "still to go" equals the ledger balance to the cent. Shared
+  accounts belong to the household. Goals cannot claim more than their account holds.
+
+  The saved insights also asserted "your emergency fund only covers about 1.5 months" while the
+  ledger showed roughly thirteen months of liquid runway — the demo's own commentary contradicting
+  its own health score. The copy now describes what is true: a large checking balance sitting idle,
+  which is the app's own idle-cash story.
+
+### Changed
+- **Demo content stops editorializing (C351).** A 240-transaction cigarette habit under a category
+  called "Guilty pleasures" is what a reviewer screenshots. The detectors need a small, frequent,
+  cash-paid habit with wandering payees; they never needed it to be that one. The habit keeps every
+  property that made it useful — same cadence, same amounts, the same stress-correlated spike during
+  the layoff months — and is now a coffee-and-snacks run. "Cheap cosmetics" became "Skincare &
+  beauty", the category and its budget read "Everyday extras", and the options loss reads "expired
+  out of the money".
+
 - **The sample dataset no longer goes stale (C349).** It carried absolute timestamps, so loading the
   demo opened on "It's been 1464 days since the balance was confirmed" fourteen times over in
   notifications, 4y+ chips on the freshness tile, OUT OF DATE badges on every account row, and a

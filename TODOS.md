@@ -5143,15 +5143,37 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   authored year left in the insight copy, and `shiftMonths` clamping Jan 31 → Feb 28 rather than
   spilling into March. `TestSampleNarrative` now pins the AUTHORED calendar via
   `SampleDatasetAt(sampleAuthoredNow)`, so the story's arcs stay asserted exactly.
-- [ ] **C350 [MINOR][SAMPLE] Sample story doesn't add up:** goal "saved" totals exceed the linked
-  account ($19.1k of goals linked to a $3,480 HYSA); "Pay off Priya's student loan" ($34k target,
-  $25k to go) vs the ladder's $18,640 balance; "Joint" accounts not owned by the household (Net
-  worth by member: "Group (shared) $0.00"); all spending "(unassigned)" in Spending-by-member;
-  car-payment transfer pairs sit as two Uncategorized Manual rows. Make the demo dataset one
-  coherent household (it's also what every screenshot/reviewer sees).
-- [ ] **C351 [MINOR][SAMPLE] Sample content tone:** "Cigarettes" (weekly, 240-txn "Guilty
-  pleasures"), "TSLA — expired worthless". Neutral/aspirational demo content lands better in
-  screenshots, reviews, and first-runs.
+- [x] **C350 ✅ DONE (2026-08-16) — Sample story didn't add up.** Probed the fixture rather than
+  trusting the ticket's list, and three of the five were live: (1) goals linked to the HYSA claimed
+  $19,100 against $15,540 actually held — the demo showed more money earmarked than exists; (2) the
+  payoff goals disagreed with the loans they were about ("$25,000 still to go" beside an $18,800
+  balance) — target/current now equal the original principal and the amount actually repaid, so
+  remaining == the ledger balance to the cent; (3) every shared account carried `OwnerID: marcus`,
+  so net-worth-by-member filed the joint checking, the HYSA, the condo, the mortgage and the card
+  under one person and reported "Group (shared) $0.00" — shared-scope accounts are owned by
+  `domain.GroupOwnerID` now. The other two were already fixed since the audit: every spending row
+  carries a MemberID (0 unattributed), and the car payments are real two-legged transfers
+  (`addTransferBetween`), not loose manual rows.
+  **Also found:** the saved insights asserted "your emergency fund only covers about 1.5 months"
+  while the ledger showed ~13 months of liquid runway — the demo's own commentary contradicting its
+  own health score. The copy now describes what is actually true (a large idle checking balance
+  earning nothing, which is the app's own idle-cash story) instead of a number the data disagrees
+  with. **Follow-on, not done:** the deeper cause is that the 60-month simulation accumulates more
+  surplus than the "debt-heavy, thin-margined" narrative implies (checking drifts to ~$30k). Fixing
+  that means retuning the simulation's outflows, which risks the arcs; it is filed rather than
+  half-done. Guards: goals may not claim more than their linked account holds, payoff goals must
+  equal their loan balance, shared accounts must be group-owned, and every spending row must be
+  attributed — each failing with the symptom it prevents.
+- [x] **C351 ✅ DONE (2026-08-16) — Sample content tone.** The detectors need a small, frequent,
+  cash-paid habit with wandering payees to find; they never needed it to be cigarettes. The habit
+  keeps every analytic property that made it useful — same cadence, same amounts, same
+  stress-correlated spike during the layoff months, same 240-odd rows, same category id so nothing
+  downstream moves — and is now a coffee-and-snacks run ("Smoke Shop" → "Corner Deli"). "Cheap
+  cosmetics" → "Skincare & beauty"; the category and its budget read "Everyday extras" rather than
+  "Guilty pleasures"; the options loss reads "expired out of the money" rather than "expired
+  worthless". Guarded by a banned-phrase scan over every transaction desc/payee/tag, category name
+  and budget name, paired with an assertion that the habit still EXISTS (≥200 rows) — a neutral
+  rewrite that deletes the thing the demo was demonstrating is not a fix.
 
 ### Helpfulness / decision quality
 - [ ] **C345 [MAJOR][UX] /notifications is an ungrouped flood:** 14 near-identical "needs an
