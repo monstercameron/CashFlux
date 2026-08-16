@@ -68,10 +68,18 @@ func SuggestBudgets(categories []domain.Category, txns []domain.Transaction, now
 // annual renewal) doesn't inflate an everyday target. With a one-month span it returns
 // that month's spend (nothing to trim). Same currency/expense/partial-month rules as
 // SuggestLimit. It is a func value so SuggestBudgets can dispatch between the two.
+//
+// Like SuggestLimit it attributes SPLIT LINES to their own category (the split
+// contract in domain/category_split.go). Reading only the parent's CategoryID
+// made the two methods disagree on the same household: a family that always
+// splits its Costco receipt across Groceries and Household got a Groceries
+// suggestion under "recent" and none at all under "healthy", because this
+// function saw no transaction booked to Groceries.
 func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) (int64, error) {
 	if categoryID == "" || months <= 0 {
 		return 0, nil
 	}
+	covers := map[string]bool{categoryID: true}
 	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 
 	monthSums := make([]int64, months+1)
@@ -79,14 +87,16 @@ func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 		ms := dateutil.AddMonths(curStart, -k)
 		me := dateutil.AddMonths(curStart, -(k - 1))
 		for _, t := range txns {
-			if !t.IsExpense() || t.CategoryID != categoryID || !dateutil.InRange(t.Date, ms, me) {
+			if !t.IsExpense() || !dateutil.InRange(t.Date, ms, me) {
 				continue
 			}
-			conv, err := rates.Convert(t.Amount.Abs(), rates.Base)
+			amt, ok, err := scopedSpend(t, covers, rates)
 			if err != nil {
 				return 0, err
 			}
-			monthSums[k] += conv.Amount
+			if ok {
+				monthSums[k] += amt
+			}
 		}
 	}
 

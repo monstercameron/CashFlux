@@ -267,6 +267,7 @@ func (c Criteria) Without(f FilterField) Criteria {
 	case FieldCategory:
 		c.Category = ""
 		c.Categories = ""
+		c.ScopeAny = false
 	case FieldMember:
 		c.Member = ""
 		c.Members = ""
@@ -276,6 +277,7 @@ func (c Criteria) Without(f FilterField) Criteria {
 	case FieldTag:
 		c.Tag = ""
 		c.Tags = ""
+		c.ScopeAny = false
 	case FieldFrom:
 		c.From = ""
 	case FieldTo:
@@ -480,6 +482,24 @@ func (c Criteria) ToggleValue(f FilterField, value string) Criteria {
 	}
 	*multi = toggleCSV(mergeSingleIntoMulti(*multi, *single), value)
 	*single = ""
+	c = c.dropScopeAnyOn(f)
+	return c
+}
+
+// dropScopeAnyOn returns c with ScopeAny cleared when f is one of the two
+// dimensions it re-wires.
+//
+// ScopeAny describes a scope the APP built — a budget's "in a tracked category
+// OR carrying a tracked tag". The moment a user edits either of those dimensions
+// by hand they are composing an ordinary filter, where every dimension ANDs, and
+// leaving the OR in place would silently WIDEN the result set: picking a
+// "Restaurants" category on top of a "#vacation" tag would show restaurants OR
+// vacation charges, with nothing on screen distinguishing that from the "and"
+// every other filter means.
+func (c Criteria) dropScopeAnyOn(f FilterField) Criteria {
+	if f == FieldCategory || f == FieldTag {
+		c.ScopeAny = false
+	}
 	return c
 }
 
@@ -509,7 +529,7 @@ func (c Criteria) RemoveValue(f FilterField, value string) Criteria {
 	if *single == value {
 		*single = ""
 	}
-	return c
+	return c.dropScopeAnyOn(f)
 }
 
 // Labels resolves entity IDs to display names for name-aware sorting (category,

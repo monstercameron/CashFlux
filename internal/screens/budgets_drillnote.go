@@ -4,7 +4,33 @@
 
 package screens
 
-import "github.com/monstercameron/CashFlux/internal/uistate"
+import (
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+)
+
+// budgetDrillTitle is the tooltip on a budget's Transactions action, identical in
+// both densities and never blank.
+//
+// It names the BUDGET, not its primary category: a multi-category or tag-tracking
+// budget has no single primary category, and the compact row's old wording
+// interpolated exactly that empty string — "See all  transactions in this
+// period" — on the budgets whose scope most needed explaining. Where the scope
+// reaches past the budget's own categories, the tooltip says so before the click
+// rather than leaving the extra rows to be discovered afterwards.
+func budgetDrillTitle(budgetName string, b domain.Budget, scope budgeting.Scope) string {
+	sub, tags := scope.HasDescendants(b), len(scope.Tags) > 0
+	switch {
+	case sub && tags:
+		return uistate.T("budgets.drillTitleSubTags", budgetName)
+	case sub:
+		return uistate.T("budgets.drillTitleSub", budgetName)
+	case tags:
+		return uistate.T("budgets.drillTitleTags", budgetName)
+	}
+	return uistate.T("budgets.drillTitlePlain", budgetName)
+}
 
 // budgetDrillChipKey names the ledger chip that says which budget a filtered
 // view was opened from. It is a PRE-chip, like the member lens: it describes the

@@ -12,6 +12,13 @@ var budgetsClarityKeys = Catalog{
 	// The budget name used to navigate silently; the action is now always a
 	// labelled control. %s = the budget's title.
 	"budgets.drillAria": "See the transactions in %s",
+	// The tooltip is the same in both densities and names the BUDGET, never its
+	// primary category — a multi-category or tag-tracking budget has no single
+	// one, and the old wording interpolated that empty string. %s = the budget.
+	"budgets.drillTitlePlain":   "See the transactions in %s for this period",
+	"budgets.drillTitleSub":     "See the transactions in %s for this period, including its sub-categories",
+	"budgets.drillTitleTags":    "See the transactions in %s for this period, including its tagged charges",
+	"budgets.drillTitleSubTags": "See the transactions in %s for this period, including its sub-categories and tagged charges",
 
 	// --- C585: say what the drill-through actually covers ---
 	// Shown on the ledger when it was opened from a budget, so a user can tell

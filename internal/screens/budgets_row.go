@@ -268,6 +268,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	// Show "name · category" only when they add information (see budgetTitle).
 	title := budgetTitle(s.Budget.Name, props.Category)
+	// One tooltip for the drill action, in BOTH densities. The two used to differ,
+	// and the compact one interpolated the primary category name — which is empty
+	// for a multi-category or tag-tracking budget, leaving "See all  transactions
+	// in this period" on exactly the budgets whose scope most needed naming.
+	drillTitle := budgetDrillTitle(title, s.Budget, drillScope)
 
 	// Owner tag (L106 learning): an INDIVIDUAL budget only counts its owner's spending, so a household
 	// can't otherwise tell why a shared expense didn't move it. Flag whose it is — but only for
@@ -430,7 +435,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	actionsRow := Div(css.Class("budget-actions"),
 		coverBtn,
 		topupBtn,
-		If(canDrill, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(uistate.T("budgets.reviewTitle")), OnClick(drillMenu),
+		If(canDrill, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(drillTitle), OnClick(drillMenu),
 			uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
 		kebabNode,
 	)
@@ -492,7 +497,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
 					Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
 					Attr("aria-label", uistate.T("budgets.drillAria", title)),
-					Title(uistate.T("budgets.drillTitle", props.Category)), OnClick(drill),
+					Title(drillTitle), OnClick(drill),
 					uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 				kebabNode,
 			),

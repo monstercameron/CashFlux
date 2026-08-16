@@ -3,10 +3,13 @@
 package budgeting
 
 import (
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func TestSuggestBudgets(t *testing.T) {
@@ -64,5 +67,42 @@ func TestHealthyLimitDropsSpike(t *testing.T) {
 	healthy, _ := HealthyLimit("dining", txns, now, 6, rates)
 	if healthy != 20000 {
 		t.Errorf("healthy = %d, want 20000 (spike dropped)", healthy)
+	}
+}
+
+// Both suggestion methods must read the same household. A family that always
+// splits its receipt across categories got a Groceries proposal under "recent"
+// and none at all under "healthy", because HealthyLimit counted only whole
+// transactions booked to the category (the split contract's category-side rule).
+func TestHealthyLimitAttributesSplitLines(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	split := func(day int, groceries, household int64) domain.Transaction {
+		return domain.Transaction{
+			ID: "r" + strconv.Itoa(day), CategoryID: "shopping",
+			Amount: money.New(-(groceries + household), "USD"),
+			Date:   time.Date(2026, time.June, day, 0, 0, 0, 0, time.UTC),
+			Splits: []domain.CategorySplit{
+				{CategoryID: "groceries", Amount: money.New(-groceries, "USD")},
+				{CategoryID: "household", Amount: money.New(-household, "USD")},
+			},
+		}
+	}
+	txns := []domain.Transaction{split(5, 8000, 4000), split(20, 6000, 2000)}
+
+	got, err := HealthyLimit("groceries", txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("HealthyLimit: %v", err)
+	}
+	if got != 14000 {
+		t.Errorf("HealthyLimit = %d, want 14000 (both June grocery lines)", got)
+	}
+
+	recent, err := SuggestLimit("groceries", txns, now, 6, rates)
+	if err != nil {
+		t.Fatalf("SuggestLimit: %v", err)
+	}
+	if recent != got {
+		t.Errorf("the two methods disagree on a one-month span: recent=%d healthy=%d", recent, got)
 	}
 }

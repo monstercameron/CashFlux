@@ -88,3 +88,67 @@ func TestScopeAnyStillAndsOtherDimensions(t *testing.T) {
 		t.Errorf("ScopeAny with a date window → %q, want \"flight\"", got)
 	}
 }
+
+// --- ScopeAny is the app's scope, never a mode the user gets stuck in ---
+//
+// ScopeAny widens the category/tag dimensions from AND to OR. It describes a
+// budget's own definition of "counts toward me". The instant a user edits either
+// dimension by hand they are composing an ordinary filter, and leaving the OR in
+// place would silently return MORE rows than the chips claim — with nothing on
+// screen to distinguish it from every other filter, which ANDs.
+
+func TestScopeAnyClearsWhenTheCategoryDimensionIsEdited(t *testing.T) {
+	base := Criteria{Categories: "gas", Tags: "vacation", ScopeAny: true}
+
+	if got := base.Without(FieldCategory); got.ScopeAny {
+		t.Error("Without(category) left ScopeAny set")
+	}
+	if got := base.RemoveValue(FieldCategory, "gas"); got.ScopeAny {
+		t.Error("RemoveValue(category) left ScopeAny set")
+	}
+	if got := base.ToggleValue(FieldCategory, "dining"); got.ScopeAny {
+		t.Error("ToggleValue(category) left ScopeAny set")
+	}
+}
+
+func TestScopeAnyClearsWhenTheTagDimensionIsEdited(t *testing.T) {
+	base := Criteria{Categories: "gas", Tags: "vacation", ScopeAny: true}
+
+	if got := base.Without(FieldTag); got.ScopeAny {
+		t.Error("Without(tag) left ScopeAny set")
+	}
+	if got := base.RemoveValue(FieldTag, "vacation"); got.ScopeAny {
+		t.Error("RemoveValue(tag) left ScopeAny set")
+	}
+	if got := base.ToggleValue(FieldTag, "work"); got.ScopeAny {
+		t.Error("ToggleValue(tag) left ScopeAny set")
+	}
+}
+
+// Editing an unrelated dimension leaves the budget scope alone — a member or
+// date narrowing on top of a budget drill is a legitimate thing to do.
+func TestScopeAnySurvivesUnrelatedEdits(t *testing.T) {
+	base := Criteria{Categories: "gas", Tags: "vacation", ScopeAny: true}
+	for _, f := range []FilterField{FieldMember, FieldAccount, FieldSource, FieldFrom, FieldText} {
+		if got := base.Without(f); !got.ScopeAny {
+			t.Errorf("Without(%s) cleared ScopeAny; only the category and tag dimensions may", f)
+		}
+	}
+	if got := base.ToggleValue(FieldMember, "m1"); !got.ScopeAny {
+		t.Error("ToggleValue(member) cleared ScopeAny")
+	}
+}
+
+// The stuck-OR scenario end to end: drill a tag-tracking budget, then pick a
+// category by hand. The result must NARROW, not widen.
+func TestPickingACategoryAfterATagDrillNarrows(t *testing.T) {
+	drill := Criteria{Tags: "vacation", ScopeAny: true}
+	if got := ids(Apply(splitSample(), drill)); got != "flight" {
+		t.Fatalf("the tag drill itself = %q, want \"flight\"", got)
+	}
+	// The user now adds "gas" to the category dimension.
+	narrowed := drill.ToggleValue(FieldCategory, "gas")
+	if got := ids(Apply(splitSample(), narrowed)); got != "" {
+		t.Errorf("adding a category to a tag filter returned %q; ANDed, nothing is both", got)
+	}
+}

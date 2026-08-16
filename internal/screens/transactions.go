@@ -117,7 +117,12 @@ func transactionsLegacy() ui.Node {
 	onFilterText := func(v string) { setFilter(func(x *uistate.TxFilter) { x.Text = v }) }
 	onFilterAcc := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Account = e.GetValue() }) })
 	onFilterCat := ui.UseEvent(func(e ui.Event) {
-		setFilter(func(x *uistate.TxFilter) { x.Category = e.GetValue(); x.Categories = "" }) // single choice replaces any multi-category drill
+		setFilter(func(x *uistate.TxFilter) {
+			x.Category, x.Categories = e.GetValue(), "" // single choice replaces any multi-category drill
+			// …and with it the budget drill's category-OR-tag scope: a hand-picked
+			// category ANDs with everything else, like every other filter (C585).
+			x.ScopeAny = false
+		})
 	})
 	// Click a column header to sort by it; click the active column again to flip
 	// direction. (Replaces the old Sort dropdown — C47.)
@@ -135,7 +140,9 @@ func transactionsLegacy() ui.Node {
 		})
 	}
 	onFilterMember := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Member = e.GetValue() }) })
-	onFilterTag := ui.UseEvent(func(e ui.Event) { setFilter(func(x *uistate.TxFilter) { x.Tag = e.GetValue() }) }) // C49
+	onFilterTag := ui.UseEvent(func(e ui.Event) { // C49
+		setFilter(func(x *uistate.TxFilter) { x.Tag, x.ScopeAny = e.GetValue(), false })
+	})
 	onFilterAmountMin := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMin = v }) })  // C53
 	onFilterAmountMax := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.AmountMax = v }) })  // C53
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
