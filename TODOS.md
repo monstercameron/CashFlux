@@ -226,23 +226,23 @@ WF13 saved views) before starting any ticket.
   their ~30 income *types* — worth auditing our income modeling breadth at the same time.
 
 **B. Assistant UX (theirs is weaker but lower-friction — steal the friction fixes)**
-- [ ] **PS7 — Turnkey AI, no key ceremony.** Piggy is included in the plan (50 msgs/day free tier),
+- [x] **PS7 [DONE 2026-08-16] — Turnkey AI, no key ceremony.** Piggy is included in the plan (50 msgs/day free tier),
   runs server-side on Anthropic Claude, with an unusually honest disclosure (what's sent, "read
   once" for images, terms prohibit training, chats reviewable by their team, hard off-switch in
   Settings). CashFlux's BYO-OpenAI-key gate is a wall for normal users. Research: Cloud-tier AI
   proxy with metered free allowance; keep BYOK as the power/local path. Their "the AI can only
   ever save your birthday and a support ticket" capability-framing is a trust pattern worth
   copying verbatim in spirit.
-- [ ] **PS8 — Guided-navigation spotlight.** Ask "how do I add a new income source?" and the
+- [x] **PS8 [DONE 2026-08-16] — Guided-navigation spotlight.** Ask "how do I add a new income source?" and the
   assistant **highlights the actual button with a spotlight animation and walks you through step
   by step**. Best support/onboarding idea in their product. We already have the agent runtime
   bridge + in-wasm semantic verbs — research a `spotlight(target)` verb + step-scripting so the
   assistant can point at real UI instead of describing it.
-- [ ] **PS9 — Current tax & limits reference pack.** Piggy cites live IRS/SSA numbers (401k/IRA/HSA
+- [x] **PS9 [DONE 2026-08-16] — Current tax & limits reference pack.** Piggy cites live IRS/SSA numbers (401k/IRA/HSA
   limits, catch-up rules, brackets, SS claiming math). Research: a versioned, dated local dataset
   (`taxref` package) consulted by engines and assistant alike, with the *vintage shown in the UI*
   ("2026 limits") and a Cloud-refreshed update path — never model-recalled numbers.
-- [ ] **PS10 — Support handoff with context.** "Can you send this to your support team?" attaches
+- [x] **PS10 [DONE 2026-08-16] — Support handoff with context.** "Can you send this to your support team?" attaches
   the full conversation context to a ticket. Ours could generate a redacted diagnostic bundle
   (app version, settings shape, recent errors — never financial rows) for the GitHub-issue path.
 
@@ -676,9 +676,9 @@ survived the duplicate/scope filters but didn't make the engine cut):
   finishes ~7 weeks sooner."
 - [ ] **EC-14 Recurrence + assignee suggestions** (SMART, To-do) — completed monthly 3× → offer
   recurrence; suggest the member who historically does this task type.
-- [ ] **EC-15 AI spend meter** (SMART, Assistant) — running actual AI spend by feature/month with
+- [x] **EC-15 [DONE 2026-08-16] AI spend meter** (SMART, Assistant) — running actual AI spend by feature/month with
   pace-vs-cap warning; the transparency view over `smart/cap.go`.
-- [ ] **EC-16 Suggested questions** (SMART, Assistant) — deterministically seeded Ask starters from
+- [x] **EC-16 [DONE 2026-08-16] Suggested questions** (SMART, Assistant) — deterministically seeded Ask starters from
   current data state ("3 over-budgets — ask what changed").
 - [ ] **EC-17 Narrate this section** (SMART+, Reports) — per-section one-shot summary with exact
   scope/period threaded in; completes the deferred per-section Ask-AI scope threading.
@@ -926,10 +926,12 @@ until picked.
 - [ ] **G2-C6 — Goals: no contribution history view.** `Goal.Contributions` is stored (drives undo-last)
   but there's no per-goal log of past contributions; also no goal notes/description field, no intermediate
   sub-milestones, and habit check-ins are append-only (no undo / streak-calendar).
-- [ ] **G2-C7 — Assistant chat polish.** No response streaming (long answers read as a stall), no manual
+- [x] **G2-C7 [DONE 2026-08-16] — Assistant chat polish.** Streaming on both transports, rename, search
+  across titles and message text, Markdown export with sources, edit-and-resend, per-answer rating.
+  ~~ No response streaming (long answers read as a stall), no manual
   conversation rename, no search across/within conversations, no chat export, can't edit-and-resend a
   prior message, no per-response feedback.
-- [ ] **G2-C8 — Assistant keyless Q&A is narrow (7 intents)** and the Insights briefing has no time-range
+- [x] **G2-C8 [DONE 2026-08-16] — Assistant keyless Q&A is narrow (7 intents)** and the Insights briefing has no time-range
   control (fixed month-to-date + 6-month trend). Add budget-status / recent-txns / subscriptions /
   largest-expense intents + a period selector.
 - [ ] **G2-C9 — Transactions smaller gaps:** bulk tag add/remove; Quick-Add can't create a transfer
@@ -1266,7 +1268,9 @@ Smart/+ contextual UI primitive backlog - research addendum, no new R-series:
 - [ ] **C276 [MINOR]** Cosmetic "Default/Member" labels imply non-existent roles; member filter is display-only (no read-visibility enforcement) → remove misleading labels until roles exist; gate reads by role when implemented.
 - [x] **R22 [RESEARCH]** Local credit-health proxy - **DONE (existing implementation, verified 2026-06-27):** the credit-health proxy is shipped in internal/healthscore (AggUtilizationPct = aggregate revolving utilization, total card balance / total credit limit; weighted 0.10 factor, applicable iff HasCredit; utilizationScore piecewise curve 10pct->100/30pct->70/80pct->0; target under 30%; improvement action; tested in healthscore_test.go), wired to live account data in health.go buildHealthInputs (ledger.Utilization over non-archived credit accounts, FX-converted) and shown on /health. Local-only, deterministic (integer math), explainable. Adversarial review: R22 SATISFIED (proxy not FICO-replica). Follow-on (own ticket, not R22): payment-history + account-age signals.
 - [ ] **R25** Unified anomaly hub. Anomaly detection is fragmented: smartengine a1BalanceAnomaly (3x-trailing-mean) + insights spending highlights + notify EventLargeTransaction + attention needs-attention, surfaced in 5 places with independent severity/wording/dismissal. UNIFY: one Anomaly shape with a stable entity+kind+period ID (extending smart.Insight, the dedup key) from ONE smartengine detection pass; dashboard Needs-attention + notification center + Reports highlights derive from it sharing ID+dismissal (dismiss once -> gone everywhere, 8.6); add an Unusual filter/scope to the /smart hub; group repeated same-rule hits (shared with the notifications collapse-threshold TODO). Presentation half already shipped (R38 decision layer + R38/8.6 severity-sorted notifications).
-- [ ] **R24** No-key AI fallback. AI is an opt-in accelerator, never the only door. Per-surface, confirm each AI-gated control is presented AFTER its no-key sibling and labeled as key-gated: insights AI Q&A (vs deterministic smartengine insights), allocate AI explanation (vs the per-criterion breakdown), smart_strip AI run-controls. The one genuine gap with no on-device equivalent is image-only OCR -> R10 (local OCR). DONE so far: Documents leads with the no-key CSV import (R55/8.9); auto-categorization=rules engine; insights=Free smartengine; allocate=deterministic breakdown.
+- [x] **R24 [DONE 2026-08-16]** No-key AI fallback. Every AI-gated control now announces the gate BEFORE
+  the click, and two screenlint ratchets keep it true: one that a gated surface says so, one that it
+  checks the backend as well as the direct key.  AI is an opt-in accelerator, never the only door. Per-surface, confirm each AI-gated control is presented AFTER its no-key sibling and labeled as key-gated: insights AI Q&A (vs deterministic smartengine insights), allocate AI explanation (vs the per-criterion breakdown), smart_strip AI run-controls. The one genuine gap with no on-device equivalent is image-only OCR -> R10 (local OCR). DONE so far: Documents leads with the no-key CSV import (R55/8.9); auto-categorization=rules engine; insights=Free smartengine; allocate=deterministic breakdown.
 - [~] **R29 [RESEARCH]** Household roles/permissions + local multi-user — **SPEC delivered 2026-06-25** (research output below; implementation is follow-on).
   - **What already exists (assessed):** roles MODEL — `internal/memberrole` (`Owner`/`Admin`/`Viewer` + `Resolve` legacy-default + `Valid`/`ParseRole`/`Label` + predicates `CanManageMembers`/`CanEditEntities`/`CanViewOnly`), `domain.Member.Role`, store round-trip (C273); role SELECTOR UI in add/edit member (`members.go`, `memberaddform.go`, C275); a view-scope `ActiveMember` atom (a per-member *filter*, not an identity).
   - **The core constraint (the actual research finding):** CashFlux is local-first — the entire dataset lives UNENCRYPTED in one on-device SQLite/IndexedDB. So UI-level role gating is a **soft guardrail** (prevents accidental edits, tailors the view), NEVER a security boundary: anyone with device access can read the raw store regardless of role. A *real* per-member boundary requires per-profile encryption (separate encrypted stores keyed by a PIN/passphrase-derived key) — a large architectural change that also breaks household-wide aggregation (net worth across members). Conclusion: **do NOT market roles as security; ship them as collaboration guardrails**, and keep any PIN as an *app-open lock* (single shared device gate), not per-member data isolation. (Cross-ref R30 security hardening for the app-lock/KDF piece; per-member encryption is explicitly out of scope for the local build.)
@@ -3930,11 +3934,11 @@ ALREADY DONE: C62 range/shift-select (transactions.go:304-344); C63 bulk export 
 
 ## R24 chat UX (#456 -> atomic)
 ALREADY DONE: per-bubble token+cost ("Used N tokens ~$X", insights.go:1074-1081); input has aria-label (placeholder-based); privacy line in key hint (en.go:1434); sample conversations seeded; auto-persistence (insights.go:476).
-- [ ] [C247][HIGH] Key gate: "where to get key" link (aiprovider.KeyURL) + ballpark cost line + elevated privacy badge (insights.go:133-137) -> extract shared KeyExplainer(provider,showCost) (reuse F43 #475 + R10 #441).
-- [ ] [C248][HIGH] Example canned Q&A for no-key + no-convos + no-sample state (insights.go:858) + 2 i18n example exchanges; gate noAI && len(convs)==0.
-- [ ] [C250][HIGH] Active model badge near composer (resolved model incl silent default fix l49) + running session-total cost (sum Usage, ai.EstimateCostUSD, compute outside MapKeyed).
-- [ ] [C251][HIGH] Gate "Edit prompt" on !noAI (insights.go:824) + "Conversations saved automatically" cue (l476) + de-emphasize vs New Chat.
-- [ ] [C249][MED] aria-hidden on Sparkles send icon (insights.go:789) + distinct input aria-label key (not placeholder).
+- [x] [C247][DONE 2026-08-16] Key gate: "where to get key" link (aiprovider.KeyURL) + ballpark cost line + elevated privacy badge (insights.go:133-137) -> extract shared KeyExplainer(provider,showCost) (reuse F43 #475 + R10 #441).
+- [x] [C248][DONE 2026-08-16] Example canned Q&A for no-key + no-convos + no-sample state (insights.go:858) + 2 i18n example exchanges; gate noAI && len(convs)==0.
+- [x] [C250][DONE 2026-08-16] Active model badge near composer (resolved model incl silent default fix l49) + running session-total cost (sum Usage, ai.EstimateCostUSD, compute outside MapKeyed).
+- [x] [C251][DONE 2026-08-16] Gate "Edit prompt" on !noAI (insights.go:824) + "Conversations saved automatically" cue (l476) + de-emphasize vs New Chat.
+- [x] [C249][DONE 2026-08-16] aria-hidden on Sparkles send icon (insights.go:789) + distinct input aria-label key (not placeholder).
 
 <!-- ===== GRANULAR DECOMPOSITION (batch 17 — final clusters, appended 2026-06-25) ===== -->
 
@@ -4627,9 +4631,16 @@ AC16 is its own scoping conversation.
 
 <!-- ===== AG SERIES (assistant / chat agent, appended 2026-07-14) ===== -->
 
-## ★ AG series — Assistant & chat agent (IMPLEMENTED 2026-07-14/15 — shipped v1.0.32; AG2/5/10 partial)
+## ★ AG series — Assistant & chat agent (COMPLETE 2026-08-16 — all 20 shipped)
 
-> **Status:** built by 4 agents kept OUT of the forbidden chat_agent.go (tool groups in sidecar
+> **Status (2026-08-16): the series is complete.** The seven that were outstanding — AG2 (what-if
+> sandbox), AG5 (scheduled agent jobs), AG8 (anomaly auto-investigation), AG10 (monthly review),
+> AG12 (image routing), AG15 (goal coaching), AG16 (negotiation prep) — all landed with pure,
+> table-tested packages behind them: `internal/appstate/sandbox_ops.go`, `internal/workflow`'s
+> `ActionAgentRun`, `internal/anomalyprobe`, `internal/monthlyreview`, `internal/imageroute`,
+> `internal/goalcoach`, `internal/negotiationprep`. The original note below is kept as history.
+>
+> **Original status:** built by 4 agents kept OUT of the forbidden chat_agent.go (tool groups in sidecar
 > files, registered by one coordinator append block). Shipped: AG1 changesets (host mounted in the
 > chat console), AG3/4 NL rule+workflow authoring (formula.Validate-gated), AG6 auditor, AG7
 > explain-anything (chip on the health tile → seeds the assistant, e2e-verified an 813-char
@@ -4656,7 +4667,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   past two actions; this is the trust primitive the rest of the series assumes. Model: a
   changeset = ordered list of pending tool calls + human-readable line each; partial apply
   allowed; failures mid-apply stop and report (no silent partial state).
-- [ ] **AG2 [MAJOR — MOONSHOT, ARCHITECTURE ALREADY FITS]** What-if sandbox. "What if I moved
+- [x] **AG2 [DONE 2026-08-16] [MAJOR — MOONSHOT, ARCHITECTURE ALREADY FITS]** What-if sandbox. "What if I moved
   to a $1,800 apartment?" — the agent operates on a COPY of the dataset (workspace machinery),
   mutates the copy, and shows the diff vs reality: runway, budgets, goal ETAs side by side.
   Discard, or apply-as-changeset (AG1) to the real workspace. Guardrails: sandbox conversations
@@ -4681,7 +4692,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   action, and the condition is validated through formula.Validate BEFORE saving (the engine's
   conditions ARE the formula language — validation is free). Show the compiled workflow in the
   editor's own vocabulary so the user learns the DSL by example.
-- [ ] **AG5 [MED]** Scheduled agent jobs. "Every Friday, summarize my week and flag anything
+- [x] **AG5 [DONE 2026-08-16] [MED]** Scheduled agent jobs. "Every Friday, summarize my week and flag anything
   weird" → the agent authors a scheduled workflow (scheduledworkflows machinery) whose action
   is an agent run with a saved prompt; results land as a conversation + optional notification.
   <!-- AG5 GAP (Agent D, 2026-07-15): BLOCKED on the action model. workflow.ActionKind is a
@@ -4713,7 +4724,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   molecule → atoms → transactions, answering follow-ups against the same grounded context.
   The derivation engine exists; this is its front door. Needs a small UI affordance on
   KPI/figure surfaces (long-press / kebab "Explain") that routes into chat with the seed.
-- [ ] **AG8 [MED]** Anomaly auto-investigation. Upgrade the flagged-activity Discuss chip: the
+- [x] **AG8 [DONE 2026-08-16] [MED]** Anomaly auto-investigation. Upgrade the flagged-activity Discuss chip: the
   agent investigates BEFORE speaking — pulls related transactions, merchant history (TX6
   stats), recurring context — and opens with a verdict + proposed fix ("this 'duplicate' is two
   same-day Ubers; dismiss the flag?"). Triage agent, not chat-about-a-flag. Tool budget capped
@@ -4722,7 +4733,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   current ranges + the user's actual figure → a comparison with ASSUMPTIONS STATED (region,
   coverage unknowns). Tools exist; the ticket is prompt discipline + a response shape: local
   figure, external range with source, explicit assumption list, never vibes.
-- [ ] **AG10 [MAJOR]** Monthly money review, agent-led. A ~10-minute guided ritual: month recap
+- [x] **AG10 [DONE 2026-08-16] [MAJOR]** Monthly money review, agent-led. A ~10-minute guided ritual: month recap
   vs typical, the auditor's top findings (AG6), budget true-ups (BG6), goal check (GL cadence)
   — each step ends in an action (AG1 changeset) or an explicit skip. Dismissible, never modal,
   resumable. Copilot/Origin bet their products on reviews; ours ends each step with an applied
@@ -4745,7 +4756,7 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   with priya" → draft transactions (split flagged) into a bulk quick-add review. TX2's two-tier
   pattern: local grammar first (amount+word pairs, no key needed), AI fallback for mess. Drafts
   use the documents draft-review surface conventions (badge dupes, pick account).
-- [ ] **AG12 [MED]** Image-in-chat pipeline. Drop a receipt/statement photo into chat → vision
+- [x] **AG12 [DONE 2026-08-16] [MED]** Image-in-chat pipeline. Drop a receipt/statement photo into chat → vision
   extract → the agent routes to the RIGHT existing pipeline based on what it sees: propose a
   transaction, propose a split (XC11), or attach as a document (TX5/AC8). One entry point,
   three existing flows; preview-approve throughout; BYO-key gated with the no-key path
@@ -4765,11 +4776,11 @@ engineenv.Explain, aicontext, artifacts/vision, and the R24 no-key fallback plan
   user files).
 
 ### The agent as a coach (tone-guarded)
-- [ ] **AG15 [MED]** Goal coaching check-ins. Opt-in cadence per goal: the agent reviews pace,
+- [x] **AG15 [DONE 2026-08-16] [MED]** Goal coaching check-ins. Opt-in cadence per goal: the agent reviews pace,
   celebrates quietly, and PROPOSES (never applies) adjustments — pulling GL4's slider math
   into conversation ("$50 more/mo finishes by your birthday — want the changeset?"). Composes
   GL7 pause states (a paused goal is not nagged). The never-naggy rule is a hard gate here.
-- [ ] **AG16 [MED]** Subscription negotiation prep. The honest local version of Rocket Money's
+- [x] **AG16 [DONE 2026-08-16] [MED]** Subscription negotiation prep. The honest local version of Rocket Money's
   negotiators: the agent assembles leverage (price history via XC5/TX9, tenure from the
   ledger, competitor pricing via web search), drafts the cancellation-threat script, and files
   the call as a task with the script attached (XC8-resolvable when the recurring's price drops
@@ -5608,24 +5619,24 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W5 — Assistant trust: evidence, permission, undo (reviewer priority 4)
 
-- [ ] **C387 [MAJOR][AI] "How I calculated this" citations on numeric answers.** KPI provenance
+- [x] **C387 [DONE 2026-08-16] [MAJOR][AI] "How I calculated this" citations on numeric answers.** KPI provenance
   (`internal/provenance`) and explain-seeding (`internal/explainseed`) exist, but chat answers
   carry no structured citations. Tools that return figures also return a provenance payload (txn
   count/IDs, accounts, date range, exclusions); render an expandable citation block under the
   answer. AC: any numeric claim in a reply can be expanded to its source rows.
-- [ ] **C388 [MAJOR][AI] Permission preview before approval.** `pendingApproval.preview` exists;
+- [x] **C388 [DONE 2026-08-16] [MAJOR][AI] Permission preview before approval.** `pendingApproval.preview` exists;
   upgrade it to a structured preview derived from the changeset: data read, data changed
   (entity + count), exact scope — before Approve/Decline.
-- [ ] **C389 [MAJOR][AI] Action history with per-action undo.** `agentreceipt` summarizes ops and
+- [x] **C389 [DONE 2026-08-16] [MAJOR][AI] Action history with per-action undo.** `agentreceipt` summarizes ops and
   `/activity` records diffs — connect them: each receipt line links its audit entry with an Undo
   button where safe (leverages the C364 checkpoint discipline).
-- [ ] **C390 [MINOR][AI] Per-conversation model + token-cap controls.** `agent.Options.TokenBudget`
+- [x] **C390 [DONE 2026-08-16] [MINOR][AI] Per-conversation model + token-cap controls.** `agent.Options.TokenBudget`
   exists (stop reason "budget") — expose model picker + budget cap per conversation in the chat
   header; show remaining budget.
-- [ ] **C391 [MINOR][AI] Smart-findings grouping + confidence.** Reviewer: "repetitive list of
+- [x] **C391 [DONE 2026-08-16] [MINOR][AI] Smart-findings grouping + confidence.** Reviewer: "repetitive list of
   similar missing-bill notices." Group same-kind findings into one expandable row with a count;
   attach a confidence tier per finding.
-- [ ] **C392 [MINOR][AI] IA cleanup: Ask / Insights / Automations.** Reviewer: "Ask, Insights,
+- [x] **C392 [DONE 2026-08-16] [MINOR][AI] IA cleanup: Ask / Insights / Automations.** Reviewer: "Ask, Insights,
   Smart, and the broader Smart page overlap conceptually." Rename the tabs to Ask (conversation) /
   Insights (generated analysis) / Automations (enabled smart rules); the Automations tab hosts the
   enable/disable state and links to the full /smart catalog instead of duplicating it.
@@ -7325,7 +7336,12 @@ design pass before any code.
 
 ### Live defects
 
-- [~] **C516 [PARTIAL — root cause identified and the silent failure made legible (2026-08-16); the underlying empty completion is upstream] [BLOCKER][AI] The assistant answers with a token line and no reply.** ★
+- [x] **C516 [DONE 2026-08-16 — fixed end to end and verified against the live provider] [BLOCKER][AI] The assistant answers with a token line and no reply.** ★
+  **Closed with C545:** reasoning models and tool turns moved to the Responses API with an explicit
+  `max_output_tokens`; both transports now refuse an empty completion and explain it, and record the
+  tokens anyway because they were billed. A gated live test (`CASHFLUX_LIVE_AI=1`) drives the real
+  API and asserts a reasoning model returns text.
+
   *"the agent isn't working I only get 'Reply: 479 tokens out · 9,637 in (context) · cost
   unavailable' and no agent response"*
   This is the still-open **L83b** with decisive new evidence. L83b's two hypotheses were (a) a
@@ -8001,7 +8017,7 @@ under evaluation. A closing note is not evidence; the call sites are.
   `categorytree.Flatten` — and is the model the flat lists should copy.
   AC: one test per picker asserting order, so the next "closes C518" cannot pass without them.
 
-- [ ] **C545 [BLOCKER][AI] The AI proxy asks reasoning models for output without giving them room
+- [x] **C545 [DONE 2026-08-16] [BLOCKER][AI] The AI proxy asks reasoning models for output without giving them room
   to produce any.** ★ *(Root cause under C516 — see the trace there.)*
   `AIService.Chat` builds its upstream body with `ai.BuildRequest` (`ai.go:76-78`), which marshals
   `{model, messages, temperature}` to `/chat/completions`. The server's allowlist is
@@ -8121,7 +8137,10 @@ under evaluation. A closing note is not evidence; the call sites are.
   withheld-income note still renders for a spending budget while a SAVING budget offers everything.
   Verified to FAIL when the label is reverted to `c.Name`.
 
-- [ ] **C551 [MINOR][AI] Backend-AI users get no tools at all, silently.**
+- [x] **C551 [DONE 2026-08-16] [MINOR][AI] Backend-AI users get no tools at all, silently.**
+  Tools, tool calls, tool results, the thinking level AND the reasoning items now cross the proxy;
+  a live test drives a two-step tool conversation to prove the follow-up turn is accepted.
+
   `sendTools` takes a `tools []ai.Tool` argument and the `useBackendAI` branch simply does not pass
   it (`insights.go:348-351`) — and `rpcMessages` (`ai/proxy_transport.go:38-44`) copies only Role
   and Content, dropping `ToolCalls` and `ToolCallID`, so the wire format could not carry a tool turn
