@@ -76,7 +76,7 @@ func NumberInput(p TextFieldProps) uic.Node {
 // Callers still pass OnInput; the component picks the event a textarea actually
 // wants, so no call site has to know this.
 func TextAreaInput(p TextFieldProps) uic.Node {
-	return Textarea(append(fieldArgs(p), OnChange(p.OnInput))...)
+	return Textarea(append(fieldArgs(p), OnInput(p.OnInput))...)
 }
 
 // MoneyInputProps configures a currency-aware MoneyInput.

@@ -126,12 +126,45 @@ test.describe("budgets: notes modal", () => {
     await app.locator('[role="dialog"] textarea').first().fill(note);
     await app.getByTestId("budget-notes-save").click();
     await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
+    // The row carries a note marker afterwards. In COMPACT density — the default,
+    // and what this suite runs in — the marker is the icon beside the budget name
+    // and the note text rides on its tooltip; the clamped text preview belongs to
+    // the card layout. Asserting the title rather than the text content is what
+    // compact actually renders, and it still proves the saved text reached the row.
     const line = app.locator(`[data-testid="budget-notes-${bid}"]`);
     await expect(line).toBeVisible();
-    await expect(line).toContainText("Trim this once");
-    // Clicking the clamped preview reopens the full note in the flip modal (the
-    // old inline aria-expanded expander was retired with the side-panel design).
+    await expect(line).toHaveAttribute("title", note);
+    // Clicking the marker reopens the full note in the flip modal (the old inline
+    // aria-expanded expander was retired with the side-panel design).
     await line.click();
+    await app.waitForTimeout(650);
+    await expect(app.locator('[role="dialog"] textarea').first()).toHaveValue(note);
+  });
+
+  // C545 proper: the note was reported as unsavable. It saved and persisted the
+  // whole time — the row simply showed no trace of it in the default density, so
+  // the write was indistinguishable from a failure. This pins BOTH halves: the
+  // note survives a reload, and the row says so.
+  test("a saved note survives a reload and the row still shows it", async ({ app }) => {
+    await nav(app, "/budgets");
+    const bid = await firstBudgetId(app);
+    await openBudgetMenu(app, bid);
+    await app.locator(`.add-menu [data-testid="budget-notes-btn-${bid}"]`).click();
+    await app.waitForTimeout(650);
+    const note = "Renews in March — cancel before it auto-bills.";
+    await app.locator('[role="dialog"] textarea').first().fill(note);
+    await app.getByTestId("budget-notes-save").click();
+    await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
+
+    await app.reload({ waitUntil: "networkidle" });
+    await nav(app, "/budgets");
+    const marker = app.locator(`[data-testid="budget-notes-${bid}"]`);
+    await expect(marker).toBeVisible({ timeout: 20000 });
+    await expect(marker).toHaveAttribute("title", note);
+    // ...and the stored text is the whole sentence, not a truncated one. A
+    // multi-line field that rewrote its own content on every keystroke used to
+    // drop characters mid-word, so the note saved as a fragment of what was typed.
+    await marker.click();
     await app.waitForTimeout(650);
     await expect(app.locator('[role="dialog"] textarea').first()).toHaveValue(note);
   });

@@ -476,8 +476,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// grid cell, so the row is always exactly six children. The badge used to
 			// be a seventh top-level child in a six-column template — every later cell
 			// shifted a column right and the kebab wrapped onto an implicit row.
+			// Name cell: the title, the note marker, and the conditional C395
+			// rollover badge.
+			//
+			// C545: the note's TEXT belongs to the card layout, but showing no trace
+			// of it in compact meant saving a note in the DEFAULT density produced no
+			// visible change at all — the write looked like it had failed, which is
+			// exactly how it was reported. The marker is the smallest honest signal:
+			// it confirms the note saved, carries the text as its tooltip, and
+			// reopens the editor on click.
+			//
+			// It rides in the name cell rather than the action cell for two reasons.
+			// The action cell is a fixed-width column, and a third control there
+			// overflowed it and clipped the status chip to "On trac". And the drill
+			// action's receipt icon is another lined document outline, so at 16px the
+			// two sat side by side as near-identical shapes. Here it reads as what it
+			// is — something the budget HAS, next to its name — rather than a third
+			// thing to do.
 			Div(css.Class("budget-crow-head"),
 				crowTitle,
+				If(strings.TrimSpace(s.Budget.Notes) != "", Button(css.Class("budget-crow-notes"), Type("button"),
+					Attr("data-testid", "budget-notes-"+s.Budget.ID),
+					Attr("aria-label", uistate.T("budgets.notesAction")+" — "+title),
+					Title(strings.TrimSpace(s.Budget.Notes)), OnClick(openNotes),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 			),
 			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),

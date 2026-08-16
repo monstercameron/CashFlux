@@ -30576,3 +30576,37 @@ uploads the encrypted snapshot. The second proves its pre-login store remains ab
 passcode leaves App Lock unset, the matching passcode reveals the exact account, the sample banner
 never appears, and the saved local dataset retains the cryptobox marker. The focused run passed in
 21 seconds; native hydration/App Lock/sync/i18n tests and the WASM build pass as well.
+
+## 2026-08-16 — C545: budget notes, and what "cannot be saved" actually meant
+
+Reported as "budget notes cannot be saved". The save path turned out to be correct the entire
+time, and most of the day went into proving that rather than fixing it — worth writing down,
+because the diagnosis kept producing confident wrong answers.
+
+An early marker (setting an error as the first statement of `saveNotes`) showed no error, and I
+concluded the handler never ran. That was wrong, and wrong in an instructive way: the error line
+renders INSIDE the same component, so a component that fails to re-render swallows the evidence.
+Any probe whose readout shares fate with the thing under test proves nothing. Replacing it with a
+global toast — observable regardless of that component — showed `saveNotes` running normally, and
+a second probe printing `notesS.Get()` showed the correct text arriving at `PutBudget`. Reading
+`app.Budgets()` back immediately after the write showed the note present in the store.
+
+So the write worked, and both real faults were on either side of it.
+
+The typed value was being corrupted on the way in. `TextAreaInput` passed its value twice — once
+as the value option, once as a child — so every keystroke re-rendered the node and rewrote the
+content under the cursor. Removing the duplicate made the field hold what was typed.
+
+The saved value was invisible on the way out. The note's text preview lives in the full-card
+layout only; in compact density the row rendered no trace of it. The card closed, nothing changed
+on screen, and the write looked like it had failed. The first attempt at a marker went into the
+compact row's action cell, and the screenshot immediately showed why that was wrong: the cell is a
+fixed-width grid column, the third control overflowed it and clipped the "On track" chip to "On
+trac", and the new icon sat beside the drill's receipt icon as a near-identical lined document.
+Moving it into the name cell fixed the overflow and the collision at once, and reads better — a
+property of the budget, next to its name, rather than a third action.
+
+Two process notes. The existing e2e asserted the note's TEXT on the card, which only holds in card
+density; it now asserts the tooltip in compact and adds the reload case, which is the half nothing
+covered. And `--text-muted` does not exist — the token is `--muted`. That is the second time this
+month a plausible-sounding token silently resolved to nothing.

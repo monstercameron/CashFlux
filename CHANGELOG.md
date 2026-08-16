@@ -6,6 +6,32 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Budget notes could not be saved — two independent faults, one symptom (C545).** Typing a note
+  and saving it appeared to do nothing at all. Neither half was in the save path, which is why it
+  read as a broken write.
+
+  First, multi-line fields dropped characters. `TextAreaInput` passed its value BOTH as the
+  element's value option and again as a child, so the renderer wrote the text into the textarea
+  twice; every keystroke re-rendered the node and rewrote its content under the cursor. A note
+  typed as "Trim this once the baby-gear splurge settles." arrived as a fragment, and in the worst
+  case the field held a single character. The value is now passed once, so `TextInput`,
+  `NumberInput` and `TextAreaInput` each bind their own handler rather than inheriting one from
+  the shared field arguments.
+
+  Second, a saved note left no trace in COMPACT density. The note's text preview was only ever
+  rendered in the full-card layout, so a household reading its budgets as a compact list saved a
+  note and saw the panel close with nothing changed — indistinguishable from a failed write, and
+  exactly how it was reported. The compact row now carries a note marker beside the budget's name,
+  with the note as its tooltip and the editor one click away. It rides in the name cell rather
+  than the action cell: a third control in that fixed-width column overflowed it and clipped the
+  status chip to "On trac", and the drill action's receipt icon is another lined document outline,
+  so at 16px the two read as the same shape. Beside the name it reads as something the budget HAS
+  rather than a third thing to do.
+
+  Covered by `e2e/regression/budgets.spec.mjs`, which now also pins the note across a reload — the
+  half no existing test asserted.
+
 ### Added
 - **The Transactions audit fixes are covered by tests, not just by having been driven once.**
   `e2e/regression/txn_audit.spec.mjs` locks down all thirteen acceptance criteria in a real browser,
