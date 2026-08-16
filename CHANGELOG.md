@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Merge two categories into one.** Pick the category to fold away and the one that survives; the
+  panel states exactly what will move ("Moves 5 things into Groceries — 3 transactions, 2 recurring")
+  before you press anything. Every reference moves: whole-transaction categories, individual split
+  lines, single- and multi-category budgets, sinking-fund goals, rules that file into it, recurring
+  templates, and its sub-categories, which are re-homed onto the survivor. This is the repair tool
+  for the duplicates that unique sibling names now prevent from being created.
+
+### Fixed
+- **Reassign-before-delete moved everything it should always have moved.** It rewrote a
+  transaction's category and a budget's category and nothing else, leaving split lines,
+  multi-category budget lists, goals, rules and recurring templates pointing at an id that no longer
+  existed. Dangling references never fail loudly — they produce totals that quietly stop adding up.
+  Both paths now run the same tested sweep.
+- **The categories page repaints when you change something.** Its refresh counter was written but
+  never read, so every bump was a no-op: deleting a category, or reassigning one before deleting it,
+  changed state the page never redrew. It happened to look right whenever an unrelated subscriber
+  fired at the same moment, which made it look intermittent rather than broken.
+- **Category changes are saved.** The page never asked for a persist, so a delete or reassign
+  survived only until the next reload.
 - **Filter transactions by direction.** A "Money in or out" control on /transactions. The criteria
   field, the matching logic and the active-filter chip all already existed — the only way to reach
   any of it was to type a natural-language search.

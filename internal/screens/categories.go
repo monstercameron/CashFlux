@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/catmerge"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -65,13 +66,46 @@ func Categories() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
+	// The render body must READ this atom, not merely hold it: a state.UseAtom only
+	// re-renders the components that read it during render. It was written but
+	// never read, which made every bump() in this file a no-op — deleting a
+	// category, reassigning one before deleting it, and (until this was found)
+	// opening the merge panel all changed state that the page never repainted to
+	// show. The page happened to look correct whenever some OTHER subscriber
+	// (the data revision below) fired at the same moment, which is what made it
+	// look intermittent rather than broken.
 	rev := state.UseAtom("rev:categories", 0)
-	bump := func() { rev.Set(rev.Get() + 1) }
+	_ = rev.Get()
+	// Every mutation on this page must ALSO ask for a persist. Writing through the
+	// store updates memory; RequestPersist is what puts it in the dataset. Without
+	// it a deleted or merged category came back on the next reload, which looks
+	// like the action silently failed rather than like a save that never happened.
+	bump := func() {
+		rev.Set(rev.Get() + 1)
+		uistate.RequestPersist()
+		uistate.BumpDataRevision()
+	}
 	_ = uistate.UseDataRevision().Get()
 
 	errMsg := ui.UseState("")
-	reassignID := ui.UseState("") // category awaiting reassignment before delete
-	reassignTo := ui.UseState("")
+	// The move panel's selection lives in ATOMS, not component state. This page
+	// remounts while its dataset settles (the first visit after a sample load is
+	// the reliable way to see it), and a remount resets ui.UseState — so a panel
+	// opened a moment too early vanished with no trace, which reads as a dead
+	// button. Atoms survive the remount, which is why every other modal on this
+	// page (the category editor, the Smart+ modal) is already driven by one.
+	reassignID := state.UseAtom("categories:moveFrom", "") // awaiting reassignment before delete, or merge
+	reassignTo := state.UseAtom("categories:moveTo", "")
+	panelMergeAtom := state.UseAtom("categories:moveIsMerge", false)
+	// Whether this panel was opened from the page (both pickers) or from a row
+	// (target only). Kept so the source picker does not disappear the moment a
+	// source is chosen, which both tore the element out of the DOM mid-interaction
+	// and left no way to change your mind short of cancelling.
+	pickedFromPage := state.UseAtom("categories:moveFromPage", false)
+	// C523: merging reuses the reassign panel rather than adding a second
+	// move-your-data UI. The only differences are the verb, the explanation, and
+	// whether the source category survives — so the mode is one flag, not a fork.
+	panelMerge := panelMergeAtom
 	collapsed := ui.UseState(map[string]bool{}) // id → collapsed; session state
 	sortByUsage := ui.UseState(false)           // sort-by-usage toggle (GI2)
 	// In-context add (G17 §1): an "+ Add category" header button on each kind card,
@@ -128,9 +162,49 @@ func Categories() ui.Node {
 		nav.Navigate(uistate.RoutePath("/transactions"))
 	}
 
+	// catNameNow resolves a category name from a FRESH store read. The closures
+	// below run at click time, long after any snapshot taken during render.
+	catNameNow := func(id string) string {
+		for _, c := range app.Categories() {
+			if c.ID == id {
+				return c.Name
+			}
+		}
+		return id
+	}
+
+	mergeCat := func(catID string) {
+		pickedFromPage.Set(false)
+		panelMerge.Set(true)
+		reassignID.Set(catID)
+		reassignTo.Set("")
+		errMsg.Set("")
+	}
+	// Page-level merge: opens the same panel with no source chosen yet, so the
+	// panel offers both pickers. Merging is a two-category act; choosing both in
+	// one place reads better than starting from a row and hunting for the other.
+	openMerge := ui.UseEvent(Prevent(func() {
+		pickedFromPage.Set(true)
+		panelMerge.Set(true)
+		reassignID.Set(mergeAnySentinel)
+		reassignTo.Set("")
+		errMsg.Set("")
+		bump()
+	}))
+	onMergeFrom := ui.UseEvent(func(e ui.Event) {
+		reassignID.Set(e.GetValue())
+		reassignTo.Set("")
+	})
+	mergeBtn := func() ui.Node {
+		return Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "categories-merge"), Title(uistate.T("categories.mergeMenuTitle")),
+			OnClick(openMerge), Span(uistate.T("categories.mergeOpen")))
+	}
+
 	deleteCat := func(catID string) {
 		// If in use, open the reassign panel instead of deleting; otherwise delete now.
 		if categoryUsage(catID) > 0 {
+			panelMerge.Set(false)
 			reassignID.Set(catID)
 			reassignTo.Set("")
 			errMsg.Set("")
@@ -148,8 +222,31 @@ func Categories() ui.Node {
 	confirmReassign := ui.UseEvent(Prevent(func() {
 		from := reassignID.Get()
 		to := reassignTo.Get()
+		if from == mergeAnySentinel {
+			errMsg.Set(uistate.T("categories.mergeChooseSource"))
+			return
+		}
 		if to == "" || to == from {
 			errMsg.Set(uistate.T("categories.pickDifferent"))
+			return
+		}
+		if panelMerge.Get() {
+			// Capture the names BEFORE the merge: the source stops existing as part
+			// of it, so resolving afterwards yields a raw id in the confirmation.
+			fromName, toName := catNameNow(from), catNameNow(to)
+			// One call: the sweep, the retire and the count all come from the same
+			// code that produced the preview, so what was promised is what happens.
+			counts, err := app.MergeCategories(from, to)
+			if err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			uistate.PostNotice(uistate.T("categories.mergedToast",
+				fromName, toName, counts.Total()), false)
+			panelMerge.Set(false)
+			reassignID.Set("")
+			errMsg.Set("")
+			bump()
 			return
 		}
 		if _, err := app.ReassignCategory(from, to); err != nil {
@@ -306,6 +403,7 @@ func Categories() ui.Node {
 			SharePct:    pct,
 			OnView:      viewTxns,
 			OnDelete:    deleteCat,
+			OnMerge:     mergeCat,
 			OnToggle:    toggleCollapse,
 		})
 	}
@@ -339,23 +437,65 @@ func Categories() ui.Node {
 	// Reassign-before-delete panel, shown when a used category is being deleted.
 	reassignPanel := Fragment()
 	if rid := reassignID.Get(); rid != "" {
+		// fromPage: opened via the page-level Merge button rather than from a row,
+		// so the panel owns the source choice for as long as it is open.
+		fromPage := panelMerge.Get() && (rid == mergeAnySentinel || pickedFromPage.Get())
+		pickingSource := rid == mergeAnySentinel
 		target := catByID[rid]
 		opts := []ui.Node{Option(Value(""), SelectedIf(reassignTo.Get() == ""), uistate.T("categories.chooseCategory"))}
 		for _, c := range cats {
 			// Only offer same-kind targets: reassigning an expense category's data to
 			// an income category (or vice versa) is semantically wrong and a
-			// data-integrity hazard (C63). Skip the category being deleted.
-			if c.ID == rid || c.Kind != target.Kind {
+			// data-integrity hazard (C63). Skip the category being retired. Until a
+			// source is chosen there is no kind to match, so everything is offered.
+			if c.ID == rid || (!pickingSource && c.Kind != target.Kind) {
 				continue
 			}
 			opts = append(opts, Option(Value(c.ID), SelectedIf(reassignTo.Get() == c.ID), c.Name))
 		}
-		reassignPanel = Div(css.Class("rpt-headsup", tw.Mb2),
-			H3(css.Class(tw.Mb1), uistate.T("common.reassignTitle")),
-			P(css.Class("muted"), uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))),
+		// Source picker, shown only when the panel was opened from the page rather
+		// than from a specific category's row.
+		var sourcePicker ui.Node = Fragment()
+		if fromPage {
+			sopts := []ui.Node{Option(Value(mergeAnySentinel), SelectedIf(pickingSource), uistate.T("categories.mergeChooseSource"))}
+			for _, c := range cats {
+				sopts = append(sopts, Option(Value(c.ID), SelectedIf(rid == c.ID), c.Name))
+			}
+			sourcePicker = Select(css.Class("field"), Attr("data-testid", "cats-merge-source"),
+				Attr("aria-label", uistate.T("categories.mergeChooseSource")), OnChange(onMergeFrom), sopts)
+		}
+		merging := panelMerge.Get()
+		title := uistate.T("common.reassignTitle")
+		desc := uistate.T("categories.reassignDesc", target.Name, categoryUsage(rid))
+		confirmLabel := uistate.T("common.moveAndDelete")
+		if merging {
+			title = uistate.T("categories.mergeTitle", target.Name)
+			if pickingSource {
+				title = uistate.T("categories.mergeTitleAny")
+			}
+			desc = uistate.T("categories.mergeDesc")
+			confirmLabel = uistate.T("categories.mergeConfirm")
+		}
+		// The preview is computed by the SAME sweep that will run, so a promise of
+		// "128 transactions" cannot be contradicted by an apply that moves 131.
+		var preview ui.Node = Fragment()
+		if merging && reassignTo.Get() != "" && !pickingSource {
+			c := app.PlanCategoryMerge(rid, reassignTo.Get())
+			preview = P(css.Class("muted", tw.Text13), Attr("data-testid", "cats-merge-preview"),
+				uistate.T("categories.mergePreview", c.Total(), catByID[reassignTo.Get()].Name)+" "+
+					mergePreviewParts(c))
+		}
+		reassignPanel = Div(css.Class("rpt-headsup", tw.Mb2), Attr("data-testid", "cats-move-panel"),
+			Attr("data-mode", panelMode(merging)),
+			H3(css.Class(tw.Mb1), title),
+			P(css.Class("muted"), desc),
+			sourcePicker,
+			// The consequence is stated ABOVE the button that causes it. Below, it
+			// is a receipt for a decision already made.
+			preview,
 			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
-				Select(css.Class("field"), Attr("aria-label", uistate.T("common.reassignTitle")), OnChange(onReassignTo), opts),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("common.moveAndDelete")),
+				Select(css.Class("field"), Attr("aria-label", title), Attr("data-testid", "cats-move-target"), OnChange(onReassignTo), opts),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cats-move-confirm"), confirmLabel),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
 		)
@@ -393,7 +533,7 @@ func Categories() ui.Node {
 			)))),
 		rptTile("cats-expense", "1 / span 4",
 			rptSection("sec-cats-expense", uistate.T("categories.expenseTitle"),
-				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), smartCatBtn(), sortToggleBtn(), addCatBtn()),
+				Div(css.Class(tw.Flex, tw.Gap2, tw.ItemsCenter), smartCatBtn(), mergeBtn(), sortToggleBtn(), addCatBtn()),
 				catTreeBody(expenseFlats, uistate.T("categories.expenseEmpty"), uistate.T("categories.addFirstExpense")))),
 		rptTile("cats-income", "1 / span 4",
 			rptSection("sec-cats-income", uistate.T("categories.incomeTitle"),
@@ -418,6 +558,7 @@ type categoryRowProps struct {
 	SharePct  int          // share of the largest same-kind category (0–100)
 	OnView    func(string) // drill into Transactions filtered by category
 	OnDelete  func(string)
+	OnMerge   func(string)    // fold this category into another one
 	OnToggle  func(id string) // toggle collapse/expand for this category
 }
 
@@ -443,6 +584,7 @@ func visibleFlats(flats []categorytree.Flat, visible map[string]bool) []category
 func CategoryRow(props categoryRowProps) ui.Node {
 	c := props.Category
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(c.ID) }))
+	merge := ui.UseEvent(Prevent(func() { props.OnMerge(c.ID) }))
 	view := ui.UseEvent(func() {
 		if props.OnView != nil {
 			props.OnView(c.ID)
@@ -527,6 +669,12 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		menuItems = append(menuItems, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "cat-view-"+c.ID), OnClick(view), uistate.T("categories.viewTxnsTitle")))
 	}
+	// Merge sits above Delete and outside the danger group: it MOVES data rather
+	// than losing it, which is the whole reason it exists as an alternative to
+	// deleting a duplicate.
+	menuItems = append(menuItems, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+		Attr("data-testid", "cat-merge-"+c.ID), Title(uistate.T("categories.mergeMenuTitle")),
+		OnClick(merge), uistate.T("categories.mergeMenu")))
 	menuItems = append(menuItems, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 		Attr("data-testid", "cat-delete-"+c.ID), Attr("aria-label", uistate.T("categories.deleteTitle")),
 		Title(uistate.T("categories.deleteTitle")), OnClick(del), uistate.T("categories.deleteTitle")))
@@ -566,3 +714,38 @@ func catColor(c string) string {
 	}
 	return c
 }
+
+// panelMode is the data-mode the move panel exposes, so a test can tell a merge
+// from a reassign-before-delete without reading copy.
+func panelMode(merging bool) string {
+	if merging {
+		return "merge"
+	}
+	return "reassign"
+}
+
+// mergePreviewParts spells out WHAT moves, not just how much. "Moves 12 things"
+// is not a number a person can check; "8 transactions, 2 budgets, 1 rule" is.
+func mergePreviewParts(c catmerge.Counts) string {
+	var parts []string
+	add := func(n int, key string) {
+		if n > 0 {
+			parts = append(parts, uistate.T(key, n))
+		}
+	}
+	add(c.Transactions, "categories.mergePartTxns")
+	add(c.Splits, "categories.mergePartSplits")
+	add(c.Budgets, "categories.mergePartBudgets")
+	add(c.Goals, "categories.mergePartGoals")
+	add(c.Rules, "categories.mergePartRules")
+	add(c.Recurring, "categories.mergePartRecurring")
+	add(c.Children, "categories.mergePartChildren")
+	if len(parts) == 0 {
+		return uistate.T("categories.mergePartNothing")
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
+}
+
+// mergeAnySentinel marks the merge panel as "opened from the page, no source
+// chosen yet", which is what makes the source picker appear.
+const mergeAnySentinel = "__pick__"

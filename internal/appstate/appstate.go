@@ -2398,24 +2398,19 @@ func (a *App) ApplyRules() (int, error) {
 // returning how many records were moved. Use it before deleting a category that
 // is still in use. The category itself is not deleted here.
 func (a *App) ReassignCategory(oldID, newID string) (int, error) {
-	moved := 0
-	for _, t := range a.Transactions() {
-		if t.CategoryID == oldID {
-			t.CategoryID = newID
-			if err := a.store.PutTransaction(t); err != nil {
-				return moved, err
-			}
-			moved++
-		}
-	}
-	for _, b := range a.Budgets() {
-		if b.CategoryID == oldID {
-			b.CategoryID = newID
-			if err := a.store.PutBudget(b); err != nil {
-				return moved, err
-			}
-			moved++
-		}
+	// C523: this used to rewrite exactly two things — a transaction's CategoryID
+	// and a budget's CategoryID — and silently leave behind split lines, a
+	// multi-category budget's CategoryIDs list, sinking-fund goals, rules that
+	// file into the category, and recurring templates. Those dangling references
+	// never fail loudly; they produce a household whose totals quietly stop
+	// adding up. It now runs the same complete sweep a merge does.
+	//
+	// Categories themselves are deliberately excluded from the sweep: the delete
+	// path owns retiring the category and re-homing its children
+	// (categorytree.ReparentOnDelete), and doing it twice would fight.
+	moved, err := a.moveCategoryRefs(oldID, newID)
+	if err != nil {
+		return moved, err
 	}
 	a.log.Info("reassigned category", "from", oldID, "to", newID, "moved", moved)
 	return moved, nil

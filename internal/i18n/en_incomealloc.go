@@ -71,6 +71,30 @@ var incomeAllocKeys = Catalog{
 	// holds a magnitude and this holds the sign, so a charge filed as income can
 	// be corrected to a spend instead of having to be deleted and re-entered.
 	"transactions.directionLabel": "Direction",
+	// C523: merging two categories into one. The verbs say what happens to the
+	// data ("move"), not what happens to the record ("delete"), because moving
+	// the data is the point and the retirement is a consequence.
+	"categories.mergeMenu":      "Merge into…",
+	"categories.mergeMenuTitle": "Fold this category into another one, moving everything that points at it",
+	// %s = the category being folded away.
+	"categories.mergeTitle":        "Merge “%s” into",
+	"categories.mergeDesc":         "Everything filed under it moves to the category you pick, and it stops existing. Nothing is deleted.",
+	"categories.mergeConfirm":      "Merge",
+	"categories.mergeOpen":         "Merge categories…",
+	"categories.mergeTitleAny":     "Merge one category into another",
+	"categories.mergeChooseSource": "Choose the category to fold away",
+	// %d = total references, %s = the surviving category.
+	"categories.mergePreview": "Moves %d things into %s.",
+	// %s = source, %s = destination, %d = how many references moved.
+	"categories.mergedToast":        "Merged %s into %s — %d references moved.",
+	"categories.mergePartTxns":      "%d transactions",
+	"categories.mergePartSplits":    "%d split lines",
+	"categories.mergePartBudgets":   "%d budgets",
+	"categories.mergePartGoals":     "%d goals",
+	"categories.mergePartRules":     "%d rules",
+	"categories.mergePartRecurring": "%d recurring",
+	"categories.mergePartChildren":  "%d sub-categories",
+	"categories.mergePartNothing":   "(nothing points at it yet)",
 	// C517: the direction filter on /transactions. The Criteria field and its chip
 	// already existed and were only reachable through natural-language search.
 	"transactions.flowLabel": "Money in or out",
