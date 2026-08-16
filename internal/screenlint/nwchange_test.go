@@ -252,3 +252,44 @@ func TestNoSurfaceProjectsRawBillOccurrences(t *testing.T) {
 			"with opposite survivors is what C340 was about")
 	}
 }
+
+// ─── C352 goal-pace ratchet ──────────────────────────────────────────────────
+
+// TestGoalPaceBadgeIsFundingDerived keeps the badge and the assistant agreeing.
+//
+// C352: a Goals card read "On track" for a baby fund needing $1,840/mo while the
+// Smart strip said only ~$462/mo was realistically free. The badge was derived
+// from calendar runway — a dated goal with a far deadline read on-track whether
+// or not it was being funded fast enough — so it was making a claim it had never
+// checked. It now comes from goals.AssessHealth, the same required-vs-available
+// comparison the assistant uses, which is what makes the two agree by
+// construction rather than by both being careful.
+func TestGoalPaceBadgeIsFundingDerived(t *testing.T) {
+	src, ok := readInternal(t)["screens/goals.go"]
+	if !ok {
+		t.Fatal("screens/goals.go not found")
+	}
+	i := strings.Index(src, "func goalPaceBadge(")
+	if i < 0 {
+		t.Fatal("goalPaceBadge has moved; update this guard rather than deleting it")
+	}
+	end := strings.Index(src[i:], "\n}")
+	if end < 0 {
+		t.Fatal("could not delimit goalPaceBadge")
+	}
+	body := src[i : i+end]
+	if !strings.Contains(body, "goalsvc.HealthOnTrack") {
+		t.Error("the on-track badge is no longer gated on the funding verdict — a goal " +
+			"the assistant calls unaffordable would read \"On track\" again (C352)")
+	}
+	for _, risk := range []string{"goalsvc.HealthAtRisk", "goalsvc.HealthWatch"} {
+		if !strings.Contains(body, risk) {
+			t.Errorf("goalPaceBadge no longer renders %s — the badge would have no way to "+
+				"disagree with an optimistic deadline (C352)", risk)
+		}
+	}
+	// AssessHealth must still be what produces that verdict.
+	if !strings.Contains(src, "goalsvc.AssessHealth(") {
+		t.Error("screens/goals.go no longer calls goals.AssessHealth (C352)")
+	}
+}

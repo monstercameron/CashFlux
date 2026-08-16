@@ -5211,10 +5211,17 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   "varies" chip on the review row names it in place instead of hiding it behind a confidence word.
   Tests: the ticket's date-night case reports zero changes, a real hike still reports and carries its
   runs, a single charge at a new price still counts, and a table over the fixed-price boundary.
-- [ ] **C352 [MAJOR][UX] Goals "On track" badge contradicts the feasibility insight** ("Baby fund
-  needs $1,840/mo but only ~$462/mo is realistically free" — yet the card says On track at
-  $1,840/mo). Fold free-cash-flow feasibility into the pace badge (On track / Tight / At risk) so
-  the badge and the Smart strip can't disagree.
+- [x] **C352 ✅ DONE (verified 2026-08-16) — Goals "On track" contradicted the feasibility
+  insight.** The fix had already landed as `goals.AssessHealth`: the badge is derived from the same
+  required-monthly-vs-available-cash comparison the assistant uses (required ≤ fair share → On
+  track; ≤ surplus → Watch; > surplus → At risk; no surplus or nothing required → no badge at all
+  rather than an unearned reassurance), and `goalPaceReason` renders the arithmetic beside it so
+  the verdict is diagnostic rather than decorative. Verified rather than assumed: a new test runs
+  the ticket's exact numbers ($1,840/mo required against $462/mo free) and asserts At risk, plus
+  the Watch and On-track boundaries and the no-claim cases. Ratchet
+  `TestGoalPaceBadgeIsFundingDerived` blocks the regression shape — an on-track badge gated on
+  calendar runway instead of the funding verdict, which is how the card came to make a claim it had
+  never checked.
 - [x] **C346 ✅ DONE (2026-07-03) — /accounts now names its liability hand-off.** The asset-list
   tile ends with a visible stub — "Liabilities (6) — managed in Debt payoff →" (owner-scoped,
   non-archived count; `data-testid="acct-liabilities-stub"`) — linking to /debt, so the page no
