@@ -551,6 +551,61 @@ test.describe("the Amount column sorts by the figure it displays", () => {
   });
 });
 
+test.describe("a hidden column cannot order the table", () => {
+  test("hiding the sorted column returns the rows to newest-first, and showing it restores the sort", async ({ app }) => {
+    await nav(app, "/transactions");
+    const amountSort = () =>
+      app.evaluate(() => {
+        const th = [...document.querySelectorAll(".txn-table thead th")].find(
+          (h) => h.textContent.trim().startsWith("Amount"),
+        );
+        return th ? th.getAttribute("aria-sort") : null;
+      });
+    // Sort by Amount (any direction — the point is that a sort is in force).
+    await app.locator(".txn-table thead th", { hasText: "Amount" }).first().locator("button.th-sort").click();
+    await expect.poll(amountSort, { timeout: 15_000 }).not.toBe("none");
+    const sortedFirst = await app.locator('tr[data-testid^="txn-row-"]').first().getAttribute("data-testid");
+
+    // Hide the Amount column.
+    await clickToolbarMenuItem(app, "txn-columns-btn");
+    await app.getByTestId("col-toggle-amount").click();
+    await expect(app.locator(".txn-table thead th", { hasText: "Amount" })).toHaveCount(0);
+    await app.keyboard.press("Escape");
+
+    // Some header must own the order. Previously NO header carried a sort while
+    // the rows stayed in amount order — an arrangement the page never stated.
+    // Polled, not read once: the table re-renders after the column toggle, and a
+    // single evaluate can land between "amount header gone" and "date header
+    // marked", reading zero for a reason that is not the defect.
+    await expect
+      .poll(
+        () =>
+          app.evaluate(
+            () =>
+              [...document.querySelectorAll(".txn-table thead th")]
+                .map((h) => h.getAttribute("aria-sort"))
+                .filter((s) => s && s !== "none").length,
+          ),
+        { timeout: 15_000 },
+      )
+      .toBe(1);
+    await expect(app.locator(".txn-table thead th", { hasText: "Date" }).first()).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
+
+    // Showing the column again restores the sort rather than making the user
+    // re-pick it — the stored preference was never discarded.
+    await clickToolbarMenuItem(app, "txn-columns-btn");
+    await app.getByTestId("col-toggle-amount").click();
+    await app.keyboard.press("Escape");
+    await expect.poll(amountSort, { timeout: 15_000 }).not.toBe("none");
+    await expect
+      .poll(() => app.locator('tr[data-testid^="txn-row-"]').first().getAttribute("data-testid"), { timeout: 15_000 })
+      .toBe(sortedFirst);
+  });
+});
+
 test.describe("the header checkbox selects every row in view", () => {
   test("it selects all shown rows, then clears them", async ({ app }) => {
     await nav(app, "/transactions");
@@ -589,8 +644,15 @@ test.describe("the header checkbox selects every row in view", () => {
 
   test("a partial selection shows the middle state, not an empty box", async ({ app }) => {
     await nav(app, "/transactions");
+    // A mid-list row, not the first: the sticky header overlays the top rows and
+    // can swallow the click (the same hazard splits.spec documents).
     const rowBoxes = app.locator('tr[data-testid^="txn-row-"] input[type=checkbox]');
-    await rowBoxes.first().click();
+    const one = rowBoxes.nth(3);
+    await one.scrollIntoViewIfNeeded();
+    await expect.poll(async () => {
+      if (!(await one.isChecked())) await one.click().catch(() => {});
+      return one.isChecked();
+    }, { timeout: 20_000 }).toBe(true);
     const box = app.getByTestId("txn-select-all-visible");
     // An unchecked box over a partial selection would claim nothing is selected;
     // `indeterminate` is a property, so this is read off the element itself.

@@ -1294,7 +1294,11 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
 		If(props.Vis.Status, Td(ClassStr("td-status "+statusToneClass(props)),
-			Attr("data-testid", "txn-status-cell"), rowStatusWord(props))),
+			Attr("data-testid", "txn-status-cell"),
+			// The word is the one that asks for action; the tooltip/accessible name
+			// carries the settled state it had to outrank (C601).
+			Attr("title", statusDetail(props)), Attr("aria-label", statusDetail(props)),
+			rowStatusWord(props))),
 		Td(ClassStr("td-actions"), OnClick(stop),
 			// The testid deliberately avoids the `txn-row-` prefix: `[data-testid^=
 			// "txn-row-"]` is how the suite selects ROWS, and a per-row child sharing
