@@ -75,7 +75,10 @@ var i18nBaselines = map[string]int{
 	// above the real number is slack the ratchet cannot see — eight strings could
 	// have been added back without failing anything.
 	"../smartengine":   163,
-	"../widgetcatalog": 42,
+	// 42→0 (2026-08-16, C362): every widget, column, chart and preset label now
+	// carries its catalog key beside its English, resolved through the translator
+	// the app installs at boot (widgetcatalog.SetTranslator).
+	"../widgetcatalog": 0,
 	"../healthscore":   0,
 	"../credithealth":  0,
 	"../attention":     0,

@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/styles"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
 	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 	"github.com/monstercameron/GoWebComponents/v5/utils"
@@ -257,6 +258,10 @@ func Run() {
 	// document-level scroll-lock + drag-retargeting listeners once, now that the DOM
 	// host exists.
 	uiw.InitBentoCoordinator()
+
+	// C362: hand the pure widget catalog the app's translator, once, so every
+	// widget/column/chart label it names resolves through the language setting.
+	widgetcatalog.SetTranslator(uistate.T)
 
 	// C361: translate the install affordances that live in web/index.html. They
 	// are shown by page script after boot and were the last user-facing English

@@ -12,6 +12,7 @@ package widgetcatalog
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
@@ -198,6 +199,17 @@ type Metric struct {
 type Option struct {
 	Value string
 	Label string
+	// LabelKey names Label's catalog entry (C362). This package is pure — it has
+	// no language context and must not acquire one — so it carries the key and
+	// the English side by side and the UI resolves at render time.
+	LabelKey string
+}
+
+// Localized returns a copy of o with its label rendered through tr, falling back
+// to the English the catalog does not know.
+func (o Option) Localized(tr copytext.Translator) Option {
+	o.Label = copytext.Text{Key: o.LabelKey, Fallback: o.Label}.Resolve(tr)
+	return o
 }
 
 // metricMeta curates the label + group + one-line doc for each built-in engine
@@ -423,47 +435,73 @@ func MetricNames(defs []customfields.Def) []string {
 	return out
 }
 
+// translator resolves the catalog keys this package's labels carry. The UI
+// installs it once at boot (SetTranslator) and it is read-only after, because a
+// pure package cannot import the UI to ask.
+//
+// A package-level hook rather than a parameter on every accessor is a deliberate
+// trade. This package has a dozen public accessors read from dozens of places,
+// and threading a translator through all of them would put the burden of
+// remembering on every future caller — the shape that left three bill surfaces
+// un-deduped in C340. Unset, every label renders the producer's English, so the
+// package stays fully usable and testable without it.
+var translator copytext.Translator
+
+// SetTranslator installs the catalog resolver for this package's labels (C362).
+// Call once, at boot, before any UI reads the catalog.
+func SetTranslator(tr copytext.Translator) { translator = tr }
+
+// localized renders a slice of options through the installed translator. Every
+// accessor already returns a fresh slice, so this never mutates a package table.
+func localized(in []Option) []Option {
+	out := make([]Option, len(in))
+	for i, o := range in {
+		out[i] = o.Localized(translator)
+	}
+	return out
+}
+
 // Formats are the KPI/figure display formats.
 func Formats() []Option {
-	return []Option{
-		{"currency", "Money"},
-		{"percent", "Percent"},
-		{"number", "Number"},
-	}
+	return localized([]Option{
+		{Value: "currency", Label: "Money", LabelKey: "wcat.fmtMoney"},
+		{Value: "percent", Label: "Percent", LabelKey: "wcat.fmtPercent"},
+		{Value: "number", Label: "Number", LabelKey: "wcat.fmtNumber"},
+	})
 }
 
 // Kinds are the widget kinds the designer can produce.
 func Kinds() []Option {
-	return []Option{
-		{"kpi", "Single figure"},
-		{"compound", "Custom layout"},
-		{"list", "List"},
-		{"chart", "Chart"},
-	}
+	return localized([]Option{
+		{Value: "kpi", Label: "Single figure", LabelKey: "wcat.kindFigure"},
+		{Value: "compound", Label: "Custom layout", LabelKey: "wcat.kindCompound"},
+		{Value: "list", Label: "List", LabelKey: "wcat.kindList"},
+		{Value: "chart", Label: "Chart", LabelKey: "wcat.kindChart"},
+	})
 }
 
 // FigureFormats are the display formats for a single figure block (the standard
 // formats plus a signed +/- money variant).
 func FigureFormats() []Option {
-	return append(Formats(), Option{Value: "signed", Label: "Signed (+/−)"})
+	return localized(append(Formats(), Option{Value: "signed", Label: "Signed (+/−)", LabelKey: "wcat.fmtSigned"}))
 }
 
 // ListDisplays are the ways a list widget can present its rows: cap to N, scroll all
 // within the tile, or page through them.
 func ListDisplays() []Option {
-	return []Option{
-		{Value: "cap", Label: "Show top rows"},
-		{Value: "scroll", Label: "Scroll all"},
-		{Value: "page", Label: "Page through"},
-	}
+	return localized([]Option{
+		{Value: "cap", Label: "Show top rows", LabelKey: "wcat.listCap"},
+		{Value: "scroll", Label: "Scroll all", LabelKey: "wcat.listScroll"},
+		{Value: "page", Label: "Page through", LabelKey: "wcat.listPage"},
+	})
 }
 
 // ChartSourceTypes are the two shapes a chart can take.
 func ChartSourceTypes() []Option {
-	return []Option{
-		{"series", "Trend over time"},
-		{"collection", "Breakdown"},
-	}
+	return localized([]Option{
+		{Value: "series", Label: "Trend over time", LabelKey: "wcat.srcSeries"},
+		{Value: "collection", Label: "Breakdown", LabelKey: "wcat.srcCollection"},
+	})
 }
 
 // Starter is a one-click preset that pre-fills the designer so a casual user never
@@ -473,11 +511,20 @@ func ChartSourceTypes() []Option {
 type Starter struct {
 	Label, Title, Kind, Formula, Format, Sub, Collection, Series string
 	Blocks                                                       []domain.Block
+	// LabelKey / TitleKey name the catalog entries for Label and Title (C362).
+	LabelKey, TitleKey string
+}
+
+// Localized returns a copy of st with its label and title rendered through tr.
+func (st Starter) Localized(tr copytext.Translator) Starter {
+	st.Label = copytext.Text{Key: st.LabelKey, Fallback: st.Label}.Resolve(tr)
+	st.Title = copytext.Text{Key: st.TitleKey, Fallback: st.Title}.Resolve(tr)
+	return st
 }
 
 // RowCounts are the row-count choices for a list widget.
 func RowCounts() []Option {
-	return []Option{{Value: "3", Label: "3"}, {Value: "5", Label: "5"}, {Value: "6", Label: "6"}, {Value: "10", Label: "10"}, {Value: "15", Label: "15"}}
+	return localized([]Option{{Value: "3", Label: "3"}, {Value: "5", Label: "5"}, {Value: "6", Label: "6"}, {Value: "10", Label: "10"}, {Value: "15", Label: "15"}})
 }
 
 // IncomeVsSpendingBlocks is the canonical "income vs spending" compound layout: a
@@ -485,7 +532,7 @@ func RowCounts() []Option {
 // compound blocks and the "Income vs spending" starter so they never drift.
 func IncomeVsSpendingBlocks() []domain.Block {
 	return []domain.Block{
-		{Kind: domain.BlockText, Text: "This month", Style: domain.Style{FontWeight: "600"}},
+		{Kind: domain.BlockText, TextKey: "wcat.blockThisMonth", Text: "This month", Style: domain.Style{FontWeight: "600"}},
 		{Kind: domain.BlockFigure, Bind: "income|currency", ColSpan: 2, Style: domain.Style{Text: "var(--up)"}},
 		{Kind: domain.BlockFigure, Bind: "expense|currency", ColSpan: 2, Style: domain.Style{Text: "var(--down)"}},
 	}
@@ -493,14 +540,23 @@ func IncomeVsSpendingBlocks() []domain.Block {
 
 // Starters returns the built-in starter presets, ordered simplest-first.
 func Starters() []Starter {
-	return []Starter{
-		{Label: "Net worth", Title: "Net worth", Kind: "kpi", Formula: "net_worth", Format: "currency"},
-		{Label: "Savings rate", Title: "Savings rate", Kind: "kpi", Formula: "savings_rate", Format: "percent"},
-		{Label: "Income vs spending", Title: "This month", Kind: "compound", Blocks: IncomeVsSpendingBlocks()},
-		{Label: "Recent activity", Title: "Recent activity", Kind: "list", Collection: "transactions"},
-		{Label: "Spending breakdown", Title: "Spending breakdown", Kind: "chart", Collection: "spending-breakdown"},
-		{Label: "Net worth trend", Title: "Net worth trend", Kind: "chart", Series: "networth"},
+	return localizedStarters([]Starter{
+		{Label: "Net worth", LabelKey: "wcat.startNetWorth", Title: "Net worth", TitleKey: "wcat.startNetWorth", Kind: "kpi", Formula: "net_worth", Format: "currency"},
+		{Label: "Savings rate", LabelKey: "wcat.startSavingsRate", Title: "Savings rate", TitleKey: "wcat.startSavingsRate", Kind: "kpi", Formula: "savings_rate", Format: "percent"},
+		{Label: "Income vs spending", LabelKey: "wcat.startIncomeVsSpending", Title: "This month", TitleKey: "wcat.blockThisMonth", Kind: "compound", Blocks: IncomeVsSpendingBlocks()},
+		{Label: "Recent activity", LabelKey: "wcat.startRecentActivity", Title: "Recent activity", TitleKey: "wcat.startRecentActivity", Kind: "list", Collection: "transactions"},
+		{Label: "Spending breakdown", LabelKey: "wcat.startSpendingBreakdown", Title: "Spending breakdown", TitleKey: "wcat.startSpendingBreakdown", Kind: "chart", Collection: "spending-breakdown"},
+		{Label: "Net worth trend", LabelKey: "wcat.startNetWorthTrend", Title: "Net worth trend", TitleKey: "wcat.startNetWorthTrend", Kind: "chart", Series: "networth"},
+	})
+}
+
+// localizedStarters renders a starter list through the installed translator.
+func localizedStarters(in []Starter) []Starter {
+	out := make([]Starter, len(in))
+	for i, st := range in {
+		out[i] = st.Localized(translator)
 	}
+	return out
 }
 
 // SortField is one column a list widget can be ordered by: the Frame column name the
@@ -508,9 +564,16 @@ func Starters() []Starter {
 // (so the designer can offer "High → Low" vs "A → Z" direction labels). Defined per
 // collection so the sort picker only ever offers columns that exist in that source.
 type SortField struct {
-	Column  string // Frame column name (must match the widgetsource resolver's output)
-	Label   string // human label (e.g. "Amount", "Date")
-	Numeric bool   // numeric/money/percent → hi/low direction; text → a/z
+	Column   string // Frame column name (must match the widgetsource resolver's output)
+	Label    string // human label (e.g. "Amount", "Date")
+	LabelKey string // Label's catalog entry (C362)
+	Numeric  bool   // numeric/money/percent → hi/low direction; text → a/z
+}
+
+// Localized returns a copy of f with its label rendered through tr.
+func (f SortField) Localized(tr copytext.Translator) SortField {
+	f.Label = copytext.Text{Key: f.LabelKey, Fallback: f.Label}.Resolve(tr)
+	return f
 }
 
 // Collection is a list/chart row source, defined in one place with its picker label,
@@ -521,6 +584,9 @@ type Collection struct {
 	Value, Label     string
 	Route, LinkLabel string      // full-data screen; empty Route = no "view all" target
 	Sort             []SortField // columns this collection's rows can be ordered by
+	// LabelKey / LinkLabelKey name the catalog entries for the two user-facing
+	// strings above (C362).
+	LabelKey, LinkLabelKey string
 	// DefaultSort is the column a fresh list of this collection is ordered by out of
 	// the box (must be one of Sort's columns; "" = the source's natural order).
 	// DefaultDesc sets that default's direction (true = descending). The designer
@@ -533,38 +599,57 @@ type Collection struct {
 // flows to the picker (Collections), the "view all" link (CollectionRoute) and the
 // sort control (SortFields/DefaultSort) alike. Sort columns must match the widgetsource Frame.
 var collectionDefs = []Collection{
-	{Value: "transactions", Label: "Recent transactions", Route: "/transactions", LinkLabel: "View all transactions",
-		Sort:        []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "desc", Label: "Description"}},
+	{Value: "transactions", Label: "Recent transactions", LabelKey: "wcat.collRecentTransactions", Route: "/transactions", LinkLabel: "View all transactions", LinkLabelKey: "wcat.linkAllTransactions",
+		Sort:        []SortField{{Column: "date", Label: "Date", LabelKey: "wcat.colDate", Numeric: true}, {Column: "amount", Label: "Amount", LabelKey: "wcat.colAmount", Numeric: true}, {Column: "desc", Label: "Description", LabelKey: "wcat.colDescription"}},
 		DefaultSort: "date", DefaultDesc: true}, // newest first
 	// The full ledger source the widgetized /transactions table renders from: the same
 	// transactions with the richer columns (payee/account/category/cleared). No "view
 	// all" route — this IS the full view.
-	{Value: "transactions-full", Label: "All transactions",
-		Sort:        []SortField{{Column: "date", Label: "Date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "payee", Label: "Payee"}, {Column: "account", Label: "Account"}, {Column: "category", Label: "Category"}, {Column: "source", Label: "Source"}},
+	{Value: "transactions-full", Label: "All transactions", LabelKey: "wcat.collAllTransactions",
+		Sort:        []SortField{{Column: "date", Label: "Date", LabelKey: "wcat.colDate", Numeric: true}, {Column: "amount", Label: "Amount", LabelKey: "wcat.colAmount", Numeric: true}, {Column: "payee", Label: "Payee", LabelKey: "wcat.colPayee"}, {Column: "account", Label: "Account", LabelKey: "wcat.colAccount"}, {Column: "category", Label: "Category", LabelKey: "wcat.colCategory"}, {Column: "source", Label: "Source", LabelKey: "wcat.colSource"}},
 		DefaultSort: "date", DefaultDesc: true}, // newest first
-	{Value: "accounts", Label: "Account balances", Route: "/accounts", LinkLabel: "View all accounts",
-		Sort:        []SortField{{Column: "balance", Label: "Balance", Numeric: true}, {Column: "name", Label: "Name"}},
+	{Value: "accounts", Label: "Account balances", LabelKey: "wcat.collAccountBalances", Route: "/accounts", LinkLabel: "View all accounts", LinkLabelKey: "wcat.linkAllAccounts",
+		Sort:        []SortField{{Column: "balance", Label: "Balance", LabelKey: "wcat.colBalance", Numeric: true}, {Column: "name", Label: "Name", LabelKey: "wcat.colName"}},
 		DefaultSort: "balance", DefaultDesc: true}, // largest balance first
-	{Value: "budgets", Label: "Budget status", Route: "/budgets", LinkLabel: "View all budgets",
-		Sort:        []SortField{{Column: "percent", Label: "Used %", Numeric: true}, {Column: "name", Label: "Name"}},
+	{Value: "budgets", Label: "Budget status", LabelKey: "wcat.collBudgetStatus", Route: "/budgets", LinkLabel: "View all budgets", LinkLabelKey: "wcat.linkAllBudgets",
+		Sort:        []SortField{{Column: "percent", Label: "Used %", LabelKey: "wcat.colUsedPct", Numeric: true}, {Column: "name", Label: "Name", LabelKey: "wcat.colName"}},
 		DefaultSort: "percent", DefaultDesc: true}, // most-used / at-risk first
-	{Value: "bills", Label: "Upcoming bills", Route: "/bills", LinkLabel: "View all bills",
-		Sort:        []SortField{{Column: "due", Label: "Due date", Numeric: true}, {Column: "amount", Label: "Amount", Numeric: true}, {Column: "name", Label: "Name"}},
+	{Value: "bills", Label: "Upcoming bills", LabelKey: "wcat.collUpcomingBills", Route: "/bills", LinkLabel: "View all bills", LinkLabelKey: "wcat.linkAllBills",
+		Sort:        []SortField{{Column: "due", Label: "Due date", LabelKey: "wcat.colDueDate", Numeric: true}, {Column: "amount", Label: "Amount", LabelKey: "wcat.colAmount", Numeric: true}, {Column: "name", Label: "Name", LabelKey: "wcat.colName"}},
 		DefaultSort: "due", DefaultDesc: false}, // soonest due first
-	{Value: "spending-breakdown", Label: "Spending by category", Route: "/reports", LinkLabel: "Open spending reports",
-		Sort:        []SortField{{Column: "amount", Label: "Amount", Numeric: true}, {Column: "percent", Label: "Share", Numeric: true}, {Column: "name", Label: "Category"}},
+	{Value: "spending-breakdown", Label: "Spending by category", LabelKey: "wcat.collSpendingByCategory", Route: "/reports", LinkLabel: "Open spending reports", LinkLabelKey: "wcat.linkSpendingReports",
+		Sort:        []SortField{{Column: "amount", Label: "Amount", LabelKey: "wcat.colAmount", Numeric: true}, {Column: "percent", Label: "Share", LabelKey: "wcat.colShare", Numeric: true}, {Column: "name", Label: "Category", LabelKey: "wcat.colCategory"}},
 		DefaultSort: "amount", DefaultDesc: true}, // biggest spend first
 }
 
+// Localized returns a copy of c with every user-facing string — its own label,
+// its "view all" link, and each sort column's label — rendered through tr.
+func (c Collection) Localized(tr copytext.Translator) Collection {
+	c.Label = copytext.Text{Key: c.LabelKey, Fallback: c.Label}.Resolve(tr)
+	c.LinkLabel = copytext.Text{Key: c.LinkLabelKey, Fallback: c.LinkLabel}.Resolve(tr)
+	sorts := make([]SortField, len(c.Sort))
+	for i, f := range c.Sort {
+		sorts[i] = f.Localized(tr)
+	}
+	c.Sort = sorts
+	return c
+}
+
 // CollectionDefs returns the full collection definitions (label + link target).
-func CollectionDefs() []Collection { return append([]Collection(nil), collectionDefs...) }
+func CollectionDefs() []Collection {
+	out := make([]Collection, len(collectionDefs))
+	for i, c := range collectionDefs {
+		out[i] = c.Localized(translator)
+	}
+	return out
+}
 
 // Collections are the row sources for a List/Chart pipeline (picker options derived
 // from the canonical definitions).
 func Collections() []Option {
 	out := make([]Option, len(collectionDefs))
 	for i, c := range collectionDefs {
-		out[i] = Option{Value: c.Value, Label: c.Label}
+		out[i] = Option{Value: c.Value, Label: c.Label, LabelKey: c.LabelKey}.Localized(translator)
 	}
 	return out
 }
@@ -586,7 +671,11 @@ func CollectionRoute(collection string) (path, label string) {
 func SortFields(collection string) []SortField {
 	for _, c := range collectionDefs {
 		if c.Value == collection {
-			return append([]SortField(nil), c.Sort...)
+			out := make([]SortField, len(c.Sort))
+			for i, f := range c.Sort {
+				out[i] = f.Localized(translator)
+			}
+			return out
 		}
 	}
 	return nil
@@ -609,50 +698,50 @@ func DefaultSort(collection string) (column string, desc bool) {
 // values ("desc"/"asc") map to the engine's sort arg (a "-" prefix for descending).
 func SortDirections(numeric bool) []Option {
 	if numeric {
-		return []Option{{"desc", "High → Low"}, {"asc", "Low → High"}}
+		return localized([]Option{{Value: "desc", Label: "High → Low", LabelKey: "wcat.sortHighLow"}, {Value: "asc", Label: "Low → High", LabelKey: "wcat.sortLowHigh"}})
 	}
-	return []Option{{"asc", "A → Z"}, {"desc", "Z → A"}}
+	return localized([]Option{{Value: "asc", Label: "A → Z", LabelKey: "wcat.sortAZ"}, {Value: "desc", Label: "Z → A", LabelKey: "wcat.sortZA"}})
 }
 
 // SeriesMetrics are the time-series sources for a Chart pipeline.
 func SeriesMetrics() []Option {
-	return []Option{
-		{"networth", "Net worth over time"},
-		{"cashflow", "Cash flow by month"},
-	}
+	return localized([]Option{
+		{Value: "networth", Label: "Net worth over time", LabelKey: "wcat.serNetWorth"},
+		{Value: "cashflow", Label: "Cash flow by month", LabelKey: "wcat.serCashFlow"},
+	})
 }
 
 // Transforms are the Frame→Frame pipeline steps the designer can add.
 func Transforms() []Option {
-	return []Option{
-		{"limit", "Limit rows"},
-		{"sort", "Sort by column"},
-		{"filter", "Filter rows"},
-	}
+	return localized([]Option{
+		{Value: "limit", Label: "Limit rows", LabelKey: "wcat.trLimit"},
+		{Value: "sort", Label: "Sort by column", LabelKey: "wcat.trSort"},
+		{Value: "filter", Label: "Filter rows", LabelKey: "wcat.trFilter"},
+	})
 }
 
 // BlockKinds are the content blocks a compound (custom-layout) widget can place.
 func BlockKinds() []Option {
-	return []Option{
-		{"figure", "Figure (a metric)"},
-		{"text", "Text / caption"},
-		{"icon", "Icon"},
-		{"divider", "Divider"},
-		{"spacer", "Spacer"},
-		{"dataview", "Embedded data"},
-	}
+	return localized([]Option{
+		{Value: "figure", Label: "Figure (a metric)", LabelKey: "wcat.oFigureAMetric"},
+		{Value: "text", Label: "Text / caption", LabelKey: "wcat.oTextCaption"},
+		{Value: "icon", Label: "Icon", LabelKey: "wcat.oIcon"},
+		{Value: "divider", Label: "Divider", LabelKey: "wcat.oDivider"},
+		{Value: "spacer", Label: "Spacer", LabelKey: "wcat.oSpacer"},
+		{Value: "dataview", Label: "Embedded data", LabelKey: "wcat.oEmbeddedData"},
+	})
 }
 
 // TemplateVerbs are the formatting verbs usable in a sub-label / text template
 // token ("{{ metric | verb }}").
 func TemplateVerbs() []Option {
 	return []Option{
-		{"currency", "Money"},
-		{"percent", "Percent"},
-		{"number", "Number"},
-		{"signed", "Signed money (+/-)"},
-		{"plural:item", "Count + noun"},
-		{"arrow", "Up/down arrow"},
+		{Value: "currency", Label: "Money", LabelKey: "wcat.fmtMoney"},
+		{Value: "percent", Label: "Percent", LabelKey: "wcat.fmtPercent"},
+		{Value: "number", Label: "Number", LabelKey: "wcat.fmtNumber"},
+		{Value: "signed", Label: "Signed money (+/-)", LabelKey: "wcat.fmtSignedMoney"},
+		{Value: "plural:item", Label: "Count + noun", LabelKey: "wcat.fmtCountNoun"},
+		{Value: "arrow", Label: "Up/down arrow", LabelKey: "wcat.fmtArrow"},
 	}
 }
 
