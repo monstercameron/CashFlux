@@ -446,11 +446,10 @@ func startDatasetAutosave() {
 	go watchDataRevision(save)
 }
 
-// dataRevisionQuietTick is how long the revision watcher waits for the edits to
-// stop before it writes. One tick of quiet collapses a burst (a bulk adjust, an
-// auto-budget save, a fast sequence of inline edits) into a single write while
-// still landing well inside the window a user can reload in.
-const dataRevisionQuietTick = 300 * time.Millisecond
+// dataRevisionTick is how often the watcher looks for new edits. It is also the
+// worst-case delay before a mutation is written, because the watcher writes on
+// the tick that notices a change rather than waiting for one of silence.
+const dataRevisionTick = 300 * time.Millisecond
 
 // watchDataRevision persists the dataset shortly after every mutation instead of
 // waiting for the 4-second ticker (C584).
@@ -465,18 +464,13 @@ const dataRevisionQuietTick = 300 * time.Millisecond
 //
 // Every mutation path already bumps the shared data revision to re-render the
 // screens, so that counter is the app's own "something changed" signal and needs
-// no new instrumentation at each write site. The watcher waits for one quiet tick
-// so a burst of edits costs one serialize, not one per edit.
+// no new instrumentation at each write site. revisionWatcher owns the timing
+// policy — leading edge then trailing edge — and carries the reasoning.
 func watchDataRevision(save func()) {
-	seen := uistate.CurrentDataRevision()
-	pending := false
+	w := revisionWatcher{seen: uistate.CurrentDataRevision()}
 	for {
-		time.Sleep(dataRevisionQuietTick)
-		switch rev := uistate.CurrentDataRevision(); {
-		case rev != seen:
-			seen, pending = rev, true // still changing — let the burst finish
-		case pending:
-			pending = false
+		time.Sleep(dataRevisionTick)
+		if w.tick(uistate.CurrentDataRevision()) {
 			save()
 		}
 	}

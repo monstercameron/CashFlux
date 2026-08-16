@@ -1,3 +1,43 @@
+## 2026-08-16 — the journey found the bug the unit tests could not
+
+C598 asked for one end-to-end pass through a zero-based month, and the value turned out to be
+exactly the thing that makes journeys expensive: it composes steps that each pass alone.
+
+Step four saves an inline limit and refreshes. It failed, holding the pre-edit limit. The first
+instinct was a wrong assertion — the budget rolls over, so the card shows its effective cap, not the
+base limit the editor edits — and that WAS wrong, but fixing it did not make the step pass. Nor was
+it a fill/click race: driving the same editor directly, with and without a wait between typing and
+saving, wrote correctly every time.
+
+The difference was the refresh. C584 replaced a 4-second autosave ticker with a watcher on the data
+revision, and I wrote that watcher to wait for a tick of silence before writing — reasoning about
+bursts (a bulk adjust, an auto-budget save) rather than about the case that actually happens, which
+is one edit and nothing else. For a lone edit the quiet-only policy costs TWO ticks: one to notice,
+one to confirm quiet. The journey's reload landed between them. The ticket I had closed still lost
+data, just in a 600ms window instead of a 4s one, and no unit test could see it because the policy
+lived inside a `for { time.Sleep(...) }` loop in a wasm-only file.
+
+So the policy moved out into `revisionWatcher` — a struct with one `tick(rev) bool` method and no
+clock — and became leading-edge plus trailing-edge, which is what `flushSettingsPersist` already
+does a few files away. I had reinvented half of an established house pattern and kept the worse
+half. It is four tests now, on native Go, including the burst case the original comment claimed to
+handle and never proved.
+
+The second lesson is about how the spec waits. The first version reloaded as soon as the editor
+closed, which is a race with a background write; the obvious repair is a sleep, and the obvious
+sleep is whatever makes it pass today. Instead the spec now waits on `cashflux:dataset:gen`, the
+stamp the autosave already bumps after every successful write. It exists for cross-tab entitlement,
+but it moves on precisely the event the test needs to observe, so no new app surface was needed. A
+test that waits for a signal reports the race; a test that sleeps hides it. This one reported it.
+
+Also of note: the run at two workers failed a spec that passes serially. That was my scratch static
+server, not the app — two concurrent 90MB wasm boots off a single-threaded file server time out.
+Worth remembering before diagnosing a phantom flake.
+
+Next: C610 (the browser Back button changes the URL but not the screen after any in-app navigation)
+is filed and unstarted. It is the reason this journey clicks the rail instead of going back, and it
+is the largest thing left on this surface.
+
 ## 2026-08-16 — "On track" on the third of the month
 
 C344 lists three symptoms and they share one cause: a period-to-date figure being compared or scored
