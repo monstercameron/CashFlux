@@ -17,8 +17,14 @@ var reviewInboxKeys = Catalog{
 	// already showing "Dining" — two labels about the same charge, contradicting
 	// each other, with nothing to say that one described the stored state and the
 	// other a pending suggestion.
+	// "on file" is the load-bearing phrase. "No category yet" beside a Category
+	// control already showing "Dining" still reads as two claims about one charge
+	// fighting each other, even wrapped in "Queued:" — because both sentences are
+	// about the category and only one of them is about the STORED one. Saying what
+	// is on file, next to a box labelled "Category to assign", is the same two facts
+	// with no contradiction left in them.
 	"review.reasonLead":          "Queued: %s",
-	"review.reasonUncategorized": "no category yet",
+	"review.reasonUncategorized": "no category on file",
 	"review.reasonFlagged":       "flagged for review",
 	"review.uncategorized":       "Uncategorized",
 

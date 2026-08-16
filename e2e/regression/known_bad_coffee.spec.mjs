@@ -87,7 +87,11 @@ test.describe("C601 — the known-bad coffee control", () => {
     // dialog open on purpose. This correction is about ONE charge, so decline it.
     await page.waitForFunction(
       () => !document.querySelector(".flip-backdrop") || !!document.querySelector("[data-testid=txn-recat-offer]"),
-      null, { timeout: 25_000 });
+      // Generous on purpose: the save re-filters and re-renders a 3,000-row ledger,
+      // and with two Playwright workers driving this wasm app on one machine that
+      // has taken over 25s. A tight bound here fails as "the offer never appeared"
+      // when the truth is "the machine was busy".
+      null, { timeout: 60_000 });
     if (await page.locator("[data-testid=txn-recat-offer]").count()) {
       await page.locator("[data-testid=txn-recat-dismiss]").click();
     }

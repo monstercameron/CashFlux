@@ -563,6 +563,11 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Fixed
+- **A cleared charge no longer hides that it still needs review.** The Status column ranked
+  settlement above review, so the seeded known-bad control — cleared AND flagged — read simply
+  "Cleared" while "Review inbox (249)" was counting it. Whether the bank settled a charge and
+  whether a person has looked at it are different questions; the column now shows the one that asks
+  for a person, and the settled state moves to its tooltip ("Needs review · cleared").
 - **Guided review's "bigger than usual" arithmetic.** It compared a transaction's SIGNED amount
   against a median of magnitudes, so a $6.75 coffee against a $6.90 typical came out as
   (−675) − 690 = −1365 and the card read "this one is $13.65 above" — wrong size, wrong direction,
@@ -606,6 +611,13 @@ and every commit updates this file under `Unreleased`.
   reading as one more control in the run.
 
 ### Changed
+- **The review card's queue reason stops competing with the category control.** "Queued: no
+  category yet" still read as a claim fighting a Category box showing "Dining" — both sentences were
+  about the category and only one was about the stored one. It says "no category on file" now, in
+  sentence case rather than a shouted status stamp.
+- **The review header spells out its own arithmetic.** "grouped into" was carried only as the
+  arrow's tooltip, so the sighted reader who reported the header as unclear still got two numbers
+  and a glyph. It reads "249 charges left → grouped into 9 merchants to decide".
 - **The review card stops contradicting itself.** It showed the queue tier "Uncategorized" directly
   above a Category control that could already read "Dining" — two labels about one charge, with
   nothing marking one as stored state and the other as a pending suggestion. The tier now reads as

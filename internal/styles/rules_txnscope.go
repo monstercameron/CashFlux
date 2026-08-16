@@ -132,6 +132,28 @@ func registerTxnScope() {
 		minWidth("12rem"),
 	)
 
+	// --- The review header names its own arithmetic (C602) ------------------------
+	// "249 charges left → 9 merchants to decide" with the joining words on the line,
+	// not hidden in the arrow's tooltip. Quiet and small so it joins the two figures
+	// rather than competing with them.
+	rule(".rvs-joiner",
+		fontSize("var(--type-12)"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+
+	// --- The review card's queue reason reads as a phrase (C600) ------------------
+	// Uppercase + 700 weight made "QUEUED: NO CATEGORY ON FILE" shout like a status
+	// stamp, which is exactly the reading that put it in competition with the
+	// Category control below it. It is a note about why the charge is here, so it is
+	// set as one: sentence case, normal tracking, still tinted.
+	rule(".rvw-reason",
+		prop("text-transform", "none"),
+		fontWeight("600"),
+		letterSpacing("0"),
+		fontSize("var(--type-12)"),
+	)
+
 	// --- The review card's pending-decision note (C600) ---------------------------
 	// Quiet, directly under the category control it qualifies: the card now states
 	// three different things about one charge (why it is queued, what would be

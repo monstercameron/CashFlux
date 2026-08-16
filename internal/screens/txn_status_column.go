@@ -19,17 +19,48 @@ import "github.com/monstercameron/CashFlux/internal/uistate"
 // a status column reads as "we do not know", which is a different claim from "there
 // is nothing to say here".
 func rowStatusWord(p txnFrameRowProps) string {
+	// NEEDS REVIEW OUTRANKS SETTLEMENT. These are two different axes — whether the
+	// bank has settled the charge, and whether a person has looked at it — and a
+	// charge can be both cleared and unreviewed. Ranking cleared first meant the
+	// seeded known-bad control, which is cleared AND flagged, read simply "Cleared"
+	// in the ledger with no hint it was sitting in the review queue: the column said
+	// the row was fine while "Review inbox (249)" was counting it (C601).
+	//
+	// The one that asks for a person wins. Settlement is bookkeeping the ledger
+	// records; review is work the ledger is asking for, and a status column that
+	// hides the ask is worse than the bare dot it replaced. The settled state is not
+	// lost — statusDetail puts it in the cell's tooltip and accessible name.
 	switch {
+	case !p.Reviewed && !p.IsTransfer:
+		return uistate.T("acctxn.legendNeedsReview")
 	case p.Reconciled:
 		return uistate.T("acctxn.legendReconciled")
 	case p.Cleared:
 		return uistate.T("acctxn.legendCleared")
-	case !p.Reviewed && !p.IsTransfer:
-		return uistate.T("acctxn.legendNeedsReview")
 	case p.Reviewed:
 		return uistate.T("transactions.statusReviewed")
 	}
 	return "—"
+}
+
+// statusDetail is the cell's full state in one sentence, for its tooltip and
+// accessible name — so the axis the word had to drop is still available.
+//
+// A row that is both settled and unreviewed reads "Needs review" and hovers
+// "Needs review · cleared". Without this the reordering above would trade one
+// hidden fact for another.
+func statusDetail(p txnFrameRowProps) string {
+	word := rowStatusWord(p)
+	if p.Reviewed || p.IsTransfer {
+		return word
+	}
+	switch {
+	case p.Reconciled:
+		return uistate.T("transactions.statusAlso", word, uistate.T("acctxn.legendReconciled"))
+	case p.Cleared:
+		return uistate.T("transactions.statusAlso", word, uistate.T("acctxn.legendCleared"))
+	}
+	return word
 }
 
 // statusToneClass tints the word.

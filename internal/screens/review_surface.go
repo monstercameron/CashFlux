@@ -718,13 +718,13 @@ func reviewBulkView(
 		Div(css.Class("rvs-collapse"),
 			Span(css.Class("rvs-big"), Attr("data-testid", "review-total"), strconv.Itoa(idx.Total)),
 			Span(css.Class("rvs-unit"), uistate.T("review.charges")),
-			// C602: the arrow IS the relationship — one merchant group is one
-			// decision, and confirming it clears all of that merchant's charges. It
-			// carries the words so a screen reader hears the sentence and a sighted
-			// reader can hover it, rather than the two counts arriving unrelated.
-			Span(css.Class("rvs-arrow"), Attr("role", "img"),
-				Attr("aria-label", uistate.T("review.groupedInto")),
-				Attr("title", uistate.T("review.groupedInto")), "→"),
+			// C602: the relationship is WRITTEN, not implied by an arrow. Carrying
+			// "grouped into" as the arrow's tooltip and accessible name left the
+			// sighted reader — the one who reported the header as unclear — with two
+			// numbers and a glyph between them. The words are on the line now, quiet
+			// enough not to compete with the figures they join.
+			Span(css.Class("rvs-arrow"), Attr("aria-hidden", "true"), "→"),
+			Span(css.Class("rvs-joiner"), uistate.T("review.groupedInto")),
 			Span(css.Class("rvs-big is-accent"), strconv.Itoa(decisions)),
 			Span(css.Class("rvs-unit"), uistate.T("review.decisions")),
 		),
