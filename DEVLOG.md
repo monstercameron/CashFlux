@@ -30797,3 +30797,37 @@ Two process notes. The existing e2e asserted the note's TEXT on the card, which 
 density; it now asserts the tooltip in compact and adds the reload case, which is the half nothing
 covered. And `--text-muted` does not exist — the token is `--muted`. That is the second time this
 month a plausible-sounding token silently resolved to nothing.
+
+## 2026-08-16 — C614: the notes design pass, and one layout trap worth remembering
+
+C613 made budget notes save. This pass made them make sense, driven by an adversarial critique of
+the working feature rather than of a design doc — which is the part that paid off: nearly every real
+finding came from reading the shipped copy and the shipped DOM, not from reasoning about intent.
+
+The sharpest finding was one I would not have caught myself. The editor described the note as "A
+private note on this budget". Budgets are shared by default and `Budget.Notes` is a plain string
+with no per-member access, so the interface was asserting a property the data model does not have —
+a household member could write something believing it was theirs alone. That is not a tone problem,
+it is a false claim, and it is the kind of thing only a reader who checks the copy against the
+entity will find.
+
+The rest was accumulation: one field carrying three labels, none of which said whether it would
+create or overwrite; a destructive action reachable only as an unnamed gesture (clear the field and
+Save); and a note that, once saved, was legible only to a mouse, because its text lived in a native
+`title` tooltip. That last one had a precedent sitting in the repo the whole time — `/accounts` had
+already retired the same glyph-plus-tooltip pattern, with a comment saying exactly why.
+
+The layout trap cost the most time and is the reusable part. Moving the note text next to the budget
+name made the NAME truncate: "Transportation" became "Tran…" so the note could keep four more words,
+which is backwards for a row scanned by name. Weighting the shrink heavily (`flex-shrink: 999`) read
+as fixed at DPR 1 and still truncated at DPR 2 — the compact name has so little slack that a
+fraction of a pixel trips the ellipsis. The actual fix is a zero flex-basis: with `flex: 1 1 0` the
+note asks for no width at all and only grows into what the name leaves, so there is no deficit to
+distribute. Any `auto` basis makes the two compete. Screenshot at 2× before believing a tight row.
+
+Two things I chose NOT to do. The critique wanted the save confirmation inside the modal rather than
+a toast; I shipped the toast because this app already confirms writes that way and it names the
+budget, and I would rather be consistent than locally optimal. And I added autofocus to the
+textarea, measured it, found it does nothing — the attribute is inert for elements inserted after
+load, and the sibling modals that already use it do not focus either — so I reverted it rather than
+ship a prop that lies, and filed it as C615.

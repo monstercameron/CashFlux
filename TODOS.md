@@ -8509,6 +8509,66 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   "notes modal" now asserts the tooltip in compact density (the text preview only ever held in card
   density, which is why the old assertion failed) and adds a reload case, which nothing covered.
 
+## C614 — budget notes: design pass after adversarial critique (2026-08-16) ★
+
+- [x] **C614 [DONE 2026-08-16] [MAJOR][BUDGET][UX] Make the notes feature intuitable, not just working.**
+  C613 made notes save. This is the pass that makes them make sense, driven by an adversarial
+  critique of the working feature. What the critique found, and what shipped:
+
+  - *The copy claimed a privacy guarantee the data model does not have.* The hint read "A private
+    note on %s". A budget is `ScopeShared` by default and `Budget.Notes` is a plain string with no
+    per-member access of any kind, so any member opening /budgets reads it. Now: "Why %s exists, or
+    something to do about it later."
+  - *One field, three labels.* The ⋯ item said "Notes", the modal title said "Budget notes", and the
+    field carried a visible "Notes" label — and none of the three said whether it was about to
+    CREATE a note or overwrite one. The menu item and title now read "Add a note" / "Edit note" by
+    state; the third label is gone (the accessible name was already on the field, so nothing was
+    lost for a screen reader). "Notes" was also the only noun in a ⋯ menu of verb phrases.
+  - *Removing a note was an unnamed destructive gesture* — select all, delete, Save. Now an explicit
+    "Remove note", offered only when a note exists, danger-toned, pinned hard-left away from
+    Cancel/Save so it cannot be hit while reaching for the primary action, and confirmed first.
+  - *No feedback at the instant of the click.* The row does change, but the user is looking at the
+    modal, and a modal that simply closes is what made a working save read as broken. A toast now
+    names the budget ("Note saved on Groceries"), matching the app's existing write-confirmation
+    pattern (`categories.mergedToast`).
+  - *Compact-density note text was mouse-only.* It lived in a native `title` tooltip, which never
+    opens on keyboard focus and does not exist on touch. The compact row now READS the note beside
+    the budget name. `/accounts` had already retired exactly this glyph-plus-tooltip pattern for
+    exactly this reason — see the comment at `accounts_row.go` "instead of being hidden behind a
+    hover tooltip on a tiny glyph".
+  - *Accessible names did not identify their budget*, so a screen reader announced an identical
+    "Notes, button" on every card. All three entry points now append " — <budget>".
+  - *The textarea was sized to the modal, not to the content* (12rem, `resize: none`) for what is
+    realistically a sentence. Now 5.5rem and resizable.
+
+  **The layout trap, recorded because it cost the most time.** Putting the note text in the name
+  cell truncated the budget NAME — "Transportation" became "Tran…" so a note could keep four extra
+  words, which is backwards for a row that is scanned by name. Weighting the shrink (`flex-shrink:
+  999`) was not enough: the compact name has almost no slack, so at 2× device pixel ratio it still
+  lost the fraction of a pixel that trips an ellipsis, while measuring clean at 1×. The fix is a
+  ZERO flex-basis (`flex: 1 1 0`) — the note then asks for no width at all and only grows into what
+  the name leaves behind, so there is no deficit to distribute and the name is never charged for the
+  note's presence. **Any `auto` basis makes the two compete; measure at DPR 2, not just DPR 1.**
+
+- [ ] **C615 [MINOR][A11Y][UI] `autofocus` does nothing anywhere in this app.**
+  Every single-field modal sets `Attr("autofocus", "")` on its primary input — the budget edit name
+  field, the cover amount, the top-up amount. None of them focus. Measured directly: open the budget
+  EDIT modal and `document.activeElement` is `BODY`, same as the notes modal that has no autofocus
+  at all. The attribute is honoured at parse time, and these elements are inserted long after load,
+  so it is inert markup.
+
+  Found while adding autofocus to the notes textarea for C614; the addition was reverted rather than
+  shipped, because a prop that does nothing is dead code.
+
+  Fixing it properly means focusing on mount, which is not free here: hooks are positional so a
+  focus effect cannot sit inside the notes branch's early return, and `UseEffect` does not run for a
+  component passed as a FlipPanel prop. It likely belongs in the FlipPanel itself — focus the first
+  focusable field when a panel opens — which also fixes keyboard focus entering the dialog, and is
+  worth doing once centrally rather than per-form.
+
+  AC: opening any single-field modal puts the caret in that field, and focus is inside the dialog
+  for a keyboard user.
+
 - [x] **C599 [DONE 2026-08-16 — a signed amount was compared against a median of magnitudes] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
   One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a
   typical `$6.90` charge. Compute anomaly deltas from the same current transaction and comparison set,
