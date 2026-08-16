@@ -43,6 +43,7 @@ func Register() {
 	registerIncomeAllocation()
 	registerBudgetCatOptIn()
 	registerStickyFormError()
+	registerSmartCatPolish()
 	registerBudgetsRecurringSurface()
 	registerBudgetFlexSurface()
 	registerCoverAllSurface()

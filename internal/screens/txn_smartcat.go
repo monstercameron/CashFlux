@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -55,6 +56,19 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	undoAtom := uistate.UseTxnUndo()
 	pr := uistate.UsePrefs().Get()
 
+	// C522: the no-provider state told the user to add a key in Settings and gave
+	// them no way to get there — the same dead end the review scan strip had
+	// before it grew a "Connect a key" button. A notice that names an action the
+	// reader cannot take from where they are is indistinguishable from a feature
+	// that is simply broken.
+	nav := router.UseNavigate()
+	goToAIKey := ui.UseEvent(Prevent(func() {
+		// openAtom, captured during render — calling UseTxnSmartCatOpen() here
+		// would be a hook call from an event handler, which runs outside the
+		// render pass and does not resolve to this component's atom.
+		openAtom.Set(false)
+		nav.Navigate(uistate.RoutePath("/settings/ai"))
+	}))
 	mode := ui.UseState(smartCatSuggest)
 	loading := ui.UseState(false)
 	scanned := ui.UseState(false)
@@ -305,7 +319,10 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	}
 	switch {
 	case !hasProvider:
-		results = P(css.Class("notice"), uistate.T("smart.aiNeedsProvider"))
+		results = Div(css.Class("smartcat-noprovider"), Attr("data-testid", "smartcat-no-provider"),
+			P(css.Class("smartcat-noprovider-text"), uistate.T("smart.aiNeedsProvider")),
+			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "smartcat-connect"),
+				OnClick(goToAIKey), uistate.T("review.scanConnect")))
 	case loading.Get():
 		results = P(css.Class("muted"), Attr("data-testid", "smartcat-loading"), uistate.T("smartcat.scanning"))
 	case errText.Get() != "":

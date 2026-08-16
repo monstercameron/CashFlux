@@ -7076,7 +7076,7 @@ design pass before any code.
   changes must survive the round trip. AC: the exact sequence above, with a change made in the edit
   form BEFORE opening the tracked-categories layer, still present when that layer closes.
 
-- [ ] **C522 [MINOR][RECAT] The re-categorizer screen needs a design pass.**
+- [~] **C522 [PARTIAL — dead end fixed + active state legible (2026-08-16); the populated result rows still use generic .row/.rows and need a pass with a key configured] [MINOR][RECAT] The re-categorizer screen needs a design pass.**
   *"the re categorizer screen needs to be visually inspected and its styling revised"*
   `internal/screens/txn_smartcat.go` predates the review-surface work and still uses generic
   `.row`/`.rows` classes with inline styles rather than the token-based styling the review modal now

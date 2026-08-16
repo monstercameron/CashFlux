@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Smart categorization stops being a dead end.** Its "these AI features need an inference
+  provider" notice named an action — add a key in Settings — and gave no way to take it, which is
+  indistinguishable from the feature being broken. The notice is now a callout with a "Connect a
+  key" button inside it that lands on the AI settings tab, matching the review scan strip.
+- **The selected mode in Smart categorization looks selected.** Its active tab was marked with a
+  thin outline, which on a dark surface reads as a focus ring rather than a choice, so at a glance
+  no tab looked chosen. The active segment now carries a fill.
+
 ### Added
 - **"Edit what this budget tracks…" is a page of the budget editor, not a replacement for it.**
   Stepping in and back now returns to the form with every unsaved change intact, and the way back

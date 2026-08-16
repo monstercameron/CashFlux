@@ -132,3 +132,34 @@ test.describe("C520 · a mistaken income can be corrected to a spend", () => {
     await expect(err).toContainText(/direction/i);
   });
 });
+
+test.describe("C522 · the re-categorizer's dead end", () => {
+  test("the no-provider notice offers the action it names", async ({ app }) => {
+    await nav(app, "/transactions");
+    // The entry point lives in the toolbar's ⋯ menu; its handler is live even
+    // though that menu's open state is a separate defect (C541).
+    await app.evaluate(() => document.querySelector('[data-testid="txn-smartcat-btn"]').click());
+
+    const notice = app.getByTestId("smartcat-no-provider");
+    await expect(notice).toBeVisible();
+    // Telling someone to add a key in Settings without a way to get to Settings
+    // is indistinguishable from the feature being broken.
+    const connect = app.getByTestId("smartcat-connect");
+    await expect(connect).toBeVisible();
+    await connect.click();
+
+    // It must land where the key actually lives, not on Settings' default tab.
+    await expect(app).toHaveURL(/\/settings\/ai/);
+  });
+
+  test("the selected mode is visibly selected", async ({ app }) => {
+    await nav(app, "/transactions");
+    await app.evaluate(() => document.querySelector('[data-testid="txn-smartcat-btn"]').click());
+    const active = app.locator(".seg-btn.active");
+    await expect(active).toHaveCount(1);
+    // An outline alone reads as a focus ring on a dark surface; the active tab
+    // has to carry a fill so a glance can tell which mode is chosen.
+    const bg = await active.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
+  });
+});

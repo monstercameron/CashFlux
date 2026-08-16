@@ -168,3 +168,41 @@ func registerStickyFormError() {
 		margin("0"),
 	)
 }
+
+// registerSmartCatPolish restyles the Smart categorization modal (C522).
+//
+// Two things were wrong with it. Its segmented control marked the active tab
+// with a thin outline that read as a focus ring rather than a selection, so at a
+// glance no tab looked chosen. And its "you need an inference provider" state
+// was a flat grey paragraph naming an action — add a key in Settings — with no
+// way to take it, which is the dead end the review scan strip already had fixed.
+func registerSmartCatPolish() {
+	// The active segment is FILLED, not merely outlined. An outline on a dark
+	// surface is the same visual language as focus, and the two competed.
+	rule(".seg-btn.active",
+		background("color-mix(in srgb, var(--accent) 22%, transparent)"),
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+		fontWeight("700"),
+	)
+	// The no-provider state is a callout with its action inside it, so the thing
+	// to do sits with the reason to do it.
+	rule(".smartcat-noprovider",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		flexWrap("wrap"),
+		gap("0.6rem"),
+		marginTop("0.6rem"),
+		padding("0.7rem 0.8rem"),
+		borderRadius("var(--radius)"),
+		border("1px solid color-mix(in srgb, var(--accent) 34%, var(--border))"),
+		background("color-mix(in srgb, var(--accent) 8%, var(--bg-elev))"),
+	)
+	rule(".smartcat-noprovider-text",
+		margin("0"),
+		flex("1 1 18rem"),
+		fontSize("var(--type-13)"),
+		color("var(--text-dim)"),
+	)
+}
