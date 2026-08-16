@@ -331,6 +331,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(AccountTransferHost),
 		uic.CreateElement(BudgetEditHost),
 		uic.CreateElement(AutoBudgetHost),
+		uic.CreateElement(AdjustAllHost),
 		uic.CreateElement(BudgetBasisHost),
 		uic.CreateElement(BudgetCategoriesHost),
 		uic.CreateElement(GoalEditHost),
@@ -1388,6 +1389,21 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 		dFrom, dTo = w.From, w.To
 	}
 	draft := period.Window{Res: w.Res, From: dFrom, To: dTo, WeekStart: w.WeekStart}
+	// liveDraft rebuilds the draft from CURRENT state, for use inside handlers.
+	//
+	// A handler closes over the render that created it, and this control re-renders
+	// on every draft change; a click landing before the new handlers are installed
+	// would otherwise step from a stale base — two fast clicks on "later" moving the
+	// endpoint once, or Apply committing the previous draft. Reading state at click
+	// time removes the window entirely rather than narrowing it.
+	liveDraft := func() period.Window {
+		cur := atom.Get()
+		f, t := draftFrom.Get(), draftTo.Get()
+		if f.IsZero() || t.IsZero() {
+			f, t = cur.From, cur.To
+		}
+		return period.Window{Res: cur.Res, From: f, To: t, WeekStart: cur.WeekStart}
+	}
 	setDraft := func(next period.Window) {
 		draftFrom.Set(next.From)
 		draftTo.Set(next.To)
@@ -1405,9 +1421,9 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 	if rangeOpen {
 		rangeRow = Div(css.Class("period-rangeedit"), Attr("data-testid", "period-range-editor"),
 			Div(css.Class("period-rangerow", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.FlexWrap),
-				ui.StepperPill(ui.StepperPillProps{Label: draft.FromLabel(), OnPrev: func() { setDraft(draft.StepFrom(-1)) }, OnNext: func() { setDraft(draft.StepFrom(1)) }, PrevLabel: uistate.T("resolution.fromEarlier"), NextLabel: uistate.T("resolution.fromLater")}),
+				ui.StepperPill(ui.StepperPillProps{Label: draft.FromLabel(), OnPrev: func() { setDraft(liveDraft().StepFrom(-1)) }, OnNext: func() { setDraft(liveDraft().StepFrom(1)) }, PrevLabel: uistate.T("resolution.fromEarlier"), NextLabel: uistate.T("resolution.fromLater")}),
 				Span(css.Class(tw.TextFaint), "–"),
-				ui.StepperPill(ui.StepperPillProps{Label: draft.ToLabel(), OnPrev: func() { setDraft(draft.StepTo(-1)) }, OnNext: func() { setDraft(draft.StepTo(1)) }, PrevLabel: uistate.T("resolution.toEarlier"), NextLabel: uistate.T("resolution.toLater")}),
+				ui.StepperPill(ui.StepperPillProps{Label: draft.ToLabel(), OnPrev: func() { setDraft(liveDraft().StepTo(-1)) }, OnNext: func() { setDraft(liveDraft().StepTo(1)) }, PrevLabel: uistate.T("resolution.toEarlier"), NextLabel: uistate.T("resolution.toLater")}),
 			),
 			// The range in one sentence, so the user reads what they are about to
 			// apply rather than inferring it from two pills.
@@ -1419,7 +1435,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "period-range-apply"),
 					attrDisabledIf(!dirty),
 					OnClick(func() {
-						atom.Set(draft)
+						atom.Set(liveDraft())
 						rangeAsked.Set(true)
 					}),
 					uistate.T("resolution.rangeApply")),
@@ -1427,8 +1443,13 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 					OnClick(func() {
 						clearDraft()
 						rangeAsked.Set(false)
-						if !w.IsSinglePeriod() {
-							atom.Set(w.Single()) // an applied range: cancelling returns to one period
+						// Read the LIVE window, not the one this closure captured when it
+						// rendered. Apply re-renders the control, and a click landing before
+						// that render's handlers replace these ones would otherwise test a
+						// window from before the range existed, conclude there was nothing
+						// to collapse, and leave the range applied with its editor gone.
+						if cur := atom.Get(); !cur.IsSinglePeriod() {
+							atom.Set(cur.Single())
 						}
 					}),
 					uistate.T(rangeCancelKey(w, dirty))),

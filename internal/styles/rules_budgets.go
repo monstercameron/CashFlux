@@ -913,6 +913,113 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C592: the "Adjust all" form ---
+	// The percentage field carries its unit inside the control, so the number and
+	// the "%" read as one value rather than a number beside a stray symbol.
+	rule(".adjustall-field",
+		display("flex"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+	rule(".adjustall-field .field",
+		maxWidth("9rem"),
+	)
+	rule(".adjustall-suffix",
+		fontWeight("600"),
+	)
+	// The hint is its own line under the field. As an inline span it sat tight
+	// against the input, and the focused input's ring clipped its first line.
+	rule(".adjustall-field + .budget-owner-hint",
+		display("block"),
+		marginTop("0.4rem"),
+		lineHeight("1.4"),
+	)
+	// The preview: the sentence, then the household total's before → after, then
+	// one line per affected budget. The total is the figure a bulk edit is really
+	// about, so it gets the weight and the per-budget list stays reference detail.
+	rule(".adjustall-preview",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.5rem"),
+		marginTop("0.6rem"),
+		padding("0.6rem 0.7rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius)"),
+	)
+	rule(".adjustall-count",
+		margin("0"),
+		fontSize("var(--type-13)"),
+		color("var(--text)"),
+	)
+	rule(".adjustall-total",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.15rem 0.5rem"),
+		paddingBottom("0.45rem"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".adjustall-total-lbl",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".adjustall-total .adjustall-after",
+		fontSize("1.05rem"),
+		fontWeight("800"),
+	)
+	rule(".adjustall-delta",
+		fontSize("var(--type-13)"),
+		fontWeight("700"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".adjustall-delta.is-up", color("var(--accent)"))
+	rule(".adjustall-delta.is-down", color("var(--text-dim)"))
+	// Long lists scroll inside the preview rather than pushing Apply off screen —
+	// the button that commits the change must stay reachable while reading it.
+	rule(".adjustall-rows",
+		display("flex"),
+		flexDirection("column"),
+		maxHeight("13rem"),
+		overflowY("auto"),
+	)
+	rule(".adjustall-row",
+		display("grid"),
+		gridTemplateColumns("1fr auto auto auto"),
+		alignItems("baseline"),
+		gap("0.5rem"),
+		padding("0.28rem 0"),
+		fontSize("var(--type-13)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".adjustall-row + .adjustall-row",
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".adjustall-name",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".adjustall-after",
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	// The acknowledgement for a reduction or an outsized raise: deliberately not
+	// styled as a warning banner. It is a sentence the user opts into, and dressing
+	// it in danger chrome teaches people to click past it.
+	rule(".adjustall-ack",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.5rem"),
+		marginTop("0.7rem"),
+		fontSize("var(--type-13)"),
+		lineHeight("1.4"),
+		cursor("pointer"),
+	)
+
 	// --- C589: the period pill's custom-range editor ---
 	// A distinct block inside the popover, separated from the quick jumps above
 	// it, so "I am composing a range" reads as its own step rather than one more

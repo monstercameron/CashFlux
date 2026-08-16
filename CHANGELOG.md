@@ -119,6 +119,21 @@ and every commit updates this file under `Unreleased`.
   other — while also setting `aria-pressed`, so it announced "Card view, pressed" with the compact
   list on screen. It is a proper two-state toggle now: one stable name, the state in `aria-pressed`,
   and a tooltip that says what a click will do.
+- **Custom range is a workflow you can see before it applies (C589).** Choosing "Custom range"
+  relabelled the period pill `Jul 2026 – Jul 2026` while the window was still one month — a label
+  for a range nobody had chosen — and each stepper click then mutated the live view, so every
+  intermediate state on the way to "June through September" was applied and re-queried. The mode
+  also lived in component state, so navigating away lost it while its effect stayed on screen. The
+  editor now opens whenever the window IS a range or you ask for one, the steppers move a draft, a
+  sentence states the span ("Jun 2026 through Aug 2026 — 3 periods") and what a range does and does
+  not change, and Apply is the only thing that touches the view.
+- **"Adjust all" is a form, not a prompt (C592).** It opened an unlabelled dialog whose entire
+  content was the question "Adjust every budget's limit by what percent?", then a confirm quoting
+  the number back — so a bulk edit across every budget in the household was a number typed into the
+  dark. It is now a titled form with a labelled percentage field and its bounds, inline guidance for
+  blank, zero, non-numeric and out-of-range values, a live preview of the total budgeted before →
+  after plus every affected budget's own before → after, and an explicit acknowledgement for any
+  reduction or outsized raise. Cancel changes nothing.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

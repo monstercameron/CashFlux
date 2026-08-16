@@ -20,16 +20,9 @@ var budgetsClarityKeys = Catalog{
 	"budgets.drillTitleTags":    "See the transactions in %s for this period, including its tagged charges",
 	"budgets.drillTitleSubTags": "See the transactions in %s for this period, including its sub-categories and tagged charges",
 
-	// --- C585: say what the drill-through actually covers ---
-	// Shown on the ledger when it was opened from a budget, so a user can tell
-	// whether the rows they are looking at are the whole story. %s = the budget.
-	"budgets.scopeNoteTitle":      "Showing what %s counts",
-	"budgets.scopeNoteCats":       "%s and its sub-categories",
-	"budgets.scopeNoteCatsPlain":  "%s",
-	"budgets.scopeNoteTags":       "plus anything tagged %s",
-	"budgets.scopeNoteSplitsHint": "Split receipts appear when any of their lines is in scope.",
-	"budgets.scopeEmptyContra":    "This budget shows %s spent, but no transaction in its scope matches the other filters you have on.",
-	"budgets.scopeEmptyClear":     "Clear the other filters",
+	// --- C586: the scoped estimate names the categories it averaged over ---
+	// %s = the category path; composed into budgets.suggestScoped below.
+	"budgets.scopeNoteCats": "%s and its sub-categories",
 
 	// --- C585: the ledger names the budget it was opened from ---
 	// A pre-chip ahead of the "Filtering by" sentence, wording chosen for what
@@ -39,6 +32,25 @@ var budgetsClarityKeys = Catalog{
 	"transactions.budgetDrillChipTags":    "From the %s budget, including its tagged charges",
 	"transactions.budgetDrillChipSubTags": "From the %s budget, including its sub-categories and tagged charges",
 	"transactions.budgetDrillChipRemove":  "Show all transactions again",
+
+	// --- C592: "Adjust all" is a form with a preview, not a bare prompt ---
+	"budgets.adjustAllTitleHeading": "Adjust every budget",
+	"budgets.adjustAllIntro":        "Raise or lower every budget's limit by the same percentage. Nothing changes until you apply it.",
+	"budgets.adjustAllFieldLabel":   "Change each limit by",
+	// %s = the accepted minimum, %s = the accepted maximum.
+	"budgets.adjustAllFieldHint":       "A positive number raises every limit, a negative one lowers it — 5 for 5%% more, -10 for 10%% less. Between %s%% and %s%%.",
+	"budgets.adjustAllNotANumber":      "Enter a number, like 5 or -10.",
+	"budgets.adjustAllZero":            "0% would leave every budget exactly as it is.",
+	"budgets.adjustAllOutOfRange":      "Enter something between %s%% and %s%%. For a bigger change, apply it twice.",
+	"budgets.adjustAllNothingToChange": "None of your budgets has a limit to scale yet.",
+	"budgets.adjustAllCount":           "%s will change by %s%%.",
+	"budgets.adjustAllTotalLabel":      "Total budgeted",
+	"budgets.adjustAllDeltaUp":         "+%s",
+	"budgets.adjustAllDeltaDown":       "−%s",
+	"budgets.adjustAllMixedCurrency":   "These budgets are in different currencies, so there is no single total — each budget's own before and after is listed below.",
+	"budgets.adjustAllAckLower":        "I want to lower %s by %s%%. Every one of these plans will have less to spend.",
+	"budgets.adjustAllAckRaise":        "I want to raise %s by %s%% — a change this size is usually a typo.",
+	"budgets.adjustAllApply":           "Apply to every budget",
 
 	// --- C589: custom range as an explicit workflow, not a mode flag ---
 	// The draft range is previewed in words and applied deliberately. %s = start

@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -1524,54 +1523,13 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 
 	// Open the add-budget modal (G4: discoverable add).
 	addBudget := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("budget") }))
-	// G2: bulk adjust — raise/lower every visible budget's limit by a percentage, with
-	// a count preview before applying and an undoable toast after. The one escape from
-	// editing ten budgets one modal at a time.
-	adjustAll := ui.UseEvent(Prevent(func() {
-		uistate.PromptModal(uistate.T("budgets.adjustAllPrompt"), "", func(v string) {
-			v = strings.TrimSuffix(strings.TrimSpace(v), "%")
-			if v == "" {
-				return
-			}
-			pct, perr := strconv.ParseFloat(v, 64)
-			if perr != nil || pct == 0 || pct < -90 || pct > 500 {
-				uistate.PostNotice(uistate.T("budgets.adjustAllBadPct"), true)
-				return
-			}
-			var targets []domain.Budget
-			for _, b := range app.Budgets() {
-				if ownerVisibleTo(b.OwnerID, activeMemberID) && b.Limit.Amount > 0 {
-					targets = append(targets, b)
-				}
-			}
-			if len(targets) == 0 {
-				return
-			}
-			verb := uistate.T("budgets.adjustAllRaise")
-			if pct < 0 {
-				verb = uistate.T("budgets.adjustAllLower")
-			}
-			absPct := strconv.FormatFloat(math.Abs(pct), 'f', -1, 64)
-			uistate.ConfirmModalLabeled(uistate.T("budgets.adjustAllConfirm", verb, plural(len(targets), "budget"), absPct), verb, false, func(ok bool) {
-				if !ok {
-					return
-				}
-				n := 0
-				for _, b := range targets {
-					nl := b.Limit.Amount + int64(math.Round(float64(b.Limit.Amount)*pct/100))
-					if nl < 1 {
-						nl = 1 // a lower can shrink a budget, never delete it
-					}
-					b.Limit = money.New(nl, b.Limit.Currency)
-					if err := app.PutBudget(b); err == nil {
-						n++
-					}
-				}
-				uistate.BumpDataRevision()
-				uistate.PostUndoable(uistate.T("budgets.adjustAllApplied", plural(n, "budget"), absPct))
-			})
-		})
-	}))
+	// G2 / C592: bulk adjust — raise or lower every visible budget's limit by a
+	// percentage. The button opens a real form (AdjustAllHost), not a prompt: a
+	// bulk edit's whole question is "what will this do to my plan", and a dialog
+	// whose entire content was "Adjust every budget's limit by what percent?"
+	// could not answer it. Nothing is written until the form's own Apply.
+	adjustAllAtom := uistate.UseBudgetAdjustOpen()
+	adjustAll := ui.UseEvent(Prevent(func() { adjustAllAtom.Set(true) }))
 	// Open the "Auto budget" review modal (suggests budgets from spending history).
 	autoBudgetAtom := uistate.UseBudgetAutoOpen()
 	openAutoBudget := ui.UseEvent(Prevent(func() { autoBudgetAtom.Set(true) }))
@@ -1892,7 +1850,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
 					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring,
-					OnDrill: func(scope budgeting.Scope, from, to string) { drillFrom(s, scope, from, to) },
+					OnDrill:    func(scope budgeting.Scope, from, to string) { drillFrom(s, scope, from, to) },
 					PeriodFrom: v.PeriodFrom[s.Budget.ID], PeriodTo: v.PeriodTo[s.Budget.ID],
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
 					Anchor:    v.Anchor,

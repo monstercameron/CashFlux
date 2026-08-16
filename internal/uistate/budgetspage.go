@@ -251,3 +251,13 @@ func UseInvestGrowthMonths() state.Atom[int] { return state.UseAtom("invest:grow
 // UseInvestPoolEditID returns the atom driving the create/edit-pool flip modal: "" = closed,
 // "new" = create a pool, or a pool id = edit that pool. Read by InvestPoolEditHost.
 func UseInvestPoolEditID() state.Atom[string] { return state.UseAtom("invest:poolEdit", "") }
+
+// UseBudgetAdjustOpen returns the shared atom controlling whether the "Adjust all"
+// form is open (C592). The budgets toolbar's Adjust-all button sets it; the
+// shell-root AdjustAllHost renders the modal when true.
+//
+// It replaced a PromptModal + ConfirmModal pair: a percentage typed into an
+// unlabelled dialog, then a sentence quoting it back. Neither could show the
+// budgets in scope or the before/after totals, which is the whole point of a bulk
+// edit, and a modal shell is the only place with room to.
+func UseBudgetAdjustOpen() state.Atom[bool] { return state.UseAtom("budgets:adjustOpen", false) }
