@@ -72,6 +72,29 @@ func deferMacrotask(fn func()) {
 	js.Global().Call("setTimeout", cb, 0)
 }
 
+// deferPaint runs fn after the browser has painted the current frame.
+//
+// requestAnimationFrame fires just BEFORE a paint, so a callback registered there
+// still runs against the old pixels; queueing a macrotask from inside it lands
+// after the paint has happened. That is the difference between "the new rows have
+// been rendered" and "the new rows are on screen", and it is what a busy state has
+// to outlast (C569). Falls back to a plain macrotask where rAF is unavailable
+// (a headless/hidden document), so the callback never simply never runs.
+func deferPaint(fn func()) {
+	raf := js.Global().Get("requestAnimationFrame")
+	if !raf.Truthy() {
+		deferMacrotask(fn)
+		return
+	}
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		defer cb.Release()
+		deferMacrotask(fn)
+		return nil
+	})
+	raf.Invoke(cb)
+}
+
 // scrollAnchorIntoView smoothly scrolls the element with the given id to the top of its
 // scroll container. The pager calls it after a prev/next so a user who paged from the
 // bottom of a long list lands on the top of the new page instead of staying stranded at

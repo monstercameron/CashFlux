@@ -15,11 +15,10 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
+	"github.com/monstercameron/CashFlux/internal/txnscope"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -79,33 +78,38 @@ type txnCalMonthCellProps struct {
 // txnCalendarWidget renders the month-grid calendar view. Each in-month day is a
 // keyboard-reachable button showing the day's net amount and a dot per few
 // transactions; recurring items appear as dimmed ghost labels on their due dates.
-// Prev/next page the visible month. Clicking a day filters the ledger to that day
-// and switches back to the table.
+// The month it shows is the LEDGER'S period, stepped from the scope bar above it
+// (C560); clicking a day narrows the ledger to that day and returns to the table.
 func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	monthAtom := uistate.UseTxnCalMonth()
 	viewAtom := uistate.UseTxnViewMode()
 	filterAtom := uistate.UseTxFilter()
 	pr := uistate.UsePrefs().Get()
 	weekStart := pr.WeekStartWeekday()
 
 	now := time.Now()
-	anchor := monthAtom.Get()
-	if anchor.IsZero() {
-		anchor = now
-	}
+	// C560: the visible month comes from the LEDGER'S date scope, not from a private
+	// calendar-month atom anchored on time.Now(). Those were separate states, so the
+	// grid could show August while the ledger label and rows were in July, and paging
+	// the calendar moved neither the rows nor the totals. One derivation now feeds the
+	// grid, the label above it, and the rows — the calendar is a projection of the
+	// ledger's scope rather than a second opinion about it.
+	f := filterAtom.Get()
+	scope := txnscope.Of(f.From, f.To, now)
+	anchor := scope.Anchor
 
 	weeks := txncalendar.Month(anchor, weekStart, props.Shown, props.App.Recurring())
 	todayKey := txncalendar.DayKey(now)
 
-	// Month paging: prev/next shift the anchor by a calendar month.
-	prevMonth := ui.UseEvent(Prevent(func() { monthAtom.Set(dateutil.AddMonths(dateutil.MonthStart(anchor), -1)) }))
-	nextMonth := ui.UseEvent(Prevent(func() { monthAtom.Set(dateutil.AddMonths(dateutil.MonthStart(anchor), 1)) }))
-	today := ui.UseEvent(Prevent(func() { monthAtom.Set(time.Time{}) }))
+	// Picking a day writes the ledger's own range, so the calendar and the scope bar
+	// above it move exactly one piece of state between them.
+	setRange := func(from, to string) {
+		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.From, x.To = from, to })
+	}
 
 	// pickDay narrows the ledger to a single day and returns to the table view.
 	pickDay := func(dateKey string) {
-		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.From, x.To = dateKey, dateKey })
+		setRange(dateKey, dateKey)
 		viewAtom.Set(uistate.TxnViewTable)
 	}
 
@@ -131,11 +135,14 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		}
 	}
 
+	// C560: the calendar keeps a caption, not a second stepper. It used to carry its
+	// own ‹ month › + Today row, which — now that the scope bar above it steps the
+	// same state — put two identical month controls one on top of the other. The
+	// caption states the LEDGER'S scope, so a single day or a custom range reads as
+	// itself here too rather than as a bare month name beside a grid the rows do not
+	// fill. The testids stay on the caption and the grid so existing selectors resolve.
 	nav := Div(css.Class("txn-cal-nav", "row"),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("transactions.calPrevMonth")), Attr("data-testid", "txn-cal-prev"), OnClick(prevMonth), uiw.Icon(icon.ChevronLeft, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		Span(css.Class("txn-cal-month"), monthLabel(dateutil.MonthStart(anchor))),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("transactions.calNextMonth")), Attr("data-testid", "txn-cal-next"), OnClick(nextMonth), uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		Button(css.Class("btn btn-sm btn-tool"), Type("button"), Attr("data-testid", "txn-cal-today"), OnClick(today), uistate.T("transactions.calToday")),
+		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), txnScopeLabel(scope)),
 	)
 
 	return uiw.Widget(uiw.WidgetProps{

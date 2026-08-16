@@ -41,10 +41,24 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 	g := props.Group
 
 	// C87: merge event — UseEvent at a stable, unconditional position in this component.
+	//
+	// C571: the confirmation named a count and nothing else — "the first entry is
+	// kept" is true but useless when every entry in the group looks alike on screen.
+	// It now names the survivor the way the ledger does (description, date) and
+	// states the arithmetic, so the user can verify which transaction lives through
+	// the operation before committing to it.
 	merge := ui.UseEvent(func() {
 		others := len(g.IDs) - 1
-		msg := fmt.Sprintf(uistate.T("duplicates.mergeConfirm"), others)
-		uistate.ConfirmModal(msg, true, func(ok bool) {
+		survivor := ""
+		if len(g.IDs) > 0 {
+			survivor = dupEntryLabel(props.Txns[g.IDs[0]], g.Description)
+		}
+		removed := uistate.T("duplicates.mergeRemovedMany", others)
+		if others == 1 {
+			removed = uistate.T("duplicates.mergeRemovedOne")
+		}
+		msg := uistate.T("duplicates.mergeConfirmNamed", len(g.IDs), survivor, g.Date, removed)
+		uistate.ConfirmModalLabeled(msg, uistate.T("duplicates.mergeConfirmBtn"), true, func(ok bool) {
 			if ok && props.OnMerge != nil {
 				props.OnMerge(g)
 			}
@@ -125,6 +139,7 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 				TxnID:    id,
 				Date:     g.Date,
 				AccName:  accName,
+				Label:    dupEntryLabel(t, g.Description),
 				IsFirst:  isFirst,
 				OnDelete: props.OnDelete,
 			})
@@ -192,12 +207,27 @@ func dupMergeCarryItems(txns map[string]domain.Transaction, ids []string) []stri
 	return items
 }
 
+// dupEntryLabel names one entry of a duplicate group for a confirmation sentence:
+// its own description, falling back to the payee, then to the group's shared
+// description. A confirmation that says "this duplicate" tells the user nothing
+// they can check; one that says "Costco #1128" does (C571).
+func dupEntryLabel(t domain.Transaction, groupDesc string) string {
+	if d := strings.TrimSpace(t.Desc); d != "" {
+		return d
+	}
+	if p := strings.TrimSpace(t.Payee); p != "" {
+		return p
+	}
+	return groupDesc
+}
+
 // dupeRowProps is the props bag for a single transaction entry within a group.
 type dupeRowProps struct {
 	TxnID    string
 	Date     string
 	AccName  string
-	IsFirst  bool // first = "keep" row; others = deletable duplicates
+	Label    string // this entry's own name, for the delete confirmation (C571)
+	IsFirst  bool   // first = "keep" row; others = deletable duplicates
 	OnDelete func(id string)
 }
 
@@ -206,9 +236,16 @@ type dupeRowProps struct {
 // (never inside an outer variable-length loop). The first entry is marked
 // "Keep"; all others get a "Delete duplicate" button.
 func dupeRow(props dupeRowProps) ui.Node {
+	// C571: the old confirmation read "Delete this duplicate transaction? This can't
+	// be undone." — both halves wrong. It named nothing the user could check against
+	// the three near-identical rows in front of them, and the claim about undo
+	// contradicted the code, which captures an audit point and posts an undoable
+	// toast. A confirmation that overstates the risk teaches people to click through
+	// confirmations. It now names the entry, says the kept one is untouched, and
+	// states the reversal path the app actually provides.
 	del := ui.UseEvent(func() {
-		msg := uistate.T("duplicates.deleteConfirm")
-		uistate.ConfirmModal(msg, true, func(ok bool) {
+		msg := uistate.T("duplicates.deleteConfirmNamed", props.Label, props.Date, props.AccName)
+		uistate.ConfirmModalLabeled(msg, uistate.T("duplicates.deleteConfirmBtn"), true, func(ok bool) {
 			if ok {
 				props.OnDelete(props.TxnID)
 			}
@@ -321,7 +358,10 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 			}
 		}
 		// C364: a merge collapses several rows into one — tell the undo story.
-		postUndoStory(uistate.T("duplicates.merged"))
+		// C571: name the survivor in the result too, so the toast confirms the same
+		// fact the confirmation promised rather than a generic "merged".
+		postUndoStory(uistate.T("duplicates.merged") + " " +
+			uistate.T("duplicates.survivorLabel", dupEntryLabel(survivor, g.Description)))
 		uistate.BumpDataRevision() // re-render the panel so the merged group drops off
 	}
 

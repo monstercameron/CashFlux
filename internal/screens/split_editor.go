@@ -48,11 +48,19 @@ type splitEditorProps struct {
 	// breakdown). The parent (transactions screen) wires it to PutTransaction.
 	OnSave func(domain.Transaction)
 	// FooterFormID, when set, renders the editor as a modal body <form> with that id
-	// (submitted by the FlipPanel's pinned Save footer) and drops the editor's own
-	// title, card border, and inline Save button — the modal chrome supplies them.
-	// Empty (the default) keeps the self-contained inline layout for the edit-form
-	// and classic-table uses.
+	// and its own pinned Cancel/Save bar, dropping the inline layout's title and card
+	// border — the modal chrome supplies those. Empty (the default) keeps the
+	// self-contained inline layout for the edit-form and classic-table uses.
+	//
+	// C566: the editor owns this footer rather than borrowing the FlipPanel's
+	// standard one. Whether the draft can be saved is a fact only the editor holds
+	// (are all the lines finished? does the money add up?), and the panel's footer had
+	// no way to read it — so an unfinished split showed a live Save that could only
+	// fail. One component now owns both the verdict and the button that acts on it.
 	FooterFormID string
+	// OnCancel dismisses the modal from the editor's own footer. Only used with
+	// FooterFormID; the inline layout has no Cancel (it is not a modal).
+	OnCancel func()
 }
 
 // SplitEditor (C58) is the split-transaction UI: it lets a single transaction be
@@ -296,6 +304,14 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			props.OnSave(t)
 		}
 	})
+	// Registered unconditionally even though only the modal layout renders it: the
+	// two layouts are branches of ONE component, so a hook created inside either
+	// branch would shift the hook order between them (the GWC hooks rule).
+	cancel := ui.UseEvent(Prevent(func() {
+		if props.OnCancel != nil {
+			props.OnCancel()
+		}
+	}))
 
 	// C570: qualified paths ("Housing > Mortgage"), not bare leaf names — a split is
 	// exactly where two categories called "Gas" have to be told apart.
@@ -399,22 +415,29 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// button (the footer owns it); "Clear split" stays as a quiet body action since
 	// the standard footer is only Cancel + Save.
 	if props.FooterFormID != "" {
+		modalSaveArgs := []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "split-save"), uistate.T("splitEditor.save")}
+		if !canSave {
+			modalSaveArgs = append(modalSaveArgs, Disabled(true), Attr("aria-disabled", "true"),
+				Title(uistate.T("splitEditor.cannotSaveYet")))
+		}
 		return Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
 			Attr("data-testid", "split-editor"), OnSubmit(save),
-			// C566: the footer's Save belongs to the host panel, so the verdict is
-			// published rather than rendered — the host reads it into SaveDisabled.
-			ui.CreateElement(splitReadyReporter, splitReadyProps{Ready: canSave}),
-			hint,
-			modeToggle,
-			rowsNode,
-			addRow2,
-			draftNote,
-			errNode,
-			If(props.Txn.HasSplits(),
-				Div(css.Class("split-editor-clear"),
-					Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}),
-					Button(css.Class("btn", "btn-sm", "btn-ghost"), Type("button"), Attr("data-testid", "split-clear"),
-						OnClick(clear), uistate.T("splitEditor.clear")))),
+			Div(css.Class("modal-scroll"),
+				hint,
+				modeToggle,
+				rowsNode,
+				addRow2,
+				draftNote,
+				errNode,
+				If(props.Txn.HasSplits(),
+					Div(css.Class("split-editor-clear"),
+						Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}),
+						Button(css.Class("btn", "btn-sm", "btn-ghost"), Type("button"), Attr("data-testid", "split-clear"),
+							OnClick(clear), uistate.T("splitEditor.clear"))))),
+			Div(css.Class("modal-sticky-foot"),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"),
+					OnClick(cancel), uistate.T("action.cancel")),
+				Button(modalSaveArgs...)),
 		)
 	}
 
@@ -439,22 +462,6 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),
 		),
 	)
-}
-
-// splitReadyProps carries the split draft's saveability to the reporter.
-type splitReadyProps struct{ Ready bool }
-
-// splitReadyReporter publishes the open split draft's validity to the hosting
-// FlipPanel (C566). It renders nothing; it exists so the publish happens in an
-// EFFECT, keyed on the verdict, rather than in the editor's render body — writing
-// shared state while rendering would re-enter the render it was called from.
-func splitReadyReporter(props splitReadyProps) ui.Node {
-	ready := props.Ready
-	ui.UseEffect(func() func() {
-		uistate.SetTxnSplitReady(ready)
-		return nil
-	}, ready)
-	return Fragment()
 }
 
 type splitRowProps struct {

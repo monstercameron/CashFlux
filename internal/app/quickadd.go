@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -162,18 +163,32 @@ func QuickAddHost() uic.Node {
 			post(uistate.T("quickAdd.needAccount"), true)
 			return false
 		}
-		amt, err := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency))
-		if err != nil || amt == 0 {
+		// C546: the amount field is a magnitude and the kind toggle carries the
+		// sign — but this used to guard on `amt == 0`, so a typed "-50" parsed to
+		// −5000, survived the guard, and was then negated by the Expense branch
+		// into +50 INCOME. The opposite of what was typed, saved silently.
+		// amountmath.ParseSigned owns that reconciliation now: a typed minus is
+		// read as intent and wins, and it reports the direction back so the
+		// toggle follows instead of displaying a lie.
+		want := amountmath.Out
+		if kind.Get() == "Income" {
+			want = amountmath.In
+		}
+		amt, resolved, err := amountmath.ParseSigned(amount.Get(), currency.Decimals(acc.Currency), want)
+		if err != nil {
 			post(uistate.T("quickAdd.needAmount"), true)
 			return false
 		}
+		// The resolved direction is already carried by amt's sign. The kind toggle
+		// is deliberately NOT set here: a state setter mid-handler re-renders the
+		// panel while this closure is still running and the write can be lost, and
+		// on this form the point is moot anyway — a successful save closes the
+		// panel and reset() returns the toggle to Expense.
+		_ = resolved
 		if strings.TrimSpace(desc.Get()) == "" {
 			// Plain-English, not the generic validator's "desc is required" (L78-T1c).
 			post(uistate.T("quickAdd.needDesc"), true)
 			return false
-		}
-		if kind.Get() == "Expense" {
-			amt = -amt
 		}
 		d, derr := dateutil.ParseDate(strings.TrimSpace(effDate))
 		if derr != nil {
@@ -304,9 +319,13 @@ func QuickAddHost() uic.Node {
 		}
 		acctOpts = append(acctOpts, Option(Value(a.ID), SelectedIf(effAcct == a.ID), label))
 	}
+	// C570: the same qualified, naturally-sorted category list Review, Edit and the
+	// split editor use — "Housing > Mortgage", not a bare "Mortgage". Quick-add is
+	// where most transactions get their category, so it was the worst place to make
+	// two same-named leaves indistinguishable.
 	catOpts := []uic.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("quickAdd.noCategory"))}
-	for _, c := range app.Categories() {
-		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catID.Get() == c.ID), c.Name))
+	for _, o := range screens.CategoryPickOptions(app.Categories()) {
+		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(catID.Get() == o.Value), o.Label))
 	}
 
 	// C47: "Mark as reviewed" checkbox: a confident entry skips the auto review-tag (L43).

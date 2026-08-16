@@ -985,8 +985,16 @@ func TopBar(props topBarProps) uic.Node {
 	onDashboard := curPath == "/"
 	// The time-resolution control only makes sense where there's a period concept;
 	// on Members/Categories/Rules/etc. it does nothing, so hide it there (C4).
+	//
+	// /transactions is NOT one of them (C560). The pill stores a snapped
+	// period.Window, which cannot express what the ledger's date filter can — a
+	// single day from a calendar click, a hand-typed range — so the two states could
+	// never be reconciled: the pill read "Jul 2026" over August rows and stepping it
+	// changed neither the rows, the totals, nor the calendar. The ledger now carries
+	// its own period control (screens.txnScopeBar), driven by the same From/To it
+	// filters on, so the label it shows cannot disagree with what it lists.
 	periodAware := map[string]bool{
-		"/": true, "/transactions": true, "/budgets": true, "/planning": true, "/insights": true, "/reports": true,
+		"/": true, "/budgets": true, "/planning": true, "/insights": true, "/reports": true,
 	}[curPath]
 	// The bar is built from four zones — menu, title, a scope+period "context"
 	// group, and the primary actions. On wide screens they sit on one flex row; below

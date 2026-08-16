@@ -1749,7 +1749,18 @@ const maxImageBytes = 10 * 1024 * 1024 // 10 MB
 // OpenAI when the user clicks Read. If the chosen file fails the lightweight
 // client-side checks (type or size), onErr is called with a human-readable
 // message and the file is not read (C97).
-func pickImageDataURL(onData func(string), onErr func(string)) {
+//
+// It reports whether the picker was actually opened. A browser can refuse a
+// programmatic click on a file input — most often when the call has drifted out of
+// the user-activation window — and it does so by throwing, not by any signal the
+// page can see afterwards. Callers that must never no-op silently (C564's receipt
+// split) use the result to say so instead of leaving a dead click.
+func pickImageDataURL(onData func(string), onErr func(string)) (opened bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			opened = false
+		}
+	}()
 	doc := js.Global().Get("document")
 	input := doc.Call("createElement", "input")
 	input.Set("type", "file")
@@ -1798,7 +1809,12 @@ func pickImageDataURL(onData func(string), onErr func(string)) {
 		return nil
 	})
 	input.Set("onchange", onChange)
+	// The input stays detached from the document: appending it would let page CSS
+	// and the modal focus trap reach it. Chrome and Firefox both open the dialog for
+	// a detached input inside a user gesture; if one refuses, the throw is caught
+	// above and reported as "not opened".
 	input.Call("click")
+	return true
 }
 
 // ---------------------------------------------------------------------------

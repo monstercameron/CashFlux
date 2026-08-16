@@ -72,7 +72,11 @@ var txnAuditKeys = Catalog{
 	"transactions.presetScopeNote": "Counts are for the transactions your current search and filters show.",
 
 	// --- C571: a merge or delete names what survives ---------------------------
-	"duplicates.mergeConfirmNamed":  "Merge %d entries into one? “%s” on %s stays — the other %d are removed. You can undo this from Activity.",
+	"duplicates.mergeConfirmNamed": "Merge %d entries into one? “%s” on %s stays, and %s removed. You can undo this from Activity.",
+	// The removed-entries clause, so the sentence reads "and 1 copy is removed" /
+	// "and 3 copies are removed" rather than "the other 1 are removed".
+	"duplicates.mergeRemovedOne":    "1 copy is",
+	"duplicates.mergeRemovedMany":   "%d copies are",
 	"duplicates.deleteConfirmNamed": "Delete this copy of “%s” (%s, %s)? The entry kept at the top of the group is untouched. You can undo this from Activity.",
 	"duplicates.deleteConfirmBtn":   "Delete duplicate",
 	"duplicates.mergeConfirmBtn":    "Merge into one",

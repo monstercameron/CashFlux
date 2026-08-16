@@ -98,7 +98,15 @@ func dataTable(props DataTableProps) ui.Node {
 	sorting := ui.UseState("")
 	ui.UseEffect(func() func() {
 		if sorting.Get() != "" {
-			sorting.Set("")
+			// C569: clear AFTER the browser has painted the re-sorted body, not in the
+			// same effect pass the new Sort/Dir arrive in. Effects run before paint, and
+			// a virtualized body materializes its window a frame later still — so
+			// clearing inline dropped aria-busy (and the header spinner, and the dimmed
+			// tbody) while the rows on screen were still in the OLD order. That gap is
+			// exactly the "new sort state over old rows" the busy state exists to
+			// prevent: a fast click-and-read lands in it. rAF fires before the next
+			// paint, so the extra macrotask puts the clear after it.
+			deferPaint(func() { sorting.Set("") })
 		}
 		return nil
 	}, props.Sort+"|"+props.Dir)

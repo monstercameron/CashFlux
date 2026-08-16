@@ -29,7 +29,18 @@ import (
 // Gating: this is a BYO-key AI action. Without an OpenAI key (and no cloud proxy),
 // it explains what is needed and leaves the manual split flow untouched.
 func startReceiptSplitFlow(app *appstate.App, txn domain.Transaction) {
+	// C564: every activation ends in a visible next step or an actionable error.
+	// Three paths used to end in silence — a nil app, a transaction the caller could
+	// not resolve (the menu passes an id through a map lookup, so a missing row
+	// yielded a zero Transaction the flow happily proceeded with), and a file picker
+	// the browser declined to open. The menu closes on click either way, so silence
+	// is indistinguishable from a broken feature.
 	if app == nil {
+		uistate.PostNotice(uistate.T("common.notReady"), true)
+		return
+	}
+	if txn.ID == "" {
+		uistate.PostNotice(uistate.T("receiptsplit.noTxn"), true)
 		return
 	}
 	settings := app.Settings()
@@ -40,12 +51,18 @@ func startReceiptSplitFlow(app *appstate.App, txn domain.Transaction) {
 		return
 	}
 
-	pickImageDataURL(
+	// Name the step BEFORE handing off to the OS picker. A native file dialog is not
+	// part of the page, so when the browser suppresses it (or it opens behind the
+	// window) the click otherwise leaves no trace at all.
+	uistate.PostNotice(uistate.T("receiptsplit.choosing"), false)
+	if !pickImageDataURL(
 		func(imageURL string) {
 			runReceiptSplitVision(app, txn, imageURL, settings, pr, useBackendAI)
 		},
 		func(e string) { uistate.PostNotice(e, true) },
-	)
+	) {
+		uistate.PostNotice(uistate.T("receiptsplit.noPicker"), true)
+	}
 }
 
 // runReceiptSplitVision sends the chosen receipt image to the vision model, then

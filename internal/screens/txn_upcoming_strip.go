@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/billmatch"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/txnscope"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -34,11 +35,23 @@ func txnUpcomingStrip(struct{}) ui.Node {
 	nav := router.UseNavigate()
 	openRecurring := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/recurring")) })
 	pr := uistate.UsePrefs().Get()
+	filterAtom := uistate.UseTxFilter()
 	if app == nil {
 		return Fragment()
 	}
 
 	now := time.Now()
+	// C560: the strip is "what is about to hit THIS month". When the ledger is paged
+	// to a period that does not contain today, that band is answering a question the
+	// page is not asking — a row of future charges floating over March 2025 reads as
+	// part of that month. Nothing about a past period is upcoming, so the strip steps
+	// aside rather than projecting the present onto it.
+	if s := txnscope.Of(filterAtom.Get().From, filterAtom.Get().To, now); s.Kind != txnscope.All {
+		if (!s.From.IsZero() && now.Before(s.From)) ||
+			(!s.To.IsZero() && now.After(s.To.AddDate(0, 0, 1))) {
+			return Fragment()
+		}
+	}
 	monthEnd := dateutil.AddMonths(dateutil.MonthStart(now), 1)
 	all := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
 	if len(all) == 0 {

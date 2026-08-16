@@ -4,16 +4,11 @@
 
 package uistate
 
-import (
-	"time"
-
-	"github.com/monstercameron/GoWebComponents/v5/state"
-)
+import "github.com/monstercameron/GoWebComponents/v5/state"
 
 const (
 	txnViewModeAtomID = "transactions:viewMode"
 	txnRegisterAtomID = "transactions:register"
-	txnCalMonthAtomID = "transactions:calMonth"
 )
 
 // Transaction view modes: the ledger surface renders either the sortable table
@@ -35,8 +30,9 @@ func UseTxnViewMode() state.Atom[string] { return state.UseAtom(txnViewModeAtomI
 // scoped to exactly one account; the toolbar hides the toggle otherwise.
 func UseTxnRegisterMode() state.Atom[bool] { return state.UseAtom(txnRegisterAtomID, false) }
 
-// UseTxnCalMonth returns the shared atom holding the month the calendar view is
-// paged to (any day within the month). A zero value means "the current month" —
-// the calendar body resolves that to time.Now at render so it always opens on the
-// present month.
-func UseTxnCalMonth() state.Atom[time.Time] { return state.UseAtom(txnCalMonthAtomID, time.Time{}) }
+// Removed (C560): the calendar used to page a private month atom anchored on
+// time.Now(), independent of the ledger's date filter — which is how the grid
+// could show one month while the rows and the period label showed another, and
+// how paging the calendar changed neither. The visible month is now DERIVED from
+// the ledger's own From/To through internal/txnscope, so there is one period state
+// on the surface instead of three. Nothing should reintroduce a second one.

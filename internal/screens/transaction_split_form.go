@@ -108,6 +108,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			Members:      app.Members(),
 			OnSave:       save,
 			FooterFormID: SplitModalFormID,
+			OnCancel:     props.OnDone,
 		}),
 	)
 }

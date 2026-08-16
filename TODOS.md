@@ -7648,7 +7648,18 @@ unsorted. C523 shipped `catmerge` and left two reference classes unswept, with a
 scans only what the merge already rewrote. C526 concluded from a profile that never engaged the code
 under evaluation. A closing note is not evidence; the call sites are.
 
-- [ ] **C544 [MAJOR][CAT] Sort the category lists C518 never reached.** *(Continues C518.)*
+- [x] **C544 [DONE 2026-08-16 — ordered at the seam, not per screen] [MAJOR][CAT] Sort the category lists C518 never reached.** *(Continues C518.)*
+  **Fixed by moving the ordering to `appstate.App.Categories()`**, which returns
+  `catname.Sorted(store.ListCategories())`. That is the single funnel every picker in the app reads
+  through (`ListCategories` has exactly one caller), so a NEW picker is correct by default rather
+  than correct only if its author remembered — which is the failure mode that let C518 close green.
+  The two screens that re-sorted with a raw byte compare (`categorypicker.go:182`,
+  `budgets_flex.go:383`) now use `catname.Less`/`catname.Sorted` so they cannot undo it.
+  Guards: `appstate/categories_order_test.go` (natural order, case-insensitivity, "Item 9" before
+  "Item 10", and order surviving a mutation through the per-revision read cache) plus
+  `screenlint/category_order_test.go` — one ratchet forbidding any new `ListCategories()` caller
+  outside the seam, one forbidding a raw byte compare on category names. Both verified to FAIL on a
+  deliberately reintroduced regression before being kept.
   `catname.Sorted` / `catname.Less` exist and are correct; they are called in exactly two screens.
   Sweep the remaining user-visible lists — these are ORDERED LISTS a user reads, not id→name maps:
   - `budgets_categories.go:281` — `budgetCategoryPicker`, the site C518 cited by line number. Still
@@ -7691,7 +7702,7 @@ under evaluation. A closing note is not evidence; the call sites are.
   usage; the user sees a message naming the cause, and after (2) the real request stops coming back
   empty. **C516 stays open until this lands.**
 
-- [ ] **C546 [MAJOR][TXN] A typed minus sign silently records the OPPOSITE transaction.** ★
+- [x] **C546 [DONE 2026-08-16] [MAJOR][TXN] A typed minus sign silently records the OPPOSITE transaction.** ★
   *(Residual of C520.)* Two live forms guard with `amt == 0` rather than `amt <= 0`, so a negative
   parses through and is then flipped by the direction control:
   - `app/quickadd.go:165-177` — type `-50` with kind "Expense" and `ParseMinor` returns −5000, the
@@ -7704,7 +7715,20 @@ under evaluation. A closing note is not evidence; the call sites are.
   direction toggle owns the sign`) — apply that idiom in both places.
   AC: a test per form asserting that "-50" with direction=out stores −5000, not +5000.
 
-- [ ] **C547 [MINOR][TXN] The edit form rejects a typed minus instead of reading it as direction.**
+  **Fixed 2026-08-16 with C547, by giving the question one owner.** `amountmath.ParseSigned(input,
+  decimals, want) (minor, resolved, err)` now owns what a typed amount MEANS: a typed minus is read
+  as intent and resolves the direction to Out, and the resolved direction is returned so the form's
+  control follows instead of displaying a direction that disagrees with what was stored. An explicit
+  PLUS is deliberately not symmetrical — "+50" is how people write a positive number, not an
+  assertion of income — so it leaves the control alone. Wired into all three forms that had their
+  own hand-rolled reconciliation: `app/quickadd.go`, `screens/planning.go` (recurring inline edit)
+  and `screens/transaction_edit_form.go`.
+  Tests: `amountmath/signed_test.go` — a table over both directions × typed sign, a PROPERTY test
+  (`TestParseSignedNeverInvertsTypedIntent`: whatever the control says, a typed minus can only ever
+  store negative), zero/junk rejection with distinct errors, and a guard that a rejected parse leaves
+  the requested direction untouched so the control cannot jump under a user fixing a typo.
+
+- [x] **C547 [DONE 2026-08-16 — with C546; one shared resolver] [MINOR][TXN] The edit form rejects a typed minus instead of reading it as direction.**
   *(Residual of C520.)* `transaction_edit_form.go:301` errors on `amt <= 0`, and `money.ParseMinor`
   accepts a leading `-`. So the user correcting a mistaken income does the obvious thing — types a
   minus in front of the amount — and gets "Enter an amount greater than zero", which is Cam's
@@ -7737,7 +7761,7 @@ under evaluation. A closing note is not evidence; the call sites are.
   Guard the two obvious cases: the new name must pass the same sibling-uniqueness rule `PutCategory`
   enforces (C536/C537), and both sources must share a kind, which the panel already requires.
 
-- [ ] **C550 [MINOR][BUDGET] The tracked-categories picker shows bare names, so duplicates are
+- [x] **C550 [DONE 2026-08-16 — with C544] [MINOR][BUDGET] The tracked-categories picker shows bare names, so duplicates are
   indistinguishable.** *(Third contributor to the C519 complaint, alongside C544.)*
   `budgetCatRow` renders `c.Name` alone (`budgets_categories.go:337`). Sub-categories are shown flat
   with no parent and no indent, so a "Gas" under "Auto" and a top-level "Gas" are the same row twice
@@ -7746,6 +7770,15 @@ under evaluation. A closing note is not evidence; the call sites are.
   (`categorypicker.go:43-59`). Use the same path here, and search over it.
   Worth doing in one change with C544: sorting, paths and the C519 explanatory note are three halves
   of the same "the list looks incomplete" report.
+
+  **Fixed 2026-08-16.** Rows render `catname.Path(cats, c)` ("Auto > Gas"), and the search matches
+  the PATH, so typing "auto" finds the child. Done in one change with C544 as planned.
+  Tests: `screens/budgets_categories_wasm_test.go` mounts the real `budgetCategoryPicker` through
+  the GoWebComponents testkit against a deliberately awkward seed (reverse-alphabetical insertion,
+  mixed case, "Item 9"/"Item 10", the same leaf name under two parents, one income category) and
+  asserts natural order, no bare duplicate label, both full paths present, and that C519's
+  withheld-income note still renders for a spending budget while a SAVING budget offers everything.
+  Verified to FAIL when the label is reverted to `c.Name`.
 
 - [ ] **C551 [MINOR][AI] Backend-AI users get no tools at all, silently.**
   `sendTools` takes a `tools []ai.Tool` argument and the `useBackendAI` branch simply does not pass
@@ -7781,6 +7814,30 @@ development-environment recovery issues, not product tickets; refresh is the doc
   failure, keep the current card, show the reason beside the action, and never advance. AC: a
   native/e2e regression test confirms category, review state, count, and reload persistence for the
   single path.
+
+  **Worked 2026-08-16 — both required behaviours are in; one honest caveat on the diagnosis.**
+  1. **Never advance on a write that did not land.** `applyReviewChoice` returned nothing, so all
+     four call sites advanced unconditionally — `review_surface.go:472` (the "Categorize & next"
+     this ticket describes) called it and then `advance()` on the next line regardless. It now
+     returns whether the write landed, and every caller branches on it: on failure the card holds
+     position and states the reason beside the action (`review.commitFailed`) instead of moving on.
+     This is the half that makes the reported symptom impossible to produce silently.
+  2. **Flush the write.** `assignReviewCategory` / `assignReviewByMerchant` now call
+     `uistate.RequestPersist()`.
+  **Caveat, recorded rather than glossed:** I first read the missing `RequestPersist` as the root
+  cause and it is NOT sufficient to explain the report. The dataset also autosaves on a 4-second
+  ticker AND on `pagehide`/`visibilitychange` (`app/persist.go:434-442`), so an ordinary reload
+  should already have flushed it. RequestPersist removes a real race — its own doc names "an action
+  that might be followed quickly by a reload", which is exactly the review loop — but it is a
+  narrowing, not a proof. The likelier explanation for an observed *reverted* write is a write that
+  FAILED and was advanced past, which is what (1) fixes, and the TR preamble's own note about
+  multi-agent save-lock warnings in the dev environment is a candidate for why it failed. **Do not
+  close this ticket until the original reproduction is re-run against this build.**
+  Tests: `screenlint/review_commit_test.go` — three AST guards that run in the native lane (the
+  review commit is a closure in a wasm-only package, so no native test can reach it directly):
+  `applyReviewChoice` must return bool; no call to it may be a bare statement with the result
+  discarded; and both write helpers must call `RequestPersist`. The bare-call guard was verified to
+  FAIL against a reintroduced `applyReviewChoice(...)` statement.
 
 - [ ] **C554 [MAJOR][REVIEW][TXN] Review scope is disconnected from the ledger scope.**
   The ledger can be filtered to `CF26-PIPE` and a period, but opening Review still shows the global
@@ -7837,7 +7894,7 @@ and every non-destructive per-transaction menu boundary. C553-C559 above already
 overlapping review persistence, review scope, period persistence, provenance, build, and navigation
 findings; these tickets add the remaining repair work without duplicating those records.
 
-- [ ] **C560 [MAJOR][TXN][STATE] Period, calendar, and ledger scopes disagree.**
+- [x] **C560 [MAJOR][TXN][STATE] Period, calendar, and ledger scopes disagree.**
   The period control showed `Jul 2026` while the visible calendar and transaction rows were in
   August; moving between periods also left the filtered cohort and totals unchanged. The calendar
   view was reached through More and did not provide an obvious return path to the ledger. Define one
@@ -7859,13 +7916,13 @@ findings; these tickets add the remaining repair work without duplicating those 
   reports are changed; provide a clearly scoped undo. AC: accidental activation cannot silently alter
   reporting state, and restoring the transaction is audited and reversible.
 
-- [ ] **C563 [MAJOR][TXN][EDIT] Row editing has no visible affordance.**
+- [x] **C563 [MAJOR][TXN][EDIT] Row editing has no visible affordance.**
   Clicking the description opened Edit this transaction, but the row exposed no Edit label or icon;
   only the tag button and kebab were visible. Add a labeled Edit action or make the row's click target
   and keyboard behavior discoverable without relying on trial and error. AC: a sighted and keyboard
   user can identify and reach editing from the row, with no conflict with tag and kebab controls.
 
-- [ ] **C564 [MAJOR][TXN][RECEIPT] Split from receipt can fail silently.**
+- [x] **C564 [MAJOR][TXN][RECEIPT] Split from receipt can fail silently.**
   Activating Split from receipt closed the menu without a dialog, file prompt, toast, or state change.
   Either open the receipt-upload flow or explain why the action is unavailable, and report errors in
   place. AC: every activation produces a visible next step or an actionable error; no silent no-op.
@@ -7893,7 +7950,7 @@ findings; these tickets add the remaining repair work without duplicating those 
   as household-wide counts and show the projected result before applying. AC: a user can tell what
   population each count describes.
 
-- [ ] **C569 [MINOR][TXN][PERF] Sort changes have delayed feedback without a busy state.**
+- [x] **C569 [MINOR][TXN][PERF] Sort changes have delayed feedback without a busy state.**
   Sort metadata changed immediately, but the visible rows reordered roughly a second later. Keep the
   sort state and rendered order synchronized, or show a pending indicator/aria-busy state until the
   new order is painted. AC: a fast click-and-read interaction never presents the old rows under the
@@ -7904,13 +7961,13 @@ findings; these tickets add the remaining repair work without duplicating those 
   as `Housing > Mortgage`. Use the shared qualified category picker and preserve search/parent context
   across add, edit, split, and review flows. AC: duplicate leaf names are distinguishable everywhere.
 
-- [ ] **C571 [MAJOR][TXN][DUPES][SAFETY] Duplicate review exposes destructive actions without a clear confirmation.**
+- [x] **C571 [MAJOR][TXN][DUPES][SAFETY] Duplicate review exposes destructive actions without a clear confirmation.**
   Review duplicates offered Merge (keep one) and Delete duplicate directly in the dialog. Add an
   explicit confirmation naming the retained and removed entries, show the resulting count, and make
   the operation undoable. AC: a mistaken merge/delete is recoverable and the user can verify exactly
   which transaction survives.
 
-- [ ] **C572 [MINOR][TXN][MENU][UX] The per-transaction kebab menu mixes unrelated risk levels.**
+- [x] **C572 [MINOR][TXN][MENU][UX] The per-transaction kebab menu mixes unrelated risk levels.**
   Rules, payment linking, splitting, history, name cleanup, exclusion, task creation, receipt work,
   and deletion appear in one flat list. Group routine organization separately from reporting and
   destructive actions, add separators and clearer labels, and keep Delete/Exclude visually distinct.
@@ -8003,3 +8060,148 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   review the result, and return to the same filtered ledger. Measure steps, route changes, lost state,
   confirmation clarity, and recovery from mistakes. AC: the journey is documented, keyboard-usable,
   recoverable, and passes with a fresh user who has not memorized CashFlux navigation.
+
+---
+
+- [ ] **C560 [MAJOR][UI][TXN] Quick-add opened from the dashboard is interactive but invisible.** ★
+  *Found 2026-08-16 while writing the C546 e2e coverage, by screenshotting the failure instead of
+  re-reading the selectors.*
+  Opening the quick-add panel from `/` (the dashboard) leaves it **fully present and operable in the
+  DOM while nothing renders on screen**: `[data-testid="txn-add-amount"]` exists, passes Playwright's
+  `toBeVisible()`, accepts `fill()`, and `[data-testid="flip-save"]` has a real bounding box at
+  (408, 660) — yet a viewport screenshot of that exact moment shows the untouched dashboard with no
+  panel. `document.elementFromPoint()` at the Save button's own centre returns an `H2` from the
+  Monthly-recap widget, and the panel's face computes to `position: relative; z-index: auto`, so it
+  establishes no stacking context above the page. The same panel opened from `/transactions` renders
+  correctly (verified by screenshot: title, fields, Expense selected, Save enabled).
+  Why it matters beyond the test: a keyboard user tabbing the dashboard can land inside an invisible
+  form, and the primary "+ Add transaction" affordance on the dashboard hero is the most obvious way
+  to add a transaction in the whole app.
+  Not yet root-caused. Two candidates worth checking first: (a) `add-transaction-btn` resolving to
+  the dashboard hero's own button rather than the chrome's, opening a different host; (b) the
+  FlipPanel's back face rendering un-flipped, which would explain a real bounding box with nothing
+  drawn. Screenshot both routes before theorising further — that is what found it.
+  AC: opening quick-add from every route either renders the panel or does not mount it; no route
+  leaves focusable, fillable controls in an unrendered panel.
+
+- [ ] **C584 [CRITICAL][BUDGETS][DATA][E2E] Persist budgets created with a new category.**
+  The Add budget flow can appear to succeed when “Create a new category for this budget” is selected,
+  but the resulting budget and category disappear after leaving `/budgets` and refreshing; the same
+  flow using an existing category persists. Treat budget and category creation as one atomic operation,
+  surface any failed write, and make the saved state re-loadable before dismissing the dialog.
+  AC: a budget created with a brand-new category survives route changes and a hard refresh, the category
+  is visible in Categories, and a failed category or budget write leaves no misleading success state.
+
+- [ ] **C585 [CRITICAL][BUDGETS][NAV][DATA] Make budget transaction drilldowns include tracked child categories.**
+  The Transportation budget showed `$1,100.00` spent, but its Transactions action opened a ledger
+  filtered to the exact parent category Transportation and returned “No matching transactions” even
+  though the budget tracks child categories such as Auto loans and Gas. Define whether a budget includes
+  descendants, then apply that same scope to spend totals, Transactions, search, and exports.
+  AC: every budget drilldown returns the transactions that contribute to its displayed spend, shows the
+  active category scope (parent plus descendants where applicable), and never presents a contradictory
+  non-empty total alongside an empty ledger.
+
+- [ ] **C586 [MAJOR][BUDGETS][CREATE][UX] Remove stale history estimates from new-category creation.**
+  With “Create a new category for this budget” enabled, the dialog still displayed a helper such as
+  “You’ve averaged $1,100.00/mo here recently,” despite the new category having no history. Copying
+  Transportation also produced a conflicting average compared with the budget’s visible spend. Compute
+  the estimate from the actual selected scope, or explicitly say that it is a parent/template estimate.
+  AC: a new category says “No history yet” or gives a clearly qualified estimate; copied budgets and
+  existing-category budgets use the same transaction scope as their cards and drilldowns.
+
+- [ ] **C587 [MAJOR][BUDGETS][ZERO-BASED][CORRECTNESS] Make expected-versus-actual income explicit in zero-based planning.**
+  The zero-based view can show 100% of expected `$10,709.16` assigned while only `$6,961.00` has been
+  received, and Close out the month reports the `$3,748.16` shortfall separately. Add a prominent state
+  for “assigned against expected income” versus “funded by received income,” with guidance for reducing,
+  deferring, or reallocating assignments when actual income is lower.
+  AC: users cannot mistake a fully assigned forecast for fully funded cash, and the page gives a direct,
+  reversible path to reconcile the plan to actual income.
+
+- [ ] **C588 [MAJOR][BUDGETS][REVIEW][NAV][UX] Align the period-review callout with its destination and action.**
+  “2 items to review from this period” expands to open to-dos linked to budgets, while “Review sinking
+  funds” routes to Goals. The wording makes this sound like a transaction or budget review inbox and
+  the destination is not predictable. Name the item type and destination directly, or make the callout
+  open a focused review surface that preserves the originating period and budget context.
+  AC: a user can predict whether the callout opens tasks, goals, transactions, or budget exceptions
+  before clicking, and returning preserves the same budget period.
+
+- [ ] **C589 [MAJOR][BUDGETS][PERIODS][UX] Redesign custom-range selection as an explicit range workflow.**
+  Choosing Custom range immediately changes the period label to a same-month range (`Jul 2026 – Jul
+  2026`), while the start/end controls are only discoverable after reopening the menu. Provide a clear
+  range dialog or inline fields with start/end values, apply/cancel semantics, and an explanation of
+  whether the range changes the report view, the budget cadence, or both.
+  AC: the user sees the selected range before it takes effect, can edit both endpoints directly, and can
+  return to a single month without hidden state or accidental partial application.
+
+- [ ] **C590 [MAJOR][BUDGETS][SETTINGS][UX] Disambiguate global budgeting method from per-budget method.**
+  Add/Edit budget exposes “Method for this budget,” while Budget settings exposes a global “Budgeting
+  method” selector. The relationship and blast radius are not stated, so a user can change a global
+  mode believing they are editing one card. Label the scope, show affected budgets, and explain defaults
+  versus overrides.
+  AC: every method control states whether it changes one budget, new-budget defaults, or the entire
+  page; saving a global change previews the affected cards and supports undo.
+
+- [ ] **C591 [MAJOR][BUDGETS][NAV][UX] Make budget-name and Transactions drilldowns distinguishable.**
+  Clicking the budget name itself navigates to a filtered Transactions view, while each card also has an
+  explicit Transactions action. This duplicates an important interaction with different discoverability
+  and makes the name look like a heading rather than a drilldown. Use a single clearly labeled action or
+  make the name a non-action with an adjacent “View transactions” control.
+  AC: keyboard, pointer, and screen-reader users can predict the result of clicking the name versus the
+  Transactions action, and both routes expose the same filter scope.
+
+- [ ] **C592 [MAJOR][BUDGETS][SETTINGS][FORM][UX] Give Adjust all a titled, validated, impact-previewing form.**
+  Adjust all opened an unlabeled dialog whose only prompt was a long sentence asking for a percentage.
+  Add a dialog heading, labeled numeric percentage input, examples and bounds, preview totals for the
+  affected budgets, and explicit confirmation for negative or large changes.
+  AC: invalid, blank, and extreme values are rejected with inline guidance; the user can see the old and
+  new totals before saving and can cancel without any mutation.
+
+- [ ] **C593 [MAJOR][BUDGETS][AUTOBUDGET][UX] Reduce the cognitive load of Auto budget.**
+  Auto budget presents a long list of checkbox-and-slider rows with suggested amounts and no persistent
+  summary of selected count, total change, remaining income, or zero-based impact while editing. Add
+  grouping, select all/none, a running total, a preview of affected cards, and a concise explanation of
+  the recommendation source.
+  AC: a user can understand the financial impact without scrolling through every row, can reset all
+  suggestions, and can save only after seeing the resulting assigned/unassigned balance.
+
+- [ ] **C594 [MAJOR][BUDGETS][CREATE][UX] Stage the Add budget flow around the common path.**
+  The creation dialog combines templates, copy-existing, manual setup, new-category creation, advanced
+  formula variables, tracking checkboxes, tags, owner, method, and rollover. The advanced surface is
+  powerful but exposes implementation-oriented variable names and a large category tree before the user
+  has established the basic budget. Split basic creation from optional tracking and explain each advanced
+  concept in product language.
+  AC: a first-time user can create a normal monthly budget quickly, while power users retain access to
+  tracking and formulas without parsing internal variable names or a large undifferentiated form.
+
+- [ ] **C595 [MAJOR][BUDGETS][RESPONSIVE][UX] Reduce repeated budget-card density with progressive disclosure.**
+  Each card places progress, limit, rollover, drivers, elapsed/date context, Top up, Transactions, a
+  kebab menu, and Follow-ups in one dense horizontal/stacked surface. This makes the primary question
+  “how much is left?” compete with secondary actions and increases scan time. Establish a clear primary
+  summary, move rarely used controls behind a consistent details disclosure, and preserve keyboard access.
+  AC: the first viewport supports quick scanning of status and remaining amount, while every secondary
+  action remains discoverable, labeled, and usable at narrow widths.
+
+- [ ] **C596 [MINOR][BUDGETS][VIEW][UX] Label the compact/card toggle by the resulting view.**
+  The control changes its label from “Compact list” to “Card view,” which describes the destination in
+  one state and the current view in the other. Use a stable action label such as “View as compact list”
+  or a two-state toggle with an accessible pressed state and tooltip.
+  AC: the label and accessible state make the current view and the next action unambiguous before and
+  after toggling.
+
+- [ ] **C597 [MAJOR][BUDGETS][SAFETY][UX] Add explicit previews and confirmations for funds-moving actions.**
+  Release unused funds, Sweep leftovers, Delete budget, Top up, and Adjust all have materially different
+  effects but are mixed into menus and dialogs with inconsistent levels of explanation. Define impact
+  previews, affected budgets/accounts, reversibility, and confirmation requirements by action type; make
+  destructive actions visually and verbally distinct.
+  AC: a user can tell whether an action changes only this period, future periods, other budgets, or the
+  underlying account balance, and no destructive or cross-budget action commits without an appropriate
+  confirmation.
+
+- [ ] **C598 [MAJOR][BUDGETS][E2E][WORKFLOW] Add a full zero-based budget acceptance journey.**
+  Exercise the complete workflow with a fresh user: inspect expected and received income, create a
+  monthly zero-based budget, create a missing category, assign all dollars, edit several limits, use
+  both individual and bulk-style adjustments where supported, open a budget drilldown, correct scope,
+  review close-out, and return to the same period. Include refreshes and route changes at each mutation.
+  AC: the journey has no lost state, stale totals, contradictory category scopes, silent persistence
+  failures, or unexplained navigation; measured completion time and action count are acceptable for a
+  monthly budgeting task.

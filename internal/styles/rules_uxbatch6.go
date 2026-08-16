@@ -71,7 +71,10 @@ func registerUxbatch6() {
 		width("80px"),
 	)
 	// Actions: fixed so the ⋯ column no longer steals width from the description.
+	// C563 widened it from 48px (exactly one ⋯) to fit the row's Edit pencil beside
+	// it — at 48px the pencil pushed the ⋯ out of the cell entirely. Both stay
+	// icon-only so the description keeps the rest of the line.
 	rule(".bento-ledger .txn-table th.td-actions, .bento-ledger .txn-table td.td-actions",
-		width("48px"),
+		width("76px"),
 	)
 }
