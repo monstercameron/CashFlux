@@ -19,7 +19,10 @@
 package catmerge
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/learntally"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
@@ -32,6 +35,14 @@ type Refs struct {
 	Rules        []rules.Rule
 	Categories   []domain.Category
 	Recurring    []domain.Recurring
+	// Tally is the persisted learn-from-corrections table (payee → categoryID →
+	// count). It survived a merge pointing at the retired id, so SMART kept
+	// proposing a category that no longer exists (C548).
+	Tally learntally.Tally
+	// Widgets are the household's saved widget specs. A flow-series filter of the
+	// form "cat:<id>" is a category reference like any other; left unswept, a
+	// saved chart quietly reported zero after a merge without saying why (C548).
+	Widgets []domain.WidgetSpec
 }
 
 // Counts is how much a merge would move, broken out by what holds the
@@ -45,11 +56,14 @@ type Counts struct {
 	Rules        int // rules that file into it
 	Recurring    int // recurring templates that post into it
 	Children     int // sub-categories that would be re-homed
+	Tally        int // learned payee→category corrections pointing at it
+	Widgets      int // saved widget specs whose series filter selects it
 }
 
 // Total is every reference that would move.
 func (c Counts) Total() int {
-	return c.Transactions + c.Splits + c.Budgets + c.Goals + c.Rules + c.Recurring + c.Children
+	return c.Transactions + c.Splits + c.Budgets + c.Goals + c.Rules + c.Recurring +
+		c.Children + c.Tally + c.Widgets
 }
 
 // Empty reports whether the merge would move nothing at all.
@@ -97,7 +111,32 @@ func Plan(r Refs, fromID, toID string) Counts {
 			c.Children++
 		}
 	}
+	for _, byCat := range r.Tally {
+		if byCat[fromID] > 0 {
+			c.Tally++
+		}
+	}
+	for _, w := range r.Widgets {
+		if widgetSelectsCategory(w, fromID) {
+			c.Widgets++
+		}
+	}
 	return c
+}
+
+// catFilterPrefix is the flow-series selector that names a category by id.
+// widgetsource.TxnFilterMatcher also accepts a display NAME after this prefix;
+// a merge only rewrites the id form, because a name-based filter keeps meaning
+// what it said and the surviving category may legitimately carry a new name.
+const catFilterPrefix = "cat:"
+
+// widgetSelectsCategory reports whether a saved spec's flow-series filter picks
+// out this category by id.
+func widgetSelectsCategory(w domain.WidgetSpec, id string) bool {
+	if id == "" || w.Pipeline == nil {
+		return false
+	}
+	return strings.TrimSpace(w.Pipeline.Source.Series.Filter) == catFilterPrefix+id
 }
 
 // budgetRefs reports whether a budget points at the category through either
@@ -134,6 +173,7 @@ func Merge(r Refs, fromID, toID string) (Refs, Counts) {
 		Rules:        make([]rules.Rule, 0, len(r.Rules)),
 		Categories:   make([]domain.Category, 0, len(r.Categories)),
 		Recurring:    make([]domain.Recurring, 0, len(r.Recurring)),
+		Widgets:      make([]domain.WidgetSpec, 0, len(r.Widgets)),
 	}
 	for _, t := range r.Transactions {
 		if t.CategoryID == fromID {
@@ -189,6 +229,33 @@ func Merge(r Refs, fromID, toID string) (Refs, Counts) {
 			cat.ParentID = toID
 		}
 		out.Categories = append(out.Categories, cat)
+	}
+	// The learned corrections table: fold the retired id's count into the
+	// survivor's for the same payee rather than dropping it. A household that
+	// corrected "Whole Foods → Groceries (old)" eleven times has taught the app
+	// something real, and the merge is a rename from their point of view.
+	if len(r.Tally) > 0 {
+		out.Tally = make(learntally.Tally, len(r.Tally))
+		for payee, byCat := range r.Tally {
+			next := make(map[string]int, len(byCat))
+			for cid, n := range byCat {
+				if cid == fromID {
+					cid = toID
+				}
+				next[cid] += n
+			}
+			out.Tally[payee] = next
+		}
+	}
+	for _, w := range r.Widgets {
+		if widgetSelectsCategory(w, fromID) {
+			// Copy the pipeline before editing it: specs are shared values and a
+			// merge must not reach into the caller's slice.
+			p := *w.Pipeline
+			p.Source.Series.Filter = catFilterPrefix + toID
+			w.Pipeline = &p
+		}
+		out.Widgets = append(out.Widgets, w)
 	}
 	return out, c
 }

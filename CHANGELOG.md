@@ -7,6 +7,26 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Merging a category no longer leaves two kinds of reference behind (C548).** The learn-from-
+  corrections tally and any saved chart filtering on `cat:<id>` both survived a merge still pointing
+  at the retired category — so SMART kept proposing a category that no longer exists, and a saved
+  chart quietly reported zero without saying why.
+
+  They were missed because every *other* reference class lives in the store, so the sweep could read
+  them all and looked complete. The tally is a UI-layer blob and widget specs live inside custom
+  pages. The tally now reaches the merge through a bridge installed at boot rather than a parameter
+  every caller has to remember, and reassign-on-delete sweeps them too.
+
+  The learned counts are folded into the survivor rather than repointed: a household that corrected a
+  payee eleven times taught the app something real, and a merge is a rename from where they sit. A
+  filter that names a category by display name is deliberately left alone.
+
+  The test the acceptance criteria asked for now exists and is honest: it serializes the whole result
+  and scans for the retired id as a string, so it catches a reference wherever it hides — and it
+  checks the fixture contained that id beforehand, so it can't pass vacuously. The previous
+  no-residual test could never have served, because it walks the same collections the merge just
+  rewrote.
+
 - **The category map's jump links actually jump (C360 follow-up).** The chips shipped as
   `href="#cat-row-<id>"` links, but the matching id never landed on the ledger row — so every chip
   pointed at an element that does not exist and the map still did nothing while looking like

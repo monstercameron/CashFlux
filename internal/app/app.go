@@ -265,6 +265,11 @@ func Run() {
 	widgetcatalog.SetTranslator(uistate.T)
 	smartengine.SetTranslator(uistate.T)
 
+	// C548: lend the UI's learn-from-corrections tally to the category merge, so
+	// merging a duplicate moves what the household taught the app instead of
+	// leaving it pointed at a retired id.
+	appstate.SetLearnTallyBridge(uistate.LoadLearnTally, uistate.SaveLearnTally)
+
 	// C361: translate the install affordances that live in web/index.html. They
 	// are shown by page script after boot and were the last user-facing English
 	// the language setting could not reach.

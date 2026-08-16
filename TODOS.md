@@ -7975,17 +7975,29 @@ under evaluation. A closing note is not evidence; the call sites are.
   pre-C520 bug — parse, reject `<= 0`, re-apply the original sign. It is unreachable today, so it is
   not a defect; it is a trap for whoever revives it. Delete it or comment the hazard.
 
-- [ ] **C548 [MAJOR][CAT] Finish the merge reference sweep and give it the test its AC asked for.**
-  *(Continues C523.)* Add to `catmerge.Refs` (or sweep alongside it): the persisted
-  `learntally.Tally` (`payee → map[categoryID]count`, `learntally/tally.go:17`, stored via
-  `uistate/learntally_store.go`) and any `WidgetSpec` series filter of the form `"cat:<id>"`
-  (`widgetsource.go:351`). Both survive a merge today pointing at a retired id — the tally makes
-  SMART propose a category that no longer exists, and the widget filter makes a saved chart report
-  zero without saying why.
-  Then write the AC's test properly: export the dataset after a merge and scan the JSON for the
-  retired id. `TestMergeLeavesNoResidual` cannot serve — `catmerge.Residual` walks the same six
-  collections the merge just rewrote, so it is circular and blind to anything outside `Refs`.
-  AC: the exported-JSON scan fails before the fix and passes after.
+- [x] **C548 ✅ DONE (2026-08-16) — Finish the merge reference sweep and give it the test its AC
+  asked for.** *(Continues C523.)* Both missing classes are now in `catmerge.Refs` and swept:
+  the persisted **learn-from-corrections tally** (`payee → categoryID → count`) and any **saved
+  widget spec** whose flow-series filter reads `cat:<id>`. The tally is FOLDED rather than
+  repointed — a household that corrected a payee eleven times against the retired id has taught the
+  app something real, and a merge is a rename from where they sit, so the counts add into the
+  survivor's existing entry. A filter that names a category by DISPLAY NAME is deliberately left
+  alone: `widgetsource` accepts either form, the name still means what it said, and the survivor may
+  legitimately be called something else.
+  **Why they were missed is the interesting part, and it shaped the fix.** Every other class lives
+  in the store, so `categoryRefs` could just read it and the sweep looked complete. These two do
+  not: the tally is a UI-layer KV blob, and widget specs live *inside* custom pages
+  (`CustomPage.Widgets[].Spec`). The tally reaches the pure package through a boot-installed bridge
+  (`appstate.SetLearnTallyBridge`) rather than a parameter on `MergeCategories`, so "remember to
+  sweep the tally too" is never a caller's problem — which is exactly how it went missing.
+  Reassign-on-delete sweeps them as well; it leaves identical residue otherwise.
+  **The AC's test, properly:** `TestMergeLeavesNoTraceInSerializedData` marshals the whole result
+  and scans for the retired id as a STRING, so it knows nothing about the shape of the data and
+  catches a reference wherever it hides. It also asserts the fixture contained the id BEFORE the
+  merge, so the scan can't pass vacuously. `TestMergeLeavesNoResidual` could never have served:
+  `Residual` walks the same collections `Merge` just rewrote, so it is circular and blind by
+  construction to any class `Refs` forgot. Ratchet:
+  `TestCategoryMergeSweepsTheOutOfStoreClasses`.
 
 - [ ] **C549 [MINOR][CAT] Merge two categories into a NEW category.** *(Cam's literal ask on C523.)*
   What shipped is "Merge into…", where the target select is built only from categories that already

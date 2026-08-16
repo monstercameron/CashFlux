@@ -3,9 +3,12 @@
 package catmerge
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/learntally"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
@@ -221,5 +224,146 @@ func TestMergeHandlesEmptyRefs(t *testing.T) {
 	}
 	if len(out.Categories) != 0 {
 		t.Error("nothing in, nothing out")
+	}
+}
+
+// ─── C548: the test the AC actually asked for ────────────────────────────────
+//
+// TestMergeLeavesNoResidual cannot serve as the proof. Residual walks the same
+// collections Merge just rewrote, so it is circular: it can only ever report on
+// what Refs already knows about, and it is blind by construction to any
+// reference class the sweep forgot. That is exactly how the learned-corrections
+// tally and the saved widget filters survived a merge for as long as they did.
+//
+// This is the honest version: serialize everything and look for the retired id
+// as a STRING. It knows nothing about the shape of the data, so it catches a
+// reference wherever it hides.
+func TestMergeLeavesNoTraceInSerializedData(t *testing.T) {
+	const from, to = "cat-old", "cat-new"
+
+	r := Refs{
+		Categories: []domain.Category{
+			{ID: from, Name: "Groceries (old)", Kind: domain.KindExpense},
+			{ID: to, Name: "Groceries", Kind: domain.KindExpense},
+			{ID: "cat-child", Name: "Produce", ParentID: from, Kind: domain.KindExpense},
+		},
+		Transactions: []domain.Transaction{
+			{ID: "t1", CategoryID: from},
+			{ID: "t2", Splits: []domain.CategorySplit{{CategoryID: from}, {CategoryID: to}}},
+		},
+		Budgets: []domain.Budget{
+			{ID: "b1", CategoryID: from},
+			{ID: "b2", CategoryIDs: []string{from, "cat-other"}},
+		},
+		Goals:     []domain.Goal{{ID: "g1", CategoryID: from}},
+		Rules:     []rules.Rule{{ID: "r1", SetCategoryID: from}},
+		Recurring: []domain.Recurring{{ID: "rec1", CategoryID: from}},
+		// The two classes C548 is about.
+		Tally: learntally.Tally{
+			"whole foods": {from: 11, "cat-other": 2},
+		},
+		Widgets: []domain.WidgetSpec{{
+			ID: "w1", Kind: domain.KindChart,
+			Pipeline: &domain.Pipeline{Source: domain.Source{
+				Kind: domain.SourceSeries, Series: domain.SeriesSpec{Metric: "flow", Filter: "cat:" + from},
+			}},
+		}},
+	}
+
+	// Guard against a vacuous scan: the id must be in there BEFORE the merge, or
+	// "not found afterwards" proves nothing.
+	if before, err := json.Marshal(r); err != nil {
+		t.Fatalf("marshal input: %v", err)
+	} else if !bytes.Contains(before, []byte(from)) {
+		t.Fatal("the fixture does not reference the retired id — the scan below would pass vacuously")
+	}
+
+	out, counts := Merge(r, from, to)
+	if counts.Tally != 1 {
+		t.Errorf("Counts.Tally = %d, want 1 — the confirmation must say the learned "+
+			"corrections move too", counts.Tally)
+	}
+	if counts.Widgets != 1 {
+		t.Errorf("Counts.Widgets = %d, want 1", counts.Widgets)
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if bytes.Contains(blob, []byte(from)) {
+		t.Errorf("the retired id %q still appears in the serialized data after a merge:\n%s",
+			from, blob)
+	}
+
+	// And the merge moved the meaning, not just the pointer: eleven corrections
+	// taught against the old id belong to the survivor, added to what it already
+	// had — a household that corrected a payee eleven times has taught the app
+	// something real, and a merge is a rename from where they sit.
+	if got := out.Tally["whole foods"][to]; got != 11 {
+		t.Errorf("tally for the surviving category = %d, want 11", got)
+	}
+	if got := out.Tally["whole foods"]["cat-other"]; got != 2 {
+		t.Errorf("an unrelated tally entry changed: %d, want 2", got)
+	}
+	if got := out.Widgets[0].Pipeline.Source.Series.Filter; got != "cat:"+to {
+		t.Errorf("widget filter = %q, want %q", got, "cat:"+to)
+	}
+	// The input must not have been mutated through the shared pipeline pointer.
+	if got := r.Widgets[0].Pipeline.Source.Series.Filter; got != "cat:"+from {
+		t.Errorf("Merge reached into the caller's spec: filter is now %q", got)
+	}
+}
+
+// A tally counted against BOTH categories folds into one entry rather than
+// losing either half.
+func TestMergeFoldsOverlappingTallies(t *testing.T) {
+	const from, to = "cat-old", "cat-new"
+	r := Refs{
+		Categories: []domain.Category{{ID: from}, {ID: to}},
+		Tally:      learntally.Tally{"costco": {from: 4, to: 3}},
+	}
+	out, _ := Merge(r, from, to)
+	if got := out.Tally["costco"][to]; got != 7 {
+		t.Errorf("folded tally = %d, want 7 (4 + 3)", got)
+	}
+	if _, still := out.Tally["costco"][from]; still {
+		t.Error("the retired id survives in the tally")
+	}
+}
+
+// A filter that names a category by DISPLAY NAME is deliberately left alone:
+// widgetsource accepts either form, the name still means what it said, and the
+// surviving category may legitimately be called something else.
+func TestMergeLeavesNameBasedFiltersAlone(t *testing.T) {
+	const from, to = "cat-old", "cat-new"
+	r := Refs{
+		Categories: []domain.Category{{ID: from, Name: "Groceries (old)"}, {ID: to, Name: "Groceries"}},
+		Widgets: []domain.WidgetSpec{{ID: "w1", Pipeline: &domain.Pipeline{
+			Source: domain.Source{Series: domain.SeriesSpec{Metric: "flow", Filter: "cat:Groceries"}},
+		}}},
+	}
+	out, counts := Merge(r, from, to)
+	if counts.Widgets != 0 {
+		t.Errorf("Counts.Widgets = %d, want 0 for a name-based filter", counts.Widgets)
+	}
+	if got := out.Widgets[0].Pipeline.Source.Series.Filter; got != "cat:Groceries" {
+		t.Errorf("a name-based filter was rewritten to %q", got)
+	}
+}
+
+// A spec with no pipeline at all (a KPI, a native tile) must not panic the sweep.
+func TestMergeToleratesSpecsWithoutPipelines(t *testing.T) {
+	const from, to = "cat-old", "cat-new"
+	r := Refs{
+		Categories: []domain.Category{{ID: from}, {ID: to}},
+		Widgets: []domain.WidgetSpec{
+			{ID: "kpi", Kind: domain.KindKPI, Scalar: &domain.ScalarBind{Expr: "net_worth"}},
+			{ID: "native", Kind: domain.KindNative, NativeID: "bills"},
+		},
+	}
+	out, counts := Merge(r, from, to)
+	if counts.Widgets != 0 || len(out.Widgets) != 2 {
+		t.Errorf("counts=%d widgets=%d, want 0 and 2", counts.Widgets, len(out.Widgets))
 	}
 }

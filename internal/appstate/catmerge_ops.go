@@ -22,6 +22,11 @@ func (a *App) categoryRefs(withCategories bool) catmerge.Refs {
 		Goals:        a.Goals(),
 		Rules:        a.Rules(),
 		Recurring:    a.Recurring(),
+		// The two classes that are not in the store, and so were not in the
+		// original sweep (C548): the UI's learn-from-corrections tally, lent in
+		// through the bridge, and widget specs saved inside custom pages.
+		Tally:   loadLearnTally(),
+		Widgets: a.pageWidgetSpecs(),
 	}
 	if withCategories {
 		r.Categories = a.Categories()
@@ -122,6 +127,9 @@ func (a *App) MergeCategories(fromID, toID string) (catmerge.Counts, error) {
 			return counts, fmt.Errorf("merge categories: category %s: %w", c.ID, err)
 		}
 	}
+	if err := a.saveSweptExtras(after); err != nil {
+		return counts, fmt.Errorf("merge categories: sweep: %w", err)
+	}
 	if _, err := a.store.DeleteCategory(fromID); err != nil {
 		return counts, fmt.Errorf("merge categories: retire %s: %w", fromID, err)
 	}
@@ -209,6 +217,12 @@ func (a *App) moveCategoryRefs(oldID, newID string) (int, error) {
 		if err := a.store.PutRecurring(rc); err != nil {
 			return counts.Total(), err
 		}
+	}
+	// Reassign-on-delete sweeps the same out-of-store classes as a merge (C548):
+	// a category being deleted with its references reassigned leaves exactly the
+	// same stale tally entries and chart filters behind if it does not.
+	if err := a.saveSweptExtras(after); err != nil {
+		return counts.Total(), err
 	}
 	return counts.Total(), nil
 }

@@ -378,3 +378,41 @@ func TestCategoryMapLinksHaveTargets(t *testing.T) {
 			"targets are gone (C360)")
 	}
 }
+
+// ─── C548 merge-sweep ratchet ────────────────────────────────────────────────
+
+// TestCategoryMergeSweepsTheOutOfStoreClasses keeps the sweep total.
+//
+// C548: everything a category can hide in EXCEPT two classes lives in the store,
+// so the original sweep read them all and looked complete. The learn-from-
+// corrections tally is a UI-layer KV blob and saved widget specs live inside
+// custom pages — both survived a merge pointing at a retired id, and neither
+// failed loudly. This fails if either is dropped from the reference snapshot or
+// the write-back disappears.
+func TestCategoryMergeSweepsTheOutOfStoreClasses(t *testing.T) {
+	files := readInternal(t)
+	ops, ok := files["appstate/catmerge_ops.go"]
+	if !ok {
+		t.Fatal("appstate/catmerge_ops.go not found")
+	}
+	for _, want := range []string{"Tally:   loadLearnTally()", "Widgets: a.pageWidgetSpecs()"} {
+		if !strings.Contains(ops, want) {
+			t.Errorf("categoryRefs no longer collects %q — that class survives a merge "+
+				"pointing at a retired id, silently (C548)", want)
+		}
+	}
+	if n := strings.Count(ops, "a.saveSweptExtras(after)"); n < 2 {
+		t.Errorf("saveSweptExtras is called %d time(s); both MergeCategories AND "+
+			"reassign-on-delete must write the swept classes back (C548)", n)
+	}
+	// And the pure side must still know about them.
+	cm, ok := files["catmerge/catmerge.go"]
+	if !ok {
+		t.Fatal("catmerge/catmerge.go not found")
+	}
+	for _, want := range []string{"Tally learntally.Tally", "Widgets []domain.WidgetSpec"} {
+		if !strings.Contains(cm, want) {
+			t.Errorf("catmerge.Refs no longer carries %q (C548)", want)
+		}
+	}
+}
