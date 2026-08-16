@@ -94,7 +94,7 @@ func TestZeroBasedIncome(t *testing.T) {
 		{"categories ignores unmatched category", IncomeModeCategories, 0, 0, []string{"bonus"}, 0},
 	}
 	for _, tc := range cases {
-		if got := ZeroBasedIncome(tc.mode, tc.paycheckMn, tc.configured, tc.cats, txns, start, end, "USD", rates); got != tc.want {
+		if got := ZeroBasedIncome(tc.mode, tc.paycheckMn, tc.configured, NewIncomeSources(nil, tc.cats), txns, start, end, "USD", rates); got != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
 		}
 	}
@@ -126,7 +126,7 @@ func TestAveragedIncome(t *testing.T) {
 		{"fixed is never averaged", IncomeModeFixed, 500000, nil, 3, 500000},
 	}
 	for _, tc := range cases {
-		if got := AveragedIncome(tc.mode, 0, tc.cfg, tc.cats, txns, monthStart, tc.months, "USD", rates); got != tc.want {
+		if got := AveragedIncome(tc.mode, 0, tc.cfg, NewIncomeSources(nil, tc.cats), txns, monthStart, tc.months, "USD", rates); got != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
 		}
 	}
@@ -222,5 +222,112 @@ func TestIncomeForBudgets(t *testing.T) {
 				t.Errorf("IncomeForBudgets() = %d, want %d", got, tc.wantMinor)
 			}
 		})
+	}
+}
+
+// TestIncomeSourcesExpandsDescendants is C532. Ticking a parent income category
+// is the obvious thing to do when deposits are filed under its children, and it
+// used to count nothing at all because the match was an exact id test while every
+// other tracked-category test in this package expands descendants first.
+func TestIncomeSourcesExpandsDescendants(t *testing.T) {
+	cats := []domain.Category{
+		{ID: "salary", Name: "Salary", Kind: domain.KindIncome},
+		{ID: "emp-a", Name: "Employer A", Kind: domain.KindIncome, ParentID: "salary"},
+		{ID: "emp-b", Name: "Employer B", Kind: domain.KindIncome, ParentID: "salary"},
+		{ID: "free", Name: "Freelance", Kind: domain.KindIncome},
+	}
+	txns := []domain.Transaction{
+		{ID: "1", Date: jan(5), Desc: "paycheck", CategoryID: "emp-a", Amount: usd(300000)},
+		{ID: "2", Date: jan(6), Desc: "paycheck", CategoryID: "emp-b", Amount: usd(200000)},
+		{ID: "3", Date: jan(7), Desc: "gig", CategoryID: "free", Amount: usd(50000)},
+	}
+	rates := makeRates(nil)
+
+	got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"salary"}), txns, jan(1), jan(31), "USD", rates)
+	if got != 500000 {
+		t.Errorf("ticking the parent must count both children: got %d, want 500000", got)
+	}
+
+	// Holding the parent aside and picking one child still works.
+	got = ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"emp-b"}), txns, jan(1), jan(31), "USD", rates)
+	if got != 200000 {
+		t.Errorf("picking one child must count only that child: got %d, want 200000", got)
+	}
+
+	// A parent with no children behaves as before.
+	got = ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"free"}), txns, jan(1), jan(31), "USD", rates)
+	if got != 50000 {
+		t.Errorf("a leaf source must count itself: got %d, want 50000", got)
+	}
+
+	// Nothing chosen is still zero — the user has not picked a source yet.
+	if got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, nil), txns, jan(1), jan(31), "USD", rates); got != 0 {
+		t.Errorf("no source chosen must be 0, got %d", got)
+	}
+}
+
+// TestIncomeSourcesDecomposesSplits is C533: a paycheck split across sources must
+// feed only the sources actually chosen, and the lines plus any uncovered
+// remainder must still add up to the deposit.
+func TestIncomeSourcesDecomposesSplits(t *testing.T) {
+	cats := []domain.Category{
+		{ID: "salary", Name: "Salary", Kind: domain.KindIncome},
+		{ID: "bonus", Name: "Bonus", Kind: domain.KindIncome},
+	}
+	split := domain.Transaction{
+		ID: "1", Date: jan(5), Desc: "paycheck", CategoryID: "salary", Amount: usd(500000),
+		Splits: []domain.CategorySplit{
+			{CategoryID: "salary", Amount: usd(400000)},
+			{CategoryID: "bonus", Amount: usd(100000)},
+		},
+	}
+	txns := []domain.Transaction{split}
+	rates := makeRates(nil)
+
+	if got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"salary"}), txns, jan(1), jan(31), "USD", rates); got != 400000 {
+		t.Errorf("only the salary line may count: got %d, want 400000", got)
+	}
+	if got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"salary", "bonus"}), txns, jan(1), jan(31), "USD", rates); got != 500000 {
+		t.Errorf("both lines chosen must total the whole deposit: got %d, want 500000", got)
+	}
+
+	// Lines that do not cover the deposit leave the rest on the transaction's own
+	// category, so a partial split never quietly loses money.
+	partial := split
+	partial.Splits = []domain.CategorySplit{{CategoryID: "bonus", Amount: usd(100000)}}
+	if got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"salary", "bonus"}), []domain.Transaction{partial},
+		jan(1), jan(31), "USD", rates); got != 500000 {
+		t.Errorf("the uncovered remainder must stay on the parent category: got %d, want 500000", got)
+	}
+	if got := ZeroBasedIncome(IncomeModeCategories, 0, 0,
+		NewIncomeSources(cats, []string{"bonus"}), []domain.Transaction{partial},
+		jan(1), jan(31), "USD", rates); got != 100000 {
+		t.Errorf("the remainder belongs to salary, which was not chosen: got %d, want 100000", got)
+	}
+}
+
+// TestIncomeBasisSkipsExcludedFromReports guards the companion fix: a deposit the
+// user excluded from reports must not inflate the income they budget against,
+// because reports.IncomeByCategory (which draws the per-source rows in the
+// picker) already skipped it and the two figures disagreed by exactly that much.
+func TestIncomeBasisSkipsExcludedFromReports(t *testing.T) {
+	cats := []domain.Category{{ID: "salary", Name: "Salary", Kind: domain.KindIncome}}
+	counted := domain.Transaction{ID: "1", Date: jan(5), Desc: "pay", CategoryID: "salary", Amount: usd(300000)}
+	excluded := domain.Transaction{ID: "2", Date: jan(6), Desc: "reimbursement", CategoryID: "salary", Amount: usd(90000), ExcludeFromReports: true}
+	txns := []domain.Transaction{counted, excluded}
+	rates := makeRates(nil)
+
+	for _, mode := range []string{IncomeModeAll, IncomeModeCategories, IncomeModePaychecks} {
+		got := ZeroBasedIncome(mode, 0, 0, NewIncomeSources(cats, []string{"salary"}), txns, jan(1), jan(31), "USD", rates)
+		if got != 300000 {
+			t.Errorf("mode %s: excluded income must not count: got %d, want 300000", mode, got)
+		}
 	}
 }

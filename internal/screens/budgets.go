@@ -620,7 +620,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		// Explicit basis (zero-based income control): all income, paychecks-only, a fixed
 		// figure, or a chosen set of income categories — averaged over BudgetIncomeAvgMonths
 		// recent months (last month only when 0/1).
-		bannerIncome = budgeting.AveragedIncome(pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, txns, ms, pr.BudgetIncomeAvgMonths, base, rates)
+		bannerIncome = resolveIncomeBasis(app, pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, pr.BudgetIncomeAvgMonths, ms, base, rates)
 	default:
 		// Unset basis — preserve prior behaviour: configured figure wins, else last month's income.
 		bannerIncome = budgeting.IncomeForBudgets(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
@@ -698,6 +698,45 @@ func computeAgeOfMoney(txns []domain.Transaction, base string, rates currency.Ra
 	}
 	sort.SliceStable(flows, func(i, j int) bool { return flows[i].Date.Before(flows[j].Date) })
 	return agemoney.Compute(flows, agemoney.Opts{})
+}
+
+// incomeBasisMonth resolves the month the income basis is derived from for the
+// viewed window: today's month while the window contains today, otherwise the
+// window's own month.
+//
+// C531: this used to be answered in two places with two different answers. The
+// page anchored on the view window while the basis MODAL anchored on time.Now(),
+// so a user paging back to a past month approved a figure in the modal that the
+// page never used — the preview and the page were averaging different months
+// over different data. Both now call this.
+func incomeBasisMonth(vw period.Window, weekStart time.Weekday) time.Time {
+	now := time.Now()
+	viewFrom, viewTo := vw.Range()
+	anchor := viewFrom
+	if !now.Before(viewFrom) && now.Before(viewTo) {
+		anchor = now
+	}
+	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
+	return ms
+}
+
+// resolveIncomeBasis is the ONE place the "income to budget with" figure is
+// computed. The page passes the saved preferences; the basis modal passes its
+// unsaved draft. Both go through here so a previewed figure and an applied
+// figure can never be computed differently.
+func resolveIncomeBasis(
+	app *appstate.App,
+	mode string, paycheckMin, fixed int64, catIDs []string, avgMonths int,
+	ms time.Time, base string, rates currency.Rates,
+) int64 {
+	if app == nil {
+		return 0
+	}
+	if mode == "" {
+		mode = budgeting.IncomeModeAll
+	}
+	sources := budgeting.NewIncomeSources(app.Categories(), catIDs)
+	return budgeting.AveragedIncome(mode, paycheckMin, fixed, sources, app.Transactions(), ms, avgMonths, base, rates)
 }
 
 // computeIncomeSources builds the income-source menu the "by source" basis presents:

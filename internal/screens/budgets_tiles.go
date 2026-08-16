@@ -946,13 +946,15 @@ func BudgetBasisBody(_ struct{}) ui.Node {
 	// averaging window), so the running total and per-source amounts preview unsaved edits
 	// and stay consistent: the checked rows sum to the previewed income.
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	now := time.Now()
-	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, now, pr.WeekStartWeekday())
+	// C531: anchor the preview on the month the PAGE is showing, not on today, so
+	// the figure approved here is the figure the page will use. Paging back to a
+	// closed month previews that month.
+	ms := incomeBasisMonth(uistate.UsePeriod().Get(), pr.WeekStartWeekday())
 	mode := d.Mode
 	if mode == "" {
 		mode = budgeting.IncomeModeAll
 	}
-	draftIncome := budgeting.AveragedIncome(mode, d.PaycheckMin, d.Fixed, d.Cats, app.Transactions(), ms, d.AvgMonths, base, rates)
+	draftIncome := resolveIncomeBasis(app, mode, d.PaycheckMin, d.Fixed, d.Cats, d.AvgMonths, ms, base, rates)
 	sources := computeIncomeSources(app, base, rates, ms, d.AvgMonths)
 
 	return Div(css.Class("zbb-basis-modal"),

@@ -3,6 +3,7 @@
 package validate
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -99,3 +100,76 @@ func TestValidateCategoryInTree(t *testing.T) {
 
 // timeoutGuard keeps the cycle test honest without a sleep in the happy path.
 var _ = time.Second
+
+// TestValidateCategoryNameUniqueAmongSiblings covers C537: the write seam is the
+// one place a duplicate name can be stopped, because eight screens create
+// categories and only one of them ever checked.
+func TestValidateCategoryNameUniqueAmongSiblings(t *testing.T) {
+	existing := []domain.Category{
+		{ID: "auto", Name: "Auto", Kind: domain.KindExpense},
+		{ID: "gas", Name: "Gas", Kind: domain.KindExpense, ParentID: "auto"},
+		{ID: "food", Name: "Food", Kind: domain.KindExpense},
+		{ID: "salary", Name: "Salary", Kind: domain.KindIncome},
+	}
+
+	t.Run("a new top-level duplicate is rejected", func(t *testing.T) {
+		c := domain.Category{ID: "new", Name: "food", Kind: domain.KindExpense}
+		if is := ValidateCategoryInTree(c, existing); is.OK() {
+			t.Fatal("a second top-level Food must be rejected")
+		}
+	})
+
+	t.Run("a duplicate under the same parent is rejected", func(t *testing.T) {
+		c := domain.Category{ID: "new", Name: " GAS ", Kind: domain.KindExpense, ParentID: "auto"}
+		if is := ValidateCategoryInTree(c, existing); is.OK() {
+			t.Fatal("a second Gas under Auto must be rejected regardless of case or spacing")
+		}
+	})
+
+	t.Run("the same name under a different parent is allowed", func(t *testing.T) {
+		c := domain.Category{ID: "new", Name: "Gas", Kind: domain.KindExpense}
+		if is := ValidateCategoryInTree(c, existing); !is.OK() {
+			t.Fatalf("a top-level Gas must be allowed alongside Auto > Gas: %v", is)
+		}
+	})
+
+	t.Run("kind does not excuse a collision", func(t *testing.T) {
+		// An income "Food" beside an expense "Food" is indistinguishable in every
+		// list the app draws, which is exactly the reported complaint.
+		c := domain.Category{ID: "new", Name: "Food", Kind: domain.KindIncome}
+		if is := ValidateCategoryInTree(c, existing); is.OK() {
+			t.Fatal("a same-named income category must still collide")
+		}
+	})
+
+	t.Run("re-saving a category does not collide with itself", func(t *testing.T) {
+		c := domain.Category{ID: "food", Name: "Food", Kind: domain.KindExpense, Color: "#8b5cf6"}
+		if is := ValidateCategoryInTree(c, existing); !is.OK() {
+			t.Fatalf("editing a category must not trip over its own name: %v", is)
+		}
+	})
+
+	t.Run("pre-existing duplicates stay editable", func(t *testing.T) {
+		// The non-hostility guarantee: data that already contains a duplicate pair
+		// must not have both members frozen against every future edit.
+		dupes := append(append([]domain.Category(nil), existing...),
+			domain.Category{ID: "food2", Name: "Food", Kind: domain.KindExpense})
+		c := domain.Category{ID: "food2", Name: "Food", Kind: domain.KindExpense, Color: "#111"}
+		if is := ValidateCategoryInTree(c, dupes); !is.OK() {
+			t.Fatalf("an unrelated edit to an existing duplicate must be allowed: %v", is)
+		}
+		// But renaming it ONTO another taken name is still caught.
+		c2 := domain.Category{ID: "food2", Name: "Auto", Kind: domain.KindExpense}
+		if is := ValidateCategoryInTree(c2, dupes); is.OK() {
+			t.Fatal("renaming onto a taken sibling name must be rejected")
+		}
+	})
+
+	t.Run("the message names the category that already holds it", func(t *testing.T) {
+		c := domain.Category{ID: "new", Name: "food", Kind: domain.KindExpense}
+		is := ValidateCategoryInTree(c, existing)
+		if is.OK() || !strings.Contains(is.Error(), "Food") {
+			t.Fatalf("the error must name the existing category, got %v", is)
+		}
+	})
+}

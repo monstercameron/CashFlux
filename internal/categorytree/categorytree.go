@@ -9,6 +9,7 @@ package categorytree
 import (
 	"sort"
 
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -42,7 +43,10 @@ func Build(cats []domain.Category) []Node {
 		byParent[parent] = append(byParent[parent], c)
 	}
 	for k := range byParent {
-		sort.SliceStable(byParent[k], func(i, j int) bool { return byParent[k][i].Name < byParent[k][j].Name })
+		// C518: natural order, so "Item 9" precedes "Item 10" rather than following
+		// it. catname.Less is the same comparison every flat picker uses, so the
+		// tree and the flat lists cannot disagree about order.
+		sort.SliceStable(byParent[k], func(i, j int) bool { return catname.Less(byParent[k][i].Name, byParent[k][j].Name) })
 	}
 
 	visited := make(map[string]bool, len(cats))

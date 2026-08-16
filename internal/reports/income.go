@@ -57,6 +57,30 @@ func IncomeByCategory(txns []domain.Transaction, start, end time.Time, rates cur
 		if !t.IsIncome() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
+		// C533: attribute a SPLIT deposit per line, so a paycheck split into
+		// salary + bonus shows under both sources rather than landing wholly on
+		// the transaction's own category. Any amount the lines do not cover stays
+		// on the transaction's category, so the rows still sum to the deposit and
+		// this total keeps agreeing with budgeting.ZeroBasedIncome.
+		if t.HasSplits() {
+			var allocated int64
+			for _, s := range t.Splits {
+				conv, err := rates.Convert(s.Amount, rates.Base)
+				if err != nil {
+					return nil, err
+				}
+				totals[s.CategoryID] += conv.Abs().Amount
+				allocated += conv.Abs().Amount
+			}
+			whole, err := rates.Convert(t.Amount, rates.Base)
+			if err != nil {
+				return nil, err
+			}
+			if rest := whole.Abs().Amount - allocated; rest > 0 {
+				totals[t.CategoryID] += rest
+			}
+			continue
+		}
 		conv, err := rates.Convert(t.Amount, rates.Base)
 		if err != nil {
 			return nil, err

@@ -6,6 +6,33 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Category names are compared one way everywhere.** A new pure `catname` package owns the
+  three questions that used to be answered independently in every screen that asked them:
+  when two names are equal (case- and whitespace-insensitive, so "Eating  Out" is not a new
+  category), how a list of them is ordered (natural, so "Item 9" precedes "Item 10"), and how
+  a typed name resolves to a category that already exists (parent-aware and kind-blind).
+- **Duplicate category names are stopped at the write seam.** `PutCategory` now rejects a name
+  already used by a SIBLING - two "Gas" under different parents stay legal, two under the same
+  parent do not. Eight code paths create categories and only one of them ever checked; the rule
+  now lives where it cannot be forgotten. Only an edit that actually sets or changes the name is
+  held to it, so a household that already has a duplicate pair can still edit one.
+- **Picking a parent income source counts its children.** The "by source" income basis matched
+  chosen categories with an exact id test while every other tracked-category test in the app
+  expands descendants first, so ticking "Salary" when deposits are filed under "Salary >
+  Employer A" counted nothing at all - silently. The resolved set is now a type
+  (`budgeting.IncomeSources`) that cannot be built without the expansion.
+- **A split deposit feeds the sources it was actually split across.** Income splits were not
+  decomposed, so a paycheck split into salary + bonus landed wholly on the transaction own
+  category. Both the basis and the per-source rows in the picker now attribute per line, with
+  any uncovered remainder staying on the transaction category so the rows still sum to the
+  deposit.
+- **Income excluded from reports no longer inflates the income you budget with.** The basis
+  counted it; the per-source rows beside it did not.
+- **The income-basis modal previews the month the page is showing.** It anchored its running
+  total on today while the page anchored on the viewed window, so paging back to a closed month
+  meant approving a figure the page would never use. Both now resolve through one helper.
+
 ### Added
 - **SMART categorization — the free, on-device half of filing transactions.** Three pure
   packages that suggest a category with no model, no network and no key: `merchantdict`

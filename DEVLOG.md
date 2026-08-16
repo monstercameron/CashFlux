@@ -1,3 +1,49 @@
+## 2026-08-16 — Three questions about a name, answered in eight places
+
+Cam reported that adding a budget was creating categories with the same name, and asked for it
+to be opt-in. Reading the code, the guard he was missing already existed — `matchExpenseCategory`
+in the add-a-budget form, whose own doc comment calls it "the guard that keeps the create-a-new-
+category default from silently minting a duplicate". It was the only duplicate check in the app,
+and it was wrong in three ways: it read a category snapshot captured at render (the component
+never subscribes to the data revision, and the same submit handler re-reads the store fresh
+thirty lines later for a different list); it only matched expense-kind, so a same-named income
+category was not a collision; and it compared names across the whole tree with no regard for
+parent, so a "Gas" nested under "Auto" satisfied a request for a top-level "Gas" and the budget
+silently attached to whichever sorted first.
+
+That last one is the interesting failure. It is not a duplicate — it is the OPPOSITE, a silent
+reuse of the wrong category — and it is worse, because nothing tells you it happened.
+
+The fix was to stop treating "are these the same name?" as a question each screen answers. The
+new `catname` package owns equality, ordering and resolution, and all three now agree: equality
+folds case and collapses internal whitespace, ordering is natural so "Item 9" precedes "Item 10"
+(Cam's separate complaint about unsorted category lists), and resolution is parent-aware and
+deliberately kind-BLIND, because an income "Investments" beside an expense "Investments" is
+indistinguishable in every list the app draws.
+
+The uniqueness rule then went to the write seam rather than into a ninth screen. The design
+question there was whether to be hostile to data that already contains duplicates. Enforcing it
+unconditionally would freeze both members of an existing pair against every future edit,
+including changing a colour. So the rule only applies when the name is actually being set or
+changed (`catname.NameChanged`) — the remedy for an existing pair is a merge, not a jammed form.
+The full native suite passed unchanged, which is the evidence that this did not break seeding or
+import.
+
+The income-basis work was smaller but the same shape. `ZeroBasedIncome` matched chosen sources
+with an exact id test while every other tracked-category test in `budgeting` expands descendants
+first, so ticking a parent counted nothing. Rather than fix the call sites, the chosen set became
+a type — `IncomeSources`, constructible only through `NewIncomeSources(cats, chosen)` — so the
+expansion cannot be skipped by the next caller. Splits got decomposed at the same time, with the
+uncovered remainder staying on the transaction's own category so the basis total still agrees
+with the per-source rows the picker draws beside it.
+
+And the modal that previews that figure was anchoring on `time.Now()` while the page anchored on
+the viewed window. Cam was looking at July in August, so the number he approved in the modal was
+averaged over different months than the number the page used. One helper now, called by both.
+
+Next: the UI half — the hero that never showed the income he had just configured, the opt-in
+checkbox he asked for, and income-side budgets for savings and investments.
+
 ## 2026-08-15 — The queue was never 250 decisions
 
 Cam's brief on the review modal was that it was too restrictive: no way to work in batches, no

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -136,6 +137,24 @@ func ValidateCategory(c domain.Category) Issues {
 // so the write seam calls both.
 func ValidateCategoryInTree(c domain.Category, existing []domain.Category) Issues {
 	var is Issues
+	// C537: a name must be unique among its SIBLINGS. Two "Gas" categories under
+	// different parents are legitimate — that is how the tree reads — but two
+	// under the same parent are indistinguishable in every list the app draws.
+	//
+	// Only an edit that actually SETS or CHANGES the name is held to the rule
+	// (catname.NameChanged). A household that already has a duplicate pair must
+	// still be able to edit one's color or class; blocking an unrelated field
+	// because of pre-existing data would be hostile, and the remedy for the pair
+	// is a merge, not a jammed form.
+	if catname.NameChanged(existing, c) {
+		if other, clash := catname.Collision(existing, c); clash {
+			where := "at the top level"
+			if c.ParentID != "" {
+				where = "under the same parent"
+			}
+			is.add("name", "is already used by "+other.Name+" "+where)
+		}
+	}
 	if c.ParentID == "" {
 		return is
 	}
