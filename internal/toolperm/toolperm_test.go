@@ -131,3 +131,52 @@ func TestPluralHandlesMultiWordEntities(t *testing.T) {
 		}
 	}
 }
+
+func TestCapabilitiesListEveryWriteToolExactlyOnce(t *testing.T) {
+	// A hand-maintained "what the AI can do" page is a promise that quietly stops
+	// being true. This one is generated from the same table the approval cards
+	// use, so adding a tool changes the page automatically.
+	caps := Capabilities()
+	if len(caps) != len(rules) {
+		t.Fatalf("capabilities = %d, table has %d entries", len(caps), len(rules))
+	}
+	seen := map[string]bool{}
+	for _, c := range caps {
+		if seen[c.Tool] {
+			t.Errorf("%s listed twice", c.Tool)
+		}
+		seen[c.Tool] = true
+		if len(c.Writes) == 0 {
+			t.Errorf("%s appears on the capability sheet with nothing it can change", c.Tool)
+		}
+	}
+}
+
+func TestCapabilitiesAreOrderedSoTheSheetDoesNotReshuffle(t *testing.T) {
+	first := Capabilities()
+	for i := 0; i < 5; i++ {
+		again := Capabilities()
+		for j := range first {
+			if again[j].Tool != first[j].Tool {
+				t.Fatalf("order changed between calls at %d: %q then %q", j, first[j].Tool, again[j].Tool)
+			}
+		}
+	}
+}
+
+func TestThePermanentListIsShortEnoughToActuallyRead(t *testing.T) {
+	// Burying the irreversible actions in a list of thirteen is the same as not
+	// disclosing them.
+	perm := PermanentCapabilities()
+	if len(perm) == 0 {
+		t.Fatal("nothing is listed as permanent, but merges and deletes are")
+	}
+	if len(perm) >= len(Capabilities()) {
+		t.Fatalf("%d of %d capabilities are permanent — the list is not a short one", len(perm), len(Capabilities()))
+	}
+	for _, c := range perm {
+		if c.Reversible {
+			t.Errorf("%s is on the permanent list but reports as reversible", c.Tool)
+		}
+	}
+}

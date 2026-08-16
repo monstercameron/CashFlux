@@ -801,6 +801,47 @@ func registerAssistantSurface() {
 	registerSpendMeter()
 	registerMonthlyReview()
 	registerSpotlight()
+	registerCapabilitySheet()
+}
+
+// registerCapabilitySheet styles the "everything it can change" disclosure (PS7).
+// Collapsed it is a single quiet line; opened it is a plain list, deliberately
+// undesigned — a list of capabilities that looks marketed is a list people stop
+// believing.
+func registerCapabilitySheet() {
+	rule(".asst-cap",
+		prop("width", "100%"),
+	)
+	rule(".asst-cap-summary",
+		prop("display", "inline-block"),
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("cursor", "pointer"),
+		prop("border-bottom", "1px dotted var(--border)"),
+		prop("padding", "0.15rem 0"),
+	)
+	rule(".asst-cap-summary:hover",
+		prop("color", "var(--text)"),
+	)
+	rule(".asst-cap-lead",
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.5rem 0 0.35rem"),
+	)
+	rule(".asst-cap-list",
+		prop("list-style", "none"),
+		prop("margin", "0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+	)
+	rule(".asst-cap-row",
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-dim)"),
+		prop("padding-left", "0.7rem"),
+		prop("border-left", "2px solid var(--border)"),
+	)
 }
 
 // registerSpotlight styles the ring the assistant points with (PS8).

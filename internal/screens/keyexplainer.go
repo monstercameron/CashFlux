@@ -8,6 +8,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/toolperm"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -67,8 +68,43 @@ func KeyExplainer(p keyExplainerProps) ui.Node {
 			whereLine,
 			keyExplainerPoint(icon.Lock, uistate.T("assistant.keyPrivacy")),
 		),
+		capabilitySheet(),
 		Button(css.Class("btn btn-sm btn-primary"), Type("button"),
 			Attr("data-testid", "assistant-key-settings"), OnClick(open), uistate.T("assistant.keyAdd")),
+	)
+}
+
+// capabilitySheet lists everything the assistant is able to CHANGE (PS7).
+//
+// Piggy's "the AI can only ever save your birthday and a support ticket" is a good
+// trust pattern precisely because it is a short, checkable list. Ours is longer, so
+// the honest version leads with the part that actually matters — the two things it
+// can do that cannot be undone — and puts the full list behind a disclosure.
+//
+// It is generated from the same table the approval cards read. A hand-written "what
+// the AI can do" page is a promise that quietly stops being true the first time
+// somebody adds a tool; this one cannot drift, because adding a tool changes it.
+func capabilitySheet() ui.Node {
+	all := toolperm.Capabilities()
+	permanent := toolperm.PermanentCapabilities()
+	if len(all) == 0 {
+		return Fragment()
+	}
+	rows := make([]any, 0, len(all))
+	for _, c := range all {
+		for _, w := range c.Writes {
+			line := w
+			if !c.Reversible {
+				line += " " + uistate.T("assistant.capPermanentMark")
+			}
+			rows = append(rows, Li(css.Class("asst-cap-row"), line))
+		}
+	}
+	list := append([]any{css.Class("asst-cap-list")}, rows...)
+	return Details(css.Class("asst-cap"), Attr("data-testid", "assistant-capabilities"),
+		Summary(css.Class("asst-cap-summary"), uistate.T("assistant.capSummary", len(all), len(permanent))),
+		P(css.Class("asst-cap-lead"), uistate.T("assistant.capLead")),
+		Ul(list...),
 	)
 }
 

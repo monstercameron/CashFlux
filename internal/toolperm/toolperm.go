@@ -18,6 +18,7 @@ package toolperm
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -278,4 +279,56 @@ func plural(n int, entity string) string {
 		words[len(words)-1] = last + "s"
 	}
 	return fmt.Sprintf("%d %s", n, strings.Join(words, " "))
+}
+
+// Capability is one thing the assistant can do, for the capability sheet.
+type Capability struct {
+	// Tool is the tool's name.
+	Tool string
+	// Writes is what it changes, in plain English.
+	Writes []string
+	// Reversible reports whether the change can be undone from Activity.
+	Reversible bool
+}
+
+// Capabilities lists everything the assistant can CHANGE, derived from the same
+// table the approval cards use.
+//
+// It is generated rather than written because a hand-maintained "what the AI can
+// do" page is a promise that quietly stops being true. Piggy's version of this
+// ("the AI can only ever save your birthday and a support ticket") is a good trust
+// pattern precisely because it is a short, checkable list — and the only way ours
+// stays checkable is if adding a tool changes the page automatically.
+//
+// The list is deliberately of WRITES only. "It can read your transactions" is true
+// of the whole app and says nothing; what somebody wants to know before switching
+// this on is the complete set of things it can alter.
+func Capabilities() []Capability {
+	out := make([]Capability, 0, len(rules))
+	for tool, r := range rules {
+		cap := Capability{Tool: tool, Reversible: r.reversible}
+		if r.writes != nil {
+			for _, w := range r.writes(map[string]any{}) {
+				cap.Writes = append(cap.Writes, w.Line())
+			}
+		}
+		if len(cap.Writes) > 0 {
+			out = append(out, cap)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Tool < out[j].Tool })
+	return out
+}
+
+// PermanentCapabilities returns just the ones that cannot be undone — the short
+// list somebody should actually read. Burying two irreversible actions in a list
+// of thirteen is the same as not disclosing them.
+func PermanentCapabilities() []Capability {
+	var out []Capability
+	for _, c := range Capabilities() {
+		if !c.Reversible {
+			out = append(out, c)
+		}
+	}
+	return out
 }

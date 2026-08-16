@@ -7,6 +7,31 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The trust and reference work from the competitive teardown (PS7, PS9, PS10).**
+
+  **A capability sheet the assistant cannot outgrow.** Piggy's "the AI can only ever save your
+  birthday and a support ticket" is a good trust pattern because it is a short, checkable list. Ours
+  is longer, so it leads with the two things that cannot be undone and puts the rest behind a
+  disclosure — burying the irreversible ones in a list of thirteen is the same as not disclosing
+  them. It is generated from the same permission table the approval cards read, because a
+  hand-written "what the AI can do" page is a promise that quietly stops being true the first time
+  somebody adds a tool.
+
+  **Dated tax figures instead of recalled ones.** A model asked "how much can I put in my 401(k)?"
+  answers confidently and a year out, because its recollection is frozen at training time and these
+  change annually — a specific, plausible, actionable, wrong answer, which is the exact shape people
+  act on without checking. The figures now live in a table with a YEAR on them and every quote
+  carries it, so a stale table is visible where a stale recollection is not. A year that isn't in the
+  table is refused rather than approximated from a neighbour, and old years are kept when new ones
+  arrive, because the person doing last year's taxes needs last year's numbers.
+
+  **A diagnostic that's safe to paste in public.** Piggy attaches the whole conversation to a support
+  ticket, which works because their AI is theirs; ours cannot and should not. The local version
+  carries versions, counts, setting SHAPE and recent errors — nothing that identifies anybody — and
+  it is built around the rule that somebody WILL paste it without reading it first. Errors go through
+  a deliberately aggressive redactor: over-redacting costs a maintainer one round trip, while
+  under-redacting puts an API key in a public issue and there is no round trip that fixes that.
+
 - **The assistant can point at a control instead of describing one (PS8).** "Click the button in the
   top right of the accounts page" is the weakest possible answer to "how do I add an account?" — the
   person is looking at the app right now, and a paragraph about a button is strictly worse than the
