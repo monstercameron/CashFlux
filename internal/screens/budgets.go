@@ -79,6 +79,12 @@ type budgetView struct {
 	// SavingsAccts is the per-account breakdown the savings section renders.
 	SavingsAssigned int64
 	SavingsAccts    []savingsAcct
+	// SavingsBudgeted is the total asked for by SAVING budgets this period, and
+	// SavingsMoved is how much has actually been set aside toward them. Kept apart
+	// from TotalLimit/TotalSpent because a contribution target is not a spending
+	// cap and mixing them makes both figures lie.
+	SavingsBudgeted int64
+	SavingsMoved    int64
 	// RolledOver is last month's unspent budget carried into this month's assignable
 	// pool (zero-based view), when the roll-leftover option is on. Raises To Assign.
 	RolledOver int64
@@ -560,7 +566,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	})
 
 	overCount, nearCount := 0, 0
-	var totalSpent, totalLimit, totalOver int64
+	var totalSpent, totalLimit, totalOver, savingsBudgeted, savingsMoved int64
 	for _, s := range statuses {
 		switch s.State {
 		case budgeting.StateOver:
@@ -571,8 +577,19 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		case budgeting.StateNear:
 			nearCount++
 		}
+		limit := s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
+		// C538: a SAVING budget is a contribution target, not a spending cap, so it
+		// must not inflate the spending figures. Folding it into "Budgeted" would
+		// make the hero claim a household plans to spend money it plans to set
+		// aside, and folding its contributions into "Spent" would do the same to
+		// the other figure. It belongs with savings, on the allocation read.
+		if s.Budget.IsSaving() {
+			savingsBudgeted += limit
+			savingsMoved += s.Spent.Amount
+			continue
+		}
 		totalSpent += s.Spent.Amount
-		totalLimit += s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
+		totalLimit += limit
 	}
 
 	// The methodology shapes the view (D6). Resolve each budget's effective method and,
@@ -639,6 +656,16 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	for _, sa := range savingsAccts {
 		savingsAssigned += sa.AssignedBase
 	}
+	// Saving BUDGETS count as assigned to savings too, so the allocation read
+	// shows the whole plan rather than only the account-based half.
+	//
+	// Known overlap, recorded on C540: a household that sets BOTH a savings budget
+	// and a per-account monthly savings figure for the same money would have it
+	// counted twice here. Reconciling the three places savings can be declared
+	// (this, Account.MonthlySavings, and sinking-fund goals) is that ticket's job;
+	// leaving saving budgets out entirely would understate the plan, which is the
+	// worse of the two errors while the reconciliation is outstanding.
+	savingsAssigned += savingsBudgeted
 
 	// C190: sum the monthly set-aside across all active sinking-fund goals.
 	var totalFundSetAside int64
@@ -660,6 +687,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		OverCount: overCount, NearCount: nearCount,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
+		SavingsBudgeted: savingsBudgeted, SavingsMoved: savingsMoved,
 		SavingsAssigned: savingsAssigned, SavingsAccts: savingsAccts,
 		RolledOver:     pooledRollover,
 		LastMonth:      lastMonth,

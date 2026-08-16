@@ -120,6 +120,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			expenseCats = append(expenseCats, c)
 		}
 	}
+	// A saving budget can track any category — that is the whole point of it —
+	// so its picker is not restricted to spending categories. Sorted so both
+	// lists read the same way (C518).
+	pickableCats := catname.Sorted(expenseCats)
 
 	// A budget watches a category. By default we create a NEW category named after the
 	// budget, so a transaction can be assigned to it immediately (closing the loop) —
@@ -150,6 +154,12 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	// outcome of adding a budget. It used to be the default AND it lived behind
 	// the Advanced disclosure, so the common path minted a category named after
 	// the budget with nothing on screen offering the alternative.
+	// C538: which way money has to move for this budget to be doing well. A
+	// spending cap by default — the historical meaning and the common case — with
+	// saving as an explicit choice rather than something guessed from the
+	// categories, so a mistyped category yields a wrong-LOOKING budget rather than
+	// a silently inverted one.
+	direction := ui.UseState(string(domain.DirectionSpend))
 	createCat := ui.UseState(false)
 	toggleCreateCat := ui.UseEvent(func() { createCat.Set(!createCat.Get()) })
 	owner := ui.UseState(domain.GroupOwnerID)
@@ -323,8 +333,9 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		catIDs := []string{finalCatID}
 		seen := map[string]bool{finalCatID: true}
 		selAlso := alsoTrack.Get()
+		saving := domain.BudgetDirection(direction.Get()).IsSaving()
 		for _, c := range app.Categories() {
-			if c.Kind == domain.KindExpense && selAlso[c.ID] && !seen[c.ID] {
+			if (saving || c.Kind == domain.KindExpense) && selAlso[c.ID] && !seen[c.ID] {
 				seen[c.ID] = true
 				catIDs = append(catIDs, c.ID)
 			}
@@ -334,6 +345,9 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, base),
 			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
 			VarName: strings.TrimSpace(ev.VarName.Get()),
+		}
+		if d := domain.BudgetDirection(direction.Get()); d.Valid() {
+			b.Direction = d
 		}
 		if len(catIDs) > 1 {
 			b.CategoryIDs = catIDs
@@ -472,7 +486,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	// It is in the essentials now, not behind Advanced — the category a budget
 	// watches is not an advanced detail, and hiding it is what let the old
 	// create-by-default behaviour run unseen.
-	existingCatOptions := uiw.OptionsFrom(expenseCats,
+	if direction.Get() == string(domain.DirectionSave) {
+		pickableCats = catname.Sorted(categories)
+	}
+	existingCatOptions := uiw.OptionsFrom(pickableCats,
 		func(c domain.Category) string { return c.ID },
 		func(c domain.Category) string { return c.Name },
 		catID.Get())
@@ -589,6 +606,23 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				Div(css.Class("ba-full"),
 					labeledField(uistate.T("common.name"),
 						Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
+				// What this budget measures, before what it watches: the direction
+				// changes which categories are even offered below.
+				Div(css.Class("ba-full"),
+					labeledField(uistate.T("budgets.directionLabel"),
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options: []uiw.SelectOption{
+								{Value: string(domain.DirectionSpend), Label: uistate.T("budgets.directionSpend")},
+								{Value: string(domain.DirectionSave), Label: uistate.T("budgets.directionSave")},
+							},
+							Selected:  direction.Get(),
+							OnChange:  func(v string) { direction.Set(v) },
+							AriaLabel: uistate.T("budgets.directionLabel"),
+							TestID:    "budget-direction",
+						}))),
+				If(direction.Get() == string(domain.DirectionSave),
+					P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-direction-hint"),
+						uistate.T("budgets.directionSaveHint"))),
 				// Which category this budget watches, and whether one gets created.
 				// This used to live behind Advanced with "create a new category" as
 				// the silent default, which is how adding a budget minted twins.
@@ -617,7 +651,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					// Optional multi-category: track more existing categories in this one budget.
 					If(len(expenseCats) > 0, Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.catsAlsoTrack"),
-							ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{Picked: alsoTrack.Get(), OnToggle: toggleAlso})))),
+							ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
+								Picked: alsoTrack.Get(), OnToggle: toggleAlso,
+								Saving: direction.Get() == string(domain.DirectionSave),
+							})))),
 					// Optional cross-category tag tracking: count any charge with these tags,
 					// whatever its category. Comma-separated; parsed + deduped on save.
 					Div(css.Class("ba-full"),

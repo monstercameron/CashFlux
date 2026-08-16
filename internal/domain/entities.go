@@ -726,6 +726,13 @@ type Budget struct {
 	// set, the by-date "needed" reads from the goal's pace instead of being
 	// re-derived here. Empty = no linked goal. Additive.
 	LinkedGoalID string `json:"linkedGoalId,omitempty"`
+	// Direction is which way money has to move for this budget to be doing well:
+	// empty (DirectionSpend) is the historical spending cap, DirectionSave makes
+	// it a contribution target where reaching the amount is the goal. Additive and
+	// zero-valued, so every existing budget loads as a spending cap with no
+	// migration. See domain.BudgetDirection for why it is explicit rather than
+	// inferred from the tracked categories.
+	Direction BudgetDirection `json:"direction,omitempty"`
 	// RolloverCapPeriods caps how much unused budget a rollover budget may carry
 	// forward, as a multiple of the period limit: a neglected budget accumulates at
 	// most RolloverCapPeriods × limit of surplus, so a fictional cushion can't build
@@ -735,6 +742,11 @@ type Budget struct {
 	// limits surplus, not debt. Additive.
 	RolloverCapPeriods int `json:"rolloverCapPeriods,omitempty"`
 }
+
+// IsSaving reports whether this budget measures money set aside rather than
+// money spent — the single place the rest of the app asks about direction, so a
+// future third direction has one call site to teach.
+func (b Budget) IsSaving() bool { return b.Direction.IsSaving() }
 
 // HasTarget reports whether the budget has a funding target beyond its limit (BG1).
 func (b Budget) HasTarget() bool { return b.TargetKind != TargetNone && b.TargetKind != "" }

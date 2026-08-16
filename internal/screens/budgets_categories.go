@@ -235,6 +235,12 @@ type budgetCategoryPickerProps struct {
 	OnToggle        func(id string)
 	ExcludeBudgetID string            // a budget id whose own tracking is ignored in the overlap note ("" = none)
 	Meta            map[string]string // categoryID → this-month "N · $X" spend metadata (nil = show none)
+	// Saving reflects the budget's direction. A SPENDING budget offers spending
+	// categories only — an income category cannot accrue against a cap, so
+	// offering one would ship a budget that is broken by construction (C534). A
+	// SAVING budget is the case that needs them, so it offers everything and the
+	// withheld-count note stands down.
+	Saving bool
 }
 
 // budgetCategoryPicker is the reusable "which categories does this budget track"
@@ -273,7 +279,7 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 		// matchesScope requires an expense, see C534/C538) but the picker now says
 		// so, and counts what it withheld.
 		for _, c := range app.Categories() {
-			if c.Kind != domain.KindExpense {
+			if !props.Saving && c.Kind != domain.KindExpense {
 				hiddenKinds++
 				continue
 			}

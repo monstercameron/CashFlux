@@ -6,6 +6,22 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Budgets can measure saving, not only spending.** A new "What this budget measures" choice makes
+  a budget either a spending cap (stay under the amount — the default and the historical meaning) or
+  a contribution target (reach the amount). The reading inverts throughout: reaching the number is
+  the healthy state, and falling short is what gets flagged. A saving budget may track income
+  categories, which a spending budget still may not — one tracking an income category could never
+  accrue at all.
+- **Transfers count toward a saving budget.** Moving $500 from checking to a brokerage is the
+  ordinary way money reaches investments, and transfers are excluded from spending budgets (rightly
+  — money moved between your own accounts was not spent). Direction decides: a transfer is not
+  spending, but it is saving. Only the leg that leaves counts, so a matching pair is never counted
+  twice.
+- **Saving budgets are kept out of the spending figures.** Their amounts feed the income-allocation
+  read rather than "Budgeted" and "Spent", which would otherwise claim a household plans to spend
+  money it plans to set aside.
+
 ### Fixed
 - **Smart categorization stops being a dead end.** Its "these AI features need an inference
   provider" notice named an action — add a key in Settings — and gave no way to take it, which is

@@ -192,6 +192,50 @@ func (s Scope) Valid() bool {
 	}
 }
 
+// BudgetDirection is which way money has to move for a budget to be doing well.
+//
+// Every budget until now was a spending CAP: less is better, and passing the
+// number is the failure. A household that wants to budget its saving or its
+// investing needs the opposite reading — the number is a floor to reach, and
+// passing it is the success. That is not a display detail: it inverts the
+// near/over thresholds, the pace projection, the bar's tone and what the issues
+// rail counts as a problem.
+//
+// It is an explicit field rather than something inferred from the tracked
+// categories' kind, deliberately. Inferring it would silently invert a budget
+// the moment a category was mistyped, and a household with a mixed set would get
+// a reading nobody chose. Explicit means a wrong-looking budget instead of a
+// wrong-behaving one.
+type BudgetDirection string
+
+const (
+	// DirectionSpend is a spending cap: staying under the limit is the goal.
+	// The zero value, so every existing budget keeps its meaning with no
+	// migration.
+	DirectionSpend BudgetDirection = ""
+	// DirectionSave is a contribution target: reaching the amount is the goal.
+	DirectionSave BudgetDirection = "save"
+)
+
+// AllBudgetDirections lists every valid direction in display order.
+var AllBudgetDirections = []BudgetDirection{DirectionSpend, DirectionSave}
+
+func (d BudgetDirection) String() string { return string(d) }
+
+// Valid reports whether d is a known direction.
+func (d BudgetDirection) Valid() bool {
+	switch d {
+	case DirectionSpend, DirectionSave:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsSaving reports whether the budget measures money set aside rather than money
+// spent.
+func (d BudgetDirection) IsSaving() bool { return d == DirectionSave }
+
 // TargetKind is the shape of a budget's optional funding target (BG1). It drives
 // how "still needed to fund this period" is computed beyond the plain limit:
 // refilling back up to a level, setting a fixed amount aside, or accumulating a

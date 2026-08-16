@@ -7039,7 +7039,7 @@ design pass before any code.
   the flat lists are the outliers. Use a natural (alpha-numeric) comparison so "Category 10" sorts
   after "Category 9". AC: every category picker in the app is ordered identically.
 
-- [~] **C519 [PARTIAL — the picker now says what it withholds and counts it (shipped 2026-08-16); unhiding income categories still waits on C538] [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
+- [x] **C519 [DONE 2026-08-16 — the picker explains what it withholds for a spending budget, and offers everything for a saving one] [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
   *"What this budget tracks might not show all categories"*
   Confirmed: `budgetCategoryPicker` skips every category whose `Kind != domain.KindExpense`
   (`budgets_categories.go:268`), so income categories never appear and nothing tells the user they
@@ -7241,7 +7241,7 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   be a stated limitation rather than silence. AC: split income is either attributed per line
   everywhere or named as unsupported in the modal.
 
-- [ ] **C534 [MAJOR][BUDGET] A budget tracking an income category can never accrue.**
+- [x] **C534 [MAJOR][BUDGET] A budget tracking an income category can never accrue.**
   `matchesScope` opens with `if !t.IsExpense() { return false }`
   (`internal/budgeting/budgeting.go:57-60`), so a budget whose tracked category is income-kind has
   `Spent` permanently $0 while its limit still lands in `totalLimit` (`budgets.go:574-575`) — it
@@ -7350,7 +7350,7 @@ Note the domain has only two kinds — `KindIncome` and `KindExpense` (`enums.go
 no savings kind. So "savings/investments" here means whatever the household typed those categories
 as, and the design must not assume.
 
-- [ ] **C538 [MAJOR][BUDGET] Budgets can track income-side categories, with the polarity inverted.** ★
+- [x] **C538 [MAJOR][BUDGET] Budgets can track income-side categories, with the polarity inverted.** ★
   *Design pass first — the evaluation, not just the picker.* A savings or income budget is a FLOOR
   to reach, not a ceiling not to breach: "$500 into investments this month", "$7,000 of salary".
   Under it, at-or-above target is healthy, short is the warning, and the progress bar fills toward
@@ -7367,7 +7367,7 @@ as, and the design must not assume.
   currently cannot accrue at all). AC: one stated direction model, applied in the evaluation, the
   row, the hero and the rail — no call site deciding for itself.
 
-- [ ] **C539 [MAJOR][BUDGET] Contributions to your own savings account are transfers, so they never
+- [x] **C539 [MAJOR][BUDGET] Contributions to your own savings account are transfers, so they never
   count.** ★
   The common shape of "I put $500 into investments" is a TRANSFER from checking to the brokerage,
   and `matchesScope` excludes transfers by construction — `IsExpense()` requires `!IsTransfer()`.
@@ -7382,7 +7382,7 @@ as, and the design must not assume.
   savings account accrues toward its budget exactly once, and a checking-to-checking transfer still
   accrues nowhere.
 
-- [ ] **C540 [MAJOR][BUDGET] Three systems already do part of this — pick one before adding a fourth.** ★
+- [~] **C540 [PARTIAL — saving budgets now feed the allocation read (2026-08-16); the three-way reconciliation with Account.MonthlySavings and sinking-fund goals is still open and CAN double-count] [MAJOR][BUDGET] Three systems already do part of this — pick one before adding a fourth.** ★
   Savings targets exist in the codebase three times over, and none of them is what Cam asked for:
   - **Per-account monthly savings.** `Account.MonthlySavings` (`entities.go:153-158`) plus the
     "Savings & investments" tile (`budgetSavingsWidget`, `budgets_tiles.go:966+`) already assigns a

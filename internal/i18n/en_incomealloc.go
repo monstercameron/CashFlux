@@ -80,6 +80,11 @@ var incomeAllocKeys = Catalog{
 	"categories.mergeTitle":   "Merge “%s” into",
 	"categories.mergeDesc":    "Everything filed under it moves to the category you pick, and it stops existing. Nothing is deleted.",
 	"categories.mergeConfirm": "Merge",
+	// C538: which way money has to move for a budget to be doing well.
+	"budgets.directionLabel":    "What this budget measures",
+	"budgets.directionSpend":    "Spending — stay under the amount",
+	"budgets.directionSave":     "Saving — reach the amount",
+	"budgets.directionSaveHint": "Money you move into savings or investments counts toward it, including transfers between your own accounts.",
 	// C524: the per-category spend report already exists in full — a magnitude
 	// histogram, prior-period deltas, sparklines and a drill-through per bar.
 	// These point at it rather than duplicating it into a second set of numbers.

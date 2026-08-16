@@ -55,10 +55,30 @@ func normalizedLimit(budget domain.Budget, rates currency.Rates) money.Money {
 // so a shared transaction can still contribute the lines an individual budget
 // owns even when a different member paid.
 func matchesScope(budget domain.Budget, t domain.Transaction, start, end time.Time) bool {
-	if !t.IsExpense() {
+	if !inScopeDirection(budget, t) {
 		return false
 	}
 	return dateutil.InRange(t.Date, start, end)
+}
+
+// inScopeDirection decides whether a transaction is the KIND of movement a
+// budget measures.
+//
+// A spending budget counts expenses: negative, and not a transfer. Excluding
+// transfers is right there — money moved between your own accounts was not
+// spent, and counting it would double-report it against the category.
+//
+// A saving budget counts contributions, which are also outflows — money leaving
+// the spending pool — but it must INCLUDE transfers, because the ordinary way to
+// put $500 into investments is a transfer from checking to the brokerage. That
+// is the answer to C539, and it falls out of the direction rather than needing a
+// separate flag: a transfer is not spending, but it IS saving. Only the leg that
+// leaves counts, so the matching pair cannot be counted twice.
+func inScopeDirection(budget domain.Budget, t domain.Transaction) bool {
+	if budget.IsSaving() {
+		return t.Amount.IsNegative()
+	}
+	return t.IsExpense()
 }
 
 // ownsScope reports whether spend attributed to member counts against the budget
@@ -162,8 +182,36 @@ func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end tim
 		Spent:     spent,
 		Remaining: remaining,
 		Percent:   percent(spent, limit),
-		State:     classify(spent, limit, nearThreshold),
+		State:     classifyDirected(budget.Direction, spent, limit, nearThreshold),
 	}, nil
+}
+
+// classifyDirected applies the budget's direction to the raw figures.
+//
+// Spending and saving are the same arithmetic read two opposite ways. Under a
+// spending cap, being under the number is healthy and passing it is the failure.
+// Under a saving target the reading inverts: reaching the number is the SUCCESS,
+// and the state worth flagging is falling short of it. Everything downstream —
+// the near/over counts, the issues rail, the bar's tone — keys off State, so
+// inverting here is what makes one flag mean "needs attention" in both worlds
+// instead of meaning two different things.
+func classifyDirected(dir domain.BudgetDirection, contributed, target money.Money, nearThreshold float64) State {
+	if !dir.IsSaving() {
+		return classify(contributed, target, nearThreshold)
+	}
+	if target.Amount <= 0 {
+		return StateOK // nothing asked for, nothing to fall short of
+	}
+	switch {
+	case contributed.Amount >= target.Amount:
+		return StateOK // funded — the goal, not a breach
+	case float64(contributed.Amount) >= nearThreshold*float64(target.Amount):
+		return StateNear // nearly there
+	}
+	// Short of the target with the period's money already committed elsewhere is
+	// the savings equivalent of overspending: it is the state that needs a
+	// decision, so it carries the same flag the rest of the app already counts.
+	return StateOver
 }
 
 // Evaluate returns the full Status for a budget over [start, end), counting only
