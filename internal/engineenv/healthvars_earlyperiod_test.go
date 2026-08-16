@@ -34,7 +34,7 @@ func earlyPeriodData(now time.Time) Data {
 		Transactions: []domain.Transaction{
 			// Last month: $400 against a $200 limit — comfortably over.
 			{ID: "t-over", AccountID: "chk", CategoryID: "cat-food",
-				Date: time.Date(lastMonth.Year(), lastMonth.Month(), 12, 0, 0, 0, 0, time.UTC),
+				Date:   time.Date(lastMonth.Year(), lastMonth.Month(), 12, 0, 0, 0, 0, time.UTC),
 				Amount: usd(-40_000)},
 			// Income so the model has enough applicable factors to be worth reading.
 			{ID: "i1", AccountID: "chk", Date: now.AddDate(0, -1, 0), Amount: usd(300_000)},
