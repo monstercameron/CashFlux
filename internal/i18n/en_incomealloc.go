@@ -88,7 +88,12 @@ var incomeAllocKeys = Catalog{
 	// C524: the per-category spend report already exists in full — a magnitude
 	// histogram, prior-period deltas, sparklines and a drill-through per bar.
 	// These point at it rather than duplicating it into a second set of numbers.
-	"budgets.seeSpend":      "See where it went",
+	"budgets.seeSpend": "See where it went",
+	// C516: a completion that is billed but carries no text - a reasoning-only
+	// turn, a length cap hit before any visible text, or a filtered response.
+	// Rendering nothing made this indistinguishable from the assistant being
+	// broken, which is exactly how it was reported.
+	"insights.emptyReply":   "The model returned no text this time — the request was charged but produced nothing to show. Try asking again, or rephrase the question.",
 	"budgets.seeSpendTitle": "Spending broken down by category, with last period alongside",
 	// C521: the tracked-categories page inside the budget editor.
 	"budgets.editCatsBack":         "← Back to budget",

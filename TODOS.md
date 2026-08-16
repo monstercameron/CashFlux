@@ -7003,7 +7003,7 @@ design pass before any code.
 
 ### Live defects
 
-- [ ] **C516 [BLOCKER][AI] The assistant answers with a token line and no reply.** ★
+- [~] **C516 [PARTIAL — root cause identified and the silent failure made legible (2026-08-16); the underlying empty completion is upstream] [BLOCKER][AI] The assistant answers with a token line and no reply.** ★
   *"the agent isn't working I only get 'Reply: 479 tokens out · 9,637 in (context) · cost
   unavailable' and no agent response"*
   This is the still-open **L83b** with decisive new evidence. L83b's two hypotheses were (a) a
@@ -7019,6 +7019,21 @@ design pass before any code.
   `tool_calls` reply followed by a text turn renders. AC: no path can render a bubble with zero text
   after a billed completion; if the loop cannot produce text it SAYS so rather than showing nothing.
   Supersedes **L83b**.
+
+  **Traced 2026-08-16.** Both of the hypotheses in this ticket were wrong, and so was L83b's
+  mount-race theory — that retry already exists (`renderMarkdownAttempt`, 3 animation frames) and is
+  not the failing path. The actual mechanism is simpler: the chat loop builds the reply turn as
+  `chatTurn{Text: r.msg.Content}` with no check that the content is non-empty
+  (`insights.go`, the `!ai.WantsTools(r.msg)` branch). A completion can legitimately return BILLED
+  with empty content — a reasoning-only turn, a length cap hit before any visible text, or a
+  filtered response — and the bubble then contains nothing but the usage line. That is precisely
+  Cam's "479 tokens out · 9,637 in · cost unavailable" with no answer. The tool-call loop is NOT at
+  fault: it only emits a reply on the non-tool branch.
+  **Fixed here:** an empty completion now reports itself and invites a retry instead of rendering an
+  empty bubble, so the failure is legible rather than looking like a dead feature.
+  **Still open:** why the model returns empty in Cam's case. That needs the finish_reason plumbed
+  through to the turn (the loop currently discards it) so the message can name the actual cause —
+  length, filter, or reasoning-only — rather than describing the symptom.
 
 ### Already built, just not surfaced
 

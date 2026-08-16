@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The assistant no longer answers with a token line and nothing else.** A completion can come back
+  billed but with no content — a reasoning-only turn, a length cap hit before any visible text, or a
+  filtered response — and the reply bubble was built from that content unchecked, so it rendered as
+  usage figures with no answer. That is indistinguishable from the assistant being broken. An empty
+  completion now says so and invites a retry.
+
 ### Added
 - **Budgets can measure saving, not only spending.** A new "What this budget measures" choice makes
   a budget either a spending cap (stay under the amount — the default and the historical meaning) or

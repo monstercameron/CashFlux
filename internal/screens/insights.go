@@ -418,7 +418,22 @@ func Insights() ui.Node {
 
 				if !ai.WantsTools(r.msg) {
 					loading.Set(false)
-					reply := chatTurn{ID: id.New(), Role: "assistant", Text: r.msg.Content, Usage: total}
+					// C516: a completion can come back BILLED but with no content —
+					// a reasoning-only turn, a length cap hit before any visible
+					// text, or a filtered response. The turn was then created with
+					// an empty Text, which rendered as a bubble containing nothing
+					// but the token line: "Reply: 479 tokens out · 9,637 in · cost
+					// unavailable" and no answer. That is indistinguishable from the
+					// assistant being broken, and it is the exact report.
+					//
+					// An empty answer is a failure, so it is reported as one, with
+					// the retry the user would otherwise have to discover by
+					// reopening the thread.
+					text := r.msg.Content
+					if strings.TrimSpace(text) == "" {
+						text = uistate.T("insights.emptyReply")
+					}
+					reply := chatTurn{ID: id.New(), Role: "assistant", Text: text, Usage: total}
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
 					// AG20: feed this turn's token spend into the per-conversation
 					// receipt (cost estimated from the resolved model).
