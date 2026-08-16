@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Production deploys were silently not happening.** The droplet's deploy hook fires when the `CI`
+  workflow SUCCEEDS on main, and the Playwright lane had grown past its 60-minute ceiling, so every
+  run concluded "cancelled" rather than "success". Pushes kept looking like they shipped while
+  budget.earlcameron.com sat on an old build. The lane is now sharded across four runners, keeping
+  the single-worker-per-runner constraint the Windows runner actually needs.
+
 - **The assistant no longer answers with a token line and nothing else.** A completion can come back
   billed but with no content — a reasoning-only turn, a length cap hit before any visible text, or a
   filtered response — and the reply bubble was built from that content unchecked, so it rendered as

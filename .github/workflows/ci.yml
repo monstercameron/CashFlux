@@ -64,17 +64,34 @@ jobs:
           go build -o /dev/null ./cmd/cashflux-portal
 
   e2e:
-    name: E2E regression (Playwright)
+    name: E2E regression (Playwright) ${{ matrix.shard }}/4
     # Runs on Windows so the committed coverage/a11y/-win32 visual baselines match
     # the runner's rendering. globalSetup builds the wasm; Playwright serves it and
     # drives Chromium. Visual pixel-diffs are a local gate (skipped in CI).
     runs-on: windows-latest
-    # The maintained matrix now covers the hosted app, operator bootstrap/auth,
-    # sync, accessibility, and route regressions. Clean Windows runners have
-    # repeatedly reached the former 30-minute job ceiling while individual
-    # tests remained inside their own strict timeouts. Keep those test-level
-    # gates unchanged and give the complete matrix enough orchestration time.
-    timeout-minutes: 60
+    # SHARDED, because this lane was not merely slow — it was silently breaking
+    # production deploys.
+    #
+    # The suite is 312 tests across 38 files, and playwright.config.mjs pins CI to
+    # ONE worker (a clean Windows runner cannot boot two ~80 MB wasm app instances
+    # without both starving the readiness gate) with 2 retries. Raising the ceiling
+    # from 30 to 60 minutes bought time once; the suite grew past that too, and the
+    # run then concluded "cancelled" rather than "failure".
+    #
+    # That is the part that mattered. The deploy hook on the droplet fires on the
+    # `CI` workflow SUCCEEDING on main (deploy/production/README.md), so a lane
+    # that never finishes means production silently stops updating while every
+    # push still looks like it went out. budget.earlcameron.com sat on 1.6.1
+    # through a whole release train for exactly this reason.
+    #
+    # Sharding keeps the single-worker constraint that the runner actually
+    # requires and buys parallelism from separate runners instead, so each shard
+    # finishes well inside its budget and the workflow can reach "success".
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -102,17 +119,22 @@ jobs:
       # Middle layer of the pyramid: fast wasm component/registry tests via
       # GoWebComponents testkit (mock DOM, no browser). These never run under
       # `go test ./...` (js&&wasm build tag), so they get a dedicated lane here.
+      # One shard runs this: it is the same work every time, so running it four
+      # times would just spend three runners re-proving the same thing.
       - name: WASM component tests (testkit)
+        if: matrix.shard == 1
         run: pwsh tools/wasm-test.ps1
 
-      - name: Run regression suite
+      - name: Run regression suite (shard ${{ matrix.shard }} of 4)
         working-directory: e2e
-        run: npx playwright test --project=chromium
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/4
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          # Unique per shard: artifact names collide otherwise and the upload fails,
+          # which would turn a real test failure into a confusing upload error.
+          name: playwright-report-shard-${{ matrix.shard }}
           path: e2e/playwright-report
           retention-days: 7
