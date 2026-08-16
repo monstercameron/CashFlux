@@ -334,10 +334,20 @@ func reviewScanStrip(props reviewScanStripProps) ui.Node {
 			title, sub = uistate.T("review.scanFailed"), props.Err
 			cls = "rvs-smart is-err"
 		}
+		// There must ALWAYS be a way forward from here. Previously the done state
+		// could render with no button at all — a reply the parser rejected left
+		// "filled 0" and nothing to click, so the only way to retry was closing
+		// and reopening the whole surface. That reads as "it doesn't work".
+		retry := Button(css.Class("btn btn-sm"), Type("button"),
+			Attr("data-testid", "review-scan-again"), OnClick(props.OnScan),
+			uistate.T("review.scanAgain"))
 		if props.CanUse {
-			action = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-				Attr("data-testid", "review-scan-use"), OnClick(props.OnUse),
-				uistate.T("review.useSuggested"))
+			action = Fragment(retry,
+				Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+					Attr("data-testid", "review-scan-use"), OnClick(props.OnUse),
+					uistate.T("review.useSuggested")))
+		} else {
+			action = retry
 		}
 	default:
 		action = Button(css.Class("btn btn-primary btn-sm"), Type("button"),

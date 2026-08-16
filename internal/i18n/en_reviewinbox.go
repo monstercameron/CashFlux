@@ -83,6 +83,7 @@ var reviewInboxKeys = Catalog{
 	"review.scanNoGaps":    "Nothing left for Smart+ to do",
 	"review.scanNoGapsSub": "Your rules, history and the merchant list already covered every merchant here.",
 	"review.scanFailed":    "Smart+ could not finish that scan",
+	"review.scanAgain":     "Scan again",
 	"review.scanSub":       "It reads %d charges at a time and can only pick categories you already have. Costs about %s on your own key.",
 	"review.scanBtn":       "Scan %d charges",
 	"review.scanNotNow":    "Not now",

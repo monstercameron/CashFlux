@@ -279,6 +279,9 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		if len(gapRows) == 0 || scanState.Get() == "scanning" {
 			return
 		}
+		// Clear a previous verdict so "Scan again" visibly restarts rather than
+		// leaving the old result on screen.
+		scanStats.Set([2]int{})
 		// One representative charge per MERCHANT, not per charge: every charge in
 		// a group shares a payee, so asking about all of them buys nothing and
 		// costs linearly.

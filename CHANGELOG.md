@@ -44,6 +44,10 @@ and every commit updates this file under `Unreleased`.
   the first thing you see is no longer the one charge nothing can answer.
 
 ### Fixed
+- **A finished Smart+ scan could leave nothing to click.** When the model's reply parsed to no
+  usable assignments the strip showed "filled 0" with no action at all, so the only way to retry
+  was closing and reopening the surface — indistinguishable from the feature being broken. The
+  finished state now always offers "Scan again".
 - **A category could be assigned to the wrong one of two identically named sub-categories.**
   Categories reached the model as bare leaf names, so "Gas" under Auto and "Gas" under
   Utilities collided in a name-keyed map and resolved to whichever was indexed last.

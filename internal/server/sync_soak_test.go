@@ -30,7 +30,7 @@ import (
 // readable via ListWorkspaces.
 func TestSoakSyncPushPull(t *testing.T) {
 	const (
-		workers        = 32
+		workers         = 32
 		writesPerWorker = 10
 	)
 

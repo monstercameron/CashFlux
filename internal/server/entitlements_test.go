@@ -77,13 +77,13 @@ func TestIsCloudActiveReadsSubscription(t *testing.T) {
 		t.Fatalf("UpsertUser: %v", err)
 	}
 	if err := store.PutSubscription(Subscription{
-		UserID:             "u1",
+		UserID:               "u1",
 		ProviderCustomer:     "cus_active",
 		ProviderSubscription: "sub_active",
-		Status:             "trialing",
-		Plan:               "personal_annual",
-		TrialEnd:           now.Add(time.Hour),
-		UpdatedAt:          now,
+		Status:               "trialing",
+		Plan:                 "personal_annual",
+		TrialEnd:             now.Add(time.Hour),
+		UpdatedAt:            now,
 	}); err != nil {
 		t.Fatalf("PutSubscription: %v", err)
 	}
