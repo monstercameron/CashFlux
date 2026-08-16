@@ -5,7 +5,12 @@ import { test, expect, nav } from "./fixtures.mjs";
 
 test.describe("assistant: pre-send data-sharing preview", () => {
   test("the What's-shared chip expands the disclosure with a token estimate", async ({ app }) => {
-    await nav(app, "/insights");
+    await nav(app, "/assistant");
+    // The disclosure lives in the Chat settings drawer, which has been closed by
+    // default since the assistant was reworked to lead with the conversation.
+    // This test predates that and had been asserting against a control that is
+    // no longer on screen until it is opened.
+    await app.getByTestId("assistant-settings-toggle").click();
     const chip = app.getByTestId("assistant-share-chip");
     await chip.scrollIntoViewIfNeeded();
     await expect(chip).toHaveAttribute("aria-expanded", "false");
