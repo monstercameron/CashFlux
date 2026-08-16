@@ -52,7 +52,11 @@ var i18nBaselines = map[string]int{
 	"../ui":             0,
 	"../uistate":        0,
 	"../widgetrender":   0,
-	"../widgetregistry": 2,
+	// 2→0 (2026-08-16, C362): the spotlight preset's text blocks carry a TextKey
+	// beside their English, so the copy baked into a user's persisted spec
+	// resolves through the catalog at render time instead of being frozen in
+	// whatever language they placed the widget in.
+	"../widgetregistry": 0,
 	"../pages":          0,
 	"../mermaid":        0,
 	"../chartspec":      0,
@@ -259,6 +263,8 @@ func i18nScanDir(t *testing.T, dir string) []string {
 			p := fset.Position(pos)
 			finds = append(finds, fmt.Sprintf("%s:%d %s %q", e.Name(), p.Line, ctx, s))
 		}
+		// Values already reachable through a sibling <Field>Key (C362).
+		hasCatalogKey := map[token.Pos]bool{}
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch node := n.(type) {
 			case *ast.CallExpr:
@@ -289,8 +295,29 @@ func i18nScanDir(t *testing.T, dir string) []string {
 						}
 					}
 				}
+			case *ast.CompositeLit:
+				// A display field paired with a <Field>Key sibling IS reachable by
+				// the catalog — the literal is that key's fallback, not the only
+				// copy of the sentence (C362). Mark its value so the KeyValueExpr
+				// case below leaves it alone. Inspect visits a composite literal
+				// before its elements, so the marks are always in place in time.
+				keyed := map[string]bool{}
+				for _, el := range node.Elts {
+					if kv, ok := el.(*ast.KeyValueExpr); ok {
+						if id, ok := kv.Key.(*ast.Ident); ok && strings.HasSuffix(id.Name, "Key") {
+							keyed[strings.TrimSuffix(id.Name, "Key")] = true
+						}
+					}
+				}
+				for _, el := range node.Elts {
+					if kv, ok := el.(*ast.KeyValueExpr); ok {
+						if id, ok := kv.Key.(*ast.Ident); ok && keyed[id.Name] {
+							hasCatalogKey[kv.Value.Pos()] = true
+						}
+					}
+				}
 			case *ast.KeyValueExpr:
-				if id, ok := node.Key.(*ast.Ident); ok && i18nDisplayFields[id.Name] {
+				if id, ok := node.Key.(*ast.Ident); ok && i18nDisplayFields[id.Name] && !hasCatalogKey[node.Value.Pos()] {
 					if s, lit := i18nClassifyExpr(node.Value); s != "" {
 						record(lit.Pos(), id.Name+":", s)
 					}

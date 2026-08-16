@@ -4,6 +4,7 @@ package notifyfeed
 
 import (
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"testing"
 	"time"
 
@@ -20,8 +21,8 @@ import (
 func TestLargeTransactionCandidates(t *testing.T) {
 	since := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
 	rates := currency.Rates{Base: "USD"}
-	text := func(desc string, amount int64) (string, string) {
-		return "Large charge: " + desc, fmt.Sprintf("%d", amount)
+	text := func(desc string, amount int64) (copytext.Text, copytext.Text) {
+		return copytext.Plain("Large charge: " + desc), copytext.Plain(fmt.Sprintf("%d", amount))
 	}
 	txns := []domain.Transaction{
 		{ID: "a", Desc: "TV", Amount: money.New(-60000, "USD"), Date: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)},    // big, in window
@@ -51,7 +52,7 @@ func TestLargeTransactionCandidates(t *testing.T) {
 func TestLargeTransactionCandidatesZeroThreshold(t *testing.T) {
 	txns := []domain.Transaction{{ID: "a", Amount: money.New(-99999, "USD"), Date: time.Now()}}
 	got, err := LargeTransactionCandidates("r", txns, 0, time.Time{}, currency.Rates{Base: "USD"},
-		func(string, int64) (string, string) { return "", "" })
+		func(string, int64) (copytext.Text, copytext.Text) { return copytext.Text{}, copytext.Text{} })
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -63,8 +64,8 @@ func TestLargeTransactionCandidatesZeroThreshold(t *testing.T) {
 func TestUnusualChargeCandidates(t *testing.T) {
 	since := time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)
 	rates := currency.Rates{Base: "USD"}
-	text := func(payee string, amount, typical int64) (string, string) {
-		return "Unusual charge at " + payee, fmt.Sprintf("%d vs usual %d", amount, typical)
+	text := func(payee string, amount, typical int64) (copytext.Text, copytext.Text) {
+		return copytext.Plain("Unusual charge at " + payee), copytext.Plain(fmt.Sprintf("%d vs usual %d", amount, typical))
 	}
 	exp := func(id, payee string, cents int64, d time.Time) domain.Transaction {
 		return domain.Transaction{ID: id, Payee: payee, Amount: money.New(-cents, "USD"), Date: d}
@@ -104,7 +105,7 @@ func TestUnusualChargeCandidates(t *testing.T) {
 
 func TestUnusualChargeCandidatesGates(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
-	txt := func(string, int64, int64) (string, string) { return "", "" }
+	txt := func(string, int64, int64) (copytext.Text, copytext.Text) { return copytext.Text{}, copytext.Text{} }
 	one := domain.Transaction{ID: "a", Payee: "X", Amount: money.New(-99999, "USD"), Date: time.Now()}
 	// Zero floor disables entirely.
 	if got, _ := UnusualChargeCandidates("r", []domain.Transaction{one}, 0, time.Time{}, rates, txt); got != nil {
@@ -124,8 +125,8 @@ func TestUnusualChargeCandidatesGates(t *testing.T) {
 
 func TestBackupCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
-	text := func(days int) (string, string) {
-		return "Back up your data", fmt.Sprintf("%d days since your last backup", days)
+	text := func(days int) (copytext.Text, copytext.Text) {
+		return copytext.Plain("Back up your data"), copytext.Plain(fmt.Sprintf("%d days since your last backup", days))
 	}
 
 	t.Run("not due yields nothing", func(t *testing.T) {
@@ -192,8 +193,8 @@ func TestStaleBalanceCandidates(t *testing.T) {
 		{ID: "sav", Name: "Savings", Type: domain.TypeSavings, BalanceAsOf: now},               // fresh
 		{ID: "arch", Name: "Old", Type: domain.TypeChecking, BalanceAsOf: old, Archived: true}, // archived → not stale
 	}
-	text := func(name string, days int) (string, string) {
-		return name + " needs an update", fmt.Sprintf("%d days since the last update", days)
+	text := func(name string, days int) (copytext.Text, copytext.Text) {
+		return copytext.Plain(name + " needs an update"), copytext.Plain(fmt.Sprintf("%d days since the last update", days))
 	}
 
 	got := StaleBalanceCandidates("rule-stale", accounts, freshness.DefaultWindows(), now, text)
@@ -232,11 +233,11 @@ func TestBudgetCandidates(t *testing.T) {
 		{Budget: domain.Budget{ID: "fun", Name: "Fun"}, State: budgeting.StateNear},
 		{Budget: domain.Budget{ID: "rent", Name: "Rent"}, State: budgeting.StateOK}, // OK → no candidate
 	}
-	text := func(name string, over bool) (string, string) {
+	text := func(name string, over bool) (copytext.Text, copytext.Text) {
 		if over {
-			return name + " over budget", "over"
+			return copytext.Plain(name + " over budget"), copytext.Plain("over")
 		}
-		return name + " near budget", "near"
+		return copytext.Plain(name + " near budget"), copytext.Plain("near")
 	}
 
 	got := BudgetCandidates("rule-budget", statuses, now, text)
@@ -276,8 +277,8 @@ func TestBillDueCandidates(t *testing.T) {
 		mk("soon", 5),   // within window → warning
 		mk("later", 20), // beyond the 7-day window → excluded
 	}
-	text := func(name string, days int) (string, string) {
-		return name + " due", fmt.Sprintf("%d days", days)
+	text := func(name string, days int) (copytext.Text, copytext.Text) {
+		return copytext.Plain(name + " due"), copytext.Plain(fmt.Sprintf("%d days", days))
 	}
 
 	got := BillDueCandidates("rule-bill", upcoming, 7, now, text)
@@ -308,7 +309,7 @@ func TestBillDueCandidates(t *testing.T) {
 func TestDigestCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 18, 9, 0, 0, 0, time.UTC)
 
-	got := DigestCandidates("rule-digest", notify.WeekKey(now), "Your week", "You spent $X.", now)
+	got := DigestCandidates("rule-digest", notify.WeekKey(now), copytext.Plain("Your week"), copytext.Plain("You spent $X."), now)
 	if len(got) != 1 {
 		t.Fatalf("got %d candidates, want 1: %+v", len(got), got)
 	}
@@ -323,15 +324,15 @@ func TestDigestCandidates(t *testing.T) {
 		t.Errorf("title/body = %q / %q", c.Title, c.Body)
 	}
 	// Empty title → nothing to summarize.
-	if none := DigestCandidates("r", notify.MonthKey(now), "", "", now); none != nil {
+	if none := DigestCandidates("r", notify.MonthKey(now), copytext.Text{}, copytext.Text{}, now); none != nil {
 		t.Errorf("empty title got %+v, want nil", none)
 	}
 }
 
 func TestLowBalanceCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 25, 9, 0, 0, 0, time.UTC)
-	text := func(name string, bal int64) (string, string) {
-		return name + " low", fmt.Sprintf("%d", bal)
+	text := func(name string, bal int64) (copytext.Text, copytext.Text) {
+		return copytext.Plain(name + " low"), copytext.Plain(fmt.Sprintf("%d", bal))
 	}
 
 	mkAsset := func(id string, opening int64) domain.Account {
@@ -475,7 +476,7 @@ func TestStaleBalanceCandidatesNoneStale(t *testing.T) {
 		{ID: "chk", Name: "Checking", Type: domain.TypeChecking, BalanceAsOf: now},
 	}
 	got := StaleBalanceCandidates("r", accounts, freshness.DefaultWindows(), now,
-		func(string, int) (string, string) { return "", "" })
+		func(string, int) (copytext.Text, copytext.Text) { return copytext.Text{}, copytext.Text{} })
 	if len(got) != 0 {
 		t.Errorf("got %d, want 0 (nothing stale)", len(got))
 	}
@@ -483,8 +484,8 @@ func TestStaleBalanceCandidatesNoneStale(t *testing.T) {
 
 func TestPaycheckLandedCandidates(t *testing.T) {
 	now := time.Date(2026, time.June, 25, 10, 0, 0, 0, time.UTC)
-	text := func(desc string, amount int64) (string, string) {
-		return "Paycheck: " + desc, fmt.Sprintf("%d", amount)
+	text := func(desc string, amount int64) (copytext.Text, copytext.Text) {
+		return copytext.Plain("Paycheck: " + desc), copytext.Plain(fmt.Sprintf("%d", amount))
 	}
 	const threshold int64 = 50000 // $500.00
 	const window = 3              // last 3 days

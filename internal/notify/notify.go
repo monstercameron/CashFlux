@@ -14,6 +14,7 @@ package notify
 
 import (
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"time"
 )
@@ -120,11 +121,15 @@ func (r Rule) CanFireAt(t time.Time) bool {
 // browser pop-up. DedupeKey identifies the occurrence so catch-up on repeated
 // opens doesn't re-fire the same thing.
 type Notification struct {
-	ID        string
-	RuleID    string
-	Event     Event
-	Title     string
-	Body      string
+	ID     string
+	RuleID string
+	Event  Event
+	Title  string
+	Body   string
+	// TitleText / BodyText carry the same copy as key + args so it can be
+	// re-rendered in a language chosen after it fired (C362).
+	TitleText copytext.Text
+	BodyText  copytext.Text
 	At        time.Time
 	Severity  Severity
 	DedupeKey string

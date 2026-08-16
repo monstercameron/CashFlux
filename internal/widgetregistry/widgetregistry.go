@@ -231,6 +231,12 @@ var pipelineBindings = map[string]struct {
 // fully custom compound widget composable from a spec — no Go body. The "spotlight"
 // built-in demonstrates the engine: a glyph, a heading, two side-by-side money
 // figures (income/expense, toned), a divider, and a templated caption.
+//
+// The text blocks carry a TextKey as well as their English (C362): a preset's
+// copy is baked into the user's spec when they place the widget, and that spec
+// is persisted, so without a key the English would be frozen into their
+// dashboard forever. Text they type themselves carries no key and is never
+// translated, which is the correct behaviour for it.
 var contentBindings = map[string]struct {
 	kind    domain.WidgetKind
 	style   domain.Style
@@ -242,11 +248,11 @@ var contentBindings = map[string]struct {
 			Mode: domain.LayoutCustom,
 			Blocks: []domain.Block{
 				{Kind: domain.BlockIcon, Bind: "sparkles"},
-				{Kind: domain.BlockText, Text: "This month", Style: domain.Style{FontWeight: "600"}},
+				{Kind: domain.BlockText, TextKey: "widget.spotlightHeading", Text: "This month", Style: domain.Style{FontWeight: "600"}},
 				{Kind: domain.BlockDivider},
 				{Kind: domain.BlockFigure, Bind: "income|currency", ColSpan: 2, Style: domain.Style{Text: "var(--up)"}},
 				{Kind: domain.BlockFigure, Bind: "expense|currency", ColSpan: 2, Style: domain.Style{Text: "var(--down)"}},
-				{Kind: domain.BlockText, Text: "Net {{cashflow_net|signed}} · {{floor(savings_rate)|number}}% saved", Style: domain.Style{Text: "var(--text-dim)"}},
+				{Kind: domain.BlockText, TextKey: "widget.spotlightCaption", Text: "Net {{cashflow_net|signed}} · {{floor(savings_rate)|number}}% saved", Style: domain.Style{Text: "var(--text-dim)"}},
 			},
 		},
 	},

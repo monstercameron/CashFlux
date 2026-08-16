@@ -3,6 +3,7 @@
 package notify
 
 import (
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"time"
 )
@@ -19,7 +20,13 @@ type Candidate struct {
 	At            time.Time // when the occurrence is dated
 	Title         string
 	Body          string
-	Severity      Severity
+	// TitleText / BodyText are the same copy in re-renderable form: a catalog key
+	// plus its arguments (C362). Title/Body remain the finished English so every
+	// existing reader keeps working; a surface that wants to honour a language
+	// chosen AFTER the notification fired resolves these instead.
+	TitleText copytext.Text
+	BodyText  copytext.Text
+	Severity  Severity
 }
 
 // CatchUp turns the candidate occurrences discovered for the gap since the app
@@ -88,6 +95,8 @@ func CatchUp(rules []Rule, candidates []Candidate, now time.Time, log DeliveredL
 				Event:     f.c.Event,
 				Title:     f.c.Title,
 				Body:      f.c.Body,
+				TitleText: f.c.TitleText,
+				BodyText:  f.c.BodyText,
 				At:        f.c.At,
 				Severity:  f.c.Severity,
 				DedupeKey: f.key,

@@ -453,7 +453,9 @@ func renderBlock(spec domain.WidgetSpec, b domain.Block, ctx widgetrender.Render
 	}
 	switch b.Kind {
 	case domain.BlockText:
-		return Div(css.Class("t-body"), Style(style), Text(widgetengine.HydrateBlock(b, sc)))
+		// C362: a preset block's copy resolves through the catalog at render time;
+		// text the user typed carries no key and is left alone.
+		return Div(css.Class("t-body"), Style(style), Text(widgetengine.HydrateBlockWith(b, sc, uistate.T)))
 	case domain.BlockFigure:
 		return Div(ClassStr("fig t-figure "+tw.Fold(tw.FontDisplay, tw.LeadingTight)), Style(style), Text(widgetengine.HydrateBlock(b, sc)))
 	case domain.BlockIcon:

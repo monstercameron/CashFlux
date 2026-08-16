@@ -6,6 +6,7 @@ package uistate
 
 import (
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 
 	"github.com/monstercameron/CashFlux/internal/notifyhistory"
 )
@@ -46,6 +47,16 @@ func feedMessage(it FeedItem) string {
 		return it.Title
 	}
 	return it.Body
+}
+
+// feedMessageText is feedMessage's re-renderable twin: the key+args form of
+// whichever line feedMessage picked, so the archive can be shown in a language
+// chosen after the alert fired (C362).
+func feedMessageText(it FeedItem) copytext.Text {
+	if it.Title != "" {
+		return it.TitleText
+	}
+	return it.BodyText
 }
 
 // ArchiveItems returns the archived records matching an optional case-insensitive
@@ -89,12 +100,13 @@ func SyncFeedToArchive() {
 	}
 	for _, it := range feed {
 		histArchive.Add(notifyhistory.Record{
-			ID:       it.ID,
-			Severity: it.Severity,
-			Message:  feedMessage(it),
-			Route:    RouteForNotifyID(it.ID),
-			At:       it.At,
-			Read:     it.Read,
+			ID:          it.ID,
+			Severity:    it.Severity,
+			Message:     feedMessage(it),
+			MessageText: feedMessageText(it),
+			Route:       RouteForNotifyID(it.ID),
+			At:          it.At,
+			Read:        it.Read,
 		})
 	}
 	saveHistory()

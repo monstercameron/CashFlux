@@ -141,6 +141,10 @@ var vSweepKeys = Catalog{
 	"boot.install":        "Install CashFlux",
 	"boot.iosHintDismiss": "Dismiss install hint",
 	"boot.iosHint":        "On iPhone or iPad: tap Share, then 'Add to Home Screen' to install CashFlux.",
+
+	// ── C362: built-in preset copy that gets persisted into a user's spec ────
+	"widget.spotlightHeading": "This month",
+	"widget.spotlightCaption": "Net {{cashflow_net|signed}} · {{floor(savings_rate)|number}}% saved",
 }
 
 func init() {

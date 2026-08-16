@@ -57,13 +57,13 @@ func notifHistoryRow(props notifHistoryRowProps) ui.Node {
 	if route != "" {
 		rowArgs = append(rowArgs,
 			Attr("role", "button"), Attr("tabindex", "0"),
-			Attr("aria-label", uistate.T("notifications.openResource", rec.Message)),
+			Attr("aria-label", uistate.T("notifications.openResource", archiveMessage(rec))),
 			OnClick(goResource))
 	}
 	rowArgs = append(rowArgs,
 		Span(ClassStr("nhx-dot "+notifySeverityClass(sev)), Attr("aria-hidden", "true")),
 		Div(css.Class("nhx-body"),
-			Div(css.Class("nhx-msg"), rec.Message),
+			Div(css.Class("nhx-msg"), archiveMessage(rec)),
 			Div(css.Class("nhx-foot"),
 				Span(css.Class("nhx-sev-tag"), notifySeverityLabel(sev)),
 				Span(css.Class("nhx-sep"), "·"),
@@ -147,4 +147,21 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 		listArgs = append(listArgs, r)
 	}
 	return Div(bar, Div(listArgs...))
+}
+
+// archiveMessage renders an archived alert through the catalog (C362).
+//
+// The archive used to store only the finished English of whatever language was
+// active when the alert fired, so switching language left history behind — not
+// as a translation gap but as a data loss, since the parts needed to rebuild the
+// sentence had already been discarded. Records now carry key and args; ones
+// written before that fall back to the stored sentence, which is the right
+// answer for them.
+func archiveMessage(rec notifyhistory.Record) string {
+	return rec.MessageText.Resolve(func(key string, args ...any) string {
+		if got := uistate.T(key, args...); got != "" && got != key {
+			return got
+		}
+		return rec.Message
+	})
 }

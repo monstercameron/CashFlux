@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
@@ -66,27 +67,30 @@ func runNotifyCatchUp() {
 
 	var cands []notify.Candidate
 	cands = append(cands, notifyfeed.StaleBalanceCandidates("default-stale", accounts, app.FreshnessWindows(), now,
-		func(name string, days int) (title, body string) {
-			return uistate.T("notify.staleTitle", name), uistate.T("notify.staleBody", days)
+		func(name string, days int) (title, body copytext.Text) {
+			return copytext.Of("notify.staleTitle", uistate.T("notify.staleTitle", name), name),
+				copytext.Of("notify.staleBody", uistate.T("notify.staleBody", days), days)
 		})...)
 	cands = append(cands, notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), billLeadDays, now,
-		func(name string, days int) (title, body string) {
+		func(name string, days int) (title, body copytext.Text) {
 			switch days {
 			case 0:
-				body = uistate.T("notify.billBodyToday")
+				body = copytext.Of("notify.billBodyToday", uistate.T("notify.billBodyToday"))
 			case 1:
-				body = uistate.T("notify.billBodyTomorrow")
+				body = copytext.Of("notify.billBodyTomorrow", uistate.T("notify.billBodyTomorrow"))
 			default:
-				body = uistate.T("notify.billBody", days)
+				body = copytext.Of("notify.billBody", uistate.T("notify.billBody", days), days)
 			}
-			return uistate.T("notify.billTitle", name), body
+			return copytext.Of("notify.billTitle", uistate.T("notify.billTitle", name), name), body
 		})...)
 	cands = append(cands, notifyfeed.BudgetCandidates("default-budget", currentBudgetStatuses(app, now), now,
-		func(name string, over bool) (title, body string) {
+		func(name string, over bool) (title, body copytext.Text) {
 			if over {
-				return uistate.T("notify.budgetOverTitle", name), uistate.T("notify.budgetOverBody")
+				return copytext.Of("notify.budgetOverTitle", uistate.T("notify.budgetOverTitle", name), name),
+					copytext.Of("notify.budgetOverBody", uistate.T("notify.budgetOverBody"))
 			}
-			return uistate.T("notify.budgetNearTitle", name), uistate.T("notify.budgetNearBody")
+			return copytext.Of("notify.budgetNearTitle", uistate.T("notify.budgetNearTitle", name), name),
+				copytext.Of("notify.budgetNearBody", uistate.T("notify.budgetNearBody"))
 		})...)
 	cands = append(cands, digestCandidates(app, now, ruleCfg)...)
 	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
@@ -133,6 +137,11 @@ func runNotifyCatchUp() {
 			At:       n.At.Unix(),
 			Severity: severityString(n.Severity),
 			DueAt:    dueDateFromDedupe(n),
+			// C362: carry the key+args form into the PERSISTED feed, so an
+			// archive written today can be re-rendered in a language chosen
+			// tomorrow. Storing only the finished sentence was a one-way door.
+			TitleText: n.TitleText,
+			BodyText:  n.BodyText,
 		}
 	}
 	uistate.PrependNotifyFeed(feed)
@@ -203,12 +212,12 @@ func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) [
 	weekStart := uistate.CurrentPrefs().WeekStartWeekday()
 	res := period.Week
 	periodKey := notify.WeekKey(now)
-	title := uistate.T("notify.digestTitle")
+	titleKey := "notify.digestTitle"
 	bodyKey := "notify.digestBody"
 	if cfg.EffectiveDigestCadence() == notify.DigestMonthly {
 		res = period.Month
 		periodKey = notify.MonthKey(now)
-		title = uistate.T("notify.digestTitleMonthly")
+		titleKey = "notify.digestTitleMonthly"
 		bodyKey = "notify.digestBodyMonthly"
 	}
 	prev := period.NewWindow(res, now, weekStart).Shift(-1)
@@ -217,7 +226,9 @@ func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) [
 	if err != nil || (flow.Income == 0 && flow.Expense == 0) {
 		return nil
 	}
-	body := uistate.T(bodyKey, fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base))
+	inc, exp := fmtBaseMoney(flow.Income, base), fmtBaseMoney(flow.Expense, base)
+	title := copytext.Of(titleKey, uistate.T(titleKey))
+	body := copytext.Of(bodyKey, uistate.T(bodyKey, inc, exp), inc, exp)
 	return notifyfeed.DigestCandidates("default-digest", periodKey, title, body, now)
 }
 
@@ -244,12 +255,14 @@ func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.Rul
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	since := now.AddDate(0, 0, -30)
 	out, err := notifyfeed.LargeTransactionCandidates("default-large", app.Transactions(), threshold, since, rates,
-		func(desc string, amount int64) (title, body string) {
+		func(desc string, amount int64) (title, body copytext.Text) {
 			label := desc
 			if label == "" {
 				label = uistate.T("notify.largeNoDesc")
 			}
-			return uistate.T("notify.largeTitle", fmtBaseMoney(amount, base)), uistate.T("notify.largeBody", label)
+			amt := fmtBaseMoney(amount, base)
+			return copytext.Of("notify.largeTitle", uistate.T("notify.largeTitle", amt), amt),
+				copytext.Of("notify.largeBody", uistate.T("notify.largeBody", label), label)
 		})
 	if err != nil {
 		return nil
@@ -281,13 +294,14 @@ func unusualChargeCandidates(app *appstate.App, now time.Time, cfg notify.RuleCo
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	since := now.AddDate(0, 0, -30)
 	out, err := notifyfeed.UnusualChargeCandidates("default-unusual", app.Transactions(), floor, since, rates,
-		func(payee string, amount, typical int64) (title, body string) {
+		func(payee string, amount, typical int64) (title, body copytext.Text) {
 			label := payee
 			if label == "" {
 				label = uistate.T("notify.largeNoDesc")
 			}
-			return uistate.T("notify.unusualTitle", label),
-				uistate.T("notify.unusualBody", fmtBaseMoney(amount, base), fmtBaseMoney(typical, base))
+			amt, typ := fmtBaseMoney(amount, base), fmtBaseMoney(typical, base)
+			return copytext.Of("notify.unusualTitle", uistate.T("notify.unusualTitle", label), label),
+				copytext.Of("notify.unusualBody", uistate.T("notify.unusualBody", amt, typ), amt, typ)
 		})
 	if err != nil {
 		return nil
@@ -357,11 +371,12 @@ func backupReminderCandidates(app *appstate.App, now time.Time) []notify.Candida
 		return nil
 	}
 	return notifyfeed.BackupCandidates("default-backup", loadBackupCadence(), loadLastBackup(), now,
-		func(daysSince int) (title, body string) {
+		func(daysSince int) (title, body copytext.Text) {
+			title = copytext.Of("notify.backupTitle", uistate.T("notify.backupTitle"))
 			if daysSince <= 0 {
-				return uistate.T("notify.backupTitle"), uistate.T("notify.backupBodyNever")
+				return title, copytext.Of("notify.backupBodyNever", uistate.T("notify.backupBodyNever"))
 			}
-			return uistate.T("notify.backupTitle"), uistate.T("notify.backupBody", daysSince)
+			return title, copytext.Of("notify.backupBody", uistate.T("notify.backupBody", daysSince), daysSince)
 		})
 }
 
@@ -404,9 +419,10 @@ func lowBalanceCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfi
 		base = "USD"
 	}
 	out, err := notifyfeed.LowBalanceCandidates("default-low-balance", app.Accounts(), app.Transactions(), floor, now,
-		func(name string, balMinor int64) (title, body string) {
-			return uistate.T("notify.lowBalTitle", name),
-				uistate.T("notify.lowBalBody", fmtBaseMoney(balMinor, base))
+		func(name string, balMinor int64) (title, body copytext.Text) {
+			bal := fmtBaseMoney(balMinor, base)
+			return copytext.Of("notify.lowBalTitle", uistate.T("notify.lowBalTitle", name), name),
+				copytext.Of("notify.lowBalBody", uistate.T("notify.lowBalBody", bal), bal)
 		})
 	if err != nil {
 		return nil
@@ -501,13 +517,14 @@ func paycheckLandedCandidates(app *appstate.App, now time.Time, cfg notify.RuleC
 		base = "USD"
 	}
 	out := notifyfeed.PaycheckLandedCandidates("default-paycheck", app.Transactions(), threshold, 3, now,
-		func(desc string, amount int64) (title, body string) {
+		func(desc string, amount int64) (title, body copytext.Text) {
 			label := desc
 			if label == "" {
 				label = uistate.T("notify.largeNoDesc")
 			}
-			return uistate.T("notify.paycheckTitle", fmtBaseMoney(amount, base)),
-				uistate.T("notify.paycheckBody", label)
+			amt := fmtBaseMoney(amount, base)
+			return copytext.Of("notify.paycheckTitle", uistate.T("notify.paycheckTitle", amt), amt),
+				copytext.Of("notify.paycheckBody", uistate.T("notify.paycheckBody", label), label)
 		})
 	return out
 }

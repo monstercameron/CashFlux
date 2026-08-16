@@ -6,7 +6,11 @@
 
 package uistate
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
+)
 
 // FeedItem is one entry in the Notification Center (C75): the title/body of an
 // emitted notification, when it fired, whether the user has read it, the
@@ -27,6 +31,14 @@ type FeedItem struct {
 	// N days" once the date passes — a notification body is written once, but
 	// the obligation keeps aging. Zero for notifications with no due date.
 	DueAt int64 `json:"dueAt,omitempty"`
+	// TitleText / BodyText carry the same copy as a catalog key plus its
+	// arguments (C362). Title/Body remain the English the alert fired with, so
+	// nothing that reads them breaks and pre-existing feed entries keep working;
+	// a reader resolves these when present so a language chosen AFTER the alert
+	// fired still reaches it. Without them the persisted feed was permanently
+	// stuck in whatever language was active when each entry was written.
+	TitleText copytext.Text `json:"titleT,omitempty"`
+	BodyText  copytext.Text `json:"bodyT,omitempty"`
 }
 
 // OverdueDays returns how many whole calendar days past its due date a

@@ -345,11 +345,15 @@ func notifyRow(props notifyRowProps) ui.Node {
 	// Every action's accessible name carries the notification it acts on — a
 	// keyboard/screen-reader pass otherwise hears an indistinguishable list of
 	// "Mark as read" ×N (2026-07-18 assessment).
-	withTitle := func(action string) string { return action + " — " + it.Title }
+	// C362: read the notification's copy through the catalog. An alert fired
+	// under one language setting was previously frozen in it forever, because
+	// only the finished sentence was stored; it now carries its key and args.
+	title := it.ResolvedTitle()
+	withTitle := func(action string) string { return action + " — " + title }
 	// A due-date alert's body is written once, but the obligation keeps aging:
 	// re-render a past-due "due in N days" line as overdue wording instead of
 	// letting yesterday's bill claim it's still "due in 0 days".
-	body := it.Body
+	body := it.ResolvedBody()
 	nowUnix := time.Now().Unix()
 	if od := uistate.OverdueDays(it.DueAt, nowUnix); od > 0 {
 		if od == 1 {
@@ -504,7 +508,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 	if route != "" {
 		mainArgs = append(mainArgs,
 			Attr("role", "button"), Attr("tabindex", "0"),
-			Attr("aria-label", uistate.T("notifications.openResource", it.Title)),
+			Attr("aria-label", uistate.T("notifications.openResource", title)),
 			Attr("data-testid", "notif-open-"+it.ID), OnClick(goResource))
 	}
 	mainArgs = append(mainArgs,
@@ -512,7 +516,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 		Div(css.Class("notif-body"),
 			Div(css.Class("notif-top"),
 				unreadDot,
-				Span(css.Class("notif-title"), it.Title),
+				Span(css.Class("notif-title"), title),
 				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4)))),
 			),
 			If(body != "", P(css.Class("notif-text"), body)),

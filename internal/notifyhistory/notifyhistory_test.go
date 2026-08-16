@@ -3,6 +3,8 @@
 package notifyhistory
 
 import (
+	"encoding/json"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"strings"
 	"testing"
 )
@@ -181,4 +183,57 @@ func itoa(n int) string {
 		b.WriteByte(digits[i])
 	}
 	return b.String()
+}
+
+// ─── C362: a persisted alert must survive a language change ──────────────────
+//
+// The archive stored only the finished English of whatever language was active
+// when the alert fired. That is not a translation gap — it is data loss: the
+// pieces needed to rebuild the sentence were discarded at write time, so no
+// later fix could recover them. A record now carries its key and args.
+func TestArchivedRecordCanBeReRenderedInAnotherLanguage(t *testing.T) {
+	var a Archive
+	a.Add(Record{
+		ID: "n1", Severity: "info", At: 1_700_000_000,
+		Message:     "Your paycheck landed — $4,700.00",
+		MessageText: copytext.Of("notify.paycheckTitle", "Your paycheck landed — %s", "$4,700.00"),
+	})
+
+	blob, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back Archive
+	if err := json.Unmarshal(blob, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(back.Items) != 1 {
+		t.Fatalf("got %d records", len(back.Items))
+	}
+	rec := back.Items[0]
+	fr := func(key string, args ...any) string {
+		if key == "notify.paycheckTitle" {
+			return "Votre salaire est arrivé — " + args[0].(string)
+		}
+		return key
+	}
+	got := rec.MessageText.Resolve(fr)
+	if want := "Votre salaire est arrivé — $4,700.00"; got != want {
+		t.Errorf("re-render = %q, want %q — the stored record did not carry enough "+
+			"to rebuild its own sentence (C362)", got, want)
+	}
+}
+
+// Records written before the key+args field existed must keep working: the
+// stored sentence is the right answer for them, not a blank row.
+func TestLegacyRecordsWithoutKeysStillRender(t *testing.T) {
+	rec := Record{ID: "old", Message: "An alert from before the change"}
+	got := rec.MessageText.Resolve(func(key string, args ...any) string { return "translated" })
+	if got != "" {
+		t.Errorf("an empty MessageText resolved to %q, want empty so the caller falls "+
+			"back to Message", got)
+	}
+	if rec.Message == "" {
+		t.Error("the legacy sentence must still be there to fall back to")
+	}
 }

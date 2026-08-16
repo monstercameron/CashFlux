@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/widgetdata"
@@ -223,9 +224,21 @@ func abs(v float64) float64 {
 // return "". The result is plain text — the renderer splices it into a text node
 // (escaped by the DOM layer), never innerHTML.
 func HydrateBlock(b domain.Block, sc Scope) string {
+	return HydrateBlockWith(b, sc, nil)
+}
+
+// HydrateBlockWith is HydrateBlock with a translator for a block that came from
+// a BUILT-IN preset (C362).
+//
+// A preset's copy is baked into the user's spec when they place the widget and
+// the spec is persisted, so resolving TextKey at RENDER time — rather than
+// freezing English at creation time — is what keeps their dashboard following
+// the language setting. Blocks with no TextKey are text the user typed, and are
+// deliberately left exactly as written.
+func HydrateBlockWith(b domain.Block, sc Scope, tr copytext.Translator) string {
 	switch b.Kind {
 	case domain.BlockText:
-		return RenderTemplate(b.Text, sc)
+		return RenderTemplate(copytext.Text{Key: b.TextKey, Fallback: b.Text}.Resolve(tr), sc)
 	case domain.BlockFigure:
 		if b.Bind == "" {
 			return ""

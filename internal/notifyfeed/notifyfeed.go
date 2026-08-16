@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
@@ -37,7 +38,7 @@ func StaleBalanceCandidates(
 	accounts []domain.Account,
 	windows freshness.Windows,
 	now time.Time,
-	text func(name string, days int) (title, body string),
+	text func(name string, days int) (title, body copytext.Text),
 ) []notify.Candidate {
 	stale := freshness.StaleAccounts(accounts, windows, now)
 	out := make([]notify.Candidate, 0, len(stale))
@@ -49,8 +50,10 @@ func StaleBalanceCandidates(
 			Event:         notify.EventStaleBalance,
 			OccurrenceKey: a.ID + "@" + notify.WeekKey(now),
 			At:            now,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      notify.SeverityWarning,
 		})
 	}
@@ -59,13 +62,14 @@ func StaleBalanceCandidates(
 
 // DigestCandidates returns a periodic summary as a one-element slice, keyed by
 // the given period key (e.g. notify.WeekKey(now) or notify.MonthKey(now)) so the
-// digest surfaces at most once per period. title and body are the already-
-// rendered summary of that period — the caller computes the figures, keeping the
-// localization and number formatting in the UI layer. An empty title yields no
-// candidate (nothing worth summarizing). Returned as a slice so callers append
-// it uniformly alongside the other generators.
-func DigestCandidates(ruleID, periodKey, title, body string, now time.Time) []notify.Candidate {
-	if title == "" {
+// digest surfaces at most once per period. title and body are that period's
+// summary as re-renderable copy — the caller computes the figures, keeping the
+// localization and number formatting in the UI layer, and the key+args form lets
+// the persisted archive be re-rendered in a language chosen later (C362). An
+// empty title yields no candidate (nothing worth summarizing). Returned as a
+// slice so callers append it uniformly alongside the other generators.
+func DigestCandidates(ruleID, periodKey string, title, body copytext.Text, now time.Time) []notify.Candidate {
+	if title.Empty() {
 		return nil
 	}
 	return []notify.Candidate{{
@@ -73,8 +77,10 @@ func DigestCandidates(ruleID, periodKey, title, body string, now time.Time) []no
 		Event:         notify.EventDigest,
 		OccurrenceKey: "digest@" + periodKey,
 		At:            now,
-		Title:         title,
-		Body:          body,
+		Title:         title.String(),
+		Body:          body.String(),
+		TitleText:     title,
+		BodyText:      body,
 		Severity:      notify.SeverityInfo,
 	}}
 }
@@ -91,7 +97,7 @@ func BillDueCandidates(
 	upcoming []bills.Bill,
 	withinDays int,
 	now time.Time,
-	text func(name string, daysUntil int) (title, body string),
+	text func(name string, daysUntil int) (title, body copytext.Text),
 ) []notify.Candidate {
 	if withinDays <= 0 {
 		withinDays = defaultBillWindow
@@ -111,8 +117,10 @@ func BillDueCandidates(
 			Event:         notify.EventBillDue,
 			OccurrenceKey: b.AccountID + "@" + b.DueDate.Format("2006-01-02"),
 			At:            now,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      sev,
 		})
 	}
@@ -131,7 +139,7 @@ func BackupCandidates(
 	cadence backup.Cadence,
 	lastBackupAt time.Time,
 	now time.Time,
-	text func(daysSince int) (title, body string),
+	text func(daysSince int) (title, body copytext.Text),
 ) []notify.Candidate {
 	if !backup.Due(cadence, lastBackupAt, now) {
 		return nil
@@ -146,8 +154,10 @@ func BackupCandidates(
 		Event:         notify.EventBackupDue,
 		OccurrenceKey: "backup@" + periodKey,
 		At:            now,
-		Title:         title,
-		Body:          body,
+		Title:         title.String(),
+		Body:          body.String(),
+		TitleText:     title,
+		BodyText:      body,
 		Severity:      notify.SeverityInfo,
 	}}
 }
@@ -162,7 +172,7 @@ func BudgetCandidates(
 	ruleID string,
 	statuses []budgeting.Status,
 	now time.Time,
-	text func(name string, over bool) (title, body string),
+	text func(name string, over bool) (title, body copytext.Text),
 ) []notify.Candidate {
 	var out []notify.Candidate
 	for _, s := range statuses {
@@ -180,8 +190,10 @@ func BudgetCandidates(
 			Event:         notify.EventBudgetThreshold,
 			OccurrenceKey: s.Budget.ID + ":" + string(s.State) + "@" + notify.MonthKey(now),
 			At:            now,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      sev,
 		})
 	}
@@ -203,7 +215,7 @@ func LowBalanceCandidates(
 	txns []domain.Transaction,
 	floor int64,
 	now time.Time,
-	text func(name string, balanceMinor int64) (title, body string),
+	text func(name string, balanceMinor int64) (title, body copytext.Text),
 ) ([]notify.Candidate, error) {
 	if floor <= 0 {
 		return nil, nil
@@ -226,8 +238,10 @@ func LowBalanceCandidates(
 			Event:         notify.EventLowBalance,
 			OccurrenceKey: "lowbal:" + a.ID + "@" + notify.WeekKey(now),
 			At:            now,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      notify.SeverityWarning,
 		})
 	}
@@ -264,7 +278,7 @@ func PaycheckLandedCandidates(
 	threshold int64,
 	windowDays int,
 	now time.Time,
-	text func(desc string, amount int64) (title, body string),
+	text func(desc string, amount int64) (title, body copytext.Text),
 ) []notify.Candidate {
 	if threshold <= 0 {
 		return nil
@@ -290,8 +304,10 @@ func PaycheckLandedCandidates(
 			Event:         notify.EventPaycheckLanded,
 			OccurrenceKey: "paycheck:" + t.ID,
 			At:            t.Date,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      notify.SeverityInfo,
 		})
 	}
@@ -351,7 +367,7 @@ func UnusualChargeCandidates(
 	floor int64,
 	since time.Time,
 	rates currency.Rates,
-	text func(payee string, amount, typical int64) (title, body string),
+	text func(payee string, amount, typical int64) (title, body copytext.Text),
 ) ([]notify.Candidate, error) {
 	if floor <= 0 {
 		return nil, nil
@@ -410,8 +426,10 @@ func UnusualChargeCandidates(
 				Event:         notify.EventUnusualCharge,
 				OccurrenceKey: "unusual:" + e.t.ID,
 				At:            e.t.Date,
-				Title:         title,
-				Body:          body,
+				Title:         title.String(),
+				Body:          body.String(),
+				TitleText:     title,
+				BodyText:      body,
 				Severity:      notify.SeverityWarning,
 			})
 		}
@@ -432,7 +450,7 @@ func LargeTransactionCandidates(
 	threshold int64,
 	since time.Time,
 	rates currency.Rates,
-	text func(desc string, amount int64) (title, body string),
+	text func(desc string, amount int64) (title, body copytext.Text),
 ) ([]notify.Candidate, error) {
 	if threshold <= 0 {
 		return nil, nil
@@ -458,8 +476,10 @@ func LargeTransactionCandidates(
 			Event:         notify.EventLargeTransaction,
 			OccurrenceKey: "txn:" + t.ID,
 			At:            t.Date,
-			Title:         title,
-			Body:          body,
+			Title:         title.String(),
+			Body:          body.String(),
+			TitleText:     title,
+			BodyText:      body,
 			Severity:      notify.SeverityWarning,
 		})
 	}

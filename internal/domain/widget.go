@@ -314,6 +314,16 @@ type Block struct {
 	Bind    string    `json:"bind,omitempty"`    // BlockFigure formula / BlockDataView target
 	ColSpan int       `json:"colSpan,omitempty"` // width within a block row
 	Style   Style     `json:"style,omitzero"`    // per-block overrides (inherit tile Style)
+	// TextKey names Text's catalog entry when the block came from a BUILT-IN
+	// preset rather than from the user's own typing (C362).
+	//
+	// A preset's copy is baked into the user's spec the moment they place the
+	// widget, and the spec is persisted — so without a key that English is
+	// frozen into their dashboard forever, exactly the way the notification
+	// archive was. The renderer prefers the key and falls back to Text, which is
+	// also what keeps a user's OWN text alone: they typed it, and translating it
+	// would be wrong.
+	TextKey string `json:"textKey,omitempty"`
 }
 
 // Style is a token-first set of presentation overrides. Values should reference

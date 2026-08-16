@@ -12,6 +12,7 @@ package notifyhistory
 
 import (
 	"encoding/json"
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"strings"
 )
@@ -32,6 +33,15 @@ type Record struct {
 	Route    string `json:"route,omitempty"`
 	At       int64  `json:"at"` // unix seconds
 	Read     bool   `json:"read,omitempty"`
+	// MessageText is Message in re-renderable form: the catalog key and the
+	// arguments it was built from (C362).
+	//
+	// Message alone is a one-way door. It is the finished English of whatever
+	// language was active the moment the alert fired, so an archive written
+	// before a language switch could never be re-rendered — the information
+	// needed to rebuild the sentence had already been discarded. Records written
+	// before this field exists keep working: it is empty and Message is used.
+	MessageText copytext.Text `json:"messageT,omitempty"`
 }
 
 // Archive is the ordered set of archived records, newest first.
