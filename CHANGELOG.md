@@ -6,6 +6,48 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The category map's jump links actually jump (C360 follow-up).** The chips shipped as
+  `href="#cat-row-<id>"` links, but the matching id never landed on the ledger row — so every chip
+  pointed at an element that does not exist and the map still did nothing while looking like
+  navigation. An anchor and its target are one change, and a test now fails if they come apart.
+
+- **An edit is written on the tick that notices it, not the tick after (C584/C598).**
+  C584's fix replaced a 4-second autosave ticker with a watcher on the app's own data-revision
+  counter, which removed the reported data loss. It left a smaller version of the same window: the
+  watcher wrote only after a tick of SILENCE, so the earliest a lone edit could reach the store was
+  the second tick, and a refresh fired between the two still came back holding the old value. The
+  end-to-end journey below caught it doing exactly that — an inline limit edit saved, the page
+  refreshed at once, and the pre-edit limit back on the card.
+
+  The watcher now writes on the leading edge and again on the trailing edge, the same shape the
+  settings persist already used: the first tick that sees a change writes immediately, and one more
+  write follows once the changes stop, catching anything that landed mid-serialize. A single edit is
+  durable in half the time; a burst still costs at most one write per tick rather than one per edit.
+  The timing policy moved into `revisionWatcher`, out of the wasm-only persistence file, so it is
+  unit-tested on native Go instead of only observable through a browser.
+
+### Added
+- **An end-to-end journey through a zero-based month (C598).**
+  The other budgets specs check controls. This one checks whether they COMPOSE, in one continuous
+  scenario: switch the household to zero-based, read expected income against what has arrived,
+  create a budget for a category that does not exist yet, edit one limit in place, adjust every
+  budget at once from a preview, drill into a budget's spending, and come back to the period it
+  started in — refreshing after every mutation, because the refresh is the gesture C584 lost data
+  to. It records the shape of the pass (route changes, refreshes survived, state rebuilt by hand)
+  and fails if any of those numbers drift.
+
+  Two details make it honest rather than merely green. It waits for the app's own "the dataset is
+  written" stamp before each refresh instead of sleeping a guessed interval, so a race is reported
+  rather than hidden behind a timeout that happens to be long enough today — which is how the C584
+  residual above surfaced. And it reads an edited limit back through the editor rather than off the
+  card, because a budget carrying rollover debt displays its EFFECTIVE cap there; asserting the
+  typed figure appeared on the card would have been asserting the wrong number.
+
+  It navigates by clicking the rail rather than firing a synthetic popstate: after any in-app
+  navigation the router ignores one entirely (C610), so the honest gesture and the working one are
+  the same here.
+
 ### Changed
 - **The budget-notes editor names its action, and a saved note is legible where it lives (C614).**
   A design pass on the feature C613 had just made work, after an adversarial critique of it.

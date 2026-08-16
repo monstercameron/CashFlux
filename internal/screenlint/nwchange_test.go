@@ -350,3 +350,31 @@ func TestDebtDoesNotRenderTheWholeCreditPage(t *testing.T) {
 			"headline as context even though the detail belongs elsewhere (C359)")
 	}
 }
+
+// ─── C360 follow-up: a jump link must have somewhere to jump ─────────────────
+
+// TestCategoryMapLinksHaveTargets pins the half of C360 that shipped broken.
+//
+// The category map's chips became `href="#cat-row-<id>"` jump links, but the
+// matching id never landed on the ledger row — so every chip was a link to an
+// element that does not exist, and the map still did nothing while reading as
+// navigation. An anchor and its target are one change; this fails if they come
+// apart again.
+func TestCategoryMapLinksHaveTargets(t *testing.T) {
+	src, ok := readInternal(t)["screens/categories.go"]
+	if !ok {
+		t.Fatal("screens/categories.go not found")
+	}
+	linksTo := strings.Contains(src, `Href("#cat-row-"+`)
+	hasTarget := strings.Contains(src, `Attr("id", "cat-row-"+`)
+	switch {
+	case linksTo && !hasTarget:
+		t.Error("the category map links to #cat-row-<id> but no row carries that id — " +
+			"every chip is a link to nowhere (C360)")
+	case hasTarget && !linksTo:
+		t.Error("category rows carry a #cat-row-<id> anchor nothing links to (C360)")
+	case !linksTo && !hasTarget:
+		t.Error("the category map is no longer navigation — both the links and their " +
+			"targets are gone (C360)")
+	}
+}

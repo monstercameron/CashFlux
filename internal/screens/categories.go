@@ -696,6 +696,10 @@ func CategoryRow(props categoryRowProps) ui.Node {
 		rowClass += " cat-zero-usage"
 	}
 	return Div(css.Class(rowClass),
+		// C360: the anchor the category map's chips jump to. Shipped without this
+		// in the first pass, so every chip was a link to an id that did not exist —
+		// the map looked like navigation and did nothing.
+		Attr("id", "cat-row-"+c.ID),
 		Span(css.Class("cat-swatch"), Style(map[string]string{"background": catColor(c.Color)})),
 		toggleBtn,
 		Div(css.Class("row-main"),
