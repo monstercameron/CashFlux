@@ -5124,11 +5124,25 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   errors; `go test ./internal/smartengine` green; wasm build rc=0.
 
 ### Sample dataset (the demo is the first impression)
-- [ ] **C349 [MAJOR][SAMPLE] Sample timestamps are absolute and now ~4 years stale**, so first-run
-  shows "It's been 1464 days since the balance was confirmed" ×14 in /notifications, "4y+" chips on
-  the dashboard Freshness tile, OUT OF DATE/STALE badges on every /accounts row, and a 17-month-old
-  "Charged after cancellation" alert. Generate sample dates relative to today (now−3d…now−45d) so
-  the demo looks healthy forever.
+- [x] **C349 ✅ DONE (2026-08-16) — Sample timestamps were absolute, so the demo rots.** Every date
+  in the fixture is now AUTHORED against a fixed anchor (`sampleAuthoredNow`) and shifted to the
+  reader's real month at build time, so the whole timeline — history, balances, recurring schedules,
+  goals, insights — slides together and every internal relationship (the layoff, the crypto arc, the
+  pregnancy) stays exactly as written. `SampleDataset()` keeps its signature; `SampleDatasetAt(now)`
+  is the testable form, because a fixture whose contents depend on the wall clock is the property
+  that caused the rot in the first place.
+  Two traps found while doing it: (1) deriving the monthly loop's anchor from the shifting `date()`
+  helper shifted twice, and made the last generated month collide with the hand-written in-flight
+  month's transaction IDs — the loop walks AUTHORED months and `date()` shifts exactly once;
+  (2) a shifted timeline puts holiday gifts in March, so the five month-of-year conditions in the
+  loop now key off the EMITTED month — a demo whose seasonal charges ignore the calendar is its own
+  kind of broken. Dated PROSE ("Baby fund (due Dec 2026)", "laid off in early 2023") is derived from
+  the shifted dates so the copy can't contradict the ledger. Tests read the fixture at 2026, 2027
+  and 2031: balances confirmed within 200 days, newest transaction within 45 days, ~60 months of
+  history preserved (the window slides, it doesn't move), holiday gifts always in December, no
+  authored year left in the insight copy, and `shiftMonths` clamping Jan 31 → Feb 28 rather than
+  spilling into March. `TestSampleNarrative` now pins the AUTHORED calendar via
+  `SampleDatasetAt(sampleAuthoredNow)`, so the story's arcs stay asserted exactly.
 - [ ] **C350 [MINOR][SAMPLE] Sample story doesn't add up:** goal "saved" totals exceed the linked
   account ($19.1k of goals linked to a $3,480 HYSA); "Pay off Priya's student loan" ($34k target,
   $25k to go) vs the ladder's $18,640 balance; "Joint" accounts not owned by the household (Net

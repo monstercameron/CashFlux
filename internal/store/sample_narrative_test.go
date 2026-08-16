@@ -17,7 +17,7 @@ import (
 // its limit. This is the guard that a future seed edit can't silently bankrupt
 // the Hartleys.
 func TestSampleTrajectory(t *testing.T) {
-	ds := SampleDataset()
+	ds := SampleDatasetAt(sampleAuthoredNow)
 	bal := map[string]int64{}
 	limit := map[string]int64{}
 	for _, a := range ds.Accounts {
@@ -65,7 +65,7 @@ func TestSampleTrajectory(t *testing.T) {
 // uncategorized cluster + a duplicated import), and the spec-backed showcase
 // pages.
 func TestSampleNarrative(t *testing.T) {
-	ds := SampleDataset()
+	ds := SampleDatasetAt(sampleAuthoredNow)
 	ym := func(d time.Time) string { return d.Format("2006-01") }
 
 	salaryByMonth := map[string]string{} // month → payee
@@ -187,7 +187,7 @@ func TestSampleNarrative(t *testing.T) {
 // carry a real SecurityType (not the "other" default), so the Investments page
 // badges each position correctly instead of showing "Other" on everything.
 func TestSampleHoldingsTyped(t *testing.T) {
-	ds := SampleDataset()
+	ds := SampleDatasetAt(sampleAuthoredNow)
 	if len(ds.Holdings) == 0 {
 		t.Fatal("expected seeded holdings")
 	}

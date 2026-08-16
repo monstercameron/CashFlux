@@ -37,10 +37,16 @@ func EmptyDataset() Dataset {
 // thin-margined household: two financed cars (the lifestyle "bad decision"), a
 // credit card they carry from eating out too often, Priya's student loan,
 // frequent travel — and a baby on the way (Priya is three months pregnant as of
-// "today", late June 2026; due ~December 2026). North star: a bigger family home.
+// the dataset's "today"; due about six months later). North star: a bigger
+// family home.
 //
-// It carries 60 months of activity (July 2021 – June 2026, plus the first days
-// of July 2026 in flight) so every trend, chart, report, and forecast has real
+// Dates are AUTHORED against sampleAuthoredNow and shifted to the reader's real
+// present, so the story always opens on the current month however long after it
+// was written the demo is loaded (C349). The authored calendar below is the
+// story's own frame of reference, not the dates anyone will see.
+//
+// It carries 60 months of activity (ending with the first days of the current
+// month in flight) so every trend, chart, report, and forecast has real
 // history — and the history tells a STORY with year-over-year growth and real
 // setbacks:
 //
@@ -114,10 +120,60 @@ func sampleSourceFor(t domain.Transaction) domain.TxnSource {
 	}
 }
 
-func SampleDataset() Dataset {
+// sampleAuthoredNow is the calendar month the sample story was WRITTEN against:
+// its "today" sits in the first days of this month, with sixty full months of
+// history behind it. Every date in the dataset is authored relative to this
+// anchor and shifted to the reader's real present by SampleDatasetAt, so the
+// narrative stays internally consistent while never going stale.
+var sampleAuthoredNow = time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+
+// SampleDataset returns the starter dataset positioned at the current date.
+func SampleDataset() Dataset { return SampleDatasetAt(time.Now()) }
+
+// shiftMonths moves an authored date forward by n whole months, clamping the
+// day to the target month's length so a 31st never spills into the next month.
+func shiftMonths(t time.Time, n int) time.Time {
+	y, m, d := t.Year(), int(t.Month())+n, t.Day()
+	y += (m - 1) / 12
+	m = (m-1)%12 + 1
+	if m < 1 {
+		m += 12
+		y--
+	}
+	// Day 0 of the following month is the last day of this one.
+	if last := time.Date(y, time.Month(m)+1, 0, 0, 0, 0, 0, time.UTC).Day(); d > last {
+		d = last
+	}
+	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+}
+
+// SampleDatasetAt returns the starter dataset as it would read on the given
+// day. Taking "now" as a parameter is what makes the fixture testable: the
+// alternative is a dataset whose contents depend on the wall clock, which is
+// exactly the property that made the old absolute dates rot.
+func SampleDatasetAt(now time.Time) Dataset {
 	usd := func(n int64) money.Money { return money.New(n, "USD") }
 	eur := func(n int64) money.Money { return money.New(n, "EUR") } // for the foreign-trip FX demo
-	date := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
+	// C349: every authored date is shifted by the whole months between when the
+	// story was written and the month the reader is actually in. The sample used
+	// to carry absolute timestamps, so a demo loaded four years later opened on
+	// "It's been 1464 days since the balance was confirmed" fourteen times over,
+	// 4y+ freshness chips, STALE badges on every account row, and a year-old
+	// "charged after cancellation" alert — a first impression of a neglected
+	// ledger rather than of a working one. Shifting the WHOLE timeline by one
+	// offset keeps every internal relationship (the layoff, the crypto arc, the
+	// pregnancy) exactly as authored.
+	shift := (now.Year()-sampleAuthoredNow.Year())*12 + int(now.Month()) - int(sampleAuthoredNow.Month())
+	date := func(y int, m time.Month, d int) time.Time {
+		return shiftMonths(time.Date(y, m, d, 0, 0, 0, 0, time.UTC), shift)
+	}
+	// Copy that names a date must name the SHIFTED one, or the demo's prose
+	// contradicts its own ledger (C349). These are the only user-facing strings
+	// in the fixture that carry a calendar reference.
+	babyDue := date(2026, time.December, 1)
+	babyDueLabel := babyDue.Format("Jan 2006")
+	babyDueMonth := babyDue.Format("January")
+	layoffLabel := date(2023, time.January, 1).Format("January 2006")
 	// Opening balances are stated as of the eve of the modeled history (July
 	// 2021); the 60 months of transactions then carry each account to "today".
 	// BalanceAsOf is when a balance was last CONFIRMED (the freshness anchor,
@@ -253,11 +309,21 @@ func SampleDataset() Dataset {
 	cleared := func(d time.Time) bool { return !d.After(clearedAsOf) }
 
 	// --- 60 months of activity (2021-07 .. 2026-06): five years, four arcs ---
-	start := date(2021, time.July, 1)
+	// The loop walks AUTHORED months: its (y, m) drive transaction IDs and the
+	// narrative's arc indices, and date() shifts each emitted date exactly once.
+	// Deriving the loop anchor from date() instead would shift twice — and the
+	// last generated month would collide with the hand-written in-flight month's
+	// transaction IDs.
+	start := time.Date(2021, time.July, 1, 0, 0, 0, 0, time.UTC)
 	for i := range 60 {
 		ym := start.AddDate(0, i, 0)
 		y, m := ym.Year(), ym.Month()
 		tag := ym.Format("2006-01")
+		// C349: seasonal events key off the month the reader will actually SEE
+		// (season), not the authored one — a shifted timeline must still put
+		// holiday gifts in December and the annual home-insurance premium in
+		// September, or the demo reads as a household with no calendar.
+		season := shiftMonths(ym, shift).Month()
 		v := vr("month", i, 6) // bounded, non-periodic wobble
 		gap := i >= layoffAt && i < rehiredAt
 		// Pregnancy / baby ramp: only the final three months (Apr–Jun 2026).
@@ -357,10 +423,10 @@ func SampleDataset() Dataset {
 			})
 		}
 		txn("hoa", 1, checking, "Birchwood Condo Association", "HOA dues", catHOA, -38000)
-		if m == time.April || m == time.October {
+		if season == time.April || season == time.October {
 			txn("proptax", 12, checking, "County Tax Collector", "Property tax (installment)", catPropTax, -150000)
 		}
-		if m == time.September {
+		if season == time.September {
 			txn("homeins", 7, checking, "SafeHarbor Insurance", "Home insurance (annual)", catHomeInsurance, -140000)
 		}
 		txn("electric", 8, checking, "Metro Power", "Electricity", catElectric, -(8500 + vr("elec", i, 9)*900))
@@ -386,7 +452,7 @@ func SampleDataset() Dataset {
 		if i >= 36 { // Marcus added ChatGPT Plus for the side projects (Jul 2024)
 			txn("chatgpt", 7, card, "OpenAI", "ChatGPT Plus", catSubs, -2000)
 		}
-		if m == time.July { // Amazon Prime annual renewal (yearly-cadence subscription)
+		if season == time.July { // Amazon Prime annual renewal (yearly-cadence subscription)
 			txn("prime", 14, card, "Amazon Prime", "Prime membership (annual)", catSubs, -13900)
 		}
 		if i >= 30 && i <= 41 { // MasterClass: signed up Jan 2024, cancelled Jan 2025
@@ -449,10 +515,10 @@ func SampleDataset() Dataset {
 		}
 		// Holiday gifts every December; a card annual fee every August; the odd
 		// out-of-network ATM fee — small realities that keep Gifts/Fees populated.
-		if m == time.December {
+		if season == time.December {
 			txn("gifts", 18, card, "Various", "Holiday gifts", catGifts, -(26000 + vr("gift", i, 4)*9000))
 		}
-		if m == time.August {
+		if season == time.August {
 			txn("cardfee", 20, card, "Beacon Bank", "Card annual fee", catFees, -9500)
 		}
 		if vr("atmfee", i, 5) == 0 {
@@ -850,7 +916,7 @@ func SampleDataset() Dataset {
 			// Virtual allocation ("earmarks"): the Hartleys have mentally reserved part of their
 			// savings + checking toward the baby and emergency funds WITHOUT moving the money —
 			// so the Goals page shows partly-earmarked coverage and the Earmarks tab has real data.
-			{ID: "goal-baby", Name: "Baby fund (due Dec 2026)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(280000), TargetDate: date(2026, time.December, 1), AccountID: hysa,
+			{ID: "goal-baby", Name: "Baby fund (due " + babyDueLabel + ")", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1200000), CurrentAmount: usd(280000), TargetDate: date(2026, time.December, 1), AccountID: hysa,
 				Allocations: []domain.GoalAllocation{{AccountID: hysa, Amount: usd(300000)}, {AccountID: checking, Amount: usd(200000)}}},
 			{ID: "goal-emergency", Name: "Emergency fund (3 months)", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, TargetAmount: usd(1500000), CurrentAmount: usd(480000), TargetDate: date(2027, time.June, 1), AccountID: hysa,
 				Notes:       "The 2023 layoff drained us to $7,500 — never again. 3 months = ~$15k. Bump the auto-transfer to $400/mo once the car loan's gone.",
@@ -951,9 +1017,9 @@ func SampleDataset() Dataset {
 		},
 		SavedInsights: []domain.SavedInsight{
 			{ID: "insight-dining", Text: "Dining is your biggest leak: it runs roughly $250–$400 over the $300 monthly budget almost every month — about $3,500/year you could redirect to the baby fund or the car loan.", CreatedAt: date(2026, time.May, 2)},
-			{ID: "insight-runway", Text: "Your emergency fund only covers about 1.5 months of expenses right now. With the baby due in December, building this toward three months is the most important near-term move.", CreatedAt: date(2026, time.June, 5)},
+			{ID: "insight-runway", Text: "Your emergency fund only covers about 1.5 months of expenses right now. With the baby due in " + babyDueMonth + ", building this toward three months is the most important near-term move.", CreatedAt: date(2026, time.June, 5)},
 			{ID: "insight-debt", Text: "Between the two car loans, the student loan, and the card, debt payments are over $1,600/month. Paying the card down first (25% APR) saves the most interest.", CreatedAt: date(2026, time.June, 6)},
-			{ID: "insight-jobloss", Text: "You've lived this before: when Marcus was laid off in early 2023, checking bottomed out near $1,200 and you drew down savings for months. Today the fund covers about 1.5 months of expenses — with the baby due in December, growing it toward three months is the single most protective move.", CreatedAt: date(2026, time.June, 8)},
+			{ID: "insight-jobloss", Text: "You've lived this before: when Marcus was laid off in " + layoffLabel + ", checking bottomed out near $1,200 and you drew down savings for months. Today the fund covers about 1.5 months of expenses — with the baby due in " + babyDueMonth + ", growing it toward three months is the single most protective move.", CreatedAt: date(2026, time.June, 8)},
 			{ID: "insight-uncategorized", Text: "There are dozens of imported transactions with raw bank names (VENMO, PAYPAL, ZELLE, STEAM…) still uncategorized. Adding three or four rules — or running the Smart+ scan — would clean most of them up and make every report more accurate.", CreatedAt: date(2026, time.June, 20)},
 			{ID: "insight-streak", Text: "The spring-2024 brokerage streak (+$13,300 over four months) worked out because you took profits — the $8,000 you moved to savings is most of what later covered the car down payments. The habit worth keeping is the cash-out, not the streak.", CreatedAt: date(2026, time.June, 14)},
 		},

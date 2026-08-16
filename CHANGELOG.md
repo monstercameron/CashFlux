@@ -62,6 +62,21 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **The sample dataset no longer goes stale (C349).** It carried absolute timestamps, so loading the
+  demo opened on "It's been 1464 days since the balance was confirmed" fourteen times over in
+  notifications, 4y+ chips on the freshness tile, OUT OF DATE badges on every account row, and a
+  year-old "charged after cancellation" alert. That is a first impression of a neglected ledger, and
+  it is what every screenshot and every reviewer sees first.
+
+  Dates are now authored against a fixed anchor and shifted to the reader's real month, so the whole
+  timeline slides together and every relationship inside the story — the layoff, the crypto arc, the
+  pregnancy — stays exactly as written. Seasonal charges follow the shifted calendar, so holiday
+  gifts stay in December and the annual home-insurance premium stays in September. Copy that names a
+  date derives it from the shifted timeline, so the prose can't contradict the ledger.
+
+  `SampleDatasetAt(now)` is the testable form; the tests read the fixture at 2026, 2027 and 2031,
+  because the property that matters is that it never rots, not that it happens to look right today.
+
 - **A period that has barely started no longer reports itself as going well (C344).** On day 3 of a
   month every budget card read "$0.00 / 0% / On track" and /health scored "Budget adherence 100%".
   Neither is a lie about the data; both are lies about the question. Nothing had happened yet, and a
