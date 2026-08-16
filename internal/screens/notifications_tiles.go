@@ -368,6 +368,7 @@ func notifListWidget(props notifProps) ui.Node {
 				uistate.PostNotice(uistate.T("notifications.dismissedNotice"), false)
 			},
 			OnSnoozeFor: func(days int) { uistate.SnoozeFeedItem(id, time.Now().Unix()+int64(days)*86400) },
+			OnResolve:   func(r uistate.Resolution) { resolveNotification(id, r) },
 		})
 	}
 
@@ -457,4 +458,37 @@ func notifListTile(body ui.Node) ui.Node {
 		ID: "notif-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// resolveNotification performs an alert's direct resolution and dismisses it
+// (C409).
+//
+// Dismissing on success is the point: the alert existed because something needed
+// doing, and leaving it in the feed after it has been done turns the center into
+// a list of things that are already handled — which is how a feed stops being
+// read. A failure leaves the row alone and says why, because a silently
+// disappearing alert with nothing changed is the worst of both.
+func resolveNotification(feedID string, r uistate.Resolution) {
+	app := appstate.Default
+	if app == nil || !r.Resolvable() {
+		return
+	}
+	switch r.Kind {
+	case uistate.ResolveBillPaid:
+		if err := app.MarkOccurrencePaid(r.EntityID, r.Occurrence); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("notifications.resolvedPaid"), false)
+	case uistate.ResolveBalanceConfirmed:
+		if err := app.TouchAccountBalance(r.EntityID, time.Now()); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("notifications.resolvedUpdated"), false)
+	default:
+		return
+	}
+	uistate.DismissFeedItem(feedID)
+	uistate.BumpDataRevision()
 }

@@ -199,7 +199,23 @@ and every commit updates this file under `Unreleased`.
   card carried a legend, but the difference between money that moved and money that has not is the
   whole reason both figures exist, and it should not have to be inferred from two abbreviated chips.
 
+### Added
+- **Resolve an alert from the alert (C409).** A bill-due notification offers "Mark paid" and a
+  stale-balance one offers "Mark updated", instead of sending you to a page to find the row the alert
+  was already about. Resolving dismisses the alert, because leaving it there after the thing is done
+  turns the notification center into a list of handled items — which is how a feed stops being read.
+
+  A notification's id already encodes what it is about, and it is parsed in one place that refuses to
+  guess: an id the parser does not recognise gets no button, because a wrong resolution writes to the
+  wrong entity. "Mark updated" moves only the confirmation date — a stale balance is unverified, not
+  wrong, and rewriting the same figure would log a change that did not happen.
+
 ### Fixed
+- **An alert rule without a label no longer shows its raw id in settings (C410).** Every shipped rule
+  has real copy; an unmapped one used to render the literal "default-unusual" because the fallback
+  handed the id to the translator, which returns unknown keys unchanged. It humanizes now, and a test
+  fails when a rule is added without real copy so the fallback stays a safety net.
+
 - **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
   /categories pointed at the top of a long report, because the report's numbered sections are not in
   the DOM when a browser processes a fragment — "#rpta-04" scrolled nowhere, and a link that appears

@@ -5728,14 +5728,39 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 - [ ] **C408 [MAJOR][NOTIF] Alert evidence + rule test/preview.** Feed candidates carry only
   Title/Body. Add a structured Reason (rule fired, threshold, observed value, entity link) rendered
   as "Why this fired"; alert settings gain a "Test this rule" preview showing what would fire today.
-- [ ] **C409 [MINOR][NOTIF] Direct Resolve actions on actionable alerts.** Bill-due → Mark paid /
-  Remind me; stale account → Mark updated; budget limit → open category — inline on the row
-  (some routes exist in `notifyroutes` — complete the set).
-- [ ] **C410 [MINOR][NOTIF] Copy + navigation fixes.** (a) `notify.billBody` "Due in %d days."
-  special-cases 0 → "Due today" / 1 → "Due tomorrow" (the feed-side fix landed; the i18n template
-  can still render "Due in 0 days"). (b) Humanize rule names in settings — reviewer saw raw
-  `default-unusual`. (c) "Alert settings" deep-links to the anchored alerts subsection, not the
-  top of the full Settings page.
+- [x] **C409 DONE (2026-08-16) - Direct Resolve actions on actionable alerts.** Every notification
+  already links somewhere, which answers "where do I go". The commoner need is "make this go away,
+  correctly", and sending the reader to a page to hunt for the row the alert was already about is a
+  step the app can just take.
+  A feed item's id IS a durable reference to what the alert is about - `notify.DedupeKey` is
+  `ruleID@occurrence`, and each generator builds its occurrence key from the entity. `ResolutionFor`
+  parses that in ONE place rather than each surface picking the string apart, and **refuses to
+  guess**: an id it does not recognise yields no resolution and no button, because a wrong
+  resolution writes to the wrong entity, which is worse than offering nothing. It splits from the
+  RIGHT, because a merged obligation's bill id is `recurring:<id>` and contains its own separator -
+  splitting from the left would cut it in half and mark the wrong thing paid.
+  Bill-due gets **Mark paid** (against the specific occurrence - a bill alert is about ONE month,
+  and marking "the bill" paid without saying which is how a paid mark lands on the wrong one) and
+  stale-balance gets **Mark updated**, backed by a new `TouchAccountBalance` that moves only the
+  confirmation date: the balance is not wrong, it is unverified, and writing the same figure back
+  through PutAccount would log a snapshot for a change that did not happen. Resolving dismisses the
+  alert - leaving it after the thing is done turns the center into a list of handled items, which is
+  how a feed stops being read - while a failure leaves the row and says why.
+  Budget-limit is left as navigation: "open the category" is what the existing link already does, and
+  a budget being over is not a thing a button can resolve.
+- [x] **C410 DONE (2026-08-16) - Copy + navigation fixes.** Checked all three; two were already
+  closed and one was live.
+  **(a) Already fixed.** `notify.billBody` has exactly one call site, and it sits inside a switch
+  that routes 0 to "Due today" and 1 to "Due tomorrow" - the template can no longer be reached with
+  those values. **(c) Already fixed.** Every "Alert settings" entry point calls
+  `OpenGlobalSettingsAt("alerts")`, which opens the settings sheet on the alerts tab rather than at
+  the top.
+  **(b) Was live, in the shape that matters.** Every rule that ships has a mapped label, so the raw
+  id only appears for a rule added WITHOUT one - and the fallback handed the unmapped id straight to
+  the translator, which returns an unknown key unchanged, so the row rendered the literal string
+  "default-unusual". It humanizes now ("default-low-balance" -> "Low balance"), which is a label
+  rather than a leak. `TestEveryAlertRuleHasALabel` keeps that a safety net rather than the norm: it
+  fails when a rule is added without real copy.
 - [ ] **C411 [MINOR][NOTIF] Row interaction ambiguity.** One primary affordance per row (the
   chevron); secondary actions fold into the kebab; hover reveals, keyboard reachable.
 

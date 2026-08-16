@@ -124,7 +124,7 @@ func notifySettings() uic.Node {
 	for _, r := range rules {
 		props := alertRowProps{
 			RuleID:  r.ID,
-			Label:   uistate.T(alertLabelKey(r.ID)),
+			Label:   alertLabel(r.ID),
 			Enabled: cfg.IsEnabled(r.ID),
 		}
 		// Attach threshold controls for rules that expose a user-tunable threshold.
@@ -205,8 +205,36 @@ func alertLabelKey(ruleID string) string {
 	case "default-unusual":
 		return "settings.alert.unusualCharge"
 	default:
+		return ""
+	}
+}
+
+// alertLabel is what the settings row actually shows for a rule (C410).
+//
+// The mapping above covers every rule that ships. The fallback matters for the
+// one that does not yet: previously an unmapped id was handed to the translator,
+// which returns an unknown key unchanged, so the row rendered the literal string
+// "default-unusual" — a raw identifier in a settings list, which is what the
+// reviewer saw. A humanized id is not as good as real copy, but it is a label
+// rather than a leak, and TestEveryAlertRuleHasALabel keeps it a safety net
+// rather than the norm.
+func alertLabel(ruleID string) string {
+	if key := alertLabelKey(ruleID); key != "" {
+		return uistate.T(key)
+	}
+	return humanizeRuleID(ruleID)
+}
+
+// humanizeRuleID turns "default-low-balance" into "Low balance".
+func humanizeRuleID(ruleID string) string {
+	s := strings.TrimPrefix(ruleID, "default-")
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, "_", " ")
+	s = strings.TrimSpace(s)
+	if s == "" {
 		return ruleID
 	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 type alertRowProps struct {

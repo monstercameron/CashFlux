@@ -450,3 +450,38 @@ func TestSpendReportLinkLandsOnItsSection(t *testing.T) {
 		t.Error("the spend report is unreachable from /budgets again (C524)")
 	}
 }
+
+// ─── C410 alert-label ratchet ────────────────────────────────────────────────
+
+// TestEveryAlertRuleHasALabel keeps the humanized fallback a safety net.
+//
+// C410: an alert rule with no mapped label was handed straight to the
+// translator, which returns an unknown key unchanged — so the settings row
+// rendered the literal string "default-unusual". A humanized id is a label
+// rather than a leak, but it is still not real copy, and it should never be
+// what a shipped rule shows. This fails when a rule is added without one.
+func TestEveryAlertRuleHasALabel(t *testing.T) {
+	files := readInternal(t)
+	rules, ok := files["notify/defaults.go"]
+	if !ok {
+		t.Fatal("notify/defaults.go not found")
+	}
+	settings, ok := files["app/settings.go"]
+	if !ok {
+		t.Fatal("app/settings.go not found")
+	}
+	ids := regexp.MustCompile(`ID:\s*"(default-[a-z-]+)"`).FindAllStringSubmatch(rules, -1)
+	if len(ids) == 0 {
+		t.Fatal("found no default rule ids — this guard would pass vacuously")
+	}
+	for _, m := range ids {
+		if !strings.Contains(settings, `case "`+m[1]+`":`) {
+			t.Errorf("alert rule %q has no label case in alertLabelKey — its settings row "+
+				"would fall back to a humanized id instead of real copy (C410)", m[1])
+		}
+	}
+	// And the fallback must still exist, or a future rule leaks its id again.
+	if !strings.Contains(settings, "func humanizeRuleID(") {
+		t.Error("the humanized fallback is gone; an unmapped rule would render its raw id")
+	}
+}

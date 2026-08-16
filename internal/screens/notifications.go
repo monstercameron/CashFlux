@@ -307,6 +307,10 @@ type notifyRowProps struct {
 	// OnSnoozeFor snoozes the notification for the given number of days (the
 	// row offers 1 / 7 / 30 — "until tomorrow / next week / next month").
 	OnSnoozeFor func(days int)
+	// OnResolve performs the alert's direct resolution — marking its bill paid,
+	// confirming its account balance (C409). Nil when the alert has none, which
+	// is what hides the button.
+	OnResolve func(uistate.Resolution)
 }
 
 // notifyRow renders one notification as a card: a severity medallion (icon) on the left,
@@ -403,6 +407,15 @@ func notifyRow(props notifyRowProps) ui.Node {
 		}
 		nav.Navigate(uistate.RoutePath(route))
 	}))
+	// C409: the alert's direct resolution, parsed from its id. Declared at a
+	// stable hook position — never inside the conditional that renders it.
+	resolution := uistate.ResolutionFor(it.ID)
+	onResolve := ui.UseEvent(Prevent(func() {
+		if props.OnResolve != nil {
+			props.OnResolve(resolution)
+		}
+	}))
+	resolveLabel := notifyResolveLabel(resolution.Kind)
 	onRead := ui.UseEvent(func() {
 		if props.OnRead != nil {
 			props.OnRead()
@@ -534,6 +547,19 @@ func notifyRow(props notifyRowProps) ui.Node {
 		// secondary actions (snooze horizons, alert settings, dismiss). Revealed on
 		// hover; always shown on touch.
 		Div(css.Class("notif-actions"),
+			// C409: resolve the thing the alert is about, from the alert. Every
+			// notification already links somewhere, which answers "where do I go";
+			// the commoner need is "make this go away, correctly", and sending the
+			// reader to a page to hunt for the row the alert was already about is a
+			// step the app can just take. Only shown when the id names something
+			// resolvable — a wrong resolution writes to the wrong entity, so the
+			// parser refuses to guess and the button simply does not appear.
+			If(resolution.Resolvable() && props.OnResolve != nil,
+				Button(css.Class("notif-primary"), Type("button"),
+					Attr("data-testid", "notif-resolve-"+it.ID),
+					Attr("aria-label", withTitle(resolveLabel)), Title(resolveLabel), OnClick(onResolve),
+					uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)),
+					Span(css.Class("notif-primary-label"), resolveLabel))),
 			Button(css.Class("notif-primary"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
 				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead),
 				uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(css.Class("notif-primary-label"), readLabel)),
@@ -617,4 +643,15 @@ func notifyDueLabel(dueAt, now int64, pr prefs.Prefs) string {
 	default:
 		return pr.FormatDate(time.Unix(dueAt, 0))
 	}
+}
+
+// notifyResolveLabel names the direct action an alert offers (C409).
+func notifyResolveLabel(k uistate.ResolveKind) string {
+	switch k {
+	case uistate.ResolveBillPaid:
+		return uistate.T("notifications.resolveMarkPaid")
+	case uistate.ResolveBalanceConfirmed:
+		return uistate.T("notifications.resolveMarkUpdated")
+	}
+	return ""
 }

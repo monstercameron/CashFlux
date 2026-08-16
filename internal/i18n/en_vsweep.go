@@ -200,6 +200,12 @@ var vSweepKeys = Catalog{
 	// %s = goal name, %s = the old date, %s = the new one.
 	"goals.retargetedNotice": "%s: deadline moved from %s to %s.",
 	"goals.archiveTitle":     "Stop tracking this goal — it stays in your history",
+
+	// ── C409: resolve an alert from the alert ───────────────────────────────
+	"notifications.resolveMarkPaid":    "Mark paid",
+	"notifications.resolveMarkUpdated": "Mark updated",
+	"notifications.resolvedPaid":       "Marked paid.",
+	"notifications.resolvedUpdated":    "Balance confirmed as of today.",
 }
 
 func init() {

@@ -3,6 +3,9 @@
 package appstate
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
@@ -59,4 +62,33 @@ func (a *App) autoRuleFor(payee, desc string, amountMinor int64, accountID strin
 		return ""
 	}
 	return r.ID
+}
+
+// TouchAccountBalance records that an account's balance has been confirmed as of
+// `at`, without changing the balance itself (C409).
+//
+// It is what a stale-balance alert actually needs: the balance is not wrong, it
+// is UNVERIFIED, and the resolution is a person saying "I looked, it's right".
+// Writing the same figure back through PutAccount would log a snapshot for a
+// change that did not happen, so this moves only the confirmation date.
+func (a *App) TouchAccountBalance(accountID string, at time.Time) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	ac, ok, err := a.store.GetAccount(accountID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("appstate: confirm balance: account %q not found", accountID)
+	}
+	if at.IsZero() {
+		at = a.now()
+	}
+	ac.BalanceAsOf = at
+	if err := a.store.PutAccount(ac); err != nil {
+		return err
+	}
+	a.log.Info("account balance confirmed", "accountId", accountID, "asOf", at.Format("2006-01-02"))
+	return nil
 }
