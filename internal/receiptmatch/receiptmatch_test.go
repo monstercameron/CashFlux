@@ -20,9 +20,9 @@ func day(s string) time.Time { d, _ := time.Parse("2006-01-02", s); return d }
 func TestMatchAmountIsTheEntryBar(t *testing.T) {
 	txns := []domain.Transaction{
 		txn("t1", "COSTCO WHOLESALE #123", -8742, "2026-07-10"),
-		txn("t2", "Costco gas", -5000, "2026-07-10"),   // wrong amount
-		txn("t3", "income", 8742, "2026-07-10"),        // income, not an expense
-		txn("t4", "far away", -8742, "2026-06-01"),     // outside the window
+		txn("t2", "Costco gas", -5000, "2026-07-10"), // wrong amount
+		txn("t3", "income", 8742, "2026-07-10"),      // income, not an expense
+		txn("t4", "far away", -8742, "2026-06-01"),   // outside the window
 	}
 	got := Match(8742, "Costco", day("2026-07-11"), txns, 5)
 	if len(got) != 1 || got[0].Txn.ID != "t1" {

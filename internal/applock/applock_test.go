@@ -171,15 +171,15 @@ func TestPasscodeStrength(t *testing.T) {
 	}{
 		{"", StrengthTooShort},
 		{"12", StrengthTooShort},
-		{"abc", StrengthTooShort},  // 3 < min 4
-		{"1111", StrengthWeak},     // all-same
-		{"1234", StrengthWeak},     // ascending run
-		{"4321", StrengthWeak},     // descending run
-		{"abcd", StrengthWeak},     // ascending letters
-		{"7392", StrengthWeak},     // 4 digits, one class, not trivial → weak
-		{"a1b2c3", StrengthFair},   // 6 chars, 2 classes
-		{"hunter2x", StrengthStrong}, // 8 chars, 2 classes (letters+digits)
-		{"correcthorse", StrengthFair}, // 12 chars but 1 class → fair (len>=8)
+		{"abc", StrengthTooShort},        // 3 < min 4
+		{"1111", StrengthWeak},           // all-same
+		{"1234", StrengthWeak},           // ascending run
+		{"4321", StrengthWeak},           // descending run
+		{"abcd", StrengthWeak},           // ascending letters
+		{"7392", StrengthWeak},           // 4 digits, one class, not trivial → weak
+		{"a1b2c3", StrengthFair},         // 6 chars, 2 classes
+		{"hunter2x", StrengthStrong},     // 8 chars, 2 classes (letters+digits)
+		{"correcthorse", StrengthFair},   // 12 chars but 1 class → fair (len>=8)
 		{"Tr0ub4dour&3", StrengthStrong}, // 12 chars, 4 classes
 		{"Aa1!Bb2@", StrengthStrong},     // 8 chars, 4 classes
 	}
@@ -242,12 +242,12 @@ func TestHashPasscodePBKDF2Deterministic(t *testing.T) {
 func TestVerifyPasscodeNewFormat(t *testing.T) {
 	salt := "testsalt"
 	cases := []struct {
-		name      string
-		passcode  string
-		stored    string
-		wantOk    bool
-		wantMigr  bool
-		wantErr   bool
+		name     string
+		passcode string
+		stored   string
+		wantOk   bool
+		wantMigr bool
+		wantErr  bool
 	}{
 		{
 			name:     "correct passcode — new PBKDF2 format",

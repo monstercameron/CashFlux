@@ -36,8 +36,8 @@ func TestResolveEmptyFallsThrough(t *testing.T) {
 
 func TestResolveOrAndSource(t *testing.T) {
 	l := Layers{
-		Defaults:  map[string]string{"theme": "dark"},
-		Member:    map[string]string{"theme": "light"},
+		Defaults: map[string]string{"theme": "dark"},
+		Member:   map[string]string{"theme": "light"},
 	}
 	if got := l.ResolveOr("theme", "x"); got != "light" {
 		t.Errorf("ResolveOr set key = %q, want light", got)

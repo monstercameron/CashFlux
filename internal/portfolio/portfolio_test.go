@@ -16,9 +16,9 @@ func almostEqual(a, b, tol float64) bool {
 
 func TestHoldingValueMinor(t *testing.T) {
 	tests := []struct {
-		name   string
-		h      Holding
-		wantV  int64
+		name  string
+		h     Holding
+		wantV int64
 	}{
 		{
 			name:  "whole shares",
@@ -46,8 +46,8 @@ func TestHoldingValueMinor(t *testing.T) {
 			wantV: 0,
 		},
 		{
-			name:  "banker rounding — 0.5 rounds to nearest even (2)",
-			h:     Holding{Shares: 0.5, CurrentPriceMinorPerShare: 3},
+			name: "banker rounding — 0.5 rounds to nearest even (2)",
+			h:    Holding{Shares: 0.5, CurrentPriceMinorPerShare: 3},
 			// 0.5 * 3 = 1.5 → math.Round → 2
 			wantV: 2,
 		},

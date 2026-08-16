@@ -168,10 +168,10 @@ func TestApplyRulesWithCounts(t *testing.T) {
 		return domain.Transaction{ID: id, AccountID: "ac1", Desc: desc, Date: time.Now(), Amount: money.New(-500, "USD")}
 	}
 	for _, tx := range []domain.Transaction{
-		mk("u1", "Uber ride home"),   // matches uber rule
-		mk("u2", "UberEats dinner"),  // matches uber rule
-		mk("c1", "Starbucks latte"),  // matches coffee rule
-		mk("no", "Grocery store"),    // no match
+		mk("u1", "Uber ride home"),  // matches uber rule
+		mk("u2", "UberEats dinner"), // matches uber rule
+		mk("c1", "Starbucks latte"), // matches coffee rule
+		mk("no", "Grocery store"),   // no match
 		{ID: "tf", AccountID: "ac1", TransferAccountID: "other", Desc: "Uber transfer", Date: time.Now(), Amount: money.New(-500, "USD")},
 	} {
 		if err := a.PutTransaction(tx); err != nil {

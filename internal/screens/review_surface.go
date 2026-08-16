@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -65,6 +66,13 @@ type reviewIndex struct {
 	Rows  []reviewRow
 	Total int // charges still queued
 	Byid  map[string]reviewRow
+	// TxnByID lets the context band resolve link members without rescanning
+	// every transaction per row (it was an O(links x transactions) nested loop).
+	TxnByID map[string]domain.Transaction
+	// Dupes maps a transaction id to the ids it looks like a duplicate of.
+	// Computed once here rather than re-running duplicate detection over the
+	// whole ledger on every render of the single-charge view.
+	Dupes map[string][]string
 }
 
 // tierOf maps a resolver confidence onto a display tier.
@@ -92,6 +100,26 @@ func buildReviewIndex(app *appstate.App) reviewIndex {
 	queue := reviewqueue.QueueOpen(txns, res, time.Now())
 	idx.Total = len(queue)
 
+	// Load the expensive inputs ONCE. Each of these is a KV read plus a JSON
+	// unmarshal, and they used to happen once per merchant.
+	tally := uistate.LoadLearnTally()
+	threshold := uistate.LoadLearnThreshold()
+	cats := app.Categories()
+
+	idx.TxnByID = make(map[string]domain.Transaction, len(txns))
+	for _, t := range txns {
+		idx.TxnByID[t.ID] = t
+	}
+	idx.Dupes = map[string][]string{}
+	for _, g := range dedupe.FindDuplicates(txns) {
+		if len(g.IDs) < 2 {
+			continue
+		}
+		for _, id := range g.IDs {
+			idx.Dupes[id] = g.IDs
+		}
+	}
+
 	// Rank each charge by the confidence of its merchant's suggestion.
 	suggByKey := map[string]catsuggest.Suggestion{}
 	okByKey := map[string]bool{}
@@ -99,7 +127,7 @@ func buildReviewIndex(app *appstate.App) reviewIndex {
 	for _, t := range queue {
 		k := reviewqueue.MerchantKey(t)
 		if _, seen := okByKey[k]; !seen {
-			s, ok := reviewSuggestion(app, t)
+			s, ok := reviewSuggestionWith(app, t, tally, threshold, cats)
 			suggByKey[k], okByKey[k] = s, ok
 		}
 		conf := 0
@@ -122,7 +150,7 @@ func buildReviewIndex(app *appstate.App) reviewIndex {
 // FlushBody, so this owns both the scrolling region and the pinned action bar.
 func ReviewSurfaceBody(_ struct{}) ui.Node {
 	app := appstate.Default
-	_ = uistate.UseDataRevision().Get()
+	rev := uistate.UseDataRevision().Get()
 	open := uistate.UseReviewInbox()
 	pr := uistate.UsePrefs().Get()
 
@@ -195,7 +223,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		return Fragment()
 	}
 
-	idx := buildReviewIndex(app)
+	// Rebuild ONLY when the data actually changes. Selecting a merchant, expanding
+	// a row or switching mode are pure view state, and re-deriving the whole queue
+	// for them is what made every interaction cost ~100-300ms.
+	idx := ui.UseMemo(func() reviewIndex { return buildReviewIndex(app) }, rev, open.Get())
 
 	// catFor resolves what a group will be categorized as: a hand edit wins over
 	// the suggestion, always.
@@ -775,7 +806,7 @@ func reviewSingleView(
 					Attr("data-testid", "review-commit-err"), notice)),
 			),
 		),
-		ui.CreateElement(reviewContextBand, reviewContextBandProps{App: app, Row: row, Txn: cur, Prefs: pr}),
+		ui.CreateElement(reviewContextBand, reviewContextBandProps{App: app, Index: idx, Row: row, Txn: cur, Prefs: pr}),
 	)
 
 	foot := Fragment(

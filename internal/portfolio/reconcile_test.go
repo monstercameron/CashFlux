@@ -105,7 +105,7 @@ func TestReconcile(t *testing.T) {
 func TestReconcilePerAccountBreakdown(t *testing.T) {
 	accts := []AccountValue{
 		{AccountID: "b", Name: "Brokerage", BalanceMinor: 1000000, SecuritiesMinor: 1200000}, // behind
-		{AccountID: "c", Name: "Cash", BalanceMinor: 500000, SecuritiesMinor: 0},              // all untracked
+		{AccountID: "c", Name: "Cash", BalanceMinor: 500000, SecuritiesMinor: 0},             // all untracked
 	}
 	got := Reconcile(accts)
 	// Order preserved.

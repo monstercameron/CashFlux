@@ -17,10 +17,10 @@ func TestAssessRamseyProgression(t *testing.T) {
 	// Has a $1k+ starter fund and no non-mortgage debt, but only 1 month of reserves → current is
 	// Baby Step 3 (full emergency fund).
 	in := Inputs{
-		HasLiquidData:    true,
-		LiquidCashMinor:  2500 * 100,
-		EmergencyMonths:  1.0,
-		KnowsLiabilities: true,
+		HasLiquidData:      true,
+		LiquidCashMinor:    2500 * 100,
+		EmergencyMonths:    1.0,
+		KnowsLiabilities:   true,
 		HasNonMortgageDebt: false,
 	}
 	p = Assess(Ramsey, in)

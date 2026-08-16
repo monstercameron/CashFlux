@@ -235,11 +235,11 @@ var (
 
 // --- color (exact palette hex; theme-var migration is a follow-up) ------------
 var (
-	BgBase    = css.Bg(css.Color(cBase))
-	BgFg      = css.Bg(css.Color(cFg))
-	BgAccent  = css.Bg(css.Color("var(--accent, #2e8b57)")) // brand-accent fill (e.g. the rail logo mark)
-	BgDown    = css.Bg(css.Color(cDown))
-	BgUp      = css.Bg(css.Color(cUp))
+	BgBase   = css.Bg(css.Color(cBase))
+	BgFg     = css.Bg(css.Color(cFg))
+	BgAccent = css.Bg(css.Color("var(--accent, #2e8b57)")) // brand-accent fill (e.g. the rail logo mark)
+	BgDown   = css.Bg(css.Color(cDown))
+	BgUp     = css.Bg(css.Color(cUp))
 	// Foreground text tokens follow the live theme: `var(--text…)` so they flip with
 	// data-theme (the hex fallback equals the dark default, so dark mode is unchanged).
 	// Hardcoding the dark hex made these vanish on white in light mode — e.g. the

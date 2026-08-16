@@ -18,11 +18,11 @@ import (
 // so a store that appears under several raw descriptors, or racks up many small
 // charges, surfaces as the single line a user means by "what's driving this".
 type Driver struct {
-	TxnID  string   // the merchant's most recent contributing transaction (for reference)
-	Label  string   // the merchant's normalized display name
-	Amount int64    // summed magnitude in the budget's limit currency (always positive)
+	TxnID  string    // the merchant's most recent contributing transaction (for reference)
+	Label  string    // the merchant's normalized display name
+	Amount int64     // summed magnitude in the budget's limit currency (always positive)
 	Date   time.Time // the most recent contributing charge
-	Tags   []string // union of the contributing charges' tags (so the UI can spot a recurring driver)
+	Tags   []string  // union of the contributing charges' tags (so the UI can spot a recurring driver)
 }
 
 // TopDrivers returns up to n of the largest MERCHANTS counting toward the budget

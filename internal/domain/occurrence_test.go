@@ -209,10 +209,10 @@ func TestMarkPaid(t *testing.T) {
 func TestPruneOccurrences(t *testing.T) {
 	paid := paidPtr(date(2026, time.January, 1))
 	occs := []RecurringOccurrence{
-		{RecurringID: "r-1", DueDate: date(2025, time.January, 1), PaidAt: paid},  // old
-		{RecurringID: "r-1", DueDate: date(2025, time.June, 1), PaidAt: paid},     // old
-		{RecurringID: "r-1", DueDate: date(2026, time.January, 1), PaidAt: paid},  // on cutoff → kept
-		{RecurringID: "r-1", DueDate: date(2026, time.March, 1), PaidAt: nil},     // recent
+		{RecurringID: "r-1", DueDate: date(2025, time.January, 1), PaidAt: paid},   // old
+		{RecurringID: "r-1", DueDate: date(2025, time.June, 1), PaidAt: paid},      // old
+		{RecurringID: "r-1", DueDate: date(2026, time.January, 1), PaidAt: paid},   // on cutoff → kept
+		{RecurringID: "r-1", DueDate: date(2026, time.March, 1), PaidAt: nil},      // recent
 		{RecurringID: "r-2", DueDate: date(2025, time.December, 31), PaidAt: paid}, // old (one day before cutoff)
 	}
 

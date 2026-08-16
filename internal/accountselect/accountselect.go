@@ -105,7 +105,7 @@ func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefau
 				continue
 			}
 			c := freq[a.ID]
-			if c > bestCount || (c == bestCount && bestID == "" ) {
+			if c > bestCount || (c == bestCount && bestID == "") {
 				bestCount = c
 				bestID = a.ID
 			} else if c == bestCount && a.ID < bestID {

@@ -27,7 +27,7 @@ func TestMeterBarComponent(t *testing.T) {
 		value   float64
 		wantNow string // aria-valuenow after MeterBar's clamp/compute
 	}{
-		{"Groceries", 25, "25"},  // in range → verbatim
+		{"Groceries", 25, "25"},   // in range → verbatim
 		{"Overspent", 150, "100"}, // above max → clamps to full
 		{"Under", -10, "0"},       // below min → clamps to empty
 	}

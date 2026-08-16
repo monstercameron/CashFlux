@@ -31,12 +31,12 @@ func privacyInputs() Inputs {
 
 func TestParseConversationTier(t *testing.T) {
 	cases := map[string]ConversationTier{
-		"aggregates-only": TierAggregatesOnly,
-		"AGGREGATES-ONLY": TierAggregatesOnly,
+		"aggregates-only":   TierAggregatesOnly,
+		"AGGREGATES-ONLY":   TierAggregatesOnly,
 		" aggregates-only ": TierAggregatesOnly,
-		"full":            TierFull,
-		"":                TierFull,
-		"nonsense":        TierFull,
+		"full":              TierFull,
+		"":                  TierFull,
+		"nonsense":          TierFull,
 	}
 	for in, want := range cases {
 		if got := ParseConversationTier(in); got != want {

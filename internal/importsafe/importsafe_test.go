@@ -57,9 +57,9 @@ func TestJumpWarning(t *testing.T) {
 func TestDuplicatesMirrorsDedupeCountAndExplains(t *testing.T) {
 	existing := []domain.Transaction{txn("e1", "a1", "Netflix", -1599, "2026-07-01")}
 	incoming := []domain.Transaction{
-		txn("", "", "NETFLIX ", -1599, "2026-07-01"), // vs ledger (case/space-insensitive)
-		txn("", "", "gym", -3000, "2026-07-02"),      // fresh
-		txn("", "", "gym", -3000, "2026-07-02"),      // repeats within the batch
+		txn("", "", "NETFLIX ", -1599, "2026-07-01"),  // vs ledger (case/space-insensitive)
+		txn("", "", "gym", -3000, "2026-07-02"),       // fresh
+		txn("", "", "gym", -3000, "2026-07-02"),       // repeats within the batch
 		txn("", "a2", "Netflix", -1599, "2026-07-01"), // other account — NOT a dup
 	}
 	dups := Duplicates(incoming, existing, "a1")

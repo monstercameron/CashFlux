@@ -6,10 +6,10 @@ import "testing"
 
 func TestFitBill(t *testing.T) {
 	cases := []struct {
-		name                    string
-		limit, spent, bill      int64
-		wantFits                bool
-		wantOverBy, wantLeft    int64
+		name                 string
+		limit, spent, bill   int64
+		wantFits             bool
+		wantOverBy, wantLeft int64
 	}{
 		{"room to spare", 50000, 20000, 12000, true, 0, 18000},
 		{"exactly to the limit fits", 50000, 38000, 12000, true, 0, 0},

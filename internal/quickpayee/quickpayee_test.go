@@ -74,9 +74,9 @@ func TestRecentPayees(t *testing.T) {
 		{
 			name: "result is ordered most-recent-first",
 			txns: []domain.Transaction{
-				txn("Target", "", 0),   // oldest
-				txn("Amazon", "", 2),   // newest
-				txn("Walmart", "", 1),  // middle
+				txn("Target", "", 0),  // oldest
+				txn("Amazon", "", 2),  // newest
+				txn("Walmart", "", 1), // middle
 			},
 			n:    0,
 			want: []string{"Amazon", "Walmart", "Target"},
@@ -84,7 +84,7 @@ func TestRecentPayees(t *testing.T) {
 		{
 			name: "n positive limits scan to n most-recent transactions",
 			txns: []domain.Transaction{
-				txn("Amazon", "", 3),  // most recent
+				txn("Amazon", "", 3), // most recent
 				txn("Walmart", "", 2),
 				txn("Target", "", 1),
 				txn("Costco", "", 0), // oldest — outside n=3 window
@@ -121,7 +121,7 @@ func TestRecentPayees(t *testing.T) {
 				}
 				return out
 			}(),
-			n:    0,
+			n: 0,
 			want: func() []string {
 				// sorted descending: Payee24 → Payee05 (first 20 distinct)
 				out := make([]string, 20)
@@ -134,10 +134,10 @@ func TestRecentPayees(t *testing.T) {
 		{
 			name: "Desc fallback: mixed payee/no-payee rows",
 			txns: []domain.Transaction{
-				txn("", "Utility bill", 3),  // Desc fallback, most recent
+				txn("", "Utility bill", 3), // Desc fallback, most recent
 				txn("Netflix", "", 2),
-				txn("", "Gym fee", 1),        // Desc fallback
-				txn("Netflix", "", 0),        // dup of Netflix
+				txn("", "Gym fee", 1), // Desc fallback
+				txn("Netflix", "", 0), // dup of Netflix
 			},
 			n:    0,
 			want: []string{"Utility bill", "Netflix", "Gym fee"},

@@ -145,7 +145,7 @@ func Register(rpID, userID, userName string, onDone func(credentialID []byte, er
 				"displayName": userName,
 			},
 			"pubKeyCredParams": []any{
-				map[string]any{"type": "public-key", "alg": -7},  // ES256
+				map[string]any{"type": "public-key", "alg": -7},   // ES256
 				map[string]any{"type": "public-key", "alg": -257}, // RS256
 			},
 			"authenticatorSelection": map[string]any{

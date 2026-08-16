@@ -20,11 +20,11 @@ func TestAddNetWorthVars(t *testing.T) {
 	}
 	d := Data{
 		Accounts: []domain.Account{
-			acct("a1", domain.TypeChecking, domain.ClassAsset, 100000),    // $1,000 cash
-			acct("a2", domain.TypeSavings, domain.ClassAsset, 300000),     // $3,000 cash
-			acct("a3", domain.TypeInvestment, domain.ClassAsset, 400000),  // $4,000 invested
-			acct("a4", domain.TypeProperty, domain.ClassAsset, 2000000),   // $20,000 property
-			acct("a5", domain.TypeOther, domain.ClassAsset, 200000),       // $2,000 other
+			acct("a1", domain.TypeChecking, domain.ClassAsset, 100000),       // $1,000 cash
+			acct("a2", domain.TypeSavings, domain.ClassAsset, 300000),        // $3,000 cash
+			acct("a3", domain.TypeInvestment, domain.ClassAsset, 400000),     // $4,000 invested
+			acct("a4", domain.TypeProperty, domain.ClassAsset, 2000000),      // $20,000 property
+			acct("a5", domain.TypeOther, domain.ClassAsset, 200000),          // $2,000 other
 			acct("l1", domain.TypeCreditCard, domain.ClassLiability, -50000), // liability — excluded from buckets
 		},
 		Transactions: []domain.Transaction{

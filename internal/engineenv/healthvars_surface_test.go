@@ -22,8 +22,8 @@ func healthTestData(now time.Time) Data {
 			OpeningBalance: money.New(minor, "USD"), BalanceAsOf: asOf}
 	}
 	card := mk("cc", domain.TypeCreditCard, domain.ClassLiability, -30000) // $300 owed
-	card.CreditLimit = money.New(100000, "USD")                           // $1,000 limit → 30% util
-	card.MinPayment = money.New(5000, "USD")                              // $50/mo minimum
+	card.CreditLimit = money.New(100000, "USD")                            // $1,000 limit → 30% util
+	card.MinPayment = money.New(5000, "USD")                               // $50/mo minimum
 	var txns []domain.Transaction
 	// Three full trailing months of $4,000 income / $3,000 spend → 25% savings rate.
 	for m := 1; m <= 3; m++ {

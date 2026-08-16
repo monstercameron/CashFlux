@@ -16,8 +16,8 @@ func TestParseTarget(t *testing.T) {
 		{"default-low-balance@lowbal:acct-cash@2026-W27", Target{TargetAccount, "acct-cash"}},
 		{"default-bill-due@acct-card@2026-07-21", Target{TargetAccount, "acct-card"}},
 		{"default-budget@budget-groceries:over@2026-07", Target{TargetBudget, "budget-groceries"}},
-		{"default-digest@digest@2026-W27", Target{}},      // no specific entity
-		{"malformed-no-at-sign", Target{}},                // not a dedupe key
+		{"default-digest@digest@2026-W27", Target{}}, // no specific entity
+		{"malformed-no-at-sign", Target{}},           // not a dedupe key
 	}
 	for _, c := range cases {
 		if got := ParseTarget(c.id); got != c.want {

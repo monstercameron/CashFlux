@@ -99,7 +99,7 @@ func TestDefaultID(t *testing.T) {
 			txns: []domain.Transaction{
 				// max date = day3; window starts 90 days before day3
 				// day0 is within 90 days of day3 in this test (just 3 days back)
-				txn("t1", "chk1", day3),           // chk1: 1 in window
+				txn("t1", "chk1", day3),                       // chk1: 1 in window
 				txn("t2", "sav1", day3.Add(-91*24*time.Hour)), // sav1: outside window
 			},
 			memberDefaultID: "",

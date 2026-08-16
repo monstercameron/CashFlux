@@ -22,8 +22,8 @@ func TestTopDrivers(t *testing.T) {
 		{ID: "big", Payee: "Costco", CategoryID: "groceries", Amount: money.New(-24000, "USD"), Date: day(3)},
 		{ID: "mid", Payee: "Whole Foods", CategoryID: "groceries", Amount: money.New(-9000, "USD"), Date: day(10)},
 		{ID: "small", Payee: "Corner Store", CategoryID: "groceries", Amount: money.New(-1500, "USD"), Date: day(12)},
-		{ID: "other", Payee: "Shell", CategoryID: "gas", Amount: money.New(-6000, "USD"), Date: day(5)},        // wrong category
-		{ID: "income", Payee: "Job", CategoryID: "groceries", Amount: money.New(30000, "USD"), Date: day(1)},   // income, excluded
+		{ID: "other", Payee: "Shell", CategoryID: "gas", Amount: money.New(-6000, "USD"), Date: day(5)},                                             // wrong category
+		{ID: "income", Payee: "Job", CategoryID: "groceries", Amount: money.New(30000, "USD"), Date: day(1)},                                        // income, excluded
 		{ID: "old", Payee: "Costco", CategoryID: "groceries", Amount: money.New(-40000, "USD"), Date: time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)}, // before period
 	}
 	drivers, err := TopDrivers(b, txns, start, end, rates, covers, 2, nil)

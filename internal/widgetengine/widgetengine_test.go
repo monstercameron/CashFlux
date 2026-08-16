@@ -67,18 +67,18 @@ func TestRenderTemplate(t *testing.T) {
 	cases := []struct{ tmpl, want string }{
 		{"", ""},
 		{"plain text", "plain text"},
-		{"{{period}}", "Jun 2026"},                               // string token
-		{"{{savings_rate|percent}} saved", "23% saved"},          // percent
-		{"{{income|currency}} in", "$6,982.00 in"},               // currency
-		{"{{income}} count", "6982 count"},                       // default number
+		{"{{period}}", "Jun 2026"}, // string token
+		{"{{savings_rate|percent}} saved", "23% saved"},               // percent
+		{"{{income|currency}} in", "$6,982.00 in"},                    // currency
+		{"{{income}} count", "6982 count"},                            // default number
 		{"cash flow {{cashflow_net|signed}}", "cash flow +$1,659.33"}, // signed +
-		{"{{delta|signed}}", "-$200.00"},                         // signed -
-		{"{{income_count|plural:deposit}}", "3 deposits"},        // plural many
-		{"{{expense_count|plural:transaction}}", "1 transaction"}, // plural one
-		{"{{savings_rate|arrow}} up", "▲ up"},                    // arrow +
-		{"{{delta|arrow}} down", "▼ down"},                       // arrow -
-		{"{{zero|arrow}}none", "none"},                           // arrow 0 → ""
-		{"{{nonexistent + }}", "—"},                              // bad expr → graceful
+		{"{{delta|signed}}", "-$200.00"},                              // signed -
+		{"{{income_count|plural:deposit}}", "3 deposits"},             // plural many
+		{"{{expense_count|plural:transaction}}", "1 transaction"},     // plural one
+		{"{{savings_rate|arrow}} up", "▲ up"},                         // arrow +
+		{"{{delta|arrow}} down", "▼ down"},                            // arrow -
+		{"{{zero|arrow}}none", "none"},                                // arrow 0 → ""
+		{"{{nonexistent + }}", "—"},                                   // bad expr → graceful
 		{"a {{unterminated", "a {{unterminated"},
 	}
 	for _, c := range cases {

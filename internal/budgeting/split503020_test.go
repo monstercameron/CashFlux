@@ -32,32 +32,32 @@ func txnFor(catID string, amountMinor int64, day string) domain.Transaction {
 
 func TestClassify(t *testing.T) {
 	tests := []struct {
-		name     string
-		catName  string
-		want     Bucket
+		name    string
+		catName string
+		want    Bucket
 	}{
 		// Needs keywords
-		{"rent",            "Rent",            BucketNeeds},
-		{"housing",         "Housing",         BucketNeeds},
-		{"groceries",       "Groceries",       BucketNeeds},
-		{"health",          "Health & Medical", BucketNeeds},
-		{"transport",       "Transport",       BucketNeeds},
-		{"utilities",       "Utilities",       BucketNeeds},
-		{"insurance",       "Car Insurance",   BucketNeeds},
-		{"childcare",       "Childcare",       BucketNeeds},
+		{"rent", "Rent", BucketNeeds},
+		{"housing", "Housing", BucketNeeds},
+		{"groceries", "Groceries", BucketNeeds},
+		{"health", "Health & Medical", BucketNeeds},
+		{"transport", "Transport", BucketNeeds},
+		{"utilities", "Utilities", BucketNeeds},
+		{"insurance", "Car Insurance", BucketNeeds},
+		{"childcare", "Childcare", BucketNeeds},
 		// Savings keywords
-		{"savings",         "Savings",         BucketSavings},
-		{"investment",      "Investment",      BucketSavings},
-		{"emergency fund",  "Emergency Fund",  BucketSavings},
-		{"retirement",      "Retirement",      BucketSavings},
+		{"savings", "Savings", BucketSavings},
+		{"investment", "Investment", BucketSavings},
+		{"emergency fund", "Emergency Fund", BucketSavings},
+		{"retirement", "Retirement", BucketSavings},
 		// Wants keywords
-		{"dining",          "Dining Out",      BucketWants},
-		{"entertainment",   "Entertainment",   BucketWants},
-		{"shopping",        "Shopping",        BucketWants},
-		{"subscription",    "Subscriptions",   BucketWants},
-		{"personal",        "Personal Care",   BucketWants},
+		{"dining", "Dining Out", BucketWants},
+		{"entertainment", "Entertainment", BucketWants},
+		{"shopping", "Shopping", BucketWants},
+		{"subscription", "Subscriptions", BucketWants},
+		{"personal", "Personal Care", BucketWants},
 		// Default → Wants
-		{"unknown",         "Miscellaneous",   BucketWants},
+		{"unknown", "Miscellaneous", BucketWants},
 	}
 
 	for _, tt := range tests {
@@ -109,18 +109,18 @@ func TestGenerate5030SumExact(t *testing.T) {
 		name   string
 		income int64
 	}{
-		{"round hundreds",   500000},  // 5000.00
-		{"odd remainder",    100001},  // forces non-zero remainder
-		{"odd remainder 2",  333333},
-		{"minimal income",   1},
-		{"large income",     10_000_000_00}, // 10 million dollars
+		{"round hundreds", 500000}, // 5000.00
+		{"odd remainder", 100001},  // forces non-zero remainder
+		{"odd remainder 2", 333333},
+		{"minimal income", 1},
+		{"large income", 10_000_000_00}, // 10 million dollars
 	}
 
 	cats := []domain.Category{
-		expCat("rent",    "Rent"),
-		expCat("food",    "Groceries"),
+		expCat("rent", "Rent"),
+		expCat("food", "Groceries"),
 		expCat("savings", "Savings"),
-		expCat("dining",  "Dining Out"),
+		expCat("dining", "Dining Out"),
 	}
 	now := mustDate("2026-06-25")
 
@@ -142,9 +142,9 @@ func TestGenerate5030SumExact(t *testing.T) {
 func TestGenerate5030Percentages(t *testing.T) {
 	income := int64(600000) // 6000.00
 	cats := []domain.Category{
-		expCat("rent",    "Rent"),
+		expCat("rent", "Rent"),
 		expCat("savings", "Savings"),
-		expCat("dining",  "Dining Out"),
+		expCat("dining", "Dining Out"),
 	}
 	now := mustDate("2026-06-25")
 	r := Generate5030(income, cats, nil, now)
@@ -164,7 +164,7 @@ func TestGenerate5030Percentages(t *testing.T) {
 
 func TestGenerate5030SkipsIncomeCategories(t *testing.T) {
 	cats := []domain.Category{
-		expCat("rent",   "Rent"),
+		expCat("rent", "Rent"),
 		incCat("salary", "Salary"),
 	}
 	now := mustDate("2026-06-25")
@@ -200,17 +200,17 @@ func TestGenerate5030ProportionalDistribution(t *testing.T) {
 	// Two Wants categories: dining spent 3000, entertainment spent 1000.
 	// Trailing spend window: 3 months before June = Mar/Apr/May.
 	cats := []domain.Category{
-		expCat("dining",  "Dining Out"),
-		expCat("entert",  "Entertainment"),
+		expCat("dining", "Dining Out"),
+		expCat("entert", "Entertainment"),
 	}
 	now := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
 	// Spend in the trailing window (March–May 2026).
 	txns := []domain.Transaction{
-		txnFor("dining",  3000, "2026-05-10"),
-		txnFor("entert",  1000, "2026-04-20"),
+		txnFor("dining", 3000, "2026-05-10"),
+		txnFor("entert", 1000, "2026-04-20"),
 		// Outside window — should be ignored.
-		txnFor("dining",  9999, "2025-12-01"),
-		txnFor("entert",  9999, "2026-06-05"), // current month, excluded
+		txnFor("dining", 9999, "2025-12-01"),
+		txnFor("entert", 9999, "2026-06-05"), // current month, excluded
 	}
 
 	income := int64(100000) // 1000.00
@@ -242,9 +242,9 @@ func TestGenerate5030ProportionalDistribution(t *testing.T) {
 func TestGenerate5030EvenSplitNoSpend(t *testing.T) {
 	// Three Needs categories, no transactions → even split.
 	cats := []domain.Category{
-		expCat("rent",   "Rent"),
-		expCat("food",   "Groceries"),
-		expCat("util",   "Utilities"),
+		expCat("rent", "Rent"),
+		expCat("food", "Groceries"),
+		expCat("util", "Utilities"),
 	}
 	now := mustDate("2026-06-25")
 	income := int64(300000) // 3000.00
@@ -270,18 +270,18 @@ func TestGenerate5030EvenSplitNoSpend(t *testing.T) {
 
 func TestGenerate5030ProposalsSumToBucketTarget(t *testing.T) {
 	cats := []domain.Category{
-		expCat("rent",    "Rent"),
-		expCat("food",    "Groceries"),
-		expCat("util",    "Utilities"),
-		expCat("dining",  "Dining Out"),
-		expCat("entert",  "Entertainment"),
+		expCat("rent", "Rent"),
+		expCat("food", "Groceries"),
+		expCat("util", "Utilities"),
+		expCat("dining", "Dining Out"),
+		expCat("entert", "Entertainment"),
 		expCat("savings", "Savings"),
-		expCat("invest",  "Investment"),
+		expCat("invest", "Investment"),
 	}
 	txns := []domain.Transaction{
-		txnFor("rent",   12000, "2026-05-01"),
-		txnFor("food",    8000, "2026-05-15"),
-		txnFor("dining",  4000, "2026-04-10"),
+		txnFor("rent", 12000, "2026-05-01"),
+		txnFor("food", 8000, "2026-05-15"),
+		txnFor("dining", 4000, "2026-04-10"),
 		txnFor("savings", 3000, "2026-03-20"),
 	}
 	income := int64(500000)

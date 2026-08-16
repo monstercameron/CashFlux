@@ -75,9 +75,9 @@ func TestTopPayeesTrailing(t *testing.T) {
 		{
 			name: "basic trailing window with payee fallback to desc",
 			txns: []domain.Transaction{
-				payeeWithFields("Amazon", "Amazon Prime", 100, dt(2026, time.June, 2)),   // Payee wins
-				payeeWithFields("", "Starbucks", 50, dt(2026, time.June, 15)),            // Payee blank → Desc used
-				payeeWithFields("Amazon", "Amazon Music", 30, dt(2026, time.March, 1)),   // outside trailing 90 days
+				payeeWithFields("Amazon", "Amazon Prime", 100, dt(2026, time.June, 2)), // Payee wins
+				payeeWithFields("", "Starbucks", 50, dt(2026, time.June, 15)),          // Payee blank → Desc used
+				payeeWithFields("Amazon", "Amazon Music", 30, dt(2026, time.March, 1)), // outside trailing 90 days
 			},
 			days:  90,
 			limit: 10,
@@ -115,7 +115,7 @@ func TestTopPayeesTrailing(t *testing.T) {
 		{
 			name: "transfers and income excluded",
 			txns: []domain.Transaction{
-				{Payee: "Pay", Amount: money.New(500000, "USD"), Date: dt(2026, time.June, 1)},                        // income (positive) — excluded
+				{Payee: "Pay", Amount: money.New(500000, "USD"), Date: dt(2026, time.June, 1)},                          // income (positive) — excluded
 				{Payee: "Move", Amount: money.New(-20000, "USD"), TransferAccountID: "a", Date: dt(2026, time.June, 4)}, // transfer — excluded
 				payeeWithFields("Expense", "", 10, dt(2026, time.June, 5)),
 			},

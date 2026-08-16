@@ -55,6 +55,7 @@ type Progress struct {
 //   - MembersDone: true when len(members) >= 2. A solo household has only the
 //     default member and is considered "done" for this optional step because
 //     household-member setup is not required for a single user.
+//
 // TODO(v1.x): the wizard's CurrencyDone uses the explicit currencyConfirmed flag,
 // while Help's setup checklist marks currency done whenever a base currency is set
 // (always true — USD is the default). So a household configured entirely through

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/merchantstats"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -40,6 +39,7 @@ type reviewGroupRowProps struct {
 // caret and select hooks are registered at stable positions rather than inside
 // the list loop (the framework's top gotcha).
 func reviewGroupRow(props reviewGroupRowProps) ui.Node {
+
 	key := props.Row.Group.Key
 	toggleOpen := ui.UseEvent(func() { props.OnToggleOpen(key) })
 	toggleSel := ui.UseEvent(func() { props.OnToggleSelect(key) })
@@ -80,6 +80,10 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 		shown = shown[:preview]
 	}
 
+	// Deliberately NOT memoized. Memoizing this subtree was measured and made no
+	// difference (472ms vs 468ms per interaction) because the cost is not here —
+	// and any memo key cheap enough to be worth it omitted the category list,
+	// which would leave a newly created category missing from this select.
 	return Div(css.Class(cls),
 		Div(css.Class("rvs-grp-row"),
 			// Named, not just testable: an icon-only checkbox in a list of 30
@@ -124,6 +128,7 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 // reviewContextBandProps drives the single-mode "what else this is tied to" band.
 type reviewContextBandProps struct {
 	App   *appstate.App
+	Index reviewIndex
 	Row   reviewRow
 	Txn   domain.Transaction
 	Prefs prefs.Prefs
@@ -173,13 +178,12 @@ func reviewContextBand(props reviewContextBandProps) ui.Node {
 		if !l.HasTxn(t.ID) || len(l.TxnIDs) < 2 {
 			continue
 		}
+		// Resolve through the precomputed map: this was a nested scan of every
+		// transaction per link member, on every render.
 		members := make([]domain.Transaction, 0, len(l.TxnIDs))
 		for _, id := range l.TxnIDs {
-			for _, o := range app.Transactions() {
-				if o.ID == id {
-					members = append(members, o)
-					break
-				}
+			if o, ok := props.Index.TxnByID[id]; ok {
+				members = append(members, o)
 			}
 		}
 		if len(members) < 2 {
@@ -197,23 +201,19 @@ func reviewContextBand(props reviewContextBandProps) ui.Node {
 	}
 
 	// 3. Duplicate candidates — categorizing both halves of a dupe is a mistake
-	// the flow used to make silently.
-	for _, grp := range dedupe.FindDuplicates(app.Transactions()) {
-		hit := false
-		for _, d := range grp.IDs {
-			if d == t.ID {
-				hit = true
-				break
+	// the flow used to make silently. Detection runs ONCE when the index is built;
+	// re-running it over the whole ledger per render was pure waste.
+	if ids := props.Index.Dupes[t.ID]; len(ids) >= 2 {
+		rows := make([]domain.Transaction, 0, len(ids))
+		for _, id := range ids {
+			if o, ok := props.Index.TxnByID[id]; ok {
+				rows = append(rows, o)
 			}
 		}
-		if !hit || len(grp.IDs) < 2 {
-			continue
-		}
 		blocks = append(blocks, Div(css.Class("rvs-ctx is-warn"), Attr("data-testid", "review-dupe"),
-			Div(css.Class("rvs-ctx-t"), Strong(uistate.T("review.dupeTitle", len(grp.IDs)))),
-			Fragment(nodesToAny(mapTxnRows(dupeTxns(app, grp), props.Prefs))...),
+			Div(css.Class("rvs-ctx-t"), Strong(uistate.T("review.dupeTitle", len(ids)))),
+			Fragment(nodesToAny(mapTxnRows(rows, props.Prefs))...),
 		))
-		break
 	}
 
 	// 4. Is this normal for the merchant?
@@ -364,18 +364,4 @@ func reviewScanStrip(props reviewScanStripProps) ui.Node {
 		),
 		action,
 	)
-}
-
-// dupeTxns resolves a duplicate group's ids back to transactions.
-func dupeTxns(app *appstate.App, g dedupe.Group) []domain.Transaction {
-	out := make([]domain.Transaction, 0, len(g.IDs))
-	for _, id := range g.IDs {
-		for _, t := range app.Transactions() {
-			if t.ID == id {
-				out = append(out, t)
-				break
-			}
-		}
-	}
-	return out
 }

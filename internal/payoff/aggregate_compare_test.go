@@ -136,7 +136,7 @@ func TestAggregateDebts(t *testing.T) {
 			},
 			base:           "USD",
 			rates:          rates,
-			wantLen:        1,    // only USD card included
+			wantLen:        1, // only USD card included
 			wantMissing:    []string{"BTC"},
 			wantBalance:    20000,
 			wantMinPayment: 1000,
@@ -149,7 +149,7 @@ func TestAggregateDebts(t *testing.T) {
 				liabilityAccount("a2", "GBP Card 2", "GBP", -8000, 22.0, 400),
 			},
 			base:        "USD",
-			rates:       rates,  // no GBP rate
+			rates:       rates, // no GBP rate
 			wantLen:     0,
 			wantMissing: []string{"GBP"}, // reported once, not twice
 		},
@@ -217,12 +217,12 @@ func TestCompare(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name               string
-		snowball           Plan
-		avalanche          Plan
-		wantMonthsSaved    int
-		wantInterestSaved  int64
-		wantFaster         string
+		name              string
+		snowball          Plan
+		avalanche         Plan
+		wantMonthsSaved   int
+		wantInterestSaved int64
+		wantFaster        string
 	}{
 		{
 			name:              "tie — both plans identical",

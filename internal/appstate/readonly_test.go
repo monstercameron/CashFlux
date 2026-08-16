@@ -127,8 +127,8 @@ func TestDeleteAccountRoleGating(t *testing.T) {
 		role    domain.MemberRole
 		wantErr bool
 	}{
-		{domain.RoleOwner, false},  // no such id → not ErrReadOnly
-		{domain.RoleViewer, true},  // blocked before even checking the id
+		{domain.RoleOwner, false}, // no such id → not ErrReadOnly
+		{domain.RoleViewer, true}, // blocked before even checking the id
 	}
 	for _, tc := range cases {
 		app := makeApp(t, tc.role)

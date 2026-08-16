@@ -15,8 +15,8 @@ func TestInvestmentPerformance(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
 	day := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	accounts := []domain.Account{
-		{ID: "brk", Name: "Brokerage", Type: domain.TypeInvestment, OpeningBalance: money.New(500000, "USD")},   // $5,000 opening
-		{ID: "chk", Name: "Checking", Type: domain.TypeChecking, OpeningBalance: money.New(100000, "USD")},      // skipped (not investment)
+		{ID: "brk", Name: "Brokerage", Type: domain.TypeInvestment, OpeningBalance: money.New(500000, "USD")},      // $5,000 opening
+		{ID: "chk", Name: "Checking", Type: domain.TypeChecking, OpeningBalance: money.New(100000, "USD")},         // skipped (not investment)
 		{ID: "old", Name: "Old", Type: domain.TypeInvestment, Archived: true, OpeningBalance: money.New(1, "USD")}, // skipped (archived)
 	}
 	txns := []domain.Transaction{

@@ -21,7 +21,7 @@ func cleanInput() Input {
 	card := domain.Account{ID: "card", Name: "Card", Currency: "USD",
 		Type: domain.TypeCreditCard, Class: domain.ClassLiability, OpeningBalance: money.New(-5000, "USD")}
 	chk.Reconciliations = []domain.Reconciliation{{
-		At: d("2026-07-10"), StatementDate: d("2026-07-10"), StatementBalance: money.New(10000 - 2500, "USD"),
+		At: d("2026-07-10"), StatementDate: d("2026-07-10"), StatementBalance: money.New(10000-2500, "USD"),
 	}}
 	return Input{
 		Accounts: []domain.Account{chk, card},

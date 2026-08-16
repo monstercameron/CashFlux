@@ -13,7 +13,7 @@ func TestHighestRungBelow(t *testing.T) {
 		want int64
 	}{
 		{0, 0},
-		{999_999, 0},         // just under $10k
+		{999_999, 0},           // just under $10k
 		{1_000_000, 1_000_000}, // exactly $10k
 		{3_000_000, 2_500_000}, // $30k → $25k rung
 		{10_000_000, 10_000_000},

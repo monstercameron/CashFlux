@@ -9,13 +9,13 @@ func TestResolveBaseURL(t *testing.T) {
 	cases := []struct {
 		override, fallback, want string
 	}{
-		{"", def, def},                                              // no override -> default
-		{"   ", def, def},                                           // blank override -> default
-		{"http://localhost:11434/v1", def, "http://localhost:11434/v1"}, // override wins
-		{"http://localhost:1234/v1/", def, "http://localhost:1234/v1"},  // trailing slash trimmed
+		{"", def, def},    // no override -> default
+		{"   ", def, def}, // blank override -> default
+		{"http://localhost:11434/v1", def, "http://localhost:11434/v1"},   // override wins
+		{"http://localhost:1234/v1/", def, "http://localhost:1234/v1"},    // trailing slash trimmed
 		{"  https://proxy.example/v1  ", def, "https://proxy.example/v1"}, // trimmed
-		{"http://x/v1", "", "http://x/v1"},                          // override wins over blank fallback
-		{"", "", ""},                                                // both blank -> blank
+		{"http://x/v1", "", "http://x/v1"},                                // override wins over blank fallback
+		{"", "", ""},                                                      // both blank -> blank
 	}
 	for _, c := range cases {
 		if got := ResolveBaseURL(c.override, c.fallback); got != c.want {

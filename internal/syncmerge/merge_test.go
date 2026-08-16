@@ -110,8 +110,8 @@ func TestMergeRecord_OnlyRemoteHasField(t *testing.T) {
 func TestMergeRecord_MultipleFields_PartialConflict(t *testing.T) {
 	local := syncmerge.Record{
 		"name":     fv("Household A", t2), // local newer → wins
-		"currency": fv("USD", t1),          // remote newer → loses
-		"color":    fv("blue", t1),         // same value → no conflict
+		"currency": fv("USD", t1),         // remote newer → loses
+		"color":    fv("blue", t1),        // same value → no conflict
 	}
 	remote := syncmerge.Record{
 		"name":     fv("Household B", t1),

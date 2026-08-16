@@ -36,6 +36,12 @@ and every commit updates this file under `Unreleased`.
   already bought in.
 
 ### Changed
+- **The review surface does less work per interaction.** The queue index is rebuilt only when the
+  data actually changes rather than on every render, the correction tally is loaded once per build
+  instead of once per merchant, and duplicate detection and transaction lookups are precomputed
+  rather than re-run per row. Measured: the index build is ~33ms of a ~490ms modal open. (The
+  larger lag when interacting with the transactions page is the ledger table re-rendering, not
+  this surface — filtering the list with no modal open costs ~1.4s on the same data.)
 - **Smart+ is asked for less, and held to more.** It sees every category as a qualified path
   with its kind (`Auto > Gas | expense`), must answer with a confidence marker, and is only
   consulted for merchants the free sources could not place. Its answers rank below both a

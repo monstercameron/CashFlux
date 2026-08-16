@@ -22,8 +22,8 @@ func TestEvalInBudget(t *testing.T) {
 	txns := []domain.Transaction{{ID: "t1", CategoryID: "cat", Date: now, Amount: money.New(-13000, "USD")}}
 	defs := []customfields.Def{{Key: "priority", EntityType: "budget", Type: customfields.TypeNumber}}
 	c := Context{
-		Base:  map[string]float64{"income": 5000},
-		Txns:  txns, Rates: currency.Rates{Base: "USD"}, Now: now, WeekStart: time.Sunday, Defs: defs,
+		Base: map[string]float64{"income": 5000},
+		Txns: txns, Rates: currency.Rates{Base: "USD"}, Now: now, WeekStart: time.Sunday, Defs: defs,
 	}
 
 	cases := []struct {
@@ -36,8 +36,8 @@ func TestEvalInBudget(t *testing.T) {
 		{"limit", 100},            //
 		{"cf_budget_priority", 4}, // this budget's own value
 		{"cf_budget_priority * 10", 40},
-		{"income", 5000},                    // global surface still reachable
-		{"clamp(overspend, 0, 25)", 25},     // language functions work in context
+		{"income", 5000},                // global surface still reachable
+		{"clamp(overspend, 0, 25)", 25}, // language functions work in context
 		{"if(overspend > 0, overspend, 0)", 30},
 		{"", 0}, // empty → 0
 	}

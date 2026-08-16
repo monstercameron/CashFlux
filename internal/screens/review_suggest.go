@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/learntally"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -26,6 +27,23 @@ func reviewSuggestion(app *appstate.App, t domain.Transaction) (catsuggest.Sugge
 	if app == nil {
 		return catsuggest.Suggestion{}, false
 	}
+	return reviewSuggestionWith(app, t, uistate.LoadLearnTally(), uistate.LoadLearnThreshold(), app.Categories())
+}
+
+// reviewSuggestionWith is reviewSuggestion with its expensive inputs hoisted out.
+//
+// The tally and threshold each come from a settings-KV read plus a full JSON
+// unmarshal. Resolving a queue merchant-by-merchant through reviewSuggestion
+// therefore re-parsed the ENTIRE tally once per merchant, which is what made
+// opening the surface block for a second on a real dataset. Callers that resolve
+// more than one charge must load once and pass the values in.
+func reviewSuggestionWith(
+	app *appstate.App, t domain.Transaction,
+	tally learntally.Tally, threshold int, cats []domain.Category,
+) (catsuggest.Suggestion, bool) {
+	if app == nil {
+		return catsuggest.Suggestion{}, false
+	}
 	ruleCat := ""
 	if r := app.AutoCategorizeTransaction(t); r.CategoryID != t.CategoryID {
 		ruleCat = r.CategoryID
@@ -35,9 +53,9 @@ func reviewSuggestion(app *appstate.App, t domain.Transaction) (catsuggest.Sugge
 		Desc:           t.Desc,
 		AmountMinor:    t.Amount.Amount,
 		RuleCategoryID: ruleCat,
-		Tally:          uistate.LoadLearnTally(),
-		Threshold:      uistate.LoadLearnThreshold(),
-		Categories:     app.Categories(),
+		Tally:          tally,
+		Threshold:      threshold,
+		Categories:     cats,
 	})
 }
 

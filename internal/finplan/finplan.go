@@ -63,14 +63,14 @@ type Step struct {
 // "you have zero emergency fund — do step 1"). Questionnaire answers (employer match, deductibles)
 // are optional and left zero/false when unknown.
 type Inputs struct {
-	HasLiquidData    bool    // whether liquid-cash + spending are known (gates emergency-fund + starter checks)
-	LiquidCashMinor  int64   // spendable buffer, minor units
-	EmergencyMonths  float64 // liquid cash ÷ average monthly spending
-	HasIncome        bool    // whether income is known (gates match/investing framing)
-	SavingsRatePct   int     // trailing savings rate, a proxy for "are you investing" (may be negative)
-	KnowsLiabilities bool    // whether liability data is available (gates the debt checks)
-	HasHighInterestDebt bool // any non-mortgage liability at/above highInterestAPR
-	HasNonMortgageDebt  bool // any liability that isn't a mortgage
+	HasLiquidData       bool    // whether liquid-cash + spending are known (gates emergency-fund + starter checks)
+	LiquidCashMinor     int64   // spendable buffer, minor units
+	EmergencyMonths     float64 // liquid cash ÷ average monthly spending
+	HasIncome           bool    // whether income is known (gates match/investing framing)
+	SavingsRatePct      int     // trailing savings rate, a proxy for "are you investing" (may be negative)
+	KnowsLiabilities    bool    // whether liability data is available (gates the debt checks)
+	HasHighInterestDebt bool    // any non-mortgage liability at/above highInterestAPR
+	HasNonMortgageDebt  bool    // any liability that isn't a mortgage
 
 	// Optional questionnaire answers — only meaningful when the matching Answered flag is set.
 	AnsweredMatch      bool

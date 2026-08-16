@@ -38,8 +38,8 @@ func TestCompute(t *testing.T) {
 		want              setup.Progress
 	}{
 		{
-			name:    "all zero → nothing done",
-			want:    setup.Progress{},
+			name: "all zero → nothing done",
+			want: setup.Progress{},
 		},
 		{
 			name:              "currency confirmed only",
@@ -244,10 +244,10 @@ func TestStepString(t *testing.T) {
 func TestIsFirstRun(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name             string
-		wizardShownOnce  bool
-		accounts         []domain.Account
-		want             bool
+		name            string
+		wizardShownOnce bool
+		accounts        []domain.Account
+		want            bool
 	}{
 		{
 			name:            "flag false, no accounts → first run",
