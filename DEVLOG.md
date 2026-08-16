@@ -129,6 +129,34 @@ author adding a sixth definition in a file nobody thinks to look at. Two of them
 shapes; the third asserts the wired call sites still import the seam, so the first two can't pass
 by protecting nothing.
 
+## 2026-08-16 — Proving it against the provider, not against my own mock
+
+Everything the AI work fixed today is a failure of AGREEMENT with a live provider:
+/chat/completions reporting a billed empty completion as a success, a reasoning model rejecting a
+temperature, a stream whose framing has to be read byte by byte. A mocked upstream proves the code
+does what I expected. Only the real provider proves the expectation was right — and in this area my
+expectations had already been wrong twice in the ticket's own history.
+
+So there is a live lane now (`internal/server/ai_live_test.go`), gated behind CASHFLUX_LIVE_AI=1 and
+reading the key from .env, that calls OpenAI for real. Five checks, all passing:
+
+  - a reasoning model returns actual text: "It went up." (36 in / 27 out, finish "stop") — the exact
+    case that used to come back billed and blank
+  - a tool reaches the model and comes back: spending_by_category({"month":"2026-08"})
+  - a tool RESULT round-trips into a grounded answer: "You spent **$312.40** on groceries"
+  - streaming delivers 56 fragments over 303 characters, and the concatenated fragments match the
+    completed event's text exactly — the reader is not watching one answer and being handed another
+  - a rejected key reads as "OpenAI didn't accept your API key. Check it in Settings."
+
+The gate matters as much as the tests. These spend the household's tokens, so nothing in CI or in a
+plain `go test ./...` can run them; they exist to be run deliberately, at the moment a transport
+changes.
+
+The fourth check is the one I would keep if I could keep only one. Streaming has a failure mode
+where the visible text and the final answer diverge — different reassembly, a dropped fragment, a
+retried request — and it is invisible to any test that only asserts "text arrived". Comparing the
+two strings is the whole guarantee.
+
 ## 2026-08-16 — A billed answer that was never an answer
 
 The assistant reply that read `479 tokens out · 9,637 in` with no text under it was not a rendering
