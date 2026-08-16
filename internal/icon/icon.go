@@ -67,6 +67,12 @@ const (
 	ArrowDown       Name = "arrow-down"
 	ArrowUpCircle   Name = "arrow-up-circle"
 	ArrowDownCircle Name = "arrow-down-circle"
+	// ThumbsUp / ThumbsDown rate an assistant answer. They are a mirrored pair on
+	// purpose: the two verdicts are the same gesture inverted, so drawing them as
+	// one shape flipped keeps them visually equal — an up that is prettier than
+	// the down tilts the rating.
+	ThumbsUp   Name = "thumbs-up"
+	ThumbsDown Name = "thumbs-down"
 
 	// Row + section actions.
 	Pencil     Name = "pencil"
@@ -167,6 +173,8 @@ var inner = map[Name]string{
 	ArrowDown:       `<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>`,
 	ArrowUpCircle:   `<circle cx="12" cy="12" r="9"/><path d="M12 16V8"/><path d="m8.5 11.5 3.5-3.5 3.5 3.5"/>`,
 	ArrowDownCircle: `<circle cx="12" cy="12" r="9"/><path d="M12 8v8"/><path d="m8.5 12.5 3.5 3.5 3.5-3.5"/>`,
+	ThumbsUp:        `<path d="M7 22V11"/><path d="M2 12.5A1.5 1.5 0 0 1 3.5 11H7v11H3.5A1.5 1.5 0 0 1 2 20.5z"/><path d="M7 11l4.2-8.4A2 2 0 0 1 15 3.5V9h4.7a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 18.3 20H7"/>`,
+	ThumbsDown:      `<path d="M7 2v11"/><path d="M2 11.5A1.5 1.5 0 0 0 3.5 13H7V2H3.5A1.5 1.5 0 0 0 2 3.5z"/><path d="M7 13l4.2 8.4A2 2 0 0 0 15 20.5V15h4.7a2 2 0 0 0 2-2.4l-1.4-7A2 2 0 0 0 18.3 4H7"/>`,
 
 	Pencil:     `<path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>`,
 	Refresh:    `<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>`,

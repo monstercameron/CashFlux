@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/chatpolish"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -257,6 +258,8 @@ func Insights() ui.Node {
 	promptDraft := ui.UseState("")
 	// A mutating tool awaiting the user's approval in the thread (nil = none pending).
 	pendingApproval := ui.UseState((*approvalReq)(nil))
+	// The rail's conversation search (G2-C7). Empty means "show them all".
+	convSearch := ui.UseState("")
 
 	// C390: picking a model sticks to THIS conversation as well as to the household
 	// default, so returning to a long analytical thread does not quietly continue it
@@ -647,6 +650,42 @@ func Insights() ui.Node {
 		run(hist)
 	}
 
+	// editAndResend rewords a past question and asks it again (G2-C7). Everything
+	// after the edited turn is dropped, because it answered a question that is no
+	// longer being asked — keeping those replies would leave a thread whose answers
+	// do not follow from what is above them, and would feed that contradiction back
+	// to the model as context.
+	editAndResend := func(tid, text string) {
+		if loading.Get() {
+			return
+		}
+		cur := turns.Get()
+		msgs := make([]domain.ChatMessage, len(cur))
+		for i, t := range cur {
+			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text}
+		}
+		kept, ok := chatpolish.TruncateForResend(msgs, tid, text)
+		if !ok {
+			return
+		}
+		hist := make([]chatTurn, 0, len(kept))
+		for i, m := range kept {
+			turn := chatTurn{ID: m.ID, Role: m.Role, Text: m.Text}
+			// Everything before the edit keeps its own accounting and sources;
+			// only the reworded turn starts clean.
+			if i < len(kept)-1 && i < len(cur) {
+				turn.Usage, turn.Sources, turn.Feedback = cur[i].Usage, cur[i].Sources, cur[i].Feedback
+			}
+			hist = append(hist, turn)
+		}
+		turns.Set(hist)
+		if key == "" && !useBackendAI {
+			errMsg.Set(uistate.T("insights.needKey"))
+			return
+		}
+		run(hist)
+	}
+
 	// deleteTurn unravels the thread from the deleted message onward: deleting a
 	// message drops it and every later turn (a conversation is a chain, so removing a
 	// middle turn would leave a dangling continuation). Uses an explicit Set over the
@@ -686,7 +725,7 @@ func Insights() ui.Node {
 		for i, t := range ts {
 			msgs[i] = domain.ChatMessage{ID: t.ID, Role: t.Role, Text: t.Text,
 				Tokens: t.Usage.TotalTokens, PromptTokens: t.Usage.PromptTokens, CompletionTokens: t.Usage.CompletionTokens,
-				CreatedAt: time.Now(), Sources: t.Sources}
+				CreatedAt: time.Now(), Sources: t.Sources, Feedback: string(t.Feedback)}
 		}
 		// Keep an AI-generated name once set, rather than re-deriving from the first line.
 		title, named := conversationTitle(ts), false
@@ -700,6 +739,23 @@ func Insights() ui.Node {
 		bump()
 	}
 
+	// rateTurn records or clears a verdict on one answer, then persists it with the
+	// conversation so the mark survives a reload — a rating that vanishes on
+	// refresh teaches people not to bother giving one.
+	rateTurn := func(tid string, v chatpolish.Feedback) {
+		cur := turns.Get()
+		next := make([]chatTurn, len(cur))
+		copy(next, cur)
+		for i := range next {
+			if next[i].ID == tid {
+				next[i].Feedback = v
+				break
+			}
+		}
+		turns.Set(next)
+		persist(next)
+	}
+
 	// switchTo loads a saved conversation into the live thread.
 	switchTo := func(cid string) {
 		for _, c := range app.Conversations() {
@@ -709,8 +765,9 @@ func Insights() ui.Node {
 			ts := make([]chatTurn, len(c.Messages))
 			for i, m := range c.Messages {
 				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text,
-					Usage:   ai.Usage{PromptTokens: m.PromptTokens, CompletionTokens: m.CompletionTokens, TotalTokens: m.Tokens},
-					Sources: m.Sources}
+					Usage:    ai.Usage{PromptTokens: m.PromptTokens, CompletionTokens: m.CompletionTokens, TotalTokens: m.Tokens},
+					Sources:  m.Sources,
+					Feedback: chatpolish.Feedback(m.Feedback)}
 			}
 			turns.Set(ts)
 			convID.Set(cid)
@@ -735,6 +792,44 @@ func Insights() ui.Node {
 		convCreated.Set(time.Time{})
 		input.Set("")
 		errMsg.Set("")
+	}
+
+	// renameConv gives a chat a name of the user's choosing. An empty name is not
+	// rejected — it clears the custom name and lets the title be derived from the
+	// first message again, which is a legitimate thing to want and must not leave a
+	// chat called nothing.
+	renameConv := func(cid, title string) {
+		for _, c := range app.Conversations() {
+			if c.ID != cid {
+				continue
+			}
+			clean, ok := chatpolish.CleanTitle(title)
+			if !ok {
+				c.Named = false
+				c.Title = conversationTitle(turnsOf(c))
+			} else {
+				c.Title, c.Named = clean, true
+			}
+			c.UpdatedAt = time.Now()
+			_ = app.PutConversation(c)
+			bump()
+			return
+		}
+	}
+
+	// exportConv downloads a chat as Markdown — for pasting into a note, sending to
+	// an accountant, or keeping a record of what the assistant said before acting on
+	// it. Markdown because the export is for a person, and because the answers are
+	// already Markdown so they travel as themselves.
+	exportConv := func(cid string) {
+		for _, c := range app.Conversations() {
+			if c.ID != cid {
+				continue
+			}
+			downloadBytes(chatpolish.ExportFilename(c, time.Now()), "text/markdown;charset=utf-8",
+				[]byte(chatpolish.ExportMarkdown(c)))
+			return
+		}
 	}
 
 	// deleteConv removes a saved conversation; if it's the open one, start fresh.
@@ -1112,12 +1207,13 @@ func Insights() ui.Node {
 			func(t chatTurn) any { return t.ID },
 			func(t chatTurn) ui.Node {
 				if t.Role == "user" {
-					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
+					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnEdit: editAndResend})
 				}
 				if t.Role == "afford" {
 					return ui.CreateElement(AffordResultBubble, affordResultBubbleProps{ID: t.ID, HTML: t.Text, OnDelete: deleteTurn})
 				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model, Sources: t.Sources, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID)})
+				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model,
+					Sources: t.Sources, Feedback: t.Feedback, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnFeedback: rateTurn})
 			},
 		),
 		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
@@ -1339,6 +1435,24 @@ func Insights() ui.Node {
 		),
 	)
 	// Bespoke aside group: the saved conversations as a quiet vertical index.
+	// G2-C7: the rail searches titles AND message text together, because someone
+	// hunting for "the chat about the car insurance" does not remember whether that
+	// phrase was the name or something they typed inside it. Matches show the line
+	// they matched on, so a result says why it is a result.
+	shown := convs
+	var matches []chatpolish.Match
+	if q := strings.TrimSpace(convSearch.Get()); q != "" {
+		matches = chatpolish.Search(convs, q)
+		shown = make([]domain.Conversation, 0, len(matches))
+		for _, m := range matches {
+			shown = append(shown, m.Conversation)
+		}
+	}
+	excerptFor := map[string]string{}
+	for _, m := range matches {
+		excerptFor[m.Conversation.ID] = m.Excerpt
+	}
+
 	railConvs := Fragment()
 	if len(convs) > 0 {
 		railConvs = collapsibleNote(collapsibleNoteProps{
@@ -1346,15 +1460,25 @@ func Insights() ui.Node {
 			TestID: "assistant-note-convs",
 			Count:  len(convs),
 			Body: Fragment(
+				ui.CreateElement(convSearchBox, convSearchBoxProps{
+					Query: convSearch.Get(), OnQuery: func(v string) { convSearch.Set(v) },
+				}),
 				Div(css.Class("asst-convs"), Attr("data-testid", "assistant-convs"),
-					MapKeyed(convs,
+					MapKeyed(shown,
 						func(c domain.Conversation) any { return c.ID },
 						func(c domain.Conversation) ui.Node {
-							return ui.CreateElement(ConversationPill, convPillProps{C: c, Active: c.ID == convID.Get(), OnPick: switchTo, OnDelete: deleteConv})
+							return ui.CreateElement(ConversationPill, convPillProps{
+								C: c, Active: c.ID == convID.Get(), Excerpt: excerptFor[c.ID],
+								OnPick: switchTo, OnDelete: deleteConv, OnRename: renameConv, OnExport: exportConv,
+							})
 						},
 					),
 				),
-				P(css.Class("ask-note-hint"), uistate.T("assistant.railHint")),
+				// An empty result is stated rather than left as a blank space, which
+				// is indistinguishable from a list that failed to load.
+				If(len(shown) == 0, P(css.Class("ask-note-hint"), Attr("data-testid", "assistant-convs-empty"),
+					uistate.T("insights.searchNone", strings.TrimSpace(convSearch.Get())))),
+				If(len(shown) > 0, P(css.Class("ask-note-hint"), uistate.T("assistant.railHint"))),
 			),
 		})
 	}
@@ -1653,13 +1777,87 @@ type convPillProps struct {
 	Active   bool
 	OnPick   func(string)
 	OnDelete func(string)
+	// OnRename gives the chat a name of the user's choosing; an empty name means
+	// "go back to deriving it from the first message" (G2-C7). Nil hides the control.
+	OnRename func(id, title string)
+	// OnExport downloads the chat as Markdown. Nil hides the control.
+	OnExport func(id string)
+	// Excerpt is the line this chat matched a search on, shown under the title so
+	// a result says WHY it is a result. Empty when not searching.
+	Excerpt string
 }
 
-// ConversationPill is one chat in the switcher: tap the title to open it, the × to
-// delete it. Its own component so the pick/delete hooks stay stable across the list.
+// turnsOf adapts a saved conversation's messages to the turn shape
+// conversationTitle expects, so a cleared name can be re-derived from the first
+// message exactly as it was derived originally.
+func turnsOf(c domain.Conversation) []chatTurn {
+	out := make([]chatTurn, len(c.Messages))
+	for i, m := range c.Messages {
+		out[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text}
+	}
+	return out
+}
+
+type convSearchBoxProps struct {
+	Query   string
+	OnQuery func(string)
+}
+
+// convSearchBox is the rail's search field. Its own component so the input hook
+// sits at a stable position above the conversation list.
+func convSearchBox(p convSearchBoxProps) ui.Node {
+	onInput := ui.UseEvent(func(e ui.Event) { p.OnQuery(e.GetValue()) })
+	clear := ui.UseEvent(Prevent(func() { p.OnQuery("") }))
+	return Div(css.Class("conv-search"),
+		Input(css.Class("field"), Type("search"), Attr("data-testid", "assistant-conv-search"),
+			Attr("aria-label", uistate.T("insights.searchAria")),
+			Placeholder(uistate.T("insights.searchPlaceholder")),
+			Value(p.Query), OnInput(onInput)),
+		If(strings.TrimSpace(p.Query) != "", Button(css.Class("conv-search-clear"), Type("button"),
+			Attr("data-testid", "assistant-conv-search-clear"),
+			Attr("aria-label", uistate.T("insights.searchClear")), Title(uistate.T("insights.searchClear")),
+			OnClick(clear), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+	)
+}
+
+// ConversationPill is one chat in the switcher: tap the title to open it, the pencil
+// to name it, the arrow to export it, the × to delete it. Its own component so every
+// hook stays at a stable position across the list.
 func ConversationPill(p convPillProps) ui.Node {
+	renaming := ui.UseState(false)
+	draft := ui.UseState("")
 	pick := ui.UseEvent(Prevent(func() { p.OnPick(p.C.ID) }))
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.C.ID) }))
+	startRename := ui.UseEvent(Prevent(func() {
+		draft.Set(p.C.Title)
+		renaming.Set(true)
+	}))
+	onDraft := ui.UseEvent(func(e ui.Event) { draft.Set(e.GetValue()) })
+	commitRename := ui.UseEvent(Prevent(func() {
+		renaming.Set(false)
+		if p.OnRename != nil {
+			p.OnRename(p.C.ID, draft.Get())
+		}
+	}))
+	// Enter commits and Escape backs out: a rename box you can only leave with the
+	// mouse is a rename box people abandon half-typed.
+	onKey := ui.UseEvent(func(e ui.Event) {
+		switch e.GetKey() {
+		case "Enter":
+			renaming.Set(false)
+			if p.OnRename != nil {
+				p.OnRename(p.C.ID, draft.Get())
+			}
+		case "Escape":
+			renaming.Set(false)
+		}
+	})
+	exportEvt := ui.UseEvent(Prevent(func() {
+		if p.OnExport != nil {
+			p.OnExport(p.C.ID)
+		}
+	}))
+
 	cls := "conv-pill " + tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap15, tw.RoundedFull, tw.Px3, tw.Py1, tw.Text12, tw.Border) + " "
 	if p.Active {
 		cls += tw.Fold(tw.BgSky15, tw.BorderSky40)
@@ -1670,10 +1868,30 @@ func ConversationPill(p convPillProps) ui.Node {
 	if title == "" {
 		title = "Untitled chat"
 	}
-	return Div(ClassStr(cls),
+	if renaming.Get() {
+		return Div(css.Class("conv-rename"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "conv-rename-input"),
+				Attr("aria-label", uistate.T("insights.renameAria")),
+				Value(draft.Get()), OnInput(onDraft), OnKeyDown(onKey), OnBlur(commitRename)),
+		)
+	}
+	pill := Div(ClassStr(cls),
 		Button(css.Class(tw.MaxW160, tw.Truncate, tw.TextLeft), Type("button"), OnClick(pick), title),
+		If(p.OnRename != nil, Button(css.Class(tw.TextFaint, tw.Opacity60, tw.HoverOpacity100), Type("button"),
+			Attr("data-testid", "conv-rename"), Title(uistate.T("insights.renameChat")),
+			Attr("aria-label", uistate.T("insights.renameChatFor", title)), OnClick(startRename),
+			uiw.Icon(icon.Pencil, css.Class(tw.W3, tw.H3)))),
+		If(p.OnExport != nil, Button(css.Class(tw.TextFaint, tw.Opacity60, tw.HoverOpacity100), Type("button"),
+			Attr("data-testid", "conv-export"), Title(uistate.T("insights.exportChat")),
+			Attr("aria-label", uistate.T("insights.exportChatFor", title)), OnClick(exportEvt),
+			uiw.Icon(icon.Upload, css.Class(tw.W3, tw.H3)))),
 		Button(css.Class(tw.TextFaint, tw.Opacity60, tw.HoverOpacity100), Type("button"), Title(uistate.T("insights.deleteChat")), Attr("aria-label", uistate.T("insights.deleteChat")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3))),
 	)
+	if strings.TrimSpace(p.Excerpt) == "" {
+		return pill
+	}
+	return Div(css.Class("conv-hit"), pill,
+		P(css.Class("conv-hit-excerpt"), Attr("data-testid", "conv-excerpt"), p.Excerpt))
 }
 
 // chatTurn is one message in the Insights conversation.
@@ -1686,6 +1904,9 @@ type chatTurn struct {
 	// user turn, on an answer the model gave without consulting anything, and on
 	// the deterministic local answers, which cite themselves in their own text.
 	Sources []domain.ChatSource
+	// Feedback is the reader's verdict on this answer (G2-C7). It stays on the
+	// device: it marks which answers were worth keeping, and goes nowhere.
+	Feedback chatpolish.Feedback
 }
 
 // asstVoiceButtonProps carries the callback the mic fills the composer with.
@@ -1886,22 +2107,74 @@ type userBubbleProps struct {
 	Text     string
 	OnDelete func(string)
 	OnRetry  func() // non-nil only on the latest message
+	// OnEdit resends this question with new wording, dropping everything that
+	// came after it (G2-C7). Nil where editing does not apply.
+	OnEdit func(id, text string)
 }
 
-// UserBubble renders one user message with its actions (Retry on the latest, Delete)
-// in a row UNDER the bubble. Its own component so the action hooks stay stable across
-// the list (no hooks in loops).
+// UserBubble renders one user message with its actions (Edit, Retry on the latest,
+// Delete) in a row UNDER the bubble. Its own component so the action hooks stay
+// stable across the list (no hooks in loops).
+//
+// Editing turns the bubble into a textarea in place. That is deliberate: the
+// alternative — copying the old question into the composer — leaves the original
+// sitting above as a question that was never really asked, and the thread stops
+// being a record of the conversation that happened.
 func UserBubble(p userBubbleProps) ui.Node {
+	editing := ui.UseState(false)
+	draft := ui.UseState("")
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
 	retryEvt := ui.UseEvent(Prevent(func() {
 		if p.OnRetry != nil {
 			p.OnRetry()
 		}
 	}))
+	startEdit := ui.UseEvent(Prevent(func() {
+		draft.Set(p.Text)
+		editing.Set(true)
+	}))
+	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
+	onDraft := ui.UseEvent(func(e ui.Event) { draft.Set(e.GetValue()) })
+	// Escape backs out, because a textarea that can only be left by clicking a
+	// button traps anyone working from the keyboard.
+	onKey := ui.UseEvent(func(e ui.Event) {
+		if e.GetKey() == "Escape" {
+			editing.Set(false)
+		}
+	})
+	submitEdit := ui.UseEvent(Prevent(func() {
+		text := strings.TrimSpace(draft.Get())
+		if text == "" || p.OnEdit == nil {
+			return
+		}
+		editing.Set(false)
+		p.OnEdit(p.ID, text)
+	}))
+
+	if editing.Get() {
+		return Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsEnd),
+			Div(css.Class("asst-msg-edit"), Attr("data-testid", "assistant-edit-box"),
+				Textarea(css.Class("field"), Attr("data-testid", "assistant-edit-input"),
+					Attr("aria-label", uistate.T("insights.editAria")), Attr("rows", "3"),
+					Value(draft.Get()), OnInput(onDraft), OnKeyDown(onKey)),
+				Div(css.Class("asst-msg-edit-actions"),
+					Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+						Attr("data-testid", "assistant-edit-send"), OnClick(submitEdit), uistate.T("insights.editSend")),
+					Button(css.Class("btn btn-sm"), Type("button"),
+						Attr("data-testid", "assistant-edit-cancel"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				),
+				P(css.Class("asst-msg-edit-note"), uistate.T("insights.editNote")),
+			),
+		)
+	}
+
 	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsEnd),
 		Div(css.Class("asst-msg-user", tw.MaxW85, tw.Text14, tw.WhitespacePreWrap), p.Text),
 		Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
+			If(p.OnEdit != nil, Button(ClassStr(actBtn), Type("button"), Attr("data-testid", "assistant-edit-msg"),
+				Title(uistate.T("insights.editMsg")), Attr("aria-label", uistate.T("insights.editMsg")), OnClick(startEdit),
+				uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4)))),
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
@@ -1914,9 +2187,34 @@ type asstBubbleProps struct {
 	Usage    ai.Usage
 	Model    string
 	Sources  []domain.ChatSource // the tool runs this answer was computed from (C387)
+	Feedback chatpolish.Feedback // the reader's verdict on this answer (G2-C7)
 	OnPin    func(string) bool
 	OnDelete func(string)
 	OnRetry  func() // non-nil only on the latest assistant turn
+	// OnFeedback records or clears a verdict on this answer. Nil where rating
+	// does not apply.
+	OnFeedback func(id string, v chatpolish.Feedback)
+}
+
+// asstActionRowClass returns the class list for an answer's action row. The row is
+// normally revealed on hover — actions on every message would shout over the
+// conversation — but once a verdict has been given the row stays visible, because
+// a rating you cannot see is a rating you cannot check or change.
+func asstActionRowClass(f chatpolish.Feedback) string {
+	base := tw.Fold(tw.Flex, tw.FlexWrap, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1)
+	if f != chatpolish.FeedbackNone {
+		return base
+	}
+	return base + " " + tw.Fold(tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity)
+}
+
+// feedbackBtnClass marks the chosen verdict so the state is visible without
+// relying on colour alone (the aria-pressed attribute carries it for AT).
+func feedbackBtnClass(base string, current, self chatpolish.Feedback) string {
+	if current == self {
+		return base + " asst-rated"
+	}
+	return base
 }
 
 // AssistantBubble renders one assistant message as Markdown (via the vendored
@@ -1954,6 +2252,16 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 			p.OnRetry()
 		}
 	}))
+	rateUp := ui.UseEvent(Prevent(func() {
+		if p.OnFeedback != nil {
+			p.OnFeedback(p.ID, chatpolish.ToggleFeedback(p.Feedback, chatpolish.FeedbackUp))
+		}
+	}))
+	rateDown := ui.UseEvent(Prevent(func() {
+		if p.OnFeedback != nil {
+			p.OnFeedback(p.ID, chatpolish.ToggleFeedback(p.Feedback, chatpolish.FeedbackDown))
+		}
+	}))
 	var note ui.Node = Fragment()
 	if p.Usage.TotalTokens > 0 {
 		// QPASS-D honesty: the old line labelled the WHOLE request ("This reply:
@@ -1989,7 +2297,7 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 			Div(Attr("id", mdID), css.Class("md insights-answer chat-agent-body", tw.Text14)),
 		),
 		// Actions sit UNDER the bubble, revealed when the bubble is hovered/focused.
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap3, tw.ItemsCenter, tw.Mt1, tw.Px1, tw.Opacity0, tw.GroupHoverOpacity100, tw.GroupFocusWithinOpacity100, tw.MotionSafeTransitionOpacity),
+		Div(ClassStr(asstActionRowClass(p.Feedback)),
 			IfElse(copied.Get(),
 				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("insights.copied")),
 				Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.copy")), Attr("aria-label", uistate.T("insights.copy")), OnClick(copyEvt), uiw.Icon(icon.Copy, css.Class(tw.W4, tw.H4))),
@@ -1999,6 +2307,17 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 				Button(ClassStr(actBtn+" "+tw.Fold(tw.Gap1, tw.Text12)), Type("button"), Title(uistate.T("insights.pinTitle")), OnClick(pin), uistate.T("insights.pin")),
 			),
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
+			// The verdict buttons stay visible once one is given: a rating that
+			// disappears when the pointer leaves cannot be seen, changed, or
+			// trusted to have registered.
+			If(p.OnFeedback != nil, Button(ClassStr(feedbackBtnClass(actBtn, p.Feedback, chatpolish.FeedbackUp)), Type("button"),
+				Attr("data-testid", "assistant-rate-up"), Attr("aria-pressed", ariaBool(p.Feedback == chatpolish.FeedbackUp)),
+				Title(uistate.T("insights.rateUp")), Attr("aria-label", uistate.T("insights.rateUp")), OnClick(rateUp),
+				uiw.Icon(icon.ThumbsUp, css.Class(tw.W4, tw.H4)))),
+			If(p.OnFeedback != nil, Button(ClassStr(feedbackBtnClass(actBtn, p.Feedback, chatpolish.FeedbackDown)), Type("button"),
+				Attr("data-testid", "assistant-rate-down"), Attr("aria-pressed", ariaBool(p.Feedback == chatpolish.FeedbackDown)),
+				Title(uistate.T("insights.rateDown")), Attr("aria-label", uistate.T("insights.rateDown")), OnClick(rateDown),
+				uiw.Icon(icon.ThumbsDown, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
 		citationPanel(p.Text, p.Sources),

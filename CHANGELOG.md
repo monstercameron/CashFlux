@@ -7,6 +7,23 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Conversation management the assistant was missing (G2-C7).** Chats can now be renamed in place
+  (clearing the name goes back to the automatic one rather than leaving a chat called nothing),
+  searched across titles AND message text together — somebody hunting for "the chat about the car
+  insurance" does not remember which of the two it was — with each result showing the line it matched
+  on, and exported as Markdown, sources included, because an answer with a figure in it is only
+  checkable if what it was computed from travels with it.
+
+  A past question can be reworded and asked again, in place in the thread. Everything after it is
+  dropped: those replies answered a question that is no longer being asked, and keeping them would
+  leave a thread whose answers don't follow from what's above them — and would feed that
+  contradiction back to the model as context. The box says so before you commit, not in a toast
+  afterwards.
+
+  Answers can be rated up or down. The rating persists with the conversation and the action row stops
+  hiding on mouse-out once a verdict exists, because a rating you can't see is one you can't check or
+  change. It stays on the device; nothing is sent anywhere.
+
 - **Findings say what kind of claim they are making (C391).** A SMART finding can be arithmetic over
   rows the household typed in ("this budget is over by $40") or an inference that is sometimes wrong
   ("these two look like duplicates"). Shown identically, the reliable ones get discounted at the same

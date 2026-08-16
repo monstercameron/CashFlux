@@ -42,6 +42,23 @@ var changesetKeys = Catalog{
 	// user's own and changing their mind is a legitimate answer.
 	"insights.budgetSpent": "This chat has spent its %s-token cap. Raise the cap above, or start a new chat.",
 	// --- C391 confidence on inferred findings ---
+	// --- G2-C7 chat polish: rename, search, export, edit-and-resend, feedback ---
+	"insights.renameChat":        "Rename",
+	"insights.renameChatFor":     "Rename the chat “%s”",
+	"insights.renameAria":        "Chat name — leave it empty to go back to the automatic name",
+	"insights.exportChat":        "Export",
+	"insights.exportChatFor":     "Export the chat “%s” as Markdown",
+	"insights.searchPlaceholder": "Search your chats",
+	"insights.searchAria":        "Search chat names and messages",
+	"insights.searchClear":       "Clear the search",
+	// %s = what was searched for.
+	"insights.searchNone":      "Nothing matches “%s”.",
+	"insights.editMsg":         "Edit and ask again",
+	"insights.editAria":        "Reword this question",
+	"insights.editSend":        "Ask again",
+	"insights.editNote":        "Asking again replaces the answers below this point.",
+	"insights.rateUp":          "This answer was useful",
+	"insights.rateDown":        "This answer missed the point",
 	"assistant.confidenceHint": "This one was worked out from a pattern, not read straight off your ledger — worth checking before you act on it.",
 }
 

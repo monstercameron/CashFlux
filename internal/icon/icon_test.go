@@ -15,6 +15,7 @@ var curated = []Name{
 	ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Close, Trash, MoreH, Grip, Search,
 	Check, CheckCircle, AlertCircle, AlertTriangle, Clock, Calendar, TrendingUp, TrendingDown,
 	ArrowUp, ArrowDown, ArrowUpCircle, ArrowDownCircle,
+	ThumbsUp, ThumbsDown,
 	Pencil, Refresh, List, PlusCircle,
 	Sparkles, MessageCircle, FileText, Copy,
 	CreditCard, Receipt, Landmark, Filter, Box, Workflow, Scale, Repeat, Calculator,

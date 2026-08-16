@@ -562,6 +562,11 @@ type ChatMessage struct {
 	// still be checked when the conversation is reopened weeks later. Additive and
 	// absent on messages saved before answers cited their work.
 	Sources []ChatSource `json:"sources,omitempty"`
+	// Feedback is the reader's verdict on an assistant answer ("up"/"down", or
+	// empty for the normal unrated state). It stays on the device with the rest of
+	// the conversation — it marks which answers were worth keeping, and is not
+	// sent anywhere.
+	Feedback string `json:"feedback,omitempty"`
 }
 
 // ChatSource is one tool run behind an assistant answer: what was consulted, over

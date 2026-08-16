@@ -795,6 +795,88 @@ func registerAssistantSurface() {
 	registerBudgetReadout()
 	registerConfidenceChip()
 	registerTabJob()
+	registerChatPolish()
+}
+
+// registerChatPolish styles the conversation-management controls (G2-C7): the
+// rail's search box and its results, in-place rename, the edit-and-ask-again box,
+// and the answer rating.
+func registerChatPolish() {
+	rule(".conv-search",
+		prop("position", "relative"),
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("margin-bottom", "0.5rem"),
+	)
+	rule(".conv-search .field",
+		prop("width", "100%"),
+		prop("font-size", "var(--type-12)"),
+		prop("padding-right", "1.8rem"),
+	)
+	rule(".conv-search-clear",
+		prop("position", "absolute"),
+		prop("right", "0.35rem"),
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("border", "none"),
+		prop("background", "transparent"),
+		prop("color", "var(--text-faint)"),
+		prop("cursor", "pointer"),
+	)
+	rule(".conv-search-clear:hover",
+		prop("color", "var(--text)"),
+	)
+	rule(".conv-hit",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.15rem"),
+		prop("align-items", "flex-start"),
+	)
+	// The matched line is why the result is a result, so it sits directly under
+	// its pill and clamps to one line rather than reflowing the rail.
+	rule(".conv-hit-excerpt",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-faint)"),
+		prop("margin", "0 0 0 0.6rem"),
+		prop("max-width", "100%"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+		prop("white-space", "nowrap"),
+	)
+	rule(".conv-rename .field",
+		prop("width", "100%"),
+		prop("font-size", "var(--type-12)"),
+	)
+	// The edit box replaces the bubble in place, so it keeps the bubble's width
+	// and side rather than jumping to the composer.
+	rule(".asst-msg-edit",
+		prop("width", "min(85%, 36rem)"),
+		prop("border", "1px solid color-mix(in srgb, var(--accent) 35%, var(--border))"),
+		prop("border-radius", "14px 14px 4px 14px"),
+		prop("background", "var(--bg-elev)"),
+		prop("padding", "0.6rem 0.7rem"),
+	)
+	rule(".asst-msg-edit .field",
+		prop("width", "100%"),
+		prop("font-size", "var(--type-14)"),
+		prop("resize", "vertical"),
+	)
+	rule(".asst-msg-edit-actions",
+		prop("display", "flex"),
+		prop("gap", "0.5rem"),
+		prop("margin-top", "0.5rem"),
+	)
+	// The consequence of asking again is stated inside the box, at the moment of
+	// deciding — not in a toast after the answers have already gone.
+	rule(".asst-msg-edit-note",
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.45rem 0 0"),
+	)
+	rule(".asst-rated",
+		prop("color", "var(--accent)"),
+		prop("opacity", "1"),
+	)
 }
 
 // registerTabJob styles the one-line job statement under the hub's tab bar
