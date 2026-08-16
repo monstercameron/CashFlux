@@ -39,6 +39,14 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// as an always-visible row button. Escape + outside-pointerdown dismiss the menu;
 	// AnchorPopover flips it near the viewport edge.
 	menuOpen := ui.UseState(false)
+	// C595: the card stacked every caption it had — tracking, tags, committed,
+	// set-aside, target, coverage, owner, method, custom fields, pace, carry,
+	// metrics — between the bar and the actions, so "how much is left?" competed
+	// with a dozen explanations. The explanatory ones now live behind one
+	// disclosure; anything that CHANGES the headline figure's meaning (an
+	// effective cap, an envelope balance, a projected overspend) stays out.
+	detailsOpen := ui.UseState(false)
+	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
 	menuID := ui.UseId()
 	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
 	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
@@ -240,6 +248,15 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		if props.PaceOver != "" {
 			fillClass = "bar-fill near"
 			label = uistate.T("budgets.atRisk")
+		}
+		// C344: three days into a period nothing has been broken yet, so "On track"
+		// is a statement about the calendar, not about the household — and a card
+		// that says "doing great" every time a month opens is one people learn to
+		// ignore. Say what is actually true (the period just started) and let last
+		// period's outcome, shown below, be the thing worth reading.
+		if props.PeriodEarly {
+			fillClass = "bar-fill is-hist"
+			label = uistate.T("budgets.periodJustStarted")
 		}
 	}
 	if lastMonthMode {
@@ -737,49 +754,68 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// empty). No note → the note column is omitted and the main content fills the width.
 		Div(css.Class("budget-lower"),
 			Div(css.Class("budget-lower-main"),
-				// Spend-composition donut for a composite budget, under the full-width bar.
-				pieNode,
+				// --- The primary summary: status, what is left, and anything that changes
+				// what the headline figure MEANS. Always visible (C595). ---
 				// One quiet metadata line beneath the bar. In last-month mode it reads the over/
 				// under-budget gap + period; otherwise the health status · money left · period.
 				IfElse(lastMonthMode,
 					Span(css.Class("budget-sub"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta+" · "+periodLabel(s.Budget.Period)),
 					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period))),
-				// C395: the rollover policy badge, high in the caption stack so the
-				// carry/no-carry policy is legible at a glance; click opens the math.
+				// C344: while the period is too young to judge, last period's outcome is the
+				// only reading here worth anything.
+				If(props.PeriodEarly && props.PriorSpent != "",
+					Span(css.Class("budget-sub"+lastMonthSubTone(props.PriorOver)),
+						Attr("data-testid", "budget-prior-"+s.Budget.ID),
+						uistate.T("budgets.priorPeriodOutcome", props.PriorSpent, props.PriorDelta))),
+				// C395: the rollover policy badge — a glanceable chip, not a caption.
 				budgetRolloverBadgeFor(props),
-				// Multi-category budgets: list the tracked categories so the combined total reads clearly.
-				If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
-					uistate.T("budgets.catsTracking", props.TrackedCats))),
-				// Cross-category tag tracking: the tags this budget also counts, whatever the category.
-				If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
-				// XC4: quiet committed-vs-free caption; XC3: the plain-English set-aside explainer.
-				// (A landing-month entry may carry only the explainer — no committed split.)
-				If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
-					Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
-						uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
-				If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
-					Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
-						props.Committed.SetAsideNote)),
-				// BG1: funding-target summary ("Refill to $200 · $60 to go").
-				budgetTargetLine(s),
-				thisMonthRef,
-				coverageLine,
-				ownerLine,
-				methodLine,
-				customLine,
-				paceLine,
-				paceMarkLine,
-				proratedLine,
-				rolloverLine,
+				// A cap that differs from the base limit, an envelope balance, an envelope in
+				// debt, a projected overspend: each re-reads the big number above it, so
+				// hiding them would hide the headline's meaning.
 				effectiveCapLine,
 				envLine,
 				envDebtLine,
-				// "What's driving this?" — the analytical link (top charges → their ledger /
-				// subscriptions), offered only when a budget is near or over, where knowing
-				// WHY is what you actually want. Collapsed and lazy, so it never crowds a card.
+				paceLine,
+				// --- Everything explanatory, behind one disclosure (C595). The card used to
+				// stack all of it between the bar and the actions, so "how much is left?"
+				// competed with a dozen explanations of how it was arrived at. ---
+				Button(css.Class("btn cf-adv-toggle budget-details-toggle"), Type("button"),
+					Attr("data-testid", "budget-details-"+s.Budget.ID),
+					Attr("aria-expanded", ariaBool(detailsOpen.Get())),
+					Attr("aria-label", uistate.T("budgets.detailsAria", title)),
+					OnClick(toggleDetails), uistate.T(budgetDetailsKey(detailsOpen.Get()))),
+				If(detailsOpen.Get(), Div(css.Class("budget-details"), Attr("data-testid", "budget-details-body-"+s.Budget.ID),
+					// Spend-composition donut for a composite budget.
+					pieNode,
+					// Multi-category budgets: the categories the combined total is made of.
+					If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
+						uistate.T("budgets.catsTracking", props.TrackedCats))),
+					// Cross-category tag tracking: the tags this budget also counts.
+					If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
+					// XC4 committed-vs-free caption; XC3 set-aside explainer.
+					If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
+						Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
+							uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
+					If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
+						Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
+							props.Committed.SetAsideNote)),
+					// BG1: funding-target summary ("Refill to $200 · $60 to go").
+					budgetTargetLine(s),
+					thisMonthRef,
+					coverageLine,
+					ownerLine,
+					methodLine,
+					customLine,
+					paceMarkLine,
+					proratedLine,
+					rolloverLine,
+					metricsStrip,
+				)),
+				// "What's driving this?" stays OUT of the disclosure: it is offered only when
+				// a budget is near or over — exactly when "why" is the question — and it is
+				// already collapsed and lazy.
 				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
 					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Anchor: props.Anchor})),
-				metricsStrip,
 				actionsRow,
 			),
 			If(hasSide, Div(css.Class("budget-side-col"),
@@ -1319,4 +1355,14 @@ func budgetLinkedTodos(budgetID string) []followUpItem {
 		return a.dueT.Before(b.dueT)
 	})
 	return out
+}
+
+// budgetDetailsKey names the card's details disclosure for its current state
+// (C595). One label per state rather than a swapped noun, so the control reads
+// the same way the density toggle now does.
+func budgetDetailsKey(open bool) string {
+	if open {
+		return "budgets.detailsHide"
+	}
+	return "budgets.detailsShow"
 }

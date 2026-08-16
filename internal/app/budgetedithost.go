@@ -5,6 +5,9 @@
 package app
 
 import (
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -23,6 +26,21 @@ import (
 // off-centre. Here there is no transformed ancestor, so the modal centres on the
 // viewport. The editor form owns its own Save/Cancel (NoFooter) and calls OnDone on
 // completion, which clears the atom.
+// budgetHasNote reports whether the budget already carries a note, so the editor
+// can say whether it is about to create one or change one.
+func budgetHasNote(id string) bool {
+	app := appstate.Default
+	if app == nil || id == "" {
+		return false
+	}
+	for _, b := range app.Budgets() {
+		if b.ID == id {
+			return strings.TrimSpace(b.Notes) != ""
+		}
+	}
+	return false
+}
+
 func BudgetEditHost() uic.Node {
 	edit := uistate.UseBudgetEdit()
 	// Read BEFORE the early return: hooks are positional, so one behind a
@@ -51,7 +69,13 @@ func BudgetEditHost() uic.Node {
 	case uistate.BudgetEditModeCover:
 		title = uistate.T("budgets.coverModalTitle")
 	case uistate.BudgetEditModeNotes:
-		title = uistate.T("budgets.notesTitle")
+		// Name the action, and name it by state: the same editor either creates a
+		// note or overwrites one, and "Budget notes" said neither. The row's ⋯ item
+		// is labelled the same way, so the modal confirms what was clicked.
+		title = uistate.T("budgets.notesAdd")
+		if budgetHasNote(e.ID) {
+			title = uistate.T("budgets.notesEdit")
+		}
 	case uistate.BudgetEditModeFormulas:
 		title = uistate.T("budgets.formulasTitle")
 	}

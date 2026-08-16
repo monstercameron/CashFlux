@@ -925,6 +925,34 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C595: the budget card's details disclosure ---
+	// A quiet toggle, not a button competing with the card's real actions: the
+	// point of the disclosure is to give the headline figure room, so its own
+	// control must not take that room back.
+	rule(".budget-details-toggle",
+		// .budget-lower-main is a block, not a flex column, so the toggle has to
+		// claim its own line explicitly — inline it sat beside the rollover badge
+		// and read as part of that chip row.
+		display("block"),
+		marginTop("0.25rem"),
+		padding("0.1rem 0"),
+		border("0"),
+		background("transparent"),
+		color("var(--text-dim)"),
+		fontSize("var(--type-12)"),
+		fontWeight("600"),
+		cursor("pointer"),
+	)
+	rule(".budget-details-toggle:hover", color("var(--text)"), textDecoration("underline"))
+	rule(".budget-details",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		marginTop("0.15rem"),
+		paddingLeft("0.55rem"),
+		borderLeft("2px solid var(--border)"),
+	)
+
 	// --- C608: the year planner's month-window control ---
 	// It replaces a sighted-only "scroll sideways" cue, so it has to look like a
 	// control rather than a hint: real buttons with a pressed state, in the flow

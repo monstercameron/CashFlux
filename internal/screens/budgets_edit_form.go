@@ -685,7 +685,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 					uistate.T("budgets.notesHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
 				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("budgets.notesPlaceholder"),
-					AriaLabel: uistate.T("budgets.notesLabel"), Autofocus: true, OnInput: onNotes}),
+					AriaLabel: uistate.T("budgets.notesLabel"), OnInput: onNotes}),
 				errLine,
 			),
 			Div(css.Class("modal-foot", "budget-notes-foot"),

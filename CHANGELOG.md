@@ -6,6 +6,36 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **The budget-notes editor names its action, and a saved note is legible where it lives (C614).**
+  A design pass on the feature C613 had just made work, after an adversarial critique of it.
+
+  The editor said "Notes" everywhere — as the ⋯ menu item, as the modal title, and again as the
+  field's own label — so one field was labelled three times and none of the three said whether it
+  was about to CREATE a note or overwrite one. The menu item and the title now read "Add a note" or
+  "Edit note" to match what will happen, and the third label is gone.
+
+  The hint no longer calls the note "private". A budget is shared by default and its note carries no
+  per-member access of any kind, so the copy was asserting a property the data model does not have.
+
+  Removing a note was reachable only by selecting the text, deleting it and pressing Save — a
+  destructive gesture with no name. It is now an explicit "Remove note" that confirms first, set
+  apart from Cancel and Save so it cannot be hit while reaching for the primary action.
+
+  Saving now confirms at the moment of the click, naming the budget: the row does change, but the
+  user is looking at the modal, and a modal that simply closes is what made a working save read as a
+  broken one in the first place.
+
+  In the compact list the note is now READ as text beside the budget name rather than hidden behind
+  a tooltip on a glyph — the same pattern /accounts deliberately retired, and for the same reason: a
+  native tooltip never opens on keyboard focus and does not exist on touch. The text takes only the
+  width the budget name leaves behind, so a note can never truncate the name, and it steps aside
+  entirely on narrow panes. Every entry point to the editor now names the budget it belongs to, so a
+  screen reader no longer announces an identical "Notes, button" on every card.
+
+  The textarea is sized to the sentence or two people actually write instead of filling the modal,
+  and is resizable for the times they write more.
+
 ### Added
 - **The assistant's answers stream (G2-C7).** A long answer used to read as a stall: a spinner, then
   everything at once. Text now appears as it is written, on BOTH paths — the direct key streams from
