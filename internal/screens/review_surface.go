@@ -272,8 +272,12 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 
 	doScan := func() {
 		if !hasProvider {
+			// Land on the AI tab, not the settings default. Sending someone to a
+			// page that says nothing about keys, after closing the surface they
+			// were working in, is why "Connect a key" read as a button that does
+			// nothing. Settings tabs are routable as /settings/<tab>.
 			uistate.CloseReviewInbox()
-			nav.Navigate(uistate.RoutePath("/settings"))
+			nav.Navigate(uistate.RoutePath("/settings/ai"))
 			return
 		}
 		if len(gapRows) == 0 || scanState.Get() == "scanning" {

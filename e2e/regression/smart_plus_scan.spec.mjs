@@ -171,3 +171,21 @@ test.describe("SMART+ scan", () => {
     });
   });
 });
+
+test.describe("SMART+ with no key", () => {
+  test("'Connect a key' lands on the AI settings tab, not the default one", async ({ app }) => {
+    // No key configured: the strip must still explain itself and offer a way to
+    // enable the feature.
+    await openReview(app);
+    const setup = app.getByTestId("review-scan-setup");
+    await expect(setup).toBeVisible();
+    await expect(app.getByTestId("review-scan")).toHaveCount(0);
+
+    await setup.click();
+
+    // It must arrive where the key actually lives. Landing on Settings' default
+    // tab — which says nothing about AI — is why this read as a dead button.
+    await expect(app).toHaveURL(/\/settings\/ai/);
+    await expect(app.getByLabel(KEY_LABEL).first()).toBeVisible();
+  });
+});

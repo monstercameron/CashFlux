@@ -44,6 +44,9 @@ and every commit updates this file under `Unreleased`.
   the first thing you see is no longer the one charge nothing can answer.
 
 ### Fixed
+- **"Connect a key" dropped you on the wrong settings tab.** It closed the review surface and
+  navigated to Settings' default tab, which says nothing about AI — so the button looked like it
+  did nothing. It now lands on the AI tab, where the key field is.
 - **A finished Smart+ scan could leave nothing to click.** When the model's reply parsed to no
   usable assignments the strip showed "filled 0" with no action at all, so the only way to retry
   was closing and reopening the surface — indistinguishable from the feature being broken. The
