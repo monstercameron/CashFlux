@@ -57,8 +57,21 @@ func NumberInput(p TextFieldProps) uic.Node {
 }
 
 // TextAreaInput renders a multi-line text input using the .field styling.
+//
+// The value is carried ONLY by fieldArgs' Value option, which the renderer
+// applies as the element's value PROPERTY. It must not also be passed as a
+// child.
+//
+// It used to be, and the result was that a textarea could hold exactly one
+// character. A textarea's child text is its content, so re-rendering replaced
+// that content: the first keystroke fired OnInput, the state change re-rendered
+// the node, the child text was written back, and every keystroke after that was
+// swallowed. Typing "TYPED NOTE" left "T" in the field. Every multi-line field
+// in the app went through here — budget and account notes, goal notes, the
+// credential form — so all of them were unusable for anything longer than a
+// single letter.
 func TextAreaInput(p TextFieldProps) uic.Node {
-	return Textarea(append(fieldArgs(p), p.Value)...)
+	return Textarea(fieldArgs(p)...)
 }
 
 // MoneyInputProps configures a currency-aware MoneyInput.

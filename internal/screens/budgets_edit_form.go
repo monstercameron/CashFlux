@@ -157,7 +157,10 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	topupCoverOpenS := ui.UseState(false)
 	// Notes mode: the budget's free-text note.
 	notesS := ui.UseState(b.Notes)
-	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
+	// The Event form, not func(string): a func(string) handler on a TEXTAREA never
+	// receives the typed text, so the note saved as empty while the field visibly
+	// held it — the editor closed cleanly and the note simply never appeared.
+	onNotes := ui.UseEvent(func(e ui.Event) { notesS.Set(e.GetValue()) })
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
 	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
@@ -465,6 +468,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			done()
 			return
 		}
+		saved := false
 		for _, bb := range app.Budgets() {
 			if bb.ID != props.BudgetID {
 				continue
@@ -474,8 +478,20 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				errS.Set(err.Error())
 				return
 			}
+			saved = true
 			break
 		}
+		// A save that matched nothing used to close the editor as though it had
+		// worked: the note simply never appeared on the card, with no error to
+		// explain it. Silence is the worst outcome for a write — say so and stay
+		// open so the text is not lost.
+		if !saved {
+			errS.Set(uistate.T("budgets.notesSaveFailed"))
+			return
+		}
+		// Writing through the store updates memory; RequestPersist is what puts it
+		// in the dataset. Without it the note survives only until the next reload.
+		uistate.RequestPersist()
 		uistate.BumpDataRevision()
 		done()
 	}))
@@ -887,11 +903,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
 						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
 					})),
+				// C590: this picker moves ONE budget; the page's "Budgeting method"
+				// popover moves the household. Both were called "method" and neither
+				// said so, which is how a card-level edit became a page-wide switch.
 				labeledField(uistate.T("budgets.methodLabel"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
-						OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
-					}))),
+					Fragment(
+						uiw.SelectInput(uiw.SelectInputProps{
+							Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
+							OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
+						}),
+						Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-edit-method-hint"),
+							budgetOwnMethodHint(app.Settings().BudgetMethodology, methodologyS.Get()))))),
 			// C5: owner silently set the budget's shared/individual scope — say what it means.
 			If(len(app.Members()) > 0, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-edit-owner-hint"),
 				Style(map[string]string{"margin": "0"}), budgetOwnerScopeHint(app.Members(), ownerS.Get()))),

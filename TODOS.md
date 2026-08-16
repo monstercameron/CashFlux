@@ -8260,3 +8260,38 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: the journey has no lost state, stale totals, contradictory category scopes, silent persistence
   failures, or unexplained navigation; measured completion time and action count are acceptable for a
   monthly budgeting task.
+
+---
+
+## C545 — budget notes cannot be saved (found 2026-08-16) ★
+
+- [ ] **C545 [BLOCKER][BUDGET] A note typed into the budget notes editor is silently discarded.** ★
+  Open a budget's ⋯ → Notes, type, Save. The editor closes with no error and the note never appears
+  — not on the card, not after navigating away and back, not after a reload. It is not in the stored
+  dataset either, so nothing is written at all.
+
+  **What has been ruled out**, so the next person does not repeat it:
+  - *Not the store.* `TestBudgetNotesRoundTrip` (added with this ticket) proves `Budget.Notes`
+    survives export/import, the SQLite snapshot, and a `PutBudget` → `ListBudgets` round trip.
+  - *Not the row rendering.* `budgets_row.go` renders `notesNode` under `If(hasSide, …
+    If(hasNotes, …))` and both flags derive directly from `s.Budget.Notes`.
+  - *Not a missing match in the save loop.* The handler now reports when it matches no budget
+    (`budgets.notesSaveFailed`) and that error never fires, so the loop matches and `PutBudget`
+    returns nil — it is being handed an EMPTY string.
+  - *Not the shared input helper.* Substituting a raw `Textarea(css.Class("field"), Value(...),
+    OnInput(...))` for `uiw.TextAreaInput` reproduces it exactly.
+  - *Not the handler's argument shape.* Both `func(v string)` and `func(e ui.Event)` with
+    `e.GetValue()` behave identically.
+  - *Not machine-speed typing.* Reproduced at 40–60 ms per character, i.e. human speed. (A plain
+    `<input>` on the same page DOES round-trip state at that speed — the add-budget name field
+    drives its live "will create …" hint correctly.)
+
+  **The live clue.** Typing `PROBE NOTE alpha` left `PROBE NOTE alpa` in the field — a character was
+  dropped mid-word. That means state IS updating and a re-render raced the keystroke, so the value
+  reaches Go at least sometimes, yet the value read at save time is empty. The most likely remaining
+  explanation is that the notes editor's component instance at save time is not the one the
+  keystrokes updated — a remount between typing and submitting would give exactly this: a live
+  field, a clobbered character, and an empty read.
+
+  AC: a typed note appears on the card immediately and survives a reload. Cover it with the existing
+  `budgets.spec.mjs` "notes modal" test, which currently fails on precisely this.

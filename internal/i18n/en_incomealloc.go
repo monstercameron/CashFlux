@@ -89,6 +89,9 @@ var incomeAllocKeys = Catalog{
 	// histogram, prior-period deltas, sparklines and a drill-through per bar.
 	// These point at it rather than duplicating it into a second set of numbers.
 	"budgets.seeSpend": "See where it went",
+	// Shown when a note save matched no budget. Silence on a write is worse than
+	// an error: the note vanishes and nothing says why.
+	"budgets.notesSaveFailed": "Could not save the note — this budget no longer exists. Copy your text before closing.",
 	// C516: a completion that is billed but carries no text - a reasoning-only
 	// turn, a length cap hit before any visible text, or a filtered response.
 	// Rendering nothing made this indistinguishable from the assistant being
