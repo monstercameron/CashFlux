@@ -6,6 +6,66 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **SMART categorization — the free, on-device half of filing transactions.** Three pure
+  packages that suggest a category with no model, no network and no key: `merchantdict`
+  (309 hand-authored merchants matched on cleaned descriptors), `learntally`'s merchant tier
+  (what you did with this merchant before), and `catsuggest`, which ranks every source
+  **rule > exact history > merchant history > dictionary > Smart+** and returns the evidence
+  behind its answer. Measured on the sample household: **176 of 250 queued charges (70%)
+  resolve with zero rules and zero history**, rising to 197 after learning one merchant.
+- **Review transactions is one surface with two modes.** Bulk collapses the queue into
+  merchant decisions tiered by confidence — 249 charges become 9 decisions on the sample —
+  with inline category selects, expandable charges, per-tier select-all and a pinned action
+  bar. One-at-a-time keeps the focused view and gains a context band showing what else the
+  charge is tied to: the other queued charges from that merchant as an inspectable list,
+  order groups and refund pairs, duplicate candidates, and how the amount compares with the
+  merchant's usual. Replaces the review inbox and the separate Smart+ categorization modal,
+  which wrote the same field through two different undo mechanisms.
+- **Turn a batch into a rule.** "Always do this" writes one rule per selected merchant and
+  applies the batch, so a single action clears what is queued and stops the next batch
+  arriving. Rules match the cleaned merchant name, not the raw descriptor.
+- **Keyboard-first triage.** j/k move, space picks, Enter confirms, s snoozes, d dismisses,
+  1/b switch modes. Typing in a field is never intercepted.
+- **Durable snooze and dismiss.** Skipping was in-memory and lost on reload, so a skipped
+  charge re-blocked the head of the queue on the next visit. Decisions now persist.
+- **One shared category picker that can create a sub-category.** Replaces four copy-pasted
+  inline quick-adds, every one of which could only ever create a top-level category.
+- **Smart+ scan states its scope and cost before it spends anything**, and now renders even
+  with no key configured — the paid tier was previously invisible to anyone who had not
+  already bought in.
+
+### Changed
+- **Smart+ is asked for less, and held to more.** It sees every category as a qualified path
+  with its kind (`Auto > Gas | expense`), must answer with a confidence marker, and is only
+  consulted for merchants the free sources could not place. Its answers rank below both a
+  hand edit and a local suggestion.
+- Category suggestions are grouped and ordered by confidence rather than newest-first, so
+  the first thing you see is no longer the one charge nothing can answer.
+
+### Fixed
+- **A category could be assigned to the wrong one of two identically named sub-categories.**
+  Categories reached the model as bare leaf names, so "Gas" under Auto and "Gas" under
+  Utilities collided in a name-keyed map and resolved to whichever was indexed last.
+- **An income charge could be given an expense category** (and the reverse) from correction
+  history, which is per-payee and blind to sign.
+- **A well-known merchant whose name ends in digits could never be recognized.** Descriptor
+  cleaning strips trailing reference numbers, which is right for "SHELL OIL 57445208" and
+  wrong for "Microsoft 365".
+- **"Also apply to N others" was ignored by two of the three ways to apply a category**, so
+  ticking it and then using Smart+ or the suggestion chip silently categorized one
+  transaction while looking like a batch.
+- **Split transactions sat in the review queue where assigning a category did nothing.**
+  Splits take precedence over the flat category everywhere spending is calculated, so a
+  reconciling split is already fully categorized; an unbalanced one now says so instead.
+- **The review progress counter lied** whenever a rule fired or a sync landed mid-session.
+- **The pinned footer of every full-height modal painted black in light mode** — it carried
+  hardcoded dark colours instead of theme tokens.
+- **A category could be saved as its own parent, or in a loop**, which only showed up as odd
+  rendering rather than being refused at the point of writing.
+- The merchant grouping shown to the user and the grouping a batch action actually touched
+  are now the same thing.
+
 ### Fixed
 - **Assistant chat bubbles no longer render permanently blank on a busy first paint.**
   `renderMarkdown` looked up its target element once and silently gave up if the DOM node wasn't

@@ -1,3 +1,62 @@
+## 2026-08-15 — The queue was never 250 decisions
+
+Cam's brief on the review modal was that it was too restrictive: no way to work in batches, no
+way to see what a charge was related to, and no way to add a category without leaving. Reading
+the code first changed the shape of the work. A bulk Smart+ categorizer already existed as a
+separate modal, so this was mostly a MERGE of two surfaces that were writing the same field
+through two different undo mechanisms — not a greenfield build.
+
+The design bet, once the data was in front of me: a queue of 250 charges is not 250 decisions.
+It is about nine merchant decisions, and the only thing that varies is how sure we are. Bulk
+mode groups by merchant and tiers by confidence; on the sample household 249 charges collapse
+to 9 rows. One-at-a-time keeps the focused view for when context matters more than throughput.
+
+Underneath, the more important decision was that the free tier should do the work. Rules,
+correction history and a shipped merchant dictionary run on-device for nothing; Smart+ is only
+asked about what they could not place, and its answers rank below both a rule and a hand edit.
+That ordering is what makes the paid pass small and its cost estimate honest. Measured: 70% of
+the sample's queued charges resolve with no rules, no history and no key at all.
+
+Four things went wrong in ways worth writing down.
+
+UseEffect does not run for a component passed as a FlipPanel prop. The keyboard listener
+registered from inside the surface silently never attached, and the header was already
+advertising "j / k move" — a hint about behaviour that did not exist. Keys now dispatch through
+the app's existing global handler. Relatedly, the root's data-focus attribute turned out to be
+load-bearing: without a changed prop on the root, the reconciler skipped diffing the keyed
+merchant rows entirely and moving focus updated no class.
+
+FlushBody strips the panel's own padding so a body can pin its own footer, which meant nothing
+supplied a horizontal gutter and every row sat flush against the panel edge. That is what Cam
+saw as "crooked", along with a money column that staggered 35px between a merchant and its
+charges. Both are measured now rather than eyeballed.
+
+A sentinel option inside a <select> is a value the browser can commit. "+ New category" could
+be left displayed where a category belongs, and re-keying the row did not restore it. Replacing
+it with a button removed the bug class instead of patching it.
+
+And the Smart+ strip rendered only when a provider was already configured — so the entire paid
+tier was invisible to anyone who had not already bought in, which is exactly how Cam came to
+report that he could not see it.
+
+Writing invariants rather than examples found three more bugs nobody would have caught by
+inspection: a dictionary entry whose name ends in digits could never match anything, history
+could hand an income charge an expense category, and the merchant namespace was forgeable by a
+payee literally named "~amazon". The cross-package test that reviewqueue and learntally group
+the same descriptors is the one I would keep above all the others — if those drift, the app
+confirms one set of charges and learns from a different one, and the symptom appears weeks later
+with nothing pointing back at the cause.
+
+CI had been red on every commit for weeks, including docs-only ones, which is why none of this
+could ship. Two causes: seven standard-library advisories fixed in a Go patch release the module
+had not moved to, and a test that pinned a subscription's expiry to a literal date and began
+failing the moment that date passed. The full native suite is green for the first time in the
+series — 221 packages — and production moved from a commit weeks behind to current.
+
+Next: Smart+ still does not see correction history as context, only as a filter on what it is
+asked about. Feeding it a few "you filed these this way" examples is the obvious next
+improvement on the cases it is actually being paid for.
+
 ## 2026-08-14 — An answer that existed and never reached the screen
 
 Found during the Assistant deep-review, not reported: a chat bubble rendering completely empty —
