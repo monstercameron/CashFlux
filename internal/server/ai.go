@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -37,8 +38,15 @@ const (
 	maxAIVisionImageURLBytes  = 4 << 20
 	maxAIVisionSchemaNameSize = 128
 	maxAIVisionSchemaBytes    = 64 << 10
+	maxAIChatTools            = 64
+	maxAIToolNameLength       = 128
+	maxAIToolSchemaBytes      = 32 << 10
 	aiCircuitFailureThreshold = 3
 	aiCircuitCooldown         = 30 * time.Second
+	// defaultAIMaxOutputTokens gives a reasoning model enough room to think AND
+	// write an answer. Too low and it spends the lot reasoning and returns nothing;
+	// unbounded and one question can eat a day's tokens.
+	defaultAIMaxOutputTokens = 8192
 )
 
 type aiHTTPDoer interface {
@@ -55,6 +63,7 @@ type AIService struct {
 	upstreamTimeout time.Duration
 	upstreamRetries int
 	requestMaxBytes int64
+	maxOutputTokens int
 	requestsPerDay  int64
 	tokensPerDay    int64
 	alertRequests   int64
@@ -76,6 +85,10 @@ type AIServiceConfig struct {
 	UpstreamTimeout time.Duration
 	UpstreamRetries int
 	RequestMaxBytes int64
+	// MaxOutputTokens bounds one completion's output. It defaults to
+	// defaultAIMaxOutputTokens rather than to "unlimited": a reasoning model with no
+	// ceiling can burn a household's whole daily allowance on a single answer.
+	MaxOutputTokens int
 	RequestsPerDay  int64
 	TokensPerDay    int64
 	AlertRequests   int64
@@ -89,6 +102,12 @@ type AIChatRequest struct {
 	Model       string       `json:"model"`
 	Messages    []ai.Message `json:"messages"`
 	Temperature float64      `json:"temperature,omitempty"`
+	// Tools are the functions the caller will run locally on the model's behalf.
+	// A household on the server key gets the same tool-using assistant as one on a
+	// direct key; without these the proxy could only ever answer from context.
+	Tools []ai.Tool `json:"tools,omitempty"`
+	// ReasoningEffort is the caller's thinking level for reasoning models.
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
 }
 
 type AIVisionRequest struct {
@@ -104,6 +123,13 @@ type AIVisionRequest struct {
 type AICompletion struct {
 	Content string   `json:"content"`
 	Usage   ai.Usage `json:"usage"`
+	// ToolCalls are the functions the model asked the caller to run. Empty on a
+	// plain answer.
+	ToolCalls []ai.ToolCall `json:"toolCalls,omitempty"`
+	// FinishReason is why the model stopped ("stop", "length", "content_filter",
+	// "tool_calls"). It travels with every completion so a short or empty answer can
+	// say why it is short rather than looking like a failure with no explanation.
+	FinishReason string `json:"finishReason,omitempty"`
 }
 
 func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
@@ -126,6 +152,10 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 			allowedModels[model] = struct{}{}
 		}
 	}
+	maxOutputTokens := cfg.MaxOutputTokens
+	if maxOutputTokens <= 0 {
+		maxOutputTokens = defaultAIMaxOutputTokens
+	}
 	blockedUsers := make(map[string]struct{}, len(cfg.BlockedUserIDs))
 	for _, userID := range cfg.BlockedUserIDs {
 		userID = strings.TrimSpace(userID)
@@ -143,6 +173,7 @@ func NewAIService(store *Store, cfg AIServiceConfig) *AIService {
 		upstreamTimeout: cfg.UpstreamTimeout,
 		upstreamRetries: cfg.UpstreamRetries,
 		requestMaxBytes: cfg.RequestMaxBytes,
+		maxOutputTokens: maxOutputTokens,
 		requestsPerDay:  cfg.RequestsPerDay,
 		tokensPerDay:    cfg.TokensPerDay,
 		alertRequests:   cfg.AlertRequests,
@@ -164,11 +195,78 @@ func (s *AIService) Chat(ctx context.Context, req AIChatRequest) (AICompletion, 
 	if err := validateAIChatRequest(req); err != nil {
 		return AICompletion{}, err
 	}
-	body, err := ai.BuildRequest(req.Model, req.Messages, req.Temperature)
+	up, err := s.buildChatUpstream(req)
 	if err != nil {
-		return AICompletion{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
+		return AICompletion{}, err
 	}
-	return s.complete(ctx, body)
+	return s.complete(ctx, up)
+}
+
+// buildChatUpstream picks the endpoint the request actually needs and prepares the
+// call for it. Reasoning models and tool-calling turns go to the Responses API:
+// /chat/completions rejects reasoning_effort alongside function tools, and — the
+// failure that made this necessary — it reports a reasoning model that spent its
+// whole allowance thinking as a *successful* reply with empty content, which is
+// how a billed call reached the screen as a blank bubble. The Responses API reports
+// that same case as incomplete with a reason. Everything else keeps the simpler
+// chat-completions path, now with an output budget so it is bounded too.
+func (s *AIService) buildChatUpstream(req AIChatRequest) (aiUpstream, error) {
+	if ai.ReasoningModel(req.Model) || len(req.Tools) > 0 {
+		body, err := ai.BuildBudgetedResponsesToolRequest(req.Model, req.Messages, req.Temperature, req.ReasoningEffort, req.Tools, s.maxOutputTokens)
+		if err != nil {
+			return aiUpstream{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
+		}
+		return aiUpstream{path: "/responses", body: body, parse: parseResponsesUpstream}, nil
+	}
+	body, err := ai.BuildRequestWithOptions(req.Model, req.Messages, ai.ChatOptions{
+		Temperature:         req.Temperature,
+		MaxCompletionTokens: s.maxOutputTokens,
+		ReasoningEffort:     req.ReasoningEffort,
+	})
+	if err != nil {
+		return aiUpstream{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
+	}
+	return aiUpstream{path: "/chat/completions", body: body, parse: parseChatUpstream}, nil
+}
+
+// aiUpstream is one prepared upstream call: which OpenAI endpoint it targets, the
+// body to post, and how to read that endpoint's reply back into a completion. The
+// two endpoints answer in different shapes, so the reader travels with the request
+// rather than being guessed at the other end.
+type aiUpstream struct {
+	path  string
+	body  []byte
+	parse func([]byte) (AICompletion, error)
+}
+
+// parseChatUpstream reads a /chat/completions reply, refusing an answer that is
+// empty for anything other than a tool call — an empty completion is always caused
+// by something (a length cap, a filter), and the finish reason names it. The usage
+// rides back even on the refusal, because those tokens were still billed.
+func parseChatUpstream(data []byte) (AICompletion, error) {
+	msg, finish, usage, err := ai.ParseChat(data)
+	if err != nil {
+		return AICompletion{Usage: usage}, err
+	}
+	if strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0 {
+		return AICompletion{Usage: usage, FinishReason: finish}, errors.New(ai.EmptyReplyMessage(finish))
+	}
+	return AICompletion{Content: msg.Content, Usage: usage, ToolCalls: msg.ToolCalls, FinishReason: finish}, nil
+}
+
+// parseResponsesUpstream reads a /responses reply. ParseResponsesChat already
+// refuses an empty reply, explains why it was empty, and reports the tokens the
+// attempt cost.
+func parseResponsesUpstream(data []byte) (AICompletion, error) {
+	msg, usage, err := ai.ParseResponsesChat(data)
+	if err != nil {
+		return AICompletion{Usage: usage}, err
+	}
+	finish := ai.FinishStop
+	if len(msg.ToolCalls) > 0 {
+		finish = ai.FinishToolCalls
+	}
+	return AICompletion{Content: msg.Content, Usage: usage, ToolCalls: msg.ToolCalls, FinishReason: finish}, nil
 }
 
 func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompletion, error) {
@@ -197,7 +295,7 @@ func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompleti
 	if err != nil {
 		return AICompletion{}, status.Errorf(codes.InvalidArgument, "build vision request: %v", err)
 	}
-	return s.complete(ctx, body)
+	return s.complete(ctx, aiUpstream{path: "/chat/completions", body: body, parse: parseChatUpstream})
 }
 
 func (s *AIService) ListModels(context.Context) []string {
@@ -219,7 +317,8 @@ func (s *AIService) ensureEnabled() error {
 	return nil
 }
 
-func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, error) {
+func (s *AIService) complete(ctx context.Context, up aiUpstream) (AICompletion, error) {
+	body := up.body
 	if s == nil || s.store == nil {
 		return AICompletion{}, status.Error(codes.FailedPrecondition, "ai service store is not configured")
 	}
@@ -271,7 +370,7 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		upstreamCtx, cancel = context.WithTimeout(ctx, s.upstreamTimeout)
 	}
 	defer cancel()
-	resp, err := s.doUpstream(upstreamCtx, body, key)
+	resp, err := s.doUpstream(upstreamCtx, up.path, body, key)
 	if err != nil {
 		release()
 		if ctx.Err() != nil {
@@ -300,20 +399,21 @@ func (s *AIService) complete(ctx context.Context, body []byte) (AICompletion, er
 		return AICompletion{}, status.Error(openAICode(resp.StatusCode), ai.ErrorMessage(resp.StatusCode, data))
 	}
 	s.recordAIUpstreamSuccess()
-	content, err := ai.ParseResponse(data)
-	if err != nil {
-		release()
-		return AICompletion{}, status.Errorf(codes.Internal, "parse openai response: %v", err)
-	}
-	usage := ai.ParseUsage(data)
-	// The request slot is already reserved; record only the tokens now.
+	// A reply that parsed to nothing was still billed upstream, so its tokens are
+	// recorded before the error is returned — the user pays for it either way, and a
+	// usage line that quietly omits failed calls understates the real spend.
+	completion, parseErr := up.parse(data)
+	usage := completion.Usage
 	next, err := s.store.AddUsage(user.ID, day, 0, int64(usage.TotalTokens))
 	if err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
 	s.auditAIUsageAlerts(ctx, day, previous, next)
 	s.metrics.ObserveAIProxy(int64(usage.TotalTokens))
-	return AICompletion{Content: content, Usage: usage}, nil
+	if parseErr != nil {
+		return AICompletion{}, status.Error(codes.Internal, parseErr.Error())
+	}
+	return completion, nil
 }
 
 func (s *AIService) aiBlocked(userID string) bool {
@@ -378,7 +478,7 @@ func crossedUsageAlert(previous, next, threshold int64) bool {
 	return threshold > 0 && previous < threshold && next >= threshold
 }
 
-func (s *AIService) doUpstream(ctx context.Context, body []byte, key string) (*http.Response, error) {
+func (s *AIService) doUpstream(ctx context.Context, path string, body []byte, key string) (*http.Response, error) {
 	attempts := s.upstreamRetries + 1
 	if attempts < 1 {
 		attempts = 1
@@ -388,7 +488,7 @@ func (s *AIService) doUpstream(ctx context.Context, body []byte, key string) (*h
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+"/chat/completions", bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, s.baseURL+path, bytes.NewReader(body))
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "build upstream request: %v", err)
 		}
@@ -466,14 +566,36 @@ func validateAIChatRequest(req AIChatRequest) error {
 	if err := validateAITemperature(req.Temperature); err != nil {
 		return err
 	}
+	if len(req.Tools) > maxAIChatTools {
+		return status.Error(codes.InvalidArgument, "too many tools")
+	}
+	for _, tool := range req.Tools {
+		if strings.TrimSpace(tool.Function.Name) == "" {
+			return status.Error(codes.InvalidArgument, "tool name is required")
+		}
+		if len(tool.Function.Name) > maxAIToolNameLength {
+			return status.Error(codes.InvalidArgument, "tool name is too long")
+		}
+		if len(tool.Function.Parameters) > maxAIToolSchemaBytes {
+			return status.Error(codes.InvalidArgument, "tool schema is too large")
+		}
+		if len(tool.Function.Parameters) > 0 && !json.Valid(tool.Function.Parameters) {
+			return status.Error(codes.InvalidArgument, "tool schema must be valid JSON")
+		}
+	}
 	var total int
 	for _, msg := range req.Messages {
 		role := strings.TrimSpace(msg.Role)
-		if role != ai.RoleSystem && role != ai.RoleUser && role != ai.RoleAssistant {
+		if role != ai.RoleSystem && role != ai.RoleUser && role != ai.RoleAssistant && role != ai.RoleTool {
 			return status.Error(codes.InvalidArgument, "message role is invalid")
 		}
-		content := strings.TrimSpace(msg.Content)
-		if content == "" {
+		if role == ai.RoleTool && strings.TrimSpace(msg.ToolCallID) == "" {
+			return status.Error(codes.InvalidArgument, "tool result is missing its call id")
+		}
+		// An assistant turn that only asks to run tools carries no text, and a tool
+		// result may legitimately be an empty string — so content is required only
+		// where nothing else in the message says what it is.
+		if strings.TrimSpace(msg.Content) == "" && len(msg.ToolCalls) == 0 && role != ai.RoleTool {
 			return status.Error(codes.InvalidArgument, "message content is required")
 		}
 		if len(msg.Content) > maxAIMessageContentBytes {

@@ -29,21 +29,42 @@ func TestAIServiceChatUsesEncryptedKeyAndRecordsUsage(t *testing.T) {
 	}
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/chat/completions" {
+		// gpt-5.4-mini is a reasoning model, so the proxy must use the Responses
+		// API — /chat/completions is the endpoint that returns a billed-but-empty
+		// reply for these models with no way to say why.
+		if r.URL.Path != "/responses" {
 			t.Fatalf("upstream path = %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-server-secret" {
 			t.Fatalf("authorization = %q", got)
 		}
-		var body ai.ChatRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		body, err := decodeResponsesRequest(string(raw))
+		if err != nil {
 			t.Fatalf("decode upstream body: %v", err)
 		}
-		if body.Model != "gpt-5.4-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello" {
-			t.Fatalf("upstream body = %+v", body)
+		if body["model"] != "gpt-5.4-mini" {
+			t.Fatalf("upstream model = %v", body["model"])
+		}
+		if _, ok := body["temperature"]; ok {
+			t.Fatalf("reasoning model was sent a temperature: %v", body)
+		}
+		budget, ok := body["max_output_tokens"].(float64)
+		if !ok || int(budget) != defaultAIMaxOutputTokens {
+			t.Fatalf("max_output_tokens = %v (want %d)", body["max_output_tokens"], defaultAIMaxOutputTokens)
+		}
+		input, ok := body["input"].([]any)
+		if !ok || len(input) != 1 {
+			t.Fatalf("upstream input = %v", body["input"])
+		}
+		if first, _ := input[0].(map[string]any); first["content"] != "hello" {
+			t.Fatalf("upstream input[0] = %v", input[0])
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi back"}}],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}`))
+		_, _ = w.Write([]byte(responsesTextReply("hi back", 2, 3)))
 	}))
 	defer upstream.Close()
 
@@ -351,7 +372,7 @@ func TestAIServiceAuditsUsageAlertsWhenThresholdsCross(t *testing.T) {
 		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":2}}`)),
+				Body:       io.NopCloser(strings.NewReader(responsesTextReply("ok", 1, 1))),
 			}, nil
 		}),
 	})
@@ -462,7 +483,7 @@ func (c *sequenceAIClient) Do(req *http.Request) (*http.Response, error) {
 	}
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"retry ok"}}],"usage":{"total_tokens":7}}`)),
+		Body:       io.NopCloser(strings.NewReader(responsesTextReply("retry ok", 3, 4))),
 	}, nil
 }
 
@@ -477,7 +498,7 @@ func TestAIServiceRetriesTransientUpstreamStatus(t *testing.T) {
 	}
 	client := &sequenceAIClient{responses: []*http.Response{
 		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
-		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"retry ok"}}],"usage":{"total_tokens":7}}`))},
+		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(responsesTextReply("retry ok", 3, 4)))},
 	}}
 	svc := NewAIService(store, AIServiceConfig{MasterKey: master, Client: client, UpstreamRetries: 1})
 	got, err := svc.Chat(ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"}), AIChatRequest{
@@ -548,7 +569,7 @@ func TestAIServiceCircuitResetsAfterCooldownAndSuccess(t *testing.T) {
 		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
 		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
 		{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(`temporary`))},
-		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"reset ok"}}],"usage":{"total_tokens":3}}`))},
+		{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(responsesTextReply("reset ok", 1, 2)))},
 	}}
 	svc := NewAIService(store, AIServiceConfig{
 		MasterKey:       master,

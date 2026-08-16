@@ -100,14 +100,21 @@ func (s *AIService) ListModelsRPC(ctx context.Context, req backendrpc.ListModels
 
 func (s *AIService) ChatRPC(ctx context.Context, req backendrpc.ChatRequest) (backendrpc.Completion, error) {
 	out, err := s.Chat(ctx, AIChatRequest{
-		Model:       req.Model,
-		Messages:    aiMessages(req.Messages),
-		Temperature: req.Temperature,
+		Model:           req.Model,
+		Messages:        aiMessages(req.Messages),
+		Temperature:     req.Temperature,
+		Tools:           aiTools(req.Tools),
+		ReasoningEffort: req.ReasoningEffort,
 	})
 	if err != nil {
 		return backendrpc.Completion{}, err
 	}
-	return backendrpc.Completion{Content: out.Content, Usage: rpcUsage(out.Usage)}, nil
+	return backendrpc.Completion{
+		Content:      out.Content,
+		Usage:        rpcUsage(out.Usage),
+		ToolCalls:    rpcToolCalls(out.ToolCalls),
+		FinishReason: out.FinishReason,
+	}, nil
 }
 
 func (s *AIService) VisionRPC(ctx context.Context, req backendrpc.VisionRequest) (backendrpc.Completion, error) {
@@ -139,7 +146,13 @@ func (s *AIService) ChatStreamRPC(req backendrpc.ChatRequest, stream grpc.Server
 		statusCode = status.Code(err).String()
 		return err
 	}
-	if err := stream.SendMsg(&backendrpc.CompletionChunk{Content: completion.Content, Usage: completion.Usage, Done: true}); err != nil {
+	if err := stream.SendMsg(&backendrpc.CompletionChunk{
+		Content:      completion.Content,
+		Usage:        completion.Usage,
+		ToolCalls:    completion.ToolCalls,
+		FinishReason: completion.FinishReason,
+		Done:         true,
+	}); err != nil {
 		statusCode = status.Code(err).String()
 		return err
 	}
@@ -169,7 +182,61 @@ func (s *AIService) VisionStreamRPC(req backendrpc.VisionRequest, stream grpc.Se
 func aiMessages(messages []backendrpc.Message) []ai.Message {
 	out := make([]ai.Message, 0, len(messages))
 	for _, msg := range messages {
-		out = append(out, ai.Message{Role: msg.Role, Content: msg.Content})
+		out = append(out, ai.Message{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCalls:  aiToolCalls(msg.ToolCalls),
+			ToolCallID: msg.ToolCallID,
+			Name:       msg.Name,
+		})
+	}
+	return out
+}
+
+func aiToolCalls(calls []backendrpc.ToolCall) []ai.ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]ai.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		out = append(out, ai.ToolCall{
+			ID:       call.ID,
+			Type:     call.Type,
+			Function: ai.FunctionCall{Name: call.Function.Name, Arguments: call.Function.Arguments},
+		})
+	}
+	return out
+}
+
+func rpcToolCalls(calls []ai.ToolCall) []backendrpc.ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]backendrpc.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		out = append(out, backendrpc.ToolCall{
+			ID:       call.ID,
+			Type:     call.Type,
+			Function: backendrpc.FunctionCall{Name: call.Function.Name, Arguments: call.Function.Arguments},
+		})
+	}
+	return out
+}
+
+func aiTools(tools []backendrpc.Tool) []ai.Tool {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]ai.Tool, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, ai.Tool{
+			Type: tool.Type,
+			Function: ai.FunctionDef{
+				Name:        tool.Function.Name,
+				Description: tool.Function.Description,
+				Parameters:  tool.Function.Parameters,
+			},
+		})
 	}
 	return out
 }

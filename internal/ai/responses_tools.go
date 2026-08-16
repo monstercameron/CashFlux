@@ -48,13 +48,14 @@ type responsesReasoning struct {
 // []json.RawMessage so reasoning items can be echoed back verbatim alongside the
 // struct-built role / function_call / function_call_output items.
 type responsesToolRequest struct {
-	Model       string                  `json:"model"`
-	Input       []json.RawMessage       `json:"input"`
-	Tools       []responsesFunctionTool `json:"tools,omitempty"`
-	ToolChoice  string                  `json:"tool_choice,omitempty"`
-	Temperature float64                 `json:"temperature,omitempty"`
-	Reasoning   *responsesReasoning     `json:"reasoning,omitempty"`
-	Store       bool                    `json:"store"`
+	Model           string                  `json:"model"`
+	Input           []json.RawMessage       `json:"input"`
+	Tools           []responsesFunctionTool `json:"tools,omitempty"`
+	ToolChoice      string                  `json:"tool_choice,omitempty"`
+	Temperature     float64                 `json:"temperature,omitempty"`
+	Reasoning       *responsesReasoning     `json:"reasoning,omitempty"`
+	MaxOutputTokens int                     `json:"max_output_tokens,omitempty"`
+	Store           bool                    `json:"store"`
 }
 
 // messagesToResponsesInput converts the chat-completions message history into the
@@ -105,12 +106,26 @@ func toolsToResponses(tools []Tool) []responsesFunctionTool {
 // temperature is included only when non-zero (reasoning models reject a custom temp).
 // store=false so the exchange isn't retained on OpenAI's side (privacy).
 func BuildResponsesToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool) ([]byte, error) {
+	return BuildBudgetedResponsesToolRequest(model, messages, temperature, reasoningEffort, tools, 0)
+}
+
+// BuildBudgetedResponsesToolRequest is BuildResponsesToolRequest with an explicit
+// max_output_tokens ceiling (0 leaves it to the model's default). A server relaying
+// other people's requests needs that ceiling: it bounds the spend per call, and
+// because the Responses API reports hitting it as incomplete rather than as a
+// success with no text, the cap stays explainable when it bites.
+func BuildBudgetedResponsesToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, maxOutputTokens int) ([]byte, error) {
 	req := responsesToolRequest{
-		Model:       model,
-		Input:       messagesToResponsesInput(messages),
-		Tools:       toolsToResponses(tools),
-		Temperature: temperature,
-		Store:       false,
+		Model:           model,
+		Input:           messagesToResponsesInput(messages),
+		Tools:           toolsToResponses(tools),
+		Temperature:     temperature,
+		MaxOutputTokens: maxOutputTokens,
+		Store:           false,
+	}
+	if ReasoningModel(model) {
+		// Reasoning models accept only the default temperature; sending one is a 400.
+		req.Temperature = 0
 	}
 	if len(tools) > 0 {
 		req.ToolChoice = "auto"
@@ -139,6 +154,29 @@ type responsesToolReply struct {
 	Output []json.RawMessage `json:"output"`
 	Usage  responsesUsage    `json:"usage"`
 	Error  *APIError         `json:"error,omitempty"`
+	// Status is "completed" / "incomplete" / "failed"; IncompleteDetails.Reason says
+	// why an incomplete reply stopped ("max_output_tokens", "content_filter"). Together
+	// they explain an empty reply instead of leaving it a mystery.
+	Status            string `json:"status,omitempty"`
+	IncompleteDetails *struct {
+		Reason string `json:"reason,omitempty"`
+	} `json:"incomplete_details,omitempty"`
+}
+
+// finishReason maps a Responses reply's status onto the chat-completions finish
+// vocabulary, so one set of explanations covers both transports.
+func (r responsesToolReply) finishReason() string {
+	if r.IncompleteDetails == nil {
+		return FinishStop
+	}
+	switch strings.TrimSpace(r.IncompleteDetails.Reason) {
+	case "max_output_tokens":
+		return FinishLength
+	case "content_filter":
+		return FinishContentFilter
+	default:
+		return r.IncompleteDetails.Reason
+	}
 }
 
 // ParseResponsesChat decodes a Responses tool reply into the same ai.Message shape
@@ -189,7 +227,7 @@ func ParseResponsesChat(data []byte) (Message, Usage, error) {
 		}
 	}
 	if msg.Content == "" && len(msg.ToolCalls) == 0 {
-		return Message{}, usage, errors.New("ai: the Responses reply was empty")
+		return Message{}, usage, errors.New(EmptyReplyMessage(r.finishReason()))
 	}
 	return msg, usage, nil
 }

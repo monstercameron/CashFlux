@@ -531,7 +531,7 @@ func TestAIDailyRequestCapHoldsUnderConcurrency(t *testing.T) {
 		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":1}}`)),
+				Body:       io.NopCloser(strings.NewReader(responsesTextReply("ok", 0, 1))),
 			}, nil
 		}),
 	})
@@ -604,7 +604,7 @@ func TestAIFailedRequestReleasesReservation(t *testing.T) {
 	working := NewAIService(store, AIServiceConfig{
 		MasterKey: master, RequestsPerDay: 1, Now: func() time.Time { return day },
 		Client: roundTripFunc(func(*http.Request) (*http.Response, error) {
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"ok"}}],"usage":{"total_tokens":2}}`))}, nil
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(responsesTextReply("ok", 1, 1)))}, nil
 		}),
 	})
 	if _, err := working.Chat(ctx, req); err != nil {

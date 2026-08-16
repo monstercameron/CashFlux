@@ -4,7 +4,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,20 +21,28 @@ import (
 
 func TestAIServiceGRPCBridgeSetKeyAndChat(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/chat/completions" {
+		if r.URL.Path != "/responses" {
 			t.Fatalf("upstream path = %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-grpc-secret" {
 			t.Fatalf("authorization = %q", got)
 		}
-		var body ai.ChatRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read upstream body: %v", err)
+		}
+		body, err := decodeResponsesRequest(string(raw))
+		if err != nil {
 			t.Fatalf("decode upstream body: %v", err)
 		}
-		if body.Model != "gpt-5.4-mini" || len(body.Messages) != 1 || body.Messages[0].Content != "hello grpc" {
+		input, _ := body["input"].([]any)
+		if body["model"] != "gpt-5.4-mini" || len(input) != 1 {
 			t.Fatalf("upstream body = %+v", body)
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"grpc says hi"}}],"usage":{"total_tokens":13}}`))
+		if first, _ := input[0].(map[string]any); first["content"] != "hello grpc" {
+			t.Fatalf("upstream input = %v", input[0])
+		}
+		_, _ = w.Write([]byte(responsesTextReply("grpc says hi", 6, 7)))
 	}))
 	defer upstream.Close()
 
@@ -94,7 +101,7 @@ func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-stream-secret" {
 			t.Fatalf("authorization = %q", got)
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"stream says hi"}}],"usage":{"total_tokens":21}}`))
+		_, _ = w.Write([]byte(responsesTextReply("stream says hi", 10, 11)))
 	}))
 	defer upstream.Close()
 

@@ -42,9 +42,44 @@ type ListModelsResponse struct {
 	Models []string `json:"models"`
 }
 
+// FunctionDef describes a tool the caller can run on the model's behalf: its name,
+// the plain-English description the model uses to decide when to call it, and a
+// JSON Schema for its arguments.
+type FunctionDef struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
+}
+
+// Tool wraps a function definition in the tools envelope.
+type Tool struct {
+	Type     string      `json:"type"`
+	Function FunctionDef `json:"function"`
+}
+
+// FunctionCall is the function name and raw JSON arguments the model wants run.
+type FunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// ToolCall is one tool invocation the model requested in an assistant turn.
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function FunctionCall `json:"function"`
+}
+
+// Message is one chat turn on the wire. ToolCalls carry an assistant turn's
+// requested calls and ToolCallID keys a tool result back to its call — without
+// them a tool conversation could not survive the trip through the proxy, which is
+// why the server path used to answer without tools at all.
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
+	ToolCallID string     `json:"toolCallId,omitempty"`
+	Name       string     `json:"name,omitempty"`
 }
 
 type Usage struct {
@@ -54,9 +89,11 @@ type Usage struct {
 }
 
 type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model           string    `json:"model"`
+	Messages        []Message `json:"messages"`
+	Temperature     float64   `json:"temperature,omitempty"`
+	Tools           []Tool    `json:"tools,omitempty"`
+	ReasoningEffort string    `json:"reasoningEffort,omitempty"`
 }
 
 type VisionRequest struct {
@@ -70,14 +107,18 @@ type VisionRequest struct {
 }
 
 type Completion struct {
-	Content string `json:"content"`
-	Usage   Usage  `json:"usage"`
+	Content      string     `json:"content"`
+	Usage        Usage      `json:"usage"`
+	ToolCalls    []ToolCall `json:"toolCalls,omitempty"`
+	FinishReason string     `json:"finishReason,omitempty"`
 }
 
 type CompletionChunk struct {
-	Content string `json:"content,omitempty"`
-	Usage   Usage  `json:"usage,omitempty"`
-	Done    bool   `json:"done,omitempty"`
+	Content      string     `json:"content,omitempty"`
+	Usage        Usage      `json:"usage,omitempty"`
+	ToolCalls    []ToolCall `json:"toolCalls,omitempty"`
+	FinishReason string     `json:"finishReason,omitempty"`
+	Done         bool       `json:"done,omitempty"`
 }
 
 type Workspace struct {

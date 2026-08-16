@@ -63,10 +63,13 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// ChatResponse is an OpenAI chat-completions response body.
+// ChatResponse is an OpenAI chat-completions response body. FinishReason says why
+// the model stopped ("stop", "length", "content_filter", "tool_calls") — without it
+// an empty reply cannot be explained, only observed.
 type ChatResponse struct {
 	Choices []struct {
-		Message Message `json:"message"`
+		Message      Message `json:"message"`
+		FinishReason string  `json:"finish_reason"`
 	} `json:"choices"`
 	Usage Usage     `json:"usage"`
 	Error *APIError `json:"error,omitempty"`
@@ -75,6 +78,79 @@ type ChatResponse struct {
 // BuildRequest marshals a chat request body to JSON.
 func BuildRequest(model string, messages []Message, temperature float64) ([]byte, error) {
 	return json.Marshal(ChatRequest{Model: model, Messages: messages, Temperature: temperature})
+}
+
+// ChatOptions are the optional knobs on a chat-completions request. Zero values
+// omit their field, so the zero ChatOptions builds the same body as BuildRequest.
+type ChatOptions struct {
+	// Temperature is dropped for reasoning models, which only accept the default.
+	Temperature float64
+	// MaxCompletionTokens caps the whole completion allowance — reasoning included.
+	// Without it a reasoning model can spend the entire allowance thinking and
+	// return empty content, which is indistinguishable from a broken feature.
+	MaxCompletionTokens int
+	// ReasoningEffort is "low"/"medium"/"high" and applies to reasoning models only.
+	ReasoningEffort string
+}
+
+// chatRequestWithOptions is a chat-completions body carrying the optional knobs.
+type chatRequestWithOptions struct {
+	Model               string    `json:"model"`
+	Messages            []Message `json:"messages"`
+	Temperature         float64   `json:"temperature,omitempty"`
+	MaxCompletionTokens int       `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string    `json:"reasoning_effort,omitempty"`
+}
+
+// BuildRequestWithOptions marshals a chat-completions body, applying each option
+// only where the model accepts it: every model gets the output budget, reasoning
+// models additionally get a thinking level and no temperature, and every other
+// model gets the temperature and no reasoning field. Callers pass what they want
+// and the model's own rules decide what is actually sent.
+func BuildRequestWithOptions(model string, messages []Message, opts ChatOptions) ([]byte, error) {
+	req := chatRequestWithOptions{Model: model, Messages: messages, MaxCompletionTokens: opts.MaxCompletionTokens}
+	if ReasoningModel(model) {
+		req.ReasoningEffort = strings.TrimSpace(opts.ReasoningEffort)
+		return json.Marshal(req)
+	}
+	req.Temperature = opts.Temperature
+	return json.Marshal(req)
+}
+
+// ReasoningModel reports whether a model id names a reasoning model — the gpt-5.x
+// family and the o-series. These think before they answer, which is why they need
+// an output budget large enough to cover the thinking AND the answer, and why they
+// reject a custom temperature.
+func ReasoningModel(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(m, "gpt-5") ||
+		strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") ||
+		strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "o5")
+}
+
+// Finish-reason values OpenAI returns, named so the empty-reply explanations below
+// can be matched against them rather than against loose string literals.
+const (
+	FinishStop          = "stop"
+	FinishLength        = "length"
+	FinishContentFilter = "content_filter"
+	FinishToolCalls     = "tool_calls"
+)
+
+// EmptyReplyMessage turns a billed-but-empty completion into a plain-English
+// sentence the user can act on. An empty reply always has a cause — the model ran
+// out of room mid-thought, a filter blocked it, or it genuinely produced nothing —
+// and naming that cause is the difference between "this feature is broken" and
+// "ask me again with a lower thinking level".
+func EmptyReplyMessage(finishReason string) string {
+	switch strings.TrimSpace(strings.ToLower(finishReason)) {
+	case FinishLength:
+		return "The model used its whole response budget thinking and had no room left to answer. Try a lower thinking level, or ask a shorter question."
+	case FinishContentFilter:
+		return "The model's safety filter stopped this reply. Try rewording the question."
+	default:
+		return "The model finished without writing an answer. Ask again — this usually clears on a retry."
+	}
 }
 
 // FinancialContext is the minimal, aggregate snapshot sent to the model for
@@ -138,7 +214,10 @@ func BuildStructuredRequest(model string, messages []Message, temperature float6
 
 // ParseResponse decodes a chat response and returns the assistant's first
 // message content. It surfaces an API error (with its message) and reports an
-// empty/garbled response as an error.
+// empty/garbled response as an error — including the case that reads as success
+// on the wire but carries no text, which is explained by its finish reason rather
+// than passed on as an empty string. Returning "" with a nil error would let a
+// blank answer travel all the way to the screen looking like a working feature.
 func ParseResponse(data []byte) (string, error) {
 	var r ChatResponse
 	if err := json.Unmarshal(data, &r); err != nil {
@@ -150,7 +229,11 @@ func ParseResponse(data []byte) (string, error) {
 	if len(r.Choices) == 0 {
 		return "", errors.New("ai: the response was empty")
 	}
-	return r.Choices[0].Message.Content, nil
+	content := r.Choices[0].Message.Content
+	if strings.TrimSpace(content) == "" {
+		return "", errors.New(EmptyReplyMessage(r.Choices[0].FinishReason))
+	}
+	return content, nil
 }
 
 // ParseUsage decodes just the token usage from a response (zero Usage on error).

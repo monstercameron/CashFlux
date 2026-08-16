@@ -15,15 +15,30 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
 )
 
+// SendProxyChat asks the backend proxy for a plain answer — no tools. Callers that
+// want the model to be able to call tools use SendProxyChatTools.
 func SendProxyChat(endpoint, token, model string, messages []Message, temperature float64, onResult func(string, Usage), onError func(string)) func() {
+	return SendProxyChatTools(endpoint, token, model, messages, temperature, "", nil,
+		func(msg Message, u Usage) { onResult(msg.Content, u) }, onError)
+}
+
+// SendProxyChatTools runs one turn through the backend proxy with tools advertised,
+// handing back the model's whole message — its text, or the tool calls it wants run.
+// This is the parity fix for the server path: a household on the shared server key
+// gets the same tool-using assistant as one on a direct key, instead of a quietly
+// weaker one that could only answer from whatever context was injected.
+func SendProxyChatTools(endpoint, token, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
 	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIChatStream, backendrpc.ChatRequest{
-		Model:       model,
-		Messages:    rpcMessages(messages),
-		Temperature: temperature,
+		Model:           model,
+		Messages:        rpcMessages(messages),
+		Temperature:     temperature,
+		Tools:           rpcTools(tools),
+		ReasoningEffort: reasoningEffort,
 	}, onResult, onError)
 }
 
 func SendProxyStructuredVisionChat(endpoint, token, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	toText := func(msg Message, u Usage) { onResult(msg.Content, u) }
 	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIVisionStream, backendrpc.VisionRequest{
 		Model:        strings.TrimSpace(model),
 		SystemPrompt: systemPrompt,
@@ -32,13 +47,67 @@ func SendProxyStructuredVisionChat(endpoint, token, model, systemPrompt, userTex
 		Temperature:  temperature,
 		SchemaName:   strings.TrimSpace(schemaName),
 		Schema:       schema,
-	}, onResult, onError)
+	}, toText, onError)
 }
 
 func rpcMessages(messages []Message) []backendrpc.Message {
 	out := make([]backendrpc.Message, 0, len(messages))
 	for _, msg := range messages {
-		out = append(out, backendrpc.Message{Role: msg.Role, Content: msg.Content})
+		out = append(out, backendrpc.Message{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCalls:  rpcToolCalls(msg.ToolCalls),
+			ToolCallID: msg.ToolCallID,
+			Name:       msg.Name,
+		})
+	}
+	return out
+}
+
+func rpcTools(tools []Tool) []backendrpc.Tool {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]backendrpc.Tool, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, backendrpc.Tool{
+			Type: tool.Type,
+			Function: backendrpc.FunctionDef{
+				Name:        tool.Function.Name,
+				Description: tool.Function.Description,
+				Parameters:  tool.Function.Parameters,
+			},
+		})
+	}
+	return out
+}
+
+func rpcToolCalls(calls []ToolCall) []backendrpc.ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]backendrpc.ToolCall, 0, len(calls))
+	for _, call := range calls {
+		out = append(out, backendrpc.ToolCall{
+			ID:       call.ID,
+			Type:     call.Type,
+			Function: backendrpc.FunctionCall{Name: call.Function.Name, Arguments: call.Function.Arguments},
+		})
+	}
+	return out
+}
+
+func toolCallsFromRPC(calls []backendrpc.ToolCall) []ToolCall {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		out = append(out, ToolCall{
+			ID:       call.ID,
+			Type:     call.Type,
+			Function: FunctionCall{Name: call.Function.Name, Arguments: call.Function.Arguments},
+		})
 	}
 	return out
 }
@@ -51,7 +120,7 @@ func rpcUsage(usage backendrpc.Usage) Usage {
 	}
 }
 
-func invokeProxyCompletionStream(endpoint, token, method string, req any, onResult func(string, Usage), onError func(string)) func() {
+func invokeProxyCompletionStream(endpoint, token, method string, req any, onResult func(Message, Usage), onError func(string)) func() {
 	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	token = strings.TrimSpace(token)
 	if endpoint == "" || token == "" {
@@ -89,6 +158,18 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 		defer stream.Cancel()
 		var content strings.Builder
 		var usage backendrpc.Usage
+		var toolCalls []backendrpc.ToolCall
+		var finish string
+		// A turn that only asks for tools carries no text, so "finished with nothing"
+		// is a real answer here rather than a failure — the caller decides what to do
+		// with an empty message that has tool calls attached.
+		finished := func() {
+			onResult(Message{
+				Role:      RoleAssistant,
+				Content:   content.String(),
+				ToolCalls: toolCallsFromRPC(toolCalls),
+			}, rpcUsage(usage))
+		}
 		for {
 			var chunk backendrpc.CompletionChunk
 			err := stream.Recv(&chunk)
@@ -96,7 +177,7 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 				return
 			}
 			if err == io.EOF {
-				onResult(content.String(), rpcUsage(usage))
+				finished()
 				return
 			}
 			if err != nil {
@@ -104,11 +185,24 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 				return
 			}
 			content.WriteString(chunk.Content)
+			if len(chunk.ToolCalls) > 0 {
+				toolCalls = append(toolCalls, chunk.ToolCalls...)
+			}
+			if chunk.FinishReason != "" {
+				finish = chunk.FinishReason
+			}
 			if chunk.Usage.TotalTokens != 0 || chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
 				usage = chunk.Usage
 			}
 			if chunk.Done {
-				onResult(content.String(), rpcUsage(usage))
+				if content.Len() == 0 && len(toolCalls) == 0 {
+					// The server refuses empty completions, so reaching here means a
+					// stream ended without ever carrying an answer. Say why rather than
+					// handing the screen a blank bubble.
+					onError(EmptyReplyMessage(finish))
+					return
+				}
+				finished()
 				return
 			}
 		}

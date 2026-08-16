@@ -342,12 +342,12 @@ func Insights() ui.Node {
 		return msgs
 	}
 
-	// sendTools dispatches one model turn: the direct OpenAI path advertises tools; the
-	// backend proxy path doesn't support tools yet, so it falls back to a plain reply.
+	// sendTools dispatches one model turn. Both paths advertise the same tools: the
+	// direct key goes straight to OpenAI, the shared server key goes through the
+	// backend proxy, and neither is the weaker assistant (C551).
 	sendTools := func(messages []ai.Message, tools []ai.Tool, onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
 		if useBackendAI {
-			return ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp,
-				func(content string, u ai.Usage) { onResult(ai.Message{Role: ai.RoleAssistant, Content: content}, u) }, onErr)
+			return ai.SendProxyChatTools(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp, chatEffort, tools, onResult, onErr)
 		}
 		// Route the tool loop through the Responses API: it's the only endpoint that
 		// accepts reasoning.effort together with function tools for the reasoning models
