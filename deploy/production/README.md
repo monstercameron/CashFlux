@@ -183,7 +183,7 @@ systemctl daemon-reload && systemctl enable --now cashflux-autoupdate.timer
 ```sh
 id cashflux                          # confirm 993:984 matches compose.yaml `user:`
 systemctl stop cashflux              # release the port and the SQLite WAL
-sh deploy-release.sh vX.Y.Z          # pull, start, health-gate
+./deploy-release.sh vX.Y.Z          # pull, start, health-gate
 curl -fsS https://budget.earlcameron.com/v1/version
 systemctl disable cashflux           # only once the container has proved itself
 ```
@@ -194,7 +194,7 @@ the same SQLite database, and the port would collide anyway.
 ### Rollback
 
 ```sh
-sh deploy-release.sh "$(cat .previous-tag)"   # previous image
+./deploy-release.sh "$(cat .previous-tag)"   # previous image
 # or, all the way back:
 docker compose -f compose.yaml down && systemctl start cashflux
 ```

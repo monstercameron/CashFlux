@@ -23,7 +23,16 @@ die() { echo "FAILED: $*" >&2; exit 1; }
 cd "${REPO_DIR}" || die "no repo at ${REPO_DIR}"
 
 log "fetching tags"
-git fetch --tags --quiet origin || die "git fetch failed"
+# --force and --prune-tags, because a tag that MOVED will otherwise wedge this
+# permanently: plain `git fetch --tags` refuses with "would clobber existing
+# tag" and exits non-zero, so every subsequent deploy dies at this line while
+# the webhook still answers 200. That is the same class of silent failure this
+# whole pull-deploy exists to avoid, and it is not hypothetical — re-pointing
+# v1.8.0 at a buildable commit did exactly that to this box.
+#
+# Forcing is safe here: this checkout is a read-only mirror used to decide which
+# version to run. It never authors tags, so origin is always the truth.
+git fetch --tags --force --prune-tags --quiet origin 2>&1 || die "git fetch failed"
 
 # Newest semver tag, by version order rather than commit date — a hotfix tagged
 # today on an older branch must not be treated as "newest".
