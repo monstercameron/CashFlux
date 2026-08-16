@@ -36,6 +36,17 @@ and every commit updates this file under `Unreleased`.
   The textarea is sized to the sentence or two people actually write instead of filling the modal,
   and is resizable for the times they write more.
 
+  A second critique round caught two things the first pass introduced. Naming the removal had only
+  added a safe path beside the unsafe one: clearing the box and pressing Save still destroyed the
+  note with no confirmation, and announced "Note saved" for what was a deletion — the interface
+  making a false statement about what it had just done. Emptying the field is now the same act as
+  pressing Remove, with the same question and the same answer, because it is the quicker gesture for
+  anyone already editing the text and guarding only the button left the easier path unguarded. And
+  "Remove note" carried both `btn` and `btn-link`; `.btn` is registered later in the generated sheet
+  and overrides every property the two share, so the control rendered as a third full-weight button
+  that merely happened to be red — the loudest thing in the footer, for the action that should be
+  the quietest. The danger tone was a decision; that weight was a cascade accident.
+
 ### Added
 - **An AI spend meter, and starter questions that name what's true today (EC-15, EC-16).** Every AI
   surface already showed an estimate before a call and a token line after it, but nothing added them

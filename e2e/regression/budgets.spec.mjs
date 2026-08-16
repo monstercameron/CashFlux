@@ -57,10 +57,27 @@ function menuItem(app, bid, testid) {
 // "resolved to <button …> - unexpected value hidden" failures across this file.
 // Waiting on the real signal is correct; the item is in the DOM the whole time,
 // so polling for its presence rather than its visibility proves nothing.
+// It also RE-CLICKS rather than waiting once. A first click is sometimes
+// swallowed while the page is still settling, and a single click followed by a
+// long wait then polls forever against a menu that was never opened — the
+// observed failure was 59 polls over 30s against an item that stayed hidden the
+// whole time. Only click when the item is not visible, so an already-open menu
+// is never toggled shut.
 async function openBudgetMenu(app, bid) {
-  await app.locator(`[data-testid="budget-kebab-${bid}"]`).scrollIntoViewIfNeeded();
-  await app.locator(`[data-testid="budget-kebab-${bid}"]`).click();
-  await expect(app.locator(`.add-menu [data-testid="edit-budget-btn-${bid}"]`)).toBeVisible({ timeout: 30000 });
+  const kebab = app.locator(`[data-testid="budget-kebab-${bid}"]`);
+  const item = app.locator(`.add-menu [data-testid="edit-budget-btn-${bid}"]`);
+  await kebab.scrollIntoViewIfNeeded();
+  await expect
+    .poll(
+      async () => {
+        if (await item.isVisible().catch(() => false)) return true;
+        await kebab.click({ timeout: 5000 }).catch(() => {});
+        await item.waitFor({ state: "visible", timeout: 3000 }).catch(() => {});
+        return await item.isVisible().catch(() => false);
+      },
+      { timeout: 40000 },
+    )
+    .toBe(true);
 }
 
 test.describe("budgets: slim footer + kebab", () => {
@@ -248,6 +265,34 @@ test.describe("budgets: notes modal", () => {
     await expect(app.locator(`[data-testid="budget-notes-${bid}"]`)).toHaveCount(0);
     await app.reload({ waitUntil: "networkidle" });
     await nav(app, "/budgets");
+    await expect(app.locator(`[data-testid="budget-notes-${bid}"]`)).toHaveCount(0);
+  });
+
+  // Emptying the box and pressing Save destroys the note exactly as the Remove
+  // button does, and it is the quicker gesture for anyone already editing text.
+  // Guarding only the button would leave the easier path unguarded — and worse,
+  // it used to report "Note saved" for what was actually a deletion.
+  test("clearing the field and saving is treated as a removal, not a save", async ({ app }) => {
+    await nav(app, "/budgets");
+    const bid = await firstBudgetId(app);
+    await openBudgetMenu(app, bid);
+    await menuItem(app, bid, "budget-notes-btn").click();
+    await app.waitForTimeout(650);
+    await app.locator('[role="dialog"] textarea').first().fill("Short-lived note.");
+    await app.getByTestId("budget-notes-save").click();
+    await expect(app.locator('[role="dialog"]')).toHaveCount(0, { timeout: 15000 });
+
+    await app.locator(`[data-testid="budget-notes-${bid}"]`).click();
+    await app.waitForTimeout(650);
+    await app.locator('[role="dialog"] textarea').first().fill("");
+    await app.getByTestId("budget-notes-save").click();
+    await app.waitForTimeout(800);
+    // It asks, exactly as the Remove button does.
+    await expect(app.locator("#cf-dialog-confirm")).toBeVisible({ timeout: 15000 });
+    await app.locator("#cf-dialog-confirm").click();
+    await app.waitForTimeout(1200);
+    // …and it says what it did. "Note saved" here would be a false statement.
+    await expect(app.locator("body")).toContainText(/Note removed from/);
     await expect(app.locator(`[data-testid="budget-notes-${bid}"]`)).toHaveCount(0);
   });
 });
