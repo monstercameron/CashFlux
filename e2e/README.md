@@ -90,6 +90,14 @@ Add a test to the gate by tagging its `describe` (or the test itself):
 test.describe("what a budget measures", { tag: "@prod" }, () => { /* … */ })
 ```
 
+A test earns its place in the gate by passing IN CI, not locally. A cold
+single-worker Windows runner is materially slower than a warm dev machine, and
+this app re-renders briefly after screens mount — so a click that always lands
+locally can be discarded there. Two specs (`category_merge`,
+`uf_txn_and_budget_pickers`) were removed from the gate for exactly that: they
+failed twice with a DIFFERENT test each time, which is a timing sensitivity in
+the app rather than a bad assertion. They still run nightly.
+
 Only put a test in the gate once you have seen it pass. Membership is "can this
 ship?", not "is this important" — the app boots and every route renders, the
 cross-cutting invariants hold, and the behaviour changed most recently works.
