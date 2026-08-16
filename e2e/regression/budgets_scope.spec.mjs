@@ -12,6 +12,39 @@ import { test, expect, nav, openVia } from "./fixtures.mjs";
 // closed menu and every later assertion then reads a hidden element.
 const SETTINGS_MENU = ".bud-set-menu:not(.hidden-menu)";
 
+// stepPeriodBack clicks the period stepper until the pill actually changes.
+//
+// A single click is not enough: the page keeps re-rendering briefly after mount,
+// and a click landing in that window is discarded — and even when it lands, the
+// pill's text has to be re-read AFTER the re-render, not in the same tick. Both
+// mistakes look identical (the period "did not move") and both were in the first
+// draft of these tests.
+async function stepPeriodBack(app, times = 1) {
+  const pill = app.getByTestId("period-pill");
+  const stepBack = pill.locator("xpath=preceding-sibling::button[1]");
+  for (let i = 0; i < times; i++) {
+    const before = (await pill.innerText()).trim();
+    // Click ONCE, then wait for the change. Clicking on every poll tick queues
+    // extra steps, and a late one lands after the value has been read — the
+    // period then runs one ahead of everything computed from it, which is a
+    // failure that looks exactly like the bug under test.
+    let moved = false;
+    for (let attempt = 0; attempt < 5 && !moved; attempt++) {
+      await stepBack.click().catch(() => {});
+      try {
+        await expect
+          .poll(async () => (await pill.innerText()).trim(), { timeout: 3_000, intervals: [150, 150, 300] })
+          .not.toBe(before);
+        moved = true;
+      } catch {
+        // The click was swallowed by a re-render; try again.
+      }
+    }
+    expect(moved, "the period stepper never moved the pill").toBe(true);
+  }
+  return (await pill.innerText()).trim();
+}
+
 async function openSettings(app) {
   await app.getByTestId("budgets-settings").scrollIntoViewIfNeeded();
   await openVia(app, app.getByTestId("budgets-settings"), app.locator(SETTINGS_MENU));
@@ -80,13 +113,7 @@ test.describe("budgets: the plan rail names its contents", () => {
     await nav(app, "/budgets");
     const pill = app.getByTestId("period-pill");
     // Step back one period so the test is not merely observing the default.
-    const stepBack = pill.locator("xpath=preceding-sibling::button[1]");
-    const start = (await pill.innerText()).trim();
-    await expect.poll(async () => {
-      await stepBack.click().catch(() => {});
-      return (await pill.innerText()).trim();
-    }, { timeout: 15_000 }).not.toBe(start);
-    const period = (await pill.innerText()).trim();
+    const period = await stepPeriodBack(app);
 
     const rail = app.getByTestId("budgets-issues-rail");
     await rail.scrollIntoViewIfNeeded();
@@ -96,15 +123,56 @@ test.describe("budgets: the plan rail names its contents", () => {
     await go.click();
     await expect(app.locator('#main[data-route="/allocate"]')).toBeVisible();
 
-    // Back to Budgets. Deliberately NOT the nav() helper: it asserts the route
-    // mounted within the default expect timeout, and /allocate → /budgets on a
-    // loaded worker is slower than that. The point of the test is the period, not
-    // how fast the page paints.
-    await app.evaluate(() => {
-      history.pushState({}, "", "/budgets");
-      dispatchEvent(new PopStateEvent("popstate"));
-    });
+    // Back to Budgets the way a user can: the rail link. Deliberately NOT a
+    // synthetic popstate — after an in-app navigation the router ignores one
+    // entirely (filed as C610, a browser-Back defect found by this very test),
+    // and a spec about the budget period should fail on the period, not on that.
+    await app.getByRole("link", { name: "Budgets" }).first().click({ force: true });
     await app.waitForSelector('#main[data-route="/budgets"]', { timeout: 45_000 });
     expect((await pill.innerText()).trim(), "the budget period must survive the round trip").toBe(period);
+  });
+});
+
+test.describe("budgets: supporting modules follow the selected period", () => {
+  // C607: the unbudgeted strip and the tracking editor read time.Now() and
+  // labelled the result "this month" whatever period the page was showing, so a
+  // closed July view listed August's figures under a caption promising July's.
+  test("the unbudgeted strip reports the viewed period and says which", async ({ app }) => {
+    await nav(app, "/budgets");
+    const pill = app.getByTestId("period-pill");
+    const hint = app.getByTestId("budgets-unbudgeted-hint");
+    const strip = app.getByTestId("budgets-unbudgeted");
+    await strip.scrollIntoViewIfNeeded();
+
+    const current = (await pill.innerText()).trim();
+    await expect(hint).toContainText(current);
+    await expect(hint).not.toContainText(/this month/i);
+    const chipsNow = (await strip.innerText()).replace(/\s+/g, " ");
+
+    // Page back far enough that the household's spending genuinely differs.
+    const past = await stepPeriodBack(app, 2);
+    expect(past, "the pill should have moved").not.toBe(current);
+
+    await strip.scrollIntoViewIfNeeded();
+    await expect(hint).toContainText(past);
+    // A closed period is described in the past tense, not as a live invitation.
+    await expect(hint).toContainText(/had spending/i);
+    expect((await strip.innerText()).replace(/\s+/g, " "), "the figures must change with the period").not.toBe(chipsNow);
+  });
+
+  test("the tracking editor's caption names the period its counts cover", async ({ app }) => {
+    await nav(app, "/budgets");
+    const period = await stepPeriodBack(app);
+
+    const kebab = app.getByTestId("budget-kebab-bud-transport");
+    await kebab.scrollIntoViewIfNeeded();
+    const cats = app.locator('.add-menu:not(.hidden-menu) [data-testid="edit-budget-cats-btn-bud-transport"]');
+    await openVia(app, kebab, cats);
+    await cats.click();
+
+    const caption = app.getByTestId("budgetcats-metahint");
+    await expect(caption).toBeVisible();
+    await expect(caption).toContainText(period);
+    await expect(caption).not.toContainText(/this month/i);
   });
 });

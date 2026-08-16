@@ -8094,7 +8094,8 @@ design pass and an end-to-end test rather than a collection of isolated label ch
 
 ---
 
-- [ ] **C560 [MAJOR][UI][TXN] Quick-add opened from the dashboard is interactive but invisible.** ★
+- [x] **C611 [DONE 2026-08-16] [MAJOR][UI][TXN] Quick-add opened from the dashboard is interactive but invisible.** ★
+  *(Renumbered from C560 — a concurrent session had already used that number.)*
   *Found 2026-08-16 while writing the C546 e2e coverage, by screenshotting the failure instead of
   re-reading the selectors.*
   Opening the quick-add panel from `/` (the dashboard) leaves it **fully present and operable in the
@@ -8115,7 +8116,29 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: opening quick-add from every route either renders the panel or does not mount it; no route
   leaves focusable, fillable controls in an unrendered panel.
 
-- [ ] **C561 [BLOCKER][TXN] The transaction edit form does not save an AMOUNT change.** ★
+  **Root cause and fix, 2026-08-16.** A flip modal mounts UNREVEALED and an effect adds `.show` one
+  frame later so the card animates in. `.flip-backdrop` was `opacity: 0; pointer-events: none` for
+  that window — invisible and not hit-testable, but **still in the DOM, in the accessibility tree,
+  and in the Tab order**. That is every symptom exactly: nothing on screen, `elementFromPoint`
+  returning the page content underneath, and the inputs still focusable and fillable. It reproduced
+  on the dashboard because that is the heaviest route, so the reveal window is longest — not because
+  anything about the dashboard was special.
+  Fixed by making the unrevealed state genuinely inert rather than merely transparent:
+  `.flip-backdrop { visibility: hidden }` with `.flip-backdrop.show { visibility: visible }`
+  (`styles/rules_gen.go`). `visibility` interpolates discretely and flips to visible at the START of
+  the transition, so the fade-in is untouched.
+  **Checked while fixing** (the reason to trust the scope): no rule re-exposes the back face —
+  `rules_lane6.go` only hides the FRONT face once flipped — and no other overlay has this defect.
+  The hover-reveal secondary actions (`.tx-2nd`, `.row-2nd`, `.btn-del-hover`) all use
+  `:not(:focus-within)`, so keyboard focus reveals them, and the kebab menus use `display: none`.
+  Tests: `styles/flip_inert_test.go` asserts on the EMITTED CSS (both rules, and that opacity and
+  visibility are transitioned as a pair), verified to fail when the visibility declaration is
+  removed; `e2e/regression/flip_inert.spec.mjs` asserts the RESULT rather than the styling — an open
+  panel is hit-testable and focusable at its own centre on both the dashboard and the ledger, and a
+  closed panel leaves nothing focusable behind. a11y ratchet still 12/12.
+
+- [x] **C612 [DONE 2026-08-16] [BLOCKER][TXN] The transaction edit form does not save an AMOUNT change.** ★
+  *(Renumbered from C561 — a concurrent session had already used that number.)*
   *Found 2026-08-16 while adding the C547 e2e coverage. Not caused by that work — the same failure
   reproduces on a path where the C546/C547 code is a no-op.*
   Driving `/transactions` → open a row → change the amount → Save leaves the ledger row **completely
@@ -8138,6 +8161,38 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   Coverage is parked, not lost: `e2e/regression/amount_sign.spec.mjs` has the reproduction as a
   `test.fixme` pointing here; its other five tests pass and cover C546 end to end.
   AC: an amount edit persists, and any refusal says so on screen.
+
+  **Root cause and fix, 2026-08-16 — and it was the completion gap in C547, not a separate defect.**
+  The amount input was `Type("number"), Step("0.01"), Attr("min", "0")`. The Save button is a SUBMIT
+  button bound to this form (`FormID: "txn-edit-form"` in `app/txnedithost.go`), so the browser runs
+  **HTML constraint validation before submitting** — and a typed "-32" is out of range for
+  `min="0"`. Submission was blocked, `OnSubmit` never fired, and the Go handler never ran: no error
+  banner, no toast, no change, and the form's own direction state unmoved. Which is precisely why
+  every black-box theory failed — nothing was wrong *inside* the handler, because the handler was
+  never reached.
+  It explains the whole evidence set: a DIRECTION-only edit persisted (the amount stayed ≥ 0, so the
+  form was valid); `fill()` and real keystrokes behaved identically (both produce an out-of-range
+  value); and quick-add was unaffected because it already used `Type("text")` +
+  `inputmode="decimal"`. So C546 worked and C547 could not, for a reason that had nothing to do with
+  the Go code either ticket changed.
+  Fixed by making the field a magnitude-and-sign TEXT field, matching quick-add:
+  `Type("text"), Attr("inputmode", "decimal")`, no `min`/`step`. The sign rule lives in
+  `amountmath.ParseSigned`, which understands a sign; expressing it as an HTML range constraint
+  contradicted that and could only ever fail silently. `type=number` was wrong for a second reason
+  too: browsers report `value === ""` for a partially-typed number (a lone "-"), so the keystroke
+  never reaches the Go state.
+  **Same defect fixed in `recurring_form.go`**, which had the identical `number` + `min="0"` pairing
+  on a form whose save also normalizes a typed sign. (`planning.go`'s inline editor has no `min`, so
+  it was already reachable.)
+  **Regression found by the adversarial pass and fixed:** dropping `type=number` means junk now
+  reaches the validator, where it hit "Enter an amount greater than zero" — the right message for a
+  zero and the wrong one for "abc". `ParseSigned` already separates `ErrZeroAmount` from a wrapped
+  `money.ErrInvalidAmount` precisely so each can say what it means, so both forms now branch on it
+  (`transactions.amountNotANumber`). Verified live: "abc" → "That isn't an amount…", "0" → "Enter an
+  amount greater than zero…".
+  Tests: `amount_sign.spec.mjs`'s previously-`fixme` test is re-enabled and passes — the full file is
+  6/6, including authoring an income row, contradicting it with a typed minus, and reopening to find
+  the direction control reads "out".
 
 - [ ] **C584 [CRITICAL][BUDGETS][DATA][E2E] Persist budgets created with a new category.**
   The Add budget flow can appear to succeed when “Create a new category for this budget” is selected,

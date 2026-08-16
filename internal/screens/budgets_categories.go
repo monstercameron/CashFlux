@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -22,12 +23,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// budgetTrackMeta aggregates THIS calendar month's expense spend by category and by tag —
+// budgetTrackMeta aggregates the VIEWED period's expense spend by category and by tag —
 // the "N · $X" selection metadata shown in the tracked-categories/tags editor. Splits count
 // per line's category; tags count the whole charge once per tag. Category values are pre-
-// formatted (only for categories with spend this month); tags return count + formatted total
+// formatted (only for categories with spend in the period); tags return count + formatted total
 // keyed by lowercased tag.
-func budgetTrackMeta(app *appstate.App) (catMeta map[string]string, tagCount map[string]int, tagTotal map[string]string) {
+//
+// C607: the window is the page's selected period, not today's month. It used to
+// read time.Now() unconditionally, so opening Edit tracking from a closed Jul 2026
+// view in August counted August's transactions under a caption promising July's.
+func budgetTrackMeta(app *appstate.App, from, to time.Time) (catMeta map[string]string, tagCount map[string]int, tagTotal map[string]string) {
 	catMeta, tagCount, tagTotal = map[string]string{}, map[string]int{}, map[string]string{}
 	if app == nil {
 		return
@@ -37,8 +42,11 @@ func budgetTrackMeta(app *appstate.App) (catMeta map[string]string, tagCount map
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	mStart := dateutil.MonthStart(time.Now())
-	mEnd := dateutil.AddMonths(mStart, 1)
+	mStart, mEnd := from, to
+	if mStart.IsZero() || mEnd.IsZero() {
+		mStart = dateutil.MonthStart(time.Now())
+		mEnd = dateutil.AddMonths(mStart, 1)
+	}
 	catN, catT, tagT := map[string]int{}, map[string]int64{}, map[string]int64{}
 	for _, t := range app.Transactions() {
 		if !t.CountsInReports() || t.IsTransfer() || !t.Amount.IsNegative() {
@@ -198,12 +206,17 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 			nTags++
 		}
 	}
-	catMeta, tagCount, tagTotal := budgetTrackMeta(app)
+	// C607: count over the page's SELECTED period, and say which one — these
+	// figures sit beside budget cards that describe that period, and a caption
+	// reading "this month" over another month's numbers is the defect.
+	trackFrom, trackTo := uistate.UsePeriod().Get().Range()
+	trackLabel := uistate.UsePeriod().Get().Label()
+	catMeta, tagCount, tagTotal := budgetTrackMeta(app, trackFrom, trackTo)
 	allTags := distinctTxnTags(app)
 
 	return Div(css.Class(tw.FlexCol),
 		Div(css.Class("modal-scroll", tw.FlexCol, tw.Gap3),
-			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgetcats-metahint"), uistate.T("budgets.trackMetaHint")),
+			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgetcats-metahint"), uistate.T("budgets.trackMetaHintPeriod", trackLabel)),
 			// Categories section.
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.catsSection")),
@@ -278,12 +291,20 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 		// filter stays (a budget tracking an income category cannot accrue at all —
 		// matchesScope requires an expense, see C534/C538) but the picker now says
 		// so, and counts what it withheld.
-		for _, c := range app.Categories() {
+		// C550: rows are labelled by PATH, not by bare name. A "Gas" nested under
+		// "Auto" and a top-level "Gas" rendered as two identical rows, which reads
+		// as a duplicate — and reads as a MISSING category when the one you wanted
+		// is the other one. That is the third contributor to the "this picker
+		// hides my categories" report, alongside the kind filter (C519) and the
+		// ordering (C544). The search matches the path too, so typing "auto"
+		// finds "Auto › Gas".
+		cats := app.Categories()
+		for _, c := range cats {
 			if !props.Saving && c.Kind != domain.KindExpense {
 				hiddenKinds++
 				continue
 			}
-			if q != "" && !strings.Contains(strings.ToLower(c.Name), q) {
+			if q != "" && !strings.Contains(strings.ToLower(catname.Path(cats, c)), q) {
 				continue
 			}
 			shown = append(shown, c)
@@ -291,9 +312,13 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 	}
 
 	keyOf := func(c domain.Category) any { return c.ID }
+	allCats := []domain.Category(nil)
+	if app != nil {
+		allCats = app.Categories()
+	}
 	rows := MapKeyed(shown, keyOf, func(c domain.Category) ui.Node {
 		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
-			CategoryID: c.ID, CategoryName: c.Name, Checked: props.Picked[c.ID],
+			CategoryID: c.ID, CategoryName: catname.Path(allCats, c), Checked: props.Picked[c.ID],
 			AlsoIn: otherBudget[c.ID], Meta: props.Meta[c.ID], OnToggle: props.OnToggle,
 		})
 	})

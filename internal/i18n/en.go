@@ -842,7 +842,7 @@ var english = Catalog{
 	"budgets.adjustAllTitle":         "Raise or lower every budget's limit by a percentage",
 	"budgets.adjustAllApplied":       "Adjusted %s by %s%%.",
 	"budgets.unbudgetedHead":         "Unbudgeted spending",
-	"budgets.unbudgetedHint":         "Categories with spending this month but no budget.",
+	// C607 replaced this with budgets.unbudgetedHintPeriod, which names the period.
 	"budgets.unbudgetedChip":         "%s · %s",
 	"budgets.budgetThis":             "Budget this",
 	"budgets.viewingStatus":          "Viewing: %s",

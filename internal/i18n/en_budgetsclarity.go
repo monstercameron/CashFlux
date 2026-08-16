@@ -33,6 +33,15 @@ var budgetsClarityKeys = Catalog{
 	"transactions.budgetDrillChipSubTags": "From the %s budget, including its sub-categories and tagged charges",
 	"transactions.budgetDrillChipRemove":  "Show all transactions again",
 
+	// --- C607: supporting modules report the period the page is showing ---
+	// They used to read today's month and label it "this month" whatever period
+	// was selected, so a closed July view listed August's figures. %s = the
+	// period label, e.g. "Jul 2026".
+	"budgets.trackMetaHintPeriod":      "Figures cover %s — transactions · total.",
+	"budgets.unbudgetedHintPeriod":     "Categories with spending in %s that no budget tracks.",
+	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
+	"budgets.unbudgetedThisPeriod":     "this period",
+
 	// --- C606: funding a cover or top-up shows what can really be moved ---
 	// The lists used to print a source's whole LIMIT under "available" — the size
 	// of its plan, most of which was already spent. %s = the movable amount.

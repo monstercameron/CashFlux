@@ -33,7 +33,8 @@ var budgetPolishKeys = Catalog{
 
 	// This-month selection metadata in the tracked-categories/tags editor.
 	"budgets.tagsNoneThisMonth": "none this month",
-	"budgets.trackMetaHint":     "Figures show this month so far — transactions · total.",
+	// C607 replaced this with budgets.trackMetaHintPeriod, which names the period
+	// the figures actually cover instead of assuming it is the current month.
 
 	// Linked follow-up to-dos in the budget card's side panel.
 	"budgets.followUpsHead": "Follow-ups · %d open of %d",

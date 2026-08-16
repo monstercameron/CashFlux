@@ -27,6 +27,18 @@ type unbudgetedStripProps struct {
 	App     *appstate.App
 	Base    string
 	CatName map[string]string
+	// From/To are the VIEWED period's half-open range, and Label names it (C607).
+	//
+	// The strip used to read time.Now() and say "this month" whatever period the
+	// page was showing: on a closed Jul 2026 view in August it listed August's
+	// spending under a label claiming otherwise. A supporting module that quietly
+	// changes scope while the page's own figures do not is worse than one that
+	// simply has no data for the period.
+	From, To time.Time
+	Label    string
+	// Historical is true when the viewed window has already ended, which changes
+	// the tense of everything here from an invitation to a record.
+	Historical bool
 }
 
 // unbudgetedCat is one candidate: an expense category with spending this month
@@ -47,7 +59,13 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 		return Fragment()
 	}
 	now := time.Now()
-	ms, me := dateutil.MonthRange(now)
+	// C607: the VIEWED period, not today's month. A zero range means the caller
+	// did not say, and falling back to this month is then honest rather than a
+	// silent mismatch — but every caller passes one.
+	ms, me := props.From, props.To
+	if ms.IsZero() || me.IsZero() {
+		ms, me = dateutil.MonthRange(now)
+	}
 	rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
 
 	// Every category any budget tracks (primary or extra) is off the table.
@@ -83,8 +101,10 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	}
 
 	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.ID }, func(c unbudgetedCat) ui.Node {
-		// Suggest from 6-month history; fall back to this month's actual spend.
-		sug, _ := budgeting.SuggestLimit(c.ID, app.Transactions(), now, 6, rates)
+		// Suggest from 6-month history ending at the VIEWED period, falling back to
+		// that period's actual spend — so the suggested limit describes the same
+		// window the chip's figure does (C607).
+		sug, _ := budgeting.SuggestLimit(c.ID, app.Transactions(), ms, 6, rates)
 		if sug <= 0 {
 			sug = c.SpentMinor
 		}
@@ -94,10 +114,22 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			LimitMajor: money.FormatMinor(sug, currency.Decimals(props.Base)),
 		})
 	})
+	// C607: the hint NAMES the period it describes. "this month" was true only by
+	// coincidence, and false in exactly the case a user is most likely to
+	// misread — a closed period they have deliberately paged back to.
+	hintKey := "budgets.unbudgetedHintPeriod"
+	if props.Historical {
+		hintKey = "budgets.unbudgetedHintPeriodPast"
+	}
+	label := props.Label
+	if label == "" {
+		label = uistate.T("budgets.unbudgetedThisPeriod")
+	}
 	return Div(css.Class("budget-unbudgeted"), Attr("data-testid", "budgets-unbudgeted"),
 		Div(css.Class("budget-unbudgeted-head"),
 			Span(css.Class("budget-unbudgeted-title"), uistate.T("budgets.unbudgetedHead")),
-			Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.unbudgetedHint")),
+			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgets-unbudgeted-hint"),
+				uistate.T(hintKey, label)),
 		),
 		Div(css.Class("budget-unbudgeted-chips"), chips),
 	)

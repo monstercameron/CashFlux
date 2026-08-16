@@ -1907,7 +1907,14 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		// full-width repetition just spent attention (design critique #2).
 		// G8: contextual creation — categories with real spending this month and no
 		// budget, each one click from a pre-filled add form (category + suggested limit).
-		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{App: app, Base: v.Base, CatName: v.CatName})
+		// C607: the strip reports the VIEWED period, and says which one. It used to
+		// read time.Now() and label the result "this month" whatever the page was
+		// showing.
+		uwStart, uwEnd := vw.Range()
+		unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{
+			App: app, Base: v.Base, CatName: v.CatName,
+			From: uwStart, To: uwEnd, Label: vw.Label(), Historical: !time.Now().Before(uwEnd),
+		})
 		listCls := "budget-grid"
 		if compact {
 			listCls = "budget-clist"

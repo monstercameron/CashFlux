@@ -245,6 +245,11 @@ and every commit updates this file under `Unreleased`.
   pushed its effective cap below what it had already spent. `budgeting.CoverSplit` caps every share,
   redistributes what a capped source cannot take, and reports a shortfall the form refuses on rather
   than quietly moving less than was asked for.
+- **The budgets page's supporting modules follow the period you are looking at (C607).** "Unbudgeted
+  spending" and the Edit-tracking editor both read today's month and labelled the result "this
+  month", whatever period the page was showing — so a closed `Jul 2026` view listed August's figures
+  under a caption promising July's. Both now compute over the selected window and name it, in the
+  past tense once the period has closed.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —
