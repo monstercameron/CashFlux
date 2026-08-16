@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/supportbundle"
 	"github.com/monstercameron/CashFlux/internal/taxref"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/version"
 )
 
 // agToolsReference adds the two tools that keep the assistant honest about things
@@ -82,7 +83,7 @@ func agToolsReference(app *appstate.App, base string, rates currency.Rates) []ch
 // content — and the errors go through Redact on the way in.
 func diagnosticInput(app *appstate.App) supportbundle.Input {
 	in := supportbundle.Input{
-		AppVersion: uistate.T("about.version"),
+		AppVersion: version.Label(),
 		UserAgent:  browserUserAgent(),
 		At:         time.Now(),
 		Counts:     map[string]int{},

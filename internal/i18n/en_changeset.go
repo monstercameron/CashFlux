@@ -69,12 +69,18 @@ var changesetKeys = Catalog{
 	"assistant.spentTokensCost": "%s tokens this chat · about %s",
 	// --- C247 the key gate answers cost / where / privacy ---
 	// %s = a ballpark price, %s = the provider's name.
-	"assistant.keyCost":        "About %s a question on %s's cheapest model — you pay them directly, we take nothing.",
-	"assistant.keyWhere":       "Get a key at",
-	"assistant.keyPrivacy":     "Only what you ask and a summary of your figures is sent. Your transactions stay on this device.",
-	"assistant.keyAdd":         "Add a key in Settings",
-	"assistant.keyGateAria":    "What adding an API key involves",
-	"assistant.confidenceHint": "This one was worked out from a pattern, not read straight off your ledger — worth checking before you act on it.",
+	"assistant.keyCost":     "About %s a question on %s's cheapest model — you pay them directly, we take nothing.",
+	"assistant.keyWhere":    "Get a key at",
+	"assistant.keyPrivacy":  "Only what you ask and a summary of your figures is sent. Your transactions stay on this device.",
+	"assistant.keyAdd":      "Add a key in Settings",
+	"assistant.keyGateAria": "What adding an API key involves",
+	// PS7: the capability sheet. %d = how many things it can change, %d = how many
+	// of those cannot be undone. The permanent count leads because it is the part
+	// somebody needs before switching this on.
+	"assistant.capSummary":       "Everything it can change — %d things, %d of them permanent",
+	"assistant.capLead":          "It can read everything in the app. This is the complete list of what it can CHANGE, and it asks before each one.",
+	"assistant.capPermanentMark": "(can't be undone)",
+	"assistant.confidenceHint":   "This one was worked out from a pattern, not read straight off your ledger — worth checking before you act on it.",
 }
 
 func init() {
