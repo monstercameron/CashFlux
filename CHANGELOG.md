@@ -645,6 +645,14 @@ and every commit updates this file under `Unreleased`.
   announces "Groceries, March 2026: $1,100.00 spent of $1,300.00 planned" (or "projected against"
   for a future month, plus any scenario shortfall). Column headers carry the full month and year the
   cell labels refer to.
+- **A budget card leads with the number you came for (C595).** Every caption the card had — tracked
+  categories, tags, committed-vs-free, set-asides, funding targets, coverage, owner, method, custom
+  fields, pace, carry, the metrics strip — was stacked between the bar and the actions, so "how much
+  is left?" competed with a dozen explanations of how it was arrived at. The explanatory ones now sit
+  behind one labelled, keyboard-reachable "Details" disclosure. What stays out is what CHANGES the
+  headline's meaning: an effective cap that differs from the limit, an envelope balance, an envelope
+  in debt, a projected overspend — and every action, because the disclosure hides explanations, not
+  things you can do.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

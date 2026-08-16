@@ -92,6 +92,10 @@ var budgetsClarityKeys = Catalog{
 	"budgets.recurring.overdue":     "Was due %s",
 	"budgets.recurring.dueInPeriod": "Due %s",
 	"budgets.recurring.afterPeriod": "Next due %s, after this period",
+	// A date that falls SHORT of the window: on a closed period it has been and
+	// gone; on a future one it lands before you get there. Both were previously
+	// folded into "after this period", which said the opposite.
+	"budgets.recurring.beforePeriod": "Due %s, before this period",
 
 	// --- C606: funding a cover or top-up shows what can really be moved ---
 	// The lists used to print a source's whole LIMIT under "available" — the size
