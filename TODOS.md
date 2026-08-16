@@ -5281,10 +5281,22 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   contains, so the first rule a first-run user sees caught nothing — a broken example of the feature
   it exists to demonstrate. It matches the merchant now, and a test asserts every phrase-matching
   sample rule catches at least one transaction, so the next one can't ship dead.
-- [ ] **C358 [MINOR][UX] /planning plan cards tell the wrong story at a glance:** a *savings* plan
-  ("House down payment in 3 years", start $19,000, $400/mo) renders as a huge red slab ending
-  "($25,100.00) · Money lasts ~35.6 months". Sign conventions/labels need "Starts $X → ends $Y by
-  <date>"; red reserved for depletion; axis or reference line on the area chart.
+- [x] **C358 ✅ DONE (2026-08-16) — /planning cards told the wrong story at a glance.** The
+  arithmetic was right and the presentation was wrong: "House down payment in 3 years" starts at
+  $19,000, saves $400/mo, and spends $60,000 on a house at month 36, so it ends at −$25,100 **by
+  design** — and the card toned itself red on "ends lower than it started", which is the app telling
+  a user that their plan to buy a house is a failure. All three of the ticket's asks landed:
+  **(1) red is for depletion only** — the tone now follows `RunwayMonths`, the same signal the ⚠
+  runway badge uses, so the colour and the badge cannot disagree; down-but-solvent reads neutral,
+  because money deliberately spent is neither good news nor bad. **(2) the arc is stated** —
+  "Starts $19,000 → ends ($25,100.00) by Jul 2029" under the figure, which turns a number that reads
+  as an alarm into the last line of an arithmetic the reader can follow, with the date making the
+  purchase at the end legible as the point of the plan. **(3) a zero reference line** on the area
+  chart — new `chart.ValueY` maps a value onto the exact scale `chart.Points` uses (a second,
+  slightly different scaling would put zero where the data doesn't), and it refuses to place a line
+  for a value outside the series' range, because a reference clamped to the chart edge misstates
+  where zero is. Tested: `ValueY` agrees with `Points` point-for-point, offers zero when it is in
+  range, refuses when it is not, and handles a flat series without dividing by zero.
 - [ ] **C359 [MINOR][IA] Page-job overlaps to sharpen:** /networth is two KPI rows + a 2-bar chart
   with a dead middle (adds nothing over /reports NW tab + /accounts hero — give it per-owner/
   per-account composition + history table, or fold it); /assistant vs /insights are near-duplicates

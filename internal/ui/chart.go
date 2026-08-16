@@ -31,6 +31,13 @@ type AreaChartProps struct {
 	// with a <title> of "<period>: <value>" so the trend's exact value is readable on hover
 	// (the caller formats so units stay correct — money vs percent). No visible change.
 	ValueLabels []string
+	// ZeroLine draws a quiet dashed rule at zero when zero falls inside the
+	// series' own range. It is a reference, not an axis: on a projected-balance
+	// chart, zero is the one value that changes what the shape MEANS, and a
+	// runway curve without it reads as a slope rather than as a countdown
+	// (V-sweep C358). Nothing is drawn when the data never approaches zero — a
+	// line clamped to the chart edge would misstate where zero is.
+	ZeroLine bool
 }
 
 // AreaChart renders a filled area sparkline from a value series using the pure
@@ -85,6 +92,18 @@ func AreaChart(props AreaChartProps) uic.Node {
 		),
 		Path(Attr("d", area), Attr("fill", "url(#"+gid+")"), css.Class("wonder-chart-area")),
 		Path(Attr("d", line), Attr("fill", "none"), Attr("stroke", stroke), Attr("stroke-width", "2"), Attr("pathLength", "1"), css.Class("wonder-chart-line")),
+	}
+	if props.ZeroLine {
+		if y, ok := chart.ValueY(props.Values, 0, h, 6); ok {
+			svgArgs = append(svgArgs, Tag("line",
+				Attr("x1", "0"), Attr("x2", fmt.Sprintf("%g", w)),
+				Attr("y1", fmt.Sprintf("%g", y)), Attr("y2", fmt.Sprintf("%g", y)),
+				Attr("stroke", "currentColor"), Attr("stroke-width", "1"),
+				Attr("stroke-dasharray", "3 3"), Attr("opacity", "0.35"),
+				Attr("vector-effect", "non-scaling-stroke"),
+				css.Class("chart-zero-line"),
+			))
+		}
 	}
 	// Optional invisible per-point hover targets (transparent so there's no visible change; under
 	// preserveAspectRatio="none" they stretch into ellipses but still receive the pointer + show the

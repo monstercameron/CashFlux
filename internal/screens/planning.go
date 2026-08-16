@@ -825,7 +825,10 @@ func PlanRow(props planRowProps) ui.Node {
 			}),
 		),
 		If(len(vals) > 1, Div(css.Class("plan-scenario-chart"),
-			uiw.AreaChart(uiw.AreaChartProps{Values: vals, Stroke: stroke, GradientID: "cf-plan-" + p.ID, Label: uistate.T("plans.chartLabel", fmtMoney(end))}),
+			// C358: a projected-balance curve without a zero line reads as a slope;
+			// with one it reads as a countdown, which is what it is.
+			uiw.AreaChart(uiw.AreaChartProps{Values: vals, Stroke: stroke, ZeroLine: true,
+				GradientID: "cf-plan-" + p.ID, Label: uistate.T("plans.chartLabel", fmtMoney(end))}),
 		)),
 	)
 }
@@ -870,4 +873,17 @@ func cadenceLabel(c domain.RecurringCadence) string {
 	default:
 		return uistate.T("recurring.cadenceMonthly")
 	}
+}
+
+// planHorizonLabel names when a plan's horizon ends, in the reader's calendar
+// rather than in months-from-now (C358).
+//
+// "Ends ($25,100.00)" is an alarm; "Starts $19,000 → ends ($25,100.00) by Jul
+// 2029" is the last line of an arithmetic the reader can follow — and the date
+// is what makes the down payment at the end legible as the point of the plan.
+func planHorizonLabel(horizonMonths int) string {
+	if horizonMonths <= 0 {
+		return uistate.T("plans.arcNoHorizon")
+	}
+	return dateutil.AddMonths(dateutil.MonthStart(time.Now()), horizonMonths).Format("Jan 2006")
 }

@@ -62,3 +62,38 @@ func TestLineAndAreaPath(t *testing.T) {
 		t.Errorf("AreaPath = %q, want %q", gotArea, wantArea)
 	}
 }
+
+// TestValueYAgreesWithPoints keeps the reference line on the same scale as the
+// curve it annotates (C358). A zero line drawn by a second, slightly different
+// scaling would put zero somewhere the data does not.
+func TestValueYAgreesWithPoints(t *testing.T) {
+	values := []float64{1900000, 800000, -200000, -2510000}
+	const w, h, pad = 180, 90, 6
+	pts := Points(values, w, h, pad)
+
+	for i, v := range values {
+		y, ok := ValueY(values, v, h, pad)
+		if !ok {
+			t.Fatalf("value %v is in its own series but ValueY reports out of range", v)
+		}
+		if diff := y - pts[i].Y; diff > 0.001 || diff < -0.001 {
+			t.Errorf("ValueY(%v) = %v, Points gives %v — the reference line would sit off "+
+				"the curve it annotates", v, y, pts[i].Y)
+		}
+	}
+
+	// Zero falls inside this series, so it can be drawn.
+	if _, ok := ValueY(values, 0, h, pad); !ok {
+		t.Error("zero is inside the range but ValueY refuses it")
+	}
+	// A series that never approaches zero must NOT get a zero line clamped to an
+	// edge — that line would say something untrue about where zero is.
+	if _, ok := ValueY([]float64{500, 600, 700}, 0, h, pad); ok {
+		t.Error("zero is outside the range but ValueY offered a position for it")
+	}
+	// A flat series has no span; the reference sits mid-chart rather than dividing
+	// by zero.
+	if y, ok := ValueY([]float64{0, 0, 0}, 0, h, pad); !ok || y != h/2 {
+		t.Errorf("flat series: y=%v ok=%v, want %v/true", y, ok, h/2)
+	}
+}

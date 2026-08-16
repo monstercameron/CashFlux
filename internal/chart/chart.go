@@ -88,3 +88,35 @@ func AreaPath(pts []Point, baseline float64) string {
 func num(v float64) string {
 	return strconv.FormatFloat(v, 'f', 2, 64)
 }
+
+// ValueY returns the y coordinate a value maps to under the same scale Points
+// uses, and whether that value falls inside the series' own range.
+//
+// It exists so a caller can draw a reference line at a meaningful value — zero,
+// on a projected-balance chart — without duplicating (and drifting from) the
+// scaling above. ok is false when the value sits outside the data's range,
+// because a reference line clamped to the edge of a chart is a line that says
+// something untrue about where zero is (V-sweep C358).
+func ValueY(values []float64, v, h, pad float64) (y float64, ok bool) {
+	if len(values) == 0 {
+		return 0, false
+	}
+	min, max := values[0], values[0]
+	for _, x := range values {
+		if x < min {
+			min = x
+		}
+		if x > max {
+			max = x
+		}
+	}
+	if v < min || v > max {
+		return 0, false
+	}
+	span := max - min
+	if span == 0 {
+		return h / 2, true
+	}
+	norm := (v - min) / span
+	return pad + (1-norm)*(h-2*pad), true
+}

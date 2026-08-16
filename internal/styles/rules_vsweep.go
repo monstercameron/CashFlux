@@ -73,6 +73,13 @@ func registerVSweep() {
 		textAlign("right"),
 	)
 
+	// ── C358: the plan's arc, quiet under its ending figure ─────────────────
+	rule(".plan-scenario-arc",
+		display("block"),
+		fontSize("var(--type-12)"),
+		marginTop("0.1rem"),
+	)
+
 	rule(".home-hero-stats-window",
 		margin("0"),
 		letterSpacing("0.04em"),

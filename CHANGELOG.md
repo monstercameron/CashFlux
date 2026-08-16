@@ -195,6 +195,20 @@ and every commit updates this file under `Unreleased`.
   which made the quick-add form look like a different application; they wear the shared control now.
 
 ### Fixed
+- **A savings plan stops rendering as a failure (C358).** "House down payment in 3 years" starts at
+  $19,000, saves $400/mo, and spends $60,000 on a house at month 36 — so it ends below where it
+  began, by design. The card toned itself on "ends lower than it started", which made a plan to buy a
+  house render as a large red slab.
+
+  Red is for depletion now, following the same runway signal the ⚠ badge already uses, so the colour
+  and the badge cannot disagree; a plan that ends lower but stays solvent reads neutral, because
+  money deliberately spent is neither good news nor bad. The card states its arc — "Starts $19,000 →
+  ends ($25,100.00) by Jul 2029" — which turns a figure that reads as an alarm into the last line of
+  an arithmetic, with the date making the purchase legible as the point of the plan. And the
+  projected-balance chart carries a zero reference line, so the curve reads as a countdown rather than
+  a slope. The line is drawn on the chart's own scale and is omitted entirely when zero is outside the
+  data's range, because a reference clamped to the edge would misstate where zero is.
+
 - **The demo's first rule catches something (C357).** It matched the word "streaming", which appears
   in none of the charges the sample generates — so the first rule a new user sees was a broken example
   of the feature it exists to demonstrate. It matches the merchant instead, and a test now asserts

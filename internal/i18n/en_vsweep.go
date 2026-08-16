@@ -100,6 +100,13 @@ var vSweepKeys = Catalog{
 	"subs.xlinkSoon":    "%d of these renew within a week →",
 	"subs.xlinkChanges": "%d changed price recently →",
 	"subs.xlinkBack":    "← Back to all subscriptions",
+
+	// ── C358: a plan card states its arc, not just its ending ───────────────
+	// "($25,100.00)" alone reads as an alarm. A savings plan that spends its
+	// savings on the thing it was saving for ends below where it began BY
+	// DESIGN. %s = start, %s = end, %s = when the horizon ends.
+	"plans.arc":          "Starts %s → ends %s by %s",
+	"plans.arcNoHorizon": "the end of the plan",
 }
 
 func init() {
