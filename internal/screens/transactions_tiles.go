@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -212,6 +213,48 @@ func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handle
 	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
 }
 
+// toolbarIconBtnState is toolbarIconBtn with an explicit disabled state and a
+// tooltip. A toolbar verb that cannot run yet (C561's Categorize before a category
+// is chosen) reads as unavailable AND says what would make it available, instead of
+// looking live and mutating on click.
+func toolbarIconBtnState(testID string, ic icon.Name, label string, onClick ui.Handler, variant string, disabled bool, title string) ui.Node {
+	cls := "btn btn-tool"
+	switch variant {
+	case "primary":
+		cls += " btn-primary"
+	case "danger":
+		cls += " bt-danger"
+	}
+	args := []any{
+		css.Class(cls), Type("button"),
+		Attr("aria-label", label), OnClick(onClick),
+		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(label),
+	}
+	if title != "" {
+		args = append(args, Attr("title", title))
+	}
+	if disabled {
+		args = append(args, Disabled(true), Attr("aria-disabled", "true"))
+	}
+	if testID != "" {
+		args = append(args, Attr("data-testid", testID))
+	}
+	return Button(args...)
+}
+
+// bulkCatLabel is a category's qualified display path for a bulk-op result message
+// ("Filed 12 under Housing > Mortgage"), or "" when the id no longer resolves.
+func bulkCatLabel(app *appstate.App, id string) string {
+	cats := app.Categories()
+	for _, c := range cats {
+		if c.ID == id {
+			return catname.Path(cats, c)
+		}
+	}
+	return ""
+}
+
 // toolbarIconBtnOpen is toolbarIconBtn with an explicit open flag: when true the button
 // stays highlighted (the .is-open state) — used for the buttons that open a flip modal /
 // panel so the trigger reads as "currently open" until it's dismissed.
@@ -277,10 +320,15 @@ func txnPresetChip(props txnPresetProps) ui.Node {
 	if props.Active {
 		cls += " on"
 	}
+	// C568: the visible count is a bare number, which reads as an unqualified total.
+	// The accessible name says what population it describes ("Large — 12 in the
+	// current view"), so the figure is never mistaken for a household-wide count.
 	return Button(css.Class(cls), Type("button"), Attr("data-testid", props.TestID),
-		Attr("aria-pressed", ariaBool(props.Active)), OnClick(on),
+		Attr("aria-pressed", ariaBool(props.Active)),
+		Attr("aria-label", uistate.T("transactions.presetCountAria", props.Label, props.Count)),
+		OnClick(on),
 		Span(props.Label),
-		Span(css.Class("txn-preset-count"), strconv.Itoa(props.Count)))
+		Span(css.Class("txn-preset-count"), Attr("aria-hidden", "true"), strconv.Itoa(props.Count)))
 }
 
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
@@ -650,26 +698,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	monthFrom := dateutil.FormatDate(monthStart)
 	monthEndEx := dateutil.AddMonths(monthStart, 1)
 	monthTo := dateutil.FormatDate(monthEndEx.AddDate(0, 0, -1))
-	// Preset match counts (one pass) — like the toolbar's "Review N", so each chip
-	// shows its payoff before the click.
-	var uncatN, reviewN2, largeN, monthN int
-	for _, t := range txns {
-		if !t.IsTransfer() && t.CategoryID == "" {
-			uncatN++
-		}
-		for _, tag := range t.Tags {
-			if tag == reviewqueue.ReviewTag {
-				reviewN2++
-				break
-			}
-		}
-		if txnfilter.AbsAmount(t) >= currency.MinorFromMajor(100, t.Amount.Currency) {
-			largeN++
-		}
-		if dateutil.InRange(t.Date, monthStart, monthEndEx) {
-			monthN++
-		}
-	}
+	// Preset match counts — like the toolbar's "Review N", so each chip shows its
+	// payoff before the click.
+	//
+	// C568: counted WITHIN the active scope (search, member, period, other filters),
+	// not over the whole ledger. A chip beside a search that reads "Large 1665" while
+	// the search shows twelve rows is describing a population no click can produce.
+	// The arithmetic lives in txnfilter.CountPresets, tested on native Go.
+	presetN := txnfilter.CountPresets(txns, f, txnfilter.PresetScope{
+		ReviewTag:  reviewqueue.ReviewTag,
+		LargeFor:   func(t domain.Transaction) int64 { return currency.MinorFromMajor(100, t.Amount.Currency) },
+		MonthStart: monthStart,
+		MonthEnd:   monthEndEx,
+	})
+	uncatN, reviewN2, largeN, monthN := presetN.Uncategorized, presetN.NeedsReview, presetN.Large, presetN.ThisMonth
 	presetsRow := Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
 		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
 		ui.CreateElement(txnPresetChip, txnPresetProps{
@@ -708,6 +750,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 					}
 				})
 			}}),
+		// One quiet line saying what the numbers count, so the chips are self-describing
+		// rather than relying on the user inferring the scope from the rows below.
+		Span(css.Class("txn-presets-note"), Attr("data-testid", "txn-presets-note"),
+			uistate.T("transactions.presetScopeNote")),
 	)
 
 	// Redesigned filter panel: quick-filter presets on top, then each categorical
@@ -1011,20 +1057,25 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	bulkExclude := ui.UseEvent(Prevent(func() { bulkSetExclude(true) }))
 	bulkInclude := ui.UseEvent(Prevent(func() { bulkSetExclude(false) }))
 
-	bulkRecategorize := ui.UseEvent(Prevent(func() {
+	// C561: "assign a category" and "clear the category" used to be the same button
+	// with the same blank default, so Categorize on a fresh selection wrote "" to every
+	// selected row — an immediate, unasked-for mutation whose only visible trace was the
+	// rows going uncategorized. They are two actions now: applyCategory needs a real
+	// choice (the button is disabled until there is one), and clearing is its own,
+	// confirmed action that says what it costs.
+	applyBulkCategory := func(cid string) {
 		sel := selAtom.Get()
-		cid := bulkCatAtom.Get()
 		// #55: checkpoint before the bulk recategorize.
 		uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")))
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
-			if sel[t.ID] && !t.IsTransfer() {
+			if sel[t.ID] && !t.IsTransfer() && t.CategoryID != cid {
 				prior = append(prior, t)
 			}
 		}
 		app.BulkMutate(func() {
 			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.IsTransfer() {
+				if !sel[t.ID] || t.IsTransfer() || t.CategoryID == cid {
 					continue
 				}
 				t.CategoryID = cid
@@ -1033,14 +1084,43 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				}
 			}
 		})
-		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpRecategorized", len(prior)), Prior: prior})
+		// The result names the count AND the category it landed in — "Filed 12 under
+		// Housing > Mortgage" — so the commit is verifiable without re-reading the rows.
+		opLabel := uistate.T("transactions.bulkOpClearedCat", len(prior))
+		if cid != "" {
+			opLabel = uistate.T("transactions.bulkCatApplied", len(prior), bulkCatLabel(app, cid))
+		}
+		undoAtom.Set(uistate.BulkSnapshot{Label: opLabel, Prior: prior})
 		clearSel()
 		bulkCatAtom.Set("")
 		uistate.BumpDataRevision()
 		// C364: undo story for bulk recategorize.
 		if len(prior) > 0 {
-			postUndoStory(uistate.T("transactions.bulkOpRecategorized", len(prior)))
+			postUndoStory(opLabel)
 		}
+	}
+	bulkRecategorize := ui.UseEvent(Prevent(func() {
+		cid := bulkCatAtom.Get()
+		if cid == "" {
+			// Belt and braces: the button is disabled, so this is only reachable via a
+			// keyboard/e2e path. Say what is missing instead of writing a blank category.
+			uistate.PostNotice(uistate.T("transactions.bulkCatDisabled"), true)
+			return
+		}
+		applyBulkCategory(cid)
+	}))
+	bulkClearCategory := ui.UseEvent(Prevent(func() {
+		n := len(selAtom.Get())
+		uistate.ConfirmModalLabeled(
+			uistate.T("transactions.bulkClearCatConfirm", n),
+			uistate.T("transactions.bulkClearCat"),
+			true,
+			func(ok bool) {
+				if ok {
+					applyBulkCategory("")
+				}
+			},
+		)
 	}))
 
 	bulkAssignMember := ui.UseEvent(Prevent(func() {
@@ -1159,11 +1239,16 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	onBulkMem := ui.UseEvent(func(e ui.Event) { bulkMemAtom.Set(e.GetValue()) })
 
 	// Standard `.field` selects for the category / member to apply.
+	//
+	// C561: the resting option reads "Choose a category" — a prompt, not a value. It
+	// used to read "No category", which is a real, destructive choice presented as the
+	// default. C570: the choices carry their full path, so two leaves with the same
+	// name are distinguishable here as they are in Review and Edit.
 	catSel := bulkCatAtom.Get()
 	catOpts := []any{css.Class("field"), Attr("data-testid", "bulk-category-select"), Attr("aria-label", uistate.T("transactions.categoryToApply")), OnChange(onBulkCat),
-		Option(Value(""), SelectedIf(catSel == ""), uistate.T("transactions.bulkNoCategory"))}
-	for _, c := range app.Categories() {
-		catOpts = append(catOpts, Option(Value(c.ID), SelectedIf(catSel == c.ID), c.Name))
+		Option(Value(""), SelectedIf(catSel == ""), uistate.T("transactions.bulkPickCategory"))}
+	for _, o := range CategoryPickOptions(app.Categories()) {
+		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(catSel == o.Value), o.Label))
 	}
 	memSel := bulkMemAtom.Get()
 	memOpts := []any{css.Class("field"), Attr("data-testid", "bulk-member-select"), Attr("aria-label", uistate.T("transactions.memberToAssign")), OnChange(onBulkMem),
@@ -1178,7 +1263,13 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	body := Div(css.Class("bulk-bar", tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2),
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
 		Select(catOpts...),
-		toolbarIconBtn("bulk-apply-category", icon.Check, uistate.T("transactions.bulkCatShort"), bulkRecategorize, ""),
+		// Categorize stays inert until a category is chosen, and says why on hover /
+		// to assistive tech. "Clear category" is the separate, confirmed way to make a
+		// selection uncategorized — the thing the blank default used to do by accident.
+		toolbarIconBtnState("bulk-apply-category", icon.Check, uistate.T("transactions.bulkCatShort"), bulkRecategorize, "",
+			catSel == "", uistate.T("transactions.bulkCatDisabled")),
+		toolbarIconBtnState("bulk-clear-category", icon.Ban, uistate.T("transactions.bulkClearCat"), bulkClearCategory, "",
+			false, uistate.T("transactions.bulkClearCatTitle")),
 		If(len(app.Members()) > 0, Select(memOpts...)),
 		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.bulkAssignShort"), bulkAssignMember, "")),
 		toolbarIconBtn("bulk-mark-cleared", icon.CheckCircle, uistate.T("transactions.bulkClearedShort"), bulkMarkCleared, ""),

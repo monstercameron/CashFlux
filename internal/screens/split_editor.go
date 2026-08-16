@@ -6,12 +6,14 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -184,6 +186,32 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	}
 	remainder := target - total
 
+	// C566: a line is only a real split line when it carries BOTH a category and an
+	// amount. The editor seeds a blank second line so "carve a piece out" is one tap
+	// away, and the amount total ignored it — so the footer read "Balanced" and offered
+	// Save while the split could not actually be saved (save then failed with "needs at
+	// least two lines"). Classify the draft here, once, and let the footer and the Save
+	// button both read from it, so the two can never disagree again.
+	//
+	//   - a wholly empty line is a DRAFT: harmless, ignored, but it is what is stopping
+	//     a one-line draft from being a split, so it is named rather than silently skipped;
+	//   - a half-filled line is INCOMPLETE: it blocks save and says which half is missing.
+	completeLines, draftLines, incompleteLines := 0, 0, 0
+	for _, d := range splits.Get() {
+		hasCat, hasAmt := d.Cat != "", strings.TrimSpace(d.Amt) != ""
+		switch {
+		case hasCat && hasAmt:
+			completeLines++
+		case !hasCat && !hasAmt:
+			draftLines++
+		default:
+			incompleteLines++
+		}
+	}
+	// Save is offered only for a draft that would actually persist: every started line
+	// finished, at least two of them, no unparseable value, and the money accounted for.
+	canSave := !parseErr && incompleteLines == 0 && completeLines >= 2 && remainder == 0
+
 	save := ui.UseEvent(Prevent(func() {
 		cur := splits.Get()
 		type line struct {
@@ -269,11 +297,10 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		}
 	})
 
-	catOpts := uiw.OptionsFrom(props.Categories,
-		func(c domain.Category) string { return c.ID },
-		func(c domain.Category) string { return c.Name },
-		"")
-	catOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}, catOpts...)
+	// C570: qualified paths ("Housing > Mortgage"), not bare leaf names — a split is
+	// exactly where two categories called "Gas" have to be told apart.
+	catOpts := append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}},
+		CategoryPickOptions(props.Categories)...)
 
 	// Owner picker options (XC10): only when the household actually has members.
 	// The first option is "Same as transaction" (empty value → falls back to the
@@ -310,12 +337,20 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// Remainder phrasing: balanced (green), or "$X left"/"$X over" — "X% left" in
 	// percent mode — so the user knows exactly what to adjust. Save is gated on a
 	// true balance, so this is the guide.
+	//
+	// C566: the unfinished-line cases are tested FIRST, because they are the ones the
+	// arithmetic cannot see. A blank line contributes nothing to the total, so without
+	// these branches a half-written split reports itself as balanced.
 	remTone, remText := "pos", uistate.T("splitEditor.balanced")
 	switch {
 	case parseErr && inPct:
 		remTone, remText = "neg", uistate.T("splitEditor.badPercent")
 	case parseErr:
 		remTone, remText = "neg", uistate.T("splitEditor.badAmount")
+	case incompleteLines > 0:
+		remTone, remText = "neg", uistate.T("splitEditor.incomplete")
+	case remainder == 0 && completeLines < 2:
+		remTone, remText = "neg", uistate.T("splitEditor.needTwoShort")
 	case remainder > 0 && inPct:
 		remTone = "neg"
 		remText = uistate.T("splitEditor.pctLeft", money.FormatMinor(remainder, 2))
@@ -350,8 +385,13 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	rowsNode := Div(css.Class("split-rows"), rows)
 	addRow2 := Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
 		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
-		Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), remText),
+		Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), Attr("role", "status"), remText),
 	)
+	// The seeded blank line is named as the draft it is, so it reads as "yours to fill
+	// in" rather than as a row the editor forgot about.
+	draftNote := If(draftLines > 0 && incompleteLines == 0,
+		P(css.Class("muted", tw.Text13), Attr("data-testid", "split-draft-note"),
+			Style(map[string]string{"margin": "0.35rem 0 0"}), uistate.T("splitEditor.draftRow")))
 	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))
 
 	// Modal layout: a body <form> whose id the FlipPanel's pinned Save footer submits.
@@ -361,10 +401,14 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	if props.FooterFormID != "" {
 		return Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
 			Attr("data-testid", "split-editor"), OnSubmit(save),
+			// C566: the footer's Save belongs to the host panel, so the verdict is
+			// published rather than rendered — the host reads it into SaveDisabled.
+			ui.CreateElement(splitReadyReporter, splitReadyProps{Ready: canSave}),
 			hint,
 			modeToggle,
 			rowsNode,
 			addRow2,
+			draftNote,
 			errNode,
 			If(props.Txn.HasSplits(),
 				Div(css.Class("split-editor-clear"),
@@ -376,6 +420,11 @@ func SplitEditor(props splitEditorProps) ui.Node {
 
 	// Inline layout (edit-form / classic table): the self-contained bordered card with
 	// its own title and Save/Clear buttons.
+	saveArgs := []any{css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), OnClick(save), uistate.T("splitEditor.save")}
+	if !canSave {
+		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"),
+			Title(uistate.T("splitEditor.cannotSaveYet")))
+	}
 	return Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
@@ -383,12 +432,29 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		modeToggle,
 		rowsNode,
 		addRow2,
+		draftNote,
 		errNode,
 		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}),
-			Button(css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), OnClick(save), uistate.T("splitEditor.save")),
+			Button(saveArgs...),
 			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),
 		),
 	)
+}
+
+// splitReadyProps carries the split draft's saveability to the reporter.
+type splitReadyProps struct{ Ready bool }
+
+// splitReadyReporter publishes the open split draft's validity to the hosting
+// FlipPanel (C566). It renders nothing; it exists so the publish happens in an
+// EFFECT, keyed on the verdict, rather than in the editor's render body — writing
+// shared state while rendering would re-enter the render it was called from.
+func splitReadyReporter(props splitReadyProps) ui.Node {
+	ready := props.Ready
+	ui.UseEffect(func() func() {
+		uistate.SetTxnSplitReady(ready)
+		return nil
+	}, ready)
+	return Fragment()
 }
 
 type splitRowProps struct {

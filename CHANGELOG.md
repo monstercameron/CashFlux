@@ -6,6 +6,41 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Bulk Categorize cannot file a selection under nothing.** Its category picker opened on "No
+  category" — a real, destructive choice dressed as a default — and Categorize applied it on the
+  spot, so one click on a fresh selection stripped the category from every selected transaction.
+  The picker now opens on "Choose a category", Categorize stays disabled until one is chosen and
+  says why, and clearing a category is its own confirmed action that states what it costs. The
+  result names both the count and the category: "Filed 12 under Housing > Mortgage".
+- **Excluding a transaction from reports asks first.** The row menu changed the transaction the
+  instant it was clicked and only then relabelled itself, so a misclick silently moved a charge out
+  of every budget, spending total and report. It now confirms, stating plainly that balances are
+  unaffected and only reporting changes. Including a transaction again applies straight away — it is
+  restorative — and both directions capture an undo point and post an undoable toast.
+- **A payment-link dialog can no longer save nothing.** Bill and subscription pickers open on "Not a
+  bill payment" / "Not a subscription payment", which is right for an unlinked charge and made Save a
+  live button that could only ever do nothing. Save is now enabled exactly when something would
+  change, reads "Remove link" when the change is removing one, and explains the disabled state.
+- **A split with an unfinished line no longer reports itself as balanced.** The editor seeds a blank
+  second line, and the totals ignored it — so the footer read "Balanced" and offered Save on a draft
+  that could only fail validation. Blank lines are now named as drafts, half-filled lines are called
+  out as incomplete, and Save — in the modal footer as well as the inline editor — is offered only
+  when every started line is finished, at least two of them exist, and the money adds up.
+- **Transaction history stops offering to save a read-only record.** The panel lists a transaction's
+  audit trail and has nothing to commit, but its host fell through to the standard Cancel/Save
+  footer, so an empty history showed a Save that could do nothing and a Cancel implying unsaved
+  edits. It is a single Close.
+- **Quick-filter counts describe the transactions you are looking at.** With a search active the
+  chips still reported household-wide totals — "Uncategorized 249", "Large 1665" beside a dozen
+  visible rows — figures no click could produce. Each count is now taken within the active search,
+  member, period and filter scope, minus that preset's own dimension, so the number is what turning
+  the filter on actually leaves. A line under the chips says what they count.
+- **Every category picker names the full path.** Quick-add, Bulk Categorize and the split editor
+  listed bare leaf names while Review and Edit showed "Housing > Mortgage", so two categories called
+  "Gas" were indistinguishable at exactly the moments a charge gets filed. One shared builder now
+  answers "which categories, and what are they called" for all of them, sorted naturally by path.
+
 ### Changed
 - **CI now gates on a fast, trustworthy subset instead of the whole suite.** Tests carry a `@prod`
   tag; the `prod` Playwright project runs those and nothing else, and that is what the deploy hook

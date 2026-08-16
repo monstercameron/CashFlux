@@ -427,15 +427,48 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			}
 		}
 	}
-	// TXC-1: flip a transaction's exclude-from-reports flag from the row kebab.
+	// TXC-1 / C562: flip a transaction's exclude-from-reports flag from the row kebab.
+	//
+	// Excluding is a reporting change with no visible trace on the row's own figures —
+	// balances are untouched — so an accidental click used to silently move money out
+	// of every budget, spending total and report with nothing but a relabelled menu
+	// entry to show for it. It now states that boundary and asks first. Re-INCLUDING
+	// is restorative, so it applies straight away; both directions capture an undo
+	// point and post an undoable toast, so either is reversible from Ctrl+Z/Activity.
+	applyExclude := func(t domain.Transaction, exclude bool) {
+		t.ExcludeFromReports = exclude
+		if err := props.App.PutTransaction(t); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		key := "transactions.includedOne"
+		if exclude {
+			key = "transactions.excludedOne"
+		}
+		postUndoStory(uistate.T(key, txnShortLabel(t)))
+	}
 	toggleExclude := func(id string) {
 		for _, t := range props.App.Transactions() {
-			if t.ID == id {
-				t.ExcludeFromReports = !t.ExcludeFromReports
-				_ = props.App.PutTransaction(t)
-				uistate.BumpDataRevision()
+			if t.ID != id {
+				continue
+			}
+			if t.ExcludeFromReports {
+				applyExclude(t, false)
 				return
 			}
+			row := t
+			uistate.ConfirmModalLabeled(
+				uistate.T("transactions.excludeConfirm", txnShortLabel(row)),
+				uistate.T("transactions.excludeConfirmBtn"),
+				true,
+				func(ok bool) {
+					if ok {
+						applyExclude(row, true)
+					}
+				},
+			)
+			return
 		}
 	}
 	// deleteRow removes the transaction (and its transfer pair). It's undoable via the toast — the

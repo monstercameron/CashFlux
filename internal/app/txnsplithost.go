@@ -25,19 +25,28 @@ import (
 // validation error keeps it open. "Clear split" remains a body action inside the form.
 func TxnSplitHost() uic.Node {
 	split := uistate.UseTxnSplit()
+	// C566: the footer's Save mirrors the draft's validity. The editor publishes its
+	// verdict into this atom, so a split with an unfinished line shows a disabled Save
+	// instead of an enabled one that can only fail. Read UNCONDITIONALLY, above the
+	// early return — a hook behind a condition drifts the hook order (GWC rule).
+	readyAtom := uistate.UseTxnSplitReady()
 	id := split.Get()
 	if id == "" {
 		return Fragment()
 	}
-	close := func() { uistate.SetTxnSplit("") }
+	// Closing resets the verdict, so the next split opens on a live Save rather than
+	// inheriting the last draft's disabled state for a frame.
+	close := func() { readyAtom.Set(true); uistate.SetTxnSplit("") }
+	ready := readyAtom.Get()
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:      uistate.T("splitEditor.title"),
-		Width:      uiw.FlipMediumW,
-		Height:     uiw.FlipMediumH,
-		FormID:     screens.SplitModalFormID,
-		SaveLabel:  uistate.T("splitEditor.save"),
-		SaveTestID: "split-save",
-		OnClose:    close,
-		Back:       uic.CreateElement(screens.TransactionSplitForm, screens.TransactionSplitFormProps{TxnID: id, OnDone: close}),
+		Title:        uistate.T("splitEditor.title"),
+		Width:        uiw.FlipMediumW,
+		Height:       uiw.FlipMediumH,
+		FormID:       screens.SplitModalFormID,
+		SaveLabel:    uistate.T("splitEditor.save"),
+		SaveTestID:   "split-save",
+		SaveDisabled: !ready,
+		OnClose:      close,
+		Back:         uic.CreateElement(screens.TransactionSplitForm, screens.TransactionSplitFormProps{TxnID: id, OnDone: close}),
 	})
 }

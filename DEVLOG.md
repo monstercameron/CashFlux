@@ -1,3 +1,63 @@
+## 2026-08-16 — Six defaults that were really decisions
+
+The Transactions audit (C560–C572) reads as thirteen separate complaints. Working through the
+first seven, they are mostly one mistake repeated: a control whose RESTING state is a real,
+consequential choice presented as "nothing selected yet".
+
+Bulk Categorize is the clearest case. Its picker's first option was "No category" and Apply wrote
+whatever the picker held, so the resting state of a fresh selection was "strip the category from
+all of these", one click away, with no confirmation and no chooser. That is not a missing guard —
+it is two different operations (assign, clear) collapsed into one button because both happen to
+write the same field. Splitting them is what fixes it: assign needs a real choice and the button
+is inert until it has one; clear is its own action and asks, because clearing a category drops
+rows out of every budget and report until they are filed again. The result message now names the
+category as well as the count, so the commit is verifiable without re-reading the rows.
+
+The payment-link dialog has the same shape from the other end. "Not a bill payment" is the correct
+resting choice for an unlinked charge — it is only wrong that Save was live beside it. Save
+commits a CHANGE now, so it is enabled exactly when the pending choices differ from what the
+transaction carries. That single rule also fixed a case nobody filed: it names itself "Remove
+link" when the change is removing one, instead of saying "saved" over a deletion.
+
+The split editor was the interesting one, because the bug was in the arithmetic's blind spot. The
+editor seeds a blank second line so "carve a piece out" is one tap away, and the balance total
+skips blank lines — so an untouched draft summed to exactly the transaction amount and the footer
+said "Balanced" in green beside an enabled Save. Pressing it failed with "needs at least two
+lines". The remainder was telling the truth about the money and lying about the split. Classifying
+each line once (complete / draft / half-filled) and having both the footer text and the Save state
+read from that classification is what makes them unable to disagree again. The modal's Save lives
+in the hosting panel's footer, so the editor publishes its verdict through an atom from an effect
+rather than the render body — writing shared state while rendering re-enters the render it came
+from.
+
+Exclude-from-reports is a confirmation gap, but the reason it matters is specific: excluding
+changes NOTHING the row itself displays. Balances are untouched by design. So an accidental
+exclusion is invisible until a budget quietly stops adding up weeks later. The confirmation says
+that boundary out loud. Including again applies immediately — it is the restorative direction —
+and both now capture an undo point, so either is reversible from Ctrl+Z or Activity.
+
+The quick-filter counts were a measurement bug rather than a control bug. They were counted over
+the whole ledger, so with `CF26-PIPE` in the search the chips read "Uncategorized 249 · Large
+1665" beside twelve rows. A count next to a filter is a promise about what pressing it yields, so
+the fix is to count within the current scope — minus that preset's own dimension, which is the
+part that takes thought. Count inside a scope that already includes the preset and an engaged
+chip reports the rows it is currently showing rather than the rows it selects, and every other
+chip reads 0 the moment one preset is on. Writing the first test I got four of six expectations
+wrong against my own fixture, which is the argument for the logic living in `txnfilter` on native
+Go rather than being computed in the view.
+
+Two smaller ones: the transaction-history modal's host never passed `CloseOnly`, so a panel whose
+own doc comment says "read-only: the footer is just Close" rendered Cancel and Save over an empty
+audit trail; and quick-add, bulk categorize and the split editor listed bare category leaf names
+while Review and Edit showed qualified paths — so the app was distinguishable about duplicate
+names everywhere except the three places a charge actually gets filed. `catname.Path` already
+existed; one shared builder now feeds all of them, sorted by path so a parent sits above its
+children.
+
+Next: the period/calendar/ledger scope disagreement (C560), the invisible row-edit affordance,
+the silent receipt split, the sort busy state, the duplicate-review confirmations, and the flat
+row menu.
+
 ## 2026-08-16 — Three questions about a name, answered in eight places
 
 Cam reported that adding a budget was creating categories with the same name, and asked for it

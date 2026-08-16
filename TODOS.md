@@ -7031,9 +7031,40 @@ design pass before any code.
   fault: it only emits a reply on the non-tool branch.
   **Fixed here:** an empty completion now reports itself and invites a retry instead of rendering an
   empty bubble, so the failure is legible rather than looking like a dead feature.
-  **Still open:** why the model returns empty in Cam's case. That needs the finish_reason plumbed
-  through to the turn (the loop currently discards it) so the message can name the actual cause —
-  length, filter, or reasoning-only — rather than describing the symptom.
+
+  **Traced to the end, 2026-08-16 (verification pass).** The previous "still open" note said the
+  cause needed "the finish_reason plumbed through to the turn (the loop currently discards it)".
+  That was wrong on both counts — the live loop uses the Responses API, and on the transport that
+  actually produces this symptom the field is never parsed at all. Following the two transports
+  apart gives a complete causal chain, and it is a SERVER-side bug, not a client one:
+
+  1. `sendTools` (`insights.go:347`) has two branches. The direct-key branch calls
+     `ai.SendResponsesChatTools` (the Responses API). The `useBackendAI` branch calls
+     `ai.SendProxyChat`.
+  2. **The direct-key path CANNOT produce Cam's symptom.** `ParseResponsesChat`
+     (`responses_tools.go:191`) already ends with `if msg.Content == "" && len(msg.ToolCalls) == 0 {
+     return ..., errors.New("ai: the Responses reply was empty") }` — an empty completion surfaces
+     as an error, never as a turn.
+  3. **The backend-proxy path produces it exactly.** `SendProxyChat`'s callback is
+     `func(content string, u ai.Usage) { onResult(ai.Message{Role: RoleAssistant, Content: content}, u) }`
+     (`insights.go:350`) — no empty check anywhere. Server-side, `ai.ParseResponse`
+     (`ai.go:142-153`) returns `r.Choices[0].Message.Content` with no empty check, and
+     `ai.ChatResponse` (`ai.go:67-73`) **does not decode `finish_reason` at all** — the field is not
+     in the struct, so it is not "discarded by the loop", it was never parsed.
+  4. **Why the content is empty.** `AIService.Chat` builds its body with `ai.BuildRequest`
+     (`ai.go:76-78`), which marshals `{model, messages, temperature}` to `/chat/completions` — no
+     `max_completion_tokens`, no `reasoning_effort`. The server's own allowlist is
+     `defaultAIModels = {"gpt-5.4-mini", "gpt-5.5", "o4-mini"}` (`server/ai.go:27`) — every one a
+     REASONING model. A reasoning model on `/chat/completions` with no output budget spends the
+     completion allowance on reasoning and returns `content: ""` with `finish_reason: "length"` and
+     non-zero `completion_tokens`. That is "479 tokens out · 9,637 in" with no answer, precisely.
+  5. The client comment at `insights.go:352-355` already knows this — it routes the DIRECT path
+     through the Responses API because "it's the only endpoint that accepts reasoning.effort together
+     with function tools for the reasoning models". The server path never got the same treatment.
+
+  So the empty bubble was the visible half of a server that asks reasoning models for output without
+  giving them room to produce any. Fix filed as **C545**. This ticket stays open until C545 lands;
+  the legibility fix here is the safety net, not the cure.
 
 ### Already built, just not surfaced
 
@@ -7045,7 +7076,7 @@ design pass before any code.
   filter strip. Add one; no new filtering logic is needed. AC: a visible In/Out/Both control that
   sets `Flow`, and the existing chip appears when it is set.
 
-- [x] **C518 [MINOR][CAT] Sort category lists alphabetically.**
+- [~] **C518 [REOPENED 2026-08-16 — closed on the helper, not on the call sites; see C544] [MINOR][CAT] Sort category lists alphabetically.**
   *"categories must be alpha/numeric sorted in the list"*
   Pickers render `app.Categories()` in STORE order. `budgetCategoryPicker`
   (`internal/screens/budgets_categories.go:264`) has no sort at all; only `budgets_flex.go:383` and
@@ -7053,6 +7084,15 @@ design pass before any code.
   `categorytree.Flatten` already orders siblings by name, so pickers that flatten get it free and
   the flat lists are the outliers. Use a natural (alpha-numeric) comparison so "Category 10" sorts
   after "Category 9". AC: every category picker in the app is ordered identically.
+
+  **Reopened 2026-08-16 (verification pass).** `e97f8545` says "Closes C518" and its `catname`
+  package is correct work — natural ordering, tested (`catname_test.go`, incl. a total-order test).
+  But the commit's file list is the evidence it never reached the call sites: it touched
+  `categorytree.go`, `budgets.go`, `budgets_tiles.go` and `validate.go`, and **not one** of the flat
+  pickers the ticket named. `budgetCategoryPicker` — the site this ticket cites by line number —
+  still builds `shown` straight from `app.Categories()` with no sort at all. Nothing regressed; the
+  sweep was simply never done, and no test asserts picker ordering, which is why it closed clean.
+  Continues as **C544** with the full site list.
 
 - [x] **C519 [DONE 2026-08-16 — the picker explains what it withholds for a spending budget, and offers everything for a saving one] [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
   *"What this budget tracks might not show all categories"*
@@ -7083,6 +7123,19 @@ design pass before any code.
   scroll/focus the offending field. AC: direction is editable; a rejected save always shows its
   reason on screen without scrolling.
 
+  **Verified 2026-08-16, both halves genuinely fixed — for the modal.** (a) `directionS` +
+  `transactions.directionOut/In` are real controls (`transaction_edit_form.go:201-205, 313, 621`).
+  (b) `.form-err-sticky` (`rules_incomealloc.go:156`) pins the message with `position:sticky;
+  bottom:0`, which needs no effect to fire — correct, given `UseEffect` does not run for a component
+  passed as a FlipPanel prop.
+  **Two residuals found, filed separately.** The amount field is a MAGNITUDE field, but nothing says
+  so and nothing handles a typed sign: `money.ParseMinor` happily returns a negative for "-50".
+  Here that trips `amt <= 0` and errors (**C547**). In quick-add and the recurring inline editor the
+  guard is `amt == 0`, so a typed minus survives and is then flipped by the direction control —
+  silently recording the OPPOSITE of what was typed (**C546**). `recurring_form.go:98-99` already
+  has the correct idiom (`if amt < 0 { amt = -amt } // magnitude field; the direction toggle owns
+  the sign`), so this is inconsistency, not an unsolved problem.
+
 - [x] **C521 [MAJOR][BUDGET] The tracked-categories modal breaks the back stack.**
   *"main page > edit budget modal > enter tracked cats modal > edit budget modal > main page"*
   Opening "Edit what this budget tracks…" from inside the edit-budget modal should PUSH a second
@@ -7099,9 +7152,19 @@ design pass before any code.
   `data-theme` by hand yields a half-applied theme — then restyle to match. Per C511 this modal is
   where Recat lives permanently, so it is worth doing properly.
 
+  **Remaining work enumerated 2026-08-16** (read from the current file, so the next session does not
+  have to re-find it). `registerSmartCatPolish` (`styles/rules_incomealloc.go`) covers the segmented
+  control and the no-provider state; the RESULT list is untouched:
+  - `txn_smartcat.go:340` and `:358` — both populated branches wrap rows in bare `.rows`.
+  - `txn_smartcat.go:420-428` — each row is `.row` + `.row-main` / `.row-desc` / `.row-meta`, the
+    generic ledger classes, so a review row and a transaction row are visually the same object.
+  - Inline styles still present at `:399` (`margin: 0`) and `:420` (`cursor: pointer`) — both belong
+    in the stylesheet with the rest.
+  The suggest/auto/recat branches share `smartCatRow`, so one restyle covers all three modes.
+
 ### New capability
 
-- [x] **C523 [MAJOR][CAT] Merge two categories into one.**
+- [~] **C523 [REOPENED 2026-08-16 — the reference sweep misses two reference classes and its AC test was never written; see C548] [MAJOR][CAT] Merge two categories into one.**
   *"on the category page, add a way to merge 2 categories into a new category"*
   Nothing like this exists (`MergeCategories` is absent). A merge must move every reference, not just
   transactions: `Transaction.CategoryID`, `CategorySplit.CategoryID`, budgets' `TrackedCategoryIDs`,
@@ -7110,6 +7173,22 @@ design pass before any code.
   a preview ("moves 128 transactions, 2 budgets and 3 rules") and a single undoable write. AC: after
   a merge no reference to the retired id survives anywhere, proven by a test that scans the exported
   JSON.
+
+  **Reopened 2026-08-16 (verification pass).** `internal/catmerge` is good work — pure, non-mutating,
+  ten tests — but it does not satisfy this ticket's own AC, in three ways.
+  1. **`learntally` is not swept**, though this ticket lists it by name. `catmerge.Refs` has six
+     members (transactions, budgets, goals, rules, categories, recurring) and no tally.
+     `learntally.Tally` is `payee → map[categoryID]count` (`tally.go:17`) and IS persisted
+     (`uistate/learntally_store.go`). After a merge the learned history still points at the retired
+     id, so SMART's history suggestion proposes a category that no longer exists.
+  2. **Widget specs are not swept.** A series filter can name a category by id —
+     `"cat:<id or name>"` (`widgetsource.go:351`, and `store/sample.go` ships exactly that shape).
+     A merged-away id leaves a saved chart silently reporting zero.
+  3. **The AC test does not exist.** `TestMergeLeavesNoResidual` calls `catmerge.Residual`, which
+     scans the same six-member `Refs` the merge already rewrote — it is circular by construction and
+     cannot fail for a collection that isn't in `Refs`. No test scans exported JSON.
+  Continues as **C548**. Cam's literal ask (merge into a NEW category, rather than folding into an
+  existing one) is also still unbuilt — **C549**.
 
 - [ ] **C524 [MAJOR][REPORT] Make spend-per-category FINDABLE (correction: it already exists).**
   *"we need either a page or a section somewhere to show spend per cat"*
@@ -7139,6 +7218,24 @@ design pass before any code.
   render). AC: a budget can track "anything matching X" with the same preview and conflict flags
   rules already provide.
 
+  **Researched 2026-08-16.** Two corrections that make this cheaper than filed.
+  1. **The hang risk is not real in Go.** "A user's bad regex must never be able to hang a render"
+     imports a JS/PCRE assumption. Go's `regexp` is RE2: guaranteed linear time in the input, no
+     backtracking, so no catastrophic-blowup pattern exists to defend against. `regexp` is also
+     ALREADY linked into the wasm binary (`payeeclean`, `payeealias`, `insights`, `savings_ops`), so
+     allowing raw regex costs no binary size either. The real hazards are ordinary: compile an
+     invalid pattern (use `regexp.Compile`, never `MustCompile`, and validate at save time with the
+     error shown in the form), and re-compiling per row (compile once per evaluation pass and cache
+     by pattern string).
+  2. **The reuse target is the right one and is bigger than the ticket says.** `rules.Condition`
+     (`internal/rules/conditions.go`) already matches over payee (raw AND `payeeclean`-normalized),
+     description, amount, account and date, each with its own op — plus `rules.MatchesTxn` for
+     whole-transaction evaluation and `rules.MatchCount`/`Uncovered` for the "matches N
+     transactions" preview this ticket's AC asks for. Adding a `regex` op to `matchText` is a
+     smaller change than adding a parallel matcher to `Budget`.
+  Suggested shape: `Budget.TrackedConditions []rules.Condition` beside `CategoryIDs`/`TrackedTags`,
+  evaluated in the same place `TrackedTags` already is, so the three selectors compose as a union.
+
 - [ ] **C526 [DEFERRED ON EVIDENCE — measured 2026-08-16; virtualization has nothing to fix at the row counts the UI actually produces] [MINOR][TXN][PERF] Virtualize the full transaction list.**
   *"in transactions when viewing all transactions, lets make sure the list is virtualized"*
   The ledger paginates (`internal/pagination`, `txnfilter.DefaultPageSize`) rather than virtualizing,
@@ -7162,6 +7259,29 @@ design pass before any code.
   clearing the date scope, a saved view, or an export preview — and measure THAT. Building a
   virtualizer against the measured numbers above would move nothing.
 
+  **CORRECTION 2026-08-16 (verification pass) — the premise above is wrong twice, and the
+  measurement is invalid.**
+  1. **The ledger already virtualizes.** "The ledger paginates rather than virtualizing, so 'view
+     all' renders every row" is false. `transactions_widget.go:729` reads
+     `virtualize := pageSize <= 0 && total > txnVirtualizeThreshold` (threshold 100), and when that
+     holds it hands `uiw.VirtualSpec{Count, RowHeight: 35, Scroller: "main.cf-scroll", RowAt, KeyAt}`
+     to the DataTable, which renders a windowed body with spacer rows
+     (`internal/ui/datatable_virtual.go`). `PageSizeAll = -1`, so choosing "All" satisfies
+     `pageSize <= 0`. This has been in since **6e45258b, 2026-06-30** — six weeks before the
+     feedback. Whatever Cam saw, it was not an unvirtualized "All" view.
+  2. **There is no built-in date scope, so the measurement never engaged the virtualizer.** The
+     note says the ledger never exceeded 51 rows "because the view is also date-scoped". The page
+     applies exactly one filter — `txnfilter.Apply(app.Transactions(), filterAtom.Get())`
+     (`transactions.go:592`) — and `TxFilter` defaults to the zero value with no From/To
+     (`uistate/txfilter.go:41-48`). The filter is PERSISTED to localStorage, so the profiled
+     session was running under a saved user filter. At ≤51 rows `virtualize` is false by
+     construction, which means the profile measured the paginated path and never touched the code
+     it was convened to evaluate.
+  **The deferral verdict still stands, but on different evidence, and the re-measure is cheap:**
+  clear the saved filter, set page size to "All" on the 5,235-row sample, and profile THAT — it is
+  the first run that actually exercises the virtual window. Until then this ticket has no measured
+  basis in either direction. Do NOT let anyone "add virtualization" here; it exists.
+
 ### Needs a design pass before code
 
 - [ ] **C527 [MAJOR][DOMAIN] Money moved between the user's own accounts.** ★
@@ -7178,6 +7298,22 @@ design pass before any code.
   answer down, then model it, then surface it. AC: one answer, applied consistently everywhere a
   balance is shown.
 
+  **Researched 2026-08-16 — the "handle transfers" half is largely BUILT; the "not yet consumed"
+  half is the whole ticket.** `appstate/transfer_ops.go` already has `CreateTransferPair` with FX
+  conversion at the saved rate, a `ReceivedMinor` override for the bank's actual rate, a `FeeMinor`
+  third leg posted as real spending, `PreviewTransferPair`, liability-payment signing, workflow
+  dedupe (`transfer_workflow_test.go`) and `DeleteTransactionWithTransferPair` with
+  `isReciprocalTransferLeg` matching. The UI is reachable from the add menu, the dashboard and an
+  account row (`accounts.transfer*`). So this ticket should not be scoped as "build transfers".
+  What is genuinely absent: (a) a pairing ACTION for an unmatched leg, and (b) any in-flight state.
+  **Before any code, one question needs Cam's answer, because the two readings need different
+  models and only one is unbuilt:** "the money isn't yet consumed" could mean (a) **in transit** —
+  left A, has not landed in B, so exactly one of the two balances is currently lying; or (b) **set
+  aside but not spent** — moved to savings, still yours, must not read as spending. (b) is already
+  handled by the `IsTransfer()` exclusion, so if Cam means (b) this ticket is aimed at the wrong
+  problem and **C539** (contributions to your own savings never reach a saving budget) is the one
+  that actually needs answering. Ask before designing.
+
 - [ ] **C528 [MAJOR][DOMAIN] A usage model for statement-at-a-time bookkeeping.** ★
   *"a big issue is how to keep this app in sync with the accounts if we use the monthly statements,
   we need a model to handle this kinda usage pattern"*
@@ -7190,6 +7326,24 @@ design pass before any code.
   cadence, a notion of a period being closed (reconciled against a statement balance) versus open,
   import-time reconciliation to the statement's closing balance, and honest labelling of any figure
   derived from an open period. Design pass before code.
+
+  **Researched 2026-08-16 — three of the four "Needs" already have a primitive; the design pass
+  should assemble, not invent.**
+  - *Per-account statement cadence*: `freshness.Windows` is `map[domain.AccountType]int` with
+    per-account overrides via `EffectiveWindowDays(a)`, plus `IsStale`, `DaysSinceUpdate`,
+    `StaleAccounts` and per-account `Dismissals` (`internal/freshness`). A monthly-statement user is
+    a 31-day window. What is missing is not the cadence, it is that a stale account currently reads
+    as a PROBLEM rather than as an expected state between statements.
+  - *Closed vs open period*: `reconcile.Through(history)` already returns the reconciled-through
+    date from `[]domain.Reconciliation`, and `reconcile.Diff` / `PreviewBulkClear` already compare
+    cleared totals against a statement balance. That IS the closed-period boundary; nothing consumes
+    it as one.
+  - *Duplicate risk on overlapping statements*: `dedupe.CountIncomingDuplicates(incoming, existing,
+    accountID)` already exists and is already used for the import review.
+  - *Genuinely missing*: reconciling to the statement's CLOSING BALANCE at import time (today
+    reconciliation is a separate manual act), and the honest labelling of open-period figures.
+  So the shape is: teach the app that "stale" and "between statements" are different states, hang
+  the closed/open boundary off `reconcile.Through`, and caption anything derived after it.
 
 ---
 
@@ -7477,3 +7631,375 @@ properly is a framework-interaction problem, not a screen fix.
   the store updates memory; RequestPersist is what puts it in the dataset — so a
   deleted category came back on the next reload, which reads as the action having
   silently failed rather than as a save that never happened.
+
+---
+
+## UF verification pass — what the ledger claimed vs what the code does (2026-08-16) ★
+
+Cam re-read the fourteen UF items against the app and asked for a deep re-check. Every C516–C528
+ticket was re-verified against the code rather than against its own closing note. Nine of the
+thirteen held up. The four that did not — C516, C518, C523, C526 — are corrected in place above;
+the follow-on work is filed here.
+
+**The pattern worth naming:** three of the four misses are the same failure — a ticket closed on the
+*mechanism* (a helper, a package, a pure function) without the *sweep* to the call sites, and with a
+test that could only ever exercise the mechanism. C518 shipped `catname` and left the pickers
+unsorted. C523 shipped `catmerge` and left two reference classes unswept, with a residual test that
+scans only what the merge already rewrote. C526 concluded from a profile that never engaged the code
+under evaluation. A closing note is not evidence; the call sites are.
+
+- [ ] **C544 [MAJOR][CAT] Sort the category lists C518 never reached.** *(Continues C518.)*
+  `catname.Sorted` / `catname.Less` exist and are correct; they are called in exactly two screens.
+  Sweep the remaining user-visible lists — these are ORDERED LISTS a user reads, not id→name maps:
+  - `budgets_categories.go:281` — `budgetCategoryPicker`, the site C518 cited by line number. Still
+    raw `app.Categories()`. This is the tracked-categories editor, i.e. the exact screen behind the
+    C519 complaint.
+  - `recurring_form.go:159` — the category `<select>` on the recurring form.
+  - `review_inbox.go:402` — the category `<select>` in the review queue, the highest-frequency
+    picker in the app.
+  - `ruleaddform.go:271` / `dataedit_forms.go:468` — both call `categorySelectOptions(cats, …)`,
+    which does not sort, over an unsorted `app.Categories()` (`ruleaddform.go:182`,
+    `dataedit_forms.go:242,357`). Sorting inside `categorySelectOptions` fixes both at once.
+  - `categorypicker.go:182` and `budgets_flex.go:383` DO sort — but with a raw byte `<`, so they are
+    case-sensitive and non-natural ("Zoo" before "apple", "Item 10" before "Item 9"). Switch both to
+    `catname.Less`; identical ordering everywhere is C518's actual AC.
+  `categoryOptions` (`categorypicker.go:43`) is already correct — it goes through
+  `categorytree.Flatten` — and is the model the flat lists should copy.
+  AC: one test per picker asserting order, so the next "closes C518" cannot pass without them.
+
+- [ ] **C545 [BLOCKER][AI] The AI proxy asks reasoning models for output without giving them room
+  to produce any.** ★ *(Root cause under C516 — see the trace there.)*
+  `AIService.Chat` builds its upstream body with `ai.BuildRequest` (`ai.go:76-78`), which marshals
+  `{model, messages, temperature}` to `/chat/completions`. The server's allowlist is
+  `{"gpt-5.4-mini", "gpt-5.5", "o4-mini"}` (`server/ai.go:27`) — all reasoning models. With no
+  `max_completion_tokens` and no `reasoning_effort`, a reasoning model can spend the whole output
+  allowance on reasoning and return `content: ""` with `finish_reason: "length"` and non-zero
+  `completion_tokens`. `ai.ParseResponse` (`ai.go:142-153`) returns that empty content without
+  checking it, and `ai.ChatResponse` (`ai.go:67-73`) does not decode `finish_reason` at all, so
+  nothing anywhere can name the cause. Downstream, `SendProxyChat`'s callback wraps it into a
+  Message with no empty check (`insights.go:350`) — which is how it reaches the bubble.
+  The client already solved this for the direct-key path: it routes through the Responses API
+  precisely because that is the endpoint that accepts `reasoning.effort` (`insights.go:352-355`).
+  The server never got the same treatment.
+  Fix, in order: (1) add `FinishReason` to `ai.ChatResponse` and surface it through
+  `AICompletion` → `backendrpc.CompletionChunk` → the turn, so the empty-reply message can say
+  *length* / *filter* / *reasoning-only*; (2) send a `max_completion_tokens` (and a reasoning
+  effort) for reasoning models, or move the proxy to the Responses API as the client did; (3) make
+  `ParseResponse` treat empty content as an error the way `ParseResponsesChat` already does, so the
+  failure cannot travel silently.
+  AC: reproduce with a mocked upstream returning `content:""` + `finish_reason:"length"` + non-zero
+  usage; the user sees a message naming the cause, and after (2) the real request stops coming back
+  empty. **C516 stays open until this lands.**
+
+- [ ] **C546 [MAJOR][TXN] A typed minus sign silently records the OPPOSITE transaction.** ★
+  *(Residual of C520.)* Two live forms guard with `amt == 0` rather than `amt <= 0`, so a negative
+  parses through and is then flipped by the direction control:
+  - `app/quickadd.go:165-177` — type `-50` with kind "Expense" and `ParseMinor` returns −5000, the
+    `amt == 0` guard passes, then `if kind == "Expense" { amt = -amt }` makes it **+50 income**.
+    Saved with no error. Quick-add is on the shell root, a keyboard shortcut and the command
+    palette, so this is the highest-traffic add path in the app.
+  - `screens/planning.go:661-666` — same shape on the recurring inline editor (`expenseS` instead of
+    a kind string), so a mistyped recurring posts inverted every period.
+  `recurring_form.go:98-99` already has the fix (`if amt < 0 { amt = -amt } // magnitude field; the
+  direction toggle owns the sign`) — apply that idiom in both places.
+  AC: a test per form asserting that "-50" with direction=out stores −5000, not +5000.
+
+- [ ] **C547 [MINOR][TXN] The edit form rejects a typed minus instead of reading it as direction.**
+  *(Residual of C520.)* `transaction_edit_form.go:301` errors on `amt <= 0`, and `money.ParseMinor`
+  accepts a leading `-`. So the user correcting a mistaken income does the obvious thing — types a
+  minus in front of the amount — and gets "Enter an amount greater than zero", which is Cam's
+  original report almost word for word even though the Direction control he is being pointed at now
+  exists. A typed minus should set the direction to *out* and keep the magnitude, which is both what
+  was meant and what `recurring_form.go` already does.
+  *Cleanup noted here rather than filed separately:* `screens/transactions.go:266-277`
+  (`transactionsLegacy`, kept alive only by `var _ = transactionsLegacy`) still contains the exact
+  pre-C520 bug — parse, reject `<= 0`, re-apply the original sign. It is unreachable today, so it is
+  not a defect; it is a trap for whoever revives it. Delete it or comment the hazard.
+
+- [ ] **C548 [MAJOR][CAT] Finish the merge reference sweep and give it the test its AC asked for.**
+  *(Continues C523.)* Add to `catmerge.Refs` (or sweep alongside it): the persisted
+  `learntally.Tally` (`payee → map[categoryID]count`, `learntally/tally.go:17`, stored via
+  `uistate/learntally_store.go`) and any `WidgetSpec` series filter of the form `"cat:<id>"`
+  (`widgetsource.go:351`). Both survive a merge today pointing at a retired id — the tally makes
+  SMART propose a category that no longer exists, and the widget filter makes a saved chart report
+  zero without saying why.
+  Then write the AC's test properly: export the dataset after a merge and scan the JSON for the
+  retired id. `TestMergeLeavesNoResidual` cannot serve — `catmerge.Residual` walks the same six
+  collections the merge just rewrote, so it is circular and blind to anything outside `Refs`.
+  AC: the exported-JSON scan fails before the fix and passes after.
+
+- [ ] **C549 [MINOR][CAT] Merge two categories into a NEW category.** *(Cam's literal ask on C523.)*
+  What shipped is "Merge into…", where the target select is built only from categories that already
+  exist (`categories.go:446-461`), so the phrasing Cam used — *merge 2 categories into a new
+  category* — has no path. `catmerge.Merge(refs, fromID, toID)` is pure and composes: create the
+  target, then merge each source into it. The work is a "＋ New category…" entry in the target
+  picker (name field, kind inherited from the sources) and running the merge once per source.
+  Guard the two obvious cases: the new name must pass the same sibling-uniqueness rule `PutCategory`
+  enforces (C536/C537), and both sources must share a kind, which the panel already requires.
+
+- [ ] **C550 [MINOR][BUDGET] The tracked-categories picker shows bare names, so duplicates are
+  indistinguishable.** *(Third contributor to the C519 complaint, alongside C544.)*
+  `budgetCatRow` renders `c.Name` alone (`budgets_categories.go:337`). Sub-categories are shown flat
+  with no parent and no indent, so a "Gas" under "Auto" and a top-level "Gas" are the same row twice
+  — which reads as a bug, and reads as *missing categories* when the one you wanted is the second
+  one. The txn picker already solves this: `categoryOptions` builds a `"Parent › Child"` path
+  (`categorypicker.go:43-59`). Use the same path here, and search over it.
+  Worth doing in one change with C544: sorting, paths and the C519 explanatory note are three halves
+  of the same "the list looks incomplete" report.
+
+- [ ] **C551 [MINOR][AI] Backend-AI users get no tools at all, silently.**
+  `sendTools` takes a `tools []ai.Tool` argument and the `useBackendAI` branch simply does not pass
+  it (`insights.go:348-351`) — and `rpcMessages` (`ai/proxy_transport.go:38-44`) copies only Role
+  and Content, dropping `ToolCalls` and `ToolCallID`, so the wire format could not carry a tool turn
+  even if it were sent. A household on the server key therefore gets a strictly weaker assistant
+  than one on a direct key, with nothing saying so. Either plumb tools through `backendrpc` or say
+  plainly in the UI that the server path answers without tools. Related to C545; same transport.
+
+- [ ] **C552 [MINOR][TXN] The In/Out filter is built but buried.** *(Follow-on to C517.)*
+  C517's control landed inside `filter-ranges`, below four pill groups and beside cleared-status
+  (`transactions_tiles.go:735`) — while date scoping gets preset chips at the top of the panel.
+  Income-vs-spending is a far more frequent cut than cleared status. Promote it to the preset row as
+  two chips, keeping the select as the canonical control. Cheap, and it closes the gap between "we
+  built it" and "Cam found it" that produced this feedback item in the first place.
+
+---
+
+## TR series — transaction workflow verification (2026-08-16) ★
+
+This is a live-verification follow-up to the RV review-inbox series, not a second review redesign.
+RV owns the surface architecture and implementation plan; UF owns the broader feedback pass. TR
+records behavior found by driving the real workflow from `/` → `/transactions` with an isolated
+20-transaction cohort. The hot-reload duplicate DOM and multi-agent save-lock warnings are
+development-environment recovery issues, not product tickets; refresh is the documented workaround.
+
+### Confirmed live defects
+
+- [ ] **C553 [BLOCKER][REVIEW][TXN] Single-review confirmation advances without a durable write.**
+  Selecting a category and pressing `Categorize & next` advanced the card, but after closing and
+  reloading the transaction remained Uncategorized and the Review count did not decrease. Make the
+  commit await the write result: on success, clear the review state and decrement the live queue; on
+  failure, keep the current card, show the reason beside the action, and never advance. AC: a
+  native/e2e regression test confirms category, review state, count, and reload persistence for the
+  single path.
+
+- [ ] **C554 [MAJOR][REVIEW][TXN] Review scope is disconnected from the ledger scope.**
+  The ledger can be filtered to `CF26-PIPE` and a period, but opening Review still shows the global
+  queue, including unrelated merchants and dates. Provide an explicit Review scope (Current filter /
+  Current period / Entire queue), or make the global behavior unmistakable and add search/filter
+  controls inside Review. AC: a user can review exactly the filtered set without navigating through
+  unrelated charges, and the header states the scope and count.
+
+- [ ] **C555 [MAJOR][TXN][STATE] The selected period is not stable across navigation and reload.**
+  Selecting Aug 2026 while working with August transactions reverted to Jul 2026 after reload or
+  route changes. Persist the period as view state, or explicitly restore the documented default and
+  explain the reset. AC: the selected period and the displayed totals agree after reload and after
+  returning from Review, Categories, or Rules.
+
+- [ ] **C556 [MAJOR][REVIEW][CAT] Single review has no reliable in-context category-creation path.**
+  The bulk surface and Categories page expose category creation, but the single card did not expose
+  `+ New category or sub-category`. Creating `Housing > Home maintenance` required leaving Review,
+  opening Categories, returning to Transactions, and reopening the queue. Reuse C499's picker in
+  both modes and preserve the current card/session while the child-category form is open. AC: a
+  missing category can be created and assigned without losing the review item or its position.
+
+- [ ] **C557 [MAJOR][TXN][CAT] Auto-categorized manual additions have no clear provenance.**
+  Leaving Category blank on manual entry still auto-filed descriptions containing terms such as
+  coffee, internet, entertainment, gas, or groceries, so those rows bypassed Review without an
+  obvious distinction from a human-confirmed category. Keep the deterministic auto-categorizer,
+  but show an "Auto-categorized" reason/badge with undo or review affordance, and make the add form
+  state whether the value is a suggestion or a committed classification. AC: users can distinguish
+  automatic, rule-derived, and manually reviewed categories in the ledger and audit trail.
+
+### Verification follow-ups
+
+- [ ] **C558 [MINOR][RELEASE][TXN] Served runtime and source disagree about the row Edit affordance.**
+  The source contains the inline edit path, but the served Transactions build exposed only the row
+  kebab menu, whose items did not include Edit. Treat this as a build/version verification issue
+  first: rebuild the served WASM, then add a smoke test asserting an Edit control is present and
+  that category changes persist. Do not duplicate C60; close this ticket when the live-build check
+  passes.
+
+- [ ] **C559 [MINOR][NAV][TXN] Review, Categories, and Rules are too disconnected for correction work.**
+  Review is entered from Transactions, while Categories and Rules are nested under Data & people;
+  correcting a missing category or turning a repeated correction into a rule requires context-losing
+  navigation. Add contextual links/actions from Review and make the destination and return path
+  explicit. AC: category creation and rule creation return to the same review scope and card.
+
+**Related existing work:** C499 covers the shared category picker; C544/C550 cover consistent
+category ordering and qualified paths; C60 covers the intended inline edit implementation; C497 and
+C508 cover live progress and undo behavior. TR should extend those tickets, not fork replacements.
+
+### Transactions-page audit expansion (2026-08-16)
+
+The following items extend TR with the additional issues found while exercising the full
+Transactions page, including filters, calendar controls, bulk actions, import/duplicate review,
+and every non-destructive per-transaction menu boundary. C553-C559 above already cover the
+overlapping review persistence, review scope, period persistence, provenance, build, and navigation
+findings; these tickets add the remaining repair work without duplicating those records.
+
+- [ ] **C560 [MAJOR][TXN][STATE] Period, calendar, and ledger scopes disagree.**
+  The period control showed `Jul 2026` while the visible calendar and transaction rows were in
+  August; moving between periods also left the filtered cohort and totals unchanged. The calendar
+  view was reached through More and did not provide an obvious return path to the ledger. Define one
+  canonical period state, apply it consistently to the ledger, calendar, totals, and upcoming panel,
+  and provide an explicit Ledger/Calendar toggle with an accessible pressed state. AC: the label,
+  grid, rows, totals, and URL/view state all identify the same month after navigation, reload, and
+  return from another page.
+
+- [x] **C561 [MAJOR][TXN][BULK] Bulk Categorize can immediately apply the blank category.**
+  Selecting one transaction exposed `No category` as the default and the Categorize action applied
+  it immediately, without opening a chooser or asking for confirmation. Require an explicit category
+  selection before enabling Apply, distinguish "clear category" from "assign category," and show an
+  undoable result with the affected count. AC: clicking Categorize with no chosen category cannot
+  mutate a transaction, and the selected category is visible before commit.
+
+- [x] **C562 [MAJOR][TXN][SAFETY] Exclude from reports is an unconfirmed destructive action.**
+  The kebab action changed the transaction immediately and only then changed its label to Include in
+  reports. Add a confirmation that explains balances are unaffected but budgets, spending, and
+  reports are changed; provide a clearly scoped undo. AC: accidental activation cannot silently alter
+  reporting state, and restoring the transaction is audited and reversible.
+
+- [ ] **C563 [MAJOR][TXN][EDIT] Row editing has no visible affordance.**
+  Clicking the description opened Edit this transaction, but the row exposed no Edit label or icon;
+  only the tag button and kebab were visible. Add a labeled Edit action or make the row's click target
+  and keyboard behavior discoverable without relying on trial and error. AC: a sighted and keyboard
+  user can identify and reach editing from the row, with no conflict with tag and kebab controls.
+
+- [ ] **C564 [MAJOR][TXN][RECEIPT] Split from receipt can fail silently.**
+  Activating Split from receipt closed the menu without a dialog, file prompt, toast, or state change.
+  Either open the receipt-upload flow or explain why the action is unavailable, and report errors in
+  place. AC: every activation produces a visible next step or an actionable error; no silent no-op.
+
+- [x] **C565 [MINOR][TXN][LINK] Payment-link dialogs allow an invalid default selection.**
+  Bill-payment and subscription-payment dialogs opened with Not a bill payment or Not a subscription
+  payment selected while Link payment remained available. Disable the commit action until a real
+  target is chosen, or make the default a valid target only when one is confidently inferred. AC:
+  the dialog cannot submit a semantic no-op and explains the required selection.
+
+- [x] **C566 [MINOR][TXN][SPLIT] Split editor presents a blank line as balanced and saveable.**
+  Split into categories opened with a second category/amount line blank while the footer reported
+  Balanced and offered Save split. Clarify whether the blank line is a draft row, disable save until
+  every row is valid, and make the remaining amount explicit. AC: the balance indicator and Save
+  state cannot imply a valid split while an incomplete line remains.
+
+- [x] **C567 [MINOR][TXN][HISTORY] Read-only empty history shows misleading Save controls.**
+  Transaction history with no recorded changes displayed Save and Cancel actions even though there
+  was nothing to edit. Use a read-only footer, or reserve Save/Cancel for an actual edit state. AC:
+  the available actions match the modal's mode and empty state.
+
+- [x] **C568 [MINOR][TXN][FILTER] Quick-filter counts ignore the active search scope.**
+  With `CF26-PIPE` active, quick filters still showed global totals such as Uncategorized 249 and
+  Large 1665. Recompute counts within the current search/member/period scope, or label them clearly
+  as household-wide counts and show the projected result before applying. AC: a user can tell what
+  population each count describes.
+
+- [ ] **C569 [MINOR][TXN][PERF] Sort changes have delayed feedback without a busy state.**
+  Sort metadata changed immediately, but the visible rows reordered roughly a second later. Keep the
+  sort state and rendered order synchronized, or show a pending indicator/aria-busy state until the
+  new order is painted. AC: a fast click-and-read interaction never presents the old rows under the
+  new sort state.
+
+- [x] **C570 [MINOR][TXN][CAT] Quick-add category choices omit parent paths.**
+  The New transaction form listed leaf names only, while Review and Edit exposed qualified paths such
+  as `Housing > Mortgage`. Use the shared qualified category picker and preserve search/parent context
+  across add, edit, split, and review flows. AC: duplicate leaf names are distinguishable everywhere.
+
+- [ ] **C571 [MAJOR][TXN][DUPES][SAFETY] Duplicate review exposes destructive actions without a clear confirmation.**
+  Review duplicates offered Merge (keep one) and Delete duplicate directly in the dialog. Add an
+  explicit confirmation naming the retained and removed entries, show the resulting count, and make
+  the operation undoable. AC: a mistaken merge/delete is recoverable and the user can verify exactly
+  which transaction survives.
+
+- [ ] **C572 [MINOR][TXN][MENU][UX] The per-transaction kebab menu mixes unrelated risk levels.**
+  Rules, payment linking, splitting, history, name cleanup, exclusion, task creation, receipt work,
+  and deletion appear in one flat list. Group routine organization separately from reporting and
+  destructive actions, add separators and clearer labels, and keep Delete/Exclude visually distinct.
+  AC: the menu hierarchy communicates risk before activation and remains usable at narrow widths.
+
+### Human-level UX refinement series (2026-08-16)
+
+These are broader interaction-design concerns observed during the same audit. They are intentionally
+larger than individual bug fixes: each one should be resolved as a coherent user workflow, with a
+design pass and an end-to-end test rather than a collection of isolated label changes.
+
+- [ ] **C573 [MAJOR][TXN][UX] Consolidate competing transaction entry points.**
+  New transaction appears in the page header, Add transaction appears above the ledger, and
+  Add something else also contains New transaction, Transfer money, and other creation actions.
+  Different entry points suggest different behavior even though they lead to overlapping flows. Define
+  one primary entry action, one clearly scoped secondary menu, and consistent labels for expense,
+  income, and transfer creation. AC: a first-time user can identify the correct starting point in
+  one glance, and every entry point makes its destination and transaction type clear.
+
+- [ ] **C574 [MAJOR][TXN][UX] Define a clear state-and-filter ownership model.**
+  Search has Clear, the filter panel has Close, the page has Clear filters, the active chip has Clear
+  all filters, and period/profile controls also affect what users believe they are viewing. The user
+  cannot reliably predict which part of the current state each control removes. Establish a visible
+  filter summary with scoped removal for each criterion and a separate reset-all action. AC: every
+  clear/reset control states exactly what it removes, and returning from Review or another page does
+  not silently change the working set.
+
+- [ ] **C575 [MAJOR][TXN][REVIEW][UX] Make global and local counts unmistakably different.**
+  Review inbox (251), filter counts, and the 20-row filtered ledger appear together without clearly
+  stating which counts are household-wide and which are scoped to the current search, member, and
+  period. Treat scope as first-class UI state: label counts, show the active scope beside Review, and
+  offer an explicit switch between Current view and Entire queue. AC: users can explain every visible
+  count without opening another page or guessing whether a filter was ignored. Extends C554 and C568.
+
+- [ ] **C576 [MAJOR][TXN][SAFETY][UX] Establish a consistent action-feedback contract.**
+  Ellipses imply a follow-up form for some actions, while other actions execute immediately; some
+  mutations have undo and others do not. Users therefore cannot predict whether a click will open a
+  panel, commit data, or do nothing. Define action classes (open, preview, commit, destructive), use
+  consistent labels and icons, require confirmation for high-impact changes, and provide a standard
+  success/error/undo treatment. AC: every transaction action communicates its consequence before
+  activation and produces visible completion feedback afterward. Extends C562, C564, C565, C571,
+  and C572.
+
+- [ ] **C577 [MAJOR][TXN][WORKFLOW][UX] Design one coherent transaction-correction journey.**
+  The page currently separates finding a transaction, reviewing it, creating a category, creating a
+  rule, checking history, and returning to the filtered ledger across several menus and routes. Model
+  the intended journey as a persistent workspace: find -> inspect -> correct -> explain automation ->
+  save -> review the next item. Preserve the originating query, period, member, row, and review card
+  across every branch. AC: a user can complete a correction and return to the same place without
+  reconstructing filters or reopening the queue. Extends C559 and C581.
+
+- [ ] **C578 [MINOR][TXN][STATUS][UX] Make transaction status legible without relying on symbols.**
+  Reconciled, Cleared, and Needs review are represented mainly by checkmarks and dots with a separate
+  legend above the table. Improve the row treatment with text labels, stable color/shape semantics,
+  keyboard-accessible explanations, and a filterable status summary. AC: a user scanning one row can
+  understand its state without first locating and interpreting the legend; color is never the only
+  signal.
+
+- [ ] **C579 [MAJOR][TXN][AUTOMATION][UX] Make classification provenance visible at the point of trust.**
+  Rule-derived, deterministic auto-categorized, imported, manually entered, and human-reviewed
+  transactions can look alike even though they carry different levels of confidence. Add a compact
+  provenance treatment in the row and edit/review surfaces, with an explanation of why the category
+  was selected and a direct correction path. AC: users can distinguish automatic suggestions from
+  confirmed decisions and can undo or override automation without hunting through Rules. Extends C557.
+
+- [ ] **C580 [MAJOR][TXN][MODAL][UX] Standardize modal semantics and footer actions.**
+  Transaction dialogs vary between Close, Cancel, Save, Link, Confirm, and immediate actions; empty
+  or read-only states sometimes still show editing controls. Define modal types (inspect, edit,
+  confirm, destructive confirmation), consistent headings, focus behavior, escape behavior, dirty-state
+  handling, and footer ordering. AC: the primary action, dismissal action, and unsaved-change behavior
+  are predictable in every transaction-related modal. Extends C565-C567.
+
+- [ ] **C581 [MAJOR][TXN][NAV][UX] Preserve context through cross-page correction flows.**
+  Rules, Categories, Recurring, Activity, and Review are valid destinations, but navigating to them can
+  feel like leaving the transaction task. Add explicit breadcrumbs or return actions that name the
+  originating transaction/filter/review card, and restore that context after completion or cancellation.
+  AC: every cross-page action has a visible return path and restores the same working set, not merely
+  the Transactions route. Extends C559 and C577.
+
+- [ ] **C582 [MINOR][TXN][UX] Reduce above-the-ledger competition and improve progressive disclosure.**
+  Profile, period, upcoming items, search, filters, review, rules, views, more actions, and multiple
+  add actions compete for attention before the ledger. Reorganize the page around the primary job of
+  scanning and correcting transactions; keep secondary planning and import tools available but
+  progressively disclosed. AC: the first viewport establishes the current scope, primary action, and
+  ledger before secondary tools dominate the visual hierarchy, while power-user access remains fast.
+
+- [ ] **C583 [MAJOR][TXN][UX][E2E] Validate the complete human correction loop as a product journey.**
+  Add a cross-surface usability scenario covering: locate a known-bad transaction, understand its
+  provenance, edit its category, create a missing category, optionally create a rule, verify history,
+  review the result, and return to the same filtered ledger. Measure steps, route changes, lost state,
+  confirmation clarity, and recovery from mistakes. AC: the journey is documented, keyboard-usable,
+  recoverable, and passes with a fresh user who has not memorized CashFlux navigation.

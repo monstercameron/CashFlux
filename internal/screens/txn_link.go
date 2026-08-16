@@ -74,6 +74,14 @@ func TxnLinkBody(_ struct{}) ui.Node {
 	subChoice := ui.UseState(txn.SubscriptionName)
 	autoLink := ui.UseState(false)
 	onSave := ui.UseEvent(Prevent(func() {
+		// C565: refuse a semantic no-op even if the button is reached some other way
+		// (an Enter keypress, an e2e click on a disabled node). Save commits a change
+		// or it does nothing at all — it never posts "saved" over an unchanged record.
+		if billChoice.Get() == txn.BillAccountID && subChoice.Get() == txn.SubscriptionName &&
+			!(autoLink.Get() && billChoice.Get() != "") {
+			uistate.PostNotice(uistate.T("txnlink.nothingToSave"), true)
+			return
+		}
 		t := txn
 		t.BillAccountID = billChoice.Get()
 		t.SubscriptionName = subChoice.Get()
@@ -234,14 +242,44 @@ func TxnLinkBody(_ struct{}) ui.Node {
 		preview = Div(previewArgs...)
 	}
 
+	// C565: the pickers open on "Not a bill payment" / "Not a subscription payment",
+	// which is the correct resting choice for an UNLINKED payment — and it made Save a
+	// live button that could only ever do nothing. Save now commits a CHANGE, so it is
+	// enabled exactly when the pending choices differ from what the transaction already
+	// carries, and it names what it will do: linking, or removing a link that exists.
+	// A "nothing chosen yet" line explains the disabled state rather than leaving the
+	// user to discover it by clicking.
+	changed := billChoice.Get() != txn.BillAccountID ||
+		subChoice.Get() != txn.SubscriptionName ||
+		(autoLink.Get() && billChoice.Get() != "")
+	clearing := !linked && (txn.BillAccountID != "" || txn.SubscriptionName != "")
+	saveLabel := uistate.T("txnlink.save")
+	if clearing {
+		saveLabel = uistate.T("txnlink.saveRemove")
+	}
+	var saveHint ui.Node = Fragment()
+	switch {
+	case !changed:
+		saveHint = P(css.Class("muted", tw.Text13), Attr("data-testid", "txnlink-nothing"),
+			Style(map[string]string{"margin": "0"}), uistate.T("txnlink.nothingToSave"))
+	case clearing:
+		saveHint = P(css.Class("muted", tw.Text13), Attr("data-testid", "txnlink-clearhint"),
+			Style(map[string]string{"margin": "0"}), uistate.T("txnlink.clearHint"))
+	}
+	saveArgs := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), OnClick(onSave), saveLabel}
+	if !changed {
+		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"))
+	}
+
 	return Div(css.Class(tw.FlexCol, tw.Gap3),
 		summary,
 		seg,
 		picker,
 		preview,
+		saveHint,
 		Div(css.Class("modal-sticky-foot"),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), OnClick(onSave), uistate.T("txnlink.save"))),
+			Button(saveArgs...)),
 	)
 }
 

@@ -24,10 +24,15 @@ func TxnHistoryHost() uic.Node {
 	}
 	close := func() { uistate.SetTxnHistory("") }
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:   uistate.T("txnhistory.title"),
-		Width:   uiw.FlipMediumW,
-		Height:  uiw.FlipMediumH,
-		OnClose: close,
-		Back:    uic.CreateElement(screens.TxnHistoryPanel, screens.TxnHistoryPanelProps{TxnID: id}),
+		Title:  uistate.T("txnhistory.title"),
+		Width:  uiw.FlipMediumW,
+		Height: uiw.FlipMediumH,
+		// C567: the panel reads a transaction's audit trail — there is nothing here to
+		// commit. Without CloseOnly the FlipPanel falls through to its standard
+		// Cancel/Save footer, so an empty history offered a Save that could only ever
+		// do nothing, and a Cancel that implied unsaved edits existed.
+		CloseOnly: true,
+		OnClose:   close,
+		Back:      uic.CreateElement(screens.TxnHistoryPanel, screens.TxnHistoryPanelProps{TxnID: id}),
 	})
 }
