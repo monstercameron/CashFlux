@@ -42,6 +42,16 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C594: the Add-budget advanced surface is grouped and explained ---
+	// It was one undifferentiated pile that OPENED with an implementation-oriented
+	// formula variable name, before the user had finished establishing the budget.
+	"budgets.groupTracking":      "What else this budget counts",
+	"budgets.groupTrackingHint":  "By default a budget counts its own category. Add more categories, or tags that cut across them.",
+	"budgets.groupBehaviour":     "How it behaves",
+	"budgets.groupBehaviourHint": "Who it belongs to, which budgeting method it follows, and whether unspent money carries into the next period.",
+	"budgets.groupFormula":       "For your own calculations",
+	"budgets.groupFormulaHint":   "A short handle for this budget in the formula builder. Most people never need it — leave it as it is.",
+
 	// --- C595: the card's explanatory captions live behind one disclosure ---
 	// The card stacked tracking, tags, committed, set-aside, target, coverage,
 	// owner, method, custom fields, pace and carry between the bar and the

@@ -206,3 +206,39 @@ test.describe("budgets: recurring dates say what they are relative to", () => {
     expect(toned).toBe(overdue);
   });
 });
+
+test.describe("budgets: the Add-budget advanced surface", () => {
+  // C594: it was one undifferentiated pile — a formula handle, a whole category
+  // tree, tags, owner, method, rollover and custom fields — and it OPENED with
+  // the implementation-oriented variable name, before the user had finished
+  // establishing the budget.
+  test("the common path is short, and the advanced surface is grouped and explained", async ({ app }) => {
+    await nav(app, "/budgets");
+    await app.getByTestId("budgets-add").click();
+    const form = app.getByTestId("budget-add-form");
+    await expect(form).toBeVisible();
+
+    // Closed, the form asks for a budget: a name, what it measures, a category, a
+    // limit and a period. The formula handle is not part of that.
+    await expect(app.getByTestId("budget-add-varname")).toHaveCount(0);
+    await expect(app.getByTestId("budget-add-tags")).toHaveCount(0);
+
+    await app.getByTestId("budget-add-advanced").click();
+    // Three named groups, each with a sentence in product language.
+    for (const g of ["tracking", "behaviour", "formula"]) {
+      const group = app.getByTestId(`budget-add-group-${g}`);
+      await expect(group).toBeVisible();
+      // A heading AND an explanation — a bare heading would just be a divider.
+      expect((await group.innerText()).split("\n").filter(Boolean).length).toBeGreaterThan(1);
+    }
+    // The formula handle comes LAST, after everything a normal budget needs.
+    const order = await app.evaluate(() =>
+      [...document.querySelectorAll('[data-testid^="budget-add-group-"]')].map((e) =>
+        e.getAttribute("data-testid"),
+      ),
+    );
+    expect(order[order.length - 1]).toBe("budget-add-group-formula");
+    // …and it is explained rather than presented as a required field.
+    await expect(app.getByTestId("budget-add-group-formula")).toContainText(/most people never need it/i);
+  });
+});

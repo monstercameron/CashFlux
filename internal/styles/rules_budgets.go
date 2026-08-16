@@ -925,6 +925,30 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C594: named groups inside the Add-budget advanced surface ---
+	// A heading and one sentence per group, so the advanced section reads as three
+	// answerable questions rather than a wall of controls.
+	rule(".ba-group",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+		marginTop("0.7rem"),
+		paddingTop("0.5rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".ba-group:first-child", marginTop("0.2rem"))
+	rule(".ba-group-head",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".ba-group-hint",
+		fontSize("var(--type-12)"),
+		lineHeight("1.4"),
+	)
+
 	// --- C595: the budget card's details disclosure ---
 	// A quiet toggle, not a button competing with the card's real actions: the
 	// point of the disclosure is to give the headline figure room, so its own

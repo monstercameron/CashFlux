@@ -746,6 +746,12 @@ and every commit updates this file under `Unreleased`.
   headline's meaning: an effective cap that differs from the limit, an envelope balance, an envelope
   in debt, a projected overspend — and every action, because the disclosure hides explanations, not
   things you can do.
+- **Adding a budget stops opening with a formula variable (C594).** The advanced surface was one
+  undifferentiated pile — a formula handle, a whole category tree, tags, owner, method, rollover and
+  custom fields — and it LED with the implementation-oriented variable name, asking a first-time user
+  to name an engine variable before they had finished naming their budget. It is three named groups
+  now, each with a sentence in product language: what else this budget counts, how it behaves, and —
+  last — the formula handle, described as something most people never need.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

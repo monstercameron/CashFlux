@@ -696,10 +696,18 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				Div(css.Class("ba-full"),
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-add-advanced"),
 						Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(toggleAdv), Text(advLabel))),
+				// C594: the advanced surface used to be one undifferentiated pile —
+				// a formula handle, a whole category tree, tags, owner, method, rollover
+				// and custom fields — opening with an implementation-oriented variable
+				// name before the user had finished establishing the budget. It is three
+				// named groups now, each saying in product language what it is for, so a
+				// power user can go straight to the one they came for and a first-timer
+				// can see at a glance that none of it is required.
 				If(advOpen.Get(), Fragment(
-					Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.varNameLabel"),
-							entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
+					// --- What else this budget counts ---
+					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-tracking"),
+						Span(css.Class("ba-group-head"), uistate.T("budgets.groupTracking")),
+						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupTrackingHint"))),
 					// Optional multi-category: track more existing categories in this one budget.
 					If(len(expenseCats) > 0, Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.catsAlsoTrack"),
@@ -716,6 +724,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 									Placeholder(uistate.T("budgets.tagsPlaceholder")),
 									Value(trackTags.Get()), OnInput(onTrackTags)),
 								Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
+					// --- How it behaves ---
+					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-behaviour"),
+						Span(css.Class("ba-group-head"), uistate.T("budgets.groupBehaviour")),
+						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupBehaviourHint"))),
 					// Owner (hidden until members exist) with its scope consequence spelled out.
 					If(len(app.Members()) > 0, Fragment(
 						labeledField(uistate.T("common.owner"),
@@ -727,9 +739,8 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 							})),
 						Div(css.Class("ba-full"),
 							Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-owner-hint"), ownerHint)))),
-					// C590: name the scope. This picker and the page's "Budgeting
-					// method" popover were both called "method", and neither said
-					// which budgets it moved.
+					// C590: name the scope. This picker and the page's "Budgeting method"
+					// popover were both called "method", and neither said which budgets it moved.
 					labeledField(uistate.T("budgets.methodLabel"),
 						Fragment(
 							uiw.SelectInput(uiw.SelectInputProps{
@@ -748,6 +759,16 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 					}),
+					// --- For your own calculations ---
+					// LAST, and explained: this is a formula handle, not a budget setting, and
+					// leading the advanced section with it asked a first-time user to name an
+					// engine variable before they had finished naming their budget.
+					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-formula"),
+						Span(css.Class("ba-group-head"), uistate.T("budgets.groupFormula")),
+						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupFormulaHint"))),
+					Div(css.Class("ba-full"),
+						labeledField(uistate.T("budgets.varNameLabel"),
+							entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
 				)),
 			),
 			errText("budget-err", errMsg.Get()),
