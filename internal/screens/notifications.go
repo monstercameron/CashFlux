@@ -416,6 +416,7 @@ func notifyRow(props notifyRowProps) ui.Node {
 		}
 	}))
 	resolveLabel := notifyResolveLabel(resolution.Kind)
+	canResolve := resolution.Resolvable() && props.OnResolve != nil
 	onRead := ui.UseEvent(func() {
 		if props.OnRead != nil {
 			props.OnRead()
@@ -543,26 +544,26 @@ func notifyRow(props notifyRowProps) ui.Node {
 
 	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-"+it.ID),
 		Div(mainArgs...),
-		// ONE primary action (mark read/unread) + a single ••• overflow holding the
-		// secondary actions (snooze horizons, alert settings, dismiss). Revealed on
-		// hover; always shown on touch.
+		// ONE primary action, then icon affordances, then a single ••• overflow.
+		//
+		// C409/C411: when an alert can be RESOLVED, that is the primary — it is
+		// the thing the alert exists to get done, and mark-read is a weaker
+		// version of the same intent ("I have dealt with this"). Showing both as
+		// primaries would put two full-width buttons of equal weight on one row
+		// and make the reader choose between them, which is the row-ambiguity
+		// C411 is about. Mark-read moves into the ••• for those rows, where it
+		// stays keyboard-reachable; on a row with nothing to resolve it is the
+		// primary, exactly as before.
 		Div(css.Class("notif-actions"),
-			// C409: resolve the thing the alert is about, from the alert. Every
-			// notification already links somewhere, which answers "where do I go";
-			// the commoner need is "make this go away, correctly", and sending the
-			// reader to a page to hunt for the row the alert was already about is a
-			// step the app can just take. Only shown when the id names something
-			// resolvable — a wrong resolution writes to the wrong entity, so the
-			// parser refuses to guess and the button simply does not appear.
-			If(resolution.Resolvable() && props.OnResolve != nil,
+			IfElse(canResolve,
 				Button(css.Class("notif-primary"), Type("button"),
 					Attr("data-testid", "notif-resolve-"+it.ID),
 					Attr("aria-label", withTitle(resolveLabel)), Title(resolveLabel), OnClick(onResolve),
 					uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)),
-					Span(css.Class("notif-primary-label"), resolveLabel))),
-			Button(css.Class("notif-primary"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
-				Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead),
-				uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(css.Class("notif-primary-label"), readLabel)),
+					Span(css.Class("notif-primary-label"), resolveLabel)),
+				Button(css.Class("notif-primary"), Type("button"), Attr("data-testid", "notif-read-"+it.ID),
+					Attr("aria-label", withTitle(readLabel)), Title(readLabel), OnClick(onRead),
+					uiw.Icon(icon.Check, css.Class(tw.W4, tw.H4)), Span(css.Class("notif-primary-label"), readLabel))),
 			// Visible snooze: a clock glyph with a "Snooze" tooltip, opening the three
 			// horizons (tomorrow / next week / next month). No longer buried in •••.
 			Div(css.Class("add-wrap"), Attr("id", snzID),
@@ -587,6 +588,12 @@ func notifyRow(props notifyRowProps) ui.Node {
 					OnClick(toggleOvf), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 				Div(ClassStr("add-backdrop"+ovfHidden), OnClick(closeOvf)),
 				Div(ClassStr("add-menu"+ovfHidden), Attr("role", "menu"),
+					// C411: mark-read lives here when a resolve action took the primary
+					// slot, so the row still has exactly one full-weight button and the
+					// action stays reachable by keyboard.
+					If(canResolve, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "notif-read-ovf-"+it.ID),
+						Attr("aria-label", withTitle(readLabel)), OnClick(onRead), readLabel)),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "notif-settings-"+it.ID), OnClick(ovfSettings), uistate.T("notifications.alertSettings")),
 					Button(css.Class("add-item add-item-danger"), Type("button"), Attr("role", "menuitem"),

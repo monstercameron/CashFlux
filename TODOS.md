@@ -5761,8 +5761,15 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   "default-unusual". It humanizes now ("default-low-balance" -> "Low balance"), which is a label
   rather than a leak. `TestEveryAlertRuleHasALabel` keeps that a safety net rather than the norm: it
   fails when a rule is added without real copy.
-- [ ] **C411 [MINOR][NOTIF] Row interaction ambiguity.** One primary affordance per row (the
-  chevron); secondary actions fold into the kebab; hover reveals, keyboard reachable.
+- [x] **C411 DONE (2026-08-16) - Row interaction ambiguity.** Hover-reveal and `:focus-within`
+  keyboard reachability were already in place (`rules_detail6.go`); what was missing was the
+  "one primary" half, and C409 had just made it worse by adding a second full-weight button.
+  Resolved by deciding which one IS primary rather than shrinking both: when an alert can be
+  RESOLVED that is the primary, because it is the thing the alert exists to get done, and mark-read
+  is a weaker version of the same intent ("I have dealt with this"). Two equal-weight buttons would
+  make the reader choose between them, which is exactly the ambiguity this ticket names. Mark-read
+  folds into the ... for those rows and stays keyboard-reachable; on a row with nothing to resolve it
+  remains the primary, unchanged.
 
 ### W10 — Density + polish across pages (reviewer priority 9)
 
