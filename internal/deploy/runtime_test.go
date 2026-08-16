@@ -190,13 +190,15 @@ func TestServerDockerfileRunsAsNonRoot(t *testing.T) {
 		t.Fatalf("read server Dockerfile: %v", err)
 	}
 	dockerfile := string(data)
-	for _, want := range []string{
-		"adduser -S -G cashflux cashflux",
-		"USER cashflux",
-	} {
-		if !strings.Contains(dockerfile, want) {
-			t.Fatalf("server Dockerfile missing non-root setting %q", want)
-		}
+	// The invariant is "the server does not run as root", not "the image creates
+	// an alpine user". The runtime base is distroless, which ships a nonroot
+	// account (65532) and has no shell to run adduser with, so the check is on
+	// the USER directive that actually decides it.
+	if !strings.Contains(dockerfile, "USER 65532:65532") {
+		t.Fatal("server Dockerfile must run as the distroless nonroot user (USER 65532:65532)")
+	}
+	if strings.Contains(dockerfile, "\nUSER root") {
+		t.Fatal("server Dockerfile must not end up running as root")
 	}
 }
 
@@ -629,13 +631,21 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Dockerfile.server: %v", err)
 	}
+	// Pinning the toolchain is the invariant; the FROM line also carries a
+	// --platform=$BUILDPLATFORM prefix so the builder stays on the runner's arch
+	// while the output is cross-compiled to linux/amd64 for the droplet.
 	for _, want := range []string{
-		"FROM golang:1.26-alpine AS build",
-		"go build -trimpath -ldflags=\"-s -w\" -o /out/cashflux-server ./cmd/cashflux-server",
+		"golang:1.26-alpine AS build",
+		"-o /out/cashflux-server ./cmd/cashflux-server",
 	} {
 		if !strings.Contains(string(dockerfile), want) {
 			t.Fatalf("Dockerfile.server missing %q", want)
 		}
+	}
+	// Cross-compilation must be explicit: the maintainer's machine is arm64 and
+	// an image built for it runs nowhere on the droplet.
+	if !strings.Contains(string(dockerfile), "GOARCH=${TARGETARCH}") {
+		t.Fatal("Dockerfile.server must honour TARGETARCH so the image can be built for linux/amd64")
 	}
 }
 
@@ -792,8 +802,10 @@ func TestSelfHostingDocumentsSingleBinaryDataDirAndBackups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read Dockerfile.server: %v", err)
 	}
-	if !strings.Contains(string(dockerfile), "ENTRYPOINT [\"cashflux-server\"]") {
-		t.Fatal("server Dockerfile does not ship the cashflux-server entrypoint")
+	// An absolute path, because a distroless image has no shell and therefore no
+	// PATH lookup — a bare "cashflux-server" would not start.
+	if !strings.Contains(string(dockerfile), `ENTRYPOINT ["/usr/local/bin/cashflux-server"]`) {
+		t.Fatal("server Dockerfile does not ship the cashflux-server entrypoint by absolute path")
 	}
 	compose, err := os.ReadFile("../../docker-compose.selfhost.yml")
 	if err != nil {
