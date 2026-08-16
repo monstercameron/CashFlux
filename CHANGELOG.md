@@ -7,6 +7,22 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **One entry point for a picture, three existing pipelines (AG12).** CashFlux could already turn an
+  image into a transaction, a split, or a document; what it could not do was choose. Asking somebody
+  to classify their own photo before they have seen what was read out of it puts the burden on the
+  person holding the phone, which is backwards — the app is the one that just looked at it.
+
+  The routing now happens from what the reading contains, and says why. Many dated ROWS mean a
+  statement; many LINE ITEMS with one date is still a receipt (confusing those sends a month of rows
+  into a single-transaction preview). An explicit "split with" routes to a shared expense, but only
+  as a tie-breaker on an otherwise-receipt reading — a shop called "Split Coffee" must not become a
+  shared expense. An unreadable image, or text with neither a merchant nor a total, is filed as a
+  document rather than proposed as a record somebody would have to go and fix.
+
+  Half a receipt still routes, flagged as a guess, and every route carries its alternatives: being
+  wrong should cost a click, not a re-upload. Making somebody photograph a receipt again to correct
+  the app's classification would be the least forgivable version of this feature.
+
 - **The guided month-end review (AG10).** Copilot and Origin bet their products on this, and the
   reason theirs work is not the content — it is that each step ends in something. A review that shows
   five charts and stops is a report; one where each step ends in a change applied or an explicit skip
