@@ -445,6 +445,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// "Cleared & not" label made the select look like an active filter at rest
 	// (review #19). Empty still maps to no-op; picking yes/no filters, clearing
 	// back to Any round-trips.
+	flowOpts := []uiw.SelectOption{
+		{Value: "", Label: uistate.T("transactions.flowAny")},
+		{Value: "out", Label: uistate.T("transactions.flowOut")},
+		{Value: "in", Label: uistate.T("transactions.flowIn")},
+	}
 	clearedOpts := []uiw.SelectOption{
 		{Value: "", Label: uistate.T("transactions.clearedAny")},
 		{Value: "no", Label: uistate.T("transactions.notCleared")},
@@ -723,6 +728,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
 			amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
 			filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
+			// C517: filtering by direction. The Criteria field, its matching logic
+			// and its chip label all already existed — the only way to reach any of
+			// it was to type a natural-language search, so this is a control over
+			// machinery that was already built and tested, not new filtering.
+			filterSelect(uistate.T("transactions.flowLabel"), f.Flow, flowOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Flow = v }) }),
 		),
 		customFilterNode,
 	)

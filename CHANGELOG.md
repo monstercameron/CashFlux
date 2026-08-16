@@ -7,6 +7,24 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Filter transactions by direction.** A "Money in or out" control on /transactions. The criteria
+  field, the matching logic and the active-filter chip all already existed — the only way to reach
+  any of it was to type a natural-language search.
+- **A transaction's direction is editable.** The edit form now carries a Direction control beside
+  the amount, so a charge that was imported or typed as income can be corrected to a spend. It
+  could not be before: the form validated the amount and then re-applied the ORIGINAL sign, which
+  made direction immutable and left deleting and re-entering the row as the only way to fix it.
+  Transfers are excluded — their sign says which leg of the move a row is, not how it is classified.
+
+### Fixed
+- **A rejected save says why, where you can see it.** The transaction form's validation message
+  rendered at the bottom of a scrolling modal body, below the fold and out of sight of the Save
+  button that produced it, so saving appeared to do nothing at all. It is now pinned to the foot of
+  the body at any scroll position, and it names the fix rather than only the fault.
+- **The budget category picker says what it is withholding.** It skipped every income category in
+  silence, so a household scanning for one it knew existed concluded the list was broken. It now
+  counts them and gives the reason. (The filter itself stays until income-side budgets exist — a
+  budget tracking an income category cannot accrue at all today.)
 - **The /budgets hero answers "how much of my income have I budgeted?"** Configuring "Budget
   income" used to change nothing visible on the default method: the basis fed the hero band's
   denominator only under zero-based budgeting, and everywhere else it reached one faint caption.

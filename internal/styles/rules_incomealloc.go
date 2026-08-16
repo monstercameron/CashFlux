@@ -142,3 +142,29 @@ func registerBudgetCatOptIn() {
 	)
 	rule(".budget-cat-optin:hover", color("var(--text)"))
 }
+
+// registerStickyFormError pins a form's validation message to the foot of its
+// scrolling body.
+//
+// The transaction edit form rendered its error at the very bottom of a scrolling
+// modal, below the fold, so pressing Save appeared to do nothing at all — the
+// message existed but the person who needed it never saw it. Sticky positioning
+// keeps it adjacent to the action that produced it at any scroll position, and
+// needs no effect to do it (UseEffect does not run for a component passed as a
+// FlipPanel prop, so a scrollIntoView would silently never fire).
+func registerStickyFormError() {
+	rule(".form-err-sticky",
+		position("sticky"),
+		bottom("0"),
+		zIndex("2"),
+		marginTop("0.5rem"),
+		padding("0.5rem 0.65rem"),
+		borderRadius("var(--radius)"),
+		border("1px solid color-mix(in srgb, var(--danger) 45%, var(--border))"),
+		background("color-mix(in srgb, var(--danger) 14%, var(--bg-card))"),
+	)
+	// The message inside loses its own margin so the pinned box is the only chrome.
+	rule(".form-err-sticky .err",
+		margin("0"),
+	)
+}

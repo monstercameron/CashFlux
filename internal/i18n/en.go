@@ -1974,7 +1974,7 @@ var english = Catalog{
 	"transactions.transfer":            "Transfer",
 	"transactions.noExport":            "No transactions match to export.",
 	"transactions.chooseAccount":       "Choose an account.",
-	"transactions.positiveAmount":      "Enter a positive amount.",
+	"transactions.positiveAmount":      "Enter an amount greater than zero — use Direction to switch between money in and money out.",
 	"transactions.splitAmountMismatch": "This transaction is split into categories — update the split below so the parts add up to the new amount.",
 	"transactions.invalidDate":         "Enter a valid date (YYYY-MM-DD).",
 	"transactions.diffDestination":     "Choose a different destination account.",

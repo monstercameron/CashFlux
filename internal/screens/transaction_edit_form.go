@@ -190,6 +190,20 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	descS := ui.UseState(txn.Desc)
 	payeeS := ui.UseState(txn.Payee)
 	amountS := ui.UseState(amountMajor)
+	// C520: the DIRECTION of an existing transaction used to be immutable. The
+	// form parsed the amount, rejected anything <= 0, then re-applied the original
+	// sign — so a charge imported as income could never be corrected to a spend
+	// without deleting and re-entering it. Correcting a mistake is the whole point
+	// of an edit form, so direction is now a control rather than a constant.
+	//
+	// Transfers are excluded: their sign is structural (which leg of the move this
+	// is), not a classification the user should flip here.
+	dirOut := txnDirOut
+	if txn.Amount.IsPositive() {
+		dirOut = txnDirIn
+	}
+	directionS := ui.UseState(dirOut)
+
 	catS := ui.UseState(txn.CategoryID)
 	dateS := ui.UseState(dateISO)
 	memberS := ui.UseState(txn.MemberID)
@@ -289,8 +303,15 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			errMsg.Set(uistate.T("transactions.positiveAmount"))
 			return
 		}
-		if t.Amount.IsNegative() {
-			amt = -amt // preserve the original income/expense sign
+		// The amount field holds a magnitude; the direction control holds the sign.
+		// A transfer keeps whatever sign it already had — that is which leg of the
+		// move this row is, not a classification to flip.
+		if t.IsTransfer() {
+			if t.Amount.IsNegative() {
+				amt = -amt
+			}
+		} else if directionS.Get() != txnDirIn {
+			amt = -amt
 		}
 		date, derr := dateutil.ParseDate(strings.TrimSpace(dateS.Get()))
 		if derr != nil {
@@ -590,7 +611,21 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				}(),
 			)),
 		labeledField(uistate.T("transactions.amountPlaceholder"),
-			Input(css.Class("field"), Type("number"), Step("0.01"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
+			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+				Attr("data-testid", "txn-edit-amount"),
+				Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
+		// Direction sits beside the amount because together they ARE the amount.
+		If(!txn.IsTransfer(), labeledField(uistate.T("transactions.directionLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options: []uiw.SelectOption{
+					{Value: txnDirOut, Label: uistate.T("transactions.directionOut")},
+					{Value: txnDirIn, Label: uistate.T("transactions.directionIn")},
+				},
+				Selected:  directionS.Get(),
+				OnChange:  func(v string) { directionS.Set(v) },
+				AriaLabel: uistate.T("transactions.directionLabel"),
+				TestID:    "txn-edit-direction",
+			}))),
 		uiw.FormField(uistate.T("transactions.categoryLabel"),
 			Div(css.Class("txn-cat-picker"),
 				Div(css.Class("txn-cat-row"),
@@ -673,7 +708,13 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				Txn: txn, Categories: categories, Members: members, OnSave: saveSplits,
 			})),
 		),
-		errText("txn-edit-err", errMsg.Get()),
+		// C520(b): this used to render at the bottom of a scrolling body, out of
+		// sight of the Save button that produced it — an error the user cannot see
+		// is the same as no error at all. Sticky to the foot of the body, so it is
+		// adjacent to the action whatever the scroll position. Sticky rather than an
+		// effect-driven scrollIntoView because UseEffect does not run for a
+		// component passed as a FlipPanel prop.
+		If(errMsg.Get() != "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", errMsg.Get()))),
 		// Delete stays in the body (left-aligned, apart from the panel footer's
 		// Cancel/Save): the FlipPanel's pinned .set-foot owns Cancel + Save now (via
 		// FormID → native submit), fixing the old floating mid-panel button row.
@@ -682,3 +723,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		),
 	)
 }
+
+// Transaction direction values for the edit form's sign control. They are the
+// form's own vocabulary, not persisted — the stored truth is the amount's sign.
+const (
+	txnDirOut = "out"
+	txnDirIn  = "in"
+)

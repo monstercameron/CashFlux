@@ -262,10 +262,19 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 	}
 
 	q := strings.ToLower(strings.TrimSpace(query.Get()))
+	hiddenKinds := 0
 	var shown []domain.Category
 	if app != nil {
+		// C519: a spending budget tracks spending categories. That filter is
+		// defensible, but it used to be SILENT — a household looking for an income
+		// category it had mistyped, or simply scanning for one it knew existed, was
+		// given no reason for its absence and reported the list as broken. The
+		// filter stays (a budget tracking an income category cannot accrue at all —
+		// matchesScope requires an expense, see C534/C538) but the picker now says
+		// so, and counts what it withheld.
 		for _, c := range app.Categories() {
 			if c.Kind != domain.KindExpense {
+				hiddenKinds++
 				continue
 			}
 			if q != "" && !strings.Contains(strings.ToLower(c.Name), q) {
@@ -283,6 +292,10 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 		})
 	})
 
+	// Say what was withheld and why, whether or not anything matched.
+	kindNote := If(hiddenKinds > 0, P(css.Class("muted", tw.Text13), Attr("data-testid", "budgetcats-kind-note"),
+		uistate.T("budgets.catsIncomeHidden", hiddenKinds)))
+
 	var list ui.Node
 	if len(shown) == 0 {
 		list = P(css.Class("muted", tw.Text13), Attr("data-testid", "budgetcats-none"), uistate.T("budgets.catsNoMatch"))
@@ -294,6 +307,7 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 			Attr("aria-label", uistate.T("budgets.catsSearch")), Placeholder(uistate.T("budgets.catsSearch")),
 			Value(query.Get()), OnInput(onQuery)),
 		list,
+		kindNote,
 	)
 }
 

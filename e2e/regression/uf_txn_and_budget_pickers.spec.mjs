@@ -1,0 +1,134 @@
+// uf_txn_and_budget_pickers.spec.mjs — three reported defects that share a
+// theme: the app knew something and did not say it.
+//
+//   C517 — transactions could be filtered by direction, but only by typing a
+//          natural-language search. The Criteria field, the matching logic and
+//          the chip label all existed; there was no control.
+//   C519 — the budget category picker silently withheld every income category.
+//   C520 — the direction of a transaction was immutable, and the error that
+//          said so rendered below the fold of a scrolling modal.
+import { test, expect, nav } from "./fixtures.mjs";
+
+test.describe("C517 · filtering by direction", () => {
+  // Spending renders in accounting parentheses with a .text-down tone; income
+  // renders plain with .text-up. Those classes are the ledger's own statement of
+  // direction, so they are what the filter has to agree with.
+  async function openFilters(app) {
+    await nav(app, "/transactions");
+    const toggle = app.getByRole("button", { name: /filters/i }).first();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  }
+
+  test("a control exists for money in vs money out", async ({ app }) => {
+    await openFilters(app);
+    const flow = app.getByLabel(/money in or out/i).first();
+    await expect(flow).toBeVisible();
+    // "Both" is the default: a filter that starts applied hides rows the user
+    // never asked to hide.
+    await expect(flow).toHaveValue("");
+  });
+
+  test("money-in leaves only income; money-out leaves only spending", async ({ app }) => {
+    await openFilters(app);
+    const flow = app.getByLabel(/money in or out/i).first();
+    const up = app.locator('[data-testid^="txn-row-"] td.td-amount.text-up');
+    const down = app.locator('[data-testid^="txn-row-"] td.td-amount.text-down');
+
+    // Poll the WHOLE condition rather than asserting the two counts in sequence:
+    // the list re-renders across the wasm boundary, so a moment exists where the
+    // incoming rows are present and the outgoing ones have not gone yet. Reading
+    // one count and then the other catches that moment and fails a filter that
+    // is working.
+    await flow.selectOption("in");
+    await expect
+      .poll(async () => `${(await up.count()) > 0}/${await down.count()}`, { timeout: 15000 })
+      .toBe("true/0");
+
+    await flow.selectOption("out");
+    await expect
+      .poll(async () => `${(await down.count()) > 0}/${await up.count()}`, { timeout: 15000 })
+      .toBe("true/0");
+
+    // Back to both: every row returns, so the control is reversible.
+    await flow.selectOption("");
+    await expect
+      .poll(async () => (await up.count()) > 0 && (await down.count()) > 0, { timeout: 15000 })
+      .toBe(true);
+  });
+
+  test("the active filter announces itself as a chip", async ({ app }) => {
+    await openFilters(app);
+    await app.getByLabel(/money in or out/i).first().selectOption("in");
+    // The chip machinery already handled Flow; this proves the control reaches it.
+    await expect(app.locator(".filter-chips, .chips").first()).toContainText(/money in|income/i);
+  });
+});
+
+test.describe("C519 · the budget picker explains what it withholds", () => {
+  test("income categories are absent, and the picker says why", async ({ app }) => {
+    await nav(app, "/budgets");
+    // Use the page own Add control, not a name match — the global add menu has a
+    // "New budget" item that opens a different host and would silently test
+    // something else.
+    await app.getByTestId("budgets-add").click();
+    // The multi-category picker lives behind Advanced on the add form.
+    const adv = app.getByTestId("budget-add-advanced");
+    if (await adv.count()) await adv.click();
+
+    const note = app.getByTestId("budgetcats-kind-note");
+    await expect(note).toBeVisible();
+    // It must count them and give the reason, not just assert a rule.
+    await expect(note).toContainText(/\d+ income categories are not shown/i);
+    await expect(note).toContainText(/spend/i);
+  });
+});
+
+test.describe("C520 · a mistaken income can be corrected to a spend", () => {
+  // The edit form opens by clicking a row's description.
+  async function openFirstTxnEdit(app) {
+    await nav(app, "/transactions");
+    await app.locator('[data-testid^="txn-row-"] .row-desc-text').first().click();
+    await expect(app.getByTestId("txn-edit-amount")).toBeVisible();
+  }
+
+  test("direction is a control, not a constant", async ({ app }) => {
+    await openFirstTxnEdit(app);
+    const dir = app.getByTestId("txn-edit-direction");
+    await expect(dir).toBeVisible();
+    // Seeded from the transaction's current sign rather than defaulting blindly.
+    await expect(dir).toHaveValue(/^(in|out)$/);
+  });
+
+  test("flipping the direction actually changes the stored sign", async ({ app }) => {
+    await openFirstTxnEdit(app);
+    const dir = app.getByTestId("txn-edit-direction");
+    const before = await dir.inputValue();
+    const flipped = before === "in" ? "out" : "in";
+    await dir.selectOption(flipped);
+    await app.getByRole("button", { name: /^save$/i }).last().click();
+
+    // Reopen and confirm it stuck. Before this fix the form re-applied the
+    // ORIGINAL sign after validating, so direction could never move and a charge
+    // filed as income had to be deleted and re-entered to be corrected.
+    await openFirstTxnEdit(app);
+    await expect(app.getByTestId("txn-edit-direction")).toHaveValue(flipped);
+
+    // Put it back so the run leaves no residue for other specs.
+    await app.getByTestId("txn-edit-direction").selectOption(before);
+    await app.getByRole("button", { name: /^save$/i }).last().click();
+  });
+
+  test("a rejected save shows its reason without scrolling", async ({ app }) => {
+    await openFirstTxnEdit(app);
+    await app.getByTestId("txn-edit-amount").fill("0");
+    await app.getByRole("button", { name: /^save$/i }).last().click();
+
+    // The message used to render at the bottom of a scrolling body, out of sight
+    // of the button that produced it, so Save looked inert.
+    const err = app.locator(".form-err-sticky");
+    await expect(err).toBeInViewport({ timeout: 10000 });
+    // ...and it must say how to fix it, not merely that it is wrong.
+    await expect(err).toContainText(/direction/i);
+  });
+});

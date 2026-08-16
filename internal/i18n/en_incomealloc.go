@@ -67,6 +67,21 @@ var incomeAllocKeys = Catalog{
 	"budgets.catAmbiguous":       "%d categories are already called “%s” — a new top-level one will be created.",
 	"budgets.createCatForced":    "You have no spending categories yet, so this budget will create one.",
 	"budgets.leftOverIncomeNote": "but %s over income",
+	// C520: the direction control on the transaction edit form. The amount field
+	// holds a magnitude and this holds the sign, so a charge filed as income can
+	// be corrected to a spend instead of having to be deleted and re-entered.
+	"transactions.directionLabel": "Direction",
+	// C517: the direction filter on /transactions. The Criteria field and its chip
+	// already existed and were only reachable through natural-language search.
+	"transactions.flowLabel": "Money in or out",
+	"transactions.flowAny":   "Both",
+	"transactions.flowOut":   "Money out (spending)",
+	"transactions.flowIn":    "Money in (income)",
+	// C519: a spending budget tracks spending categories. Saying so beats leaving
+	// the reader to conclude the list is broken. %d = how many were withheld.
+	"budgets.catsIncomeHidden":  "%d income categories are not shown — a spending budget tracks what you spend, not what you earn.",
+	"transactions.directionOut": "Money out (spending)",
+	"transactions.directionIn":  "Money in (income)",
 }
 
 func init() {
