@@ -6,7 +6,13 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/icon"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // lensChipKey marks the transactions toolbar chip that represents the TOP BAR's
@@ -19,6 +25,34 @@ import (
 // there. Keying it apart lets the one handler route each chip to the state that
 // actually owns it.
 const lensChipKey = "lens"
+
+// toolbarIconBtnTitled is a toolbar button whose accessible name carries MORE than
+// its visible label.
+//
+// It exists for counts whose scope cannot fit on the button. "Review inbox (249)"
+// beside a ledger reading "122 of 3,227" is two populations rendered identically;
+// the button has room for the number but not for "across the whole household,
+// ignoring this page's filters". Putting that in the title alone would leave it to
+// hover only, so it is the accessible name as well — the sentence is the point.
+func toolbarIconBtnTitled(testID string, ic icon.Name, label, title string, onClick ui.Handler, variant string) ui.Node {
+	cls := "btn btn-tool"
+	switch variant {
+	case "primary":
+		cls += " btn-primary"
+	case "danger":
+		cls += " bt-danger"
+	}
+	args := []any{
+		css.Class(cls), Type("button"),
+		Attr("aria-label", label+" — "+title), Attr("title", title), OnClick(onClick),
+		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Span(label),
+	}
+	if testID != "" {
+		args = append(args, Attr("data-testid", testID))
+	}
+	return Button(args...)
+}
 
 // clearAllLabel is the text for the filter summary's reset, or "" to hide it.
 //

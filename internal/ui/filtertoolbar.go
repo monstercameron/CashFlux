@@ -53,7 +53,14 @@ type FilterToolbarProps struct {
 	// (e.g. "Filters — 3 active"). Falls back to FiltersLabel when nil.
 	ActiveAriaLabel func(n int) string
 
-	Chips        []Chip           // active-filter chips (empty hides the row + badge)
+	Chips []Chip // active-filter chips (empty hides the row + badge)
+	// PreChips are chips that narrow the view but are NOT this page's filters —
+	// ambient state owned elsewhere, like the top bar's member perspective. They
+	// render at the start of the summary row, BEFORE the "Filtering by" lead-in, so
+	// the row does not describe them as filters; they are not counted by the Filters
+	// trigger's badge and the reset does not claim to remove them. Their ✕ still
+	// comes back through OnRemoveChip, keyed so the caller can route it (C574).
+	PreChips     []Chip
 	OnRemoveChip func(key string) // a chip's ✕
 	OnClearAll   func()           // the "clear all" link
 	// ClearAllLabel is the text for the clear-all link. An EMPTY label hides the
@@ -151,20 +158,19 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		If(n > 0, Span(css.Class("filter-badge"), Attr("aria-hidden", "true"), Text(strconv.Itoa(n)))),
 	)
 
-	chips := MapKeyed(props.Chips,
-		func(c Chip) any { return c.Key },
-		func(c Chip) uic.Node {
-			remove := props.RemoveLabel
-			if c.RemoveLabel != "" {
-				remove = c.RemoveLabel
-			}
-			return uic.CreateElement(filterChip, filterChipProps{
-				Label: c.Label, Key: c.Key, Class: c.Class,
-				RemoveLabel: remove, Named: c.RemoveLabel == "",
-				OnRemove: props.OnRemoveChip,
-			})
-		},
-	)
+	renderChip := func(c Chip) uic.Node {
+		remove := props.RemoveLabel
+		if c.RemoveLabel != "" {
+			remove = c.RemoveLabel
+		}
+		return uic.CreateElement(filterChip, filterChipProps{
+			Label: c.Label, Key: c.Key, Class: c.Class,
+			RemoveLabel: remove, Named: c.RemoveLabel == "",
+			OnRemove: props.OnRemoveChip,
+		})
+	}
+	chips := MapKeyed(props.Chips, func(c Chip) any { return c.Key }, renderChip)
+	preChips := MapKeyed(props.PreChips, func(c Chip) any { return c.Key }, renderChip)
 
 	searchCls := "fctrl fctrl-search"
 	if props.Search != "" {
@@ -199,12 +205,19 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 			),
 			If(len(props.Actions) > 0, Div(css.Class("filter-toolbar-actions"), props.Actions)),
 		),
-		// The chip row is the view's filter SUMMARY, so it says so. Unlabelled chips
-		// read as decoration next to a search box; a lead-in makes the row a sentence
-		// — "Filtering by: Groceries, July 2026" — and gives the reset something to
+		// The chip row is the view's SUMMARY, so it says so. Unlabelled chips read as
+		// decoration next to a search box; a lead-in makes the row a sentence —
+		// "Filtering by: Groceries, July 2026" — and gives the reset something to
 		// belong to (C574).
-		If(n > 0, Div(css.Class("filter-chips"), Attr("data-testid", "filter-summary"),
-			Span(css.Class("filter-chips-lead"), Text(uistate.T("filters.summaryLead"))),
+		//
+		// PreChips sit OUTSIDE that sentence, ahead of the lead-in, because they are
+		// not filters: putting "Viewing as Priya" under a label reading "Filtering by"
+		// would re-merge the two kinds of state this row exists to keep apart. When
+		// only PreChips are present the lead-in and the reset are both absent, so
+		// nothing on the row claims to be a filter.
+		If(n > 0 || len(props.PreChips) > 0, Div(css.Class("filter-chips"), Attr("data-testid", "filter-summary"),
+			preChips,
+			If(n > 0, Span(css.Class("filter-chips-lead"), Text(uistate.T("filters.summaryLead")))),
 			chips,
 			If(props.ClearAllLabel != "", Button(css.Class("btn-link chip-clear-all"), Type("button"),
 				Attr("data-testid", "filter-clear-all"),

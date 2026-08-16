@@ -428,6 +428,30 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			}
 		}
 	}
+	// C579: accept an automatic category as the user's own decision. Reviewed is
+	// exactly that fact — the flag the review queue and the provenance mark both
+	// read — so confirming here is one write and the "auto" mark disappears from the
+	// row. It is restorative rather than destructive (nothing about the money
+	// changes, only who owns the classification), so it applies immediately, but it
+	// still captures an undo point and says what it did.
+	confirmCategory := func(id string) {
+		for _, t := range props.App.Transactions() {
+			if t.ID != id {
+				continue
+			}
+			if t.Reviewed {
+				return // already the user's decision; nothing to confirm
+			}
+			t.Reviewed = true
+			if err := props.App.PutTransaction(t); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			postUndoStory(uistate.T("transactions.confirmedCategory"))
+			return
+		}
+	}
 	// TXC-1 / C562: flip a transaction's exclude-from-reports flag from the row kebab.
 	//
 	// Excluding is a reporting change with no visible trace on the row's own figures —
@@ -618,6 +642,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// ledger on every sort / select / pagination re-render (the full stats still compute
 	// lazily only when a chip is opened).
 	merchantCounts := merchantChargeCountsMemo(props.App, txnDataRev)
+	// C579: which rows carry a category no person has confirmed, and which rule (if
+	// any) accounts for it. Classified once for the whole view — rows re-render on
+	// selection, sort and pagination, and none of those change the answer.
+	autoProv := txnAutoByID(props.Shown, props.App.Rules())
 	// The trend chips are a secondary affordance, so mount them just AFTER the table has
 	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
 	// route-settle so the ledger paints as fast as before, then the chips fade in.
@@ -711,6 +739,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
 			Reviewed:            txByID[rid].Reviewed,
+			AutoCategory:        autoProv[rid].IsAutomatic(),
+			AutoCategoryWhy:     autoMarkWhy(autoProv[rid], srcCol.Str(i)),
 			Selected:            sel[rid],
 			Receipts:            nAtt,
 			Attachment:          firstAtt,
@@ -747,6 +777,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnOpenLink = openLink
 		r.OnOpenSplit = openSplit
 		r.OnToggleExclude = toggleExclude
+		r.OnConfirmCategory = confirmCategory
 		// C564: resolve against the LIVE ledger, not the render-time page map. txByID
 		// is built from the shown slice, so a row whose data moved underneath the
 		// render (a rule applied, a sync landed) yielded a zero Transaction that the
@@ -911,7 +942,17 @@ type txnFrameRowProps struct {
 	// stronger chip than plain cleared.
 	Reconciled bool
 	Reviewed   bool
-	Selected   bool
+	// AutoCategory marks a row whose category was filed by automation and which
+	// nobody has confirmed (C579). AutoCategoryWhy is the sentence explaining what
+	// filed it — naming the rule when one accounts for it — shown on the mark's
+	// tooltip and as its accessible name.
+	AutoCategory    bool
+	AutoCategoryWhy string
+	// OnConfirmCategory accepts the automatic category as the user's own decision,
+	// so the correction path for "the machine is right" costs one click and does not
+	// require opening the Rules page (C579).
+	OnConfirmCategory func(txnID string)
+	Selected          bool
 	// Payment linkage (the ⋯ row menu): the current bill / subscription links (if any),
 	// shown as a ✓ on the menu items. OnOpenLink opens the payment-link flip modal for
 	// this transaction, pre-set to the chosen mode (uistate.TxnLinkMode*).
@@ -1169,7 +1210,14 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		// td-acct/td-cat mark the secondary columns so the stylesheet can dim them
 		// (2026-07-17 audit: the description column carries the reading priority).
 		If(props.Vis.Account, Td(ClassStr("td-acct"), props.Account)),
-		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
+		// The provenance mark sits IN the category cell, at the point of trust: the
+		// question it answers ("did a person decide this?") is about that word, and a
+		// badge parked over in the description column would not be read as being
+		// about the category at all (C579).
+		If(props.Vis.Category, Td(ClassStr("td-cat"),
+			Span(css.Class("td-cat-inner"),
+				Span(css.Class("td-cat-name"), props.Category),
+				If(props.AutoCategory, ui.CreateElement(txnAutoMark, txnAutoMarkProps{Why: props.AutoCategoryWhy}))))),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
 		Td(ClassStr("td-actions"), OnClick(stop),
@@ -1212,6 +1260,18 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	remove := uistate.T(txnMenuRemove)
 
 	// --- Organize: reversible bookkeeping on this one charge --------------------
+	// C579: when the category is automation's guess, the cheapest correct action is
+	// to say "yes, that's right" — and it was the one action the page did not offer.
+	// Accepting it here is one click and needs no trip to the Rules page; disagreeing
+	// is the Edit button the row already has. Offered only on rows that actually read
+	// as automatic, so it never appears as a no-op.
+	if props.AutoCategory && props.OnConfirmCategory != nil {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("transactions.confirmCategory"), Icon: icon.Check, Section: organize,
+			TestID:   "txn-confirm-category",
+			OnSelect: func() { props.OnConfirmCategory(props.ID) },
+		})
+	}
 	// C363: the row's most strategic action first — turn this one charge into a
 	// standing rule (the /rules workbench opens prefilled). Gated on transfer legs
 	// (a transfer has no merchant/category to generalize into a rule).

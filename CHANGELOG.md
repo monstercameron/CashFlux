@@ -20,6 +20,21 @@ and every commit updates this file under `Unreleased`.
   can say exactly which commit it was built from.
 
 
+### Added
+- **The ledger says what it is showing, in words, where you can see it.** The page put a review
+  backlog ("Review inbox (249)"), quick-filter counts and a pager range ("1–25 of 3,227") side by
+  side, each measured against a different population — and the one statement that tied a number to
+  its scope was screen-reader-only. A visible line above the rows now reads "Showing 709 of 3,227
+  transactions · net $60,984.79 · viewing as Priya Hartley", always with its denominator, and it
+  shares a row with the status legend rather than adding one. The Review inbox button says on hover
+  and to assistive tech that its count is household-wide and ignores this page's filters.
+- **A category nobody confirmed says so.** A category a person chose, one a rule wrote and one an
+  import guessed all rendered as the same plain word, so there was no way to tell a settled decision
+  from a machine's suggestion. Unconfirmed automatic categories now carry a small "auto" mark in the
+  category cell that names the rule accounting for it — or says honestly that no current rule does —
+  and the row menu offers "Confirm this category", which is the one-click way to accept automation
+  without a trip to the Rules page. Hand-entered and reviewed rows are never marked.
+
 ### Fixed
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
@@ -38,6 +53,39 @@ and every commit updates this file under `Unreleased`.
 - **Two filter chips stopped rendering their raw stored value.** The "no category yet" quick filter
   produced a chip reading `1`, and a custom-field filter produced a chip reading only its value with
   no hint of the field it belonged to.
+- **Transactions has one period, stated where the rows are.** The page used to show the top bar's
+  reporting-period pill, which stores a snapped month/quarter window and cannot express what the
+  ledger's date filter can — a single day picked from the calendar, a hand-typed range. So the two
+  could never agree: the pill read "Jul 2026" over August rows, stepping it moved neither the rows
+  nor the totals, and the calendar showed a third month of its own. The ledger now carries its own
+  period bar, driven by the same dates it filters on, so the label, the calendar grid, the rows and
+  the totals are one fact rendered once. The pill is gone from this page; every other period-aware
+  page keeps it. The "upcoming this month" strip steps aside when the ledger is paged to a period
+  that does not contain today — nothing about a past month is upcoming.
+- **Ledger and Calendar are a visible pair, not a hidden switch.** The calendar was an entry inside
+  "⋯ More" with no pressed state and no way back except finding the same hidden entry again. It is
+  now a two-button toggle beside the period bar, and the calendar's own duplicate month stepper is
+  gone — one control moves the month for both views.
+- **The row menu groups by what an action costs.** Rules, splits, receipts, name cleanup, history
+  and follow-ups sit under Organize; bill, subscription, refund and group links under Links;
+  excluding a charge from reports under Reporting; deleting it under Remove. The last two are
+  painted as the destructive actions they are, so risk is legible before the click, not after.
+- **The ledger says it is re-sorting until the new rows are on screen.** The busy state cleared in
+  the same frame the new sort arrived, but a virtualized body paints its rows a frame later — so a
+  fast click-and-read could catch the new sort state over the old order. The spinner, the table's
+  `aria-busy` and a dimmed body now persist until after the browser has painted the new order.
+- **Editing a transaction is a visible, keyboard-reachable action.** Clicking a row opened the edit
+  modal and nothing said so: no label, no icon, and a `<tr>` is not focusable, so the ledger's most
+  common action was undiscoverable by sight and unreachable by keyboard. Each row now carries an
+  Edit control beside its ⋯ menu, in the tab order and named for assistive tech.
+- **"Split from receipt" always produces a next step.** Three paths ended in silence — no app, a
+  transaction the row could not resolve, and a browser that declined to open the file picker. Each
+  now says what happened, and the action announces the step it is starting before handing off to
+  the operating system's file dialog.
+- **Duplicate review names what survives.** Merge said only "the first entry is kept", which is
+  useless when every row in the group looks alike, and delete claimed "this can't be undone" while
+  the code was capturing an undo point and posting an undoable toast. Both now name the entry,
+  state the resulting count, and describe the reversal path that actually exists.
 - **Bulk Categorize cannot file a selection under nothing.** Its category picker opened on "No
   category" — a real, destructive choice dressed as a default — and Categorize applied it on the
   spot, so one click on a fresh selection stripped the category from every selected transaction.

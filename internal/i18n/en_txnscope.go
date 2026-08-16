@@ -10,20 +10,13 @@ var txnScopeKeys = Catalog{
 	// The scope line above the ledger. It states the size of the view, its
 	// denominator, and every scope that produced it, so no visible count is left
 	// for the user to reverse-engineer.
+	// (The DATE half of the scope is stated by the ledger's own period bar
+	// immediately above this line, so it is deliberately not repeated here.)
 	"transactions.scopeAll":      "Showing all %s",
 	"transactions.scopeNarrowed": "Showing %d of %s",
 	"transactions.scopeNet":      "net %s",
-	"transactions.scopeEveryone": "everyone",
 	"transactions.scopeLens":     "viewing as %s",
 	"transactions.scopeAria":     "What this ledger is showing",
-
-	// The date half of the scope line. "All dates" is stated out loud because a
-	// ledger sorted newest-first looks like a month even when it holds five years.
-	"transactions.scopeDatesAll":     "all dates",
-	"transactions.scopeDatesSince":   "%s onward",
-	"transactions.scopeDatesUntil":   "up to %s",
-	"transactions.scopeDatesBetween": "%s – %s",
-	"transactions.scopeDatesDay":     "%s only",
 
 	// The member lens, shown as its own chip rather than folded in with the page's
 	// filters — it comes from the top bar and its ✕ clears the top bar, not a filter.
@@ -43,6 +36,17 @@ var txnScopeKeys = Catalog{
 	// The review backlog is measured across the whole household; the ledger beside
 	// it usually is not. The button says so on hover and to assistive tech.
 	"transactions.reviewScopeTitle": "%d charges need review across the whole household — this count ignores the filters on this page",
+
+	// Classification provenance (C579). The mark is one small word beside a
+	// category nobody has confirmed; the sentences behind it say what filed the
+	// row, and name the rule when one accounts for it.
+	"transactions.autoMark":           "auto",
+	"transactions.autoWhyRule":        "Filed automatically by your rule matching \"%s\". No one has confirmed it — open the transaction to change or confirm the category.",
+	"transactions.autoWhyRuleUnnamed": "Filed automatically by one of your rules. No one has confirmed it — open the transaction to change or confirm the category.",
+	"transactions.autoWhySource":      "Filed automatically when this came in from %s. No rule of yours accounts for this category, and no one has confirmed it.",
+	"transactions.autoWhyUnknown":     "Filed automatically. No rule of yours accounts for this category, and no one has confirmed it.",
+	"transactions.confirmCategory":    "Confirm this category",
+	"transactions.confirmedCategory":  "Category confirmed — this row no longer reads as automatic.",
 
 	// Shared toolbar controls whose labels were generic enough to be ambiguous
 	// once several clear/close controls sat next to each other.

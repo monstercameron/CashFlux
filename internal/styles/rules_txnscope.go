@@ -29,4 +29,77 @@ func registerTxnScope() {
 		borderColor("var(--accent)"),
 		boxShadow("inset 2px 0 0 0 var(--accent)"),
 	)
+
+	// --- Count line + legend share one row (C575 / C582) --------------------------
+	// Both answer "how do I read the rows below", and every row of chrome above the
+	// ledger is a row the user scrolls past to reach what they came for. The count
+	// takes the left, the legend the right; they stack on narrow widths.
+	rule(".txn-toolbar-foot",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.25rem 1rem"),
+		padding("0.35rem 0.1rem 0.1rem"),
+	)
+	// The count is the sentence that gives every other number on the page its
+	// denominator, so it is normal reading weight, not the dim caption the hidden
+	// summary used to be.
+	rule(".txn-countline",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.35rem"),
+		fontSize("var(--type-13)"),
+		color("var(--text)"),
+	)
+	rule(".txn-countline .txn-count-sep, .txn-countline .txn-count-net, .txn-countline .txn-count-lens",
+		color("var(--text-dim)"),
+	)
+	rule(".txn-toolbar-foot .txn-legend",
+		padding("0"),
+	)
+
+	// --- Category provenance mark (C579) ------------------------------------------
+	// Room for the mark. The Category column has been 90px since the uxbatch6 pass,
+	// which already clipped ordinary names ("Guilty ple…", "Uncatego…") before
+	// anything was added beside them; a provenance mark in a cell that narrow would
+	// leave "Gro… auto". The 46px comes off the description's percentage share
+	// (40% → 36%), which is the only column with slack: at 1440px it drops from
+	// roughly 460px to 414px and still holds a full merchant line. Trading four
+	// points of a column that was not truncating for a column that was is the right
+	// direction.
+	rule(".bento-ledger .txn-table th.row-desc-col",
+		width("36%"),
+	)
+	rule(".bento-ledger .txn-table th.td-cat, .bento-ledger .txn-table td.td-cat",
+		width("136px"),
+	)
+	// The category cell becomes "name + optional mark". The name truncates; the mark
+	// never does, because a clipped provenance signal is worse than none — it would
+	// read as part of the category.
+	rule(".td-cat-inner",
+		display("flex"),
+		alignItems("baseline"),
+		gap("0.3rem"),
+		minWidth("0"),
+	)
+	rule(".td-cat-name",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	// Lower-case, dim and small: this marks the ORDINARY case (most imported rows
+	// are unconfirmed), so it must not shout. It earns its place by being a word
+	// rather than a colour, and by explaining itself on hover and to a screen reader.
+	rule(".txn-auto-mark",
+		fontSize("var(--type-11)"),
+		lineHeight("1"),
+		letterSpacing("0.02em"),
+		color("var(--text-dim)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-pill)"),
+		padding("0.1rem 0.3rem"),
+		cursor("help"),
+	)
 }

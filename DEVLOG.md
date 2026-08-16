@@ -1,3 +1,118 @@
+## 2026-08-16 — Three states that could never have agreed
+
+The rest of the Transactions audit (C560, C563, C564, C569, C571, C572). C560 is the one worth
+writing down, because the obvious fix would have been wrong.
+
+The report is that the period pill read `Jul 2026` while the rows and the calendar were in August,
+and that stepping the pill changed nothing. Three states, none of them talking: the top bar's
+`period.Window`, the ledger's `TxFilter.From/To`, and the calendar's own `UseTxnCalMonth` atom
+anchored on `time.Now()`. The instinct is to sync them. That cannot work, and the reason is in the
+types: a `Window` snaps to unit boundaries, so it can represent "August 2026" but not "the 14th"
+or "Jun 15 – Aug 2" — both of which the ledger's date filter can, and both of which the ledger
+produces (a calendar day-click; the filter panel). Any sync would have had to either forbid ranges
+the ledger already supports or let the pill display a month it wasn't showing — which is the bug.
+
+So the right move was to decide WHICH state is canonical and delete the others. From/To wins,
+because it is the only one that can express everything the page actually does. The pill left
+`/transactions` — it is a reporting-period control and belongs on the aggregate surfaces — and the
+ledger got its own bar whose label is DERIVED from From/To rather than stored beside it. That is
+the whole guarantee: `txnscope.Of(from, to, now)` classifies the range as All / Month / Day /
+Custom, and the label, the calendar's anchor and the rows all read from the same call. A whole
+calendar month says "August 2026"; anything else says what it really is. Making the label a
+function of the filter rather than a second copy of it is what makes the two incapable of
+disagreeing — there is nothing left to drift.
+
+Deciding what counts as a whole month took the most care, and the tests are mostly near-misses:
+Aug 1–30 is not August, Aug 2–31 is not August, Feb 1–29 IS February in 2024 and is not in 2026.
+Get that wrong in the permissive direction and you put a confident wrong month over right rows,
+which is worse than the bug being fixed. `Step` deliberately lands on a whole month from ANY
+starting scope, including All dates, so the round trip is stable and "‹" from All dates shows last
+month rather than doing nothing.
+
+Two consequences fell out. The calendar had its own ‹ month › + Today row, which — once the bar
+above it stepped the same state — was two identical controls stacked; it keeps a caption and
+nothing else. And the "upcoming this month" strip was anchored on today regardless of the period,
+so paging to March 2025 floated a band of future charges over a historical month. Nothing about a
+past period is upcoming, so it steps aside rather than projecting the present onto it.
+
+C569 was the one I nearly closed as already-fixed. The table already had a managed sort spinner
+with `aria-busy`, and reading the code it looked correct. Driving it showed why it isn't: effects
+run BEFORE paint, and the ledger's body is virtualized, so it materializes its window a frame
+later still. Clearing the busy state in the effect that receives the new sort therefore drops it
+while the rows on screen are still the old ones — precisely the gap the busy state exists to
+cover. The clear now goes through `rAF → macrotask`, which is the difference between "the new rows
+have been rendered" and "the new rows are on screen".
+
+C563 turned into a layout problem rather than a markup one. Adding a labelled Edit to the row is
+easy; the ledger's actions column is pinned narrow on purpose so the description keeps the reading
+width, and a visible "Edit" word pushed the ⋯ trigger clean out of the cell. Measuring it in the
+browser (the pencil at 11–40, the kebab at 42–84 in an 80px cell) is what caught it — it is not
+visible in a screenshot at a glance. The word became the accessible name, the ⋯ trigger picked up
+the tighter icon-button padding the cell already applies to its other glyphs, and both fit.
+
+C571's confirmation was interesting for a reason the ticket didn't mention: it said "This can't be
+undone" while the code beneath it captured an undo point and posted an undoable toast. A
+confirmation that overstates the risk is not a safe default — it teaches people that confirmations
+are noise. It now names the surviving entry, states the arithmetic, and describes the reversal
+path the app really provides.
+
+Verified by driving an isolated build on its own port rather than the shared dev server, since
+another session is working the same files: the label and rows move in the same render (577ms, no
+intermediate disagreement), the calendar caption matches the label, the menu renders its four
+tiers with Delete and Exclude in the destructive tone, the bulk Categorize is inert on "Choose a
+category", the split modal's Save is disabled beside "A split needs at least two complete lines",
+the payment-link Save is disabled beside "Pick a bill or a subscription", the history footer is a
+lone Close, and the preset counts drop from household-wide to the searched cohort. No page errors.
+
+Unrelated and pre-existing: `internal/deploy` fails three assertions at a clean HEAD — the tests
+expect literal `FROM golang:1.26-alpine AS build`, an alpine `adduser` line and a shell entrypoint,
+while `Dockerfile.server` deliberately uses `--platform=$BUILDPLATFORM` and a distroless nonroot
+runtime. The tests are stale against an intentional change, not a regression.
+
+## 2026-08-16 — What the adversarial pass caught, and two counts that had no denominator
+
+Ran an adversarial reviewer over the lens commit before building on it. It found two regressions
+I had introduced, both the same shape as the bug I was fixing, one layer further out.
+
+**The filter panel displayed the layered filter and wrote the unlayered one.** The Member pill
+group read `f.SelectedValues(FieldMember)` — the lens-layered value — so with a lens active the
+lensed member's pill rendered as already selected. Clicking it (the obvious way to turn off what
+looks like an active pill) routes through `ToggleValue` against the PERSISTED filter, which never
+held that member — so the toggle ADDS it. The lens is then baked into the saved filter, and by its
+own "explicit filter wins" rule the lens stops applying, so the top bar's "Everyone" no longer
+frees the ledger. A panel that edits a value has to display that same value; every group in it now
+reads `fOwn`. The same slip had reached "Save current view", which would have written the ambient
+perspective into a named saved view forever.
+
+**And the lead-in re-merged what the chip separated.** The chip row's new "Filtering by" label sat
+above every chip including the lens — a label asserting exactly the thing the lens chip exists to
+deny. Chips that are not filters now render in a PreChips slot ahead of the lead-in, outside the
+Filters badge count and outside the reset's remit. With only a lens active the row shows one chip
+and no lead-in, so nothing on it claims to be a filter.
+
+Then C575. The page had a review count, four quick-filter counts, and a pager range, each against
+a different population; the only sentence that gave any of them a denominator was `sr-only`. The
+sighted user got the numbers and none of the context — which is the whole complaint. That sentence
+is now visible, always carries its denominator ("Showing 709 of 3,227"), names the perspective, and
+is the live region (keeping the hidden one too would announce every filter change twice). It shares
+a row with the status legend, because both answer "how do I read the rows below" and every row of
+chrome above the ledger is a row the user scrolls past.
+
+C579 is derived, not stored, and the derivation is where the care goes. Nothing records which rule
+filed a transaction, and back-filling that would be a guess dressed as a fact. What can be
+established: the row was confirmed, or entered by hand, or neither — and whether a rule that exists
+NOW would file it where it currently sits. The trap is taking the first MATCHING rule: that names a
+rule which sets tags, or renames the payee, or files the row somewhere else entirely, and telling a
+user "this came from rule X" when X disagrees with the row is a worse lie than saying nothing. The
+predicate is "matches AND SetCategoryID == the row's category", and when nothing satisfies it the
+mark says no rule accounts for the category rather than implying one exists. Reviewed outranks a
+matching rule, because confirming is precisely the act that moves ownership of the decision from
+the machine to the person.
+
+Adding a word to the category cell cost 46px the cell did not have — it was 90px and already
+clipping "Guilty ple…" before anything sat beside it. Four points came off the description's
+percentage share, which was the only column with slack.
+
 ## 2026-08-16 — Two controls on the ledger that were lying, and one that was duplicated
 
 Starting the human-level UX series (C573–C583) by driving the real page rather than reading it.

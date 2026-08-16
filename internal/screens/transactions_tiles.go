@@ -364,7 +364,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// apart on purpose: the lens belongs to the top bar and is cleared there, so it
 	// gets its own chip rather than masquerading as one of the page's filters (C574).
 	fOwn := filterAtom.Get()
-	f, lensOn := fOwn.WithOwnerLens(uistate.UseMemberLens())
+	// One hook call, held in a local: UseMemberLens wraps a state atom, so calling it
+	// again later (inside the chip loop, say) would be a conditional hook.
+	memberLens := uistate.UseMemberLens()
+	f, lensOn := fOwn.WithOwnerLens(memberLens)
 
 	accounts := app.Accounts()
 	categories := app.Categories()
@@ -551,12 +554,15 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// member chip whose ✕ calls RemoveValue on a criteria that never held the member —
 	// a control that names something and then removes nothing (C574).
 	active := fOwn.ActiveFilters()
-	chips := make([]uiw.Chip, 0, len(active)+1)
+	// The lens goes in the summary row's PRE-chip slot: ahead of the "Filtering by"
+	// lead-in, outside the Filters badge count, and untouched by the reset — because
+	// it is the top bar's perspective, not one of this page's filters.
+	var lensChips []uiw.Chip
 	if lensOn {
 		// One chip per lensed member, keyed so OnRemoveChip can tell "clear the top
 		// bar's perspective" from "drop one of this page's filters".
-		for _, id := range uistate.UseMemberLens() {
-			chips = append(chips, uiw.Chip{
+		for _, id := range memberLens {
+			lensChips = append(lensChips, uiw.Chip{
 				Key:         lensChipKey + chipKeySep + id,
 				Label:       uistate.T("transactions.lensChip", memberName[id]),
 				Class:       "filter-chip-lens",
@@ -564,6 +570,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			})
 		}
 	}
+	chips := make([]uiw.Chip, 0, len(active))
 	for _, af := range active {
 		// Key encodes field + value so a per-value chip ✕ removes just that value
 		// (RemoveValue), not the whole dimension.
@@ -779,14 +786,21 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// Redesigned filter panel: quick-filter presets on top, then each categorical
 	// dimension as a group of toggle pills (multi-select), followed by the date/amount
 	// ranges, the cleared status, and any custom-field filter.
+	// EVERY control in this panel reads and writes the user's OWN filter (fOwn), not
+	// the lens-layered one. Showing the layered value here would light the lensed
+	// member's pill as if the user had chosen it, and the click that "turns it off"
+	// goes through ToggleValue against the persisted filter — which never held that
+	// member, so the toggle ADDS it. The lens would then be permanently baked into
+	// the saved filter and the top bar's "Everyone" would stop working. A panel that
+	// edits a value must display that same value.
 	filtersBody := Div(css.Class("filter-panel"),
 		presetsRow,
 		Div(css.Class("filter-groups"),
-			filterMultiGroup(uistate.T("transactions.filterAccount"), txnfilter.FieldAccount, f.SelectedValues(txnfilter.FieldAccount), accOpts, onToggleFilter),
-			filterMultiGroup(uistate.T("transactions.filterCategory"), txnfilter.FieldCategory, f.SelectedValues(txnfilter.FieldCategory), catOpts, onToggleFilter),
-			filterMultiGroup(uistate.T("transactions.member"), txnfilter.FieldMember, f.SelectedValues(txnfilter.FieldMember), memberOpts, onToggleFilter),
-			filterMultiGroup(uistate.T("transactions.filterSource"), txnfilter.FieldSource, f.SelectedValues(txnfilter.FieldSource), sourceOpts, onToggleFilter),
-			If(len(tagList) > 0, filterMultiGroup(uistate.T("transactions.filterTag"), txnfilter.FieldTag, f.SelectedValues(txnfilter.FieldTag), tagOpts, onToggleFilter)),
+			filterMultiGroup(uistate.T("transactions.filterAccount"), txnfilter.FieldAccount, fOwn.SelectedValues(txnfilter.FieldAccount), accOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.filterCategory"), txnfilter.FieldCategory, fOwn.SelectedValues(txnfilter.FieldCategory), catOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.member"), txnfilter.FieldMember, fOwn.SelectedValues(txnfilter.FieldMember), memberOpts, onToggleFilter),
+			filterMultiGroup(uistate.T("transactions.filterSource"), txnfilter.FieldSource, fOwn.SelectedValues(txnfilter.FieldSource), sourceOpts, onToggleFilter),
+			If(len(tagList) > 0, filterMultiGroup(uistate.T("transactions.filterTag"), txnfilter.FieldTag, fOwn.SelectedValues(txnfilter.FieldTag), tagOpts, onToggleFilter)),
 		),
 		Div(css.Class("filter-ranges"),
 			dateField(uistate.T("transactions.fromDate"), f.From, onFilterFrom),
@@ -859,6 +873,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		},
 		FilterFields: filtersBody,
 		Chips:        chips,
+		PreChips:     lensChips,
 		OnRemoveChip: func(key string) {
 			field, value, _ := strings.Cut(key, chipKeySep)
 			// The member lens lives in the top bar, not in this page's filter, so its
@@ -884,7 +899,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		Actions: []ui.Node{
 			// Review inbox (CG-S2): the guided triage entry point, shown only when
 			// something needs review, with a live count so the backlog is visible.
-			If(reviewN > 0, toolbarIconBtn("txn-review-btn", icon.ScanLine, uistate.T("review.button", reviewN), openReview, "")),
+			// C575: the review backlog is counted across the WHOLE household and ignores
+			// every filter on this page, so beside a filtered ledger its number belongs
+			// to a different population than everything else on screen. The button keeps
+			// the count — it is the backlog's whole point — and says which population it
+			// is measuring, on hover and to assistive tech.
+			If(reviewN > 0, toolbarIconBtnTitled("txn-review-btn", icon.ScanLine,
+				uistate.T("review.button", reviewN), uistate.T("transactions.reviewScopeTitle", reviewN), openReview, "")),
 			// C363: first-class Rules entry — labeled, with the active-rule count, so
 			// the auto-categorization workbench is one visible click from the ledger.
 			toolbarIconBtn("txn-rules-btn", icon.Workflow, uistate.T("transactions.rulesButton", ruleCount), openRules, ""),
@@ -899,7 +920,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// Saved views / watchlists (TX3): list saved filter sets with their live
 			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
 			// amount alerts. Own component so its popover + list hooks stay stable.
-			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: f, Rates: props.Rates, Base: props.Base}),
+			// fOwn, not f: "Save current view" writes the filter it is handed, and the
+			// member lens is a transient top-bar perspective, not part of the view the
+			// user is naming. Saving the layered filter would bake whoever the top bar
+			// happened to show into the saved view permanently, invisibly.
+			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: fOwn, Rates: props.Rates, Base: props.Base}),
 			// Secondary utilities (Import, Duplicates, Categorize, Export CSV, Columns)
 			// folded into the "⋯ More" overflow built above.
 			moreMenu,
@@ -908,23 +933,28 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		},
 	})
 
-	// Screen-reader live region announcing the match count + net as filters change.
 	var shownNet int64
 	for _, t := range props.Shown {
 		if c, err := props.Rates.Convert(t.Amount, props.Base); err == nil {
 			shownNet += c.Amount
 		}
 	}
-	filterStatus := ""
-	switch {
-	case len(txns) == 0:
-		filterStatus = ""
-	case len(props.Shown) == 0:
-		filterStatus = uistate.T("transactions.noMatch")
-	default:
-		filterStatus = uistate.T("transactions.summary", plural(len(props.Shown), "transaction"), fmtMoney(money.New(shownNet, props.Base)))
+	// C575: the count line replaces the screen-reader-only summary that used to live
+	// here. It states the size of the view WITH its denominator and names the
+	// perspective, so a sighted user can explain the number the same way a screen
+	// reader could. It is the live region too — keeping the hidden one as well would
+	// announce every filter change twice.
+	lensName := ""
+	if lensOn && len(memberLens) > 0 {
+		lensName = memberName[memberLens[0]]
+		if len(memberLens) > 1 {
+			lensName = plural(len(memberLens), "member")
+		}
 	}
-	statusLine := P(css.Class(tw.SrOnly), Attr("role", "status"), Attr("aria-live", "polite"), Attr("aria-atomic", "true"), Text(filterStatus))
+	countLine := ui.CreateElement(txnCountLine, txnCountLineProps{
+		Shown: len(props.Shown), Total: len(txns),
+		Net: money.New(shownNet, props.Base), Lens: lensName,
+	})
 
 	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
 	// cleared / needs review) are otherwise undecoded shape+color, so a small key
@@ -934,13 +964,17 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	if len(props.Shown) > 0 {
 		legend = txnStatusLegend()
 	}
+	// Count and legend share one row (C582): they are both "how to read the rows
+	// below", and above the ledger every row of chrome is a row the user scrolls
+	// past to reach the thing they came for.
+	footRow := Div(css.Class("txn-toolbar-foot"), countLine, legend)
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		// C560: the ledger's own period + view bar sits directly under the toolbar, so
 		// the scope the rows are in is stated on the page that shows them rather than
 		// by a top-bar pill reading different state.
-		Body: Div(toolbar, ui.CreateElement(txnScopeBar, struct{}{}), interpretRow, legend, statusLine),
+		Body: Div(toolbar, ui.CreateElement(txnScopeBar, struct{}{}), interpretRow, footRow),
 	})
 }
 
