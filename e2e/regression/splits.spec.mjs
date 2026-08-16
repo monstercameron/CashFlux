@@ -11,8 +11,11 @@ async function openSplitEditor(app, rowId) {
   if (rowId) {
     row = app.locator(`[data-testid="${rowId}"]`);
   } else {
+    // `tr[...]`, not a bare prefix match: several per-row CHILD controls also carry
+    // ids beginning `txn-row-` (tags, note, receipt), so the loose selector aliases
+    // rows and their contents into one list and nth(i) stops meaning "row i".
     for (let i = 6; i < 12; i++) {
-      row = app.locator('[data-testid^="txn-row-"]').nth(i);
+      row = app.locator('tr[data-testid^="txn-row-"]').nth(i);
       await row.scrollIntoViewIfNeeded();
       await row.locator('[data-testid^="txn-kebab-"]').click();
       if (await row.locator('[data-testid="txn-split-open"]').isVisible()) break;
@@ -46,12 +49,14 @@ test.describe("transactions: percent split mode", () => {
     await app.getByTestId("split-cat-1").selectOption({ index: 1 });
     // 60 + 30 = 90% → the remainder line demands the missing 10%.
     await expect(app.getByTestId("split-remainder")).toContainText(/10\.00% left/i);
-    // Saving while unbalanced is rejected with the percent message.
-    await app.getByTestId("split-save").click();
-    await expect(app.getByTestId("split-editor")).toContainText(/must add up to 100%/i);
+    // Saving while unbalanced is not possible. C566 moved this from "click Save,
+    // read the rejection" to "Save is not offered, and the remainder says why" —
+    // the state is communicated before the click rather than after it.
+    await expect(app.getByTestId("split-save")).toBeDisabled();
     // Balance it and save.
     await app.getByTestId("split-amt-1").fill("40");
     await expect(app.getByTestId("split-remainder")).toContainText(/balanced/i);
+    await expect(app.getByTestId("split-save")).toBeEnabled();
     await app.getByTestId("split-save").click();
     await expect(app.getByTestId("split-editor")).toHaveCount(0);
     // The editor round-trips: reopening the SAME transaction shows the split as

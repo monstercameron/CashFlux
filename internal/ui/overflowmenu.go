@@ -137,12 +137,17 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		ClassStr("add-menu" + menuHidden),
 		Attr("role", "menu"),
 	}
-	// Sections (C572): a heading is emitted the first time a section name appears,
-	// and the items under it are wrapped in a role=group labelled by that heading —
-	// so a screen reader announces "Remove, group" before "Delete", exactly as a
-	// sighted user reads the heading above the separator. Items with no Section stay
-	// ungrouped at the top, which is what an unsectioned menu (every other caller)
-	// renders today.
+	// Sections (C572): a heading is emitted the first time a section name appears.
+	// It carries role="presentation" so it stays out of the menu's owned children —
+	// a role="menu" may only own menuitems (and groups), and a stray labelled div
+	// would make the menu structurally invalid to a screen reader.
+	//
+	// The heading is therefore a SIGHTED affordance, and each item carries the same
+	// fact in its own accessible name ("Delete — Remove") so the grouping survives
+	// for anyone who never sees the heading. That keeps one flat list of menuitems,
+	// which is both valid ARIA and what the existing keyboard handling expects.
+	// Items with no Section stay unlabelled at the top, which is what an unsectioned
+	// menu (every other caller) renders today.
 	lastSection := ""
 	for _, item := range props.Items {
 		if item.Hidden {
@@ -152,7 +157,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 			lastSection = item.Section
 			if item.Section != "" {
 				menuArgs = append(menuArgs,
-					Div(css.Class("add-menu-section"), Attr("role", "presentation"), item.Section))
+					Div(css.Class("add-menu-section"), Attr("role", "presentation"), Attr("aria-hidden", "true"), item.Section))
 			}
 		}
 		menuArgs = append(menuArgs, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
@@ -204,6 +209,13 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 				onSelect()
 			}
 		}),
+	}
+	// The section heading is aria-hidden (it cannot be an owned child of role=menu),
+	// so each item restates its section in its own accessible name. Without this the
+	// grouping would be a purely visual cue and a screen-reader user would hear ten
+	// equally-weighted entries — the flat list C572 set out to fix.
+	if item.Section != "" {
+		btnArgs = append(btnArgs, Attr("aria-label", item.Label+" — "+item.Section))
 	}
 	if item.TestID != "" {
 		btnArgs = append(btnArgs, Attr("data-testid", item.TestID))

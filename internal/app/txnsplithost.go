@@ -34,10 +34,16 @@ func TxnSplitHost() uic.Node {
 	// because whether the draft can be saved is a fact only the editor holds — line
 	// completeness and the remainder. The panel's standard footer could not read it,
 	// so an unfinished split showed a live Save that could only fail validation.
+	//
+	// FormID is still set even though the panel renders no footer: it is what the
+	// panel's Enter handler submits. Without it, Enter falls through to "no OnSave,
+	// so close" and discards the draft — the footer moving into the body must not
+	// quietly change what the keyboard does.
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("splitEditor.title"),
 		Width:     uiw.FlipMediumW,
 		Height:    uiw.FlipMediumH,
+		FormID:    screens.SplitModalFormID,
 		NoFooter:  true,
 		FlushBody: true,
 		OnClose:   close,

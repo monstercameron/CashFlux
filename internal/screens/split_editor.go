@@ -6,7 +6,6 @@ package screens
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -198,27 +197,14 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// amount. The editor seeds a blank second line so "carve a piece out" is one tap
 	// away, and the amount total ignored it — so the footer read "Balanced" and offered
 	// Save while the split could not actually be saved (save then failed with "needs at
-	// least two lines"). Classify the draft here, once, and let the footer and the Save
-	// button both read from it, so the two can never disagree again.
-	//
-	//   - a wholly empty line is a DRAFT: harmless, ignored, but it is what is stopping
-	//     a one-line draft from being a split, so it is named rather than silently skipped;
-	//   - a half-filled line is INCOMPLETE: it blocks save and says which half is missing.
-	completeLines, draftLines, incompleteLines := 0, 0, 0
+	// least two lines"). Both the footer text and the Save state read ONE verdict from
+	// split.Classify/Saveable (pure, table-driven-tested), so they cannot disagree.
+	draftLines := make([]split.Line, 0, len(splits.Get()))
 	for _, d := range splits.Get() {
-		hasCat, hasAmt := d.Cat != "", strings.TrimSpace(d.Amt) != ""
-		switch {
-		case hasCat && hasAmt:
-			completeLines++
-		case !hasCat && !hasAmt:
-			draftLines++
-		default:
-			incompleteLines++
-		}
+		draftLines = append(draftLines, split.Line{CategoryID: d.Cat, Value: d.Amt})
 	}
-	// Save is offered only for a draft that would actually persist: every started line
-	// finished, at least two of them, no unparseable value, and the money accounted for.
-	canSave := !parseErr && incompleteLines == 0 && completeLines >= 2 && remainder == 0
+	shape := split.Classify(draftLines)
+	canSave := shape.Saveable(!parseErr, remainder == 0)
 
 	save := ui.UseEvent(Prevent(func() {
 		cur := splits.Get()
@@ -363,9 +349,9 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		remTone, remText = "neg", uistate.T("splitEditor.badPercent")
 	case parseErr:
 		remTone, remText = "neg", uistate.T("splitEditor.badAmount")
-	case incompleteLines > 0:
+	case shape.Incomplete > 0:
 		remTone, remText = "neg", uistate.T("splitEditor.incomplete")
-	case remainder == 0 && completeLines < 2:
+	case remainder == 0 && shape.Complete < split.MinSplitLines:
 		remTone, remText = "neg", uistate.T("splitEditor.needTwoShort")
 	case remainder > 0 && inPct:
 		remTone = "neg"
@@ -405,7 +391,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	)
 	// The seeded blank line is named as the draft it is, so it reads as "yours to fill
 	// in" rather than as a row the editor forgot about.
-	draftNote := If(draftLines > 0 && incompleteLines == 0,
+	draftNote := If(shape.Blank > 0 && shape.Incomplete == 0,
 		P(css.Class("muted", tw.Text13), Attr("data-testid", "split-draft-note"),
 			Style(map[string]string{"margin": "0.35rem 0 0"}), uistate.T("splitEditor.draftRow")))
 	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))

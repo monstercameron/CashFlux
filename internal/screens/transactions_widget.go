@@ -1256,8 +1256,14 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		If(props.Vis.Status, Td(ClassStr("td-status "+statusToneClass(props)),
 			Attr("data-testid", "txn-status-cell"), rowStatusWord(props))),
 		Td(ClassStr("td-actions"), OnClick(stop),
+			// The testid deliberately avoids the `txn-row-` prefix: `[data-testid^=
+			// "txn-row-"]` is how the suite selects ROWS, and a per-row child sharing
+			// that prefix aliases into the row list — nth(7) stops being the seventh
+			// row and starts being a button inside the third. The pre-existing
+			// tags/note/receipt ids are conditional, so they only ever perturbed a few
+			// rows; an Edit control on EVERY row would shift the whole index space.
 			Button(css.Class("btn btn-icon txn-row-edit"), Type("button"),
-				Attr("data-testid", "txn-row-edit"),
+				Attr("data-testid", "txn-rowedit"),
 				Attr("aria-label", uistate.T("transactions.rowEditAria", props.Desc)),
 				Title(uistate.T("transactions.rowEditHint")),
 				OnClick(editRow),

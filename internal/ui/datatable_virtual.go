@@ -81,8 +81,14 @@ func deferMacrotask(fn func()) {
 // to outlast (C569). Falls back to a plain macrotask where rAF is unavailable
 // (a headless/hidden document), so the callback never simply never runs.
 func deferPaint(fn func()) {
+	// Probe for the function but CALL it on the global (js.Global().Call), matching
+	// the rest of the codebase: a detached invoke passes `this` as undefined, which
+	// is tolerated for Window methods but not for methods of any other interface —
+	// so the calling convention here should not depend on which one rAF happens to
+	// be. A document with no rAF (headless, hidden) falls back to a macrotask so the
+	// callback still runs; it must never simply never fire, or the busy state sticks.
 	raf := js.Global().Get("requestAnimationFrame")
-	if !raf.Truthy() {
+	if raf.IsUndefined() || raf.Type() != js.TypeFunction {
 		deferMacrotask(fn)
 		return
 	}
@@ -92,7 +98,7 @@ func deferPaint(fn func()) {
 		deferMacrotask(fn)
 		return nil
 	})
-	raf.Invoke(cb)
+	js.Global().Call("requestAnimationFrame", cb)
 }
 
 // scrollAnchorIntoView smoothly scrolls the element with the given id to the top of its

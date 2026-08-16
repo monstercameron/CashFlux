@@ -102,6 +102,84 @@ func TestCountPresetsHonoursTheActiveScope(t *testing.T) {
 	}
 }
 
+// The ticket names search, member and period as the scopes that must be honoured.
+// Search is covered above; these are the other two, plus the multi-value
+// dimensions the filter panel writes as pills.
+func TestCountPresetsHonoursMemberAndAccountScopes(t *testing.T) {
+	usd := func(minor int64) money.Money { return money.New(minor, "USD") }
+	aug := func(day int) time.Time { return time.Date(2026, 8, day, 12, 0, 0, 0, time.UTC) }
+	txns := []domain.Transaction{
+		{ID: "p1", Desc: "Priya coffee", Date: aug(2), Amount: usd(-500), MemberID: "m-priya", AccountID: "acc-1"},
+		{ID: "p2", Desc: "Priya laptop", Date: aug(3), Amount: usd(-150000), MemberID: "m-priya", AccountID: "acc-1"},
+		{ID: "m1", Desc: "Marcus lunch", Date: aug(4), Amount: usd(-1800), MemberID: "m-marcus", AccountID: "acc-2"},
+		{ID: "m2", Desc: "Marcus tyres", Date: aug(5), Amount: usd(-60000), MemberID: "m-marcus", AccountID: "acc-2"},
+	}
+	scope := PresetScope{
+		ReviewTag:  "needs-review",
+		LargeFor:   func(domain.Transaction) int64 { return 10000 },
+		MonthStart: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		MonthEnd:   time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	all := CountPresets(txns, Criteria{}.Normalize(), scope)
+	if all.Uncategorized != 4 || all.Large != 2 || all.ThisMonth != 4 {
+		t.Fatalf("unscoped = %+v, want 4 uncategorized / 2 large / 4 this month", all)
+	}
+
+	// A member scope — the top bar's "viewing as" lens writes this field.
+	priya := CountPresets(txns, Criteria{Member: "m-priya"}.Normalize(), scope)
+	if priya.Uncategorized != 2 || priya.Large != 1 || priya.ThisMonth != 2 {
+		t.Errorf("member-scoped = %+v, want 2 / 1 / 2 — the counts must describe Priya's rows only", priya)
+	}
+
+	// A single-account scope.
+	acct := CountPresets(txns, Criteria{Account: "acc-2"}.Normalize(), scope)
+	if acct.Uncategorized != 2 || acct.Large != 1 {
+		t.Errorf("account-scoped = %+v, want 2 uncategorized / 1 large", acct)
+	}
+
+	// A multi-value dimension (the filter panel's toggle pills) still scopes the
+	// counts: two accounts selected is the whole ledger here.
+	both := CountPresets(txns, Criteria{Accounts: "acc-1,acc-2"}.Normalize(), scope)
+	if both.Uncategorized != 4 || both.Large != 2 {
+		t.Errorf("two-account scope = %+v, want the same as unscoped for this fixture", both)
+	}
+}
+
+// A count is a promise about what pressing the chip yields, so it must equal the
+// size of the set the preset's own filter actually produces. This checks the
+// promise against Apply rather than against a hand-counted constant.
+func TestPresetCountsMatchWhatApplyingThePresetProduces(t *testing.T) {
+	txns := presetFixture()
+	scope := presetScope()
+	base := Criteria{Text: "CF26-PIPE"}.Normalize()
+	got := CountPresets(txns, base, scope)
+
+	uncat := base
+	uncat.Uncategorized = true
+	if n := len(Apply(txns, uncat.Normalize())); n != got.Uncategorized {
+		t.Errorf("Uncategorized chip promised %d, applying it yields %d", got.Uncategorized, n)
+	}
+
+	review := base
+	review.Tag = scope.ReviewTag
+	if n := len(Apply(txns, review.Normalize())); n != got.NeedsReview {
+		t.Errorf("Needs-review chip promised %d, applying it yields %d", got.NeedsReview, n)
+	}
+
+	large := base
+	large.AmountMin = "100"
+	if n := len(Apply(txns, large.Normalize())); n != got.Large {
+		t.Errorf("Large chip promised %d, applying it yields %d", got.Large, n)
+	}
+
+	month := base
+	month.From, month.To = "2026-08-01", "2026-08-31"
+	if n := len(Apply(txns, month.Normalize())); n != got.ThisMonth {
+		t.Errorf("This-month chip promised %d, applying it yields %d", got.ThisMonth, n)
+	}
+}
+
 func TestCountPresetsToleratesAnUnconfiguredScope(t *testing.T) {
 	got := CountPresets(presetFixture(), Criteria{}, PresetScope{})
 	if got.NeedsReview != 0 || got.Large != 0 || got.ThisMonth != 0 {
