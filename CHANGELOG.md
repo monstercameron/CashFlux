@@ -100,6 +100,11 @@ and every commit updates this file under `Unreleased`.
   with two affordances, one of them invisible unless you happened to hover it, and nothing
   announcing it to a screen reader. The name is a heading again in both densities, and the compact
   row gained its own labelled Transactions control so it keeps a one-click path.
+- **The compact/card toggle stops contradicting itself (C596).** It swapped its label between
+  "Compact list" and "Card view" — naming the destination in one state and the current view in the
+  other — while also setting `aria-pressed`, so it announced "Card view, pressed" with the compact
+  list on screen. It is a proper two-state toggle now: one stable name, the state in `aria-pressed`,
+  and a tooltip that says what a click will do.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

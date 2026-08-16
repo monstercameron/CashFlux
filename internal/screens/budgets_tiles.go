@@ -494,13 +494,20 @@ func lastMonthLabelKey(on bool) string {
 	return "budgets.lastMonth"
 }
 
-// budgetDensityLabelKey picks the density toggle's label: the button always names the
-// layout a click switches TO ("Compact list" from cards, "Card view" from the list).
-func budgetDensityLabelKey(density string) string {
+// budgetDensityTitleKey picks the density toggle's tooltip for its CURRENT state.
+//
+// C596: the button's visible label is now fixed ("Compact list") and its
+// aria-pressed carries the state, because a label that swapped between "Compact
+// list" and "Card view" described the destination in one state and the current
+// view in the other — and paired with aria-pressed=true it announced "Card view,
+// pressed" while the compact list was the thing on screen. A two-state toggle
+// with a stable name says both halves without contradiction; the tooltip spells
+// out what a click does.
+func budgetDensityTitleKey(density string) string {
 	if density == uistate.BudgetDensityCompact {
-		return "budgets.densityCards"
+		return "budgets.densityTitleOn"
 	}
-	return "budgets.densityCompact"
+	return "budgets.densityTitleOff"
 }
 
 // budgetAssignBanner renders the method-specific income context line: simple mode
@@ -1646,12 +1653,15 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	// Budget-settings popover. Same atom + persisted pref; the button always names (via
 	// its label + tooltip) the layout a click switches TO, and reports its state through
 	// aria-pressed.
+	densityOn := densityAtom.Get() == uistate.BudgetDensityCompact
 	densityToggleBtn := Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityAtom.Get() == uistate.BudgetDensityCompact)),
-		Attr("aria-label", uistate.T("budgets.densityToolbarAria")),
-		Title(uistate.T("budgets.densityTitle")), OnClick(toggleDensity),
+		Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityOn)),
+		Title(uistate.T(budgetDensityTitleKey(densityAtom.Get()))), OnClick(toggleDensity),
 		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(uistate.T(budgetDensityLabelKey(densityAtom.Get()))))
+		// A STABLE name, so the pressed state means what it says. No aria-label
+		// override: the visible text is the accessible name, which is what lets a
+		// screen-reader user and a sighted user talk about the same control.
+		Span(uistate.T("budgets.densityCompact")))
 	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeSettings),
 		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionTools")),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
@@ -1756,21 +1766,24 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	// Windowed to the budget's own period (task #14): the row's figures describe
 	// one period, so the drill lands on that period's rows — the From/To arrive
 	// as normal clearable filter chips.
-	viewTransactions := func(categoryIDs []string, from, to string) {
-		var f uistate.TxFilter
-		switch len(categoryIDs) {
-		case 0:
-			// no tracked category — just open the unfiltered ledger
-		case 1:
-			f.Category = categoryIDs[0] // single: use the plain category filter (dropdown reflects it)
-		default:
-			f.Categories = strings.Join(categoryIDs, ",") // multi: OR across all tracked categories
-		}
+	viewTransactions := func(scope budgeting.Scope, from, to string) {
+		f := budgetScopeFilter(scope)
 		f.From, f.To = from, to
 		f = f.Normalize()
 		txFilter.Set(f)
 		uistate.PersistTxFilter(f)
 		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
+	// The drill also records WHICH budget it came from, so the ledger can name the
+	// origin instead of presenting an anonymous pile of category chips (C585).
+	drillFrom := func(s budgeting.Status, scope budgeting.Scope, from, to string) {
+		applied := budgetScopeFilter(scope)
+		uistate.SetBudgetDrill(uistate.BudgetDrill{
+			BudgetID: s.Budget.ID, Name: budgetTitle(s.Budget.Name, v.CatName[s.Budget.CategoryID]),
+			Spent: fmtMoney(s.Spent), Descendants: scope.HasDescendants(s.Budget), Tags: len(scope.Tags) > 0,
+			Scope: uistate.BudgetDrillScope{Category: applied.Category, Categories: applied.Categories, Tags: applied.Tags},
+		})
+		viewTransactions(scope, from, to)
 	}
 
 	var body ui.Node
@@ -1878,7 +1891,8 @@ func budgetListWidget(props budgetListProps) ui.Node {
 					Covered:        v.Covered[s.Budget.ID],
 					LastMonthSpent: v.LastMonth[s.Budget.ID].Spent, LastMonthDelta: v.LastMonth[s.Budget.ID].Delta, LastMonthOver: v.LastMonth[s.Budget.ID].Over,
 					LastMonthPct: v.LastMonth[s.Budget.ID].Pct, LastMonthFill: v.LastMonth[s.Budget.ID].Fill,
-					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring, OnDrill: viewTransactions,
+					OnDelete: cbs.OnDelete, OnRemoveRecurring: cbs.OnRemoveRecurring,
+					OnDrill: func(scope budgeting.Scope, from, to string) { drillFrom(s, scope, from, to) },
 					PeriodFrom: v.PeriodFrom[s.Budget.ID], PeriodTo: v.PeriodTo[s.Budget.ID],
 					LinkedTodos: todoCounts[s.Budget.ID], OnViewTodos: viewTodos,
 					Anchor:    v.Anchor,

@@ -344,7 +344,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// on Transactions pointed there. A labeled toolbar entry (with the active-rule
 	// count) makes it reachable in one visible click.
 	nav := router.UseNavigate()
-	openRules := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/rules")) }))
+	openRules := ui.UseEvent(Prevent(func() { txnLeaveFor("/rules"); nav.Navigate(uistate.RoutePath("/rules")) }))
 
 	// View-mode toggles: Calendar swaps the main slot (TX8); Register adds a running-
 	// balance column (TX12) and is only offered when the filter scopes to one account.
@@ -1446,7 +1446,7 @@ func txnUndoBarWidget(props txnUndoBarProps) ui.Node {
 	}))
 	// C364: a working "View in Activity" link right on the undo bar, so the full
 	// change history (with per-change undo) is one click from the bulk op.
-	viewActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
+	viewActivity := ui.UseEvent(Prevent(func() { txnLeaveFor("/activity"); nav.Navigate(uistate.RoutePath("/activity")) }))
 
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", snap.Label)),

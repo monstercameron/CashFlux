@@ -825,7 +825,7 @@ func registerBudgetsSurface() {
 	// chip fits the widest pill ("Over budget").
 	rule(".budget-crow",
 		display("grid"),
-		gridTemplateColumns("minmax(8rem, 1fr) minmax(9rem, 1.4fr) 10.5rem 7.5rem 7rem 2.5rem"),
+		gridTemplateColumns("minmax(8rem, 1fr) minmax(9rem, 1.4fr) 10.5rem 7.5rem 7rem 4.6rem"),
 		alignItems("center"),
 		gap("0.8rem"),
 		padding("0.4rem 0.6rem 0.4rem 0.75rem"),
@@ -913,12 +913,54 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C589: the period pill's custom-range editor ---
+	// A distinct block inside the popover, separated from the quick jumps above
+	// it, so "I am composing a range" reads as its own step rather than one more
+	// preset. The preview sentence and the scope note are the two things the old
+	// mode toggle never said.
+	rule(".period-rangeedit",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		marginTop("0.4rem"),
+		paddingTop("0.5rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".period-rangepreview",
+		margin("0"),
+		fontSize("var(--type-13)"),
+		fontWeight("600"),
+		color("var(--text)"),
+	)
+	rule(".period-rangenote",
+		margin("0"),
+		fontSize("var(--type-12)"),
+		color("var(--text-faint)"),
+		maxWidth("22rem"),
+	)
+	rule(".period-rangeacts",
+		marginTop("0.15rem"),
+	)
+
+	// C591: the compact row's action cell — one labelled Transactions button and
+	// the ⋯ overflow, side by side in the last column. The row's name is a heading
+	// again, so this is the only place a click navigates.
+	rule(".budget-crow-actions",
+		display("flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		justifySelf("end"),
+	)
+	rule(".budget-crow-drill",
+		padding("0.25rem"),
+		lineHeight("1"),
+	)
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
 	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
 	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu
 	// — same fixed-column discipline as the full row so narrow panes align too.
 	ruleContentMax(860-railCollapsedPx, ".budget-crow",
-		gridTemplateColumns("minmax(7rem, 1fr) 10.5rem 7rem 2.5rem"),
+		gridTemplateColumns("minmax(7rem, 1fr) 10.5rem 7rem 4.6rem"),
 	)
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-bar", display("none"))
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-left", display("none"))
