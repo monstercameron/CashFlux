@@ -225,6 +225,21 @@ and every commit updates this file under `Unreleased`.
   surfaces come to look like they are doing each other's jobs. They ask something now.
 
 ### Fixed
+- **The last of the UI layer's untranslatable copy (C361).** Two surfaces sat outside the language
+  setting. The install button and the iOS "Add to Home Screen" hint live in `web/index.html` and are
+  shown by page script after boot, so they persist; they are relabelled from Go, because that page's
+  JavaScript is deliberately frozen. And the help centre's twenty topic strings were plain arguments
+  to its own section builder.
+
+  The help centre is the more interesting one. The hardcoded-copy scanner reported the whole screens
+  package at zero the entire time those strings were there, because it checked only the FIRST string
+  argument of a helper — and the help builder is variadic, so even listing it would have guarded one
+  paragraph per topic. It checks every string argument of such helpers now. A blind spot in a guard
+  is indistinguishable from compliance.
+
+  Re-running the widened scan also showed the smartengine baseline sitting eight above its actual
+  count — slack a ratchet cannot see. Tightened.
+
 - **Sweep polish across five surfaces (C360).** /split printed each running balance twice —
   "Marcus Hartley owes $32.00 … $32.00" — because the label carried the amount as well as the amount
   column; the label says who and which way now. /investments showed "RETURN 0.00% · GAIN/LOSS $0.00"

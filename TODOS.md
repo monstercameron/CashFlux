@@ -5347,32 +5347,29 @@ struct fields), now living permanently as the **one-way ratchet test**
 `internal/screenlint/i18n_hardcoded_test.go` (per-directory baselines that may only fall; run with
 -v to list findings; brand/product names exempt via an explicit allowlist).
 
-- [ ] **C361 [MAJOR][I18N] UI layer: 428 hardcoded user-facing strings found; first tranche
-  converted (screens 211→126, app 17→0).** ✅ DONE this pass: dashboard tiles (empty states, chart
-  series/axis names, error boundary), /split (all 11), /accounts reconcile flow + add/edit advanced
-  toggles + FX-exclusion notice (also /networth's copy), /health (delta lines, targets, weakest,
-  no-data), /debt (progress tracking, strategy-match, burn-down labels, Try-extra), /documents
-  draft review (reconcile lines, placeholders, Start over, Import receipt), smart digest row +
-  section, /categories, /rules order card, budget Cover…/Top up…, /help checklist + changelog +
-  offline, app chrome (toast Dismiss, period picker Week/Month/Quarter/Year, tile color, date-format
-  options, backend toggle) — every value byte-identical to the literal it replaced (rendered English
-  and e2e text matchers unchanged), keys in `internal/i18n/en_i18nsweep.go`. REMAINING (126, held by
-  the ratchet): the power-tool surfaces — theme_editor (27), studio_designer (27), widget_builder
-  (21), plus reports_screen chart labels (11, churning surface), transactions (15 incl. the
-  documents CSV-import copy), workflows, dashboards' remaining Name: fields — convert file-by-file
-  and lower `../screens` in i18n_hardcoded_test.go each time.
-  **SECOND PASS (same day, Cam: "every page AND component"):** closed the coverage gaps the first
-  pass missed — (a) the shared component library `internal/ui` (DataTable pager All/Prev/Next/
-  Rows-per-page, FlipPanel Close/Cancel/Save, FilterToolbar close, InlineEditForm kbd hint) +
-  `uistate.Global()`'s "Settings" title, all → catalog keys; (b) the helper-argument blind spot —
-  the scanner now checks the FIRST string arg of labeledField/withFieldLabel/smartBrandHeader
-  (fixed the 4 live sites: Role ×2, Priority, Digest); (c) the ratchet now covers 7 more dirs
-  (ui/uistate/widgetrender/widgetregistry/pages/mermaid/chartspec — all 0 except widgetregistry 2,
-  see below). VERIFIED live: pager/labels render identical English, no raw-key leaks, 0 errors.
-  Remaining known non-ratchet surfaces: `web/index.html` pre-wasm boot copy ("Getting your money in
-  order…", "Install CashFlux", the install-hint aria) — can't use the Go bundle before wasm loads;
-  needs a navigator.language-keyed inline map or post-mount relabeling. help.go's FAQ corpus is
-  plain-arg strings to its local section builder (not yet in the scanner's helper list).
+- [x] **C361 ✅ DONE (2026-08-16) — UI layer hardcoded English.** The bulk had landed in earlier
+  tranches (screens 428→211→126→0; app, ui, uistate, widgetrender, pages, mermaid, chartspec all at
+  0). Two named remainders were still open, and closing them exposed a third.
+  **(1) `web/index.html` boot copy.** The skeleton's own line ("Getting your money in order…") is
+  replaced by the app the instant wasm mounts, so translating it buys nothing — nobody reads it for
+  longer than a paint. The install button and the iOS "Add to Home Screen" hint are different: page
+  script shows them AFTER boot and they persist for as long as the browser offers them, so they were
+  the last user-facing English the language setting could not reach. They are relabelled from Go
+  (`internal/app/bootcopy.go`) rather than by adding a language map to the page script, because
+  index.html's JavaScript is deliberately frozen. The iOS hint's body is rewritten text-node by
+  text-node, since replacing the element's content would delete the close button and its listener.
+  **(2) help.go's FAQ corpus.** Twenty strings — seven topic titles and their body paragraphs —
+  passed as plain arguments to the screen's own section builder. **The interesting part is why they
+  were invisible:** the scanner checked the FIRST string argument of a helper, and `helpTopicBody`
+  is variadic, so even adding it to the helper list would have guarded only the first paragraph of
+  each topic. A new `i18nAllArgStringFuncs` set checks every string argument. A blind spot in a guard
+  is indistinguishable from compliance — `../screens` read 0 the whole time the help centre sat
+  outside the language setting.
+  **(3) Found while re-running the widened scan:** the `../smartengine` baseline was 171 against an
+  actual count of 163 — eight strings of slack the ratchet could not see. Tightened.
+  With the widened scanner the whole UI layer is genuinely at 0; everything it still reports is
+  C362's scope (smartengine 163, widgetcatalog 42, widgetregistry 2).
+
 - [ ] **C362 [MAJOR][I18N][ARCH] Logic packages bake English at generation time — needs the
   key+args architecture.** `internal/smartengine` (160 findings: every insight Title/Detail/action
   Label across ~84 SMART features) and `internal/widgetcatalog` (42: widget/column/chart labels)

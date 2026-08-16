@@ -133,6 +133,14 @@ var vSweepKeys = Catalog{
 	// "Groceries 100%" claims a composition the data does not have. %s = the
 	// category name.
 	"dashboard.breakdownSingle": "Everything spent this period is in %s so far.",
+
+	// ── C361: the boot chrome the Go UI tree does not own ───────────────────
+	// These live in web/index.html and are shown by page script after wasm
+	// mounts, so they persist and were the last user-facing English the language
+	// setting could not reach. Relabelled from Go (index.html's JS is frozen).
+	"boot.install":        "Install CashFlux",
+	"boot.iosHintDismiss": "Dismiss install hint",
+	"boot.iosHint":        "On iPhone or iPad: tap Share, then 'Add to Home Screen' to install CashFlux.",
 }
 
 func init() {

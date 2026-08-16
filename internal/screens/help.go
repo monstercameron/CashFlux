@@ -130,26 +130,26 @@ type helpSection struct {
 // what's-new render separately beside the hero).
 func helpSections() []helpSection {
 	return []helpSection{
-		{"help-start", "Getting started", helpTopicBody(
-			"Add an account (Accounts → Add account), then record what you spend and earn from the + button or the dashboard's Add transaction.",
-			"Set a budget per category in Budgets, and track savings targets in Goals — the dashboard rolls it all up.")},
-		{"help-data", "Bringing in your data", helpTopicBody(
-			"Import a bank CSV from Documents → import; CashFlux maps the columns and flags duplicates before anything is saved.",
-			"Most banks let you export a CSV from your transactions or statements page — look for an Export or Download option.")},
-		{"help-reports", "Budgets, goals & reports", helpTopicBody(
-			"Budgets show what's left for the period; Goals show pace toward a target. Reports breaks down spending by category, payee, and member, with trends over time.",
-			"Financial health (in Plan & analyze) scores your overall position and suggests the next step.")},
-		{"help-smart", "The Smart layer", helpTopicBody(
-			"Smart surfaces optional, opt-in insights and recommendations. Free insights run entirely on your device at no cost; AI features are clearly labelled and only run when you add your own key.",
-			"Turn features on or off in Smart → Manage, and dial how much they surface in Appearance.")},
-		{"help-shortcuts", "Keyboard shortcuts", helpTopicBody(
-			"Press ? anytime to see the full shortcut list. Ctrl/⌘ K opens the command palette to jump anywhere or run an action.",
-			"Alt + 1–9 jumps between the main sections; Alt + N adds a transaction.")},
-		{"help-privacy", "Your privacy", helpTopicBody(
-			"CashFlux is local-first: your financial data is stored on this device and is never uploaded or shared. You can export a backup at any time from Settings.",
-			"An optional passcode lock (Settings) keeps the app's screens behind a code and can encrypt your data at rest.")},
-		{"help-support", "Support & feedback", supportBody()},
-		{"help-offline", "Works offline", helpTopicBody(uistate.T("help.worksOfflineBody"))},
+		{"help-start", uistate.T("help.startTitle"), helpTopicBody(
+			uistate.T("help.startBody1"),
+			uistate.T("help.startBody2"))},
+		{"help-data", uistate.T("help.dataTitle"), helpTopicBody(
+			uistate.T("help.dataBody1"),
+			uistate.T("help.dataBody2"))},
+		{"help-reports", uistate.T("help.reportsTitle"), helpTopicBody(
+			uistate.T("help.reportsBody1"),
+			uistate.T("help.reportsBody2"))},
+		{"help-smart", uistate.T("help.smartTitle"), helpTopicBody(
+			uistate.T("help.smartBody1"),
+			uistate.T("help.smartBody2"))},
+		{"help-shortcuts", uistate.T("help.shortcutsTitle"), helpTopicBody(
+			uistate.T("help.shortcutsBody1"),
+			uistate.T("help.shortcutsBody2"))},
+		{"help-privacy", uistate.T("help.privacyTitle"), helpTopicBody(
+			uistate.T("help.privacyBody1"),
+			uistate.T("help.privacyBody2"))},
+		{"help-support", uistate.T("help.supportTitle"), supportBody()},
+		{"help-offline", uistate.T("help.offlineTitle"), helpTopicBody(uistate.T("help.worksOfflineBody"))},
 	}
 }
 

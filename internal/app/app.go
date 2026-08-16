@@ -258,6 +258,11 @@ func Run() {
 	// host exists.
 	uiw.InitBentoCoordinator()
 
+	// C361: translate the install affordances that live in web/index.html. They
+	// are shown by page script after boot and were the last user-facing English
+	// the language setting could not reach.
+	relabelBootChrome()
+
 	// Intercept same-origin route-link clicks so a raw <a href> navigates in-app
 	// (client-side) instead of doing a full page reload — a reload drops the in-memory
 	// app-lock passcode and forces a re-unlock. Covers every page's links at once.

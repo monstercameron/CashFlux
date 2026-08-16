@@ -67,7 +67,10 @@ var i18nBaselines = map[string]int{
 	// its three in-package insight strings (Title/Detail/Label).
 	// 169→171 (2026-07-14): AC14 SMART-A9 fee-bleed detector adds its in-package
 	// insight Detail and the close-it-task action Label.
-	"../smartengine":   171,
+	// 171→163 (2026-08-16, C361): tightened to the ACTUAL count. A baseline set
+	// above the real number is slack the ratchet cannot see — eight strings could
+	// have been added back without failing anything.
+	"../smartengine":   163,
 	"../widgetcatalog": 42,
 	"../healthscore":   0,
 	"../credithealth":  0,
@@ -95,6 +98,18 @@ var i18nElementFuncs = map[string]bool{
 var i18nPropFuncs = map[string]bool{
 	"Title": true, "Placeholder": true, "Alt": true,
 	"labeledField": true, "withFieldLabel": true, "smartBrandHeader": true,
+	// C361: help.go's own section builder. Its body lines were plain string
+	// arguments — a display position the scanner did not look at — so the entire
+	// help centre sat outside the language setting while every screen around it
+	// was at zero. A blind spot in the guard is indistinguishable from compliance.
+	"helpTopicBody": true,
+}
+
+// i18nAllArgStringFuncs are calls where EVERY string argument is user-visible,
+// not just the first. helpTopicBody takes a variadic list of paragraphs; checking
+// only its first would have left the second line of every help topic unguarded.
+var i18nAllArgStringFuncs = map[string]bool{
+	"helpTopicBody": true,
 }
 
 var i18nDisplayFields = map[string]bool{
@@ -258,6 +273,13 @@ func i18nScanDir(t *testing.T, dir string) []string {
 				if i18nPropFuncs[name] && len(node.Args) >= 1 {
 					if s, lit := i18nClassifyExpr(node.Args[0]); s != "" {
 						record(lit.Pos(), name+"(prop)", s)
+					}
+				}
+				if i18nAllArgStringFuncs[name] {
+					for _, arg := range node.Args {
+						if s, lit := i18nClassifyExpr(arg); s != "" {
+							record(lit.Pos(), name+"(arg)", s)
+						}
 					}
 				}
 				if name == "Attr" && len(node.Args) == 2 {
