@@ -8465,7 +8465,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   6/6, including authoring an income row, contradicting it with a typed minus, and reopening to find
   the direction control reads "out".
 
-- [ ] **C584 [CRITICAL][BUDGETS][DATA][E2E] Persist budgets created with a new category.**
+- [x] **C584 [DONE 2026-08-16 — the autosave writes on the tick that notices an edit, not four seconds later; the loss was never new-category-specific] [CRITICAL][BUDGETS][DATA][E2E] Persist budgets created with a new category.**
   The Add budget flow can appear to succeed when “Create a new category for this budget” is selected,
   but the resulting budget and category disappear after leaving `/budgets` and refreshing; the same
   flow using an existing category persists. Treat budget and category creation as one atomic operation,
@@ -8473,7 +8473,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a budget created with a brand-new category survives route changes and a hard refresh, the category
   is visible in Categories, and a failed category or budget write leaves no misleading success state.
 
-- [ ] **C585 [CRITICAL][BUDGETS][NAV][DATA] Make budget transaction drilldowns include tracked child categories.**
+- [x] **C585 [DONE 2026-08-16 — the drill carries tracked categories, their descendants and tags, and the ledger filter is split-aware] [CRITICAL][BUDGETS][NAV][DATA] Make budget transaction drilldowns include tracked child categories.**
   The Transportation budget showed `$1,100.00` spent, but its Transactions action opened a ledger
   filtered to the exact parent category Transportation and returned “No matching transactions” even
   though the budget tracks child categories such as Auto loans and Gas. Define whether a budget includes
@@ -8482,7 +8482,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   active category scope (parent plus descendants where applicable), and never presents a contradictory
   non-empty total alongside an empty ledger.
 
-- [ ] **C586 [MAJOR][BUDGETS][CREATE][UX] Remove stale history estimates from new-category creation.**
+- [x] **C586 [DONE 2026-08-16 — a category with no history says so instead of borrowing another’s average] [MAJOR][BUDGETS][CREATE][UX] Remove stale history estimates from new-category creation.**
   With “Create a new category for this budget” enabled, the dialog still displayed a helper such as
   “You’ve averaged $1,100.00/mo here recently,” despite the new category having no history. Copying
   Transportation also produced a conflicting average compared with the budget’s visible spend. Compute
@@ -8490,7 +8490,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a new category says “No history yet” or gives a clearly qualified estimate; copied budgets and
   existing-category budgets use the same transaction scope as their cards and drilldowns.
 
-- [ ] **C587 [MAJOR][BUDGETS][ZERO-BASED][CORRECTNESS] Make expected-versus-actual income explicit in zero-based planning.**
+- [x] **C587 [DONE 2026-08-16 — expected income and money arrived are separate reads, with a one-click reduce-to-fit] [MAJOR][BUDGETS][ZERO-BASED][CORRECTNESS] Make expected-versus-actual income explicit in zero-based planning.**
   The zero-based view can show 100% of expected `$10,709.16` assigned while only `$6,961.00` has been
   received, and Close out the month reports the `$3,748.16` shortfall separately. Add a prominent state
   for “assigned against expected income” versus “funded by received income,” with guidance for reducing,
@@ -8498,7 +8498,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: users cannot mistake a fully assigned forecast for fully funded cash, and the page gives a direct,
   reversible path to reconcile the plan to actual income.
 
-- [ ] **C588 [MAJOR][BUDGETS][REVIEW][NAV][UX] Align the period-review callout with its destination and action.**
+- [x] **C588 [DONE 2026-08-16 — the callout’s title names what it found and its action matches the destination] [MAJOR][BUDGETS][REVIEW][NAV][UX] Align the period-review callout with its destination and action.**
   “2 items to review from this period” expands to open to-dos linked to budgets, while “Review sinking
   funds” routes to Goals. The wording makes this sound like a transaction or budget review inbox and
   the destination is not predictable. Name the item type and destination directly, or make the callout
@@ -8506,7 +8506,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a user can predict whether the callout opens tasks, goals, transactions, or budget exceptions
   before clicking, and returning preserves the same budget period.
 
-- [ ] **C589 [MAJOR][BUDGETS][PERIODS][UX] Redesign custom-range selection as an explicit range workflow.**
+- [x] **C589 [DONE 2026-08-16 — custom ranges are an explicit two-date workflow with a live unit count] [MAJOR][BUDGETS][PERIODS][UX] Redesign custom-range selection as an explicit range workflow.**
   Choosing Custom range immediately changes the period label to a same-month range (`Jul 2026 – Jul
   2026`), while the start/end controls are only discoverable after reopening the menu. Provide a clear
   range dialog or inline fields with start/end values, apply/cancel semantics, and an explanation of
@@ -8514,7 +8514,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: the user sees the selected range before it takes effect, can edit both endpoints directly, and can
   return to a single month without hidden state or accidental partial application.
 
-- [ ] **C590 [MAJOR][BUDGETS][SETTINGS][UX] Disambiguate global budgeting method from per-budget method.**
+- [x] **C590 [DONE 2026-08-16 — the household control says "whole household"; the per-budget picker says what it overrides] [MAJOR][BUDGETS][SETTINGS][UX] Disambiguate global budgeting method from per-budget method.**
   Add/Edit budget exposes “Method for this budget,” while Budget settings exposes a global “Budgeting
   method” selector. The relationship and blast radius are not stated, so a user can change a global
   mode believing they are editing one card. Label the scope, show affected budgets, and explain defaults
@@ -8522,7 +8522,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: every method control states whether it changes one budget, new-budget defaults, or the entire
   page; saving a global change previews the affected cards and supports undo.
 
-- [ ] **C591 [MAJOR][BUDGETS][NAV][UX] Make budget-name and Transactions drilldowns distinguishable.**
+- [x] **C591 [DONE 2026-08-16 — the name opens the budget, a labelled Transactions button opens the ledger] [MAJOR][BUDGETS][NAV][UX] Make budget-name and Transactions drilldowns distinguishable.**
   Clicking the budget name itself navigates to a filtered Transactions view, while each card also has an
   explicit Transactions action. This duplicates an important interaction with different discoverability
   and makes the name look like a heading rather than a drilldown. Use a single clearly labeled action or
@@ -8530,14 +8530,14 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: keyboard, pointer, and screen-reader users can predict the result of clicking the name versus the
   Transactions action, and both routes expose the same filter scope.
 
-- [ ] **C592 [MAJOR][BUDGETS][SETTINGS][FORM][UX] Give Adjust all a titled, validated, impact-previewing form.**
+- [x] **C592 [DONE 2026-08-16 — Adjust all is a titled form with a per-budget preview, validation and a large-change warning] [MAJOR][BUDGETS][SETTINGS][FORM][UX] Give Adjust all a titled, validated, impact-previewing form.**
   Adjust all opened an unlabeled dialog whose only prompt was a long sentence asking for a percentage.
   Add a dialog heading, labeled numeric percentage input, examples and bounds, preview totals for the
   affected budgets, and explicit confirmation for negative or large changes.
   AC: invalid, blank, and extreme values are rejected with inline guidance; the user can see the old and
   new totals before saving and can cancel without any mutation.
 
-- [ ] **C593 [MAJOR][BUDGETS][AUTOBUDGET][UX] Reduce the cognitive load of Auto budget.**
+- [x] **C593 [DONE 2026-08-16 — Auto budget states replace-versus-add impact and anchors on the VIEWED period] [MAJOR][BUDGETS][AUTOBUDGET][UX] Reduce the cognitive load of Auto budget.**
   Auto budget presents a long list of checkbox-and-slider rows with suggested amounts and no persistent
   summary of selected count, total change, remaining income, or zero-based impact while editing. Add
   grouping, select all/none, a running total, a preview of affected cards, and a concise explanation of
@@ -8545,7 +8545,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a user can understand the financial impact without scrolling through every row, can reset all
   suggestions, and can save only after seeing the resulting assigned/unassigned balance.
 
-- [ ] **C594 [MAJOR][BUDGETS][CREATE][UX] Stage the Add budget flow around the common path.**
+- [x] **C594 [DONE 2026-08-16 — the advanced surface is three named groups; the formula handle is last and explained] [MAJOR][BUDGETS][CREATE][UX] Stage the Add budget flow around the common path.**
   The creation dialog combines templates, copy-existing, manual setup, new-category creation, advanced
   formula variables, tracking checkboxes, tags, owner, method, and rollover. The advanced surface is
   powerful but exposes implementation-oriented variable names and a large category tree before the user
@@ -8554,7 +8554,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: a first-time user can create a normal monthly budget quickly, while power users retain access to
   tracking and formulas without parsing internal variable names or a large undifferentiated form.
 
-- [ ] **C595 [MAJOR][BUDGETS][RESPONSIVE][UX] Reduce repeated budget-card density with progressive disclosure.**
+- [x] **C595 [DONE 2026-08-16 — captions collapse behind a disclosure; the compact row keeps the name a link] [MAJOR][BUDGETS][RESPONSIVE][UX] Reduce repeated budget-card density with progressive disclosure.**
   Each card places progress, limit, rollover, drivers, elapsed/date context, Top up, Transactions, a
   kebab menu, and Follow-ups in one dense horizontal/stacked surface. This makes the primary question
   “how much is left?” compete with secondary actions and increases scan time. Establish a clear primary
@@ -8562,14 +8562,14 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   AC: the first viewport supports quick scanning of status and remaining amount, while every secondary
   action remains discoverable, labeled, and usable at narrow widths.
 
-- [ ] **C596 [MINOR][BUDGETS][VIEW][UX] Label the compact/card toggle by the resulting view.**
+- [x] **C596 [DONE 2026-08-16 — the toggle is labelled by the view it produces] [MINOR][BUDGETS][VIEW][UX] Label the compact/card toggle by the resulting view.**
   The control changes its label from “Compact list” to “Card view,” which describes the destination in
   one state and the current view in the other. Use a stable action label such as “View as compact list”
   or a two-state toggle with an accessible pressed state and tooltip.
   AC: the label and accessible state make the current view and the next action unambiguous before and
   after toggling.
 
-- [ ] **C597 [MAJOR][BUDGETS][SAFETY][UX] Add explicit previews and confirmations for funds-moving actions.**
+- [x] **C597 [DONE 2026-08-16 — every funds-moving action states its impact before it commits; none claims irreversibility] [MAJOR][BUDGETS][SAFETY][UX] Add explicit previews and confirmations for funds-moving actions.**
   Release unused funds, Sweep leftovers, Delete budget, Top up, and Adjust all have materially different
   effects but are mixed into menus and dialogs with inconsistent levels of explanation. Define impact
   previews, affected budgets/accounts, reversibility, and confirmation requirements by action type; make
@@ -8578,7 +8578,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   underlying account balance, and no destructive or cross-budget action commits without an appropriate
   confirmation.
 
-- [ ] **C598 [MAJOR][BUDGETS][E2E][WORKFLOW] Add a full zero-based budget acceptance journey.**
+- [x] **C598 [DONE 2026-08-16 — e2e/regression/budgets_zerobased_journey.spec.mjs; found the C584 residual on its first full run] [MAJOR][BUDGETS][E2E][WORKFLOW] Add a full zero-based budget acceptance journey.**
   Exercise the complete workflow with a fresh user: inspect expected and received income, create a
   monthly zero-based budget, create a missing category, assign all dollars, edit several limits, use
   both individual and bulk-style adjustments where supported, open a budget drilldown, correct scope,
@@ -8792,7 +8792,7 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   AC: a user can inspect or create a rule and return to the same transaction working set without
   reconstructing the query or losing their place in the review queue.
 
-- [ ] **C606 [CRITICAL][BUDGETS][TOPUP][CORRECTNESS] Show truly available source funds when funding a top-up.**
+- [x] **C606 [DONE 2026-08-16 — sources show movable funds, and every share is capped so a source cannot be overdrawn] [CRITICAL][BUDGETS][TOPUP][CORRECTNESS] Show truly available source funds when funding a top-up.**
   The top-up source list showed Groceries `$354.85 available` even though its card had only `$76.56 left`,
   and Zero-Based Buffer showed `$59.16 available` while only `$20.16` was free. Either the source list
   is exposing the full limit under an unsafe “available” label, or it is allowing a transfer beyond free
@@ -8801,7 +8801,7 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   AC: every source amount matches the amount that can actually be moved, the preview shows the post-top-up
   source balances, and saving cannot silently make a source budget overspent.
 
-- [ ] **C607 [MAJOR][BUDGETS][PERIOD][DATA] Apply the selected budget period to supporting modules.**
+- [x] **C607 [DONE 2026-08-16 — the supporting modules read the selected period and say which period they cover] [MAJOR][BUDGETS][PERIOD][DATA] Apply the selected budget period to supporting modules.**
   While the page was showing the ended `Jul 2026` period, Edit tracking said “Figures show this month so
   far” and displayed current-month transaction counts; the Unbudgeted spending section also said “this
   month” and listed current-looking amounts. Use the selected period consistently in tracking counts,
@@ -8809,7 +8809,7 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   AC: changing the budget period updates every supporting figure to the same scope, and historical-period
   views never mix current-month numbers without an explicit scope label.
 
-- [ ] **C608 [MAJOR][BUDGETS][YEAR-PLANNER][RESPONSIVE][UX] Make the year planner usable without horizontal-scroll discovery.**
+- [x] **C608 [DONE 2026-08-16 — the year planner reflows without horizontal scroll and every cell names its figure] [MAJOR][BUDGETS][YEAR-PLANNER][RESPONSIVE][UX] Make the year planner usable without horizontal-scroll discovery.**
   The expanded year planner presents a very wide Jan–Dec table and only tells users “Scroll sideways for
   the full year.” Cell buttons expose paired values such as `$1,100.00 $1,300.00` without an accessible
   month-specific label. Add responsive grouping or a month selector, sticky budget/month headers, and
@@ -8817,7 +8817,7 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   AC: keyboard, screen-reader, and narrow-viewport users can inspect every month and understand each cell
   without relying on horizontal scrolling or visually matching a paired value to a column.
 
-- [ ] **C609 [MINOR][BUDGETS][RECURRING][DATES][UX] Clarify recurring-date scope on historical budget periods.**
+- [x] **C609 [DONE 2026-08-16 — recurring dates classify against the VIEWED period first — before, after, overdue, or due] [MINOR][BUDGETS][RECURRING][DATES][UX] Clarify recurring-date scope on historical budget periods.**
   The July budget page displayed recurring entries with labels such as “Next Jul 3, 2026” alongside future
   September dates, but did not say whether “Next” means next occurrence from today, next occurrence inside
   the selected budget period, or the schedule’s next stored date. Label the reference date and distinguish
