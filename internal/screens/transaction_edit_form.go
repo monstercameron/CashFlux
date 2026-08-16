@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	"github.com/monstercameron/CashFlux/internal/txnprov"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -342,6 +343,16 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		t.Desc = strings.TrimSpace(descS.Get())
 		t.Payee = strings.TrimSpace(payeeS.Get())
 		t.Amount = money.New(amt, t.Amount.Currency)
+		// C579: picking a category by hand is the user taking ownership of the
+		// classification, so record it. Without this the row they just filed keeps
+		// its "auto" mark and goes on telling them a machine chose it — the
+		// correction journey ends with the ledger contradicting the correction.
+		// Narrow on purpose (see txnprov.ConfirmsCategory): only a CHANGE to a real
+		// category counts, so fixing a typo in the amount does not silently vouch for
+		// a category the user never looked at.
+		if txnprov.ConfirmsCategory(txn, domain.Transaction{CategoryID: catS.Get()}) {
+			t.Reviewed = true
+		}
 		t.CategoryID = catS.Get()
 		t.Date = date
 		if memberS.Get() != "" {
@@ -553,10 +564,15 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		if len(cands) == 1 {
 			offer = uistate.T("similartxns.offerOne")
 		}
-		return Div(css.Class("form-grid"), Attr("data-testid", "txn-recat-offer"), Attr("role", "status"),
+		// A STACK, not a form-grid. As a grid this block became three auto-fit columns
+		// — the question in the first, the preview in the second, and all three answer
+		// buttons crushed into a 150px third, rendering as "categori them" / "No
+		// thanks" clipped mid-word. It is a question followed by evidence followed by
+		// answers; that is a column, and the answers wrap rather than shrink.
+		return Div(ClassStr("txn-recat-offer"), Attr("data-testid", "txn-recat-offer"), Attr("role", "status"),
 			P(css.Class("t-body"), offer),
 			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), rows),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Div(css.Class("txn-recat-actions", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-recat-apply"), OnClick(applySimilar), uistate.T("similartxns.apply")),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-recat-rule"), OnClick(alwaysRule), uistate.T("similartxns.alwaysDo")),
 				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-recat-dismiss"), OnClick(dismissSimilar), uistate.T("similartxns.dismiss")),

@@ -187,6 +187,31 @@ expect literal `FROM golang:1.26-alpine AS build`, an alpine `adduser` line and 
 while `Dockerfile.server` deliberately uses `--platform=$BUILDPLATFORM` and a distroless nonroot
 runtime. The tests are stale against an intentional change, not a regression.
 
+## 2026-08-16 — The journey test earned its keep in the first run
+
+C583 asked for the correction loop to be validated as a product journey rather than as a set of
+controls. Writing it found two things nothing else had, which is the argument for the ticket.
+
+**The row contradicted the correction.** Step 3 files a charge by hand and step 3's assertion is
+that the row stops claiming a machine filed it. It did not: the edit form never touched `Reviewed`,
+so a user who opened an "auto" row, picked a category and saved watched the row go on telling them
+automation chose it. `txnprov.ConfirmsCategory` is deliberately narrow — the saved category must be
+non-empty AND different — because treating any save as confirmation would let someone who fixed a
+typo in the amount silently vouch for a category they never looked at, which is the same overclaim
+pointing the other way.
+
+**A modal that had no visible way out.** The click after Save timed out for sixty seconds against
+`.flip-backdrop intercepts pointer events`. It was not a bug in the app — saving a category change
+raises the "N more look like this — recategorize them too?" offer, which correctly keeps the dialog
+open and asks before acting. It was a bug in my test AND a real layout defect: the offer replaces
+the form body, so asserting "the form is hidden" passes while the dialog is still up. And the offer
+was laid out as a `form-grid`, so its question, its evidence and its three answers each took one
+auto-fit column — the answers crushed into 150px, rendering as "categori them" and a clipped "No
+thanks". A question, its evidence, and its answers are a column, not a row of equal thirds.
+
+The journey also records its own shape: two route changes (out to Rules, back) and zero pieces of
+state rebuilt by hand. Those are assertions, not notes — a loop that grows a detour fails.
+
 ## 2026-08-16 — What the adversarial pass caught, and two counts that had no denominator
 
 Ran an adversarial reviewer over the lens commit before building on it. It found two regressions

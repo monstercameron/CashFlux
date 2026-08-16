@@ -114,6 +114,49 @@ func TestARuleThatSetsNoCategoryExplainsNothing(t *testing.T) {
 	}
 }
 
+// Without this, a user who opens an "auto" row, picks a category by hand and
+// saves would watch the row keep telling them a machine chose it.
+func TestConfirmsCategory(t *testing.T) {
+	cases := []struct {
+		name          string
+		before, after string
+		want          bool
+	}{
+		{"picked a category where a rule had guessed", "c-groceries", "c-dining", true},
+		{"filed a previously uncategorized row", "", "c-dining", true},
+		{"saved without touching the category", "c-dining", "c-dining", false},
+		{"cleared the category", "c-dining", "", false},
+		{"saved an uncategorized row unchanged", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := txnprov.ConfirmsCategory(
+				txn(func(x *domain.Transaction) { x.CategoryID = tc.before }),
+				txn(func(x *domain.Transaction) { x.CategoryID = tc.after }),
+			)
+			if got != tc.want {
+				t.Errorf("ConfirmsCategory(%q -> %q) = %v, want %v", tc.before, tc.after, got, tc.want)
+			}
+		})
+	}
+}
+
+// The whole point of confirming: the row stops reading as automatic.
+func TestConfirmingClearsTheAutomaticMark(t *testing.T) {
+	row := txn(nil)
+	if !txnprov.Of(row, []rules.Rule{diningRule}).IsAutomatic() {
+		t.Fatal("fixture is not automatic to begin with")
+	}
+	edited := row
+	edited.CategoryID = "c-groceries"
+	if txnprov.ConfirmsCategory(row, edited) {
+		edited.Reviewed = true
+	}
+	if txnprov.Of(edited, []rules.Rule{diningRule}).IsAutomatic() {
+		t.Error("a hand-picked category still reads as automatic")
+	}
+}
+
 // Rules written against the tidy merchant name must still explain a row whose
 // stored payee is the processor descriptor — that is how the engine matches
 // (ruleMatchesFull searches the cleaned payee too), and provenance has to agree

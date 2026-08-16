@@ -84,6 +84,22 @@ func Of(t domain.Transaction, rs []rules.Rule) Provenance {
 	return Provenance{Level: Automatic, RuleMatch: explainingRule(t, rs)}
 }
 
+// ConfirmsCategory reports whether an edit should be recorded as a person taking
+// ownership of the row's classification.
+//
+// It exists to close a contradiction the provenance mark would otherwise create:
+// a user opens a row marked "auto", picks a category by hand, saves — and the row
+// still reads "auto", because nothing in the edit path ever set Reviewed. The
+// classification is now unambiguously theirs and the ledger says a machine did it.
+//
+// The test is deliberately narrow: the saved category must be non-empty and
+// DIFFERENT from what was there. Treating any save as confirmation would let a
+// user who fixed a typo in the amount silently vouch for a category they never
+// looked at — which is the same class of overclaim, pointing the other way.
+func ConfirmsCategory(before, after domain.Transaction) bool {
+	return after.CategoryID != "" && after.CategoryID != before.CategoryID
+}
+
 // explainingRule finds the first rule that matches t AND files it under the
 // category t already carries.
 //

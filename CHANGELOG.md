@@ -33,6 +33,15 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Fixed
+- **Filing a transaction by hand stops it reading as automatic.** Picking a category in the edit
+  dialog never recorded that a person had made the decision, so the row kept its "auto" mark and
+  went on saying a machine chose it — the correction journey ended with the ledger contradicting the
+  correction. A category CHANGE now counts as confirming it; editing anything else does not, so
+  fixing a typo in an amount never silently vouches for a category nobody looked at.
+- **"Recategorize the similar ones too?" is readable.** The offer was laid out as a form grid, so its
+  question, its evidence and its three answers each took one auto-fit column — leaving the answers
+  crushed into 150px and clipped mid-word ("categori them", "No thanks"). It reads down the panel
+  now, and the answers wrap instead of shrinking.
 - **The edit dialog's category picker is readable again.** "New category" sat beside the category
   select and took more than half the row at the dialog's width, clipping it to "— No categ". The
   select now claims a real minimum width and the button wraps beneath it when there isn't room for

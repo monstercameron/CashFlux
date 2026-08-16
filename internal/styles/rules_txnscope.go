@@ -106,6 +106,19 @@ func registerTxnScope() {
 		borderTop("1px solid var(--border)"),
 	)
 
+	// --- "Recategorize the similar ones too?" reads as a question (C580) ----------
+	// Question, then evidence, then answers — down the panel, with the answers free
+	// to wrap onto a second line. As a form-grid this was three auto-fit columns and
+	// the three answer buttons shared the last one, clipped mid-word.
+	rule(".txn-recat-offer",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
+	)
+	rule(".txn-recat-actions",
+		flexWrap("wrap"),
+	)
+
 	// --- The category picker gives the SELECT the width (C580) --------------------
 	// "New category" is a secondary action beside the control the field is actually
 	// for, and at the modal's two-column width it was taking more than half the row
