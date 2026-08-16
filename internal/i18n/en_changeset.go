@@ -52,13 +52,25 @@ var changesetKeys = Catalog{
 	"insights.searchAria":        "Search chat names and messages",
 	"insights.searchClear":       "Clear the search",
 	// %s = what was searched for.
-	"insights.searchNone":      "Nothing matches “%s”.",
-	"insights.editMsg":         "Edit and ask again",
-	"insights.editAria":        "Reword this question",
-	"insights.editSend":        "Ask again",
-	"insights.editNote":        "Asking again replaces the answers below this point.",
-	"insights.rateUp":          "This answer was useful",
-	"insights.rateDown":        "This answer missed the point",
+	"insights.searchNone": "Nothing matches “%s”.",
+	"insights.editMsg":    "Edit and ask again",
+	"insights.editAria":   "Reword this question",
+	"insights.editSend":   "Ask again",
+	"insights.editNote":   "Asking again replaces the answers below this point.",
+	"insights.rateUp":     "This answer was useful",
+	"insights.rateDown":   "This answer missed the point",
+	// --- C250 the model and the running spend, at the point of asking ---
+	"assistant.activeModelTitle": "The model that will answer your next question",
+	// %s = a token count; the second %s = an estimated cost.
+	"assistant.spentTokens":     "%s tokens this chat",
+	"assistant.spentTokensCost": "%s tokens this chat · about %s",
+	// --- C247 the key gate answers cost / where / privacy ---
+	// %s = a ballpark price, %s = the provider's name.
+	"assistant.keyCost":        "About %s a question on %s's cheapest model — you pay them directly, we take nothing.",
+	"assistant.keyWhere":       "Get a key at",
+	"assistant.keyPrivacy":     "Only what you ask and a summary of your figures is sent. Your transactions stay on this device.",
+	"assistant.keyAdd":         "Add a key in Settings",
+	"assistant.keyGateAria":    "What adding an API key involves",
 	"assistant.confidenceHint": "This one was worked out from a pattern, not read straight off your ledger — worth checking before you act on it.",
 }
 

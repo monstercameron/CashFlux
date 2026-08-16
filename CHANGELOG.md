@@ -37,6 +37,27 @@ and every commit updates this file under `Unreleased`.
   and is resizable for the times they write more.
 
 ### Added
+- **The key gate answers the questions that actually decide it (C247).** It used to say "add your
+  OpenAI key in Settings" and stop, leaving the three things people weigh unanswered: what will it
+  cost, where do I get one, and what leaves my device. Someone deciding with no figures in front of
+  them assumes the worst of all three, and the assistant stays off for reasons that were never true.
+  The gate now answers all three specifically — a real ballpark from the provider's own pricing
+  (~9.6k in / 0.5k out per question, the footprint measured on live traffic), the real key page, and
+  a plain statement that only the question and a summary of the figures is sent. An unrecognised
+  endpoint — a local model, a proxy — gets the explanation with the figures omitted, because quoting
+  OpenAI's prices for something that isn't OpenAI is worse than quoting none.
+
+- **The composer says which model will answer and what the chat has cost (C250).** Both sit under
+  the box where the next question is typed rather than in a header the eye has already left: the
+  model changes the answer, and the running spend is the number that decides whether to ask again.
+  The cost says "about" because it is an estimate from a pricing table that drifts upstream, and a
+  figure presented as exact when it isn't teaches people to distrust the accurate parts too.
+
+### Changed
+- **The system-prompt editor is hidden without a key (C251).** Offering to edit instructions for a
+  model that cannot be called is a setting that cannot have an effect, which reads as the feature
+  being broken rather than as it being switched off.
+
 - **The assistant's answers stream (G2-C7).** A long answer used to read as a stall: a spinner, then
   everything at once. Text now appears as it is written, on BOTH paths — the direct key streams from
   the Responses API, and the proxy forwards each fragment down the existing gRPC stream, so a

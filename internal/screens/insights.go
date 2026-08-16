@@ -1294,7 +1294,26 @@ func Insights() ui.Node {
 		}}),
 		trailing,
 	)
-	composer := inputRow
+	// C390: this conversation's cap and what it has spent against it. Reading the
+	// tally revision keeps the readout live as turns land.
+	_ = uistate.UseAgentActionsRevision().Get()
+	_ = uistate.UseAgentTallyRevision().Get()
+	budgetCap := uistate.AgentBudget(convID.Get())
+	budgetUsed := uistate.AgentTokensUsed(convID.Get())
+	budgetLeft, budgetCapped := uistate.AgentBudgetRemaining(convID.Get())
+
+	// C250: which model is answering, and what this chat has cost so far, sit
+	// directly under the box where the next question is typed. Both belong at the
+	// point of asking rather than in a header the eye has already left: the model
+	// changes the answer, and the running spend is the number that decides whether
+	// to ask again.
+	composerMeta := Fragment()
+	if !noAI {
+		composerMeta = ui.CreateElement(composerStatus, composerStatusProps{
+			Model: model, Tokens: budgetUsed, Capped: budgetCapped, Remaining: budgetLeft,
+		})
+	}
+	composer := Fragment(inputRow, composerMeta)
 	if noAI {
 		// The full key explainer shows under the composer only mid-conversation;
 		// on an empty thread the agent intro's callout is the single CTA.
@@ -1426,13 +1445,6 @@ func Insights() ui.Node {
 		shareChars += len(t.Text)
 	}
 	shareEstTokens := shareChars / 4
-	// C390: this conversation's cap and what it has spent against it. Reading the
-	// tally revision keeps the readout live as turns land.
-	_ = uistate.UseAgentActionsRevision().Get()
-	_ = uistate.UseAgentTallyRevision().Get()
-	budgetCap := uistate.AgentBudget(convID.Get())
-	budgetUsed := uistate.AgentTokensUsed(convID.Get())
-	budgetLeft, budgetCapped := uistate.AgentBudgetRemaining(convID.Get())
 	chatControls := Div(css.Class("ask-controls"), Attr("data-testid", "assistant-controls"),
 		Attr("role", "group"), Attr("aria-label", uistate.T("assistant.controlsLabel")),
 		modelPicker(modelPickerProps{Models: modelList.Get(), Current: model, OnPick: pickModel}),
@@ -1450,9 +1462,12 @@ func Insights() ui.Node {
 			EstTokens: shareEstTokens,
 		}),
 		Div(css.Class("ask-ctrl-actions"),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
+			// C251: editing the system prompt is meaningless without a model to send
+			// it to. Showing the control to a keyless user offers a setting that
+			// cannot have an effect, which reads as the feature being broken.
+			If(!noAI, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-edit-prompt"),
 				Title(uistate.T("insights.editPrompt")), OnClick(openPrompt),
-				uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt"))),
+				uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.editPrompt")))),
 		),
 	)
 	// Bespoke aside group: the saved conversations as a quiet vertical index.
@@ -1541,10 +1556,7 @@ func Insights() ui.Node {
 		Div(css.Class("asst-intro-cap"), Span(css.Class("rec-tag"), uistate.T("assistant.capEstimateTag")), Span(uistate.T("assistant.capEstimate"))),
 		// Keyless: the crucial fact (fixed question set now, full agent with a key)
 		// lives HERE, where attention lands — not in footer microcopy.
-		If(noAI, Div(css.Class("asst-key-callout"), Attr("data-testid", "assistant-key-callout"),
-			Span(uistate.T("assistant.keyCallout")),
-			Button(css.Class("btn btn-sm btn-primary"), Type("button"), OnClick(func() { uistate.OpenGlobalSettingsAt("ai") }), uistate.T("nav.settings")),
-		)),
+		If(noAI, ui.CreateElement(KeyExplainer, keyExplainerProps{BaseURL: settings.OpenAIBaseURL})),
 	)
 
 	// MIA-extend (#445-9): when the user has an active scope show a compact
@@ -2199,6 +2211,38 @@ func UserBubble(p userBubbleProps) ui.Node {
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
+	)
+}
+
+type composerStatusProps struct {
+	Model     string
+	Tokens    int
+	Capped    bool
+	Remaining int
+}
+
+// composerStatus is the line under the composer naming the model that will answer
+// and what this conversation has spent (C250).
+//
+// The cost is stated as an estimate in as many words, because it is one: it is
+// derived from a pricing table that drifts upstream. A figure presented as exact
+// when it is not teaches people to distrust the accurate parts of the app too.
+func composerStatus(p composerStatusProps) ui.Node {
+	if strings.TrimSpace(p.Model) == "" {
+		return Fragment()
+	}
+	spend := Fragment()
+	if p.Tokens > 0 {
+		text := uistate.T("assistant.spentTokens", ai.FormatTokens(p.Tokens))
+		if cost, ok := ai.EstimateCostUSD(p.Model, ai.Usage{PromptTokens: p.Tokens}); ok && cost > 0 {
+			text = uistate.T("assistant.spentTokensCost", ai.FormatTokens(p.Tokens), ai.FormatCostUSD(cost))
+		}
+		spend = Span(css.Class("asst-status-spend"), Attr("data-testid", "assistant-session-spend"), text)
+	}
+	return Div(css.Class("asst-status"), Attr("data-testid", "assistant-composer-status"),
+		Span(css.Class("asst-status-model"), Attr("data-testid", "assistant-active-model"),
+			Title(uistate.T("assistant.activeModelTitle")), p.Model),
+		spend,
 	)
 }
 

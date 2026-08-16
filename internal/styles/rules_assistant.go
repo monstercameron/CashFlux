@@ -797,6 +797,82 @@ func registerAssistantSurface() {
 	registerTabJob()
 	registerChatPolish()
 	registerStreaming()
+	registerKeyGate()
+}
+
+// registerKeyGate styles the explanation shown when a feature is waiting for a key
+// (C247) and the model/spend line under the composer (C250). Both are quiet by
+// design: the gate is a card because it is asking for a decision, the status line
+// is a caption because it is only reporting one.
+func registerKeyGate() {
+	rule(".asst-key-callout",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("align-items", "flex-start"),
+		prop("gap", "0.6rem"),
+		prop("margin-top", "0.75rem"),
+		prop("padding", "0.85rem 1rem"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "var(--bg-elev)"),
+		prop("max-width", "44rem"),
+	)
+	rule(".asst-key-lead",
+		prop("font-size", "var(--type-14)"),
+		prop("line-height", "1.5"),
+		prop("margin", "0"),
+	)
+	rule(".asst-key-points",
+		prop("list-style", "none"),
+		prop("margin", "0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("gap", "0.4rem"),
+	)
+	rule(".asst-key-point",
+		prop("display", "flex"),
+		prop("gap", "0.55rem"),
+		prop("align-items", "flex-start"),
+		prop("font-size", "var(--type-13)"),
+		prop("line-height", "1.45"),
+		prop("color", "var(--text-dim)"),
+	)
+	rule(".asst-key-icon",
+		prop("color", "var(--accent)"),
+		prop("margin-top", "0.15rem"),
+		prop("opacity", "0.85"),
+	)
+	rule(".asst-key-point a",
+		prop("overflow-wrap", "anywhere"),
+	)
+	rule(".asst-status",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.55rem"),
+		prop("align-items", "baseline"),
+		prop("margin", "0.35rem 0.15rem 0"),
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".asst-status-model",
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("letter-spacing", "0.01em"),
+	)
+	rule(".asst-status-spend",
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	// The two facts are separated by a hairline rather than punctuation, so the
+	// line stays readable when the spend half is absent.
+	rule(".asst-status-spend::before",
+		prop("content", "\"\""),
+		prop("display", "inline-block"),
+		prop("width", "1px"),
+		prop("height", "0.8em"),
+		prop("margin-right", "0.55rem"),
+		prop("vertical-align", "-0.05em"),
+		prop("background", "var(--border)"),
+	)
 }
 
 // registerStreaming styles the answer as it is being written (G2-C7). It matches
