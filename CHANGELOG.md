@@ -7,6 +7,25 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The guided month-end review (AG10).** Copilot and Origin bet their products on this, and the
+  reason theirs work is not the content — it is that each step ends in something. A review that shows
+  five charts and stops is a report; one where each step ends in a change applied or an explicit skip
+  is a ritual people finish.
+
+  It is a card on the Insights tab, not a modal and not a route, and that is the whole difference
+  between a ritual people finish and one they close: a modal demands the ten minutes now, and the
+  answer to a demand made at the wrong moment is always no. It remembers where it got to, survives
+  being walked away from mid-step, and never hosts the work itself — the budgets screen is better at
+  budgets than a card will ever be, so each step opens the place somebody already knows.
+
+  The silences are specified as carefully as the steps. A step with nothing in it is skipped rather
+  than shown empty. A month with nothing flagged, no budget off and no goal needing a decision is not
+  offered at all, because opening a ten-minute ritual to report that there is nothing to do wastes
+  the ten minutes it asked for. A dismissal is respected for the rest of the month. Progress from a
+  previous month is discarded rather than resumed into, and the step index is clamped, because a
+  budget trued up on Tuesday removes its own step by Thursday. And skipping is a first-class outcome:
+  the close says what was left rather than implying everything was handled.
+
 - **Goal coaching and negotiation prep, as proposals the assistant can offer (AG15, AG16).** Both are
   read-only tools that produce something to decline — advice nobody asked for should not also be
   advice they have to undo.

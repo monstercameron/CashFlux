@@ -532,7 +532,14 @@ func assistantInsightsDataPanel() ui.Node {
 			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("assistant.metricsShow"), ShowSaved: true}),
 		)))
 	}
-	return Div(css.Class("bento bento-assistant"), Attr("data-testid", "assistant-insights-surface"), tiles)
+	return Fragment(
+		// AG10: the guided month-end review sits ABOVE the briefing, because it is
+		// a thing to do and the briefing is a thing to read. It renders nothing at
+		// all when there is nothing to review, when it has been done this month, or
+		// when it was dismissed — the never-naggy rule lives in one place.
+		ui.CreateElement(MonthlyReviewCard),
+		Div(css.Class("bento bento-assistant"), Attr("data-testid", "assistant-insights-surface"), tiles),
+	)
 }
 
 // assistantSpendTrend renders the briefing's spending trend: total expense

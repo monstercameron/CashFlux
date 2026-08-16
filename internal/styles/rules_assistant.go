@@ -799,6 +799,73 @@ func registerAssistantSurface() {
 	registerStreaming()
 	registerKeyGate()
 	registerSpendMeter()
+	registerMonthlyReview()
+}
+
+// registerMonthlyReview styles the guided month-end review (AG10). It is a card,
+// not a modal, and the styling has to keep saying so: no backdrop, no trapped
+// focus, and a close control that reads as "not now" rather than as an escape
+// hatch. The accent spine marks it as the one thing on the page asking for
+// something, without shouting over the briefing below it.
+func registerMonthlyReview() {
+	rule(".mrev",
+		prop("border", "1px solid var(--border)"),
+		prop("border-left", "3px solid var(--accent)"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "var(--bg-elev)"),
+		prop("padding", "1rem 1.1rem"),
+		prop("margin", "0 0 1rem"),
+		prop("max-width", "44rem"),
+	)
+	rule(".mrev-head",
+		prop("display", "flex"),
+		prop("align-items", "flex-start"),
+		prop("justify-content", "space-between"),
+		prop("gap", "1rem"),
+	)
+	rule(".mrev-eyebrow",
+		prop("font-size", "var(--type-11)"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.06em"),
+		prop("color", "var(--text-faint)"),
+		prop("margin", "0 0 0.2rem"),
+	)
+	rule(".mrev-title",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "1.2rem"),
+		prop("line-height", "1.2"),
+		prop("margin", "0"),
+	)
+	rule(".mrev-close",
+		prop("flex", "0 0 auto"),
+		prop("border", "none"),
+		prop("background", "transparent"),
+		prop("color", "var(--text-faint)"),
+		prop("cursor", "pointer"),
+		prop("padding", "0.2rem"),
+	)
+	rule(".mrev-close:hover",
+		prop("color", "var(--text)"),
+	)
+	rule(".mrev-body",
+		prop("font-size", "var(--type-14)"),
+		prop("line-height", "1.5"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.6rem 0 0"),
+	)
+	rule(".mrev-body p",
+		prop("margin", "0 0 0.4rem"),
+	)
+	rule(".mrev-fine",
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".mrev-actions",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.5rem"),
+		prop("margin-top", "0.85rem"),
+	)
 }
 
 // registerSpendMeter styles the AI spend meter (EC-15). The figure is the largest
