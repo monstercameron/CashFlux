@@ -1,3 +1,39 @@
+## 2026-08-16 — Two controls on the ledger that were lying, and one that was duplicated
+
+Starting the human-level UX series (C573–C583) by driving the real page rather than reading it.
+Two of the controls above the ledger reported a scope they did not apply, and neither failure is
+visible from the source alone — you have to click them and watch the rows not move.
+
+The top bar's **member perspective** was the worse one. `internal/uistate/activescope.go` moved
+the app to a multi-dimensional scope atom and deliberately left `UseActiveMember` in place "to
+avoid breaking concurrent WIP". Nothing has written that atom since. The transactions surface
+still read it, so its member layering — `if am := UseActiveMember().Get(); am != ""` — was dead
+code that always took the false branch. Selecting "View as Priya" changed the switcher's label and
+nothing else: 3,227 rows before, 3,227 rows after, Marcus's charges still listed, and no chip to
+explain any of it. A view lens that silently does nothing is worse than no lens, because the user
+has now *told the app who they are looking at* and will read the next screenful as that person's.
+
+Fixing the read was one line. The interesting part was the chip. The obvious move — fold the lens
+into the criteria before calling `ActiveFilters()` — produces a member chip whose ✕ calls
+`RemoveValue` on the persisted filter, which never held that member, so the chip cannot be
+removed. That is the same class of defect one layer down. The lens is ambient state owned by the
+top bar, so it gets its own chip, its own key, its own removal path and a visible accent edge:
+the row now contains two KINDS of chip and says so before the click, which is what C574 asks for.
+`Criteria.WithOwnerLens` returns `(criteria, applied)` precisely so the page can tell "no lens"
+from "lens overridden by an explicit member filter" — without that bit you cannot decide whether
+to draw a chip at all.
+
+The **period pill** was the other liar, and the other session's C560 work is the right cure — the
+ledger now carries its own date scope bar instead of a top-bar pill it never read. (My first
+instinct was to delete the pill from the route; theirs keeps the capability and wires it. Better.)
+
+The **duplicate reset** was simpler and pure UX: "Clear filters" in the toolbar and "Clear all
+filters" under the chips, two labels for one function, plus a search ✕ and a panel ✕ both named
+for their verb alone. Four controls, four different scopes, no way to predict any of them. Now
+there is one reset, it counts what it removes, and it disappears when the only chip on screen is
+the lens — which it does not remove. A reset reading "Clear all 0 filters" was the first thing the
+verification screenshot caught in my own change.
+
 ## 2026-08-16 — Six defaults that were really decisions
 
 The Transactions audit (C560–C572) reads as thirteen separate complaints. Working through the

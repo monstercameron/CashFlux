@@ -58,6 +58,7 @@ func Register() {
 	registerTierSystem()
 	registerImportWizard()
 	registerTxnToolbar()
+	registerTxnAudit()
 	registerTxnEditSurface()
 	registerTxnCalendar()
 	registerSavedViews()
@@ -117,6 +118,7 @@ func Register() {
 	registerUxbatch6()
 	registerDebtCoachSurface()
 	registerHealthAnalysis()
+	registerTxnScope()
 	inject(Build())
 }
 

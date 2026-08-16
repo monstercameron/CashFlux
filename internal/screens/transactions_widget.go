@@ -89,12 +89,13 @@ func Transactions() ui.Node {
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
 	f := filterAtom.Get()
-	// Honour the top-bar active-member perspective (L21): scope to the active member
+	// Honour the top-bar member perspective (L21): scope to the lensed member(s)
 	// only when the per-screen filter has no member of its own. The persisted filter
-	// is never mutated.
-	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
-		f.Member = am
-	}
+	// is never mutated. Read through UseMemberLens, not the retired UseActiveMember
+	// atom — nothing has written that atom since the app moved to ActiveScope, so
+	// this layering was silently a no-op and the switcher did not scope the ledger
+	// at all (C574).
+	f, _ = f.WithOwnerLens(uistate.UseMemberLens())
 
 	// C13: a bulk selection must not outlive the filter/search it was made under. A
 	// quick-filter (or search, saved view, or member switch) that hides the selected
@@ -746,7 +747,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnOpenLink = openLink
 		r.OnOpenSplit = openSplit
 		r.OnToggleExclude = toggleExclude
-		r.OnReceiptSplit = func(id string) { startReceiptSplitFlow(props.App, txByID[id]) }
+		// C564: resolve against the LIVE ledger, not the render-time page map. txByID
+		// is built from the shown slice, so a row whose data moved underneath the
+		// render (a rule applied, a sync landed) yielded a zero Transaction that the
+		// flow then tried to split. The flow rejects an unresolved id out loud.
+		r.OnReceiptSplit = func(id string) {
+			for _, t := range props.App.Transactions() {
+				if t.ID == id {
+					startReceiptSplitFlow(props.App, t)
+					return
+				}
+			}
+			uistate.PostNotice(uistate.T("receiptsplit.noTxn"), true)
+		}
 		r.OnPairRefund = pairRefundRow
 		r.OnUnpair = unpairRow
 		r.OnUngroup = ungroupRow
@@ -997,6 +1010,15 @@ func txnTagChip(props txnTagChipProps) ui.Node {
 
 func txnFrameRow(props txnFrameRowProps) ui.Node {
 	open := ui.UseEvent(func() { props.OnOpen(props.ID) })
+	// C563: the whole row opened the edit modal, and nothing said so. There was no
+	// Edit label, no icon, and the <tr> is not focusable — so the single most common
+	// action on the ledger was reachable only by guessing, and not at all by keyboard.
+	// A labelled Edit button in the actions cell puts it in the tab order beside the
+	// ⋯ trigger; the row click stays as the shortcut for people who already know it.
+	editRow := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		props.OnOpen(props.ID)
+	})
 	selToggle := ui.UseEvent(func(e ui.Event) {
 		// Read shiftKey defensively: a `change` event has no shiftKey property, so
 		// .Bool() on the undefined value PANICS (aborting the handler — selection then
@@ -1150,7 +1172,15 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
-		Td(ClassStr("td-actions"), OnClick(stop), txnRowMenu(props)),
+		Td(ClassStr("td-actions"), OnClick(stop),
+			Button(css.Class("btn btn-icon txn-row-edit"), Type("button"),
+				Attr("data-testid", "txn-row-edit"),
+				Attr("aria-label", uistate.T("transactions.rowEditAria", props.Desc)),
+				Title(uistate.T("transactions.rowEditHint")),
+				OnClick(editRow),
+				uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+				Span(css.Class("txn-row-edit-label"), uistate.T("transactions.rowEdit"))),
+			txnRowMenu(props)),
 	)
 	return Tr(rowArgs...)
 }
@@ -1160,18 +1190,100 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 // A ✓ prefixes an entry whose link/breakdown is already set. The picking/clearing
 // happens in the modal, so the menu stays short. Built with OverflowMenu
 // (loop-safe: it owns each item's click hook).
+//
+// C572: the entries are grouped by what an action COSTS, not by the order they were
+// added over time. Rules, splits, history and name cleanup are reversible bookkeeping;
+// bill/subscription/refund links change how a charge is interpreted elsewhere;
+// excluding rewrites every budget and report the charge feeds; deleting removes it.
+// A flat list makes all four look alike at the moment of the click, so each tier gets
+// a heading, and the two that change more than this row wear the danger tier.
+const (
+	txnMenuOrganize = "txnmenu.sectionOrganize"
+	txnMenuLinks    = "txnmenu.sectionLinks"
+	txnMenuReports  = "txnmenu.sectionReports"
+	txnMenuRemove   = "txnmenu.sectionRemove"
+)
+
 func txnRowMenu(props txnFrameRowProps) ui.Node {
 	var items []uiw.OverflowMenuItem
+	organize := uistate.T(txnMenuOrganize)
+	links := uistate.T(txnMenuLinks)
+	reports := uistate.T(txnMenuReports)
+	remove := uistate.T(txnMenuRemove)
+
+	// --- Organize: reversible bookkeeping on this one charge --------------------
 	// C363: the row's most strategic action first — turn this one charge into a
 	// standing rule (the /rules workbench opens prefilled). Gated on transfer legs
 	// (a transfer has no merchant/category to generalize into a rule).
 	if props.OnCreateRule != nil && !props.IsTransfer {
 		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("transactions.createRule"), Icon: icon.Workflow,
+			Label: uistate.T("transactions.createRule"), Icon: icon.Workflow, Section: organize,
 			TestID:   "txn-create-rule",
 			OnSelect: func() { props.OnCreateRule(props.ID) },
 		})
 	}
+	// Split-into-categories: not offered on transfer legs (no category to split).
+	if props.OnOpenSplit != nil && !props.IsTransfer {
+		splitLabel := uistate.T("splitEditor.toggle")
+		if props.HasSplits {
+			splitLabel = "✓ " + splitLabel
+		}
+		items = append(items, uiw.OverflowMenuItem{
+			Label: splitLabel, Icon: icon.Split, Section: organize,
+			TestID:   "txn-split-open",
+			OnSelect: func() { props.OnOpenSplit(props.ID) },
+		})
+	}
+	// XC11: propose a split from a receipt image (BYO-key AI). Same transfer-leg
+	// gating as the manual split — a transfer leg has no category to split. It sits
+	// beside the manual split it is an assist for, rather than eight rows away.
+	if props.OnReceiptSplit != nil && !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("receiptsplit.menuAction"), Icon: icon.Receipt, Section: organize,
+			TestID:   "txn-receipt-split-open",
+			OnSelect: func() { props.OnReceiptSplit(props.ID) },
+		})
+	}
+	// SM-1: clean up / map this merchant name — a per-transaction entry to the payee
+	// mapping that also lives on /rules. Opens the payee-cleanup flip modal.
+	if !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("payeeClean.menuAction"), Icon: icon.Pencil, Section: organize,
+			TestID:   "txn-cleanname-open",
+			OnSelect: func() { uistate.SetPayeeClean(props.ID) },
+		})
+	}
+	// Add a follow-up task linked to THIS charge (return it, get reimbursed, dispute it,
+	// cancel the subscription…). Seeds the add-task modal with a suggested title + the
+	// transaction link pre-selected, then opens it (a due date is optional there).
+	{
+		merchant := props.TrendMerchant
+		if merchant == "" {
+			merchant = props.Desc
+		}
+		txnID := props.ID
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("transactions.followUpTask"), Icon: icon.Todo, Section: organize,
+			TestID: "txn-followup-task",
+			OnSelect: func() {
+				uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+					Title:    uistate.T("transactions.followUpTaskTitle", merchant),
+					LinkType: string(domain.RelatedTransaction),
+					LinkID:   txnID,
+				})
+				uistate.SetAddTarget("task")
+			},
+		})
+	}
+	// #63: every recorded change to THIS transaction (edits, rule applications,
+	// imports) — the audit trail scoped to one row. Opens the history flip modal.
+	items = append(items, uiw.OverflowMenuItem{
+		Label: uistate.T("txnhistory.menuAction"), Icon: icon.History, Section: organize,
+		TestID:   "txn-history-open",
+		OnSelect: func() { uistate.SetTxnHistory(props.ID) },
+	})
+
+	// --- Links: what this charge is FOR, which other surfaces read -------------
 	if props.OnOpenLink != nil {
 		billLabel := uistate.T("transactions.markBill")
 		if props.BillAccountID != "" {
@@ -1187,46 +1299,54 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		// further UI needing input; immediate actions (exclude, unpair) don't.
 		items = append(items,
 			uiw.OverflowMenuItem{
-				Label: billLabel, Icon: icon.Bills,
+				Label: billLabel, Icon: icon.Bills, Section: links,
 				TestID:   "txn-markbill-open",
 				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) },
 			},
 			uiw.OverflowMenuItem{
-				Label: subLabel, Icon: icon.Subscriptions,
+				Label: subLabel, Icon: icon.Subscriptions, Section: links,
 				TestID:   "txn-marksub-open",
 				OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) },
 			})
 	}
-	// Split-into-categories: not offered on transfer legs (no category to split).
-	if props.OnOpenSplit != nil && !props.IsTransfer {
-		splitLabel := uistate.T("splitEditor.toggle")
-		if props.HasSplits {
-			splitLabel = "✓ " + splitLabel
-		}
+	// XC2: pair a money-in transaction as the refund of an earlier purchase; or
+	// remove an existing pairing (offered on either side of the pair).
+	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
 		items = append(items, uiw.OverflowMenuItem{
-			Label: splitLabel, Icon: icon.Split,
-			TestID:   "txn-split-open",
-			OnSelect: func() { props.OnOpenSplit(props.ID) },
+			Label: uistate.T("txnlinks.pairAction"), Icon: icon.Repeat, Section: links,
+			TestID:   "txn-pair-refund",
+			OnSelect: func() { props.OnPairRefund(props.ID) },
 		})
 	}
-	// #63: every recorded change to THIS transaction (edits, rule applications,
-	// imports) — the audit trail scoped to one row. Opens the history flip modal.
-	items = append(items, uiw.OverflowMenuItem{
-		Label: uistate.T("txnhistory.menuAction"), Icon: icon.History,
-		TestID:   "txn-history-open",
-		OnSelect: func() { uistate.SetTxnHistory(props.ID) },
-	})
-	// SM-1: clean up / map this merchant name — a per-transaction entry to the payee
-	// mapping that also lives on /rules. Opens the payee-cleanup flip modal.
-	if !props.IsTransfer {
+	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
 		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("payeeClean.menuAction"), Icon: icon.Pencil,
-			TestID:   "txn-cleanname-open",
-			OnSelect: func() { uistate.SetPayeeClean(props.ID) },
+			Label: uistate.T("txnlinks.unpairAction"), Icon: icon.Close, Section: links,
+			TestID:   "txn-unpair",
+			OnSelect: func() { props.OnUnpair(props.ID) },
 		})
 	}
+	// TX9: release this row's bill-match link (the occurrence reads unpaid again).
+	if props.OnUnlinkBill != nil && props.IsBillMatched {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("billmatch.unlink"), Icon: icon.Close, Section: links,
+			TestID:   "txn-unlink-bill",
+			OnSelect: func() { props.OnUnlinkBill(props.ID) },
+		})
+	}
+	// XC1: release this row's order group (keeps the transactions).
+	if props.OnUngroup != nil && props.GroupSize > 1 {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("txnlinks.ungroupAction"), Icon: icon.Box, Section: links,
+			TestID:   "txn-ungroup",
+			OnSelect: func() { props.OnUngroup(props.ID) },
+		})
+	}
+
+	// --- Reporting: changes what every budget and report counts ----------------
 	// TXC-1: exclude / include this transaction in budgets & reports (still counts
 	// toward account balances either way). The label states the action to perform.
+	// Excluding wears the danger tier: it leaves this row looking untouched while
+	// rewriting figures on four other surfaces (C562 makes it confirm as well).
 	if props.OnToggleExclude != nil {
 		excLabel := uistate.T("transactions.kebabExclude")
 		if props.ExcludedFromReports {
@@ -1237,79 +1357,19 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			excIcon = icon.Check
 		}
 		items = append(items, uiw.OverflowMenuItem{
-			Label: excLabel, Icon: excIcon,
+			Label: excLabel, Icon: excIcon, Section: reports,
+			Danger:   !props.ExcludedFromReports, // including again is restorative
 			TestID:   "txn-toggle-exclude",
 			OnSelect: func() { props.OnToggleExclude(props.ID) },
 		})
 	}
-	// Add a follow-up task linked to THIS charge (return it, get reimbursed, dispute it,
-	// cancel the subscription…). Seeds the add-task modal with a suggested title + the
-	// transaction link pre-selected, then opens it (a due date is optional there).
-	{
-		merchant := props.TrendMerchant
-		if merchant == "" {
-			merchant = props.Desc
-		}
-		txnID := props.ID
-		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("transactions.followUpTask"), Icon: icon.Todo,
-			TestID: "txn-followup-task",
-			OnSelect: func() {
-				uistate.SetTaskAddSeed(uistate.TaskAddSeed{
-					Title:    uistate.T("transactions.followUpTaskTitle", merchant),
-					LinkType: string(domain.RelatedTransaction),
-					LinkID:   txnID,
-				})
-				uistate.SetAddTarget("task")
-			},
-		})
-	}
-	// XC11: propose a split from a receipt image (BYO-key AI). Same transfer-leg
-	// gating as the manual split — a transfer leg has no category to split.
-	if props.OnReceiptSplit != nil && !props.IsTransfer {
-		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("receiptsplit.menuAction"), Icon: icon.Receipt,
-			TestID:   "txn-receipt-split-open",
-			OnSelect: func() { props.OnReceiptSplit(props.ID) },
-		})
-	}
-	// XC2: pair a money-in transaction as the refund of an earlier purchase; or
-	// remove an existing pairing (offered on either side of the pair).
-	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
-		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("txnlinks.pairAction"), Icon: icon.Repeat,
-			TestID:   "txn-pair-refund",
-			OnSelect: func() { props.OnPairRefund(props.ID) },
-		})
-	}
-	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
-		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("txnlinks.unpairAction"), Icon: icon.Close,
-			TestID:   "txn-unpair",
-			OnSelect: func() { props.OnUnpair(props.ID) },
-		})
-	}
-	// TX9: release this row's bill-match link (the occurrence reads unpaid again).
-	if props.OnUnlinkBill != nil && props.IsBillMatched {
-		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("billmatch.unlink"), Icon: icon.Close,
-			TestID:   "txn-unlink-bill",
-			OnSelect: func() { props.OnUnlinkBill(props.ID) },
-		})
-	}
-	// XC1: release this row's order group (keeps the transactions).
-	if props.OnUngroup != nil && props.GroupSize > 1 {
-		items = append(items, uiw.OverflowMenuItem{
-			Label:    uistate.T("txnlinks.ungroupAction"),
-			TestID:   "txn-ungroup",
-			OnSelect: func() { props.OnUngroup(props.ID) },
-		})
-	}
+
+	// --- Remove: the charge stops existing -------------------------------------
 	// Destructive action last: delete this transaction (and its transfer pair). Undoable via the
 	// toast, so no modal — consistent with the card view's single delete.
 	if props.OnDelete != nil {
 		items = append(items, uiw.OverflowMenuItem{
-			Label: uistate.T("action.delete"), Icon: icon.Trash,
+			Label: uistate.T("action.delete"), Icon: icon.Trash, Section: remove, Danger: true,
 			TestID:   "txn-delete",
 			OnSelect: func() { props.OnDelete(props.ID) },
 		})

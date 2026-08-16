@@ -22,6 +22,17 @@ import (
 type Chip struct {
 	Key   string
 	Label string
+	// Class is an optional extra class on the chip. It exists so a caller can mark
+	// a chip that represents a DIFFERENT kind of state from the rest — the
+	// transactions ledger uses it for the top bar's member perspective, whose ✕
+	// clears the top bar rather than one of the page's filters. Without a visible
+	// difference the two are one undifferentiated row and the user cannot predict
+	// what any given ✕ takes away (C574).
+	Class string
+	// RemoveLabel overrides the toolbar's generic "Remove this filter: …" wording
+	// for this chip's ✕. A chip that is not a filter must not describe itself as
+	// one, or the control names the wrong thing at the moment of the click.
+	RemoveLabel string
 }
 
 // FilterToolbarProps configures a FilterToolbar. The component is screen-agnostic:
@@ -42,11 +53,16 @@ type FilterToolbarProps struct {
 	// (e.g. "Filters — 3 active"). Falls back to FiltersLabel when nil.
 	ActiveAriaLabel func(n int) string
 
-	Chips         []Chip           // active-filter chips (empty hides the row + badge)
-	OnRemoveChip  func(key string) // a chip's ✕
-	OnClearAll    func()           // the "clear all" link
-	ClearAllLabel string           // text for the clear-all link
-	RemoveLabel   string           // aria-label for a chip's ✕
+	Chips        []Chip           // active-filter chips (empty hides the row + badge)
+	OnRemoveChip func(key string) // a chip's ✕
+	OnClearAll   func()           // the "clear all" link
+	// ClearAllLabel is the text for the clear-all link. An EMPTY label hides the
+	// link entirely — for when chips are showing but none of them is something this
+	// reset would remove (the transactions ledger's member-lens chip is cleared from
+	// the top bar, so a reset beside it would otherwise advertise "clear all 0
+	// filters" and do nothing).
+	ClearAllLabel string
+	RemoveLabel   string // aria-label prefix for a chip's ✕
 
 	Actions []uic.Node // trailing toolbar buttons (e.g. Clear, Export CSV)
 }
@@ -138,8 +154,14 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	chips := MapKeyed(props.Chips,
 		func(c Chip) any { return c.Key },
 		func(c Chip) uic.Node {
+			remove := props.RemoveLabel
+			if c.RemoveLabel != "" {
+				remove = c.RemoveLabel
+			}
 			return uic.CreateElement(filterChip, filterChipProps{
-				Label: c.Label, Key: c.Key, RemoveLabel: props.RemoveLabel, OnRemove: props.OnRemoveChip,
+				Label: c.Label, Key: c.Key, Class: c.Class,
+				RemoveLabel: remove, Named: c.RemoveLabel == "",
+				OnRemove: props.OnRemoveChip,
 			})
 		},
 	)
@@ -164,22 +186,35 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					Input(css.Class("fctrl-input"), Type("search"),
 						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						Value(props.Search), OnInput(onSearch)),
+					// "Clear search", not "Clear": on a page that also offers a filter
+					// reset and a panel close, a control named only for its verb leaves
+					// the user guessing how much of the view it takes with it (C574).
 					If(props.Search != "", Button(css.Class("fctrl-clear"), Type("button"),
-						Attr("aria-label", uistate.T("action.clear")), OnClick(onClear),
+						Attr("data-testid", "filter-clear-search"),
+						Attr("aria-label", uistate.T("action.clearSearch")),
+						Attr("title", uistate.T("action.clearSearch")), OnClick(onClear),
 						Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
 				),
 				trigger,
 			),
 			If(len(props.Actions) > 0, Div(css.Class("filter-toolbar-actions"), props.Actions)),
 		),
-		If(n > 0, Div(css.Class("filter-chips"), chips,
-			Button(css.Class("btn-link chip-clear-all"), Type("button"),
+		// The chip row is the view's filter SUMMARY, so it says so. Unlabelled chips
+		// read as decoration next to a search box; a lead-in makes the row a sentence
+		// — "Filtering by: Groceries, July 2026" — and gives the reset something to
+		// belong to (C574).
+		If(n > 0, Div(css.Class("filter-chips"), Attr("data-testid", "filter-summary"),
+			Span(css.Class("filter-chips-lead"), Text(uistate.T("filters.summaryLead"))),
+			chips,
+			If(props.ClearAllLabel != "", Button(css.Class("btn-link chip-clear-all"), Type("button"),
+				Attr("data-testid", "filter-clear-all"),
+				Attr("aria-label", props.ClearAllLabel),
 				OnClick(func() {
 					if props.OnClearAll != nil {
 						props.OnClearAll()
 					}
 				}),
-				props.ClearAllLabel),
+				props.ClearAllLabel)),
 		)),
 		// C52: inline collapsible filter panel — no backdrop, no occlusion. The table
 		// remains visible below while the user adjusts filters. The panel mounts/unmounts
@@ -189,8 +224,12 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 			Div(css.Class("filter-inline-header"),
 				H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(props.FiltersTitle)),
-				Button(css.Class("set-close"), Type("button"), Attr("aria-label", uistate.T("action.close")),
-					Attr("title", uistate.T("action.close")),
+				// This ✕ closes the PANEL and changes no filter — worth saying, because
+				// it sits among controls that do remove things (C574).
+				Button(css.Class("set-close"), Type("button"),
+					Attr("data-testid", "filter-panel-close"),
+					Attr("aria-label", uistate.T("filters.closePanel")),
+					Attr("title", uistate.T("filters.closePanel")),
 					OnClick(func() { open.Set(false) }), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 			Div(css.Class("filter-inline-body"), props.FilterFields),
@@ -204,14 +243,30 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 type filterChipProps struct {
 	Label       string
 	Key         string
+	Class       string
 	RemoveLabel string
-	OnRemove    func(string)
+	// Named asks the chip to append its own label to RemoveLabel, turning the
+	// toolbar's generic "Remove this filter" into "Remove this filter: Groceries"
+	// so a screen-reader user can tell one ✕ from the next. A chip that supplied
+	// its own complete RemoveLabel sets this false and is left as written.
+	Named    bool
+	OnRemove func(string)
 }
 
 func filterChip(props filterChipProps) uic.Node {
-	return Span(css.Class("filter-chip"),
+	cls := "filter-chip"
+	if props.Class != "" {
+		cls += " " + props.Class
+	}
+	// The ✕'s accessible name names the chip it removes ("Remove filter: Groceries"),
+	// so a screen-reader user hears which of several ✕s they are on (C574).
+	removeLabel := props.RemoveLabel
+	if props.Named && removeLabel != "" && props.Label != "" {
+		removeLabel = removeLabel + ": " + props.Label
+	}
+	return Span(ClassStr(cls),
 		Span(css.Class("chip-text"), props.Label),
-		Button(css.Class("chip-x"), Type("button"), Attr("aria-label", props.RemoveLabel),
+		Button(css.Class("chip-x"), Type("button"), Attr("aria-label", removeLabel),
 			OnClick(func() {
 				if props.OnRemove != nil {
 					props.OnRemove(props.Key)

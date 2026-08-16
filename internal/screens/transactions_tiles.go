@@ -351,23 +351,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	viewAtom := uistate.UseTxnViewMode()
 	registerAtom := uistate.UseTxnRegisterMode()
 	calActive := viewAtom.Get() == uistate.TxnViewCalendar
-	// Calendar + Register are view switches that moved into the "⋯ More" menu (July
-	// 2026 command-bar consolidation — the resting bar keeps only search, filters, the
-	// primary Add, and More). Their handlers are plain closures invoked from
-	// OverflowMenuItem.OnSelect, never On* hooks registered inside a loop.
-	onCalendar := func() {
-		if viewAtom.Get() == uistate.TxnViewCalendar {
-			viewAtom.Set(uistate.TxnViewTable)
-		} else {
-			viewAtom.Set(uistate.TxnViewCalendar)
-		}
-	}
+	// C560: Calendar has left the "⋯ More" menu for the scope bar's explicit
+	// Ledger/Calendar pair. Buried in an overflow it had no pressed state and no
+	// obvious way back — a user who switched views had to find the same hidden entry
+	// again to return. Register stays here: it decorates the table rather than
+	// replacing it, so it is a setting, not a view. Its handler is a plain closure
+	// invoked from OverflowMenuItem.OnSelect, never an On* hook inside a loop.
 	onRegister := func() { registerAtom.Set(!registerAtom.Get()) }
 
-	f := filterAtom.Get()
-	if am := uistate.UseActiveMember().Get(); am != "" && f.Member == "" {
-		f.Member = am
-	}
+	// fOwn is the filter the USER set on this page. f layers the top bar's member
+	// perspective on top of it for the purpose of filtering, but the two are kept
+	// apart on purpose: the lens belongs to the top bar and is cleared there, so it
+	// gets its own chip rather than masquerading as one of the page's filters (C574).
+	fOwn := filterAtom.Get()
+	f, lensOn := fOwn.WithOwnerLens(uistate.UseMemberLens())
 
 	accounts := app.Accounts()
 	categories := app.Categories()
@@ -414,7 +411,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 	onFilterCustomValText := ui.UseEvent(func(v string) { debFilter("customval", func(x *uistate.TxFilter) { x.CustomVal = v }) })
-	clearFilters := ui.UseEvent(Prevent(clearAllFilters))
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 
 	// doExportCSV downloads the filtered ledger as CSV. It's a plain closure (not a
@@ -539,11 +535,35 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				return uistate.T("transactions.chipFlowIn")
 			}
 			return uistate.T("transactions.chipFlowOut")
+		case txnfilter.FieldUncategorized:
+			// The quick filter stores "1", and the chip used to render that literally —
+			// a chip that reads "1" beside chips that read "Groceries" (C574).
+			return uistate.T("transactions.chipUncategorized")
+		case txnfilter.FieldCustom:
+			// A custom-field chip showed only the value ("blue"), never which field it
+			// belonged to, so two custom filters were indistinguishable.
+			return uistate.T("transactions.chipCustom", customFieldLabel(app.CustomFieldDefsFor("transaction"), fOwn.CustomKey), af.Value)
 		}
 		return af.Value
 	}
-	active := f.ActiveFilters()
-	chips := make([]uiw.Chip, 0, len(active))
+	// Chips come from the user's OWN filter; the ambient member lens gets a chip of
+	// its own below. Deriving them from the layered filter instead would offer a
+	// member chip whose ✕ calls RemoveValue on a criteria that never held the member —
+	// a control that names something and then removes nothing (C574).
+	active := fOwn.ActiveFilters()
+	chips := make([]uiw.Chip, 0, len(active)+1)
+	if lensOn {
+		// One chip per lensed member, keyed so OnRemoveChip can tell "clear the top
+		// bar's perspective" from "drop one of this page's filters".
+		for _, id := range uistate.UseMemberLens() {
+			chips = append(chips, uiw.Chip{
+				Key:         lensChipKey + chipKeySep + id,
+				Label:       uistate.T("transactions.lensChip", memberName[id]),
+				Class:       "filter-chip-lens",
+				RemoveLabel: uistate.T("transactions.lensChipRemove"),
+			})
+		}
+	}
 	for _, af := range active {
 		// Key encodes field + value so a per-value chip ✕ removes just that value
 		// (RemoveValue), not the whole dimension.
@@ -799,15 +819,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// so the resting row stays a short line of high-frequency actions with the primary
 	// Add at its right end. Each item keeps its original testid so e2e selectors still
 	// resolve it (the menu items live in the DOM, revealed on open).
-	// View switches fold into "More" too (July 2026 command-bar consolidation): the
-	// resting bar is search + filters + primary Add + More, not a row of loose toggles.
-	// A ✓ prefix marks the active view; Register is offered only when the ledger is
-	// scoped to one account and the calendar isn't showing (same gate as before).
+	// Register stays in "More": it decorates the table rather than replacing it, and
+	// it is offered only when the ledger is scoped to one account and the calendar
+	// isn't showing. A ✓ prefix marks it active. Calendar has moved out to the scope
+	// bar's explicit view toggle (C560).
 	_, singleAcct := f.SingleAccount()
-	calLabel := uistate.T("transactions.calendarView")
-	if calActive {
-		calLabel = "✓ " + calLabel
-	}
 	regLabel := uistate.T("transactions.registerView")
 	if registerAtom.Get() {
 		regLabel = "✓ " + regLabel
@@ -817,7 +833,6 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		TriggerTestID: "txn-more-btn",
 		TriggerClass:  "btn btn-tool",
 		Items: []uiw.OverflowMenuItem{
-			{Label: calLabel, Icon: icon.Calendar, TestID: "txn-calendar-btn", OnSelect: onCalendar},
 			{Label: regLabel, Icon: icon.List, TestID: "txn-register-btn", OnSelect: onRegister, Hidden: !(singleAcct && !calActive)},
 			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
 			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
@@ -846,10 +861,21 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		Chips:        chips,
 		OnRemoveChip: func(key string) {
 			field, value, _ := strings.Cut(key, chipKeySep)
+			// The member lens lives in the top bar, not in this page's filter, so its
+			// ✕ clears the perspective. Routing it through RemoveValue (as every chip
+			// used to be) removed nothing at all, because the persisted filter never
+			// held the member the chip named.
+			if field == lensChipKey {
+				uistate.ClearMemberLens()
+				return
+			}
 			setFilter(func(x *uistate.TxFilter) { *x = x.RemoveValue(txnfilter.FilterField(field), value) })
 		},
-		OnClearAll:    clearAllFilters,
-		ClearAllLabel: uistate.T("transactions.clearAllFilters"),
+		OnClearAll: clearAllFilters,
+		// The reset states its size, so "clear" is never a leap of faith about how
+		// much of the current view is about to change — and it is absent when the
+		// only chip showing is the member lens, which it does not clear (C574).
+		ClearAllLabel: clearAllLabel(len(active)),
 		RemoveLabel:   uistate.T("transactions.removeFilter"),
 		// Standard labeled toolbar buttons (.btn-tool): a slightly-grayed leading glyph
 		// plus an always-visible text label, so each action reads at a glance instead of
@@ -862,7 +888,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// C363: first-class Rules entry — labeled, with the active-rule count, so
 			// the auto-categorization workbench is one visible click from the ledger.
 			toolbarIconBtn("txn-rules-btn", icon.Workflow, uistate.T("transactions.rulesButton", ruleCount), openRules, ""),
-			If(len(active) > 0, toolbarIconBtn("", icon.Close, uistate.T("transactions.clear"), clearFilters, "")),
+			// There is no second "Clear filters" button here any more. It did exactly
+			// what the chip row's reset does, so the page offered two differently-worded
+			// controls ("Clear filters" / "Clear all filters") for one action, sitting a
+			// few centimetres apart — the ambiguity C574 is about. The reset now lives
+			// with the chips it removes, and counts them.
 			// Select-all, Calendar, and Register moved into the "⋯ More" overflow (2026-07
 			// command-bar consolidation): the resting row keeps only the everyday verbs plus
 			// the primary Add, so the page reads as a focused workspace, not a tool pile.
@@ -907,7 +937,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(toolbar, interpretRow, legend, statusLine),
+		// C560: the ledger's own period + view bar sits directly under the toolbar, so
+		// the scope the rows are in is stated on the page that shows them rather than
+		// by a top-bar pill reading different state.
+		Body: Div(toolbar, ui.CreateElement(txnScopeBar, struct{}{}), interpretRow, legend, statusLine),
 	})
 }
 

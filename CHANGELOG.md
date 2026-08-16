@@ -6,7 +6,38 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **CashFlux ships as a container.** `Dockerfile.server` now builds a distroless, non-root,
+  linux/amd64 image; `deploy/production/compose.yaml` runs it on the droplet the same way
+  AnimeFeedFlux and the portfolio already run; and `.github/workflows/release.yml` publishes it to
+  ghcr.io on a `vX.Y.Z` tag, refusing to publish if the tag disagrees with `version.go`.
+- **A health-gated, pull-based deploy.** The release only POSTs "something new may exist" — no tag
+  and no command travel with it. The droplet decides which tag to move to, verifies it is really
+  published, and waits for the container to report healthy before calling the deploy a success, with
+  the outgoing tag recorded for rollback. A daily timer covers a lost webhook delivery.
+- **`cashflux-server healthcheck` and `cashflux-server version`.** The probe travels with the binary
+  so it works on a distroless image that has no shell and no HTTP client, and a running container
+  can say exactly which commit it was built from.
+
+
 ### Fixed
+- **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
+  the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
+  nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —
+  the same 3,227 rows, the same totals, no chip, no explanation. The ledger now reads the live
+  perspective, an explicit member filter set on the page still wins over it, and the lens appears as
+  its own chip ("Viewing as Priya Hartley") whose ✕ returns to Everyone.
+- **The transactions page no longer shows a period control it ignores** — see below; the ledger's
+  date scope is stated in the page's own scope bar.
+- **Every clear control on the ledger says what it removes.** The page carried a "Clear filters"
+  button and a "Clear all filters" link doing exactly the same thing a few centimetres apart, a
+  search ✕ labelled only "Clear", and a filter-panel ✕ labelled only "Close". There is now one
+  reset, it counts what it will remove ("Clear all 3 filters") and is absent when it would remove
+  nothing; the search ✕ says "Clear search"; the panel ✕ says it closes the panel and leaves the
+  filters applied; and each chip's ✕ names its chip.
+- **Two filter chips stopped rendering their raw stored value.** The "no category yet" quick filter
+  produced a chip reading `1`, and a custom-field filter produced a chip reading only its value with
+  no hint of the field it belonged to.
 - **Bulk Categorize cannot file a selection under nothing.** Its category picker opened on "No
   category" — a real, destructive choice dressed as a default — and Categorize applied it on the
   spot, so one click on a fresh selection stripped the category from every selected transaction.
