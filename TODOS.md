@@ -5538,15 +5538,46 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   the transaction CSV mapping-wizard machinery for a holdings import (ticker, name, shares, cost
   basis, price, as-of, class), preview before commit, dedupe by account+ticker (merge = update
   shares/price), undoable.
-- [ ] **C377 [MAJOR][INVEST] Sector + geography allocation.** `AllocationByAssetClass`/`BySecurityType`
-  exist; reviewer benchmark (Empower) adds sector + geography. Add optional Sector/Region fields to
-  `domain.Holding`, allocation views for both, "unclassified" bucket when unset.
-- [ ] **C378 [MINOR][INVEST] Fee drag.** Optional expense-ratio (bps) per holding → annual fee-drag
-  line in the portfolio summary ("fees cost ≈ $X/yr at current value"), pure calc in
-  `internal/portfolio` first.
-- [ ] **C379 [MAJOR][INVEST] Rebalancing targets + drift.** Target % per asset class (per household),
-  drift view (current vs target with over/under bars), and suggested *virtual* rebalancing moves
-  (no real money — consistent with the goals set-aside language).
+- [x] **C377 DONE (2026-08-16) - Sector + geography allocation.** `domain.Holding` gained optional
+  `Sector`/`Region`, with `portfolio.AllocationBySector`/`ByRegion` over one shared grouping the four
+  allocation views now use.
+  **Both are free text, not a controlled vocabulary**, and that is deliberate: the app has no
+  market-data feed to classify a position from, so committing to a taxonomy it cannot verify would be
+  worse than letting the household name its own buckets.
+  **`Unclassified` is deliberately NOT "other".** "Other" means classified and did not fit;
+  unclassified means nobody has said yet - a meaningful state on a dimension nothing fills in
+  automatically, and one the allocation must show rather than hide, or a portfolio with two labelled
+  holdings would read as fully classified. The columns render only once at least one holding carries
+  the dimension: two columns reading "unclassified 100%" tell the reader nothing and crowd out the
+  two that do.
+- [x] **C378 DONE (2026-08-16) - Fee drag.** `Holding.ExpenseRatioBps` plus `portfolio.Fees`, pure
+  and tested first, surfaced as a line on the allocation section.
+  **Why it matters more than its [MINOR] tag suggests:** an expense ratio is the one portfolio cost
+  that never appears as a transaction - the fund deducts it internally, so the ledger never sees it
+  and no amount of categorising will surface it. A household can hold an expensive fund for a decade
+  with nothing anywhere saying so.
+  Two judgement calls in the maths. A holding with NO ratio recorded is **unknown, not free**: it is
+  excluded from both the cost and the weighted average, because averaging it in as zero would quietly
+  understate the exact number the household is trying to judge. And the figure reports its own
+  **coverage** - a value-weighted ratio over a third of the portfolio is not a portfolio-wide figure,
+  so the line qualifies itself when it is not. With no ratios at all it says nothing rather than
+  printing "$0/yr", which would claim the opposite of what is known.
+- [x] **C379 DONE (2026-08-16) - Rebalancing targets + drift.** `portfolio.Rebalance` computes
+  per-class drift and the signed delta, with `TargetsValid` accepting a set entered as thirds
+  (33.3/33.3/33.4) - rejecting that would make the feature unusable for the first thing anyone tries.
+  Targets persist in the preserved settings KV: a statement of intent, not transaction data, so it
+  survives a wipe for the same reason the learned-correction tally does, and needs no store migration.
+  **Virtual is the feature, not a disclaimer.** The app has no brokerage connection and will never
+  place a trade, so the section says once and plainly that nothing here moves money, rather than
+  leaving the reader to infer it from the absence of a button - the same language the goals
+  set-asides use.
+  Three decisions worth recording: the delta's SIGN is settled in the model (negative = money moves
+  out) so two views cannot disagree about which way it goes; the total counts each dollar ONCE, since
+  every dollar leaving one class arrives in another and adding both sides would say twice as much
+  moves as does; and a class that is HELD but never planned for still appears, as pure overweight -
+  the case where drift matters most, and the one a targets-only loop would silently drop. The bar's
+  length is the current weight with a tick at the target, so "on target" reads as a full bar rather
+  than as nothing at all.
 - [ ] **C380 [MINOR][INVEST] User-imported benchmark + balance-history series.** CSV import of a
   benchmark series and of investment-account balance history; growth chart gains a comparison
   overlay. Keeps the no-live-market-data constraint.

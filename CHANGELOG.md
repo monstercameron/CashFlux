@@ -119,6 +119,29 @@ and every commit updates this file under `Unreleased`.
   is how the bill-link's "only when empty" rule came to be written three times. The dry-run preview
   evaluates the same predicate, so the blast radius it promises is the one delivered.
 
+### Added
+- **Investment analysis: sector and geography, fund fees, and drift from your targets (C377, C378,
+  C379).**
+
+  Holdings can carry a sector and a region, with allocation views for both. Both are free text rather
+  than a fixed taxonomy - the app has no market-data feed to classify a position from, and committing
+  to a vocabulary it cannot verify would be worse than letting you name your own buckets. Unset shows
+  as "unclassified" rather than folded into "other": those mean different things, and a portfolio with
+  two labelled holdings should not read as fully classified.
+
+  Fund fees are the one portfolio cost that never appears as a transaction - the fund deducts it
+  internally, so the ledger never sees it and no amount of categorising will surface it. Record an
+  expense ratio and the allocation section says what it costs per year at current value. A holding
+  with no ratio is treated as unknown, not free: including it as zero would understate the exact
+  number you are trying to judge, so it is excluded and the figure says how much of the portfolio it
+  actually speaks for.
+
+  And you can state a target allocation and see how far the market has moved you from it, with the
+  amount that would close each gap. Nothing here moves money - CashFlux has no brokerage connection
+  and will never place a trade - which the section says plainly rather than leaving you to infer it.
+  A class you hold but never planned for still appears, as pure overweight, because that is the case
+  where drift matters most.
+
 ### Fixed
 - **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
   /categories pointed at the top of a long report, because the report's numbered sections are not in

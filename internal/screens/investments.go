@@ -125,7 +125,15 @@ type investView struct {
 	TotalValueMinor int64
 	AllocClass      []portfolio.Weight
 	AllocType       []portfolio.Weight
-	HasAny          bool // any investment account exists at all
+	// C377: two further allocation dimensions. Nothing fills these in
+	// automatically, so a portfolio will often be mostly unclassified — which the
+	// view shows rather than hides.
+	AllocSector []portfolio.Weight
+	AllocRegion []portfolio.Weight
+	// C378: what the funds cost to hold, and how much of the portfolio that
+	// figure actually speaks for.
+	Fees   portfolio.FeeDrag
+	HasAny bool // any investment account exists at all
 	// Reconcile explains the tracked-securities value against the investment-account
 	// balances that feed net worth: securities + cash&untracked = accounts total.
 	Reconcile portfolio.Reconciliation
@@ -195,6 +203,9 @@ func computeInvestViewRaw(app *appstate.App) investView {
 	v.SecSummary = portfolio.PortfolioSummary(ph)
 	v.AllocClass = portfolio.AllocationByAssetClass(ph)
 	v.AllocType = portfolio.AllocationBySecurityType(ph)
+	v.AllocSector = portfolio.AllocationBySector(ph)
+	v.AllocRegion = portfolio.AllocationByRegion(ph)
+	v.Fees = portfolio.Fees(ph)
 	v.TotalValueMinor = v.SecSummary.TotalValueMinor + v.TradValueMinor
 
 	// Reconciliation: for each investment account, the market value of its tracked
@@ -303,6 +314,8 @@ func InvestmentsScreen() ui.Node {
 		}
 		if len(v.Securities) > 0 {
 			specs = append(specs, investNativeSpec("invest-allocation"))
+			// C379: the drift read, which renders nothing until targets exist.
+			specs = append(specs, investNativeSpec("invest-rebalance"))
 		}
 		specs = append(specs, investNativeSpec("invest-pools"))
 		if formulasAtom.Get() {
@@ -342,6 +355,9 @@ func init() {
 	})
 	R("invest-allocation", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investAllocationWidget, investPanelProps{App: c.App})
+	})
+	R("invest-rebalance", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(investRebalanceWidget, investPanelProps{App: c.App})
 	})
 	R("invest-pools", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(investPoolsWidget, investPanelProps{App: c.App})

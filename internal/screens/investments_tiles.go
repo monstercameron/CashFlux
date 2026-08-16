@@ -417,10 +417,24 @@ func investAllocationWidget(props investPanelProps) ui.Node {
 		return Fragment()
 	}
 	body := investSection("sec-allocation", uistate.T("investments.allocationTitle"), Fragment(),
-		Div(css.Class("inv-alloc-cols"),
-			allocColumn(uistate.T("investments.byType"), v.AllocType, v.Sym, v.Dec, true),
-			allocColumn(uistate.T("investments.byClass"), v.AllocClass, v.Sym, v.Dec, false),
-		))
+		Fragment(
+			// C378: the one portfolio cost that never appears as a transaction — the
+			// fund deducts it internally, so nothing in the ledger will ever show it.
+			// Silent when no ratio is recorded anywhere: an unrated portfolio is
+			// unknown, not free, and printing "$0/yr" would say the opposite.
+			investFeeLine(v),
+			Div(css.Class("inv-alloc-cols"),
+				allocColumn(uistate.T("investments.byType"), v.AllocType, v.Sym, v.Dec, true),
+				allocColumn(uistate.T("investments.byClass"), v.AllocClass, v.Sym, v.Dec, false),
+				// C377: sector and geography. Shown only once at least one holding
+				// carries the dimension — a column that is 100% "unclassified" tells
+				// the reader nothing they did not already know, and four columns of
+				// which two are empty is worse than two.
+				If(allocClassified(v.AllocSector),
+					allocColumn(uistate.T("investments.bySector"), v.AllocSector, v.Sym, v.Dec, false)),
+				If(allocClassified(v.AllocRegion),
+					allocColumn(uistate.T("investments.byRegion"), v.AllocRegion, v.Sym, v.Dec, false)),
+			)))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-allocation", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -456,6 +470,86 @@ func allocColumn(title string, weights []portfolio.Weight, sym string, dec int, 
 	)
 }
 
+// --- invest-rebalance (C379) ------------------------------------------------------
+
+// investRebalanceWidget shows how far the portfolio has drifted from the
+// household's own target allocation, and what would close the gap.
+//
+// Every figure here is VIRTUAL, in the same sense as the goals set-asides: the
+// app has no brokerage connection and will never place a trade, so a "move" is a
+// sentence about what could be done, never an instruction it carries out. The
+// copy says so once, plainly, rather than leaving the reader to infer it from
+// the absence of a button.
+//
+// The section is silent until targets exist. An empty target set is not "target
+// everything at zero" — showing 100% drift against nothing would be an alarm
+// about a decision the household has not made yet.
+func investRebalanceWidget(props investPanelProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	v := computeInvestView(props.App)
+	targets := uistate.LoadRebalanceTargets()
+	if len(v.Securities) == 0 || len(targets) == 0 {
+		return Fragment()
+	}
+	plan := portfolio.Rebalance(portfolio.FromDomainSlice(v.Securities), targets)
+
+	rows := []any{css.Class("inv-alloc-list")}
+	for _, d := range plan.Drifts {
+		label := d.AssetClass
+		if label == "other" || label == "" {
+			label = uistate.T("investments.assetClassOther")
+		}
+		// The bar shows the CURRENT weight with a tick at the target, the same
+		// value-on-a-scale reading the health factors use — a bar whose length was
+		// the drift would make "on target" render as nothing at all.
+		cur := d.CurrentPct
+		if cur > 100 {
+			cur = 100
+		}
+		tick := d.TargetPct
+		if tick > 100 {
+			tick = 100
+		}
+		tone := "inv-drift-under"
+		if d.Overweight() {
+			tone = "inv-drift-over"
+		}
+		move := uistate.T("investments.driftOnTarget")
+		if d.DeltaMinor != 0 {
+			key := "investments.driftAdd"
+			if d.Overweight() {
+				key = "investments.driftTrim"
+			}
+			move = uistate.T(key, fmtSignedMoney(absMinor(d.DeltaMinor), v.Sym, v.Dec))
+		}
+		rows = append(rows, Div(css.Class("inv-alloc-row"), Attr("data-testid", "inv-drift-"+nameSlug(d.AssetClass)),
+			Div(css.Class("inv-alloc-head"),
+				Span(css.Class("inv-alloc-label"), label),
+				Span(ClassStr("inv-alloc-val "+tone),
+					fmt.Sprintf("%.1f%% / %.0f%%", d.CurrentPct, d.TargetPct))),
+			Div(css.Class("inv-alloc-track"),
+				Div(css.Class("inv-alloc-fill"), Attr("style", fmt.Sprintf("width:%.1f%%", cur))),
+				Div(css.Class("inv-drift-tick"), Attr("style", fmt.Sprintf("left:%.1f%%", tick)))),
+			Span(css.Class("t-caption", tw.TextFaint), move),
+		))
+	}
+
+	body := investSection("sec-rebalance", uistate.T("investments.rebalanceTitle"), Fragment(),
+		Fragment(
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "inv-rebalance-virtual"),
+				uistate.T("investments.rebalanceVirtual")),
+			Div(rows...),
+			P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "inv-rebalance-total"),
+				uistate.T("investments.rebalanceTotal",
+					fmtSignedMoney(plan.TotalMinor, v.Sym, v.Dec),
+					fmt.Sprintf("%.1f", plan.MaxDriftPct))),
+		))
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "invest-rebalance", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: body,
+	})
+}
+
 // --- invest-formula --------------------------------------------------------------
 
 func investFormulaWidget(props investPanelProps) ui.Node {
@@ -467,4 +561,43 @@ func investFormulaWidget(props investPanelProps) ui.Node {
 		ID: "invest-formula", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// allocClassified reports whether an allocation dimension has anything in it
+// beyond the unclassified bucket (C377).
+//
+// Sector and region are filled in by hand — nothing classifies a position
+// automatically — so a household that has not touched them would otherwise get
+// two columns reading "unclassified 100%", which says nothing they did not
+// already know and crowds out the two columns that do.
+func allocClassified(ws []portfolio.Weight) bool {
+	for _, w := range ws {
+		if w.Label != portfolio.Unclassified {
+			return true
+		}
+	}
+	return false
+}
+
+// investFeeLine states what the funds cost to hold each year (C378).
+//
+// An expense ratio is deducted inside the fund, so it never reaches the ledger
+// and no amount of categorising will surface it — a household can hold an
+// expensive fund for a decade with nothing anywhere saying so. The line is
+// silent when no holding carries a ratio, because an unrated portfolio is
+// UNKNOWN rather than free, and it qualifies itself when the ratios cover only
+// part of the portfolio: a weighted average over a third of the value is not a
+// portfolio-wide figure, and showing one without saying so invites reading it
+// as though it were.
+func investFeeLine(v investView) ui.Node {
+	if !v.Fees.Known() {
+		return Fragment()
+	}
+	line := uistate.T("investments.feeDrag",
+		fmtSignedMoney(v.Fees.AnnualMinor, v.Sym, v.Dec),
+		fmt.Sprintf("%.2f", v.Fees.WeightedBps/100))
+	if !v.Fees.Complete() {
+		line += " " + uistate.T("investments.feeDragPartial", int(v.Fees.CoveragePct()+0.5))
+	}
+	return P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-fee-drag"), line)
 }

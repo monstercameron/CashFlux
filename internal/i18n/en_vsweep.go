@@ -168,6 +168,25 @@ var vSweepKeys = Catalog{
 	"rules.memberMeta":         "assigns %s",
 	"rules.reviewedMeta":       "marks reviewed",
 	"rules.excludeMeta":        "excludes from reports",
+
+	// ── C377/C378: allocation dimensions and what the funds cost ────────────
+	"investments.bySector": "By sector",
+	"investments.byRegion": "By region",
+	// %s = the annual cost, %s = the value-weighted ratio as a percentage.
+	"investments.feeDrag": "Fund fees cost about %s a year at current value (%s%% weighted).",
+	// %d = the share of portfolio value that actually carries a recorded ratio.
+	"investments.feeDragPartial": "Based on the %d%% of your portfolio with a recorded expense ratio.",
+
+	// ── C379: drift against the household's own target allocation ───────────
+	// The virtual line is not a disclaimer bolted on — it is what the feature IS.
+	// CashFlux has no brokerage connection and will never place a trade.
+	"investments.rebalanceTitle":   "Drift from your targets",
+	"investments.rebalanceVirtual": "Nothing here moves money. These are the amounts that would bring each class back to the share you picked — CashFlux never places trades.",
+	// %s = the money that would change hands, %s = the largest drift as a percent.
+	"investments.rebalanceTotal": "About %s would move in total; the furthest class is %s%% off target.",
+	"investments.driftOnTarget":  "On target",
+	"investments.driftAdd":       "Would add about %s",
+	"investments.driftTrim":      "Would move about %s out",
 }
 
 func init() {

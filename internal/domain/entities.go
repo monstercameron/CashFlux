@@ -1384,4 +1384,23 @@ type Holding struct {
 	// crypto / cash / other), so securities investments read and allocate distinctly.
 	// Empty normalizes to "other"; JSON round-trips with no store migration.
 	SecurityType SecurityType `json:"securityType,omitempty"`
+
+	// Sector and Region are two further allocation dimensions (C377). Both are
+	// free text rather than a controlled vocabulary: the app has no market-data
+	// feed to classify a position from, and pretending to a taxonomy it cannot
+	// verify would be worse than letting the household name its own buckets.
+	// Empty means UNCLASSIFIED — a state the allocation views show rather than
+	// hide, so a portfolio with two labelled holdings does not read as fully
+	// classified. Additive; existing holdings load with both empty.
+	Sector string `json:"sector,omitempty"`
+	Region string `json:"region,omitempty"`
+
+	// ExpenseRatioBps is the fund's annual expense ratio in basis points
+	// (100 bps = 1.00%), zero when unknown or not applicable (C378).
+	//
+	// It is the one portfolio cost that never appears as a transaction — the fund
+	// deducts it internally, so no amount of categorising will ever surface it,
+	// and a household can hold an expensive fund for a decade with nothing in the
+	// ledger saying so. Zero means UNKNOWN, never free.
+	ExpenseRatioBps int `json:"expenseRatioBps,omitempty"`
 }

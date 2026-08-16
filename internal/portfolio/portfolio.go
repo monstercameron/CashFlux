@@ -25,6 +25,21 @@ type Holding struct {
 	// SecurityType is the position's category (stock/etf/bond/…) as a plain string,
 	// so the pure package stays free of the domain enum. Empty maps to "other".
 	SecurityType string
+	// Sector and Region are the two allocation dimensions the benchmark adds
+	// beyond asset class and security type (C377). Both are free text the
+	// household types, not a controlled vocabulary: the app has no market-data
+	// feed to classify a position from, so pretending to a taxonomy it cannot
+	// verify would be worse than letting people name their own buckets.
+	//
+	// Empty is not "other" here, it is UNCLASSIFIED — a meaningful state on a
+	// dimension nothing fills in automatically, and one the view has to show
+	// rather than hide, or a portfolio with two labelled holdings would read as
+	// 100% classified.
+	Sector string
+	Region string
+	// ExpenseRatioBps is the fund's annual expense ratio in basis points
+	// (100 bps = 1.00%), zero when unknown or not applicable (C378).
+	ExpenseRatioBps int
 }
 
 // HoldingValueMinor returns the current market value of h in minor units,
@@ -138,6 +153,59 @@ func AllocationByAssetClass(hs []Holding) []Weight {
 	}
 	sort.Slice(weights, func(i, j int) bool {
 		return weights[i].ValueMinor > weights[j].ValueMinor
+	})
+	return weights
+}
+
+// Unclassified is the bucket label for a holding with no value on a dimension
+// that nothing fills in automatically (C377). It is deliberately distinct from
+// "other": "other" says the position was classified and did not fit, while this
+// says nobody has said yet — and a portfolio where most of the pie is
+// unclassified should read that way rather than looking diversified.
+const Unclassified = "unclassified"
+
+// AllocationBySector groups holdings by Sector, and AllocationByRegion by
+// Region; both bucket the unset ones under Unclassified (C377).
+func AllocationBySector(hs []Holding) []Weight {
+	return allocationBy(hs, func(h Holding) string { return h.Sector }, Unclassified)
+}
+
+// AllocationByRegion is AllocationBySector's twin for geography.
+func AllocationByRegion(hs []Holding) []Weight {
+	return allocationBy(hs, func(h Holding) string { return h.Region }, Unclassified)
+}
+
+// allocationBy is the shared grouping the four allocation views use: sum market
+// value per bucket, express each as a percentage of the whole, and order by
+// value. blank is the label an empty key falls into.
+func allocationBy(hs []Holding, key func(Holding) string, blank string) []Weight {
+	if len(hs) == 0 {
+		return nil
+	}
+	totals := make(map[string]int64)
+	var total int64
+	for _, h := range hs {
+		k := key(h)
+		if k == "" {
+			k = blank
+		}
+		v := HoldingValueMinor(h)
+		totals[k] += v
+		total += v
+	}
+	weights := make([]Weight, 0, len(totals))
+	for k, v := range totals {
+		var pct float64
+		if total != 0 {
+			pct = float64(v) / float64(total) * 100
+		}
+		weights = append(weights, Weight{Label: k, ValueMinor: v, Pct: pct})
+	}
+	sort.Slice(weights, func(i, j int) bool {
+		if weights[i].ValueMinor != weights[j].ValueMinor {
+			return weights[i].ValueMinor > weights[j].ValueMinor
+		}
+		return weights[i].Label < weights[j].Label // stable for equal values
 	})
 	return weights
 }

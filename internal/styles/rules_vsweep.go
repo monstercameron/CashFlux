@@ -91,6 +91,29 @@ func registerVSweep() {
 		color("var(--text)"),
 	)
 
+	// ── C379: the target tick on a drift bar ────────────────────────────────
+	// The bar's LENGTH is the current weight and the tick marks the target, so
+	// "on target" reads as a full-looking bar with the tick at its end rather
+	// than as an empty bar — the same value-on-a-scale reading the health
+	// factors use.
+	rule(".inv-alloc-track",
+		position("relative"),
+	)
+	rule(".inv-drift-tick",
+		position("absolute"),
+		top("-2px"),
+		bottom("-2px"),
+		width("2px"),
+		background("var(--text)"),
+		opacity("0.55"),
+	)
+	rule(".inv-drift-over",
+		color("var(--warn, var(--text))"),
+	)
+	rule(".inv-drift-under",
+		color("var(--text-dim)"),
+	)
+
 	rule(".home-hero-stats-window",
 		margin("0"),
 		letterSpacing("0.04em"),
