@@ -7,6 +7,22 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The assistant can point at a control instead of describing one (PS8).** "Click the button in the
+  top right of the accounts page" is the weakest possible answer to "how do I add an account?" — the
+  person is looking at the app right now, and a paragraph about a button is strictly worse than the
+  button. The assistant now takes them to the screen and rings the control.
+
+  The destinations are a curated list of the fourteen places people actually get stuck, not the live
+  DOM. A model given the whole page will confidently point at the wrong thing; a model given fourteen
+  named destinations either finds one or says it cannot, and the second failure is recoverable while
+  the first is not. Matching is on words rather than substrings — the first version passed its own
+  test phrases and would have failed on "how do I add a new income source?", which does not contain
+  the literal string it was matching against.
+
+  The ring goes on the real control rather than dimming the page around it: a modal spotlight would
+  block the very interaction it is describing, and the whole point is that the person can now do the
+  thing. It pulses three times and stops, and not at all under reduced motion.
+
 - **The what-if sandbox (AG2).** "What if I moved to an $1,800 flat?" has no good answer from
   arithmetic alone: the interesting effects are second-order — the budget that stops fitting, the
   goal whose date slips, the runway that shortens — and they come out of the same engines that

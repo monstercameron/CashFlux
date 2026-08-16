@@ -370,6 +370,10 @@ func Shell(props ShellProps) uic.Node {
 		// posting a brief insight summary to the notification feed. Mounted once
 		// here (not in a loop) so its hook depth is always constant.
 		uic.CreateElement(screens.SmartDigestDriver),
+		// PS8: the assistant's guided highlight. Mounted at the shell so the ring
+		// survives the navigation that puts the control on screen — mounting it
+		// inside a screen would unmount it at the moment it is needed.
+		uic.CreateElement(screens.SpotlightHost),
 	)
 }
 

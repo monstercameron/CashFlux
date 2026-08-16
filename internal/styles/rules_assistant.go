@@ -800,6 +800,51 @@ func registerAssistantSurface() {
 	registerKeyGate()
 	registerSpendMeter()
 	registerMonthlyReview()
+	registerSpotlight()
+}
+
+// registerSpotlight styles the ring the assistant points with (PS8).
+//
+// It rings the real control in place rather than dimming the page around it. A
+// modal spotlight would block the very interaction it is describing — the point is
+// that the person can now DO the thing — so this is an outline and a soft glow that
+// sit on top of whatever the control already looks like, and can be worked through
+// without dismissing anything. The pulse stops under reduced motion; a ring that
+// throbs indefinitely beside a form is a distraction, not a signpost.
+func registerSpotlight() {
+	rule(".is-spotlit",
+		prop("position", "relative"),
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "3px"),
+		prop("border-radius", "var(--radius)"),
+		prop("box-shadow", "0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent)"),
+		prop("animation", "cf-spotlight 1.6s ease-out 3"),
+	)
+	keyframes("cf-spotlight",
+		at("0%", prop("box-shadow", "0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent)")),
+		at("70%", prop("box-shadow", "0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent)")),
+		at("100%", prop("box-shadow", "0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent)")),
+	)
+	ruleMedia("(prefers-reduced-motion: reduce)", ".is-spotlit",
+		prop("animation", "none"),
+	)
+	// The note names what was highlighted, so the ring explains itself instead of
+	// just glowing at somebody.
+	rule(".spot-note",
+		prop("position", "fixed"),
+		prop("bottom", "1rem"),
+		prop("left", "50%"),
+		prop("transform", "translateX(-50%)"),
+		prop("z-index", "60"),
+		prop("padding", "0.5rem 0.9rem"),
+		prop("border-radius", "var(--radius-pill)"),
+		prop("background", "var(--bg-elev)"),
+		prop("border", "1px solid var(--accent)"),
+		prop("color", "var(--text)"),
+		prop("font-size", "var(--type-13)"),
+		prop("box-shadow", "0 6px 24px rgba(0,0,0,0.18)"),
+		prop("pointer-events", "none"),
+	)
 }
 
 // registerMonthlyReview styles the guided month-end review (AG10). It is a card,
