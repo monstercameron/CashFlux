@@ -998,7 +998,10 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: "rule-coffee", Match: "coffee", SetCategoryID: catDining, SetTags: []string{"coffee"}},
 			{ID: "rule-shell", Match: "shell", SetCategoryID: catGas},
 			{ID: "rule-greenfield", Match: "greenfield", SetCategoryID: catGroceries},
-			{ID: "rule-streaming", Match: "streaming", SetCategoryID: catSubs},
+			// C357: this matched the word "streaming", which appears in no charge the
+			// demo generates — a rule catching 0 transactions is a broken example of
+			// the feature it exists to demonstrate. It matches the merchant instead.
+			{ID: "rule-streaming", Match: "netflix", SetCategoryID: catSubs},
 			{ID: "rule-doordash", Match: "doordash", SetCategoryID: catDining},
 			{ID: "rule-amazon", Match: "amzn", SetCategoryID: catShopping},
 			{ID: "rule-instacart", Match: "instacart", SetCategoryID: catGroceries},

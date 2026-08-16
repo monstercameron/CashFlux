@@ -61,6 +61,18 @@ func registerVSweep() {
 		fontSize("var(--type-12)"),
 	)
 
+	// ── C357: the rules list IS the ordering surface ────────────────────────
+	// The precedence number moved onto the row when the duplicate "Rule order"
+	// section was retired. Quiet and tabular so it reads as an index, not a
+	// figure competing with the match count on the right.
+	rule(".rule-prec",
+		flex("none"),
+		minWidth("1.25rem"),
+		fontVariantNumeric("tabular-nums"),
+		fontSize("var(--type-12)"),
+		textAlign("right"),
+	)
+
 	rule(".home-hero-stats-window",
 		margin("0"),
 		letterSpacing("0.04em"),

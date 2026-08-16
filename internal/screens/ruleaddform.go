@@ -410,7 +410,10 @@ func condSlotRow(
 	hint := condValueHint(field)
 	return Div(css.Class("cond-slot"),
 		Label(css.Class("cond-slot-header"),
-			Input(Type("checkbox"), Checked(enabled), OnChange(onEnable)),
+			// C357: the themed control, not the browser's default box. Every other
+			// checkbox in the app wears .cf-check; these three were the only native
+			// ones left, so the quick-add form looked like a different application.
+			Input(css.Class("cf-check"), Type("checkbox"), Checked(enabled), OnChange(onEnable)),
 			Span(label),
 		),
 		If(enabled,

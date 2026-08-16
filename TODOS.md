@@ -5267,10 +5267,20 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   mentioned each other, so a second sighting of a row looked like a bug. The main list now names
   what has been lifted out ("3 of these renew within a week →", "1 changed price recently →") and
   the derived sections link back, which costs one line and turns three lists into one page.
-- [ ] **C357 [MINOR][UX] /rules quick-add ships placeholder condition labels** — literal
-  "Condition 1 / Condition 2 / Condition 3" with unthemed native checkboxes — and the bottom "Rule
-  order" flowchart duplicates the drag-list above it. Real, plain-English condition labels; themed
-  checkboxes; one ordering surface. (Also: sample rule 'Contains "streaming"' matches 0 txns.)
+- [x] **C357 ✅ DONE (2026-08-16) — /rules placeholder labels, native checkboxes, two orderings.**
+  The condition labels were already real English since the audit ("Match a field (amount, account,
+  or date)", "Add a second condition"…). The other three were live. **Checkboxes:** the three
+  condition slots were the only native `<input type=checkbox>` left in the app — every other one
+  wears `.cf-check` — so the quick-add form looked like a different application. Themed.
+  **One ordering surface:** the Mermaid flowchart had already become a native precedence chain, but
+  the duplication was never the rendering — it was that "Your rules" above it IS the precedence
+  order, numbered, draggable, with each rule's shadow warning and match count inline, and the chain
+  restated the same sequence carrying strictly less. The chain is deleted (not merely unmounted — a
+  dormant second renderer is how two views drift apart) and its precedence number moved onto the
+  row. **The dead sample rule:** `Contains "streaming"` matched a word no charge in the demo
+  contains, so the first rule a first-run user sees caught nothing — a broken example of the feature
+  it exists to demonstrate. It matches the merchant now, and a test asserts every phrase-matching
+  sample rule catches at least one transaction, so the next one can't ship dead.
 - [ ] **C358 [MINOR][UX] /planning plan cards tell the wrong story at a glance:** a *savings* plan
   ("House down payment in 3 years", start $19,000, $400/mo) renders as a huge red slab ending
   "($25,100.00) · Money lasts ~35.6 months". Sign conventions/labels need "Starts $X → ends $Y by
@@ -8596,27 +8606,33 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   AC: opening any single-field modal puts the caret in that field, and focus is inside the dialog
   for a keyboard user.
 
-- [x] **C599 [DONE 2026-08-16 — a signed amount was compared against a median of magnitudes] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
+- [ ] **C599 [REOPENED 2026-08-16 — latest regression still reproduces the signed/magnitude mismatch] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
   One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a
   typical `$6.90` charge. Compute anomaly deltas from the same current transaction and comparison set,
   format the sign and amount consistently, and suppress the insight when the comparison is incomplete.
   AC: every anomaly message is mathematically consistent with the visible transaction amount and
   baseline; automated tests cover below-typical, equal-to-typical, above-typical, and missing-baseline
   cases.
+  **Regression evidence, 2026-08-16.** Fresh one-at-a-time review still showed a `$6.75` transaction,
+  typical charge `$6.90`, and “this one is `$13.65` above.” The issue is live and must not be marked done.
 
-- [x] **C600 [DONE 2026-08-16 — "Queued: no category yet" + "Category to assign" + a not-saved-yet line] [MAJOR][TXN][REVIEW][UX] Clarify review status versus assigned category.**
+- [ ] **C600 [REOPENED 2026-08-16 — latest regression still shows conflicting queue/category states] [MAJOR][TXN][REVIEW][UX] Clarify review status versus assigned category.**
   The guided card showed the review tier `Uncategorized` while its Category control was already set to
   `Dining`. Separate queue state from category state with explicit labels such as “Needs review” and
   “Current category,” or remove the ambiguous tier label when a category is assigned.
   AC: a reviewer can tell whether a transaction lacks a category, lacks human confirmation, or is simply
   grouped in an uncategorized review tier without inferring from conflicting labels.
+  **Regression evidence, 2026-08-16.** Fresh one-at-a-time review still showed the tier `Uncategorized`
+  while the Category combobox was selected to `Dining`.
 
-- [x] **C601 [DONE 2026-08-16 — not a fixture bug: the edit path never cleared the needs-review tag] [MAJOR][TXN][DATA][FIXTURE] Resolve the known-bad coffee transaction through the correction workflow.**
+- [ ] **C601 [REOPENED 2026-08-16 — known-bad control remains unchanged after fresh regression] [MAJOR][TXN][DATA][WORKFLOW] Resolve the known-bad coffee transaction through the correction workflow.**
   `CF26-PIPE-S01 known-bad coffee control` remains in `Dining` and `Needs review` despite being the
   seeded bad-category case. Correct it through the intended review/edit path, preserve its `#coffee`
   tag and other fields, and verify the result after reload and search.
   AC: the transaction has the intended category, no unrelated fields change, the review state reflects
   the completed decision, and the known-bad regression test proves the correction persists.
+  **Regression evidence, 2026-08-16.** Searching `CF26-PIPE-S01` still returns category `Dining` and
+  status `Needs review`; the correction has not been completed in the live workflow.
 
   **What it actually was, 2026-08-16.** Not a fixture problem, and the seed is unchanged — this
   charge is the control the whole review surface demonstrates itself on, so "fixing" it in
@@ -8634,6 +8650,11 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   seeded category is Dining, which for a coffee shop is defensible — what the seed marks as odd is
   the AMOUNT ($68, described as "Coffee — $68?!"), not the category.
 
+  **Live-regression discrepancy, 2026-08-16.** The current UI still exposes `CF26-PIPE-S01 known-bad
+  coffee control` as `Dining` and `Needs review`, so the completed e2e path above does not cover the
+  visible control used in this regression pass. Keep this ticket open until the fixture IDs and intended
+  correction are reconciled and the live row is verified after search and reload.
+
   **Left deliberately narrow.** Clearing the review flag is gated on the category actually CHANGING
   (`txnprov.ConfirmsCategory`). A charge that is flagged but already correctly categorized, opened
   in the edit form and saved without touching the category, keeps its flag — the review surface's
@@ -8641,21 +8662,26 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   in the form's Tags field. Widening the rule to "any save clears the flag" would let someone
   correcting a typo in an amount silently discharge a review someone else asked for.
 
-- [x] **C602 [DONE 2026-08-16 — "251 charges left → grouped into → 11 merchants to decide"] [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
+- [ ] **C602 [REOPENED 2026-08-16 — headline counts remain ambiguous in both review modes] [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
   The review dialog presents `251 charges → 11 decisions`, but does not immediately explain whether a
   decision represents a merchant group, a bulk action, or an individual charge. Show both the remaining
   charge count and decision/group count with labels and update them consistently after selection,
   confirmation, snooze, and dismissal.
   AC: a reviewer can predict how one confirmation changes each count before committing it, and the
   counts remain consistent between one-at-a-time and bulk modes.
+  **Regression evidence, 2026-08-16.** Fresh bulk review still displayed `251 charges → 11 decisions`,
+  while one-at-a-time displayed `251 left`; the UI still does not explicitly identify “decisions” as
+  merchant groups in the headline or explain how the two counts relate.
 
-- [x] **C603 [DONE 2026-08-16 — the caption names the grid's month; adjacent days name theirs] [MAJOR][TXN][CALENDAR][UX] Add explicit month and year context to Calendar view.**
+- [ ] **C603 [REOPENED 2026-08-16 — All dates calendar still has no visible month/year label] [MAJOR][TXN][CALENDAR][UX] Add explicit month and year context to Calendar view.**
   Calendar view under `All dates` showed a grid of day numbers without a prominent month/year heading,
   making adjacent-month days and the current scope ambiguous. Display the active month or range, mark
   leading/trailing days as belonging to adjacent months, and make the relationship between Calendar
   selection and ledger date filters explicit.
   AC: users can identify the month represented by every visible day, and selecting a day clearly states
   the resulting date filter and provides a direct way back to the prior range.
+  **Regression evidence, 2026-08-16.** Fresh Calendar view reported `Period shown: All dates`, rendered
+  the day grid, and exposed no month/year text; adjacent days were therefore still ambiguous.
 
 - [x] **C604 [DONE 2026-08-16 — money that moved leads; Plan & track / Set up below it] [MAJOR][TXN][NAV][UX] Split and relabel the overloaded Add something else menu.**
   One menu combines expense, income, transfer, account, budget, goal, task, category, member, rule,

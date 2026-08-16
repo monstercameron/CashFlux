@@ -327,13 +327,14 @@ func Rules() ui.Node {
 
 	list := IfElse(len(rs) == 0,
 		ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("rules.empty"), CTALabel: uistate.T("rules.addFirst"), AddTarget: "rule"}),
-		hhRowsList(MapKeyed(rs,
-			func(r rules.Rule) any { return r.ID },
-			func(r rules.Rule) ui.Node {
+		hhRowsList(MapKeyedIndexed(rs,
+			func(_ int, r rules.Rule) any { return r.ID },
+			func(i int, r rules.Rule) ui.Node {
 				rid := r.ID
 				return ui.CreateElement(RuleRow, ruleRowProps{
 					Rule: r, CategoryName: catName[r.SetCategoryID], CondLine: condLine(r),
-					Warning: warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
+					Precedence: i + 1,
+					Warning:    warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
 					OnDelete:       deleteRule,
 					OnMove:         moveRule,
 					OnDragStart:    func() { dragSrc.Set(rid) },
@@ -499,46 +500,13 @@ func Rules() ui.Node {
 				aiSugs.Set(next)
 			},
 		}))),
-		// Precedence chain: first match wins, top to bottom; shadowed rules flagged
-		// (C70/C64). Rendered natively in the surface's own language (a numbered
-		// spine) — the old Mermaid flowchart wore the library's stock lavender theme.
-		If(len(rs) > 1, rptTile("rules-order", "1 / span 4",
-			rptSection("sec-rules-order", uistate.T("rules.orderTitle"), nil, Fragment(
-				P(css.Class("muted"), uistate.T("rules.orderHint")),
-				rulesPrecedenceChain(rs, catName, warnByID, condLine),
-			)))),
+		// C357: there is ONE ordering surface. "Your rules" above is already the
+		// precedence order — numbered, draggable, with each rule's shadow warning
+		// and match count inline — and a second read-only list of the same rules
+		// in the same order, carrying strictly less information, made the page
+		// look like it had two different notions of order. The numbering and the
+		// first-match-wins sentence moved up into the list; the chain is gone.
 	)
-}
-
-// rulesPrecedenceChain renders the first-match-wins order as a numbered spine:
-// each link shows its precedence number, the match phrase, and the category it
-// files into; shadowed rules dim with their warning inline. A native replacement
-// for the stock-themed Mermaid flowchart (aria-label preserved).
-func rulesPrecedenceChain(rs []rules.Rule, catName map[string]string, warnByID map[string]string, condLine func(rules.Rule) string) ui.Node {
-	items := []any{css.Class("rule-chain"), Attr("role", "list"), Attr("aria-label", uistate.T("rules.precedenceLabel"))}
-	for i, r := range rs {
-		cat := catName[r.SetCategoryID]
-		if cat == "" {
-			cat = uistate.T("rules.unknownCategory")
-		}
-		cls := "rule-chain-item"
-		if warnByID[r.ID] != "" {
-			cls += " rule-chain-shadowed"
-		}
-		identity := uistate.T("rules.matchLabel", r.Match)
-		if l := condLine(r); l != "" {
-			identity = uistate.T("rules.condLabel", l)
-		}
-		items = append(items, Div(ClassStr(cls), Attr("role", "listitem"),
-			Span(css.Class("rule-chain-n", tw.FontDisplay), fmt.Sprintf("%d", i+1)),
-			Div(css.Class("rule-chain-body"),
-				Span(css.Class("rule-chain-match"), identity),
-				Span(css.Class("rule-chain-cat"), "→ "+cat),
-				If(warnByID[r.ID] != "", Span(css.Class("rule-chain-warn", tw.TextWarn), warnByID[r.ID])),
-			),
-		))
-	}
-	return Div(items...)
 }
 
 // validateRuleInput returns the i18n key of the first problem with a rule's
@@ -602,7 +570,12 @@ type ruleRowProps struct {
 	// CondLine is the rule's structured conditions in plain English ("" when the
 	// rule matches by phrase) — shown as the row's identity so a condition rule
 	// isn't a black box behind an ignored match phrase.
-	CondLine       string
+	CondLine string
+	// Precedence is this rule's 1-based position in the first-match-wins order.
+	// The list IS the ordering surface (C357): a separate read-only "Rule order"
+	// section restated the same sequence with less information, so the page
+	// looked like it held two notions of order.
+	Precedence     int
 	Warning        string // non-empty when this rule never fires (shadowed)
 	MatchCount     int    // how many existing transactions this rule's phrase hits
 	MaxMatchCount  int    // the heaviest rule's count — anchors the weight bar
@@ -722,6 +695,11 @@ func RuleRow(props ruleRowProps) ui.Node {
 			}
 		})),
 		Span(css.Class("rule-grip"), Attr("aria-hidden", "true"), Title(uistate.T("rules.dragTitle")), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
+		// The precedence number the retired "Rule order" section used to carry
+		// (C357): first match wins, top to bottom, and the row says which it is.
+		If(props.Precedence > 0, Span(css.Class("rule-prec", tw.TextFaint),
+			Attr("aria-hidden", "true"), Attr("data-testid", "rule-prec-"+r.ID),
+			strconv.Itoa(props.Precedence))),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), Span(css.Class("rule-match"), identity)),
 			Span(css.Class("row-meta"), meta),

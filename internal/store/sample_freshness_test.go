@@ -324,3 +324,34 @@ func TestDemoContentStaysNeutral(t *testing.T) {
 			"habit, not delete it", habit)
 	}
 }
+
+// TestEverySampleRuleCatchesSomething pins C357.
+//
+// The demo shipped a rule matching the word "streaming", which appears in none
+// of the charges it generates. A rule catching zero transactions is a broken
+// example of the feature it exists to demonstrate — and it is the first rule a
+// first-run user sees.
+func TestEverySampleRuleCatchesSomething(t *testing.T) {
+	ds := SampleDatasetAt(sampleAuthoredNow)
+	if len(ds.Rules) == 0 {
+		t.Fatal("sample has no rules — this guard would pass vacuously")
+	}
+	for _, r := range ds.Rules {
+		if r.Match == "" {
+			continue // a conditions-only rule matches by its conditions, not a phrase
+		}
+		needle := strings.ToLower(r.Match)
+		hits := 0
+		for _, tx := range ds.Transactions {
+			if strings.Contains(strings.ToLower(tx.Payee), needle) ||
+				strings.Contains(strings.ToLower(tx.Desc), needle) {
+				hits++
+			}
+		}
+		if hits == 0 {
+			t.Errorf("sample rule %q matches %q, which nothing in the demo's ledger "+
+				"contains — a rule catching nothing is a broken example of rules (C357)",
+				r.ID, r.Match)
+		}
+	}
+}

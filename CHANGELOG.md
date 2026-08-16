@@ -164,7 +164,23 @@ and every commit updates this file under `Unreleased`.
   inside it, and unconditionally on touch. The ⋯ menu deliberately keeps resting: hiding the way in
   to a menu is a different problem from hiding the menu.
 
+### Changed
+- **/rules has one ordering surface again (C357).** "Your rules" is the precedence order — numbered,
+  draggable, with each rule's shadow warning and match count inline — and a second read-only "Rule
+  order" section below it restated the same sequence carrying strictly less information, so the page
+  looked like it held two different notions of order. The second list is deleted rather than merely
+  hidden, because a dormant second renderer is how two views drift apart, and its precedence number
+  moved onto the row.
+
+  The three condition-slot checkboxes were also the only native browser checkboxes left in the app,
+  which made the quick-add form look like a different application; they wear the shared control now.
+
 ### Fixed
+- **The demo's first rule catches something (C357).** It matched the word "streaming", which appears
+  in none of the charges the sample generates — so the first rule a new user sees was a broken example
+  of the feature it exists to demonstrate. It matches the merchant instead, and a test now asserts
+  every phrase-matching sample rule hits at least one transaction.
+
 - **/allocate's criterion meters stop reading as rates (C353).** "Pay down Mortgage · RETURNS 27%"
   sat beside a 4.1% mortgage, and "RETURNS 100%" appeared on a card. Those are normalized ranking
   scores on abstract axes, and a percent sign turned them into claims about the account's actual
