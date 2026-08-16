@@ -112,7 +112,13 @@ func TestPayPalApplyWebhookUpsertsSubscription(t *testing.T) {
 	if err := store.UpsertUser(User{ID: "u1", Provider: "paypal", Subject: "u1", CreatedAt: now}); err != nil {
 		t.Fatalf("UpsertUser: %v", err)
 	}
-	raw := []byte(`{"id":"WH-EVT-1","event_type":"BILLING.SUBSCRIPTION.ACTIVATED","resource":{"id":"I-SUB123","custom_id":"u1","status":"ACTIVE","plan_id":"P-ANNUAL","billing_info":{"next_billing_time":"2026-08-01T00:00:00Z"}}}`)
+	// The period end must be in the future relative to the REAL clock, not to
+	// `now`: IsCloudActive deliberately evaluates entitlement against
+	// time.Now() (an entitlement that expires must actually expire), so a
+	// hardcoded date turns this into a time bomb. It was pinned to
+	// 2026-08-01 and began failing the moment that date passed.
+	nextBilling := time.Now().UTC().AddDate(1, 0, 0).Format(time.RFC3339)
+	raw := []byte(`{"id":"WH-EVT-1","event_type":"BILLING.SUBSCRIPTION.ACTIVATED","resource":{"id":"I-SUB123","custom_id":"u1","status":"ACTIVE","plan_id":"P-ANNUAL","billing_info":{"next_billing_time":"` + nextBilling + `"}}}`)
 	if err := (paypalProvider{}).ApplyWebhook(store, WebhookEvent{ID: "WH-EVT-1", Type: "BILLING.SUBSCRIPTION.ACTIVATED", Raw: raw}, now, nil); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
