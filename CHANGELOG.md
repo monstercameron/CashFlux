@@ -366,6 +366,14 @@ and every commit updates this file under `Unreleased`.
   browser. The confirmation now says what actually happens: the transactions stay exactly where they
   are and simply stop counting against a cap. A `screenlint` ratchet fails the build if any budgets
   confirmation claims irreversibility again, extending the C571 guard to this surface.
+- **A fully assigned plan is no longer mistaken for a fully funded one (C587).** The zero-based view
+  could show 100% of an expected `$10,709.16` assigned while only `$6,961.00` had arrived, with the
+  `$3,748.16` difference reported nowhere but a separate month-close flow — so the number that
+  decides whether a payment clears was the one missing. A state directly under the allocation bar now
+  names the unfunded amount and both figures behind it, and offers the one action that closes the
+  gap: scale every assignment down to the money in hand, arriving in the Adjust-all form pre-filled
+  and previewed budget by budget, still requiring the reduction acknowledgement, still undoable. It
+  renders nothing when the plan is funded.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

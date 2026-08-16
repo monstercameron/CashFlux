@@ -145,3 +145,30 @@ test.describe("period: custom range", () => {
       .toBe(applied);
   });
 });
+
+test.describe("budgets: assigned versus funded", () => {
+  // C587: the page could report 100% of an EXPECTED income assigned while a
+  // third of it had not arrived, with the gap visible only inside a separate
+  // month-close flow. "Fully assigned" and "fully funded" looked identical.
+  test("names the unfunded gap and offers a previewed, undoable way to close it", async ({ app }) => {
+    await nav(app, "/budgets");
+    const callout = app.getByTestId("budgets-funded-callout");
+    await callout.scrollIntoViewIfNeeded();
+    await expect(callout).toBeVisible();
+    // Both figures, and the distinction between them, in words.
+    await expect(callout).toContainText(/isn't funded yet/i);
+    await expect(callout).toContainText(/assigned .*, and .* has actually arrived/i);
+
+    // The resolution is the bulk adjuster, pre-filled with the exact reduction —
+    // so it arrives previewed budget by budget rather than applied.
+    await app.getByTestId("budgets-funded-reconcile").click();
+    await expect(app.getByTestId("adjustall-form")).toBeVisible();
+    const pct = await app.getByTestId("adjustall-pct").inputValue();
+    expect(Number(pct), "the pre-filled percentage must be a reduction").toBeLessThan(0);
+    await expect(app.getByTestId("adjustall-preview")).toBeVisible();
+    // A reduction still requires the explicit acknowledgement — arriving here
+    // from a suggestion does not lower the bar for taking money out of plans.
+    await expect(app.getByTestId("adjustall-ack")).toBeVisible();
+    await expect(app.getByTestId("adjustall-apply")).toBeDisabled();
+  });
+});

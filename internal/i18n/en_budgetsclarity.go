@@ -42,6 +42,17 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C587: assigned against expected income vs funded by received income ---
+	// A plan can be 100% assigned against an expected $10,709.16 while $6,961.00
+	// has arrived; "fully assigned" then looks exactly like "fully funded".
+	// %s = the unfunded amount / the assigned total / the received total.
+	"budgets.fundedTitle":          "%s of your plan isn't funded yet",
+	"budgets.fundedBody":           "You've assigned %s, and %s has actually arrived. The rest is planned against income you haven't received.",
+	"budgets.fundedTitleHist":      "%s of that plan was never funded",
+	"budgets.fundedBodyHist":       "%s was assigned and %s arrived. The difference was planned against income that did not come in.",
+	"budgets.fundedReconcile":      "Bring the plan down to what arrived",
+	"budgets.fundedReconcileTitle": "Scale every budget down so the plan matches the money you have — previewed budget by budget, and undoable",
+
 	// --- C597: every funds-moving action explains its reach in the same words ---
 	// Assembled by screens.fundsImpactLine. Kept as fragments so six flows read
 	// identically instead of each inventing its own phrasing.

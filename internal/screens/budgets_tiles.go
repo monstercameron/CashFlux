@@ -297,12 +297,22 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
 	// basis never masquerades as money already received. One quiet sub-line.
 	var incomeActual ui.Node = Fragment()
+	// C587: the funding read — what the plan was built on, what has arrived, and
+	// what is assigned. A plan can be 100% assigned against an expected $10,709.16
+	// while only $6,961.00 has come in, and "fully assigned" then looks exactly
+	// like "fully funded". The difference is the part that decides whether a
+	// payment clears.
+	var funding budgeting.FundingRead
 	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
 		actualIncome := int64(0)
 		if lines, err := reports.IncomeByCategory(app.Transactions(), wStart, wEnd, currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}); err == nil {
 			for _, ln := range lines {
 				actualIncome += ln.Amount
 			}
+		}
+		funding = budgeting.FundingRead{
+			Expected: v.BannerIncome, Received: actualIncome,
+			Assigned: v.TotalLimit + v.SavingsAssigned,
 		}
 		key := "budgets.incomeActualSoFar"
 		if hist {
@@ -359,6 +369,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
 		band,
 		alloc,
+		// C587: directly under the allocation bar, because that bar is what makes
+		// "fully assigned" look like "fully funded". Renders nothing when the plan
+		// IS funded, so it is a state rather than a permanent fixture.
+		ui.CreateElement(budgetFundedCallout, budgetFundedProps{Funding: funding, Base: v.Base, Historical: hist}),
 		Div(css.Class("budget-hero-cap"),
 			incomeActual,
 			Div(css.Class("budget-hero-side"),

@@ -261,3 +261,24 @@ func UseInvestPoolEditID() state.Atom[string] { return state.UseAtom("invest:poo
 // budgets in scope or the before/after totals, which is the whole point of a bulk
 // edit, and a modal shell is the only place with room to.
 func UseBudgetAdjustOpen() state.Atom[bool] { return state.UseAtom("budgets:adjustOpen", false) }
+
+// budgetAdjustSeed pre-fills the "Adjust all" percentage when the form is opened
+// from somewhere that already knows the answer — the C587 "bring the plan down
+// to what has arrived" action, which computes the exact reduction and hands it
+// over rather than asking the user to work it out.
+//
+// A plain variable, not an atom: it is written on the budgets page and read on
+// the first render of a modal that has not mounted yet, where a captured atom
+// reference would still be nil. Cleared as soon as the form reads it, so a later
+// manual open starts blank.
+var budgetAdjustSeed string
+
+// SetBudgetAdjustSeed pre-fills the next "Adjust all" open with a percentage.
+func SetBudgetAdjustSeed(pct string) { budgetAdjustSeed = pct }
+
+// TakeBudgetAdjustSeed returns the pending pre-fill and clears it.
+func TakeBudgetAdjustSeed() string {
+	v := budgetAdjustSeed
+	budgetAdjustSeed = ""
+	return v
+}

@@ -609,11 +609,23 @@ func registerBudgetsSurface() {
 		flexDirection("column"),
 		minHeight("0"),
 	)
+	// Sized to the notes people actually write — a sentence or two — rather than to
+	// the modal. A ten-line empty box oversold how much was expected and made the
+	// silent close after Save read as more suspicious than it needed to. It stays
+	// resizable, so a genuinely long note is still comfortable to write and review;
+	// shrinking the box while forbidding resize would have traded one problem for
+	// another.
 	rule(".budget-notes-scroll textarea",
 		flex("1"),
 		width("100%"),
-		minHeight("12rem"),
-		prop("resize", "none"),
+		minHeight("5.5rem"),
+		prop("resize", "vertical"),
+	)
+	// The remove control sits apart from Cancel/Save, hard left, so a destructive
+	// action is never adjacent to the primary one.
+	rule(".budget-notes-foot .budget-notes-remove",
+		marginRight("auto"),
+		color("var(--danger)"),
 	)
 
 	// --- Sweep-leftovers config modal ------------------------------------------------
@@ -913,6 +925,37 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C587: the "assigned but not funded" state ---
+	// Warn-toned, not danger: nothing is broken, the plan is simply ahead of the
+	// money. It sits directly under the allocation bar because that bar is what
+	// makes a fully-assigned plan look fully funded.
+	rule(".budget-funded",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.4rem 0.75rem"),
+		marginTop("0.5rem"),
+		padding("0.5rem 0.7rem"),
+		background("color-mix(in srgb, var(--warn) 12%, transparent)"),
+		border("1px solid color-mix(in srgb, var(--warn) 40%, var(--border))"),
+		borderRadius("var(--radius)"),
+	)
+	rule(".budget-funded-main",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.1rem"),
+		flex("1"),
+		minWidth("14rem"),
+	)
+	rule(".budget-funded-title",
+		fontWeight("700"),
+		color("var(--text)"),
+	)
+	rule(".budget-funded-body",
+		fontSize("var(--type-12)"),
+		lineHeight("1.4"),
+	)
+
 	// C609: only an overdue recurring is a call to action, so only it is toned.
 	// The other two states are context and stay as quiet as the rest of the meta
 	// line — colouring all three would make the one that matters invisible.
@@ -1160,7 +1203,8 @@ func registerBudgetsSurface() {
 	rule(".budget-crow-notes",
 		display("inline-flex"),
 		alignItems("center"),
-		flexShrink("0"),
+		gap("0.3rem"),
+		minWidth("0"),
 		padding("0"),
 		border("0"),
 		background("none"),
@@ -1168,6 +1212,30 @@ func registerBudgetsSurface() {
 		cursor("pointer"),
 		color("var(--muted)"),
 	)
+	// The note's text yields to the budget name: the name takes the width it needs
+	// first, and the note ellipsizes into whatever is left. Capped so a long note
+	// cannot push the name out of a row whose job is to be scannable.
+	rule(".budget-crow-notes .budget-crow-notes-text",
+		minWidth("0"),
+		maxWidth("22rem"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		fontSize("var(--type-12)"),
+	)
+	// The name cell's non-name children are pinned by default so badges never wrap;
+	// the note is the one that MAY shrink, because it has an ellipsis to fall back on.
+	//
+	// The shrink factor is deliberately enormous. At plain `1` the note and the
+	// budget NAME shrink in proportion, which truncated "Transportation" to "Tran…"
+	// so that a note could keep four extra words — exactly backwards, since the name
+	// is what the row is scanned by. Weighted like this the note gives up all of its
+	// width first, and the name only starts to ellipsize once the note is gone.
+	rule(".budget-crow-head > .budget-crow-notes", flexShrink("999"))
+	// Narrow panes drop the note text and keep the icon: at that width the row has
+	// already given up its meter and its "left" phrase, so prose is the wrong thing
+	// to spend the remaining space on. The note is still one click away.
+	ruleContentMax(860-railCollapsedPx, ".budget-crow-notes-text", display("none"))
 	rule(".budget-crow-notes:hover", color("var(--text)"))
 	rule(".budget-crow-notes:focus-visible", color("var(--text)"))
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.

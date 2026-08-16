@@ -40,7 +40,10 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	openAtom := uistate.UseBudgetAdjustOpen()
 	activeMemberID := uistate.UseActiveMember().Get()
 
-	pctStr := ui.UseState("")
+	// C587: opened from "bring the plan down to what has arrived", the reduction
+	// is already known — the form starts with it filled in and previewed, rather
+	// than asking the user to compute a percentage from two figures.
+	pctStr := ui.UseState(uistate.TakeBudgetAdjustSeed())
 	onPct := ui.UseEvent(func(v string) { pctStr.Set(v) })
 	ack := ui.UseState(false)
 	toggleAck := ui.UseEvent(func() { ack.Set(!ack.Get()) })
