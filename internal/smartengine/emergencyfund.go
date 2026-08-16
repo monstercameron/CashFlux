@@ -114,22 +114,23 @@ func g21EmergencyResize(in Input) []smart.Insight {
 	}
 
 	ins := smart.Insight{
-		Feature: "SMART-G21",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G21:" + g.ID + ":" + itoa64(int64(level)),
-		Title:   "Your essential month has shifted — resize " + g.Name + "?",
-		Detail: "Your essential month is now about " + in.hmoney(derived) + " (it has moved " + direction +
-			" from " + in.hmoney(g.EssentialBasisMinor) + "). A " + itoa64(int64(level)) +
-			"-month fund would target " + in.hmoney(newTarget) + ". Update the target when you're ready — nothing changes until you do.",
+		Feature:  "SMART-G21",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G21:" + g.ID + ":" + itoa64(int64(level)),
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(newTarget)).
+	}.
+		WithTitle("smart.g21.title", "Your essential month has shifted — resize %s?", g.Name).
+		WithDetail("smart.g21.detail",
+			"Your essential month is now about %s (it has moved %s from %s). A %s-month fund would target %s. Update the target when you're ready — nothing changes until you do.",
+			in.hmoney(derived), direction, in.hmoney(g.EssentialBasisMinor),
+			itoa64(int64(level)), in.hmoney(newTarget)).
+		WithAmount(in.baseMoney(newTarget)).
 		WithAction(smart.Action{
 			Kind:        smart.ActionNavigate,
-			Label:       "Review emergency fund",
 			Route:       "/goals",
 			RelatedType: "goal",
 			RelatedID:   g.ID,
-		})
+		}.WithLabel("smart.g21.action", "Review emergency fund"))
 	return []smart.Insight{ins}
 }
 

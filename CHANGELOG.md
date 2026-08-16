@@ -240,6 +240,26 @@ and every commit updates this file under `Unreleased`.
   surfaces come to look like they are doing each other's jobs. They ask something now.
 
 ### Fixed
+- **The language setting now reaches the whole app, and notification history survives a language
+  change (C362).** The pure logic packages write most of the app's sentences — 84 SMART detectors and
+  the entire widget catalog — and they composed them by concatenation at detection time. None of it
+  could be translated, and the notification feed persisted the finished English, so an archive
+  written before a language switch was stuck in the old one forever.
+
+  That second half was not a translation gap but data loss: the pieces needed to rebuild the sentence
+  were thrown away at write time. Copy now travels as a catalog key, its arguments, and the English
+  the producer would otherwise have baked in — and it falls back to that English whenever the catalog
+  doesn't know the key, so a detector added tomorrow shows its own sentence rather than a raw key
+  name. Persisted notifications and archived records carry all three, and records written before this
+  keep working from their stored text.
+
+  Widget presets got the same treatment for the same reason: a preset's copy is baked into a user's
+  dashboard spec when they place the widget, so it resolves at render time now. Text a user typed
+  themselves carries no key and is deliberately never translated.
+
+  smartengine went 163 → 0 and the widget catalog 42 → 0, converted byte-for-byte; the rendered
+  English is unchanged. Every directory in the hardcoded-copy ratchet reads zero.
+
 - **The last of the UI layer's untranslatable copy (C361).** Two surfaces sat outside the language
   setting. The install button and the iOS "Add to Home Screen" hint live in `web/index.html` and are
   shown by page script after boot, so they persist; they are relabelled from Go, because that page's

@@ -34,12 +34,9 @@ func p5GoalOverlay(in Input) []smart.Insight {
 	income, expense := in.trailingMonthly()
 	net := income - expense
 	after := net - needs
-	detail := "Your active goals need about " + in.hmoney(needs) + "/mo. "
-	if after >= 0 {
-		detail += "After funding them your typical net stays positive at about " + in.hmoney(after) + "/mo."
-	} else {
-		detail += "After funding them your typical net is about " + in.hmoney(after) +
-			"/mo — the goals outpace your surplus, so something has to give."
+	detailKey, detailFmt := "smart.p5.detailPositive", "Your active goals need about %s/mo. After funding them your typical net stays positive at about %s/mo."
+	if after < 0 {
+		detailKey, detailFmt = "smart.p5.detailNegative", "Your active goals need about %s/mo. After funding them your typical net is about %s/mo — the goals outpace your surplus, so something has to give."
 	}
 	sev := smart.SeverityInfo
 	if after < 0 {
@@ -49,11 +46,13 @@ func p5GoalOverlay(in Input) []smart.Insight {
 		Feature:  "SMART-P5",
 		Page:     smart.PagePlanning,
 		Key:      "SMART-P5:" + in.Now.Format("2006-01"),
-		Title:    "Goals consume " + in.hmoney(needs) + "/mo of your forecast",
-		Detail:   detail,
 		Severity: sev,
-	}.WithAmount(in.baseMoney(needs)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p5.title", "Goals consume %s/mo of your forecast", in.hmoney(needs)).
+		WithDetail(detailKey, detailFmt, in.hmoney(needs), in.hmoney(after)).
+		WithAmount(in.baseMoney(needs)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p5.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -83,15 +82,16 @@ func p6ConfidenceBand(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-P6",
-		Page:    smart.PagePlanning,
-		Key:     "SMART-P6:" + in.Now.Format("2006-01"),
-		Title:   "Your monthly net swings about ±" + in.hmoney(swing),
-		Detail: "Over the last " + plural(int64(len(nets)), "month") + " your monthly net ranged from " +
-			in.hmoney(lo) + " to " + in.hmoney(hi) + ". Plan with that margin, not a single line.",
+		Feature:  "SMART-P6",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P6:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(swing)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p6.title", "Your monthly net swings about ±%s", in.hmoney(swing)).
+		WithDetail("smart.p6.detail", "Over the last %s your monthly net ranged from %s to %s. Plan with that margin, not a single line.", plural(int64(len(nets)), "month"), in.hmoney(lo), in.hmoney(hi)).
+		WithAmount(in.baseMoney(swing)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p6.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -103,16 +103,16 @@ func p9BreakEven(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-P9",
-		Page:    smart.PagePlanning,
-		Key:     "SMART-P9:" + in.Now.Format("2006-01"),
-		Title:   "Break-even spending: " + in.hmoney(income) + "/mo",
-		Detail: "You stay cash-positive as long as monthly spending stays under about " +
-			in.hmoney(income) + " (your typical income). You're running near " +
-			in.hmoney(expense) + "/mo.",
+		Feature:  "SMART-P9",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P9:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(income)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p9.title", "Break-even spending: %s/mo", in.hmoney(income)).
+		WithDetail("smart.p9.detail", "You stay cash-positive as long as monthly spending stays under about %s (your typical income). You're running near %s/mo.", in.hmoney(income), in.hmoney(expense)).
+		WithAmount(in.baseMoney(income)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p9.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -156,15 +156,16 @@ func p4Affordability(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-P4",
-		Page:    smart.PagePlanning,
-		Key:     "SMART-P4:" + in.Now.Format("2006-01"),
-		Title:   "Suggested cash buffer: " + in.hmoney(essentials),
-		Detail: "Your essentials run about " + in.hmoney(essentials) +
-			"/mo. Using that as the runway floor and the affordability reserve keeps the projections grounded in real spending rather than a guess.",
+		Feature:  "SMART-P4",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P4:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(essentials)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p4.title", "Suggested cash buffer: %s", in.hmoney(essentials)).
+		WithDetail("smart.p4.detail", "Your essentials run about %s/mo. Using that as the runway floor and the affordability reserve keeps the projections grounded in real spending rather than a guess.", in.hmoney(essentials)).
+		WithAmount(in.baseMoney(essentials)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p4.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -193,15 +194,16 @@ func p1DiscoverRecurring(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-P1",
-		Page:    smart.PagePlanning,
-		Key:     "SMART-P1:" + in.Now.Format("2006-01"),
-		Title:   plural(int64(newCount), "recurring charge") + " not in your plan yet",
-		Detail: "Your history shows about " + in.hmoney(monthly) + "/mo of recurring charges that aren't " +
-			"in Planning. Adding them sharpens the forecast and runway.",
+		Feature:  "SMART-P1",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P1:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(monthly)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p1.title", "%s not in your plan yet", plural(int64(newCount), "recurring charge")).
+		WithDetail("smart.p1.detail", "Your history shows about %s/mo of recurring charges that aren't in Planning. Adding them sharpens the forecast and runway.", in.hmoney(monthly)).
+		WithAmount(in.baseMoney(monthly)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p1.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -229,15 +231,16 @@ func p8ExtraDebt(in Input) []smart.Insight {
 	// Name the highest-APR debt as the place to send it.
 	target := highestAPRDebt(debts)
 	ins := smart.Insight{
-		Feature: "SMART-P8",
-		Page:    smart.PagePlanning,
-		Key:     "SMART-P8:" + in.Now.Format("2006-01"),
-		Title:   "Put an extra " + in.hmoney(extra) + "/mo toward debt",
-		Detail: "You free up about " + in.hmoney(surplus) + "/mo. Sending " +
-			in.hmoney(extra) + " of it to " + target + " each month clears your debt faster and saves interest.",
+		Feature:  "SMART-P8",
+		Page:     smart.PagePlanning,
+		Key:      "SMART-P8:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(extra)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.p8.title", "Put an extra %s/mo toward debt", in.hmoney(extra)).
+		WithDetail("smart.p8.detail", "You free up about %s/mo. Sending %s of it to %s each month clears your debt faster and saves interest.", in.hmoney(surplus), in.hmoney(extra), target).
+		WithAmount(in.baseMoney(extra)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.p8.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -316,18 +319,17 @@ func p10BillShock(in Input) []smart.Insight {
 		monthsOut := max(monthsBetween(in.Now, due), 1)
 		setAside := charge / monthsOut
 		out = append(out, smart.Insight{
-			Feature: "SMART-P10",
-			Page:    smart.PagePlanning,
-			Key:     "SMART-P10:" + r.ID + ":" + due.Format("2006-01"),
-			Title:   r.Label + " of " + in.hmoney(charge) + " lands " + due.Format("Jan 2"),
-			Detail: "A large " + r.Label + " charge (" + in.hmoney(charge) + ") is coming " +
-				due.Format("Jan 2") + ". Setting aside about " + in.hmoney(setAside) +
-				"/mo until then softens the hit.",
+			Feature:  "SMART-P10",
+			Page:     smart.PagePlanning,
+			Key:      "SMART-P10:" + r.ID + ":" + due.Format("2006-01"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(charge)).
-			WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
-				TaskTitle: "Set aside " + in.hmoney(setAside) + "/mo for " + r.Label,
-				TaskNotes: r.Label + " (" + in.hmoney(charge) + ") is due " + due.Format("Jan 2") + "."}))
+		}.
+			WithTitle("smart.p10.title", "%s of %s lands %s", r.Label, in.hmoney(charge), due.Format("Jan 2")).
+			WithDetail("smart.p10.detail", "A large %s charge (%s) is coming %s. Setting aside about %s/mo until then softens the hit.", r.Label, in.hmoney(charge), due.Format("Jan 2"), in.hmoney(setAside)).
+			WithAmount(in.baseMoney(charge)).
+			WithAction(smart.Action{Kind: smart.ActionCreateTask, TaskTitle: "Set aside " + in.hmoney(setAside) + "/mo for " + r.Label,
+				TaskNotes: r.Label + " (" + in.hmoney(charge) + ") is due " + due.Format("Jan 2") + "."}.
+				WithLabel("smart.p10.action", "Add a to-do")))
 	}
 	return out
 }

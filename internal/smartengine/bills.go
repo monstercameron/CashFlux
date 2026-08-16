@@ -33,8 +33,9 @@ func init() {
 }
 
 // labelOpenBills is the shared navigate-action label used by every bills engine,
-// declared once so the copy reads identically everywhere (and is translated in a
-// single place when the bills engines move onto the i18n catalog).
+// declared once so the copy reads identically everywhere — and, since C362, so
+// it is translated in a single place: every site pairs it with the one key
+// "smart.bills.openAction".
 const labelOpenBills = "Open bills"
 
 const (
@@ -97,15 +98,16 @@ func bl1PredictVariable(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL1",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL1:" + key,
-			Title:   labels[key] + ": about " + in.hmoney(pred) + " expected",
-			Detail: labels[key] + " varies; its last " + plural(int64(len(last3)), "charge") + " averaged " +
-				in.hmoney(pred) + " (range " + in.hmoney(min) + "–" + in.hmoney(mx) + ").",
+			Feature:  "SMART-BL1",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL1:" + key,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(in.baseMoney(pred)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"}))
+		}.
+			WithTitle("smart.bl1.title", "%s: about %s expected", labels[key], in.hmoney(pred)).
+			WithDetail("smart.bl1.detail", "%s varies; its last %s averaged %s (range %s–%s).", labels[key], plural(int64(len(last3)), "charge"), in.hmoney(pred), in.hmoney(min), in.hmoney(mx)).
+			WithAmount(in.baseMoney(pred)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills"}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -157,15 +159,16 @@ func bl14SeasonalBill(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL14",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL14:" + key,
-			Title:   m.label + " swings seasonally up to " + in.hmoney(hi),
-			Detail: m.label + " has ranged from " + in.hmoney(lo) + " to " + in.hmoney(hi) +
-				" across the year. Budget for the high end in peak months rather than the average.",
+			Feature:  "SMART-BL14",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL14:" + key,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(in.baseMoney(hi)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"}))
+		}.
+			WithTitle("smart.bl14.title", "%s swings seasonally up to %s", m.label, in.hmoney(hi)).
+			WithDetail("smart.bl14.detail", "%s has ranged from %s to %s across the year. Budget for the high end in peak months rather than the average.", m.label, in.hmoney(lo), in.hmoney(hi)).
+			WithAmount(in.baseMoney(hi)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills"}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -188,15 +191,16 @@ func bl10PayAllDue(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-BL10",
-		Page:    smart.PageBills,
-		Key:     "SMART-BL10:" + in.Now.Format("2006-01-02"),
-		Title:   plural(int64(n), "bill") + " due in the next few days",
-		Detail: plural(int64(n), "bill") + " totaling about " + in.hmoney(total) +
-			" are due within " + plural(int64(bl10DueWindow), "day") + ". Review and clear them together.",
+		Feature:  "SMART-BL10",
+		Page:     smart.PageBills,
+		Key:      "SMART-BL10:" + in.Now.Format("2006-01-02"),
 		Severity: smart.SeverityWarn,
-	}.WithAmount(in.baseMoney(total)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
+	}.
+		WithTitle("smart.bl10.title", "%s due in the next few days", plural(int64(n), "bill")).
+		WithDetail("smart.bl10.detail", "%s totaling about %s are due within %s. Review and clear them together.", plural(int64(n), "bill"), in.hmoney(total), plural(int64(bl10DueWindow), "day")).
+		WithAmount(in.baseMoney(total)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills"}.
+			WithLabel("smart.bills.openAction", labelOpenBills))
 	return []smart.Insight{ins}
 }
 
@@ -222,16 +226,16 @@ func bl5OptimalPayDate(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-BL5",
-		Page:    smart.PageBills,
-		Key:     "SMART-BL5:" + nextPay.Format("2006-01-02"),
-		Title:   "Time flexible payments to just after payday",
-		Detail: plural(int64(beforeN), "bill") + " (about " + in.hmoney(beforeTotal) +
-			") land before your next paycheck around " + nextPay.Format("Jan 2") +
-			". Where a biller allows it, shifting payment to just after payday smooths the month.",
+		Feature:  "SMART-BL5",
+		Page:     smart.PageBills,
+		Key:      "SMART-BL5:" + nextPay.Format("2006-01-02"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(beforeTotal)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
+	}.
+		WithTitle("smart.bl5.title", "Time flexible payments to just after payday").
+		WithDetail("smart.bl5.detail", "%s (about %s) land before your next paycheck around %s. Where a biller allows it, shifting payment to just after payday smooths the month.", plural(int64(beforeN), "bill"), in.hmoney(beforeTotal), nextPay.Format("Jan 2")).
+		WithAmount(in.baseMoney(beforeTotal)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills"}.
+			WithLabel("smart.bills.openAction", labelOpenBills))
 	return []smart.Insight{ins}
 }
 
@@ -259,16 +263,16 @@ func bl15GracePeriod(in Input) []smart.Insight {
 		}
 		avg := sumDays / n
 		ins := smart.Insight{
-			Feature: "SMART-BL15",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL15:" + a.ID,
-			Title:   a.Name + " is typically paid " + plural(int64(avg), "day") + " after the due date",
-			Detail: "Across recent cycles " + a.Name + " was paid about " + plural(int64(avg), "day") +
-				" after the " + ordinalDay(a.DueDayOfMonth) + " — your effective last-safe-pay date, not just the nominal due date.",
+			Feature:  "SMART-BL15",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL15:" + a.ID,
 			Severity: smart.SeverityInfo,
-		}
-		out = append(out, ins.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.bl15.title", "%s is typically paid %s after the due date", a.Name, plural(int64(avg), "day")).
+			WithDetail("smart.bl15.detail", "Across recent cycles %s was paid about %s after the %s — your effective last-safe-pay date, not just the nominal due date.", a.Name, plural(int64(avg), "day"), ordinalDay(a.DueDayOfMonth))
+		out = append(out, ins.
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -330,15 +334,16 @@ func bl8PaycheckGrouping(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-BL8",
-		Page:    smart.PageBills,
-		Key:     "SMART-BL8:" + nextPay.Format("2006-01-02"),
-		Title:   plural(int64(n), "bill") + " due before your next paycheck",
-		Detail: plural(int64(n), "bill") + " totaling about " + in.hmoney(total) +
-			" fall before your next paycheck around " + nextPay.Format("Jan 2") + " — make sure they're covered.",
+		Feature:  "SMART-BL8",
+		Page:     smart.PageBills,
+		Key:      "SMART-BL8:" + nextPay.Format("2006-01-02"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(total)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills, Route: "/bills"})
+	}.
+		WithTitle("smart.bl8.title", "%s due before your next paycheck", plural(int64(n), "bill")).
+		WithDetail("smart.bl8.detail", "%s totaling about %s fall before your next paycheck around %s — make sure they're covered.", plural(int64(n), "bill"), in.hmoney(total), nextPay.Format("Jan 2")).
+		WithAmount(in.baseMoney(total)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills"}.
+			WithLabel("smart.bills.openAction", labelOpenBills))
 	return []smart.Insight{ins}
 }
 
@@ -380,15 +385,15 @@ func bl4Autopay(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL4",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL4:" + a.ID + ":" + prevDue.Format("2006-01"),
-			Title:   a.Name + " looks auto-paid",
-			Detail: "A payment posted around the " + prevDue.Format("Jan 2") + " due date, so " + a.Name +
-				" appears to be on autopay — no action needed.",
+			Feature:  "SMART-BL4",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL4:" + a.ID + ":" + prevDue.Format("2006-01"),
 			Severity: smart.SeverityInfo,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-			Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.bl4.title", "%s looks auto-paid", a.Name).
+			WithDetail("smart.bl4.detail", "A payment posted around the %s due date, so %s appears to be on autopay — no action needed.", prevDue.Format("Jan 2"), a.Name).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -416,17 +421,16 @@ func bl13StatementClarity(in Input) []smart.Insight {
 		}
 		monthlyInterest := pctOf(owed, a.InterestRateAPR) / 12
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL13",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL13:" + a.ID + ":" + in.Now.Format("2006-01"),
-			Title:   "Paying only the minimum on " + a.Name + " is costing you",
-			Detail: a.Name + " owes " + in.hmoney(owed) + " at " + fmtPct(a.InterestRateAPR) +
-				" APR. The " + in.hmoney(minPay) + " minimum payment leaves about " +
-				in.hmoney(monthlyInterest) + "/mo in interest — paying more would cut that down.",
+			Feature:  "SMART-BL13",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL13:" + a.ID + ":" + in.Now.Format("2006-01"),
 			Severity: smart.SeverityNudge,
-		}.WithAmount(in.baseMoney(monthlyInterest)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.bl13.title", "Paying only the minimum on %s is costing you", a.Name).
+			WithDetail("smart.bl13.detail", "%s owes %s at %s APR. The %s minimum payment leaves about %s/mo in interest — paying more would cut that down.", a.Name, in.hmoney(owed), fmtPct(a.InterestRateAPR), in.hmoney(minPay), in.hmoney(monthlyInterest)).
+			WithAmount(in.baseMoney(monthlyInterest)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -464,17 +468,16 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL6",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL6:" + a.ID + ":" + due.Format("2006-01"),
-			Title:   a.Name + " is due " + due.Format("Jan 2") + " — paying late adds up",
-			Detail: "At " + fmtPct(a.InterestRateAPR) + " APR, slipping a week past the " +
-				due.Format("Jan 2") + " due date costs roughly " + in.hmoney(weekInterest) +
-				" in interest (plus any late fee).",
+			Feature:  "SMART-BL6",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL6:" + a.ID + ":" + due.Format("2006-01"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(weekInterest)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.bl6.title", "%s is due %s — paying late adds up", a.Name, due.Format("Jan 2")).
+			WithDetail("smart.bl6.detail", "At %s APR, slipping a week past the %s due date costs roughly %s in interest (plus any late fee).", fmtPct(a.InterestRateAPR), due.Format("Jan 2"), in.hmoney(weekInterest)).
+			WithAmount(in.baseMoney(weekInterest)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -499,21 +502,24 @@ func bl2CanCover(in Input) []smart.Insight {
 		return nil
 	}
 	when := in.Now.AddDate(0, 0, proj.BreachDay)
-	detail := "Projecting your recurring bills against liquid cash, the balance dips to about " +
-		in.hmoney(proj.MinBalance) + " around " + when.Format("Jan 2") + "."
+	detailKey, detailFmt := "smart.bl2.detail", "Projecting your recurring bills against liquid cash, the balance dips to about %s around %s."
+	detailArgs := []any{in.hmoney(proj.MinBalance), when.Format("Jan 2")}
 	if up := bills.UpcomingAll(in.Accounts, in.Recurring, in.Now); len(up) > 0 {
 		soon := up[0]
-		detail += " " + soon.Name + " (" + hm(soon.Amount) + ") is due " + soon.DueDate.Format("Jan 2") + "."
+		detailKey, detailFmt = "smart.bl2.detailSoon", detailFmt+" %s (%s) is due %s."
+		detailArgs = append(detailArgs, soon.Name, hm(soon.Amount), soon.DueDate.Format("Jan 2"))
 	}
 	ins := smart.Insight{
 		Feature:  "SMART-BL2",
 		Page:     smart.PageBills,
 		Key:      "SMART-BL2:" + when.Format("2006-01-02"),
-		Title:    "Upcoming bills may not be covered",
-		Detail:   detail,
 		Severity: smart.SeverityAlert,
-	}.WithAmount(in.baseMoney(proj.BreachShortfall)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.bl2.title", "Upcoming bills may not be covered").
+		WithDetail(detailKey, detailFmt, detailArgs...).
+		WithAmount(in.baseMoney(proj.BreachShortfall)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.bl2.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -552,33 +558,31 @@ func bl3MissedBill(in Input) []smart.Insight {
 			// is never nudged to pay a debt a second time. This is an info-level
 			// evidence note, not an alert.
 			out = append(out, smart.Insight{
-				Feature: "SMART-BL3",
-				Page:    smart.PageBills,
-				Key:     key,
-				Title:   a.Name + " looks already paid",
-				Detail: "A matching payment of " + in.hmoney(m.CandBase) + " on " +
-					m.Candidate.Date.Format("Jan 2") + " in " + in.accountName(m.Candidate.AccountID) +
-					" isn't linked to this bill, so it read as unpaid. It's almost certainly already handled — link it so you don't pay twice.",
+				Feature:  "SMART-BL3",
+				Page:     smart.PageBills,
+				Key:      key,
 				Severity: smart.SeverityInfo,
-			}.WithAmount(in.baseMoney(m.CandBase)).
-				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-					Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+			}.
+				WithTitle("smart.bl3.title", "%s looks already paid", a.Name).
+				WithDetail("smart.bl3.detail", "A matching payment of %s on %s in %s isn't linked to this bill, so it read as unpaid. It's almost certainly already handled — link it so you don't pay twice.", in.hmoney(m.CandBase), m.Candidate.Date.Format("Jan 2"), in.accountName(m.Candidate.AccountID)).
+				WithAmount(in.baseMoney(m.CandBase)).
+				WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+					WithLabel("smart.bills.openAction", labelOpenBills)))
 			continue
 		}
 		// Genuinely no matching payment anywhere — the real overdue case. Show the
 		// search that was run so the finding is checkable, not a black box.
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL3",
-			Page:    smart.PageBills,
-			Key:     key,
-			Title:   a.Name + " may have been missed",
-			Detail: a.Name + " payment of about " + in.hmoney(expected) + " was due " +
-				prevDue.Format("Jan 2") + ". No matching payment turned up in any account in the " +
-				plural(int64(days), "day") + " since — check whether it was paid.",
+			Feature:  "SMART-BL3",
+			Page:     smart.PageBills,
+			Key:      key,
 			Severity: smart.SeverityAlert,
-		}.WithAmount(a.MinPayment.Abs()).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: labelOpenBills,
-				Route: "/bills", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.bl3.title2", "%s may have been missed", a.Name).
+			WithDetail("smart.bl3.detail2", "%s payment of about %s was due %s. No matching payment turned up in any account in the %s since — check whether it was paid.", a.Name, in.hmoney(expected), prevDue.Format("Jan 2"), plural(int64(days), "day")).
+			WithAmount(a.MinPayment.Abs()).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}
 	return out
 }
@@ -596,15 +600,16 @@ func bl7BillIncrease(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL7",
-			Page:    smart.PageBills,
-			Key:     "SMART-BL7:" + c.Name + ":" + c.ChangedAt.Format("2006-01"),
-			Title:   c.Name + " went up " + itoa64(int64(c.PercentChange)) + "%",
-			Detail: c.Name + " rose from " + in.hmoney(c.OldAmount) + " to " +
-				in.hmoney(c.NewAmount) + " as of " + c.ChangedAt.Format("Jan 2") + ".",
+			Feature:  "SMART-BL7",
+			Page:     smart.PageBills,
+			Key:      "SMART-BL7:" + c.Name + ":" + c.ChangedAt.Format("2006-01"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(c.Delta)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.bl7.title", "%s went up %s%%", c.Name, itoa64(int64(c.PercentChange))).
+			WithDetail("smart.bl7.detail", "%s rose from %s to %s as of %s.", c.Name, in.hmoney(c.OldAmount), in.hmoney(c.NewAmount), c.ChangedAt.Format("Jan 2")).
+			WithAmount(in.baseMoney(c.Delta)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.bl7.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -630,18 +635,16 @@ func bl9SinkingFund(in Input) []smart.Insight {
 			due = r.Cadence.Next(due)
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-BL9",
-			Page:    smart.PageGoals,
-			Key:     "SMART-BL9:" + r.ID,
-			Title:   "Set aside for " + r.Label,
-			Detail: r.Label + " is about " + in.hmoney(abs64(annual)) + "/yr, due " +
-				due.Format("Jan 2") + ". Putting aside " + in.hmoney(monthly) +
-				"/mo now avoids the lump-sum shock.",
+			Feature:  "SMART-BL9",
+			Page:     smart.PageGoals,
+			Key:      "SMART-BL9:" + r.ID,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(in.baseMoney(monthly)).
+		}.
+			WithTitle("smart.bl9.title", "Set aside for %s", r.Label).
+			WithDetail("smart.bl9.detail", "%s is about %s/yr, due %s. Putting aside %s/mo now avoids the lump-sum shock.", r.Label, in.hmoney(abs64(annual)), due.Format("Jan 2"), in.hmoney(monthly)).
+			WithAmount(in.baseMoney(monthly)).
 			WithAction(smart.Action{
 				Kind:              smart.ActionCreateGoal,
-				Label:             "Create a sinking fund",
 				GoalName:          r.Label + " Fund",
 				GoalTarget:        abs64(in.toBaseMinor(annualMinor(r), r.Amount.Currency)),
 				GoalCurrency:      in.Base,
@@ -649,7 +652,8 @@ func bl9SinkingFund(in Input) []smart.Insight {
 				GoalCategoryID:    r.CategoryID,
 				RelatedType:       "bill",
 				RelatedID:         r.ID,
-			}))
+			}.
+				WithLabel("smart.bl9.action", "Create a sinking fund")))
 	}
 	return out
 }

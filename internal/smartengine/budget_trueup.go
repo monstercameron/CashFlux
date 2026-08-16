@@ -41,21 +41,23 @@ func b13TrueUp(in Input) []smart.Insight {
 		if u.Seasonal {
 			basis = "this month in prior years"
 		}
-		detail := name + " has run about " + hmoneyc(u.LearnedMinor, cur) + "/mo over " +
-			plural(int64(u.BasisMonths), "month") + " against a " + hmoneyc(u.CurrentLimitMinor, cur) +
-			" budget. Based on " + basis + ", raising it to " + hmoneyc(u.SuggestedMinor, cur) +
-			" would match reality. Accept, or leave it and keep the tighter target."
 		out = append(out, smart.Insight{
 			Feature: "SMART-B13",
 			Page:    smart.PageBudgets,
 			// Level-encoded key: a further drift (new SuggestedMinor) re-flags.
 			Key:      "SMART-B13:" + u.Budget.ID + ":" + itoa64(u.SuggestedMinor),
-			Title:    name + " is running above its budget — raise it to " + hmoneyc(u.SuggestedMinor, cur) + "?",
-			Detail:   detail,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(u.SuggestedMinor-u.CurrentLimitMinor, cur)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review the budget",
-				Route: "/budgets", RelatedType: "budget", RelatedID: u.Budget.ID}))
+		}.
+			WithTitle("smart.b13.title", "%s is running above its budget — raise it to %s?",
+				name, hmoneyc(u.SuggestedMinor, cur)).
+			WithDetail("smart.b13.detail",
+				"%s has run about %s/mo over %s against a %s budget. Based on %s, raising it to %s would match reality. Accept, or leave it and keep the tighter target.",
+				name, hmoneyc(u.LearnedMinor, cur), plural(int64(u.BasisMonths), "month"),
+				hmoneyc(u.CurrentLimitMinor, cur), basis, hmoneyc(u.SuggestedMinor, cur)).
+			WithAmount(mny(u.SuggestedMinor-u.CurrentLimitMinor, cur)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate,
+				Route: "/budgets", RelatedType: "budget", RelatedID: u.Budget.ID,
+			}.WithLabel("smart.b13.action", "Review the budget")))
 	}
 	return out
 }

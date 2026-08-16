@@ -5370,22 +5370,39 @@ struct fields), now living permanently as the **one-way ratchet test**
   With the widened scanner the whole UI layer is genuinely at 0; everything it still reports is
   C362's scope (smartengine 163, widgetcatalog 42, widgetregistry 2).
 
-- [ ] **C362 [MAJOR][I18N][ARCH] Logic packages bake English at generation time — needs the
-  key+args architecture.** `internal/smartengine` (160 findings: every insight Title/Detail/action
-  Label across ~84 SMART features) and `internal/widgetcatalog` (42: widget/column/chart labels)
-  build user-facing copy as Go string concatenations in pure packages with no language context; the
-  notification feed then PERSISTS the pre-formatted English (e.g. "Your paycheck landed — $4,700.00"
-  sits formatted in IndexedDB), so a language switch can never re-translate history. Design needed:
-  insights/notifications carry `Key string` + `Args []any` (formatted via the i18n bundle at RENDER
-  time; persisted entries store key+args, formatting on read), or the engines accept an injected
-  translator func. widgetcatalog can reuse the registry's existing NameKey pattern
-  (`dashboard.heroTitle` precedent). The ratchet holds `../smartengine` at 160 and
-  `../widgetcatalog` at 42 until this lands; healthscore/credithealth/attention/notify/
-  subscriptions/billsched/widgetsource are already at 0 (they return data, not copy — keep it that
-  way; band/label words like credithealth's "Good" surface via UI-side keys). Also in this class:
-  `widgetregistry`'s "spotlight" preset content-layout templates ("This month", the Net/saved
-  template line) are PERSISTED into the user's widget spec at creation — translate at
-  spec-instantiation time (ratchet holds `../widgetregistry` at 2).
+- [x] **C362 ✅ DONE (2026-08-16) — Logic packages baked English at generation time.**
+  Two problems wearing one number, and only one of them was a translation gap.
+  **The data bug first.** The notification feed persisted the finished English of whatever language
+  was active when an alert fired ("Your paycheck landed — $4,700.00" sitting formatted in the
+  archive), so a household that switched language kept its history in the old one forever. That is
+  not untranslated copy — it is data loss: the pieces needed to rebuild the sentence were discarded
+  at write time, so no later fix could recover them.
+  **The seam:** `internal/copytext` carries copy as a catalog KEY, its ARGS, and the English the
+  producer would otherwise have baked in. `Resolve` degrades to that English when the catalog does
+  not know the key, which is what makes it safe to adopt one call site at a time — a detector added
+  tomorrow shows its own English, never a raw key name.
+  **Wired end to end through persistence:** producers hand `copytext.Text` to `notifyfeed`,
+  `notify.Candidate`/`Notification` carry it, the persisted `FeedItem` and the archived
+  `notifyhistory.Record` store it, and both surfaces resolve it. Records written before this keep
+  working from their stored sentence. Same shape for the widget presets: a preset's copy is baked
+  into a user's spec when they place the widget and that spec is persisted, so `domain.Block` gained
+  a `TextKey` resolved at RENDER time — and text a user typed carries no key and is deliberately
+  never translated.
+  **Then the volume.** `smartengine` 163 → **0** and `widgetcatalog` 42 → **0**, converted
+  byte-for-byte so the rendered English is unchanged. `smart.Insight.WithTitle`/`WithDetail` and
+  `Action.WithLabel` produce the composed sentence AND the key+args from one call, so the two can
+  never describe different things. Resolution happens at the one door insights leave the package
+  through (`smartengine.localize`) rather than at each of a dozen render sites — a rule the caller
+  has to remember is a rule that gets forgotten (C340) — and the AI context builder and the digest
+  read those same fields. `widgetcatalog` gained `Localized` helpers plus a boot-installed
+  translator, for the same reason.
+  **The conversion was done with a tool, not by hand** (`tools/copyconv`): each site is a
+  `+`-concatenation chain mixing literal text with formatted values, and reordering one argument by
+  hand still compiles and still reads as English. An AST pass makes the decomposition total. It also
+  surfaced 16 sites where the whole string came from a local variable — the conversion would have
+  "passed" with a `%s` format while the real English stayed untranslatable — and each of those was
+  fixed properly, with a key per branch where the copy was built conditionally.
+  Every directory in the hardcoded-copy ratchet now reads 0.
 
 ## W. Nine-page 10/10 pass — 2026-07-19 (v1.2.6 black-box comp assessment) ★
 
@@ -8312,7 +8329,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
 
 ---
 
-- [x] **C611 [DONE 2026-08-16] [MAJOR][UI][TXN] Quick-add opened from the dashboard is interactive but invisible.** ★
+- [ ] **C611 [OPEN — my earlier "DONE" was wrong; see the correction at the end] [MAJOR][UI][TXN] Quick-add opened from the dashboard is interactive but invisible.** ★
   *(Renumbered from C560 — a concurrent session had already used that number.)*
   *Found 2026-08-16 while writing the C546 e2e coverage, by screenshotting the failure instead of
   re-reading the selectors.*
@@ -8354,6 +8371,42 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   removed; `e2e/regression/flip_inert.spec.mjs` asserts the RESULT rather than the styling — an open
   panel is hit-testable and focusable at its own centre on both the dashboard and the ledger, and a
   closed panel leaves nothing focusable behind. a11y ratchet still 12/12.
+
+  ---
+
+  **CORRECTION 2026-08-16 — the fix above was REVERTED and this ticket is OPEN. The diagnosis was
+  wrong.** Recording it in full because the wrong answer is instructive.
+  What I claimed: the defect was cosmetic-CSS — an unrevealed panel was `opacity: 0` (invisible but
+  focusable), so `visibility: hidden` would make it inert. Shipped with a CSS unit test and an e2e
+  guard, both green.
+  What driving it directly actually shows: **the panel often does not REVEAL at all on a cold first
+  open.** One click on "Add transaction", wait 1.8s, and the backdrop is still `flip-backdrop` with
+  no `.show`, `.flip-inner` with no `.flipped`, and focus still on the trigger button. A SECOND
+  click reveals it. So the panel is not "revealed but transparent" — the reveal never happened.
+  **Why the tests did not catch it:** the suite's `openVia` helper RETRIES the click until the
+  target appears, so every test opened the panel with two clicks and asserted against a state a real
+  user's single click does not reach. A green suite that never exercises the reported gesture.
+  **The visibility change was therefore treating a symptom, and it has been fully reverted**
+  (`internal/ui/flippanel.go` and `internal/styles/rules_gen.go` are back at HEAD;
+  `styles/flip_inert_test.go` is deleted). Two attempted fixes for the real cause were also tried
+  and reverted, and both are worth knowing about: scheduling the reveal via `requestAnimationFrame`
+  changes nothing, and `UseLayoutEffect` — which the framework documents for exactly this
+  ("focusing a freshly mounted element") — stops the panel mounting at all. That ordering is
+  load-bearing; a comment now says so.
+  **Focus is the same bug, not a second one.** With everything reverted and the backdrop measured at
+  `visibility: visible`, focus STILL does not enter the dialog. Both symptoms follow from the mount
+  effects not completing on a cold open.
+  **Why I stopped rather than pushing on:** a concurrent session is editing this same worktree, so
+  every `go build` produces a different program. The same probe returned "revealed" and "not
+  revealed" on builds minutes apart with none of my code changed, which makes A/B bisection
+  meaningless — I twice drew a confident conclusion from what turned out to be someone else's
+  half-finished build. This needs a quiet worktree.
+  **Next step:** reproduce on a tree with no concurrent edits, then instrument `flipPanel`'s two
+  mount effects (does the passive effect run at all on first mount? does `shown.Set(true)` schedule
+  a render?) — that separates "effect never ran" from "state set never repainted", which no
+  black-box probe can. `e2e/regression/flip_inert.spec.mjs` documents the reproduction; its focus
+  assertion is a `test.fixme` pointing here, and its header states plainly that the passing tests
+  only hold because the harness clicks twice.
 
 - [x] **C612 [DONE 2026-08-16] [BLOCKER][TXN] The transaction edit form does not save an AMOUNT change.** ★
   *(Renumbered from C561 — a concurrent session had already used that number.)*
@@ -8792,3 +8845,44 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   duplicate). Reproduce with the probe shape above before theorising.
   AC: after any in-app navigation, Back and Forward change the rendered screen to match the URL, and
   `#main[data-route]` always equals `location.pathname`.
+
+---
+
+## TR journey replay backfill (2026-08-16)
+
+This is the repository record for the live journey replay that created a 16-transaction UXJ cohort,
+used Review in bulk and one-at-a-time modes, edited categories, created a category, and corrected the
+known-bad search result. The in-app To-do entries mirror these findings, but the repo is the canonical
+engineering backlog. C553 and C601 remain open: their source-level notes must not be treated as live
+closure until this replay passes against the served build.
+
+- [ ] **C616 [BLOCKER][TXN][REVIEW][STATE] One-at-a-time Review still cannot persist a category choice.**
+  In the live replay, selecting a valid category and using either `Categorize & next` or Enter showed
+  `That didn't save`, left the card unchanged, and left the Review count unchanged. The bulk path did
+  persist successfully, so this is specific to the guided single-review commit path. Re-run C553's
+  source guard and browser test against the served build, then verify the category, review state, queue
+  count, and reload persistence before advancing the card.
+  AC: a failed write keeps the card in place with an actionable error; a successful write advances only
+  after persistence and updates the ledger, Review inbox, counters, and reload state consistently.
+
+- [ ] **C617 [MAJOR][TXN][REVIEW][STATE] Review confirmation and ledger status remain contradictory.**
+  Bulk confirmation reported `Categorized 6 charges` and reduced the Review inbox from 263 to 251, but
+  the processed UXJ rows still displayed `Needs review` in the ledger. The edited known-bad control also
+  persisted its new category while retaining `Needs review`. Define whether confirmation clears the flag;
+  then make the inbox query, ledger badge, decisions counter, and reload state use the same transition.
+  AC: after a confirmed decision, the same transaction cannot simultaneously disappear from the Review
+  queue and remain visibly actionable as `Needs review` unless the UI explains the distinct meanings.
+
+- [ ] **C618 [MAJOR][TXN][REVIEW][DATA] Rule-categorized review items can be absent from Review inbox.**
+  UXJ-S01 and UXJ-B01-B03 received categories automatically and still showed `Needs review` in the
+  ledger, but did not appear as merchant groups in the Review dialog. Reconcile the queue source and
+  count semantics, or add an explicit `Auto-categorized` state with a clear confirmation path.
+  AC: every transaction labeled `Needs review` is either reachable from Review inbox or clearly labeled
+  as outside the queue with a reason and an alternate action.
+
+- [ ] **C619 [MINOR][TXN][SEARCH][CAT][UX] Remove stale search feedback and category-label drift.**
+  While changing the transaction search, the previous filter/results briefly remained visible without a
+  pending indicator or disabled actions. Review also showed qualified labels such as `Transportation >
+  Gas`, while the ledger showed only `Gas`. Add pending-search feedback and use one consistent category
+  label convention across Review, ledger, edit, and filter surfaces.
+  AC: users cannot act on stale search results, and the same category is named consistently everywhere.

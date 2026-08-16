@@ -112,15 +112,16 @@ func su15Pause(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU15",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU15:" + key,
-			Title:   m.label + " looks seasonal",
-			Detail: m.label + " charges only part of the year. Pausing it in the off-months — rather than cancelling " +
-				"and re-subscribing — keeps your settings and saves the gap months.",
+			Feature:  "SMART-SU15",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU15:" + key,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(m.amt, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su15.title", "%s looks seasonal", m.label).
+			WithDetail("smart.su15.detail", "%s charges only part of the year. Pausing it in the off-months — rather than cancelling and re-subscribing — keeps your settings and saves the gap months.", m.label).
+			WithAmount(mny(m.amt, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su15.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -159,15 +160,16 @@ func su7UsageVsCost(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU7",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU7:" + strings.ToLower(s.Name),
-			Title:   "You may be paying for " + s.Name + " without using it",
-			Detail: s.Name + " is the only activity in " + catName + " — " +
-				hmoneyc(s.Amount, s.Currency) + " a month with nothing else in that category. Worth a look.",
+			Feature:  "SMART-SU7",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU7:" + strings.ToLower(s.Name),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su7.title", "You may be paying for %s without using it", s.Name).
+			WithDetail("smart.su7.detail", "%s is the only activity in %s — %s a month with nothing else in that category. Worth a look.", s.Name, catName, hmoneyc(s.Amount, s.Currency)).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su7.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -189,15 +191,16 @@ func su12Attribution(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU12",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU12:" + strings.ToLower(s.Name),
-			Title:   s.Name + " isn't assigned to anyone",
-			Detail: s.Name + " (" + hmoneyc(s.Amount, s.Currency) +
-				") isn't attributed to a household member. Assign it so everyone's share is clear.",
+			Feature:  "SMART-SU12",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU12:" + strings.ToLower(s.Name),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su12.title", "%s isn't assigned to anyone", s.Name).
+			WithDetail("smart.su12.detail", "%s (%s) isn't attributed to a household member. Assign it so everyone's share is clear.", s.Name, hmoneyc(s.Amount, s.Currency)).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su12.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -265,17 +268,17 @@ func su9RenewalReminders(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU9",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU9:" + strings.ToLower(s.Name) + ":" + s.NextRenewal.Format("2006-01-02"),
-			Title:   s.Name + " renews " + s.NextRenewal.Format("Jan 2"),
-			Detail: s.Name + " (" + hmoneyc(s.Amount, s.Currency) + ") renews on " + s.NextRenewal.Format("Jan 2") +
-				". Decide whether to keep it before it charges again.",
+			Feature:  "SMART-SU9",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU9:" + strings.ToLower(s.Name) + ":" + s.NextRenewal.Format("2006-01-02"),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
-				TaskTitle: "Keep " + s.Name + "? Renews " + s.NextRenewal.Format("Jan 2"),
-				TaskNotes: s.Name + " renews " + s.NextRenewal.Format("Jan 2") + " for " + hmoneyc(s.Amount, s.Currency) + "."}))
+		}.
+			WithTitle("smart.su9.title", "%s renews %s", s.Name, s.NextRenewal.Format("Jan 2")).
+			WithDetail("smart.su9.detail", "%s (%s) renews on %s. Decide whether to keep it before it charges again.", s.Name, hmoneyc(s.Amount, s.Currency), s.NextRenewal.Format("Jan 2")).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionCreateTask, TaskTitle: "Keep " + s.Name + "? Renews " + s.NextRenewal.Format("Jan 2"),
+				TaskNotes: s.Name + " renews " + s.NextRenewal.Format("Jan 2") + " for " + hmoneyc(s.Amount, s.Currency) + "."}.
+				WithLabel("smart.su9.action", "Add a to-do")))
 	}
 	return out
 }
@@ -293,15 +296,16 @@ func su6CostCreep(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU6",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU6:" + strings.ToLower(strings.TrimSpace(c.Name)),
-			Title:   c.Name + " costs " + itoa64(int64(c.PercentChange)) + "% more than before",
-			Detail: c.Name + " has crept from " + hmoneyc(c.OldAmount, in.Base) + " to " +
-				hmoneyc(c.NewAmount, in.Base) + " — a silent price walk-up worth noticing.",
+			Feature:  "SMART-SU6",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU6:" + strings.ToLower(strings.TrimSpace(c.Name)),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(c.Delta, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su6.title", "%s costs %s%% more than before", c.Name, itoa64(int64(c.PercentChange))).
+			WithDetail("smart.su6.detail", "%s has crept from %s to %s — a silent price walk-up worth noticing.", c.Name, hmoneyc(c.OldAmount, in.Base), hmoneyc(c.NewAmount, in.Base)).
+			WithAmount(mny(c.Delta, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su6.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -319,15 +323,16 @@ func su8Forgotten(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU8",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU8:" + strings.ToLower(s.Name),
-			Title:   s.Name + " — no charge since " + s.Last.Format("Jan 2"),
-			Detail: s.Name + " hasn't charged in a while. If it lapsed that's fine; if it's still active, " +
-				"it's an easy one to forget you're paying for.",
+			Feature:  "SMART-SU8",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU8:" + strings.ToLower(s.Name),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su8.title", "%s — no charge since %s", s.Name, s.Last.Format("Jan 2")).
+			WithDetail("smart.su8.detail", "%s hasn't charged in a while. If it lapsed that's fine; if it's still active, it's an easy one to forget you're paying for.", s.Name).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su8.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -350,15 +355,16 @@ func su11Zombie(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU11",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU11:" + strings.ToLower(s.Name),
-			Title:   s.Name + " has quietly charged for " + plural(int64(s.Count), "period"),
-			Detail: "A small recurring charge (" + hmoneyc(s.Amount, s.Currency) + ") that's been running a long time — " +
-				"easy to forget. Worth a check that you still use it.",
+			Feature:  "SMART-SU11",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU11:" + strings.ToLower(s.Name),
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su11.title", "%s has quietly charged for %s", s.Name, plural(int64(s.Count), "period")).
+			WithDetail("smart.su11.detail", "A small recurring charge (%s) that's been running a long time — easy to forget. Worth a check that you still use it.", hmoneyc(s.Amount, s.Currency)).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su11.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -411,15 +417,16 @@ func su3TrialConversion(in Input) []smart.Insight {
 			}
 			label := displayMerchant(in, name)
 			out = append(out, smart.Insight{
-				Feature: "SMART-SU3",
-				Page:    smart.PageSubscriptions,
-				Key:     "SMART-SU3:" + name + ":" + c.date.Format("2006-01-02"),
-				Title:   label + " just converted to a paid charge",
-				Detail: "After a free or intro period, " + label + " posted its first real charge of " +
-					hmoneyc(c.amount, in.Base) + " on " + c.date.Format("Jan 2") + " — cancel now if you're not using it.",
+				Feature:  "SMART-SU3",
+				Page:     smart.PageSubscriptions,
+				Key:      "SMART-SU3:" + name + ":" + c.date.Format("2006-01-02"),
 				Severity: smart.SeverityWarn,
-			}.WithAmount(mny(c.amount, in.Base)).
-				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+			}.
+				WithTitle("smart.su3.title", "%s just converted to a paid charge", label).
+				WithDetail("smart.su3.detail", "After a free or intro period, %s posted its first real charge of %s on %s — cancel now if you're not using it.", label, hmoneyc(c.amount, in.Base), c.date.Format("Jan 2")).
+				WithAmount(mny(c.amount, in.Base)).
+				WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+					WithLabel("smart.su3.action", "Review subscriptions")))
 			break // one conversion warning per merchant
 		}
 	}
@@ -475,15 +482,16 @@ func su1CancelCandidates(in Input) []smart.Insight {
 			Feature:  "SMART-SU1",
 			Page:     smart.PageSubscriptions,
 			Key:      "SMART-SU1:" + strings.ToLower(s.Name),
-			Title:    "Consider cutting " + s.Name + " — save " + hmoneyc(annual, s.Currency) + "/yr",
-			Detail:   s.Name + " stands out because " + joinReasons(reasons) + ".",
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(annual, s.Currency)).
+		}.
+			WithTitle("smart.su1.title", "Consider cutting %s — save %s/yr", s.Name, hmoneyc(annual, s.Currency)).
+			WithDetail("smart.su1.detail", "%s stands out because %s.", s.Name, joinReasons(reasons)).
+			WithAmount(mny(annual, s.Currency)).
 			WithAction(smart.Action{
 				Kind:             smart.ActionCancelSubscription,
-				Label:            "Cancel " + s.Name,
 				SubscriptionName: s.Name,
-			}))
+			}.
+				WithLabel("smart.su1.action", "Cancel %s", s.Name)))
 	}
 	return out
 }
@@ -506,15 +514,16 @@ func su4AnnualSavings(in Input) []smart.Insight {
 		}
 		saving := annual * annualPlanDiscount / 100
 		out = append(out, smart.Insight{
-			Feature: "SMART-SU4",
-			Page:    smart.PageSubscriptions,
-			Key:     "SMART-SU4:" + strings.ToLower(s.Name),
-			Title:   "Pay " + s.Name + " annually to save " + hmoneyc(saving, s.Currency) + "/yr",
-			Detail: s.Name + " costs about " + hmoneyc(annual, s.Currency) +
-				"/yr monthly; many services are roughly two months cheaper on an annual plan.",
+			Feature:  "SMART-SU4",
+			Page:     smart.PageSubscriptions,
+			Key:      "SMART-SU4:" + strings.ToLower(s.Name),
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(saving, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions", Route: "/subscriptions"}))
+		}.
+			WithTitle("smart.su4.title", "Pay %s annually to save %s/yr", s.Name, hmoneyc(saving, s.Currency)).
+			WithDetail("smart.su4.detail", "%s costs about %s/yr monthly; many services are roughly two months cheaper on an annual plan.", s.Name, hmoneyc(annual, s.Currency)).
+			WithAmount(mny(saving, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
+				WithLabel("smart.su4.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -530,10 +539,10 @@ func su14CancellationTally(in Input) []smart.Insight {
 		Feature:  "SMART-SU14",
 		Page:     smart.PageSubscriptions,
 		Key:      "SMART-SU14:tally",
-		Title:    "You've cancelled " + plural(int64(n), "subscription"),
-		Detail:   "Nice work trimming recurring costs — every cancellation keeps paying off each month.",
 		Severity: smart.SeverityInfo,
-	}
+	}.
+		WithTitle("smart.su14.title", "You've cancelled %s", plural(int64(n), "subscription")).
+		WithDetail("smart.su14.detail", "Nice work trimming recurring costs — every cancellation keeps paying off each month.")
 	return []smart.Insight{ins}
 }
 

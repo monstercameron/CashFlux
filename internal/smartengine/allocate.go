@@ -33,15 +33,16 @@ func al5OutcomePreview(in Input) []smart.Insight {
 	}
 	target := highestAPRDebt(debts)
 	ins := smart.Insight{
-		Feature: "SMART-AL5",
-		Page:    smart.PageAllocate,
-		Key:     "SMART-AL5:" + in.Now.Format("2006-01"),
-		Title:   "Allocating your surplus clears debt in " + plural(int64(plan.Months), "month"),
-		Detail: "Putting your " + in.hmoney(surplus) + "/mo surplus toward " + target +
-			" (highest-interest first) clears your debt in about " + plural(int64(plan.Months), "month") + ".",
+		Feature:  "SMART-AL5",
+		Page:     smart.PageAllocate,
+		Key:      "SMART-AL5:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(surplus)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open allocate", Route: "/allocate"})
+	}.
+		WithTitle("smart.al5.title", "Allocating your surplus clears debt in %s", plural(int64(plan.Months), "month")).
+		WithDetail("smart.al5.detail", "Putting your %s/mo surplus toward %s (highest-interest first) clears your debt in about %s.", in.hmoney(surplus), target, plural(int64(plan.Months), "month")).
+		WithAmount(in.baseMoney(surplus)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/allocate"}.
+			WithLabel("smart.al5.action", "Open allocate"))
 	return []smart.Insight{ins}
 }
 
@@ -68,10 +69,12 @@ func al1SuggestedProfile(in Input) []smart.Insight {
 		Feature:  "SMART-AL1",
 		Page:     smart.PageAllocate,
 		Key:      "SMART-AL1:" + profile,
-		Title:    "The \"" + profile + "\" profile fits your situation",
-		Detail:   why + " Start from the " + profile + " profile, then adjust as you like.",
 		Severity: smart.SeverityNudge,
-	}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open allocate", Route: "/allocate"})
+	}.
+		WithTitle("smart.al1.title", "The \"%s\" profile fits your situation", profile).
+		WithDetail("smart.al1.detail", "%s Start from the %s profile, then adjust as you like.", why, profile).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/allocate"}.
+			WithLabel("smart.al1.action", "Open allocate"))
 	return []smart.Insight{ins}
 }
 
@@ -84,16 +87,16 @@ func al3SmartReserve(in Input) []smart.Insight {
 	}
 	reserve := essentials * emergencyTargetMos
 	ins := smart.Insight{
-		Feature: "SMART-AL3",
-		Page:    smart.PageAllocate,
-		Key:     "SMART-AL3:" + in.Now.Format("2006-01"),
-		Title:   "Suggested reserve: " + in.hmoney(reserve),
-		Detail: "Holding back about " + in.hmoney(reserve) + " (" + itoa64(emergencyTargetMos) +
-			" months of your roughly " + in.hmoney(essentials) +
-			"/mo essentials) keeps a real buffer before allocating the rest.",
+		Feature:  "SMART-AL3",
+		Page:     smart.PageAllocate,
+		Key:      "SMART-AL3:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(reserve)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open allocate", Route: "/allocate"})
+	}.
+		WithTitle("smart.al3.title", "Suggested reserve: %s", in.hmoney(reserve)).
+		WithDetail("smart.al3.detail", "Holding back about %s (%s months of your roughly %s/mo essentials) keeps a real buffer before allocating the rest.", in.hmoney(reserve), itoa64(emergencyTargetMos), in.hmoney(essentials)).
+		WithAmount(in.baseMoney(reserve)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/allocate"}.
+			WithLabel("smart.al3.action", "Open allocate"))
 	return []smart.Insight{ins}
 }
 

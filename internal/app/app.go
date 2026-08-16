@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/styles"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -262,6 +263,7 @@ func Run() {
 	// C362: hand the pure widget catalog the app's translator, once, so every
 	// widget/column/chart label it names resolves through the language setting.
 	widgetcatalog.SetTranslator(uistate.T)
+	smartengine.SetTranslator(uistate.T)
 
 	// C361: translate the install affordances that live in web/index.html. They
 	// are shown by page script after boot and were the last user-facing English

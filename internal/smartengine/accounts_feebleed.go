@@ -68,23 +68,24 @@ func a9FeeBleed(in Input) []smart.Insight {
 		// Annualize the observed fee drain over the window months.
 		annualMinor := feeTotalMinor * 12 / feeBleedMonths
 		ins := smart.Insight{
-			Feature: "SMART-A9",
-			Page:    smart.PageAccounts,
-			Key:     "SMART-A9:" + a.ID,
-			Title:   a.Name + " is paying a fee for nothing",
-			Detail: "The only activity on " + a.Name + " in the last " + plural(feeBleedMonths, "month") +
-				" is " + plural(int64(feeCount), "fee-like charge") + " totaling " + in.hmoney(feeTotalMinor) +
-				" — about " + in.hmoney(annualMinor) + "/yr on a dormant account. Consider closing it to stop the bleed.",
+			Feature:  "SMART-A9",
+			Page:     smart.PageAccounts,
+			Key:      "SMART-A9:" + a.ID,
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(annualMinor)).
+		}.
+			WithTitle("smart.a9.title", "%s is paying a fee for nothing", a.Name).
+			WithDetail("smart.a9.detail",
+				"The only activity on %s in the last %s is %s totaling %s — about %s/yr on a dormant account. Consider closing it to stop the bleed.",
+				a.Name, plural(feeBleedMonths, "month"), plural(int64(feeCount), "fee-like charge"),
+				in.hmoney(feeTotalMinor), in.hmoney(annualMinor)).
+			WithAmount(in.baseMoney(annualMinor)).
 			WithAction(smart.Action{
 				Kind:        smart.ActionCreateTask,
-				Label:       "Add a task to close it",
 				TaskTitle:   "Close " + a.Name + " and stop the monthly fee",
 				TaskNotes:   "This account has had no real activity in " + plural(feeBleedMonths, "month") + " but is still charged a recurring fee. Close it once the balance is zeroed.",
 				RelatedType: "account",
 				RelatedID:   a.ID,
-			})
+			}.WithLabel("smart.a9.action", "Add a task to close it"))
 		out = append(out, ins)
 	}
 	return out

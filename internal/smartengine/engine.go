@@ -18,6 +18,7 @@ package smartengine
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -186,7 +187,7 @@ func Run(in Input, s smart.Settings) []smart.Insight {
 	}
 	out = s.Active(out)
 	smart.SortInsights(out)
-	return out
+	return localize(out)
 }
 
 // RunPage is Run scoped to a single page — used by per-page Smart panels so a
@@ -208,6 +209,43 @@ func RunPage(in Input, s smart.Settings, page smart.Page) []smart.Insight {
 	}
 	out = s.Active(out)
 	smart.SortInsights(out)
+	return localize(out)
+}
+
+// translator resolves the catalog keys the detectors' copy carries. The UI
+// installs it once at boot (SetTranslator); a pure package cannot import the UI
+// to ask, and the detectors must stay pure so they remain testable as plain
+// functions over domain data.
+//
+// Unset, every insight renders the English its detector composed — which is
+// exactly what happened before C362, so the package behaves identically without
+// it and every existing test keeps passing untouched.
+var translator copytext.Translator
+
+// SetTranslator installs the catalog resolver for insight copy (C362). Call
+// once, at boot.
+func SetTranslator(tr copytext.Translator) { translator = tr }
+
+// localize resolves each insight's title, detail and action label through the
+// installed translator.
+//
+// It happens HERE, at the one door every insight leaves the package through,
+// rather than at each of the dozen render sites: a rule the caller has to
+// remember is a rule that gets forgotten (C340), and the notification digest and
+// the AI context builder read these too.
+func localize(out []smart.Insight) []smart.Insight {
+	if translator == nil {
+		return out
+	}
+	for i := range out {
+		out[i].Title = out[i].TitleText().Resolve(translator)
+		out[i].Detail = out[i].DetailText().Resolve(translator)
+		if a := out[i].Action; a != nil {
+			la := *a
+			la.Label = la.LabelText().Resolve(translator)
+			out[i].Action = &la
+		}
+	}
 	return out
 }
 

@@ -76,15 +76,16 @@ func b7Seasonal(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-B7",
-			Page:    smart.PageBudgets,
-			Key:     "SMART-B7:" + cat,
-			Title:   name + " spending is seasonal",
-			Detail: name + " ranged from " + hmoneyc(lo, in.Base) + " to " + hmoneyc(hi, in.Base) +
-				"/mo across recent months. A month-specific budget fits it better than a flat number.",
+			Feature:  "SMART-B7",
+			Page:     smart.PageBudgets,
+			Key:      "SMART-B7:" + cat,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(hi-lo, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open budgets", Route: "/budgets", RelatedType: "category", RelatedID: cat}))
+		}.
+			WithTitle("smart.b7.title", "%s spending is seasonal", name).
+			WithDetail("smart.b7.detail", "%s ranged from %s to %s/mo across recent months. A month-specific budget fits it better than a flat number.", name, hmoneyc(lo, in.Base), hmoneyc(hi, in.Base)).
+			WithAmount(mny(hi-lo, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/budgets", RelatedType: "category", RelatedID: cat}.
+				WithLabel("smart.b7.action", "Open budgets")))
 	}
 	return out
 }
@@ -112,35 +113,40 @@ func b8SafeToSpend(in Input) []smart.Insight {
 	if liquid < safeToSpendFloorAb {
 		// Surface a low-balance warning rather than silently returning nothing:
 		// a near-empty wallet is itself the key fact the user should see.
-		return []smart.Insight{{
+		return []smart.Insight{smart.Insight{
 			Feature:  "SMART-B8",
 			Page:     smart.PageBudgets,
 			Key:      "SMART-B8:" + in.Now.Format("2006-01"),
-			Title:    "Liquid cash is very low",
-			Detail:   "Your spendable cash is " + hmoneyc(liquid, in.Base) + " — well below the level needed to cover upcoming bills and goal contributions.",
 			Severity: smart.SeverityWarn,
-		}}
+		}.
+			WithTitle("smart.b8.lowTitle", "Liquid cash is very low").
+			WithDetail("smart.b8.lowDetail",
+				"Your spendable cash is %s — well below the level needed to cover upcoming bills and goal contributions.",
+				hmoneyc(liquid, in.Base))}
 	}
 	sev := smart.SeverityInfo
-	title := hmoneyc(safe, in.Base) + " is safe to spend"
-	detail := "After the bills still due this month (" + hmoneyc(billsLeft, in.Base) +
-		") and your goal contributions (" + hmoneyc(goalNeeds, in.Base) +
-		"), about " + hmoneyc(safe, in.Base) + " of your " + hmoneyc(liquid, in.Base) +
-		" liquid cash is genuinely free."
+	titleKey, titleFmt := "smart.b8.title", "%s is safe to spend"
+	titleArgs := []any{hmoneyc(safe, in.Base)}
+	detailKey := "smart.b8.detail"
+	detailFmt := "After the bills still due this month (%s) and your goal contributions (%s), about %s of your %s liquid cash is genuinely free."
+	detailArgs := []any{hmoneyc(billsLeft, in.Base), hmoneyc(goalNeeds, in.Base),
+		hmoneyc(safe, in.Base), hmoneyc(liquid, in.Base)}
 	if safe < 0 {
 		sev = smart.SeverityWarn
-		title = "Spending is tight this month"
-		detail = "Your bills and goal contributions this month exceed liquid cash by " +
-			hmoneyc(-safe, in.Base) + " — hold off on discretionary spending."
+		titleKey, titleFmt, titleArgs = "smart.b8.tightTitle", "Spending is tight this month", nil
+		detailKey = "smart.b8.tightDetail"
+		detailFmt = "Your bills and goal contributions this month exceed liquid cash by %s — hold off on discretionary spending."
+		detailArgs = []any{hmoneyc(-safe, in.Base)}
 	}
 	ins := smart.Insight{
 		Feature:  "SMART-B8",
 		Page:     smart.PageBudgets,
 		Key:      "SMART-B8:" + in.Now.Format("2006-01"),
-		Title:    title,
-		Detail:   detail,
 		Severity: sev,
-	}.WithAmount(mny(safe, in.Base))
+	}.
+		WithTitle(titleKey, titleFmt, titleArgs...).
+		WithDetail(detailKey, detailFmt, detailArgs...).
+		WithAmount(mny(safe, in.Base))
 	return []smart.Insight{ins}
 }
 
@@ -161,16 +167,16 @@ func b9PacingNudge(in Input) []smart.Insight {
 		name := budgetName(b)
 		over := hmoneyc(pace.OverBy.Amount, pace.OverBy.Currency)
 		out = append(out, smart.Insight{
-			Feature: "SMART-B9",
-			Page:    smart.PageBudgets,
-			Key:     "SMART-B9:" + b.ID + ":" + start.Format("2006-01-02"),
-			Title:   name + " is on pace to exceed its budget",
-			Detail: name + " is projected to exceed budget by " + over +
-				" this period. Slowing spending now would keep it closer to plan.",
+			Feature:  "SMART-B9",
+			Page:     smart.PageBudgets,
+			Key:      "SMART-B9:" + b.ID + ":" + start.Format("2006-01-02"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(pace.OverBy).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open budgets",
-				Route: "/budgets", RelatedType: "budget", RelatedID: b.ID}))
+		}.
+			WithTitle("smart.b9.title", "%s is on pace to exceed its budget", name).
+			WithDetail("smart.b9.detail", "%s is projected to exceed budget by %s this period. Slowing spending now would keep it closer to plan.", name, over).
+			WithAmount(pace.OverBy).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/budgets", RelatedType: "budget", RelatedID: b.ID}.
+				WithLabel("smart.b9.action", "Open budgets")))
 	}
 	return out
 }
@@ -191,16 +197,16 @@ func b10UncoveredSpending(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-B10",
-			Page:    smart.PageBudgets,
-			Key:     "SMART-B10:" + catID,
-			Title:   name + " has no budget yet",
-			Detail: "You spend about " + hmoneyc(monthly, in.Base) + "/mo on " + name +
-				" with no budget covering it — adding one keeps it from slipping through.",
+			Feature:  "SMART-B10",
+			Page:     smart.PageBudgets,
+			Key:      "SMART-B10:" + catID,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(monthly, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Add a budget",
-				Route: "/budgets", RelatedType: "category", RelatedID: catID}))
+		}.
+			WithTitle("smart.b10.title", "%s has no budget yet", name).
+			WithDetail("smart.b10.detail", "You spend about %s/mo on %s with no budget covering it — adding one keeps it from slipping through.", hmoneyc(monthly, in.Base), name).
+			WithAmount(mny(monthly, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/budgets", RelatedType: "category", RelatedID: catID}.
+				WithLabel("smart.b10.action", "Add a budget")))
 	}
 	return out
 }

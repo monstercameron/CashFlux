@@ -92,15 +92,16 @@ func t19NewMerchant(in Input) []smart.Insight {
 		}
 		label := labels[key]
 		out = append(out, smart.Insight{
-			Feature: "SMART-T19",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T19:" + key,
-			Title:   "First time you've paid " + label,
-			Detail: "This " + first.date.Format("Jan 2") + " charge of " + hmoneyc(first.baseMag, in.Base) +
-				" is the first time " + label + " appears in your history. If you recognise it, all good — if not, it's worth a second look.",
+			Feature:  "SMART-T19",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T19:" + key,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(mny(first.baseMag, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transactions", Route: "/transactions"}))
+		}.
+			WithTitle("smart.t19.title", "First time you've paid %s", label).
+			WithDetail("smart.t19.detail", "This %s charge of %s is the first time %s appears in your history. If you recognise it, all good — if not, it's worth a second look.", first.date.Format("Jan 2"), hmoneyc(first.baseMag, in.Base), label).
+			WithAmount(mny(first.baseMag, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
+				WithLabel("smart.t19.action", "View transactions")))
 	}
 	return out
 }
@@ -137,23 +138,22 @@ func t20NewSubscription(in Input) []smart.Insight {
 		}
 		label := labels[key]
 		out = append(out, smart.Insight{
-			Feature: "SMART-T20",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T20:" + key,
-			Title:   label + " looks like a new subscription",
-			Detail: label + " has charged " + hmoneyc(second.baseMag, in.Base) + " twice, about a month apart (" +
-				first.date.Format("Jan 2") + " and " + second.date.Format("Jan 2") +
-				"). Track it as a recurring charge so it shows up in your plan.",
+			Feature:  "SMART-T20",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T20:" + key,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(mny(second.baseMag, in.Base)).
+		}.
+			WithTitle("smart.t20.title", "%s looks like a new subscription", label).
+			WithDetail("smart.t20.detail", "%s has charged %s twice, about a month apart (%s and %s). Track it as a recurring charge so it shows up in your plan.", label, hmoneyc(second.baseMag, in.Base), first.date.Format("Jan 2"), second.date.Format("Jan 2")).
+			WithAmount(mny(second.baseMag, in.Base)).
 			WithAction(smart.Action{
 				Kind:              smart.ActionCreateRecurring,
-				Label:             "Track as recurring",
 				RecurringLabel:    label,
 				RecurringAmount:   -abs64(second.amount), // expense (negative), native currency
 				RecurringCurrency: second.currency,
 				RecurringCadence:  string(domain.CadenceMonthly),
-			}))
+			}.
+				WithLabel("smart.t20.action", "Track as recurring")))
 	}
 	return out
 }

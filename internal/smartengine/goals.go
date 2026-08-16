@@ -53,14 +53,15 @@ func g2Forecast(in Input) []smart.Insight {
 			continue // on track or ahead at this pace — no warning
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G2",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G2:" + g.ID,
-			Title:   g.Name + " is likely to finish late",
-			Detail: "Even putting your full " + in.hmoney(surplus) + "/mo surplus toward " + g.Name +
-				", it lands around " + finish.Format("Jan 2006") + " — later than the planned " + g.TargetDate.Format("Jan 2006") + ".",
+			Feature:  "SMART-G2",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G2:" + g.ID,
 			Severity: smart.SeverityWarn,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g2.title", "%s is likely to finish late", g.Name).
+			WithDetail("smart.g2.detail", "Even putting your full %s/mo surplus toward %s, it lands around %s — later than the planned %s.", in.hmoney(surplus), g.Name, finish.Format("Jan 2006"), g.TargetDate.Format("Jan 2006")).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g2.action", "Open goal")))
 	}
 	return out
 }
@@ -90,14 +91,15 @@ func g10WhatIf(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G10",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G10:" + g.ID,
-			Title:   "Add " + hmoneyc(g10ExtraStep, in.Base) + "/mo to finish " + g.Name + " sooner",
-			Detail: "Contributing " + hmoneyc(g10ExtraStep, in.Base) + "/mo beyond the planned pace brings " +
-				g.Name + " in about " + plural(months, "month") + " sooner.",
+			Feature:  "SMART-G10",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G10:" + g.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g10.title", "Add %s/mo to finish %s sooner", hmoneyc(g10ExtraStep, in.Base), g.Name).
+			WithDetail("smart.g10.detail", "Contributing %s/mo beyond the planned pace brings %s in about %s sooner.", hmoneyc(g10ExtraStep, in.Base), g.Name, plural(months, "month")).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g10.action", "Open goal")))
 	}
 	return out
 }
@@ -117,14 +119,15 @@ func g20Shared(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G20",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G20:" + g.ID,
-			Title:   g.Name + " is a shared goal",
-			Detail: g.Name + " is shared across your " + plural(int64(len(in.Members)), "household member") +
-				". Logging contributions by member keeps each person's share clear.",
+			Feature:  "SMART-G20",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G20:" + g.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g20.title", "%s is a shared goal", g.Name).
+			WithDetail("smart.g20.detail", "%s is shared across your %s. Logging contributions by member keeps each person's share clear.", g.Name, plural(int64(len(in.Members)), "household member")).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g20.action", "Open goal")))
 	}
 	return out
 }
@@ -157,26 +160,28 @@ func g17AutoContribute(in Input) []smart.Insight {
 			// Goal has a destination account: offer the one-tap automate action.
 			action = smart.Action{
 				Kind:              smart.ActionAutomateGoal,
-				Label:             "Set up automatic transfer",
 				GoalID:            g.ID,
 				GoalMonthlyAmount: needed.Amount,
 				RelatedType:       "goal",
 				RelatedID:         g.ID,
-			}
+			}.
+				WithLabel("smart.g20.action2", "Set up automatic transfer")
 		} else {
 			// No linked account yet: navigate so the user can link one first.
-			action = smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}
+			action = smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g20.action3", "Open goal")
 		}
 
 		out = append(out, smart.Insight{
-			Feature: "SMART-G17",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G17:" + g.ID,
-			Title:   "Automate " + g.Name + ": " + hm(needed) + " each payday",
-			Detail: "Setting a standing rule to move " + hm(needed) + " to " + g.Name + " on each payday (around the " +
-				ordinalDay(payday) + ") keeps it on track without remembering it every month.",
+			Feature:  "SMART-G17",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G17:" + g.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(needed).WithAction(action))
+		}.
+			WithTitle("smart.g17.title", "Automate %s: %s each payday", g.Name, hm(needed)).
+			WithDetail("smart.g17.detail", "Setting a standing rule to move %s to %s on each payday (around the %s) keeps it on track without remembering it every month.", hm(needed), g.Name, ordinalDay(payday)).
+			WithAmount(needed).
+			WithAction(action))
 	}
 	return out
 }
@@ -210,16 +215,16 @@ func g19BorrowWarning(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G19",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G19:" + g.ID,
-			Title:   g.Name + "'s linked account is below its saved amount",
-			Detail: g.Name + " shows " + hm(g.CurrentAmount) + " saved, but its linked account holds only " +
-				in.hmoney(bal) + " — if you borrowed from it, the goal is set back by " +
-				in.hmoney(cur-bal) + ".",
+			Feature:  "SMART-G19",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G19:" + g.ID,
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(cur-bal)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g19.title", "%s's linked account is below its saved amount", g.Name).
+			WithDetail("smart.g19.detail", "%s shows %s saved, but its linked account holds only %s — if you borrowed from it, the goal is set back by %s.", g.Name, hm(g.CurrentAmount), in.hmoney(bal), in.hmoney(cur-bal)).
+			WithAmount(in.baseMoney(cur-bal)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g19.action", "Open goal")))
 	}
 	return out
 }
@@ -246,14 +251,15 @@ func g14LinkAccount(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G14",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G14:" + g.ID,
-			Title:   "Link " + g.Name + " to an account",
-			Detail: "Linking " + g.Name + " to a savings account lets its progress track the real balance " +
-				"automatically, instead of updating it by hand.",
+			Feature:  "SMART-G14",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G14:" + g.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g14.title", "Link %s to an account", g.Name).
+			WithDetail("smart.g14.detail", "Linking %s to a savings account lets its progress track the real balance automatically, instead of updating it by hand.", g.Name).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g14.action", "Open goal")))
 	}
 	return out
 }
@@ -280,15 +286,16 @@ func g3AllocateSurplus(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-G3",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G3:" + in.Now.Format("2006-01"),
-		Title:   "You're freeing up about " + in.hmoney(surplus) + "/mo",
-		Detail: "After income and spending you have roughly " + in.hmoney(surplus) +
-			"/mo left over. Routing it across your " + plural(int64(n), "active goal") + " would reach them sooner.",
+		Feature:  "SMART-G3",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G3:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(surplus)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goals", Route: "/goals"})
+	}.
+		WithTitle("smart.g3.title", "You're freeing up about %s/mo", in.hmoney(surplus)).
+		WithDetail("smart.g3.detail", "After income and spending you have roughly %s/mo left over. Routing it across your %s would reach them sooner.", in.hmoney(surplus), plural(int64(n), "active goal")).
+		WithAmount(in.baseMoney(surplus)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals"}.
+			WithLabel("smart.g3.action", "Open goals"))
 	return []smart.Insight{ins}
 }
 
@@ -312,15 +319,16 @@ func g15DebtStrategy(in Input) []smart.Insight {
 	}
 	target := highestAPRDebt(debts)
 	ins := smart.Insight{
-		Feature: "SMART-G15",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G15:" + in.Now.Format("2006-01"),
-		Title:   "Avalanche could save " + in.hmoney(saved) + " in interest",
-		Detail: "Paying your highest-interest debt (" + target + ") first instead of the smallest balance " +
-			"saves about " + in.hmoney(saved) + " in interest over the payoff.",
+		Feature:  "SMART-G15",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G15:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(saved)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning", Route: "/planning"})
+	}.
+		WithTitle("smart.g15.title", "Avalanche could save %s in interest", in.hmoney(saved)).
+		WithDetail("smart.g15.detail", "Paying your highest-interest debt (%s) first instead of the smallest balance saves about %s in interest over the payoff.", target, in.hmoney(saved)).
+		WithAmount(in.baseMoney(saved)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning"}.
+			WithLabel("smart.g15.action", "Open planning"))
 	return []smart.Insight{ins}
 }
 
@@ -373,15 +381,16 @@ func g8GoalImpact(in Input) []smart.Insight {
 		weeks = 1
 	}
 	ins := smart.Insight{
-		Feature: "SMART-G8",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G8:" + big.ID,
-		Title:   "That " + in.hmoney(bigMag) + " is " + plural(weeks, "week") + " of " + refGoal.Name,
-		Detail: txnLabel(big) + " on " + big.Date.Format("Jan 2") + " (" + in.hmoney(bigMag) +
-			") equals about " + plural(weeks, "week") + " of your " + refGoal.Name + " saving pace.",
+		Feature:  "SMART-G8",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G8:" + big.ID,
 		Severity: smart.SeverityInfo,
-	}.WithAmount(in.baseMoney(bigMag)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: refGoal.ID})
+	}.
+		WithTitle("smart.g8.title", "That %s is %s of %s", in.hmoney(bigMag), plural(weeks, "week"), refGoal.Name).
+		WithDetail("smart.g8.detail", "%s on %s (%s) equals about %s of your %s saving pace.", txnLabel(big), big.Date.Format("Jan 2"), in.hmoney(bigMag), plural(weeks, "week"), refGoal.Name).
+		WithAmount(in.baseMoney(bigMag)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: refGoal.ID}.
+			WithLabel("smart.g8.action", "Open goal"))
 	return []smart.Insight{ins}
 }
 
@@ -399,22 +408,21 @@ func g12SuggestGoals(in Input) []smart.Insight {
 	}
 	target := essentials * emergencyStartMonths
 	ins := smart.Insight{
-		Feature: "SMART-G12",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G12:emergency",
-		Title:   "Consider starting an emergency fund",
-		Detail: "You don't have an emergency fund yet. A common starting target is " +
-			in.hmoney(target) + " — about " + itoa64(emergencyStartMonths) +
-			" months of your roughly " + in.hmoney(essentials) + "/mo essentials.",
+		Feature:  "SMART-G12",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G12:emergency",
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(target)).
+	}.
+		WithTitle("smart.g12.title", "Consider starting an emergency fund").
+		WithDetail("smart.g12.detail", "You don't have an emergency fund yet. A common starting target is %s — about %s months of your roughly %s/mo essentials.", in.hmoney(target), itoa64(emergencyStartMonths), in.hmoney(essentials)).
+		WithAmount(in.baseMoney(target)).
 		WithAction(smart.Action{
 			Kind:         smart.ActionCreateGoal,
-			Label:        "Create goal",
 			GoalName:     "Emergency Fund",
 			GoalTarget:   target,
 			GoalCurrency: in.Base,
-		})
+		}.
+			WithLabel("smart.g12.action", "Create goal"))
 	return []smart.Insight{ins}
 }
 
@@ -451,16 +459,16 @@ func g18Feasibility(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-G18",
-			Page:    smart.PageGoals,
-			Key:     "SMART-G18:" + d.g.ID,
-			Title:   d.g.Name + "'s deadline looks tight",
-			Detail: d.g.Name + " needs " + in.hmoney(d.needed) + "/mo to hit " +
-				d.g.TargetDate.Format("Jan 2006") + ", but only about " + in.hmoney(fair) +
-				"/mo is realistically free for it — consider extending the date or trimming elsewhere.",
+			Feature:  "SMART-G18",
+			Page:     smart.PageGoals,
+			Key:      "SMART-G18:" + d.g.ID,
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(d.needed)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: d.g.ID}))
+		}.
+			WithTitle("smart.g18.title", "%s's deadline looks tight", d.g.Name).
+			WithDetail("smart.g18.detail", "%s needs %s/mo to hit %s, but only about %s/mo is realistically free for it — consider extending the date or trimming elsewhere.", d.g.Name, in.hmoney(d.needed), d.g.TargetDate.Format("Jan 2006"), in.hmoney(fair)).
+			WithAmount(in.baseMoney(d.needed)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: d.g.ID}.
+				WithLabel("smart.g18.action", "Open goal")))
 	}
 	return out
 }
@@ -497,15 +505,16 @@ func g13Windfall(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-G13",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G13:" + best.ID,
-		Title:   "You received a large deposit of " + in.hmoney(bestBase),
-		Detail: "A " + in.hmoney(bestBase) + " deposit on " + best.Date.Format("Jan 2") +
-			" stands out from your usual income. Routing some of it to a goal or to debt now keeps it from drifting into spending.",
+		Feature:  "SMART-G13",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G13:" + best.ID,
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(bestBase)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goals", Route: "/goals"})
+	}.
+		WithTitle("smart.g13.title", "You received a large deposit of %s", in.hmoney(bestBase)).
+		WithDetail("smart.g13.detail", "A %s deposit on %s stands out from your usual income. Routing some of it to a goal or to debt now keeps it from drifting into spending.", in.hmoney(bestBase), best.Date.Format("Jan 2")).
+		WithAmount(in.baseMoney(bestBase)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals"}.
+			WithLabel("smart.g13.action", "Open goals"))
 	return []smart.Insight{ins}
 }
 
@@ -555,27 +564,33 @@ func g1SuggestedContribution(in Input) []smart.Insight {
 			continue
 		}
 		neededBase := in.toBaseMinor(needed.Amount, needed.Currency)
-		detail := "Saving " + hm(needed) + "/mo reaches " + g.Name + " by " + g.TargetDate.Format("Jan 2006") + "."
+		detailKey := "smart.g1.detail"
+		detailFmt := "Saving %s/mo reaches %s by %s."
+		detailArgs := []any{hm(needed), g.Name, g.TargetDate.Format("Jan 2006")}
 		if surplus > 0 {
 			switch goals.AssessHealth(neededBase, surplus, n) {
 			case goals.HealthOnTrack:
-				detail += " That fits within its roughly " + in.hmoney(fair) + "/mo share of your " + in.hmoney(surplus) + "/mo of slack."
+				detailKey, detailFmt = "smart.g1.detailOnTrack", detailFmt+" That fits within its roughly %s/mo share of your %s/mo of slack."
+				detailArgs = append(detailArgs, in.hmoney(fair), in.hmoney(surplus))
 			case goals.HealthWatch:
-				detail += " That's more than its roughly " + in.hmoney(fair) + "/mo fair share of your " + in.hmoney(surplus) + "/mo slack — it would crowd your other goals, so consider a later date."
+				detailKey, detailFmt = "smart.g1.detailWatch", detailFmt+" That's more than its roughly %s/mo fair share of your %s/mo slack — it would crowd your other goals, so consider a later date."
+				detailArgs = append(detailArgs, in.hmoney(fair), in.hmoney(surplus))
 			case goals.HealthAtRisk:
-				detail += " That's above your entire " + in.hmoney(surplus) + "/mo of slack — consider a later date."
+				detailKey, detailFmt = "smart.g1.detailAtRisk", detailFmt+" That's above your entire %s/mo of slack — consider a later date."
+				detailArgs = append(detailArgs, in.hmoney(surplus))
 			}
 		}
 		out = append(out, smart.Insight{
 			Feature:  "SMART-G1",
 			Page:     smart.PageGoals,
 			Key:      "SMART-G1:" + g.ID,
-			Title:    "Save " + hm(needed) + "/mo for " + g.Name,
-			Detail:   detail,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(needed).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal",
-				Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+		}.
+			WithTitle("smart.g1.title", "Save %s/mo for %s", hm(needed), g.Name).
+			WithDetail(detailKey, detailFmt, detailArgs...).
+			WithAmount(needed).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+				WithLabel("smart.g1.action", "Open goal")))
 	}
 	return out
 }
@@ -605,16 +620,16 @@ func g5GoalConflict(in Input) []smart.Insight {
 	}
 	shortfall := totalNeeded - surplus
 	ins := smart.Insight{
-		Feature: "SMART-G5",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G5:" + in.Now.Format("2006-01"),
-		Title:   "Your goals are overcommitted by " + in.hmoney(shortfall) + "/mo",
-		Detail: "You have about " + in.hmoney(surplus) + "/mo of slack, but your " +
-			plural(int64(n), "active goal") + " require " + in.hmoney(totalNeeded) +
-			"/mo. Extend a deadline or trim a goal to close the gap.",
+		Feature:  "SMART-G5",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G5:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityWarn,
-	}.WithAmount(in.baseMoney(shortfall)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review goals", Route: "/goals"})
+	}.
+		WithTitle("smart.g5.title", "Your goals are overcommitted by %s/mo", in.hmoney(shortfall)).
+		WithDetail("smart.g5.detail", "You have about %s/mo of slack, but your %s require %s/mo. Extend a deadline or trim a goal to close the gap.", in.hmoney(surplus), plural(int64(n), "active goal"), in.hmoney(totalNeeded)).
+		WithAmount(in.baseMoney(shortfall)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals"}.
+			WithLabel("smart.g5.action", "Review goals"))
 	return []smart.Insight{ins}
 }
 
@@ -636,11 +651,13 @@ func g6MilestoneNudge(in Input) []smart.Insight {
 				Feature:  "SMART-G6",
 				Page:     smart.PageGoals,
 				Key:      "SMART-G6:done:" + g.ID,
-				Title:    "You reached " + g.Name + "! 🎉",
-				Detail:   g.Name + " is fully funded at " + hm(g.TargetAmount) + ". Time to set the next one.",
 				Severity: smart.SeverityInfo,
-			}.WithAmount(g.TargetAmount).
-				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+			}.
+				WithTitle("smart.g6.title", "You reached %s! 🎉", g.Name).
+				WithDetail("smart.g6.detail", "%s is fully funded at %s. Time to set the next one.", g.Name, hm(g.TargetAmount)).
+				WithAmount(g.TargetAmount).
+				WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+					WithLabel("smart.g6.action", "Open goal")))
 			continue
 		}
 		if pct >= almostTherePct {
@@ -652,11 +669,13 @@ func g6MilestoneNudge(in Input) []smart.Insight {
 				Feature:  "SMART-G6",
 				Page:     smart.PageGoals,
 				Key:      "SMART-G6:near:" + g.ID,
-				Title:    g.Name + " is " + itoa64(int64(pct)) + "% there",
-				Detail:   "Just " + hm(rem) + " left on " + g.Name + " — the finish line is close.",
 				Severity: smart.SeverityInfo,
-			}.WithAmount(rem).
-				WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID}))
+			}.
+				WithTitle("smart.g6.title2", "%s is %s%% there", g.Name, itoa64(int64(pct))).
+				WithDetail("smart.g6.detail2", "Just %s left on %s — the finish line is close.", hm(rem), g.Name).
+				WithAmount(rem).
+				WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+					WithLabel("smart.g6.action2", "Open goal")))
 		}
 	}
 	return out
@@ -680,16 +699,16 @@ func g11EmergencyFund(in Input) []smart.Insight {
 	}
 	gap := essentials*emergencyTargetMos - current
 	ins := smart.Insight{
-		Feature: "SMART-G11",
-		Page:    smart.PageGoals,
-		Key:     "SMART-G11:" + g.ID,
-		Title:   "Emergency fund covers " + fmtMonths(covered) + " of essentials",
-		Detail: g.Name + " holds " + in.hmoney(current) + " against about " +
-			in.hmoney(essentials) + "/mo of essentials. Most aim for " + itoa64(emergencyTargetMos) +
-			" months — another " + in.hmoney(gap) + " gets there.",
+		Feature:  "SMART-G11",
+		Page:     smart.PageGoals,
+		Key:      "SMART-G11:" + g.ID,
 		Severity: smart.SeverityNudge,
-	}.WithAmount(in.baseMoney(gap)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open goal", Route: "/goals", RelatedType: "goal", RelatedID: g.ID})
+	}.
+		WithTitle("smart.g11.title", "Emergency fund covers %s of essentials", fmtMonths(covered)).
+		WithDetail("smart.g11.detail", "%s holds %s against about %s/mo of essentials. Most aim for %s months — another %s gets there.", g.Name, in.hmoney(current), in.hmoney(essentials), itoa64(emergencyTargetMos), in.hmoney(gap)).
+		WithAmount(in.baseMoney(gap)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/goals", RelatedType: "goal", RelatedID: g.ID}.
+			WithLabel("smart.g11.action", "Open goal"))
 	return []smart.Insight{ins}
 }
 

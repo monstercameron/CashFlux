@@ -49,9 +49,9 @@ var i18nBaselines = map[string]int{
 	// Cam: "every page AND component"). widgetregistry's 2 are the preset
 	// content-layout templates persisted into user specs (C362 class:
 	// translate at spec-creation time, not render time).
-	"../ui":             0,
-	"../uistate":        0,
-	"../widgetrender":   0,
+	"../ui":           0,
+	"../uistate":      0,
+	"../widgetrender": 0,
 	// 2→0 (2026-08-16, C362): the spotlight preset's text blocks carry a TextKey
 	// beside their English, so the copy baked into a user's persisted spec
 	// resolves through the catalog at render time instead of being frozen in
@@ -71,10 +71,11 @@ var i18nBaselines = map[string]int{
 	// its three in-package insight strings (Title/Detail/Label).
 	// 169→171 (2026-07-14): AC14 SMART-A9 fee-bleed detector adds its in-package
 	// insight Detail and the close-it-task action Label.
-	// 171→163 (2026-08-16, C361): tightened to the ACTUAL count. A baseline set
-	// above the real number is slack the ratchet cannot see — eight strings could
-	// have been added back without failing anything.
-	"../smartengine":   163,
+	// 163→0 (2026-08-16, C362): every detector pairs its English with a catalog
+	// key through Insight.WithTitle/WithDetail and Action.WithLabel, and
+	// smartengine.localize resolves them at the one door insights leave the
+	// package through.
+	"../smartengine": 0,
 	// 42→0 (2026-08-16, C362): every widget, column, chart and preset label now
 	// carries its catalog key beside its English, resolved through the translator
 	// the app installs at boot (widgetcatalog.SetTranslator).

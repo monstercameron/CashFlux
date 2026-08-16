@@ -22,7 +22,12 @@
 // native Go.
 package smart
 
-import "github.com/monstercameron/CashFlux/internal/money"
+import (
+	"fmt"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // Page is the app page a smart feature belongs to. The values match the SMART
 // sub-series prefixes (A=Accounts, T=Transactions, …) so a feature code and its
@@ -166,6 +171,9 @@ const (
 type Action struct {
 	Kind  ActionKind
 	Label string // button text, e.g. "Add a to-do"
+	// LabelKey / LabelArgs are Label in re-renderable form (C362).
+	LabelKey  string
+	LabelArgs []any
 
 	// ActionCreateTask payload.
 	TaskTitle string
@@ -226,6 +234,18 @@ type Insight struct {
 	Title string
 	// Detail is the one- or two-line reason / explanation.
 	Detail string
+	// TitleKey / DetailKey name Title and Detail's catalog entries, and
+	// TitleArgs / DetailArgs are the values that fill them (C362).
+	//
+	// The detectors are pure: they have no language context and must not acquire
+	// one, yet they are where ~84 features' sentences are written. Carrying the
+	// key and its arguments alongside the composed English lets a surface render
+	// through the catalog, while Title/Detail keep every existing reader — the
+	// CSV export, the AI context builder, the tests — working unchanged. Use
+	// WithTitle / WithDetail rather than setting these by hand, so the English
+	// and the arguments can never describe different things.
+	TitleKey, DetailKey   string
+	TitleArgs, DetailArgs []any
 	// Severity drives sort order and tone.
 	Severity Severity
 	// Amount is an optional headline figure (a saving, a shortfall, a balance).
@@ -240,6 +260,46 @@ type Insight struct {
 	// value here means "the detector didn't say", not "certain".
 	Confidence    Confidence
 	confidenceSet bool
+}
+
+// WithTitle sets the insight's headline from a catalog key and the English
+// format the detector would otherwise have written (C362). The composed
+// sentence and the key+args are produced from the same call, so they cannot
+// drift apart.
+func (i Insight) WithTitle(key, format string, args ...any) Insight {
+	i.Title = fmt.Sprintf(format, args...)
+	i.TitleKey, i.TitleArgs = key, args
+	return i
+}
+
+// WithDetail is WithTitle's twin for the explanation line.
+func (i Insight) WithDetail(key, format string, args ...any) Insight {
+	i.Detail = fmt.Sprintf(format, args...)
+	i.DetailKey, i.DetailArgs = key, args
+	return i
+}
+
+// TitleText / DetailText expose the insight's copy in re-renderable form for a
+// surface that wants to resolve it through the catalog.
+func (i Insight) TitleText() copytext.Text {
+	return copytext.Text{Key: i.TitleKey, Args: i.TitleArgs, Fallback: i.Title}
+}
+
+// DetailText is TitleText's twin for the explanation line.
+func (i Insight) DetailText() copytext.Text {
+	return copytext.Text{Key: i.DetailKey, Args: i.DetailArgs, Fallback: i.Detail}
+}
+
+// LabelText is the action's button copy in re-renderable form.
+func (a Action) LabelText() copytext.Text {
+	return copytext.Text{Key: a.LabelKey, Args: a.LabelArgs, Fallback: a.Label}
+}
+
+// WithLabel sets an action's button copy from a catalog key and its English.
+func (a Action) WithLabel(key, format string, args ...any) Action {
+	a.Label = fmt.Sprintf(format, args...)
+	a.LabelKey, a.LabelArgs = key, args
+	return a
 }
 
 // WithAmount returns a copy of the insight carrying the given money figure as

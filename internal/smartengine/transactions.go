@@ -55,15 +55,15 @@ func t4BulkEdit(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-T4",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T4:" + key,
-			Title:   labels[key] + " is split across " + plural(int64(len(cats)), "category"),
-			Detail: labels[key] + " appears in " + plural(int64(len(cats)), "category") + " across " +
-				plural(int64(counts[key]), "transaction") +
-				". Standardizing the category will make reports more accurate.",
+			Feature:  "SMART-T4",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T4:" + key,
 			Severity: smart.SeverityNudge,
-		}.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review transactions", Route: "/transactions"}))
+		}.
+			WithTitle("smart.t4.title", "%s is split across %s", labels[key], plural(int64(len(cats)), "category")).
+			WithDetail("smart.t4.detail", "%s appears in %s across %s. Standardizing the category will make reports more accurate.", labels[key], plural(int64(len(cats)), "category"), plural(int64(counts[key]), "transaction")).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
+				WithLabel("smart.t4.action", "Review transactions")))
 	}
 	return out
 }
@@ -94,12 +94,13 @@ func t11Timeline(in Input) []smart.Insight {
 		Feature:  "SMART-T11",
 		Page:     smart.PageTransactions,
 		Key:      "SMART-T11:big:" + curStart.Format("2006-01") + ":" + big.ID,
-		Title:    "Biggest expense this month: " + hmoneyc(bigMag, in.Base),
-		Detail:   txnLabel(big) + " on " + big.Date.Format("Jan 2") + " is your largest single expense so far this month.",
 		Severity: smart.SeverityInfo,
-	}.WithAmount(mny(bigMag, in.Base)).
-		WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transaction",
-			Route: "/transactions", RelatedType: "transaction", RelatedID: big.ID})
+	}.
+		WithTitle("smart.t11.title", "Biggest expense this month: %s", hmoneyc(bigMag, in.Base)).
+		WithDetail("smart.t11.detail", "%s on %s is your largest single expense so far this month.", txnLabel(big), big.Date.Format("Jan 2")).
+		WithAmount(mny(bigMag, in.Base)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: big.ID}.
+			WithLabel("smart.t11.action", "View transaction"))
 	return []smart.Insight{ins}
 }
 
@@ -122,15 +123,16 @@ func t2Duplicates(in Input) []smart.Insight {
 	for _, g := range groups {
 		extra := len(g.IDs) - 1
 		out = append(out, smart.Insight{
-			Feature: "SMART-T2",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T2:" + g.Date + ":" + strings.ToLower(g.Description) + ":" + itoa64(g.Amount),
-			Title:   plural(int64(extra), "possible duplicate") + " of " + g.Description,
-			Detail: itoa64(int64(len(g.IDs))) + " identical entries on " + g.Date + " for " +
-				hmoneyc(abs64(g.Amount), g.Currency) + " — merge or remove the extras.",
+			Feature:  "SMART-T2",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T2:" + g.Date + ":" + strings.ToLower(g.Description) + ":" + itoa64(g.Amount),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(mny(abs64(g.Amount), g.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review transactions", Route: "/transactions"}))
+		}.
+			WithTitle("smart.t2.title", "%s of %s", plural(int64(extra), "possible duplicate"), g.Description).
+			WithDetail("smart.t2.detail", "%s identical entries on %s for %s — merge or remove the extras.", itoa64(int64(len(g.IDs))), g.Date, hmoneyc(abs64(g.Amount), g.Currency)).
+			WithAmount(mny(abs64(g.Amount), g.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
+				WithLabel("smart.t2.action", "Review transactions")))
 	}
 	return out
 }
@@ -171,17 +173,16 @@ func t6SpendingSpike(in Input) []smart.Insight {
 			cat = "this category"
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-T6",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T6:" + t.ID,
-			Title:   hmoneyc(mag, in.Base) + " in " + cat + " is unusually large",
-			Detail: txnLabel(t) + " on " + t.Date.Format("Jan 2") + " is about " +
-				itoa64(mag/maxInt64(mean, 1)) + "× the typical " + cat + " charge (" +
-				hmoneyc(mean, in.Base) + ").",
+			Feature:  "SMART-T6",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T6:" + t.ID,
 			Severity: smart.SeverityWarn,
-		}.WithAmount(mny(mag, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transaction",
-				Route: "/transactions", RelatedType: "transaction", RelatedID: t.ID}))
+		}.
+			WithTitle("smart.t6.title", "%s in %s is unusually large", hmoneyc(mag, in.Base), cat).
+			WithDetail("smart.t6.detail", "%s on %s is about %s× the typical %s charge (%s).", txnLabel(t), t.Date.Format("Jan 2"), itoa64(mag/maxInt64(mean, 1)), cat, hmoneyc(mean, in.Base)).
+			WithAmount(mny(mag, in.Base)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: t.ID}.
+				WithLabel("smart.t6.action", "View transaction")))
 	}
 	return out
 }
@@ -201,15 +202,16 @@ func t7MissingTxn(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-T7",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T7:" + strings.ToLower(s.Name) + ":" + expected.Format("2006-01"),
-			Title:   s.Name + " hasn't posted yet",
-			Detail: s.Name + " usually charges about " + hmoneyc(s.Amount, s.Currency) +
-				" by " + expected.Format("Jan 2") + ", but no charge is recorded — check for a forgotten entry or a failed payment.",
+			Feature:  "SMART-T7",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T7:" + strings.ToLower(s.Name) + ":" + expected.Format("2006-01"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Check transactions", Route: "/transactions"}))
+		}.
+			WithTitle("smart.t7.title", "%s hasn't posted yet", s.Name).
+			WithDetail("smart.t7.detail", "%s usually charges about %s by %s, but no charge is recorded — check for a forgotten entry or a failed payment.", s.Name, hmoneyc(s.Amount, s.Currency), expected.Format("Jan 2")).
+			WithAmount(mny(s.Amount, s.Currency)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
+				WithLabel("smart.t7.action", "Check transactions")))
 	}
 	return out
 }
@@ -230,16 +232,16 @@ func t13RefundMatch(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-T13",
-			Page:    smart.PageTransactions,
-			Key:     "SMART-T13:" + r.ID,
-			Title:   "Refund of " + hm(r.Amount) + " from " + txnLabel(r),
-			Detail: "This " + r.Date.Format("Jan 2") + " credit looks like a refund of your " +
-				charge.Date.Format("Jan 2") + " charge — they net out, so it won't distort category totals.",
+			Feature:  "SMART-T13",
+			Page:     smart.PageTransactions,
+			Key:      "SMART-T13:" + r.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(r.Amount).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transaction",
-				Route: "/transactions", RelatedType: "transaction", RelatedID: r.ID}))
+		}.
+			WithTitle("smart.t13.title", "Refund of %s from %s", hm(r.Amount), txnLabel(r)).
+			WithDetail("smart.t13.detail", "This %s credit looks like a refund of your %s charge — they net out, so it won't distort category totals.", r.Date.Format("Jan 2"), charge.Date.Format("Jan 2")).
+			WithAmount(r.Amount).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: r.ID}.
+				WithLabel("smart.t13.action", "View transaction")))
 	}
 	return out
 }

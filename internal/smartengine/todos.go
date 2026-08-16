@@ -35,15 +35,18 @@ func d1AutoTodos(in Input) []smart.Insight {
 		return nil
 	}
 	ins := smart.Insight{
-		Feature: "SMART-D1",
-		Page:    smart.PageTodos,
-		Key:     "SMART-D1:uncategorized:" + in.Now.Format("2006-01"),
-		Title:   plural(int64(n), "transaction") + " still need a category",
-		Detail: "You have " + plural(int64(n), "recent uncategorized transaction") +
-			". Categorizing them keeps your budgets and reports accurate.",
+		Feature:  "SMART-D1",
+		Page:     smart.PageTodos,
+		Key:      "SMART-D1:uncategorized:" + in.Now.Format("2006-01"),
 		Severity: smart.SeverityNudge,
-	}.WithAction(smart.Action{Kind: smart.ActionCreateTask, Label: "Add a to-do",
-		TaskTitle: "Categorize " + plural(int64(n), "transaction"),
-		TaskNotes: "Review recent uncategorized transactions and assign categories."})
+	}.
+		WithTitle("smart.d1.title", "%s still need a category", plural(int64(n), "transaction")).
+		WithDetail("smart.d1.detail",
+			"You have %s. Categorizing them keeps your budgets and reports accurate.",
+			plural(int64(n), "recent uncategorized transaction")).
+		WithAction(smart.Action{Kind: smart.ActionCreateTask,
+			TaskTitle: "Categorize " + plural(int64(n), "transaction"),
+			TaskNotes: "Review recent uncategorized transactions and assign categories.",
+		}.WithLabel("smart.d1.action", "Add a to-do"))
 	return []smart.Insight{ins}
 }

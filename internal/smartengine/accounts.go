@@ -79,9 +79,10 @@ func a2DormantAccount(in Input) []smart.Insight {
 			Feature:  "SMART-A2",
 			Page:     smart.PageAccounts,
 			Key:      "SMART-A2:" + a.ID,
-			Title:    a.Name + " has been quiet for " + plural(months, "month"),
 			Severity: smart.SeverityNudge,
-		}.WithAmount(bal)
+		}.
+			WithTitle("smart.a2.title", "%s has been quiet for %s", a.Name, plural(months, "month")).
+			WithAmount(bal)
 		if a.ExpectedReturnAPR < idleLowAPR {
 			idle := pctOf(baseBal, idleBenchmarkAPR-a.ExpectedReturnAPR)
 			ins.Detail = "No activity in " + plural(months, "month") + ". At a typical " +
@@ -90,8 +91,9 @@ func a2DormantAccount(in Input) []smart.Insight {
 		} else {
 			ins.Detail = "No activity in " + plural(months, "month") + " — review whether it's still needed."
 		}
-		ins = ins.WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review account",
-			Route: "/accounts", RelatedType: "account", RelatedID: a.ID})
+		ins = ins.
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/accounts", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.a2.action", "Review account"))
 		out = append(out, ins)
 	}
 	return out
@@ -136,17 +138,16 @@ func a4CashPositioning(in Input) []smart.Insight {
 			continue
 		}
 		out = append(out, smart.Insight{
-			Feature: "SMART-A4",
-			Page:    smart.PageAccounts,
-			Key:     "SMART-A4:" + a.ID,
-			Title:   "Move idle cash from " + a.Name + " to earn more",
-			Detail: hm(bal) + " sits at " + fmtPct(a.ExpectedReturnAPR) + " in " + a.Name +
-				". Moving it to " + best.Name + " (" + fmtPct(bestAPR) + ") would earn about " +
-				in.hmoney(gain) + "/yr.",
+			Feature:  "SMART-A4",
+			Page:     smart.PageAccounts,
+			Key:      "SMART-A4:" + a.ID,
 			Severity: smart.SeverityNudge,
-		}.WithAmount(in.baseMoney(gain)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open accounts",
-				Route: "/accounts", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.a4.title", "Move idle cash from %s to earn more", a.Name).
+			WithDetail("smart.a4.detail", "%s sits at %s in %s. Moving it to %s (%s) would earn about %s/yr.", hm(bal), fmtPct(a.ExpectedReturnAPR), a.Name, best.Name, fmtPct(bestAPR), in.hmoney(gain)).
+			WithAmount(in.baseMoney(gain)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/accounts", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.a4.action", "Open accounts")))
 	}
 	return out
 }
@@ -182,16 +183,16 @@ func a1BalanceAnomaly(in Input) []smart.Insight {
 		}
 		ratio := cur / mean
 		out = append(out, smart.Insight{
-			Feature: "SMART-A1",
-			Page:    smart.PageAccounts,
-			Key:     "SMART-A1:" + a.ID + ":" + curStart.Format("2006-01"),
-			Title:   "Spending from " + a.Name + " is higher than usual",
-			Detail: "This month's spending of " + in.hmoney(cur) + " is about " +
-				itoa64(ratio) + "× its recent monthly average of " + in.hmoney(mean) + ".",
+			Feature:  "SMART-A1",
+			Page:     smart.PageAccounts,
+			Key:      "SMART-A1:" + a.ID + ":" + curStart.Format("2006-01"),
 			Severity: smart.SeverityWarn,
-		}.WithAmount(in.baseMoney(cur)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "View transactions",
-				Route: "/transactions", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.a1.title", "Spending from %s is higher than usual", a.Name).
+			WithDetail("smart.a1.detail", "This month's spending of %s is about %s× its recent monthly average of %s.", in.hmoney(cur), itoa64(ratio), in.hmoney(mean)).
+			WithAmount(in.baseMoney(cur)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.a1.action", "View transactions")))
 	}
 	return out
 }
@@ -214,16 +215,16 @@ func a7RecurringCharges(in Input) []smart.Insight {
 		}
 		monthly := subscriptions.MonthlyTotal(subs)
 		out = append(out, smart.Insight{
-			Feature: "SMART-A7",
-			Page:    smart.PageAccounts,
-			Key:     "SMART-A7:" + a.ID,
-			Title:   plural(int64(len(subs)), "recurring charge") + " on " + a.Name,
-			Detail: "About " + in.hmoney(monthly) + "/mo in recurring debits run through " +
-				a.Name + ". Open Subscriptions to review them.",
+			Feature:  "SMART-A7",
+			Page:     smart.PageAccounts,
+			Key:      "SMART-A7:" + a.ID,
 			Severity: smart.SeverityInfo,
-		}.WithAmount(in.baseMoney(monthly)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Review subscriptions",
-				Route: "/subscriptions", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.a7.title", "%s on %s", plural(int64(len(subs)), "recurring charge"), a.Name).
+			WithDetail("smart.a7.detail", "About %s/mo in recurring debits run through %s. Open Subscriptions to review them.", in.hmoney(monthly), a.Name).
+			WithAmount(in.baseMoney(monthly)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.a7.action", "Review subscriptions")))
 	}
 	return out
 }
@@ -248,17 +249,16 @@ func a8OverdraftForecast(in Input) []smart.Insight {
 		}
 		when := in.Now.AddDate(0, 0, proj.BreachDay)
 		out = append(out, smart.Insight{
-			Feature: "SMART-A8",
-			Page:    smart.PageAccounts,
-			Key:     "SMART-A8:" + a.ID,
-			Title:   a.Name + " may dip below zero around " + when.Format("Jan 2"),
-			Detail: "Projecting known recurring flows, " + a.Name + " reaches about " +
-				in.hmoney(proj.MinBalance) + " on " + when.Format("Jan 2") +
-				" — short by " + in.hmoney(proj.BreachShortfall) + ".",
+			Feature:  "SMART-A8",
+			Page:     smart.PageAccounts,
+			Key:      "SMART-A8:" + a.ID,
 			Severity: smart.SeverityAlert,
-		}.WithAmount(in.baseMoney(proj.BreachShortfall)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Label: "Open planning",
-				Route: "/planning", RelatedType: "account", RelatedID: a.ID}))
+		}.
+			WithTitle("smart.a8.title", "%s may dip below zero around %s", a.Name, when.Format("Jan 2")).
+			WithDetail("smart.a8.detail", "Projecting known recurring flows, %s reaches about %s on %s — short by %s.", a.Name, in.hmoney(proj.MinBalance), when.Format("Jan 2"), in.hmoney(proj.BreachShortfall)).
+			WithAmount(in.baseMoney(proj.BreachShortfall)).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/planning", RelatedType: "account", RelatedID: a.ID}.
+				WithLabel("smart.a8.action", "Open planning")))
 	}
 	return out
 }
