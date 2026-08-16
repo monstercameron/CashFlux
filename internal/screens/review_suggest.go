@@ -86,19 +86,29 @@ func reviewWhy(s catsuggest.Suggestion) string {
 // (C496): checking "also apply to N others" and then clicking a different button
 // silently categorized a single transaction while looking like a batch. Routing
 // every caller through here means a fourth action cannot forget the flag.
-func applyReviewChoice(app *appstate.App, cur domain.Transaction, categoryID string, batch bool) {
+// applyReviewChoice reports whether the categorization actually LANDED.
+//
+// C553: it used to return nothing, so the caller advanced to the next card
+// unconditionally — including when the write had failed. A queue that moves on
+// from an item it did not save is worse than one that refuses to move, because
+// the user has no way to tell the two apart. The boolean is what lets the caller
+// hold position and show the reason instead.
+func applyReviewChoice(app *appstate.App, cur domain.Transaction, categoryID string, batch bool) bool {
 	if app == nil || categoryID == "" {
-		return
+		return false
 	}
 	if batch {
-		if n := assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), categoryID); n > 0 {
+		n := assignReviewByMerchant(app, strings.TrimSpace(rawPayeeOf(cur)), categoryID)
+		if n > 0 {
 			postCategorizedUndo(app, categoryID, n)
 		}
-		return
+		return n > 0
 	}
 	if assignReviewCategory(app, cur.ID, categoryID) {
 		postCategorizedUndo(app, categoryID, 1)
+		return true
 	}
+	return false
 }
 
 // rememberReviewChoice records a confirmed categorization so the next charge
