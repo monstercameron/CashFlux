@@ -96,7 +96,7 @@ func renderKPISpec(spec domain.WidgetSpec, c widgetrender.RenderCtx) ui.Node {
 	// savings is a declarative KPI (scalar binding "savings_rate") but rendered as a
 	// gauge rather than a plain figure tile — a presentation variant of Kind==KPI.
 	if spec.ID == "savings" {
-		return savingsRateWidget(view.Value, spec.Settings)
+		return savingsRateWidget(view.Value, spec.Settings, c.PeriodLabel)
 	}
 	pres := kpiPresentation[spec.ID]
 	tone := pres.Tone

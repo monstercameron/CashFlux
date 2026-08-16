@@ -24,6 +24,19 @@ var vSweepKeys = Catalog{
 	// Stat label on the Reports net-worth tab. It used to read "Change this
 	// period" while showing last month's step; it now names its real window.
 	"nw.changeMonthLabel": "Change this month",
+
+	// ── C342/C343: name the window over every figure that has one ───────────
+	// Caption above the dashboard hero's income / spending / net / savings-rate
+	// row. %s is the selected period ("Jul 2026").
+	"home.statsWindow": "For %s",
+	// /health factor measurement windows. The model names the span as a key;
+	// these are the only place it becomes English.
+	"healthx.windowTrailing3mo":   "Averaged over the last 3 full months",
+	"healthx.windowCurrentPeriod": "This period so far",
+	"healthx.windowAsOfToday":     "As of today",
+	// Tooltip on the period chip a windowed dashboard tile always wears — the
+	// mirror of the "Today" chip a current-state tile wears when paged away.
+	"widget.windowBadgeTitle": "This tile's figures cover the selected period",
 }
 
 func init() {

@@ -96,6 +96,22 @@ func widgetIcon(id string) icon.Name {
 // month's value (the parity scan's dashboard period-contract defect).
 // Period-windowed tiles (income, spending, budgets, breakdown, cash flow,
 // recap, trend series) are deliberately absent — they follow the period.
+// periodWindowedWidgets are the mirror image: tiles whose figures ARE a window
+// of activity and therefore DO re-window with the period picker. They wear the
+// selected period as a chip at all times — not only when paged away — because
+// the V-sweep's finding was that a reader had no way to tell a "this month"
+// figure from a "this period" one from a trailing-three-month one while all
+// three sat on the same screen (C343). A number that names its window is the
+// cheapest form of data-trust in the app.
+var periodWindowedWidgets = map[string]bool{
+	"kpi-income":   true,
+	"kpi-spending": true,
+	"cashflow":     true,
+	"breakdown":    true,
+	"savings":      true,
+	"budgets":      true,
+}
+
 var todayBadgeWidgets = map[string]bool{
 	"kpi-networth":    true,
 	"kpi-assets":      true,
@@ -480,12 +496,23 @@ func widget(props WidgetProps) uic.Node {
 	// Current-state tiles wear a "Today" chip while the dashboard is paged to
 	// another period (see todayBadgeWidgets).
 	var todayBadge uic.Node = Fragment()
-	if todayBadgeWidgets[props.ID] && !props.Preview {
+	switch {
+	case props.Preview:
+		// A settings/preview tile has no live window to describe.
+	case todayBadgeWidgets[props.ID]:
 		ws, we := viewedPeriod.Range()
 		if now := time.Now(); now.Before(ws) || !now.Before(we) {
 			label := uistate.T("widget.todayBadge")
 			todayBadge = Span(css.Class("w-today"), Attr("data-testid", "w-today-badge"),
 				Attr("title", uistate.T("widget.todayBadgeTitle")), label)
+		}
+	case periodWindowedWidgets[props.ID]:
+		// Always on: this tile's figure IS the selected window, and saying so is
+		// what stops it being compared against a differently-windowed number
+		// elsewhere on the page (C343).
+		if label := viewedPeriod.Label(); label != "" {
+			todayBadge = Span(css.Class("w-today", "w-window"), Attr("data-testid", "w-window-badge"),
+				Attr("title", uistate.T("widget.windowBadgeTitle")), label)
 		}
 	}
 

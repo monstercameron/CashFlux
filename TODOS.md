@@ -5000,17 +5000,39 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   — no file outside the seam may derive the delta from raw cutoffs, no file outside
   `networth_change.go` may assemble the sentence, and the six wired call sites must keep importing
   the seam (so the first two can't pass vacuously). `go test` green; wasm build rc=0.
-- [ ] **C342 [MINOR][DATA-TRUST] Savings rate 60% (dashboard KPI) vs 31% (/health factor)** with
-  no window label on either. Label the window ("June" / "3-mo avg") or unify the computation.
+- [x] **C342 ✅ DONE (2026-08-16) — Savings rate 60% (dashboard KPI) vs 31% (/health factor).**
+  Both figures were correct; they measure different windows and neither said which. Unifying them
+  would have been the wrong fix — the dashboard's is the selected period (what you're living in)
+  and /health's is the trailing three FULL months (so a score doesn't swing on the 2nd). So: both
+  now name their window. `healthscore.Factor` gained a `Window` field (a stable key —
+  `trailing3mo` / `currentPeriod` / `asOfToday` — not display text, so it survives translation),
+  set per factor in `Evaluate`, and EVERY applicable factor tile renders it, not just savings as
+  before; the weakest-factor summary line carries it too. On the dashboard, the hero's stat row
+  gained a window caption ("For Jul 2026") and the savings widget's "this period" caption became
+  the actual period name. Guards: `TestEveryApplicableFactorNamesItsWindow` (a new factor must
+  declare a window) + `TestHealthFactorsRenderTheirWindow` (the view can't stop showing it, and
+  can't go back to gating on `f.Key == "savings"`).
 - [ ] **C340 [MAJOR][DATA-TRUST] /bills double-counts liability obligations.** Liability-derived
   bills AND recurring flows list the same payment twice ("Student loan payment · $320 · Jul 5" +
   "Priya's Student Loan ✦ · $320 · Jul 5"; both car payments likewise), inflating "Total due soon
   $8,814.00", Upcoming-bills counts, and the calendar badges. Link the recurring flow to its
   liability account (or dedupe on amount+date+account) and show one row with a "covers ✦" note.
-- [ ] **C343 [MAJOR][UX] The global period control doesn't visibly scope pages.** Top bar says
-  "Jul 2026" while /transactions shows all 2,320 rows ("1–25 of 2320") and several pages mix
-  windows ("this month", "this period", trailing-3-mo) without saying which. Decide which surfaces
-  obey the period picker, and stamp every money figure's window in its label (§R65 storytelling).
+- [x] **C343 ✅ DONE (2026-08-16) — The global period control didn't visibly scope pages.**
+  Two halves, one already closed by later work: **which surfaces obey the picker** was settled by
+  the C560 ledger rework — `app/shell.go`'s `periodAware` map shows the pill on `/`, `/budgets`,
+  `/planning`, `/insights` and `/reports` only, and /transactions owns its own scope bar whose
+  label is derived from the filter's own dates (guarded by `TestTransactionsIsNotPeriodAware`).
+  **Stamping every figure's window** was the open half, and is what landed here. The dashboard
+  already had half the system — current-state tiles (net worth, bills, to-do, …) wear a "Today"
+  chip while the dashboard is paged away — but the mirror case was missing: period-windowed tiles
+  (income, spending, cash flow, breakdown, savings, budgets) said nothing at all. They now wear
+  the selected period as an always-on chip in the same slot, styled quieter (dashed) than the
+  "Today" exception chip so context and warning don't read alike. Plus: the hero's four-stat row
+  is captioned with its window, the savings widget names the period instead of "this period",
+  every /health factor names its measurement span (C342), and the annual report's net-worth trend
+  stamps "over the year" instead of printing a bare arrow (C341). Guard:
+  `TestBadgeMapsAreDisjointAndReal` — no tile may claim to be both current-state and windowed, and
+  a windowed id that matches no real tile fails rather than silently never rendering.
 - [ ] **C344 [MAJOR][UX] Early-period distortions read as broken.** On day 3 of a period: /budgets
   shows every card "$0.00 / 0% / On track", /reports announces "Spending is down 66% versus the
   previous period", /health scores "Budget adherence 100%". Pro-rate comparisons, or add explicit

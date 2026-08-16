@@ -1399,7 +1399,7 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
 // income that wasn't spent, as a big figure and a bar.
-func savingsRateWidget(ratePct float64, cfg widgetcfg.Config) ui.Node {
+func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string) ui.Node {
 	// ratePct is the tile's configurable formula evaluated over the engine surface
 	// (default (income−expense)/income·100). Truncate toward zero to match the hero's
 	// whole-percent reading (ledger.SavingsRate convention).
@@ -1426,15 +1426,23 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config) ui.Node {
 		tone, bar = "text-warn", "bg-warn"
 	}
 
+	// Name the actual window, not "this period" (C342/C343): this figure is read
+	// against /health's savings-rate factor, which averages the last three FULL
+	// months — two right answers to the same question, previously with nothing on
+	// either to tell them apart.
+	window := uistate.T("dashboard.thisPeriod")
+	if periodLabel != "" {
+		window = periodLabel
+	}
 	left := Div(
 		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", pct)),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("dashboard.savingsSub", target)),
+		Div(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "savings-window"), window),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
 		right = Div(css.Class(tw.Flex1),
 			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
-			Div(css.Class("t-caption", tw.TextFaint, tw.Mt2), uistate.T("dashboard.thisPeriod")),
 		)
 	}
 	body := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5), left, right)

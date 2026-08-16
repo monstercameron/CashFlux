@@ -71,6 +71,25 @@ func healthTextTone(b healthscore.Band) string {
 	}
 }
 
+// healthWindowLabel turns a factor's measurement window into plain English.
+//
+// The model names the span as a stable key rather than display text, so a
+// renderer cannot show a factor's value without being able to say what it was
+// measured over — the omission that made /health's 31% savings rate look like it
+// contradicted the dashboard's 60% when both were right about different windows
+// (C342).
+func healthWindowLabel(w healthscore.Window) string {
+	switch w {
+	case healthscore.WindowTrailing3Mo:
+		return uistate.T("healthx.windowTrailing3mo")
+	case healthscore.WindowCurrentPeriod:
+		return uistate.T("healthx.windowCurrentPeriod")
+	case healthscore.WindowAsOfToday:
+		return uistate.T("healthx.windowAsOfToday")
+	}
+	return ""
+}
+
 // healthBarTone maps a factor score to a progress-bar background tone.
 func healthBarTone(score int) string {
 	switch {
@@ -276,9 +295,13 @@ func healthWidgetNode(struct{}) ui.Node {
 	} else {
 		weakLine := Fragment()
 		if w, ok := weakestApplicable(r); ok {
+			// The weakest factor's value carries its window here too (C342) — this
+			// line is the one most people read, and the detail tile that names the
+			// span is a click away.
 			weakLine = Div(css.Class("t-caption", tw.TextDim, tw.Mt2),
 				Span(css.Class(tw.TextFaint), uistate.T("health.weakestLabel")),
-				Text(w.Label+" "+w.Value+" → "+w.Target))
+				Text(w.Label+" "+w.Value+" → "+w.Target),
+				If(w.Window != "", Span(css.Class(tw.TextFaint), " · "+healthWindowLabel(w.Window))))
 		}
 		right = Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
 			Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(r.Band))), string(r.Band)),
@@ -435,9 +458,12 @@ func healthFactorTile(p healthFactorTileProps) ui.Node {
 			Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), f.Value),
 			targetLine,
 		),
-		// Name the measurement window on the factors that average it, so this "Savings
-		// rate" isn't confused with the current-period savings_rate formula (review #3).
-		If(f.Key == "savings", P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "hf-period-"+f.Key), uistate.T("healthx.savingsPeriod"))),
+		// Name the measurement window on EVERY factor, not just savings (C342).
+		// The model carries it, so a value can no longer be shown without the span
+		// it was measured over — that gap is why /health's 31% savings rate and
+		// the dashboard's 60% read as a contradiction instead of two windows.
+		If(f.Applicable && f.Window != "", P(css.Class("t-caption", tw.TextFaint),
+			Attr("data-testid", "hf-period-"+f.Key), healthWindowLabel(f.Window))),
 		meterNode,
 		P(css.Class("muted", tw.Mt2), uistate.T("health.f."+f.Key+".why")),
 		Details(css.Class("hlt-curve"),

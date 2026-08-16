@@ -1,3 +1,33 @@
+## 2026-08-16 — Two right answers look exactly like one wrong one
+
+C342 reads like an arithmetic bug: savings rate 60% on the dashboard, 31% on /health. It isn't. The
+dashboard measures the period you have selected; the health model averages the last three *full*
+calendar months, on purpose, so the score doesn't lurch every time a new month starts with one
+paycheck in it. Both numbers are defensible. The defect is that neither of them said which question
+it was answering, and a reader with two numbers and no windows has no way to conclude anything
+except that the app is wrong somewhere.
+
+So the fix is not to unify them — unifying would have destroyed a deliberate design decision to
+make a display problem go away. The fix is to make the window part of the model. `healthscore.Factor`
+carries a `Window` now, as a stable key rather than English, and every factor tile renders it. The
+previous code named the window on exactly one factor, gated by `f.Key == "savings"`, which is the
+shape that guarantees the next factor with an unusual window ships unlabelled.
+
+C343 turned out to be two tickets wearing one number. "Which surfaces obey the period picker" was
+already answered by the C560 ledger rework — there's a `periodAware` map in the shell and the ledger
+owns its own scope bar. What was still open was the stamping, and the dashboard had a striking
+half-system for it: tiles whose figures are current state wear a "Today" chip when you page the
+dashboard to another month, so they can't be misread. The mirror case — tiles that genuinely do
+re-window — wore nothing. Someone had built the exception and not the rule.
+
+Both chips now share a slot, and the styling distinguishes them: the always-on period chip is
+dashed and lowercase, the "Today" chip is solid and uppercase. One is context, the other is a
+warning that a figure is ignoring the control above it, and they should not read alike.
+
+The guard that matters here isn't the behaviour test, it's the disjointness check: a tile in both
+maps claims to be current-state and windowed at once, and a windowed id that matches no real tile
+means the chip silently never renders while the ticket reads as closed.
+
 ## 2026-08-16 — Five answers to one question
 
 C341 was filed as "the net-worth month delta disagrees three ways", with a partial fix already

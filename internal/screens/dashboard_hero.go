@@ -119,6 +119,7 @@ func dashboardHero() ui.Node {
 		Net:          netDisplay,
 		NetTone:      figTone(netMoney),
 		SavingsPct:   savingsPct,
+		PeriodLabel:  w.Label(),
 		Spark:        spark,
 		Delta:        delta,
 		DeltaTone:    deltaTone,
@@ -174,9 +175,15 @@ type heroSummaryProps struct {
 	Net          string // formatted cash-flow net (income − spending)
 	NetTone      string // color token for the net figure
 	SavingsPct   int
-	Spark        []float64 // trailing 6-month net-worth series for the hero sparkline (nil → no chart)
-	Delta        string    // formatted "▲ $X this month" net-worth change ("" → no chip)
-	DeltaTone    string    // color token for the delta chip
+	// PeriodLabel names the window the four stats below cover ("Jul 2026"). The
+	// row used to be captioned "this month" in a code comment and nowhere in the
+	// UI, so a hero paged to March showed March's savings rate beside a health
+	// score averaging the last three months, with nothing to tell them apart
+	// (C342/C343).
+	PeriodLabel string
+	Spark       []float64 // trailing 6-month net-worth series for the hero sparkline (nil → no chart)
+	Delta       string    // formatted "▲ $X this month" net-worth change ("" → no chip)
+	DeltaTone   string    // color token for the delta chip
 	// HasAccounts demotes the "Add account" quick action once setup is done (#76):
 	// with accounts in place it's a rare admin task that lives on /accounts, not a
 	// daily entry point beside Add transaction.
@@ -263,12 +270,20 @@ func heroSummary(props heroSummaryProps) ui.Node {
 			spark,
 		),
 
-		// This-month compact stat row (income / spending / net / savings rate).
-		Div(css.Class("home-hero-stats"),
-			heroStat(uistate.T("home.income"), props.Income, "text-up"),
-			heroStat(uistate.T("home.spending"), props.Spending, "text-down"),
-			heroStat(uistate.T("home.net"), props.Net, props.NetTone),
-			heroStat(uistate.T("home.savingsRate"), savingsStr, savingsTone),
+		// Compact stat row (income / spending / net / savings rate) for the SELECTED
+		// period — named, because these four are the app's most-copied figures and
+		// the ones most often compared against a differently-windowed number
+		// elsewhere (C342/C343).
+		Div(css.Class("home-hero-stats-block"),
+			P(css.Class("home-hero-stats-window t-caption", tw.TextFaint),
+				Attr("data-testid", "hero-stats-window"),
+				uistate.T("home.statsWindow", props.PeriodLabel)),
+			Div(css.Class("home-hero-stats"),
+				heroStat(uistate.T("home.income"), props.Income, "text-up"),
+				heroStat(uistate.T("home.spending"), props.Spending, "text-down"),
+				heroStat(uistate.T("home.net"), props.Net, props.NetTone),
+				heroStat(uistate.T("home.savingsRate"), savingsStr, savingsTone),
+			),
 		),
 
 		// Quick actions — the two most common entry points, surfaced without hunting.

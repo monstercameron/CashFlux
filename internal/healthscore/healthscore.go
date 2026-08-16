@@ -110,7 +110,30 @@ type Factor struct {
 	// target into one met/unmet statement instead of showing parallel numbers.
 	TargetMet  bool
 	Applicable bool
+	// Window names the span the Value was measured over, as a stable key the UI
+	// maps to copy — never display text, so it survives translation.
+	//
+	// It exists because two right answers to one question read as a
+	// contradiction: the dashboard's 60% savings rate (the selected period) and
+	// this model's 31% (the trailing three full months) are both correct, and
+	// neither said so (C342). A renderer that shows Value without Window is
+	// showing a number nobody can reconcile.
+	Window Window
 }
+
+// Window is the span a factor's value was measured over.
+type Window string
+
+const (
+	// WindowTrailing3Mo is an average across the last three FULL calendar months,
+	// deliberately excluding the current partial one so a score does not swing on
+	// the 2nd of the month.
+	WindowTrailing3Mo Window = "trailing3mo"
+	// WindowCurrentPeriod is the period the household is currently in.
+	WindowCurrentPeriod Window = "currentPeriod"
+	// WindowAsOfToday is a position read right now, not an average of anything.
+	WindowAsOfToday Window = "asOfToday"
+)
 
 // Step is one prioritized, plain-English action drawn from the weakest factors.
 // TimeFraming is optional context the UI/builder may fill (e.g. "~8 months away");
@@ -140,6 +163,7 @@ type Result struct {
 
 type factorDef struct {
 	key, label, target string
+	window             Window
 	weight             float64
 	applicable         bool
 	rawScore           int
@@ -170,36 +194,42 @@ func Evaluate(in Inputs) Result {
 	defs := []factorDef{
 		{
 			key: "savings", label: "Savings rate", target: "20% or more", weight: 0.25,
+			window:     WindowTrailing3Mo,
 			applicable: in.HasIncome, rawScore: savingsScore(in.SavingsRatePct),
 			value:     fmt.Sprintf("%d%%", in.SavingsRatePct),
 			targetMet: in.SavingsRatePct >= 20,
 		},
 		{
 			key: "emergency", label: "Emergency fund", target: "3–6 months", weight: 0.25,
+			window:     WindowTrailing3Mo,
 			applicable: in.HasLiquidData, rawScore: emergencyScore(in.EmergencyMonths),
 			value:     fmt.Sprintf("%.1f mo", in.EmergencyMonths),
 			targetMet: in.EmergencyMonths >= 3,
 		},
 		{
 			key: "debt", label: "Debt payments", target: "under 36% of income", weight: 0.20,
+			window:     WindowTrailing3Mo,
 			applicable: in.HasIncome, rawScore: obligationScore(in.ObligationRatioPct, in.HasLiabilities),
 			value:     obligationValue(in.ObligationRatioPct, in.HasLiabilities),
 			targetMet: !in.HasLiabilities || in.ObligationRatioPct < 36,
 		},
 		{
 			key: "budget", label: "Budget adherence", target: "100% on track", weight: 0.10,
+			window:     WindowCurrentPeriod,
 			applicable: in.HasBudgets, rawScore: clampPct(in.BudgetAdherencePct),
 			value:     fmt.Sprintf("%d%%", clampPct(in.BudgetAdherencePct)),
 			targetMet: clampPct(in.BudgetAdherencePct) >= 100,
 		},
 		{
 			key: "utilization", label: "Credit utilization", target: "under 30%", weight: 0.10,
+			window:     WindowAsOfToday,
 			applicable: in.HasCredit, rawScore: utilizationScore(in.AggUtilizationPct),
 			value:     fmt.Sprintf("%d%%", clampPct(in.AggUtilizationPct)),
 			targetMet: in.AggUtilizationPct < 30,
 		},
 		{
 			key: "nw-trend", label: "Net-worth trend", target: "growing 5% or more", weight: 0.10,
+			window:     WindowTrailing3Mo,
 			applicable: in.HasNWTrend, rawScore: nwTrendScore(in.NWTrendPct),
 			value:     fmt.Sprintf("%.1f%%", in.NWTrendPct),
 			targetMet: in.NWTrendPct >= 5.0,
@@ -223,7 +253,8 @@ func Evaluate(in Inputs) Result {
 	}
 
 	for _, d := range defs {
-		f := Factor{Key: d.key, Label: d.label, Value: d.value, Target: d.target, TargetMet: d.targetMet, Applicable: d.applicable}
+		f := Factor{Key: d.key, Label: d.label, Value: d.value, Target: d.target,
+			TargetMet: d.targetMet, Applicable: d.applicable, Window: d.window}
 		if d.applicable {
 			f.Score = d.rawScore
 			if applWeight > 0 {

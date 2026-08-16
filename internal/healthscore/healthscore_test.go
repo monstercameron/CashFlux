@@ -579,3 +579,44 @@ func TestTargetMet(t *testing.T) {
 		}
 	}
 }
+
+// TestEveryApplicableFactorNamesItsWindow pins C342.
+//
+// The dashboard reported a 60% savings rate (the selected period) while this
+// model reported 31% (the trailing three full months). Both were right; neither
+// said which window it meant, so the pair read as a contradiction on the two
+// most-read money pages. Every factor now carries the span it was measured over,
+// which is what lets a renderer show the value and the window together.
+func TestEveryApplicableFactorNamesItsWindow(t *testing.T) {
+	in := full()
+	in.NWTrendPct, in.HasNWTrend = 6, true
+	r := Evaluate(in)
+
+	valid := map[Window]bool{
+		WindowTrailing3Mo: true, WindowCurrentPeriod: true, WindowAsOfToday: true,
+	}
+	seen := map[string]Window{}
+	for _, f := range r.Factors {
+		if !f.Applicable {
+			continue
+		}
+		if !valid[f.Window] {
+			t.Errorf("factor %q window = %q, want one of the declared windows", f.Key, f.Window)
+		}
+		seen[f.Key] = f.Window
+	}
+	// The two the ticket is about, pinned by name: savings averages three full
+	// months (so a score does not swing on the 2nd), utilization is a position.
+	if got := seen["savings"]; got != WindowTrailing3Mo {
+		t.Errorf("savings window = %q, want %q", got, WindowTrailing3Mo)
+	}
+	if got := seen["utilization"]; got != WindowAsOfToday {
+		t.Errorf("utilization window = %q, want %q", got, WindowAsOfToday)
+	}
+	if got := seen["budget"]; got != WindowCurrentPeriod {
+		t.Errorf("budget window = %q, want %q", got, WindowCurrentPeriod)
+	}
+	if len(seen) != 6 {
+		t.Fatalf("annotated %d applicable factors, want 6 — a new factor must declare its window", len(seen))
+	}
+}

@@ -119,6 +119,7 @@ func Register() {
 	registerDebtCoachSurface()
 	registerHealthAnalysis()
 	registerTxnScope()
+	registerVSweep()
 	inject(Build())
 }
 

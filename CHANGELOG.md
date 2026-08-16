@@ -7,6 +7,29 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Every money figure now names the window it covers (C342, C343).** The dashboard reported a 60%
+  savings rate and /health reported 31%. Both were right — one is the selected period, the other is
+  an average over the last three full months — and neither said so, which is indistinguishable from
+  one of them being broken.
+
+  Unifying the two would have been the wrong fix: the dashboard's figure is the month you are living
+  in, and /health deliberately averages three *full* months so a score doesn't swing on the 2nd. So
+  they name their windows instead. The health model carries the span as data now — a `Window` on each
+  factor, as a stable key rather than display text — so a value cannot be rendered without one. Every
+  factor tile shows it; previously only the savings tile did, and only by a hardcoded check on its key.
+
+  The dashboard had half of a system for this already: current-state tiles like net worth and upcoming
+  bills wear a "Today" chip when the dashboard is paged to another month, so they can't be misread as
+  that month's figures. The mirror case was missing entirely — the tiles that *do* re-window with the
+  picker said nothing. Income, spending, cash flow, breakdown, savings rate and budgets now wear the
+  selected period at all times, in the same slot, styled quieter than the "Today" chip: one is
+  context, the other is a warning. The hero's four-stat row gained a window caption, and the savings
+  widget names the actual period instead of the unhelpfully vague "this period".
+
+  The other half of C343 — deciding which surfaces obey the picker at all — was settled by the ledger
+  rework: the pill appears only on the five surfaces that honour it, and /transactions owns a scope
+  bar whose label is derived from its own filter dates.
+
 - **The assistant answered with a token line and no reply (C516 / C545 AI-proxy / L83b).** A question
   asked on the shared server key came back as `Reply: 479 tokens out · 9,637 in · cost unavailable`
   and nothing else. The call had succeeded and the model had produced 479 tokens — they just were
