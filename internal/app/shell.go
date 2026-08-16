@@ -290,6 +290,10 @@ func Shell(props ShellProps) uic.Node {
 			// everyone/"" view. Placed after the other global status banners so the
 			// stacking order reads: sample → subscription → member scope.
 			uic.CreateElement(ScopeBanner),
+			// C581: the one-hop way back out of a cross-page correction (ledger →
+			// Rules / Activity / To-do). Shown only on the route the trip was for, and
+			// it names the task it returns to rather than just saying "Back".
+			uic.CreateElement(ReturnBanner, returnBannerProps{ActivePath: props.ActivePath}),
 			// Each screen renders as its OWN component (CreateElement → its own fiber,
 			// so its hooks never share the Shell's), keyed by the active route path.
 			// The key is what makes navigating BETWEEN two pages of the same component
@@ -1300,14 +1304,33 @@ type resolutionControlProps struct {
 // ResolutionControl is the top bar's time-resolution control. The common case is
 // a single period: a Week/Month/Quarter granularity toggle and one stepper that
 // pages the whole window (‹ Jun 2026 ›). When the view has moved off the current
-// period a "This period" reset appears; a "Custom range" toggle reveals the
-// dual From/To steppers for advanced ranges. All date math lives in
+// period a "This period" reset appears; a "Custom range" toggle opens an explicit
+// range workflow with its own draft, preview and Apply. All date math lives in
 // internal/period — every action just stores the next immutable Window.
+//
+// C589 — why the range is a DRAFT, not a live edit. "Custom range" used to be a
+// mode flag: clicking it relabelled the pill "Jul 2026 – Jul 2026" while the
+// window was still one month (a label describing a range nobody had chosen yet),
+// and each stepper click then mutated the live view, so every intermediate state
+// of "June through September" was applied and re-queried on the way there. The
+// mode also lived in component state, so navigating away lost it and an existing
+// range could not be edited again without hunting.
+//
+// Now: the editor is open whenever the window IS a range or the user asked for
+// one; the steppers move a draft; the pill keeps describing what is actually
+// applied until Apply commits it; and Cancel leaves the view exactly as it was.
 func ResolutionControl(props resolutionControlProps) uic.Node {
 	atom := uistate.UsePeriod()
 	w := atom.Get()
 	open := uic.UseState(false)
-	rangeMode := uic.UseState(false)
+	// rangeAsked is only the user's REQUEST to see the range editor. Whether the
+	// editor shows is derived below from that plus the window itself, so an
+	// applied range always brings its own editor back — no hidden mode.
+	rangeAsked := uic.UseState(false)
+	// The uncommitted range. Zero anchors mean "not started"; the editor seeds it
+	// from the live window the first time it renders.
+	draftFrom := uic.UseState(time.Time{})
+	draftTo := uic.UseState(time.Time{})
 	menuID := uic.UseId()
 	closeMenu := func() { open.Set(false) }
 	// Escape / outside-click dismissal, matching the +Add and More menus.
@@ -1339,14 +1362,12 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 			label)
 	}
 
-	// The pill shows the current single period, or the from–to range. On a
-	// year-ending page the single-period label says what stepping really does.
+	// The pill describes what is APPLIED — a single period, or the real range —
+	// and never the range being drafted. On a year-ending page the single-period
+	// label says what stepping really does.
 	pillLabel := w.Label()
 	if props.YearEnding {
 		pillLabel = uistate.T("resolution.yearEnding", w.Label())
-	}
-	if rangeMode.Get() {
-		pillLabel = w.FromLabel() + " – " + w.ToLabel()
 	}
 	expanded := "false"
 	if open.Get() {
@@ -1357,18 +1378,62 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 		hidden = " hidden-menu"
 	}
 
-	// The dual From/To steppers only appear inside the popover in custom-range mode.
-	rangeRow := Fragment()
-	if rangeMode.Get() {
-		rangeRow = Div(css.Class("period-rangerow", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.FlexWrap),
-			ui.StepperPill(ui.StepperPillProps{Label: w.FromLabel(), OnPrev: func() { atom.Set(w.StepFrom(-1)) }, OnNext: func() { atom.Set(w.StepFrom(1)) }, PrevLabel: uistate.T("resolution.fromEarlier"), NextLabel: uistate.T("resolution.fromLater")}),
-			Span(css.Class(tw.TextFaint), "–"),
-			ui.StepperPill(ui.StepperPillProps{Label: w.ToLabel(), OnPrev: func() { atom.Set(w.StepTo(-1)) }, OnNext: func() { atom.Set(w.StepTo(1)) }, PrevLabel: uistate.T("resolution.toEarlier"), NextLabel: uistate.T("resolution.toLater")}),
-		)
+	// The editor is open when the user asked for it OR the window already is a
+	// range — so an applied range is always editable, and the mode can never be
+	// lost behind a navigation while its effect stays on screen.
+	rangeOpen := rangeAsked.Get() || !w.IsSinglePeriod()
+	// Seed the draft from the live window the first time the editor renders.
+	dFrom, dTo := draftFrom.Get(), draftTo.Get()
+	if rangeOpen && (dFrom.IsZero() || dTo.IsZero()) {
+		dFrom, dTo = w.From, w.To
 	}
-	rangeLabel := uistate.T("resolution.customRange")
-	if rangeMode.Get() {
-		rangeLabel = uistate.T("resolution.singlePeriod")
+	draft := period.Window{Res: w.Res, From: dFrom, To: dTo, WeekStart: w.WeekStart}
+	setDraft := func(next period.Window) {
+		draftFrom.Set(next.From)
+		draftTo.Set(next.To)
+	}
+	clearDraft := func() {
+		draftFrom.Set(time.Time{})
+		draftTo.Set(time.Time{})
+	}
+	dirty := rangeOpen && !dFrom.IsZero() && (!dFrom.Equal(w.From) || !dTo.Equal(w.To))
+
+	// The range editor: both endpoints, the range it describes in words, what it
+	// does and does not change, and explicit Apply / Cancel. Nothing here touches
+	// the live window until Apply.
+	rangeRow := Fragment()
+	if rangeOpen {
+		rangeRow = Div(css.Class("period-rangeedit"), Attr("data-testid", "period-range-editor"),
+			Div(css.Class("period-rangerow", tw.Flex, tw.ItemsCenter, tw.Gap25, tw.FlexWrap),
+				ui.StepperPill(ui.StepperPillProps{Label: draft.FromLabel(), OnPrev: func() { setDraft(draft.StepFrom(-1)) }, OnNext: func() { setDraft(draft.StepFrom(1)) }, PrevLabel: uistate.T("resolution.fromEarlier"), NextLabel: uistate.T("resolution.fromLater")}),
+				Span(css.Class(tw.TextFaint), "–"),
+				ui.StepperPill(ui.StepperPillProps{Label: draft.ToLabel(), OnPrev: func() { setDraft(draft.StepTo(-1)) }, OnNext: func() { setDraft(draft.StepTo(1)) }, PrevLabel: uistate.T("resolution.toEarlier"), NextLabel: uistate.T("resolution.toLater")}),
+			),
+			// The range in one sentence, so the user reads what they are about to
+			// apply rather than inferring it from two pills.
+			P(css.Class("period-rangepreview"), Attr("data-testid", "period-range-preview"),
+				rangePreviewText(draft)),
+			P(css.Class("period-rangenote"), Attr("data-testid", "period-range-note"),
+				uistate.T("resolution.rangeScopeNote")),
+			Div(css.Class("period-rangeacts", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.FlexWrap),
+				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "period-range-apply"),
+					attrDisabledIf(!dirty),
+					OnClick(func() {
+						atom.Set(draft)
+						rangeAsked.Set(true)
+					}),
+					uistate.T("resolution.rangeApply")),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "period-range-cancel"),
+					OnClick(func() {
+						clearDraft()
+						rangeAsked.Set(false)
+						if !w.IsSinglePeriod() {
+							atom.Set(w.Single()) // an applied range: cancelling returns to one period
+						}
+					}),
+					uistate.T(rangeCancelKey(w, dirty))),
+			),
+		)
 	}
 
 	// A single compact control: ‹ [period ⌄] › — the chevrons page the window; the
@@ -1408,17 +1473,54 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				preset(uistate.T("resolution.presetYTD"), "ytd"),
 				preset(uistate.T("resolution.presetPriorYear"), "lastyear"),
 			),
-			rangeRow,
-			Button(css.Class("period-rangetoggle"), Type("button"),
+			// The editor's own Cancel closes it, so the toggle only ever OPENS the
+			// range workflow — one control, one direction, nothing to mis-read.
+			If(!rangeOpen, Button(css.Class("period-rangetoggle"), Type("button"),
+				Attr("data-testid", "period-range-open"),
+				Attr("aria-expanded", "false"),
 				OnClick(func() {
-					if rangeMode.Get() {
-						atom.Set(w.Single())
-						rangeMode.Set(false)
-					} else {
-						rangeMode.Set(true)
-					}
+					draftFrom.Set(w.From)
+					draftTo.Set(w.To)
+					rangeAsked.Set(true)
 				}),
-				rangeLabel),
+				uistate.T("resolution.customRange"))),
+			rangeRow,
 		),
 	)
+}
+
+// attrDisabledIf returns the disabled attribute when cond holds, else a no-op —
+// the empty-string `disabled` attribute still disables in HTML, so it has to be
+// omitted rather than set to a falsy value.
+func attrDisabledIf(cond bool) any {
+	if cond {
+		return Attr("disabled", "disabled")
+	}
+	return Fragment()
+}
+
+// rangePreviewText states the drafted range in words — the sentence a user reads
+// before pressing Apply (C589). A one-unit draft is not yet a range, and saying
+// "Jun 2026 through Jun 2026 — 1 periods" of it is both ungrammatical and
+// misleading about what would be applied.
+func rangePreviewText(draft period.Window) string {
+	if n := period.UnitsIn(draft); n > 1 {
+		return uistate.T("resolution.rangePreview", draft.FromLabel(), draft.ToLabel(), n)
+	}
+	return uistate.T("resolution.rangePreviewOne", draft.FromLabel())
+}
+
+// rangeCancelKey names the range editor's secondary action for what it will
+// actually do. With unsaved edits it discards them; with an applied range and
+// nothing pending it is the way back to a single period; with neither it just
+// closes the editor. One button, three honest labels — better than a "Single
+// period" toggle that sometimes discarded a draft and sometimes changed the view.
+func rangeCancelKey(w period.Window, dirty bool) string {
+	switch {
+	case dirty:
+		return "resolution.rangeDiscard"
+	case !w.IsSinglePeriod():
+		return "resolution.rangeBackToSingle"
+	}
+	return "resolution.rangeClose"
 }

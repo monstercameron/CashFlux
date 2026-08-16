@@ -110,6 +110,28 @@ func (w Window) Single() Window {
 	return Window{Res: w.Res, From: w.From, To: w.From, WeekStart: w.WeekStart}
 }
 
+// UnitsIn counts how many whole units of the window's resolution it spans — 1
+// for a single period, 3 for "Jun 2026 – Aug 2026".
+//
+// The range editor states its selection in words before applying it (C589), and
+// "3 months" is the part a reader checks; two endpoint pills leave the span to be
+// worked out by hand. Anchors are assumed to sit on unit boundaries; a window
+// whose end precedes its start counts as one unit rather than a negative span.
+func UnitsIn(w Window) int {
+	if !w.To.After(w.From) {
+		return 1
+	}
+	n := 1
+	for cur := w.From; cur.Before(w.To); n++ {
+		next := Step(w.Res, cur, 1)
+		if !next.After(cur) {
+			break // defensive: an unsteppable anchor must not spin forever
+		}
+		cur = next
+	}
+	return n
+}
+
 // Label renders the window as one string: a single unit label when it covers one
 // period ("Jun 2026"), or "from – to" for a multi-unit range ("Jun 2026 – Aug
 // 2026"). This is what the redesigned single-stepper control shows.

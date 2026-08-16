@@ -165,3 +165,42 @@ func TestWindowRange(t *testing.T) {
 		t.Errorf("Range = [%s, %s), want [2026-06-01, 2026-09-01)", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	}
 }
+
+// --- C589: the range editor states its span before applying it ---
+
+func TestUnitsIn(t *testing.T) {
+	ws := time.Sunday
+	cases := []struct {
+		name string
+		w    Window
+		want int
+	}{
+		{"single month", NewWindow(Month, d(2026, time.June, 15), ws), 1},
+		{"three months", Window{Res: Month, From: d(2026, time.June, 1), To: d(2026, time.August, 1), WeekStart: ws}, 3},
+		{"two weeks", Window{Res: Week, From: d(2026, time.June, 7), To: d(2026, time.June, 14), WeekStart: ws}, 2},
+		{"four quarters", Window{Res: Quarter, From: d(2026, time.January, 1), To: d(2026, time.October, 1), WeekStart: ws}, 4},
+		{"two years", Window{Res: Year, From: d(2025, time.January, 1), To: d(2026, time.January, 1), WeekStart: ws}, 2},
+		// A reversed pair is not a negative span; the steppers keep from <= to,
+		// but the count must stay sane if one ever arrives out of order.
+		{"reversed", Window{Res: Month, From: d(2026, time.August, 1), To: d(2026, time.June, 1), WeekStart: ws}, 1},
+	}
+	for _, c := range cases {
+		if got := UnitsIn(c.w); got != c.want {
+			t.Errorf("%s: UnitsIn = %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+// The span the editor reports must agree with the range actually reported on:
+// counting units and walking Range() must describe the same window.
+func TestUnitsInAgreesWithRange(t *testing.T) {
+	w := Window{Res: Month, From: d(2026, time.June, 1), To: d(2026, time.August, 1), WeekStart: time.Sunday}
+	start, end := w.Range()
+	months := 0
+	for cur := start; cur.Before(end); cur = Step(Month, cur, 1) {
+		months++
+	}
+	if got := UnitsIn(w); got != months {
+		t.Errorf("UnitsIn = %d but Range spans %d months", got, months)
+	}
+}
