@@ -242,6 +242,73 @@ func indexOf(ss []string, want string) int {
 	return -1
 }
 
+// A table ordered by a column nobody can see states nothing about its own order:
+// no header carries a sort indicator, yet the rows are not in the default order.
+func TestEffectiveSortFallsBackWhenItsColumnIsHidden(t *testing.T) {
+	tests := []struct {
+		name    string
+		crit    Criteria
+		hidden  map[string]bool
+		wantKey string
+		wantDir string
+		wantWhy string
+	}{
+		{
+			name: "a visible column keeps its sort",
+			crit: Criteria{Sort: "amount", Dir: Asc}, hidden: map[string]bool{"category": true},
+			wantKey: "amount", wantDir: Asc,
+			wantWhy: "Amount is on screen, so it still orders the table",
+		},
+		{
+			name: "hiding the sorted column falls back to newest first",
+			crit: Criteria{Sort: "amount", Dir: Asc}, hidden: map[string]bool{"amount": true},
+			wantKey: "date", wantDir: Desc,
+			wantWhy: "no header could show the amount sort, so the order must not be by amount",
+		},
+		{
+			name: "each hideable column behaves the same",
+			crit: Criteria{Sort: "category", Dir: Asc}, hidden: map[string]bool{"category": true},
+			wantKey: "date", wantDir: Desc,
+			wantWhy: "Category is hideable too",
+		},
+		{
+			// Date and Description cannot be hidden, so they are never in the map.
+			name: "an always-visible column is unaffected",
+			crit: Criteria{Sort: "payee", Dir: Asc}, hidden: map[string]bool{"amount": true, "account": true},
+			wantKey: "payee", wantDir: Asc,
+			wantWhy: "Description has no visibility toggle",
+		},
+		{
+			name: "a nil map means everything is visible",
+			crit: Criteria{Sort: "source", Dir: Desc}, hidden: nil,
+			wantKey: "source", wantDir: Desc,
+			wantWhy: "callers without column state must not lose their sort",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			key, dir := EffectiveSort(tc.crit, tc.hidden)
+			if key != tc.wantKey || dir != tc.wantDir {
+				t.Errorf("EffectiveSort() = %q/%q, want %q/%q — %s", key, dir, tc.wantKey, tc.wantDir, tc.wantWhy)
+			}
+		})
+	}
+}
+
+// The fallback is a DISPLAY decision: the stored preference survives, so putting
+// the column back restores the sort rather than making the user re-pick it.
+func TestEffectiveSortDoesNotMutateTheStoredCriteria(t *testing.T) {
+	c := Criteria{Sort: "amount", Dir: Asc}
+	if _, _ = EffectiveSort(c, map[string]bool{"amount": true}); c.Sort != "amount" || c.Dir != Asc {
+		t.Fatalf("stored criteria changed to %q/%q", c.Sort, c.Dir)
+	}
+	// Re-showing the column brings the sort straight back.
+	key, dir := EffectiveSort(c, nil)
+	if key != "amount" || dir != Asc {
+		t.Errorf("restored sort = %q/%q, want amount/asc", key, dir)
+	}
+}
+
 func TestCountPresetsToleratesAnUnconfiguredScope(t *testing.T) {
 	got := CountPresets(presetFixture(), Criteria{}, PresetScope{})
 	if got.NeedsReview != 0 || got.Large != 0 || got.ThisMonth != 0 {

@@ -97,3 +97,44 @@ func TestFundingReadReduceToFitPctDeclinesWhenItCannotHelp(t *testing.T) {
 		t.Errorf("a >90%% cut = %v, want 0 (out of the adjuster's range)", got)
 	}
 }
+
+// --- The reconcile has to actually reconcile ---
+//
+// The percentage goes to the bulk BUDGET adjuster, which never touches savings
+// assignments. Computing it against the whole assigned figure left the plan
+// short by exactly the savings whenever a household saved anything.
+func TestReduceToFitPctScalesOnlyTheAdjustablePart(t *testing.T) {
+	f := FundingRead{Expected: 200000, Received: 100000, Assigned: 150000, Fixed: 50000}
+
+	pct := f.ReduceToFitPct()
+	if pct >= 0 {
+		t.Fatalf("ReduceToFitPct = %v, want a reduction", pct)
+	}
+	// Applying it to the BUDGETS must land the whole plan on the money received.
+	budgetsAfter := AdjustedLimit(f.Adjustable(), pct)
+	total := budgetsAfter + f.Fixed
+	if total > f.Received+50 || total < f.Received-50 {
+		t.Errorf("after %v%% the plan totals %d, want about %d (the money received)", pct, total, f.Received)
+	}
+}
+
+// When the unscalable part alone already exceeds what arrived, no percentage
+// closes the gap — zeroing every budget would not do it — so no one-click fix is
+// offered rather than one that quietly does something else.
+func TestReduceToFitPctDeclinesWhenSavingsAloneExceedIncome(t *testing.T) {
+	f := FundingRead{Expected: 200000, Received: 40000, Assigned: 150000, Fixed: 50000}
+	if got := f.ReduceToFitPct(); got != 0 {
+		t.Errorf("ReduceToFitPct = %v, want 0 — savings alone are over the income", got)
+	}
+}
+
+// With nothing fixed, the behaviour is unchanged.
+func TestReduceToFitPctUnchangedWithoutFixedAssignments(t *testing.T) {
+	f := FundingRead{Expected: 1070916, Received: 696100, Assigned: 1070916}
+	if f.Adjustable() != f.Assigned {
+		t.Errorf("Adjustable = %d, want the whole assigned figure", f.Adjustable())
+	}
+	if got := f.ReduceToFitPct(); got >= 0 {
+		t.Errorf("ReduceToFitPct = %v, want a reduction", got)
+	}
+}

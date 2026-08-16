@@ -37,6 +37,33 @@ const (
 // PageSizes are the offered page-size choices (plus "All" = PageSizeAll).
 var PageSizes = []int{25, 50, 100}
 
+// DefaultSortKey is the column the ledger falls back to: newest first.
+const DefaultSortKey = "date"
+
+// EffectiveSort returns the key and direction the ledger should ACTUALLY order by,
+// given which sortable columns the user currently has on screen.
+//
+// Four of the six sortable columns can be hidden (Amount, Account, Category,
+// Source), and hiding one used to leave its sort in force: the rows stayed ordered
+// by a column that was no longer there, NO header showed a sort indicator, and the
+// state survived a reload. A table whose order corresponds to nothing on screen is
+// the same defect as a period label over the wrong month — the order is applied,
+// and the page never says so.
+//
+// The stored preference is deliberately left alone. Falling back is a display
+// decision, so re-showing the column restores the sort the user chose rather than
+// silently discarding it the moment they freed up some width.
+//
+// hidden holds the sort keys whose columns are currently off; a key absent from it
+// (or a nil map) is treated as visible, which is right for the columns that cannot
+// be hidden at all.
+func EffectiveSort(c Criteria, hidden map[string]bool) (key, dir string) {
+	if c.Sort == "" || !hidden[c.Sort] {
+		return c.Sort, c.Dir
+	}
+	return DefaultSortKey, DefaultDir(DefaultSortKey)
+}
+
 // ValidSortKey reports whether k is a known sortable column.
 func ValidSortKey(k string) bool {
 	for _, s := range SortKeys {

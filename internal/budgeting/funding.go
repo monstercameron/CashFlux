@@ -19,6 +19,25 @@ type FundingRead struct {
 	Received int64
 	// Assigned is the total handed out to budgets and savings.
 	Assigned int64
+	// Fixed is the part of Assigned that a bulk budget adjustment cannot scale —
+	// today, the monthly amounts assigned to savings and investment accounts.
+	//
+	// It exists because the reconcile action hands its percentage to the budget
+	// adjuster, which only ever touches budgets. Computing the reduction against
+	// the WHOLE assigned figure produced a percentage that left the plan still
+	// short whenever a household saved anything: assign $1,000 to budgets and $500
+	// to savings against $1,000 received, and a −33.3%% cut across budgets leaves
+	// $667 + $500 = $1,167 — still $167 over. The button claimed to resolve the
+	// gap and did not.
+	Fixed int64
+}
+
+// Adjustable is the part of the plan a bulk budget adjustment can actually move.
+func (f FundingRead) Adjustable() int64 {
+	if adj := f.Assigned - f.Fixed; adj > 0 {
+		return adj
+	}
+	return 0
 }
 
 // Unfunded is the part of the plan that no arrived money backs yet. Zero when
@@ -76,10 +95,19 @@ func (f FundingRead) ReceivedPct() int {
 // adjustment can express — in which case the UI must not offer a one-click fix
 // that would quietly do something else.
 func (f FundingRead) ReduceToFitPct() float64 {
-	if f.FullyFunded() || f.Assigned <= 0 || f.Received < 0 {
+	adj := f.Adjustable()
+	if f.FullyFunded() || adj <= 0 || f.Received < 0 {
 		return 0
 	}
-	raw := (float64(f.Received)/float64(f.Assigned) - 1) * 100
+	// The budgets have to come down to whatever the received money leaves once the
+	// unscalable part is honoured. If that is nothing, no percentage exists that
+	// closes the gap — zeroing every budget would not do it — and offering a
+	// one-click fix that quietly did something else is worse than offering none.
+	target := f.Received - f.Fixed
+	if target <= 0 {
+		return 0
+	}
+	raw := (float64(target)/float64(adj) - 1) * 100
 	pct := math.Round(raw*10) / 10
 	if pct >= 0 || pct < AdjustMinPct {
 		return 0
