@@ -130,6 +130,28 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **/allocate's criterion meters stop reading as rates (C353).** "Pay down Mortgage · RETURNS 27%"
+  sat beside a 4.1% mortgage, and "RETURNS 100%" appeared on a card. Those are normalized ranking
+  scores on abstract axes, and a percent sign turned them into claims about the account's actual
+  yield. They read `27/100` now, and the Returns chip carries the real rate beside the score — "4.1%
+  APR saved" for a debt payment, "7.5% expected" for an asset — so the number the reader was reaching
+  for is present rather than merely disclaimed. Goal progress keeps its percent sign, because that
+  one is a real percentage of a real target.
+
+- **The credit score and the financial-health score stop wearing each other's words (C354).**
+  /credit showed 55 as "Good" with a green ring while /health showed 73 as "Good" with a green ring:
+  two 0–100 scores one click apart, using the same word and colour for values fifteen points apart.
+
+  The credit bands sat 15–20 points below the health bands; they are identical now, so 55 reads Fair
+  in amber and nothing under 60 wears a green word. The bottom tier adopted the health scale's word
+  too — grading the same score "Poor" on one page and "Critical" on the other is still two
+  vocabularies. The ring's continuous hue was a flat ramp that tinted a 55 nearly green regardless of
+  its band; it follows the thresholds now.
+
+  And the two scores have distinct names. The credit proxy measures habits — utilization, payment
+  history, account age — so it is called "Credit habits", and "Financial health" keeps the name it
+  earned. A test compares both scales across all 101 scores, so moving one without the other fails.
+
 - **The subscription price tracker stops reporting spending as price rises (C347).** It took the
   latest charge as "the new price" and walked back to the first charge with any different amount, so
   a date-night habit costing $88, $95, $102 and $96 announced "Date night went up 9%" — two arbitrary

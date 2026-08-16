@@ -5228,13 +5228,29 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   longer silently hides 6 accounts its own summary counts. MEASURED live: stub renders with the
   correct count, click navigates to /debt; 0 page errors; i18n guard green; wasm build rc=0.
   (Follow-on if wanted: collapsed liability rows with Update-balance inline instead of a stub.)
-- [ ] **C353 [MINOR][UX] /allocate criterion meters read as literal finance numbers:** "Pay down
-  Mortgage — RETURN 27%" (a 4.1% APR), "RETURN 100%" on the card. They're normalized scores;
-  label them as scores (no % on abstract axes) or show the real APR/yield beside the score.
-- [ ] **C354 [MINOR][UX] Credit-health 55/100 shows "Good" + a green ring** (/credit and /debt)
-  next to "−38 pts" utilization drag; /health separately shows 73 "Good". Calibrate label/color
-  bands (≤60 = amber "Needs work") and name the two scores distinctly ("Financial health" vs
-  "Credit habits") so two green "Good" rings can't mean 73 and 55.
+- [x] **C353 ✅ DONE (2026-08-16) — /allocate criterion meters read as finance numbers.** Did both
+  halves the ticket offered, because each fixes a different failure. The abstract axes lost their
+  percent signs and read `27/100` — a normalized ranking score with a `%` beside a mortgage is a
+  claim about the mortgage's rate, and `RETURNS 100%` is an impossible one. And the Returns chip now
+  carries the REAL rate beside its score ("4.1% APR saved" for a debt payment, "7.5% expected" for
+  an asset), so the number the reader was reaching for is actually present rather than merely
+  disclaimed. The headline card score and the meter's screen-reader label use the same `n/100`
+  wording; goal progress KEEPS its percent sign, because that one is a real percentage of a real
+  target. Ratchet `TestAllocateScoresAreNotPrintedAsRates` fails if a criterion chip formats its
+  score with `%` again or the real-rate helper disappears.
+- [x] **C354 ✅ DONE (2026-08-16) — Credit 55 read "Good" in green while /health's 73 also read
+  "Good" in green.** Two 0–100 scores one click apart, using the same word and the same colour for
+  values fifteen points apart. **Calibration:** `credithealth`'s thresholds sat 15–20 points below
+  `healthscore`'s; they are now identical (≥80 / ≥60 / ≥40 / ≥25), so 55 reads Fair in amber and
+  nothing under 60 wears a green word — the boundary the ticket asked for. The bottom tier also
+  adopted healthscore's word ("Critical" rather than "Poor"): two scales that grade the same score
+  with synonyms are still two vocabularies to reconcile. The continuous ring HUE was a flat ×1.3
+  ramp that tinted a 55 nearly green regardless of its band; it is anchored to the thresholds now.
+  **Naming:** the credit proxy is about habits — utilization, payment history, age — so it says so
+  ("Credit habits"), and "Financial health" keeps the name it earned. Guards: a table over every
+  band boundary including the sweep's exact 55, an assertion that no score under 60 can read Good or
+  Excellent, and a loop comparing `credithealth.BandFor` against `healthscore.BandFor` for all 101
+  scores — so moving either scale without the other fails.
 
 ### Page composition / IA (new, concrete — beyond open R-items)
 - [ ] **C348 [MINOR][UX] /subscriptions triple-lists the same rows** (main list, price changes,

@@ -311,14 +311,17 @@ func Evaluate(in Inputs) Result {
 		res.Score = clampPct(res.Score - negativeCashFlowPenalty)
 	}
 
-	res.Band = bandFor(res.Score)
+	res.Band = BandFor(res.Score)
 	res.Steps = buildSteps(defs)
 	return res
 }
 
-// bandFor maps a 0–100 score to its tier (five tiers; "Critical" distinguishes a
+// BandFor maps a 0–100 score to its tier (five tiers; "Critical" distinguishes a
 // dire score from a merely weak one so the coaching copy can match the urgency).
-func bandFor(score int) Band {
+//
+// Exported so /credit's parallel scale can be asserted against it directly: the
+// two used to disagree about what "Good" meant by fifteen points (C354).
+func BandFor(score int) Band {
 	switch {
 	case score >= 80:
 		return BandExcellent

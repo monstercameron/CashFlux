@@ -68,15 +68,24 @@ func allocDestRow(props allocDestRowProps) ui.Node {
 
 	// Breakdown chips — the criteria that earned the score, plus any qualitative note.
 	chips := []any{css.Class("alloc-dest-breakdown")}
+	// C353: these are NORMALIZED SCORES on abstract axes, not rates. Printing
+	// "RETURNS 27%" beside a mortgage at 4.1% APR reads as a claim about the
+	// mortgage — and "RETURNS 100%" on the card reads as an absurd one. They are
+	// scored out of 100 now, with no percent sign, and the Returns chip carries
+	// the REAL rate beside its score so the number it was being mistaken for is
+	// actually available.
 	chips = append(chips,
-		allocBreakdownChip(uistate.T("allocate.critReturns"), r.Breakdown.Returns),
-		allocBreakdownChip(uistate.T("allocate.critStability"), r.Breakdown.Stability),
-		allocBreakdownChip(uistate.T("allocate.critLiquidity"), r.Breakdown.Liquidity),
+		allocBreakdownChip(uistate.T("allocate.critReturns"), r.Breakdown.Returns,
+			allocRealRate(r.Candidate)),
+		allocBreakdownChip(uistate.T("allocate.critStability"), r.Breakdown.Stability, ""),
+		allocBreakdownChip(uistate.T("allocate.critLiquidity"), r.Breakdown.Liquidity, ""),
 	)
 	if r.Candidate.DebtReduction {
 		chips = append(chips, Span(css.Class("alloc-dest-tag"), uistate.T("allocate.paysDebtTag")))
 	}
 	if r.Breakdown.GoalProgress > 0 {
+		// Goal progress IS a real percentage of a real target, so it keeps its
+		// percent sign — the axes that lost theirs are the abstract ones (C353).
 		chips = append(chips, Span(css.Class("alloc-dest-tag"),
 			fmt.Sprintf("%s %.0f%%", uistate.T("allocate.goalTag"), r.Breakdown.GoalProgress*100)))
 	}
@@ -88,12 +97,14 @@ func allocDestRow(props allocDestRowProps) ui.Node {
 				Span(css.Class("alloc-dest-name"), r.Candidate.Name),
 				Div(css.Class("alloc-dest-figs"),
 					amountNode,
-					Span(css.Class("alloc-dest-score", tw.TextDim), fmt.Sprintf("%d%%", scorePct)),
+					Span(css.Class("alloc-dest-score", tw.TextDim),
+						Attr("title", uistate.T("allocate.scoreHint")),
+						uistate.T("allocate.scoreOutOf", scorePct)),
 				),
 			),
 			uiw.MeterBar(uiw.MeterBarProps{
 				Value: float64(scorePct), Tone: "bg-accent",
-				Label: uistate.T("allocate.scoreLabel", float64(scorePct)),
+				Label: uistate.T("allocate.scoreMeterAria", scorePct),
 			}),
 			Div(chips...),
 		),
@@ -113,13 +124,35 @@ func allocDestRow(props allocDestRowProps) ui.Node {
 	)
 }
 
-// allocBreakdownChip is one criterion contribution as a compact labelled chip (0–100%).
-func allocBreakdownChip(label string, frac float64) ui.Node {
+// allocBreakdownChip is one criterion's contribution as a compact labelled chip.
+//
+// The value is a SCORE out of 100 on an abstract axis, and it is rendered
+// without a percent sign for exactly that reason (C353): "RETURNS 27%" beside a
+// mortgage at 4.1% APR reads as a statement about the mortgage's rate, and
+// "RETURNS 100%" reads as an impossible one. `real` is the underlying finance
+// figure when the axis has one ("4.1% APR"), shown beside the score so the
+// number the reader was reaching for is actually there.
+func allocBreakdownChip(label string, frac float64, real string) ui.Node {
 	pct := max(0, min(int(frac*100+0.5), 100))
 	return Span(css.Class("alloc-dest-chip"),
 		Span(css.Class("alloc-dest-chip-label", tw.TextDim), label),
-		Span(css.Class("alloc-dest-chip-val"), fmt.Sprintf("%d%%", pct)),
+		Span(css.Class("alloc-dest-chip-val"), uistate.T("allocate.scoreOutOf", pct)),
+		If(real != "", Span(css.Class("alloc-dest-chip-real", tw.TextFaint), real)),
 	)
+}
+
+// allocRealRate renders the actual finance number behind the Returns axis: the
+// expected return for an asset, or the interest a debt payment stops accruing.
+// Empty when the candidate has no rate, so the chip shows a bare score rather
+// than a fabricated "0.0%".
+func allocRealRate(c allocate.Candidate) string {
+	if c.ExpectedReturnAPR == 0 {
+		return ""
+	}
+	if c.DebtReduction {
+		return uistate.T("allocate.realAPRDebt", c.ExpectedReturnAPR)
+	}
+	return uistate.T("allocate.realAPRAsset", c.ExpectedReturnAPR)
 }
 
 type excludedChipProps struct {

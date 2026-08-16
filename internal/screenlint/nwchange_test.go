@@ -293,3 +293,37 @@ func TestGoalPaceBadgeIsFundingDerived(t *testing.T) {
 		t.Error("screens/goals.go no longer calls goals.AssessHealth (C352)")
 	}
 }
+
+// ─── C353 abstract-axis ratchet ──────────────────────────────────────────────
+
+// TestAllocateScoresAreNotPrintedAsRates keeps /allocate's meters honest.
+//
+// C353: the criterion axes are normalized 0–100 scores, and they were rendered
+// with a percent sign — so "Pay down Mortgage · RETURNS 27%" sat next to a 4.1%
+// mortgage and read as a claim about the mortgage's rate, while "RETURNS 100%"
+// read as an impossible one. A score on an abstract axis gets no percent sign,
+// and the Returns chip carries the real APR beside it.
+func TestAllocateScoresAreNotPrintedAsRates(t *testing.T) {
+	src, ok := readInternal(t)["screens/allocate_rows.go"]
+	if !ok {
+		t.Fatal("screens/allocate_rows.go not found")
+	}
+	code := codeOnly(t, "allocate_rows.go", src)
+	i := strings.Index(code, "func allocBreakdownChip(")
+	if i < 0 {
+		t.Fatal("allocBreakdownChip has moved; update this guard rather than deleting it")
+	}
+	end := strings.Index(code[i:], "\n}")
+	body := code[i : i+end]
+	if strings.Contains(body, `"%d%%"`) || strings.Contains(body, `"%.0f%%"`) {
+		t.Error("a criterion chip formats its score with a percent sign again — the axis " +
+			"is a ranking score, not a rate (C353)")
+	}
+	if !strings.Contains(body, `uistate.T("allocate.scoreOutOf"`) {
+		t.Error("the criterion chip no longer renders its value as a score out of 100 (C353)")
+	}
+	if !strings.Contains(code, "func allocRealRate(") {
+		t.Error("the real APR beside the Returns score is gone — the whole point was that " +
+			"the number the reader was reaching for should actually be there (C353)")
+	}
+}

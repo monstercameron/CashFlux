@@ -68,6 +68,30 @@ var vSweepKeys = Catalog{
 	// subscription means. %d = the largest deviation from the median charge.
 	"subs.varies":     "varies",
 	"subs.variesHint": "Charged a different amount each time (up to %d%% apart) — this is recurring spending, not a set-price subscription",
+
+	// ── C353: /allocate meters are scores, not rates ────────────────────────
+	// The criterion axes are normalized 0–100 scores. Printing them with a
+	// percent sign made "Pay down Mortgage — RETURNS 27%" read as a claim about
+	// a 4.1% mortgage, and "RETURNS 100%" read as an impossible one. %d = the
+	// score.
+	"allocate.scoreOutOf": "%d/100",
+	"allocate.scoreHint":  "A ranking score out of 100 across your chosen criteria — not a rate of return",
+	// The real finance figure beside the Returns score. %.1f = annual percent.
+	"allocate.realAPRAsset": "%.1f%% expected",
+	"allocate.realAPRDebt":  "%.1f%% APR saved",
+	// Screen-reader label for the ranking meter. %d = the score out of 100.
+	"allocate.scoreMeterAria": "Ranking score %d out of 100",
+
+	// ── C354: two 0–100 scores must not share a name ────────────────────────
+	// /health showed 73 "Good" with a green ring and /credit showed 55 "Good"
+	// with a green ring, both labelled "…health". A reader comparing them had no
+	// way to tell they were different scales measuring different things. The
+	// credit proxy is about HABITS — utilization, payment history, age — so it
+	// says so, and "Financial health" keeps the name it earned.
+	"nav.credit":               "Credit habits",
+	"credit.pageTitle":         "Credit habits",
+	"credit.ringLabel":         "Credit-habits score: %d out of 100 — %s",
+	"detail6.creditScoreLabel": "Credit-habits score (CashFlux estimate — not a bureau score)",
 }
 
 func init() {

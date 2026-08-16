@@ -28,6 +28,12 @@ func registerVSweep() {
 		letterSpacing("0.02em"),
 	)
 
+	// ── C353: the real rate sits beside the abstract score ──────────────────
+	rule(".alloc-dest-chip-real",
+		marginLeft("0.3rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+
 	rule(".home-hero-stats-window",
 		margin("0"),
 		letterSpacing("0.04em"),

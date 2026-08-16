@@ -109,24 +109,37 @@ func utilScore(pct int) int {
 // Band is the qualitative tier for the overall proxy score.
 type Band string
 
+// Thresholds mirror healthscore.bandFor EXACTLY (V-sweep C354). They used to
+// sit 15–20 points lower, so the same qualitative word meant different things on
+// two pages that sit next to each other: /credit called 55 "Good" and drew a
+// green ring while /health called 73 "Good", and a reader comparing them had no
+// way to know the words were on different scales. A 55 with a −38-point
+// utilization drag is not a good score; it now reads Fair, in amber.
 const (
-	BandExcellent Band = "Excellent" // proxy ≥ 75
-	BandGood      Band = "Good"      // proxy ≥ 55
-	BandFair      Band = "Fair"      // proxy ≥ 35
-	BandPoor      Band = "Poor"      // proxy < 35
+	BandExcellent Band = "Excellent"  // proxy ≥ 80
+	BandGood      Band = "Good"       // proxy ≥ 60
+	BandFair      Band = "Fair"       // proxy ≥ 40
+	BandNeedsWork Band = "Needs work" // proxy ≥ 25
+	// BandCritical uses healthscore's word, not a synonym of it: two scales one
+	// click apart that grade the same score "Poor" and "Critical" are still two
+	// vocabularies for the reader to reconcile.
+	BandCritical Band = "Critical" // proxy < 25
 )
 
-// bandFor maps a 0–100 proxy score to its Band.
-func bandFor(score int) Band {
+// BandFor maps a 0–100 proxy score to its Band. Exported so the calibration
+// against healthscore's identical thresholds can be asserted directly (C354).
+func BandFor(score int) Band {
 	switch {
-	case score >= 75:
+	case score >= 80:
 		return BandExcellent
-	case score >= 55:
+	case score >= 60:
 		return BandGood
-	case score >= 35:
+	case score >= 40:
 		return BandFair
+	case score >= 25:
+		return BandNeedsWork
 	default:
-		return BandPoor
+		return BandCritical
 	}
 }
 
@@ -427,7 +440,7 @@ func Evaluate(in Inputs) Result {
 		AgeScore:    ageScore,
 		ProxyScore:  proxyScore,
 		Weights:     proxyWeights(onTimeScore, ageScore),
-		Band:        bandFor(proxyScore),
+		Band:        BandFor(proxyScore),
 		Demerits:    deriveDemerits(cardUtils, agg, onTimeScore, ageScore),
 		Advice:      deriveAdvice(cardUtils, agg, onTimeScore, ageScore, proxyScore),
 		Disclaimer:  Disclaimer,

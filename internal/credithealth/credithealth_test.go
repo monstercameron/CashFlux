@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/credithealth"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -322,7 +323,7 @@ func TestBandMapping(t *testing.T) {
 		Balances: map[string]int64{"b2": -95000}, // 95% util
 		Now:      baseNow,
 	})
-	if res2.Band != credithealth.BandPoor {
+	if res2.Band != credithealth.BandCritical {
 		t.Errorf("Expected Poor band for 95%% util-only, got %s (score=%d)", res2.Band, res2.ProxyScore)
 	}
 }
@@ -477,6 +478,62 @@ func TestProxyWeightsFormulaIdentity(t *testing.T) {
 		}
 		if got := clamp(int(weighted)); got != r.ProxyScore {
 			t.Errorf("case %d: formula identity gives %d, ProxyScore is %d", i, got, r.ProxyScore)
+		}
+	}
+}
+
+// ─── C354: two 0–100 scores must not disagree about what a word means ────────
+
+// TestBandsMatchTheFinancialHealthScale is the ticket's complaint made testable.
+//
+// /credit showed 55 as "Good" with a green ring while /health showed 73 as
+// "Good" with a green ring — the same word and the same colour for two scores
+// fifteen points apart, sitting one click from each other. The thresholds are
+// now identical to healthscore's, so the words are comparable across the pages.
+func TestBandsMatchTheFinancialHealthScale(t *testing.T) {
+	for _, tc := range []struct {
+		score int
+		want  credithealth.Band
+	}{
+		{100, credithealth.BandExcellent},
+		{80, credithealth.BandExcellent},
+		{79, credithealth.BandGood},
+		{60, credithealth.BandGood},
+		{59, credithealth.BandFair},
+		// The exact figure from the sweep: 55, with a −38-point utilization drag.
+		{55, credithealth.BandFair},
+		{40, credithealth.BandFair},
+		{39, credithealth.BandNeedsWork},
+		{25, credithealth.BandNeedsWork},
+		{24, credithealth.BandCritical},
+		{0, credithealth.BandCritical},
+	} {
+		if got := credithealth.BandFor(tc.score); got != tc.want {
+			t.Errorf("credithealth.BandFor(%d) = %q, want %q", tc.score, got, tc.want)
+		}
+	}
+}
+
+// A score is only "Good" from 60 up — the boundary the sweep asked for
+// ("≤60 = amber").
+func TestNothingUnderSixtyReadsAsGood(t *testing.T) {
+	for score := 0; score < 60; score++ {
+		if b := credithealth.BandFor(score); b == credithealth.BandGood || b == credithealth.BandExcellent {
+			t.Fatalf("credithealth.BandFor(%d) = %q — anything under 60 must not wear a green word (C354)", score, b)
+		}
+	}
+}
+
+// The two scales must stay identical, not merely start identical: this compares
+// the credit bands against healthscore's own thresholds directly, so moving
+// either one without the other fails here.
+func TestCreditBandsTrackTheHealthScoreBands(t *testing.T) {
+	for score := 0; score <= 100; score++ {
+		credit, health := credithealth.BandFor(score), healthscore.BandFor(score)
+		if string(credit) != string(health) {
+			t.Fatalf("score %d: /credit says %q but /health says %q — the same word on two "+
+				"0-100 scores one click apart must mean the same thing (C354)",
+				score, credit, health)
 		}
 	}
 }

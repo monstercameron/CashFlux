@@ -96,13 +96,16 @@ func buildCreditInputs(app *appstate.App, now time.Time) credithealth.Inputs {
 }
 
 // creditBandTone maps a credithealth.Band to a semantic tone class.
+//
+// Only Excellent and Good are green (C354). A 55 used to be Good, so a score
+// dragged down 38 points by utilization wore the same green ring as a healthy
+// one — and the /health page's own 73 wore that ring too, which made the colour
+// mean nothing.
 func creditBandTone(b credithealth.Band) string {
 	switch b {
-	case credithealth.BandExcellent:
+	case credithealth.BandExcellent, credithealth.BandGood:
 		return "text-up"
-	case credithealth.BandGood:
-		return "text-up"
-	case credithealth.BandFair:
+	case credithealth.BandFair, credithealth.BandNeedsWork:
 		return "text-warn"
 	default:
 		return "text-down"
@@ -139,7 +142,23 @@ func creditUtilBarTone(b credithealth.UtilBand) string {
 
 // creditHue maps a 0–100 proxy score to a continuous red→green hue (HSL),
 // mirroring the approach in healthHue.
-func creditHue(score int) int { return score * 13 / 10 }
+func creditHue(score int) int {
+	// Anchored to the band thresholds (C354) rather than to a flat ×1.3 ramp,
+	// which tinted a 55 nearly green while its band said Fair. 0 → red (0°),
+	// 40 → amber (45°), 60 → yellow-green (75°), 100 → green (130°).
+	switch {
+	case score <= 0:
+		return 0
+	case score < 40:
+		return score * 45 / 40
+	case score < 60:
+		return 45 + (score-40)*30/20
+	case score >= 100:
+		return 130
+	default:
+		return 75 + (score-60)*55/40
+	}
+}
 
 // creditProxyColor returns the ring/figure stroke for a proxy score.
 func creditProxyColor(r credithealth.Result) string {

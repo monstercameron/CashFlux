@@ -259,8 +259,8 @@ func TestBands(t *testing.T) {
 		{24, BandCritical}, {0, BandCritical},
 	}
 	for _, c := range cases {
-		if got := bandFor(c.score); got != c.band {
-			t.Errorf("bandFor(%d)=%q, want %q", c.score, got, c.band)
+		if got := BandFor(c.score); got != c.band {
+			t.Errorf("BandFor(%d)=%q, want %q", c.score, got, c.band)
 		}
 	}
 }
