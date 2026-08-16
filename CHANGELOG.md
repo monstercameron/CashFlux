@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Merge categories into a new one (C549).** "Merge into…" only ever offered categories that already
+  existed, so "merge these two into a new category" had no path at all. The target picker now has a
+  "＋ New category…" entry with a name field; kind, parent and colour come from the source, so there
+  is nothing else to ask.
+
+  It composes rather than adding merge logic — create the target, then run the same sweep once per
+  source — and the order is deliberate: the target is created first, so a rejected name fails before
+  any data moves. Duplicate sibling names are refused by the same rule that governs every other
+  category, and mixed kinds are refused the way the merge panel already refuses them.
+
 ### Fixed
 - **Merging a category no longer leaves two kinds of reference behind (C548).** The learn-from-
   corrections tally and any saved chart filtering on `cat:<id>` both survived a merge still pointing

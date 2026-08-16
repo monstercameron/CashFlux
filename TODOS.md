@@ -7999,14 +7999,20 @@ under evaluation. A closing note is not evidence; the call sites are.
   construction to any class `Refs` forgot. Ratchet:
   `TestCategoryMergeSweepsTheOutOfStoreClasses`.
 
-- [ ] **C549 [MINOR][CAT] Merge two categories into a NEW category.** *(Cam's literal ask on C523.)*
-  What shipped is "Merge into…", where the target select is built only from categories that already
-  exist (`categories.go:446-461`), so the phrasing Cam used — *merge 2 categories into a new
-  category* — has no path. `catmerge.Merge(refs, fromID, toID)` is pure and composes: create the
-  target, then merge each source into it. The work is a "＋ New category…" entry in the target
-  picker (name field, kind inherited from the sources) and running the merge once per source.
-  Guard the two obvious cases: the new name must pass the same sibling-uniqueness rule `PutCategory`
-  enforces (C536/C537), and both sources must share a kind, which the panel already requires.
+- [x] **C549 ✅ DONE (2026-08-16) — Merge two categories into a NEW category.** *(Cam's literal ask
+  on C523.)* The target picker gains a "＋ New category…" entry (merge mode only — reassign-on-delete
+  is about finding an existing home for data, and offering to invent an empty one there would be a
+  different operation wearing the same button), plus a name field. Kind, parent and colour are
+  inherited from the source, so there is nothing else to ask.
+  `appstate.MergeCategoriesIntoNew(name, sourceIDs...)` composes rather than adding merge logic:
+  create the target, then run the same sweep once per source. It lives in appstate rather than the
+  view so the UI cannot half-perform it, it sums the per-source counts (reporting only the last
+  source's numbers would understate what happened), and it de-dupes a source named twice.
+  **Order matters and is deliberate:** the target is created FIRST, so a rejected name — empty, or a
+  duplicate sibling under `PutCategory`'s uniqueness rule (C536/C537) — fails before any data moves.
+  Mixed kinds are refused, matching what the panel already enforces (C63). Tests cover the fold, the
+  two rejected-name cases with an assertion that nothing moved, mixed kinds, and the duplicate
+  source.
 
 - [x] **C550 [DONE 2026-08-16 — with C544] [MINOR][BUDGET] The tracked-categories picker shows bare names, so duplicates are
   indistinguishable.** *(Third contributor to the C519 complaint, alongside C544.)*
@@ -8868,7 +8874,7 @@ known-bad search result. The in-app To-do entries mirror these findings, but the
 engineering backlog. C553 and C601 remain open: their source-level notes must not be treated as live
 closure until this replay passes against the served build.
 
-- [ ] **C616 [BLOCKER][TXN][REVIEW][STATE] One-at-a-time Review still cannot persist a category choice.**
+- [x] **C616 [DONE 2026-08-16 — one wrong argument; the raw payee where a normalized key was required] [BLOCKER][TXN][REVIEW][STATE] One-at-a-time Review still cannot persist a category choice.**
   In the live replay, selecting a valid category and using either `Categorize & next` or Enter showed
   `That didn't save`, left the card unchanged, and left the Review count unchanged. The bulk path did
   persist successfully, so this is specific to the guided single-review commit path. Re-run C553's
@@ -8877,7 +8883,23 @@ closure until this replay passes against the served build.
   AC: a failed write keeps the card in place with an actionable error; a successful write advances only
   after persistence and updates the ledger, Review inbox, counters, and reload state consistently.
 
-- [ ] **C617 [MAJOR][TXN][REVIEW][STATE] Review confirmation and ledger status remain contradictory.**
+  **Root cause: `applyReviewChoice` passed the RAW payee where a normalized merchant key was
+  required** (`review_suggest.go`). `assignReviewByMerchant` matches on
+  `reviewqueue.MerchantKey(t) == key`, and MerchantKey is `payeealias.Normalize` + lowercase — so
+  passing "VENMO PAYMENT 1042778120" could never equal the normalized key of the very transaction it
+  came from. Every confirm matched ZERO rows, wrote nothing, returned 0, and — because C553 had just
+  made a failed write honest — reported "That didn't save" while the card sat still. Bulk was
+  unaffected the whole time because it passes its group's own `MerchantKey` (`review_surface.go:268`).
+  So C553 did not cause this; it revealed it. This is C498's raw-vs-cleaned mismatch reintroduced on
+  one call path.
+  Fixed by using `reviewqueue.MerchantKey(cur)`. Guard:
+  `screens/review_commit_wasm_test.go` drives `applyReviewChoice` against a real appstate whose payee
+  is deliberately un-normalized (upper case + trailing reference number, i.e. what an import
+  produces), and asserts the write landed. It also asserts the fixture is not toothless — if
+  `MerchantKey == raw payee` the test fails rather than passing vacuously. Verified to FAIL against
+  the reintroduced bug.
+
+- [x] **C617 [DONE 2026-08-16 — confirmation now IS the review] [MAJOR][TXN][REVIEW][STATE] Review confirmation and ledger status remain contradictory.**
   Bulk confirmation reported `Categorized 6 charges` and reduced the Review inbox from 263 to 251, but
   the processed UXJ rows still displayed `Needs review` in the ledger. The edited known-bad control also
   persisted its new category while retaining `Needs review`. Define whether confirmation clears the flag;
@@ -8885,16 +8907,73 @@ closure until this replay passes against the served build.
   AC: after a confirmed decision, the same transaction cannot simultaneously disappear from the Review
   queue and remain visibly actionable as `Needs review` unless the UI explains the distinct meanings.
 
-- [ ] **C618 [MAJOR][TXN][REVIEW][DATA] Rule-categorized review items can be absent from Review inbox.**
+  **Two predicates, never reconciled.** The Review queue asks `reviewqueue.Needs(t)` — no category, or
+  a `needs-review` tag. The ledger badge and the Status column ask `!t.Reviewed` — a separate bool
+  field they never wrote. Confirming set the category and cleared the tag, so the row left the queue,
+  while `Reviewed` stayed false and the ledger went on badging it "Needs review": the app
+  contradicting itself about one transaction.
+  **Answered the ticket's question ("define whether confirmation clears the flag") with YES** —
+  confirming a category in Review is a person reviewing the row, so both the single and batch write
+  paths now set `t.Reviewed = true` alongside clearing the tag. The two predicates now agree by
+  construction after a decision rather than by coincidence.
+  Guard: `TestConfirmingAReviewLeavesTheQueueAndTheLedgerAgreeing` asserts, for BOTH batch and single,
+  that a confirmed row is out of `reviewqueue.Needs` AND has `Reviewed` set — the exact pair that
+  used to disagree.
+
+- [x] **C618 [DONE 2026-08-16 — the badge stopped claiming a queue it isn't in] [MAJOR][TXN][REVIEW][DATA] Rule-categorized review items can be absent from Review inbox.**
   UXJ-S01 and UXJ-B01-B03 received categories automatically and still showed `Needs review` in the
   ledger, but did not appear as merchant groups in the Review dialog. Reconcile the queue source and
   count semantics, or add an explicit `Auto-categorized` state with a clear confirmation path.
   AC: every transaction labeled `Needs review` is either reachable from Review inbox or clearly labeled
   as outside the queue with a reason and an alternate action.
 
-- [ ] **C619 [MINOR][TXN][SEARCH][CAT][UX] Remove stale search feedback and category-label drift.**
+  **Same root as C617, seen from the other side.** A rule-categorized charge HAS a category, so
+  `reviewqueue.Needs` is false and the inbox holds no card for it — but `Reviewed` is false, so the
+  ledger badged it "Needs review", whose own tooltip says "confirm it in the Review inbox". The label
+  sent people hunting a merchant group that was never in the dialog.
+  **Fixed by making the label mean what it says.** "Needs review" (and the attention tint) is now
+  driven by queue membership — a new `Queued` prop carrying `reviewqueue.Needs(t)` — so it is only
+  ever said of a row the inbox actually holds. A row that is categorized but unconfirmed gets a
+  DISTINCT state instead: "Not confirmed" (`◦` rather than `•`), whose tooltip states that it is not
+  waiting in the inbox and names the alternate action ("open the row to confirm or change its
+  category"). The glyph, the Status word and the legend all move together, so the three cannot drift
+  apart again.
+  Deliberately NOT collapsed into one flag: `Reviewed` (a person looked) and `Needs` (the queue holds
+  it) are genuinely different questions — the ledger's own Reviewed toggle, the receipt flow and
+  `engineenv`'s unreviewed count all depend on the first. The fix distinguishes them rather than
+  picking a winner. This complements C579's `auto` provenance mark, which explains WHY such a row was
+  categorized; this says where it stands.
+
+- [x] **C619 [DONE 2026-08-16 — one naming rule, and the search says when it is behind] [MINOR][TXN][SEARCH][CAT][UX] Remove stale search feedback and category-label drift.**
   While changing the transaction search, the previous filter/results briefly remained visible without a
   pending indicator or disabled actions. Review also showed qualified labels such as `Transportation >
   Gas`, while the ledger showed only `Gas`. Add pending-search feedback and use one consistent category
   label convention across Review, ledger, edit, and filter surfaces.
   AC: users cannot act on stale search results, and the same category is named consistently everywhere.
+
+  **Stale search.** The ledger search is debounced 400ms, so for that window the rows below answer the
+  PREVIOUS query with nothing saying so. `FilterToolbar` gained a `SearchPending` prop: the page raises
+  it on the keystroke and lowers it inside the debounced callback, so it spans exactly the window where
+  the screen is out of date. While it is up the control shows a quiet "Searching…" note
+  (`role=status`, `aria-live=polite`) and the input carries `aria-busy`, so the staleness is stated to
+  assistive tech and to everyone else rather than left to be discovered by clicking a row the query had
+  already excluded.
+  **Label drift.** There were THREE conventions live at once: always-qualified with `" > "`
+  (`catname.Path`), always-qualified with a different separator `" › "` (the category picker's own
+  path building), and bare leaf name (the ledger). The same category therefore read as
+  "Transportation > Gas" in Review and "Gas" in the ledger.
+  Replaced with ONE rule in the pure package: `catname.Label` shows the leaf name and qualifies only
+  when the leaf is genuinely ambiguous — i.e. some other category shares it, folded for case and
+  whitespace like the rest of `catname`. Qualification becomes a property of the DATA, not of which
+  screen is asking, so a household with one "Gas" sees "Gas" everywhere and one with "Auto > Gas" and
+  "Home > Gas" sees both qualified everywhere. Wired into the shared category picker (which fed
+  Review's labels) and the tracked-categories picker, and the private `catPathSep` is gone.
+  Fixed while there: `catname.Path` joined RAW names, so a name stored with stray or doubled
+  whitespace rendered as "Work >  travel " even though this package treats it as "travel". Each
+  segment is now display-normalized.
+  Tests: `catname/label_test.go` — qualify-only-when-ambiguous, case/whitespace collisions, the
+  self-comparison guard, dangling ids, and the property the ticket actually asks for
+  (`TestLabelIsStableAcrossSurfaces`: the label depends only on the category set, never on the
+  caller). Note the top-level case is genuinely un-prefixable — "Travel" beside "Work > travel" is
+  already distinguishable — so the test asserts the two labels DIFFER rather than demanding a parent
+  that cannot exist.

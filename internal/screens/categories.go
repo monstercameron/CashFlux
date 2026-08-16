@@ -138,6 +138,9 @@ func Categories() ui.Node {
 	}
 
 	onReassignTo := ui.UseEvent(func(e ui.Event) { reassignTo.Set(e.GetValue()) })
+	// C549: the name for a merge target that does not exist yet.
+	mergeNewName := state.UseAtom("categories:mergeNewName", "")
+	onMergeNewName := ui.UseEvent(func(e ui.Event) { mergeNewName.Set(e.GetValue()) })
 
 	categoryUsage := func(catID string) int {
 		used := 0
@@ -236,6 +239,26 @@ func Categories() ui.Node {
 		}
 		if to == "" || to == from {
 			errMsg.Set(uistate.T("categories.pickDifferent"))
+			return
+		}
+		// C549: merging into a category that does not exist yet. One call, so a
+		// failed name cannot leave the data half-moved — the target is created
+		// first and a rejected name aborts before anything merges.
+		if panelMerge.Get() && to == mergeNewSentinel {
+			fromName := catNameNow(from)
+			name := strings.TrimSpace(mergeNewName.Get())
+			_, counts, err := app.MergeCategoriesIntoNew(name, from)
+			if err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			uistate.PostNotice(uistate.T("categories.mergedToast", fromName, name, counts.Total()), false)
+			panelMerge.Set(false)
+			reassignID.Set("")
+			reassignTo.Set("")
+			mergeNewName.Set("")
+			errMsg.Set("")
+			bump()
 			return
 		}
 		if panelMerge.Get() {
@@ -451,6 +474,13 @@ func Categories() ui.Node {
 		pickingSource := rid == mergeAnySentinel
 		target := catByID[rid]
 		opts := []ui.Node{Option(Value(""), SelectedIf(reassignTo.Get() == ""), uistate.T("categories.chooseCategory"))}
+		if panelMerge.Get() && !pickingSource {
+			// Merge only. Reassign-on-delete is about finding an existing home for
+			// data; offering to invent an empty one there would be a different
+			// operation wearing the same button.
+			opts = append(opts, Option(Value(mergeNewSentinel),
+				SelectedIf(reassignTo.Get() == mergeNewSentinel), uistate.T("categories.mergeIntoNew")))
+		}
 		for _, c := range cats {
 			// Only offer same-kind targets: reassigning an expense category's data to
 			// an income category (or vice versa) is semantically wrong and a
@@ -487,7 +517,7 @@ func Categories() ui.Node {
 		// The preview is computed by the SAME sweep that will run, so a promise of
 		// "128 transactions" cannot be contradicted by an apply that moves 131.
 		var preview ui.Node = Fragment()
-		if merging && reassignTo.Get() != "" && !pickingSource {
+		if merging && reassignTo.Get() != "" && reassignTo.Get() != mergeNewSentinel && !pickingSource {
 			c := app.PlanCategoryMerge(rid, reassignTo.Get())
 			preview = P(css.Class("muted", tw.Text13), Attr("data-testid", "cats-merge-preview"),
 				uistate.T("categories.mergePreview", c.Total(), catByID[reassignTo.Get()].Name)+" "+
@@ -503,6 +533,14 @@ func Categories() ui.Node {
 			preview,
 			Form(css.Class("form-grid"), OnSubmit(confirmReassign),
 				Select(css.Class("field"), Attr("aria-label", title), Attr("data-testid", "cats-move-target"), OnChange(onReassignTo), opts),
+				// C549: name the target when it does not exist yet. Kind and parent
+				// are inherited from the source, so there is nothing else to ask.
+				If(reassignTo.Get() == mergeNewSentinel,
+					Input(css.Class("field"), Type("text"), Value(mergeNewName.Get()),
+						Attr("data-testid", "cats-merge-newname"),
+						Attr("aria-label", uistate.T("categories.mergeNewNameLabel")),
+						Placeholder(uistate.T("categories.mergeNewNamePlaceholder")),
+						OnInput(onMergeNewName))),
 				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cats-move-confirm"), confirmLabel),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),
@@ -761,3 +799,8 @@ func mergePreviewParts(c catmerge.Counts) string {
 // mergeAnySentinel marks the merge panel as "opened from the page, no source
 // chosen yet", which is what makes the source picker appear.
 const mergeAnySentinel = "__pick__"
+
+// mergeNewSentinel is the target-picker entry that means "make one" (C549).
+// Cam's ask was "merge 2 categories into a new category"; the picker only
+// offered targets that already existed, so the phrasing had no path at all.
+const mergeNewSentinel = "__new__"

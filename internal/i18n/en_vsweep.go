@@ -145,6 +145,11 @@ var vSweepKeys = Catalog{
 	// ── C362: built-in preset copy that gets persisted into a user's spec ────
 	"widget.spotlightHeading": "This month",
 	"widget.spotlightCaption": "Net {{cashflow_net|signed}} · {{floor(savings_rate)|number}}% saved",
+
+	// ── C549: merge into a category that does not exist yet ─────────────────
+	"categories.mergeIntoNew":            "＋ New category…",
+	"categories.mergeNewNameLabel":       "Name for the new category",
+	"categories.mergeNewNamePlaceholder": "e.g. Groceries",
 }
 
 func init() {

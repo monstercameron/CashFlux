@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/catmerge"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 )
 
 // categoryRefs snapshots every collection that can hold a category reference.
@@ -225,4 +226,99 @@ func (a *App) moveCategoryRefs(oldID, newID string) (int, error) {
 		return counts.Total(), err
 	}
 	return counts.Total(), nil
+}
+
+// MergeCategoriesIntoNew creates a category and folds every source into it,
+// returning the new category's id and the combined counts (C549).
+//
+// Cam's ask was "merge 2 categories into a new category", and what existed only
+// offered targets that already exist — so the phrasing had no path at all. It
+// composes rather than needing new merge logic: create the target, then run the
+// same sweep once per source. Doing it here rather than in the view keeps the
+// whole thing one operation the UI cannot half-perform.
+//
+// The new category inherits its Kind and ParentID from the FIRST source, and
+// every source must share that kind: folding an expense category into an income
+// one is the data-integrity hazard the merge panel already refuses (C63).
+// Sibling-name uniqueness is not re-implemented here — PutCategory enforces it
+// (C536/C537), so a duplicate name fails before anything is merged.
+func (a *App) MergeCategoriesIntoNew(name string, sourceIDs ...string) (string, catmerge.Counts, error) {
+	if err := a.roleGuard(); err != nil {
+		return "", catmerge.Counts{}, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", catmerge.Counts{}, fmt.Errorf("merge categories: name the new category")
+	}
+	if len(sourceIDs) == 0 {
+		return "", catmerge.Counts{}, fmt.Errorf("merge categories: pick at least one category to merge")
+	}
+
+	byID := make(map[string]domain.Category, len(a.Categories()))
+	for _, c := range a.Categories() {
+		byID[c.ID] = c
+	}
+	seen := make(map[string]bool, len(sourceIDs))
+	srcs := make([]domain.Category, 0, len(sourceIDs))
+	for _, id := range sourceIDs {
+		c, ok := byID[id]
+		if !ok {
+			return "", catmerge.Counts{}, fmt.Errorf("merge categories: one of them no longer exists")
+		}
+		if seen[id] {
+			continue // the same category twice is one source
+		}
+		seen[id] = true
+		srcs = append(srcs, c)
+	}
+	for _, c := range srcs[1:] {
+		if c.Kind != srcs[0].Kind {
+			return "", catmerge.Counts{}, fmt.Errorf(
+				"merge categories: %q and %q are different kinds — an expense and an income category cannot merge",
+				srcs[0].Name, c.Name)
+		}
+	}
+
+	// Create the target FIRST, so a rejected name (duplicate sibling, invalid
+	// tree position) fails before any data has moved.
+	target := domain.Category{
+		ID:       id.New(),
+		Name:     name,
+		Kind:     srcs[0].Kind,
+		ParentID: srcs[0].ParentID,
+		Color:    srcs[0].Color,
+	}
+	if err := a.PutCategory(target); err != nil {
+		return "", catmerge.Counts{}, err
+	}
+
+	var total catmerge.Counts
+	for _, c := range srcs {
+		got, err := a.MergeCategories(c.ID, target.ID)
+		if err != nil {
+			// The target and any completed merges stay: they are valid on their own,
+			// and silently unwinding a partial merge would be a second, larger
+			// mutation performed without asking.
+			return target.ID, total, fmt.Errorf("merge categories: %q: %w", c.Name, err)
+		}
+		total = addCounts(total, got)
+	}
+	a.log.Info("merged categories into a new one", "into", target.ID, "sources", len(srcs), "moved", total.Total())
+	return target.ID, total, nil
+}
+
+// addCounts sums two merge tallies field by field, so a multi-source merge can
+// report one honest total rather than the last source's numbers.
+func addCounts(a, b catmerge.Counts) catmerge.Counts {
+	return catmerge.Counts{
+		Transactions: a.Transactions + b.Transactions,
+		Splits:       a.Splits + b.Splits,
+		Budgets:      a.Budgets + b.Budgets,
+		Goals:        a.Goals + b.Goals,
+		Rules:        a.Rules + b.Rules,
+		Recurring:    a.Recurring + b.Recurring,
+		Children:     a.Children + b.Children,
+		Tally:        a.Tally + b.Tally,
+		Widgets:      a.Widgets + b.Widgets,
+	}
 }
