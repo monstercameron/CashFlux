@@ -176,3 +176,33 @@ test.describe("budgets: supporting modules follow the selected period", () => {
     await expect(caption).not.toContainText(/this month/i);
   });
 });
+
+test.describe("budgets: recurring dates say what they are relative to", () => {
+  // C609: every row read "Next <date>" whether the date had passed, fell inside
+  // the period on screen, or belonged to the schedule's future — three different
+  // facts under one word, on a page whose whole job is period-scoped figures.
+  test("each recurring date names its state, and only overdue is toned", async ({ app }) => {
+    await nav(app, "/budgets");
+    const strip = app.getByTestId("budgets-recurring");
+    await strip.scrollIntoViewIfNeeded();
+
+    // No bare "Next <date>" survives: each date carries its relationship.
+    await expect(strip).not.toContainText(/·\s*Next \w{3} \d/);
+    await expect(strip).toContainText(/(Was due|Due|Next due .*after this period)/);
+
+    // The states are exposed structurally, so a wording change cannot quietly
+    // collapse three meanings back into one.
+    const states = await app.evaluate(() => [
+      ...new Set([...document.querySelectorAll('[data-testid^="brc-date-"]')].map((e) => e.getAttribute("data-testid"))),
+    ]);
+    expect(states.length, "at least one classified date").toBeGreaterThan(0);
+    for (const s of states) {
+      expect(s).toMatch(/^brc-date-(overdue|due-in-period|after-period)$/);
+    }
+    // Only an overdue date is toned — colouring all three hides the one that asks
+    // the user for something.
+    const toned = await app.locator(".brc-date.is-overdue").count();
+    const overdue = await app.locator('[data-testid="brc-date-overdue"]').count();
+    expect(toned).toBe(overdue);
+  });
+});

@@ -42,6 +42,13 @@ var budgetsClarityKeys = Catalog{
 	"budgets.unbudgetedHintPeriodPast": "Categories that had spending in %s and no budget tracking them.",
 	"budgets.unbudgetedThisPeriod":     "this period",
 
+	// --- C609: a recurring date says what it is relative to ---
+	// "Next Jul 3, 2026" beside "Next Sep 1, 2026" said nothing about whether
+	// either had happened. %s = the formatted date.
+	"budgets.recurring.overdue":     "Was due %s",
+	"budgets.recurring.dueInPeriod": "Due %s",
+	"budgets.recurring.afterPeriod": "Next due %s, after this period",
+
 	// --- C606: funding a cover or top-up shows what can really be moved ---
 	// The lists used to print a source's whole LIMIT under "available" — the size
 	// of its plan, most of which was already spent. %s = the movable amount.

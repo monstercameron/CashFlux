@@ -913,6 +913,14 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// C609: only an overdue recurring is a call to action, so only it is toned.
+	// The other two states are context and stay as quiet as the rest of the meta
+	// line — colouring all three would make the one that matters invisible.
+	rule(".brc-date.is-overdue",
+		color("var(--warn)"),
+		fontWeight("600"),
+	)
+
 	// --- C606: the funding list's two extra facts ---
 	// A caveat and a consequence, both quiet: the headline is still what can be
 	// moved, and these explain it rather than competing with it.

@@ -310,6 +310,11 @@ and every commit updates this file under `Unreleased`.
   month", whatever period the page was showing — so a closed `Jul 2026` view listed August's figures
   under a caption promising July's. Both now compute over the selected window and name it, in the
   past tense once the period has closed.
+- **A recurring charge's date says what it is relative to (C609).** Every row read "Next <date>",
+  whether the date had already passed, fell inside the period on screen, or belonged to the
+  schedule's future — so a July view showed "Next Jul 3, 2026" beside "Next Sep 1, 2026" and neither
+  said which was which. Dates now read "Was due", "Due" or "Next due …, after this period", and only
+  an overdue one is toned, because it is the only one asking for anything.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

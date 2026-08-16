@@ -6,6 +6,9 @@ package screens
 
 import (
 	"sort"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -80,9 +83,15 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		}
 	}
 
+	// C609: every date is stated against a reference. The list showed "Next Jul 3,
+	// 2026" beside "Next Sep 1, 2026" with nothing saying whether either had
+	// happened, was about to, or belonged to the period on screen — three
+	// different facts under one word.
+	recurNow := time.Now()
+	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 	rows := make([]ui.Node, 0, len(recs))
 	for _, r := range recs {
-		rows = append(rows, budgetRecurringRow(r, catName))
+		rows = append(rows, budgetRecurringRow(r, catName, recurNow, recurStart, recurEnd))
 	}
 
 	head := Div(css.Class("brc-head"),
@@ -119,7 +128,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 // cadence as a frequency pill, next-due date, amount, and — when the cadence
 // isn't monthly — the normalized per-month figure so charges compare fairly.
 // Display-only (no handlers), safe to build inside the row loop.
-func budgetRecurringRow(r domain.Recurring, catName map[string]string) ui.Node {
+func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, periodStart, periodEnd time.Time) ui.Node {
 	cat := catName[r.CategoryID]
 	if cat == "" {
 		cat = uistate.T("budgets.recurring.uncategorized")
@@ -128,9 +137,12 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string) ui.Node {
 	if r.Autopay {
 		meta = append(meta, Span(css.Class(tw.TextFaint), " · "+uistate.T("budgets.recurring.autopay")))
 	}
-	if !r.NextDue.IsZero() {
-		meta = append(meta, Span(css.Class(tw.TextFaint),
-			" · "+uistate.T("budgets.recurring.nextDue", uistate.LoadPrefs().FormatDate(r.NextDue))))
+	// C609: the date carries its own meaning — overdue, due inside the period on
+	// screen, or the schedule's next date after it.
+	if state := budgeting.ClassifyRecurDate(r.NextDue, now, periodStart, periodEnd); state != budgeting.RecurUnscheduled {
+		when := uistate.LoadPrefs().FormatDate(r.NextDue)
+		meta = append(meta, Span(ClassStr(recurDateClass(state)), Attr("data-testid", "brc-date-"+string(state)),
+			" · "+uistate.T(recurDateKey(state), when)))
 	}
 
 	// Amount block: the charge as-is, plus a per-month equivalent when the cadence
@@ -149,4 +161,24 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string) ui.Node {
 		),
 		Div(css.Class("brc-amtcol"), amountNodes),
 	)
+}
+
+// recurDateKey / recurDateClass give each date state its own words and tone
+// (C609). Only "overdue" is a call to action, so only it is toned; the other two
+// are context and stay quiet.
+func recurDateKey(state budgeting.RecurDateState) string {
+	switch state {
+	case budgeting.RecurOverdue:
+		return "budgets.recurring.overdue"
+	case budgeting.RecurAfterPeriod:
+		return "budgets.recurring.afterPeriod"
+	}
+	return "budgets.recurring.dueInPeriod"
+}
+
+func recurDateClass(state budgeting.RecurDateState) string {
+	if state == budgeting.RecurOverdue {
+		return "brc-date is-overdue"
+	}
+	return "brc-date " + tw.Fold(tw.TextFaint)
 }
