@@ -5,9 +5,11 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -90,16 +92,18 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 			errS.Set(uistate.T("recurring.labelRequired"))
 			return
 		}
-		amt, err := money.ParseMinor(strings.TrimSpace(amountS.Get()), dec)
-		if err != nil || amt == 0 {
-			errS.Set(uistate.T("recurring.amountRequired"))
+		// C561: this form's field became text (so a typed minus is not blocked by
+		// HTML range validation), which also means junk now reaches the validator.
+		// Route through the shared resolver so the sign rule and the two distinct
+		// error cases are the same here as everywhere else.
+		amt, _, err := amountmath.ParseSigned(amountS.Get(), dec, amountmath.DirectionFrom(dirS.Get()))
+		if err != nil {
+			if errors.Is(err, amountmath.ErrZeroAmount) {
+				errS.Set(uistate.T("recurring.amountRequired"))
+			} else {
+				errS.Set(uistate.T("transactions.amountNotANumber"))
+			}
 			return
-		}
-		if amt < 0 {
-			amt = -amt // magnitude field; the direction toggle owns the sign
-		}
-		if dirS.Get() == "out" {
-			amt = -amt
 		}
 		nextDue := time.Now()
 		if !isNew {
@@ -176,7 +180,13 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 					},
 				})),
 			labeledField(uistate.T("recurring.amountLabel", base),
-				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("data-testid", "rec-amount"),
+				// C561: text + inputmode=decimal, not number + min=0. This form's save
+				// normalizes a typed sign to a magnitude and lets the direction toggle
+				// own it (`if amt < 0 { amt = -amt }` below), but min="0" made a typed
+				// minus fail HTML constraint validation first, so the submit was
+				// blocked and the handler never ran — the same silent no-op that hid
+				// behind the transaction edit form.
+				Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "rec-amount"),
 					Value(amountS.Get()), OnInput(onAmount))),
 			labeledField(uistate.T("recurring.cadence"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Attr("data-testid", "rec-cadence"),

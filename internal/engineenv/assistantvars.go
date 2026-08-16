@@ -135,3 +135,30 @@ func addAssistantVars(out map[string]float64, d Data, major func(int64) float64)
 		out["assistant_top_merchant"] = major(top[0].Amount)
 	}
 }
+
+// AssistantSpendStoryRange is AssistantSpendStory over an arbitrary window and its
+// comparison window (G2-C8). It returns what was spent in the window and what was
+// spent in the window before it, so a briefing can be shown for any period rather
+// than only for the current month.
+//
+// The two windows are supplied rather than derived here on purpose: deciding what
+// a period is compared against is a judgement (a partial month matches day-for-day,
+// a complete month matches the previous month), and it lives in one tested place —
+// internal/insightsperiod — instead of being re-decided by every caller.
+func AssistantSpendStoryRange(txns []domain.Transaction, rates currency.Rates, start, end, priorStart, priorEnd time.Time) (spent, prior int64, err error) {
+	cur, err := reports.IncomeExpenseSeries(txns, []time.Time{start, end}, rates)
+	if err != nil {
+		return 0, 0, err
+	}
+	before, err := reports.IncomeExpenseSeries(txns, []time.Time{priorStart, priorEnd}, rates)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(cur) > 0 {
+		spent = cur[0].Expense
+	}
+	if len(before) > 0 {
+		prior = before[0].Expense
+	}
+	return spent, prior, nil
+}

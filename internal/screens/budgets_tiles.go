@@ -313,6 +313,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		funding = budgeting.FundingRead{
 			Expected: v.BannerIncome, Received: actualIncome,
 			Assigned: v.TotalLimit + v.SavingsAssigned,
+			// The savings/investment assignments are part of the plan but not part
+			// of what a bulk budget adjustment can scale, so the reconcile
+			// percentage has to be computed against the budgets alone.
+			Fixed: v.SavingsAssigned,
 		}
 		key := "budgets.incomeActualSoFar"
 		if hist {
@@ -1372,8 +1376,11 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	if fundShort {
 		count++
 	}
-	// A closed month's open follow-ups are unfinished business worth surfacing.
-	if props.Hist && props.FollowUps > 0 {
+	// Open follow-ups are unfinished business worth surfacing in ANY period. The
+	// count used to be gated on a closed month while the detail row below was not,
+	// so a live period could expand to a follow-ups row the header never mentioned
+	// — which is exactly the "predict before clicking" the ticket asks for (C588).
+	if props.FollowUps > 0 {
 		count++
 	}
 
@@ -1391,7 +1398,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	// transactions, budgets, tasks or goals — three different destinations hide
 	// behind it, and the wording read like a transaction review inbox, which is
 	// the one thing it never is.
-	title := budgetIssuesTitle(props.OverAssigned > 0, fundShort, props.Hist && props.FollowUps > 0, props.Hist)
+	title := budgetIssuesTitle(props.OverAssigned > 0, fundShort, props.FollowUps > 0, props.Hist)
 	// Over-assignment is the page's to-do: the Resolve figure rides the header.
 	var resolve ui.Node = Fragment()
 	if props.OverAssigned > 0 {

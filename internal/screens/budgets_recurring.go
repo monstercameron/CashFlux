@@ -172,6 +172,8 @@ func recurDateKey(state budgeting.RecurDateState) string {
 		return "budgets.recurring.overdue"
 	case budgeting.RecurAfterPeriod:
 		return "budgets.recurring.afterPeriod"
+	case budgeting.RecurBeforePeriod:
+		return "budgets.recurring.beforePeriod"
 	}
 	return "budgets.recurring.dueInPeriod"
 }

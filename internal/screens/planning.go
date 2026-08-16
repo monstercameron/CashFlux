@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/afford"
+	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
@@ -658,19 +659,32 @@ func RecurringRow(props recurringRowProps) ui.Node {
 		base = r.Amount.Currency
 	}
 	saveEdit := ui.UseEvent(Prevent(func() {
-		amt, err := money.ParseMinor(strings.TrimSpace(amountS.Get()), currency.Decimals(base))
-		if err != nil || amt == 0 {
+		// C546: same defect as quick-add had — the `amt == 0` guard let a typed
+		// "-50" through, and the expense branch then negated it into +50 income,
+		// which for a recurring posts inverted every single period. ParseSigned
+		// reads a typed minus as intent and reports the direction back, so the
+		// Expense toggle follows rather than contradicting what was saved.
+		want := amountmath.In
+		if expenseS.Get() {
+			want = amountmath.Out
+		}
+		amt, resolved, err := amountmath.ParseSigned(amountS.Get(), currency.Decimals(base), want)
+		if err != nil {
 			return // invalid amount — keep the editor open
 		}
-		if expenseS.Get() {
-			amt = -amt
-		}
+		// Sync the toggle AFTER the save, never before: a state setter mid-handler
+		// re-renders this row while the closure is still running, which can lose
+		// the write entirely (silently — no error, nothing saved).
+		syncExpense := resolved != want
 		props.OnSave(domain.Recurring{
 			ID: r.ID, Label: strings.TrimSpace(labelS.Get()), Amount: money.New(amt, base),
 			Cadence: domain.RecurringCadence(cadenceS.Get()), NextDue: r.NextDue,
 			AccountID: accountS.Get(), CategoryID: categoryS.Get(),
 			Autopost: r.Autopost, Autopay: autopayS.Get(),
 		})
+		if syncExpense {
+			expenseS.Set(true) // a typed minus can only ever resolve to Out
+		}
 		editing.Set(false)
 	}))
 
@@ -746,21 +760,30 @@ func PlanRow(props planRowProps) ui.Node {
 	for i, v := range curve {
 		vals[i] = float64(v)
 	}
-	// Tone the projected figure + sparkline by whether the plan ends up (accent) or down (red)
-	// vs. its starting balance.
-	up := planning.EndBalance(p) >= p.StartBalance
-	endToneCls := "text-up"
-	stroke := chartLineColor(uistate.CurrentAccent())
-	if !up {
-		endToneCls = "text-down"
-		stroke = "#d8716f"
-	}
-
 	// Delete handler for the ⋯ overflow menu (a stable hook position — not in a loop).
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
 
 	// Runway readout: how long does the balance last before crossing zero?
 	runwayMo, depletes := planning.RunwayMonths(p)
+
+	// C358: RED IS FOR DEPLETION, not for "ends lower than it started".
+	//
+	// "House down payment in 3 years" starts at $19,000, saves $400/mo, and spends
+	// $60,000 on a house at month 36 — so it ends below where it began, by design.
+	// Toning on that made a savings plan render as a huge red slab, which is the
+	// app telling the user their plan to buy a house is a failure. A plan is only
+	// in trouble when it runs OUT: the tone follows RunwayMonths, the same signal
+	// the ⚠ runway badge already uses, so the colour and the badge cannot disagree.
+	endToneCls := "text-up"
+	stroke := chartLineColor(uistate.CurrentAccent())
+	switch {
+	case depletes:
+		endToneCls = "text-down"
+		stroke = "#d8716f"
+	case planning.EndBalance(p) < p.StartBalance:
+		// Down but solvent: money deliberately spent is neither good news nor bad.
+		endToneCls = "text-dim"
+	}
 	var runwayNode ui.Node = Fragment()
 	if depletes {
 		runwayNode = Span(css.Class("plan-scenario-runway is-danger plan-runway--danger"), Attr("role", "status"), Attr("aria-label", uistate.T("plans.runwayDanger")),
@@ -779,6 +802,14 @@ func PlanRow(props planRowProps) ui.Node {
 			),
 			Div(css.Class("plan-scenario-figs"),
 				Span(ClassStr("plan-scenario-end "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(endToneCls)), fmtMoney(end)),
+				// C358: one figure with no frame reads as a verdict. Saying where the
+				// plan starts, where it ends, and by when turns "($25,100.00)" from an
+				// alarm into the last line of an arithmetic the reader can follow.
+				Span(css.Class("plan-scenario-arc", tw.TextFaint), Attr("data-testid", "plan-arc-"+p.ID),
+					uistate.T("plans.arc",
+						fmtMoney(money.New(p.StartBalance, props.Base)),
+						fmtMoney(end),
+						planHorizonLabel(p.HorizonMonths))),
 				runwayNode,
 			),
 			uiw.KebabMenu(uiw.KebabMenuProps{

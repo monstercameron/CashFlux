@@ -14,6 +14,22 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
+// hiddenSortKeys maps the user's column-visibility choices onto the sort keys
+// those columns carry, so txnfilter.EffectiveSort can tell which sorts currently
+// have no header to show them.
+//
+// Only the four hideable sortable columns appear. Date and Description have no
+// visibility toggle, so their keys are never in the map and are always treated as
+// visible — which is what an absent key means.
+func hiddenSortKeys(cols uistate.TxnCols) map[string]bool {
+	return map[string]bool{
+		"amount":   !cols.Amount,
+		"account":  !cols.Account,
+		"category": !cols.Category,
+		"source":   !cols.Source,
+	}
+}
+
 // txnSelectAllHeaderProps carries the ids of the rows currently on screen. It is
 // the VISIBLE set, not the filtered set: the page you are looking at, or the whole
 // list while the "All" view is virtualized.

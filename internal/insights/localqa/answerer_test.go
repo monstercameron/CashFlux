@@ -31,6 +31,33 @@ type mockSource struct {
 	healthScore int
 	healthBand  string
 	healthOK    bool
+
+	budgetTotal     int
+	budgetOver      int
+	budgetWorstName string
+	budgetWorstOver int64
+	budgetOK        bool
+
+	recent []RecentTxn
+
+	subCount   int
+	subMonthly int64
+
+	largestPayee  string
+	largestAmount int64
+	largestOK     bool
+}
+
+func (m *mockSource) BudgetStatus() (int, int, string, int64, bool) {
+	return m.budgetTotal, m.budgetOver, m.budgetWorstName, m.budgetWorstOver, m.budgetOK
+}
+
+func (m *mockSource) RecentTransactions() []RecentTxn { return m.recent }
+
+func (m *mockSource) Subscriptions() (int, int64) { return m.subCount, m.subMonthly }
+
+func (m *mockSource) LargestExpense() (string, int64, bool) {
+	return m.largestPayee, m.largestAmount, m.largestOK
 }
 
 func (m *mockSource) LiquidBalanceMinor() int64 { return m.liquidBalance }
@@ -304,4 +331,116 @@ func TestAnswerIntegration(t *testing.T) {
 			t.Errorf("integration answer %q missing %q", answer, want)
 		}
 	}
+}
+
+// The four intents added for G2-C8. Each is a question the device can answer
+// exactly, for free, that used to cost a paid model call.
+
+func TestBudgetStatusAnswers(t *testing.T) {
+	money := func(v int64) string { return fmtTestMoney(v) }
+	for _, tc := range []struct {
+		name string
+		src  *mockSource
+		want string
+	}{
+		{
+			name: "no budgets",
+			src:  &mockSource{},
+			want: "You haven't set up any budgets yet.",
+		},
+		{
+			name: "all within",
+			src:  &mockSource{budgetTotal: 4, budgetOK: true},
+			want: "All 4 budgets are within their limits.",
+		},
+		{
+			name: "one over reads in the singular",
+			src:  &mockSource{budgetTotal: 4, budgetOver: 1, budgetWorstName: "Dining", budgetWorstOver: 4210, budgetOK: true},
+			want: "1 of your 4 budgets is over: Dining, by $42.10.",
+		},
+		{
+			name: "several over names the worst",
+			src:  &mockSource{budgetTotal: 6, budgetOver: 3, budgetWorstName: "Dining", budgetWorstOver: 4210, budgetOK: true},
+			want: "3 of your 6 budgets are over. The furthest over is Dining, by $42.10.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := Answer(IntentBudgetStatus, tc.src, "", money)
+			if !ok || got != tc.want {
+				t.Fatalf("got %q/%v, want %q", got, ok, tc.want)
+			}
+		})
+	}
+}
+
+func TestRecentTransactionsAnswers(t *testing.T) {
+	money := func(v int64) string { return fmtTestMoney(v) }
+	src := &mockSource{recent: []RecentTxn{
+		{Payee: "Trader Joe's", AmountMinor: 4210},
+		{Payee: "Shell", AmountMinor: 3800},
+		{Payee: "Costco", AmountMinor: 12200},
+		{Payee: "Netflix", AmountMinor: 1599},
+		{Payee: "Spotify", AmountMinor: 1199},
+	}}
+	got, ok := Answer(IntentRecentTransactions, src, "", money)
+	if !ok {
+		t.Fatal("no answer")
+	}
+	// Three named, read as a list, with the remainder counted rather than dumped.
+	if got != "Your most recent: Trader Joe's $42.10, Shell $38.00 and Costco $122.00. There are 2 more." {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRecentTransactionsWithNothingRecorded(t *testing.T) {
+	got, ok := Answer(IntentRecentTransactions, &mockSource{}, "", fmtTestMoney)
+	if !ok || got != "You haven't recorded any transactions yet." {
+		t.Fatalf("got %q/%v", got, ok)
+	}
+}
+
+func TestRecentTransactionsSingularRemainder(t *testing.T) {
+	src := &mockSource{recent: []RecentTxn{
+		{Payee: "A", AmountMinor: 100}, {Payee: "B", AmountMinor: 200},
+		{Payee: "C", AmountMinor: 300}, {Payee: "D", AmountMinor: 400},
+	}}
+	got, _ := Answer(IntentRecentTransactions, src, "", fmtTestMoney)
+	if !strings.HasSuffix(got, "There is 1 more.") {
+		t.Fatalf("singular remainder reads wrong: %q", got)
+	}
+}
+
+func TestSubscriptionsAnswers(t *testing.T) {
+	got, ok := Answer(IntentSubscriptions, &mockSource{subCount: 1, subMonthly: 1599}, "", fmtTestMoney)
+	if !ok || got != "You have 1 subscription costing about $15.99 a month." {
+		t.Fatalf("got %q/%v", got, ok)
+	}
+	many, _ := Answer(IntentSubscriptions, &mockSource{subCount: 7, subMonthly: 8420}, "", fmtTestMoney)
+	if many != "You have 7 subscriptions costing about $84.20 a month." {
+		t.Fatalf("got %q", many)
+	}
+	none, _ := Answer(IntentSubscriptions, &mockSource{}, "", fmtTestMoney)
+	if none != "No recurring subscriptions are set up." {
+		t.Fatalf("got %q", none)
+	}
+}
+
+func TestLargestExpenseAnswers(t *testing.T) {
+	got, ok := Answer(IntentLargestExpense, &mockSource{largestPayee: "Costco", largestAmount: 12200, largestOK: true}, "", fmtTestMoney)
+	if !ok || got != "Your biggest expense this period was $122.00 at Costco." {
+		t.Fatalf("got %q/%v", got, ok)
+	}
+	none, _ := Answer(IntentLargestExpense, &mockSource{}, "", fmtTestMoney)
+	if none != "Nothing has been spent this period yet." {
+		t.Fatalf("got %q", none)
+	}
+}
+
+// fmtTestMoney renders minor units as dollars for the assertions above.
+func fmtTestMoney(v int64) string {
+	neg := ""
+	if v < 0 {
+		neg, v = "-", -v
+	}
+	return fmt.Sprintf("%s$%d.%02d", neg, v/100, v%100)
 }

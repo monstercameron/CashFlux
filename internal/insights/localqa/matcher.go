@@ -51,6 +51,23 @@ const (
 
 	// IntentHealthScore covers questions about overall financial health.
 	IntentHealthScore
+
+	// G2-C8: the keyless answerer covered seven questions, which left obvious ones
+	// — "am I over budget?", "what did I buy today?" — falling through to a paid
+	// model for a figure the device already knows exactly. These four are the most
+	// asked of the remainder.
+
+	// IntentBudgetStatus covers "am I over budget?" and "how are my budgets doing?".
+	IntentBudgetStatus
+
+	// IntentRecentTransactions covers "what did I spend recently?".
+	IntentRecentTransactions
+
+	// IntentSubscriptions covers "what am I subscribed to?" and its monthly cost.
+	IntentSubscriptions
+
+	// IntentLargestExpense covers "what was my biggest expense?".
+	IntentLargestExpense
 )
 
 // String returns a human-readable label for the Intent.
@@ -70,6 +87,14 @@ func (i Intent) String() string {
 		return "GoalProgress"
 	case IntentHealthScore:
 		return "HealthScore"
+	case IntentBudgetStatus:
+		return "BudgetStatus"
+	case IntentRecentTransactions:
+		return "RecentTransactions"
+	case IntentSubscriptions:
+		return "Subscriptions"
+	case IntentLargestExpense:
+		return "LargestExpense"
 	default:
 		return "None"
 	}
@@ -87,6 +112,40 @@ type intentRule struct {
 // rules are evaluated in order; the first rule whose any phrase is found in
 // the lowercased input wins.
 var rules = []intentRule{
+	// "my biggest expense" and "what did I spend the most on" contain "spend"
+	// wording that the broad category rule would otherwise claim, so the more
+	// specific questions are matched first (see the precedence note above).
+	{
+		IntentLargestExpense,
+		[]string{
+			"biggest expense",
+			"largest expense",
+			"biggest purchase",
+			"most expensive",
+			"spend the most on",
+			"spent the most on",
+		},
+	},
+	{
+		IntentSubscriptions,
+		[]string{
+			"subscription",
+			"subscribed to",
+			"recurring charges",
+			"what am i paying for monthly",
+		},
+	},
+	{
+		IntentRecentTransactions,
+		[]string{
+			"recent transactions",
+			"recent spending",
+			"latest transactions",
+			"last few transactions",
+			"what did i buy",
+			"what have i bought",
+		},
+	},
 	{
 		IntentSpendingByCategory,
 		[]string{
@@ -103,6 +162,22 @@ var rules = []intentRule{
 			"can i spend",
 			"how much can i spend",
 			"free to spend",
+		},
+	},
+	// "How much can I spend without going over budget?" mentions a budget but is
+	// asking about headroom, so SafeToSpend above claims it first. Only a question
+	// ABOUT the budgets themselves reaches here.
+	{
+		IntentBudgetStatus,
+		[]string{
+			"over budget",
+			"budget status",
+			"how are my budgets",
+			"how's my budget",
+			"hows my budget",
+			"am i on budget",
+			"within budget",
+			"budgets doing",
 		},
 	},
 	{
@@ -153,7 +228,7 @@ var rules = []intentRule{
 	},
 }
 
-// Match classifies text into one of the seven supported Intents.
+// Match classifies text into one of the supported Intents.
 // It lowercases the input, then evaluates each rule in precedence order
 // (see package documentation). Returns (IntentNone, false) when no rule
 // matches.

@@ -28,6 +28,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/insights"
+	"github.com/monstercameron/CashFlux/internal/insightsperiod"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/scope"
@@ -150,6 +151,30 @@ func assistantRouteTo(p assistantRouteProps) ui.Node {
 	return ui.CreateElement(AssistantHub)
 }
 
+type insightsPeriodPickerProps struct {
+	Selected string
+	OnPick   func(string)
+}
+
+// insightsPeriodPicker chooses the briefing's time range (G2-C8). Its own
+// component so the select's change hook sits at a stable position.
+func insightsPeriodPicker(p insightsPeriodPickerProps) ui.Node {
+	onChange := ui.UseEvent(func(e ui.Event) { p.OnPick(e.GetValue()) })
+	return Label(css.Class("todo-ctrl"), Title(uistate.T("assistant.periodPick")),
+		Span(css.Class("todo-ctrl-label"), uistate.T("assistant.periodLabel")),
+		Select(css.Class("todo-select"), Attr("aria-label", uistate.T("assistant.periodPick")),
+			Attr("data-testid", "assistant-period"), OnChange(onChange),
+			MapKeyed(insightsperiod.All(),
+				func(x insightsperiod.Period) any { return string(x) },
+				func(x insightsperiod.Period) ui.Node {
+					return Option(Value(string(x)), SelectedIf(string(x) == p.Selected),
+						uistate.T(insightsperiod.LabelKey(x)))
+				},
+			),
+		),
+	)
+}
+
 // astTile wraps a tile body in the shared Widget chrome at an explicit bento
 // column placement ("1 / span 4" full-width, "span 2" for a half-width pair).
 func astTile(tid, col string, body ui.Node) ui.Node {
@@ -223,6 +248,10 @@ func assistantInsightsDataPanel() ui.Node {
 	rev := ui.UseState(0)
 	showFormulas := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
+	// G2-C8: the briefing was fixed to month-to-date, so the tab called Insights
+	// could only ever show one insight. The selection is an atom rather than local
+	// state so it survives a trip to another tab and back.
+	periodAtom := uistate.UseInsightsPeriod()
 
 	// ── Data setup ────────────────────────────────────────────────────────────
 
@@ -270,7 +299,12 @@ func assistantInsightsDataPanel() ui.Node {
 
 	// ── Briefing figures — the SAME derivations as the assistant_* variables ──
 
-	mtd, prev, pace, _ := engineenv.AssistantSpendStory(scopedTxns, rates, now)
+	window := insightsperiod.Resolve(insightsperiod.Period(periodAtom.Get()), now)
+	mtd, prev, _ := engineenv.AssistantSpendStoryRange(scopedTxns, rates, window.Start, window.End, window.PriorStart, window.PriorEnd)
+	// The comparison figure IS the pace for every window: each period is measured
+	// against the equivalent span before it, so "ahead of pace" means the same
+	// thing whichever period is chosen.
+	pace := prev
 	anomalies := engineenv.AssistantHighlights(scopedTxns, cats, rates, now, uistate.T("insights.uncategorized"))
 	merchants, _ := reports.TopPayeesTrailing(scopedTxns, engineenv.AssistantMerchantWindowDays, now, rates, 7)
 	flaggedIns := runAnomalyDetectors(app, pr.WeekStartWeekday())
@@ -286,12 +320,15 @@ func assistantInsightsDataPanel() ui.Node {
 			arrow, tone, key, mag = "▼", "pos", "assistant.paceBehind", -delta
 		}
 		pacePill = Span(ClassStr("rpt-delta "+tone), Attr("data-testid", "ast-pace-delta"),
-			Attr("title", uistate.T("assistant.paceTitle")),
+			// The tooltip names WHAT the figure is compared against, which now
+			// varies by period. Leaving it fixed at "the same day last month"
+			// would misdescribe every window except the default.
+			Attr("title", uistate.T(insightsperiod.ComparisonKey(window.Period))),
 			arrow+" "+uistate.T(key, fmtMoney(money.New(mag, base))))
 	}
 
 	chips := []ui.Node{
-		rptChip(uistate.T("assistant.chipLastMonth"), fmtMoney(money.New(prev, base)), ""),
+		rptChip(uistate.T(insightsperiod.ComparisonKey(window.Period)), fmtMoney(money.New(prev, base)), ""),
 	}
 	// The hero is a month-to-date story, so its top-merchant chip must be
 	// month-scoped — the trailing-90-day `merchants` ranking feeds the Top
@@ -308,9 +345,19 @@ func assistantInsightsDataPanel() ui.Node {
 	}
 	chips = append(chips, rptChip(uistate.T("assistant.chipFlagged"), fmt.Sprintf("%d", len(flaggedIns)), flaggedTone))
 
-	heroTile := astTile("ast-hero", "1 / span 4", astSection("sec-ast-hero", uistate.T("assistant.heroTitle"), nil,
+	// The selector sits in the hero's own header, beside the figure it governs —
+	// a range control anywhere else leaves the reader guessing which numbers moved
+	// when it changes.
+	periodControl := ui.CreateElement(insightsPeriodPicker, insightsPeriodPickerProps{
+		Selected: string(window.Period),
+		OnPick:   func(v string) { periodAtom.Set(v) },
+	})
+	heroTile := astTile("ast-hero", "1 / span 4", astSection("sec-ast-hero", uistate.T(insightsperiod.LabelKey(window.Period)), periodControl,
 		Div(css.Class("rpt-hero"),
-			P(css.Class("rpt-hero-eyebrow", tw.TextDim), uistate.T("assistant.heroAsOf", uistate.LoadPrefs().FormatDate(now))),
+			P(css.Class("rpt-hero-eyebrow", tw.TextDim), Attr("data-testid", "ast-hero-range"),
+				uistate.T("assistant.heroRange",
+					uistate.LoadPrefs().FormatDate(window.Start),
+					uistate.LoadPrefs().FormatDate(window.End.AddDate(0, 0, -1)))),
 			Div(css.Class("rpt-hero-main"),
 				Div(
 					Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), Attr("data-countup", ""), Attr("data-testid", "ast-hero-value"), fmtMoney(money.New(mtd, base))),

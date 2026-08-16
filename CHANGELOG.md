@@ -37,6 +37,25 @@ and every commit updates this file under `Unreleased`.
   and is resizable for the times they write more.
 
 ### Added
+- **Four more questions the assistant answers without a key, and a period selector on the briefing
+  (G2-C8).** The keyless answerer covered seven questions, so obvious ones — "am I over budget?",
+  "what did I buy recently?", "what am I subscribed to?", "what was my biggest expense?" — fell
+  through to a paid model for figures the device already knows exactly. All four are now answered
+  locally, instantly and free. The budget answer leads with how far over, because "over by $4" and
+  "over by $400" are different situations that a count alone flattens; the subscriptions answer counts
+  the household's own recurring schedule rather than guessing subscriptions from transaction patterns,
+  because a keyless answer should be a fact about what was set up, not an inference presented as one.
+
+  The Insights briefing was fixed to month-to-date, so the tab called Insights could only ever show
+  one insight. It now offers this month / last month / last 3 months / last 12 months, and the
+  comparison follows the selection rather than staying silently pinned to "the same days last month".
+  The comparison rule is the careful part, and it lives in one tested place: a PARTIAL window is
+  compared day-for-day against the window before it — seventeen days of August against the first
+  seventeen days of July, never against the whole of July, which is the easiest way to make a normal
+  month look like a collapse — while a COMPLETE calendar month is compared with the previous calendar
+  month, because shifting July back by its own 31 days lands in the middle of May and nobody reading
+  "vs last month" means that.
+
 - **The key gate answers the questions that actually decide it (C247).** It used to say "add your
   OpenAI key in Settings" and stop, leaving the three things people weigh unanswered: what will it
   cost, where do I get one, and what leaves my device. Someone deciding with no figures in front of

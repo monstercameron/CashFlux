@@ -372,11 +372,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	now := time.Now()
 	// Anchor each budget's period to today when the viewed window includes today,
 	// otherwise to the window's start (C40).
-	viewFrom, viewTo := vw.Range()
-	anchor := viewFrom
-	if !now.Before(viewFrom) && now.Before(viewTo) {
-		anchor = now
-	}
+	anchor := budgetViewAnchor(vw, now)
 	cats := app.Categories()
 
 	statuses := make([]budgeting.Status, 0, len(budgets))
@@ -754,11 +750,7 @@ func computeAgeOfMoney(txns []domain.Transaction, base string, rates currency.Ra
 // over different data. Both now call this.
 func incomeBasisMonth(vw period.Window, weekStart time.Weekday) time.Time {
 	now := time.Now()
-	viewFrom, viewTo := vw.Range()
-	anchor := viewFrom
-	if !now.Before(viewFrom) && now.Before(viewTo) {
-		anchor = now
-	}
+	anchor := budgetViewAnchor(vw, now)
 	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
 	return ms
 }
@@ -1126,4 +1118,21 @@ func checkedAttr(checked bool) []any {
 	// `checked` content attribute — an attribute only seeds defaultChecked and doesn't
 	// update the live property on a keyed re-render, so the tick wouldn't show/clear.
 	return []any{Checked(checked)}
+}
+
+// budgetViewAnchor is the date a period-scoped figure should be computed at:
+// today when the viewed window contains today, otherwise the window's start
+// (C40).
+//
+// It is extracted so surfaces OUTSIDE computeBudgetView — the Auto-budget
+// modal's income basis, for one — resolve it the same way. Reading time.Now()
+// instead meant a modal opened from a closed July compared the plan against
+// July's income while the page behind it used June's: two months' figures for
+// one question, on one screen.
+func budgetViewAnchor(vw period.Window, now time.Time) time.Time {
+	viewFrom, viewTo := vw.Range()
+	if !now.Before(viewFrom) && now.Before(viewTo) {
+		return now
+	}
+	return viewFrom
 }

@@ -9,7 +9,7 @@ package localqa
 
 import "fmt"
 
-// Source abstracts the financial data required to answer the seven supported
+// Source abstracts the financial data required to answer the supported
 // intents. All monetary values are expressed in minor units (e.g. cents for
 // USD) so the package stays free of floating-point arithmetic.
 //
@@ -46,7 +46,35 @@ type Source interface {
 	// (e.g. "Good", "Fair", "Poor"). ok is false when there is insufficient
 	// data to compute the score.
 	HealthScore() (score int, band string, ok bool)
+
+	// BudgetStatus returns how many budgets are set, how many are over, and the
+	// name and overspend of the worst one. ok is false when no budgets exist.
+	BudgetStatus() (total, over int, worstName string, worstOverMinor int64, ok bool)
+
+	// RecentTransactions returns the most recent transactions, newest first, as
+	// (payee, minor amount) pairs. The implementation decides how many; the
+	// answerer names as many as read well in a sentence.
+	RecentTransactions() []RecentTxn
+
+	// Subscriptions returns how many recurring charges are active and their
+	// combined monthly cost in minor units.
+	Subscriptions() (count int, monthlyMinor int64)
+
+	// LargestExpense returns the biggest single expense of the current period.
+	// ok is false when nothing has been spent.
+	LargestExpense() (payee string, amountMinor int64, ok bool)
 }
+
+// RecentTxn is one recent transaction, reduced to what an answer needs to say.
+type RecentTxn struct {
+	Payee       string
+	AmountMinor int64
+}
+
+// recentTxnsNamed is how many recent transactions an answer lists. Three fits a
+// sentence; more turns the answer into a table, which the ledger already is and
+// does better.
+const recentTxnsNamed = 3
 
 // Answer produces a plain-English response for the given intent using live
 // financial data supplied by src.
@@ -118,10 +146,88 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 		}
 		return fmt.Sprintf("Your financial health score is %d/100 — %s.", score, band), true
 
+	case IntentBudgetStatus:
+		total, over, worst, worstOver, ok := src.BudgetStatus()
+		if !ok || total == 0 {
+			return "You haven't set up any budgets yet.", true
+		}
+		if over == 0 {
+			return fmt.Sprintf("All %d budget%s are within their limits.", total, pluralS(total)), true
+		}
+		if over == 1 {
+			return fmt.Sprintf("1 of your %d budgets is over: %s, by %s.", total, worst, fmtMoney(worstOver)), true
+		}
+		return fmt.Sprintf("%d of your %d budgets are over. The furthest over is %s, by %s.",
+			over, total, worst, fmtMoney(worstOver)), true
+
+	case IntentRecentTransactions:
+		txns := src.RecentTransactions()
+		if len(txns) == 0 {
+			return "You haven't recorded any transactions yet.", true
+		}
+		named := txns
+		if len(named) > recentTxnsNamed {
+			named = named[:recentTxnsNamed]
+		}
+		parts := make([]string, 0, len(named))
+		for _, t := range named {
+			parts = append(parts, fmt.Sprintf("%s %s", t.Payee, fmtMoney(t.AmountMinor)))
+		}
+		out := "Your most recent: " + joinList(parts) + "."
+		if len(txns) > len(named) {
+			out += fmt.Sprintf(" There %s %d more.", isAre(len(txns)-len(named)), len(txns)-len(named))
+		}
+		return out, true
+
+	case IntentSubscriptions:
+		count, monthly := src.Subscriptions()
+		if count == 0 {
+			return "No recurring subscriptions are set up.", true
+		}
+		return fmt.Sprintf("You have %d subscription%s costing about %s a month.",
+			count, pluralS(count), fmtMoney(monthly)), true
+
+	case IntentLargestExpense:
+		payee, amount, ok := src.LargestExpense()
+		if !ok {
+			return "Nothing has been spent this period yet.", true
+		}
+		return fmt.Sprintf("Your biggest expense this period was %s at %s.", fmtMoney(amount), payee), true
+
 	default:
 		// IntentNone or any future intent not yet handled.
 		return "", false
 	}
+}
+
+// joinList renders a list the way a person reads one out: "a, b and c".
+func joinList(parts []string) string {
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	case 2:
+		return parts[0] + " and " + parts[1]
+	default:
+		out := ""
+		for i, p := range parts[:len(parts)-1] {
+			if i > 0 {
+				out += ", "
+			}
+			out += p
+		}
+		return out + " and " + parts[len(parts)-1]
+	}
+}
+
+// isAre picks the verb for a count, so "there is 1 more" and "there are 4 more"
+// both read correctly.
+func isAre(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
 }
 
 // pluralS returns "s" when n != 1, and "" otherwise — used for grammatically

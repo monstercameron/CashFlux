@@ -125,6 +125,13 @@ func Transactions() ui.Node {
 	if registerActive {
 		f.Sort, f.Dir = "date", txnfilter.Asc
 	}
+	// A hidden column cannot order the table. Four of the six sortable columns can
+	// be switched off in Columns, and hiding the one you had sorted by used to leave
+	// its order in force with NO header showing a sort indicator — the rows were
+	// arranged by something that was not on screen, and it survived a reload. The
+	// STORED preference is untouched, so putting the column back restores the sort
+	// rather than discarding it the moment the user freed up some width.
+	f.Sort, f.Dir = txnfilter.EffectiveSort(f, hiddenSortKeys(uistate.UseTxnCols().Get()))
 
 	// The filtered + sorted set drives both the engine frame (the table) and the
 	// duplicate/selection affordances in the toolbar/bulk tiles. RichTransactions
@@ -318,6 +325,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	anchorAtom := uistate.UseTxnSelAnchor()
 	previewAtom := uistate.UseTxnPreview()
 	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
+	// The headers must claim the order the ROWS are actually in. The surface host
+	// applies the same fallback when it builds the frame, so reading it here too is
+	// what stops a hidden column's sort from being announced by a header that is no
+	// longer rendered — or, worse, by no header at all while the rows stay ordered.
+	f.Sort, f.Dir = txnfilter.EffectiveSort(f, hiddenSortKeys(colVis))
 
 	// A row's "N follow-ups" chip links to the To-do list pre-filtered to transaction-
 	// linked tasks (the closest the shared link filter gets to "this charge's tasks").
@@ -658,7 +670,31 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	trendReady := useAfterSettle("txn-trend")
 	// C605: if the user came back here from a side trip that started on a row, land
 	// on that row. Unconditional hook, at a stable position.
-	useTxnFocusRow()
+	// Virtualize the heavy "All" view (only the rows near the viewport are rendered);
+	// the bounded pages (25/50/100) are already small, so render the slice directly.
+	// Computed here rather than beside the table body because the focus helper below
+	// needs it too, and two copies of the rule would eventually disagree.
+	virtualize := pageSize <= 0 && total > txnVirtualizeThreshold
+	// C605: if the user came back here from a side trip that started on a row, land
+	// on that row. Unconditional hook, at a stable position.
+	//
+	// The hint is what makes it work on the virtualized view: there, the row may not
+	// be in the DOM at all, so the helper has to move the scroller to where the row
+	// WILL render before it can look for it. IndexOf is the frame's own ordering, so
+	// the position is the one the user would have scrolled to.
+	useTxnFocusRow(txnFocusRowHint{
+		Virtual:   virtualize,
+		RowHeight: txnRowHeight,
+		Scroller:  "main.cf-scroll",
+		IndexOf: func(id string) (int, bool) {
+			for i := 0; i < total; i++ {
+				if idCol.Str(i) == id {
+					return i, true
+				}
+			}
+			return 0, false
+		},
+	})
 
 	// Follow-up tasks linked to each transaction (open/total + the items behind them), so
 	// a row can surface a chip + hover popover. Built once from the task list, read O(1)
@@ -809,10 +845,6 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnDelete = deleteRow
 		return ui.CreateElement(txnFrameRow, r)
 	}
-
-	// Virtualize the heavy "All" view (only the rows near the viewport are rendered);
-	// the bounded pages (25/50/100) are already small, so render the slice directly.
-	virtualize := pageSize <= 0 && total > txnVirtualizeThreshold
 
 	// visibleOrder (for shift-range select) spans the rows in the current view: the
 	// whole list when virtualized ("All"), otherwise the current page.

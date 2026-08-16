@@ -7,12 +7,12 @@ package screens
 import (
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -380,7 +380,10 @@ func flexAssignForm(props flexAssignFormProps) ui.Node {
 			cats = append(cats, c)
 		}
 	}
-	sort.Slice(cats, func(i, j int) bool { return cats[i].Name < cats[j].Name })
+	// C544: app.Categories() already arrives naturally ordered, and filtering
+	// preserves that — but re-sorting here with a raw byte compare would UNDO it
+	// ("Zoo" before "apple"). catname.Sorted is the one comparison in the app.
+	cats = catname.Sorted(cats)
 	recs := app.Recurring()
 
 	// Seed the draft: stored class if set, else the heuristic default.

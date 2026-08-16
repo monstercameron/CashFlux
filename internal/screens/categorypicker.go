@@ -15,6 +15,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -179,7 +180,10 @@ func CategoryPicker(props CategoryPickerProps) ui.Node {
 			parents = append(parents, c)
 		}
 	}
-	sort.SliceStable(parents, func(i, j int) bool { return parents[i].Name < parents[j].Name })
+	// C544: catname.Less, not a raw byte compare — a byte compare is
+	// case-sensitive ("Zoo" before "apple") and non-natural ("Item 10" before
+	// "Item 9"), so this select disagreed with every other category list.
+	sort.SliceStable(parents, func(i, j int) bool { return catname.Less(parents[i].Name, parents[j].Name) })
 	parentOpts := []any{css.Class("field"), Attr("data-testid", "catpick-parent"),
 		Attr("aria-label", uistate.T("catpick.parentLabel")), OnChange(onParent),
 		Option(Value(""), SelectedIf(parentID.Get() == ""), uistate.T("catpick.topLevel"))}

@@ -153,8 +153,14 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			}
 		}
 	}
-	now := time.Now()
-	monthStart := dateutil.MonthStart(now)
+	// The income basis has to be the PAGE's, not today's. Reading time.Now() here
+	// meant that reviewing a closed July in August compared the plan against
+	// July's income while the page behind the modal compared it against June's —
+	// two different months' figures for the same question, on the same screen.
+	// Same anchor rule as computeBudgetView: today when the viewed window contains
+	// it, otherwise the window's start.
+	autoAnchor := budgetViewAnchor(uistate.UsePeriod().Get(), time.Now())
+	monthStart := dateutil.MonthStart(autoAnchor)
 	autoIncome := budgeting.IncomeForBudgets(uistate.CurrentPrefs().MonthlyIncomeMinor,
 		app.Transactions(), dateutil.AddMonths(monthStart, -1), monthStart, base, rates)
 	impact := budgeting.AutoBudgetImpactOf(app.Budgets(), autoIncome, pending)

@@ -23,6 +23,20 @@ var assistantKeys = Catalog{
 	"assistant.jobInsights":    "Things the app noticed without being asked.",
 	"assistant.jobAutomations": "What's switched on to run by itself.",
 
+	// G2-C8: the briefing's time-range selector.
+	"assistant.periodLabel":     "Period",
+	"assistant.periodPick":      "Choose the period this briefing covers",
+	"assistant.periodThisMonth": "This month",
+	"assistant.periodLastMonth": "Last month",
+	"assistant.periodLast3":     "Last 3 months",
+	"assistant.periodLast12":    "Last 12 months",
+	// %s = the first day of the window, %s = its last day.
+	"assistant.heroRange": "Spending from %s to %s",
+	// How the comparison figure should be read, per period.
+	"assistant.comparePace":      "compared with the same days last month",
+	"assistant.comparePrevMonth": "compared with the month before",
+	"assistant.comparePrevSpan":  "compared with the same span before it",
+
 	// The Insights briefing surface — hero tile.
 	"assistant.heroTitle":       "This month",
 	"assistant.heroAsOf":        "Spending through %s",

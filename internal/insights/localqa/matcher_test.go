@@ -346,3 +346,37 @@ func TestExtractCategory(t *testing.T) {
 		})
 	}
 }
+
+func TestNewIntentsMatchTheirQuestions(t *testing.T) {
+	for _, tc := range []struct {
+		q    string
+		want localqa.Intent
+	}{
+		{"Am I over budget?", localqa.IntentBudgetStatus},
+		{"How are my budgets doing?", localqa.IntentBudgetStatus},
+		{"What did I buy recently?", localqa.IntentRecentTransactions},
+		{"Show me my recent transactions", localqa.IntentRecentTransactions},
+		{"What subscriptions am I paying for?", localqa.IntentSubscriptions},
+		{"What was my biggest expense?", localqa.IntentLargestExpense},
+		{"What did I spend the most on?", localqa.IntentLargestExpense},
+	} {
+		got, ok := localqa.Match(tc.q)
+		if !ok || got != tc.want {
+			t.Errorf("localqa.Match(%q) = %v/%v, want %v", tc.q, got, ok, tc.want)
+		}
+	}
+}
+
+func TestBudgetHeadroomStillReadsAsSafeToSpend(t *testing.T) {
+	// "over budget" appears here, but the question is about headroom, not about
+	// the budgets. The more specific intent has to win or the answer is wrong.
+	if got, _ := localqa.Match("How much can I spend without going over budget?"); got != localqa.IntentSafeToSpend {
+		t.Fatalf("Match = %v, want SafeToSpend", got)
+	}
+}
+
+func TestAskingAboutACategoryStillBeatsTheBiggestExpense(t *testing.T) {
+	if got, _ := localqa.Match("How much did I spend on groceries?"); got != localqa.IntentSpendingByCategory {
+		t.Fatalf("Match = %v, want SpendingByCategory", got)
+	}
+}

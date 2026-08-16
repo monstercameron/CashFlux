@@ -482,43 +482,86 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		done()
 	}))
 
-	saveNotes := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		saved := false
+	// writeNote is the single path that changes a budget's note, so that clearing
+	// the field and pressing Save cannot behave differently from pressing Remove.
+	// An empty result IS a removal and says so; announcing "Note saved" for a
+	// deletion would be the interface making a false statement about what it did.
+	writeNote := func(next string) {
 		for _, bb := range app.Budgets() {
 			if bb.ID != props.BudgetID {
 				continue
 			}
-			bb.Notes = strings.TrimSpace(notesS.Get())
+			bb.Notes = next
 			if err := app.PutBudget(bb); err != nil {
 				errS.Set(err.Error())
 				return
 			}
-			saved = true
-			break
+			// Writing through the store updates memory; RequestPersist is what puts
+			// it in the dataset. Without it the note survives only until a reload.
+			uistate.RequestPersist()
+			uistate.BumpDataRevision()
+			// Say so at the moment of the click. The row does change, but the user
+			// is looking at the modal, and a modal that just closes is what made a
+			// working save read as a broken one. The budget is named because notes
+			// are per-budget and several get written in a row.
+			title := budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID))
+			key := "budgets.notesSaved"
+			if next == "" {
+				key = "budgets.notesRemoved"
+			}
+			uistate.PostNotice(uistate.T(key, title), false)
+			done()
+			return
 		}
 		// A save that matched nothing used to close the editor as though it had
 		// worked: the note simply never appeared on the card, with no error to
 		// explain it. Silence is the worst outcome for a write — say so and stay
 		// open so the text is not lost.
-		if !saved {
-			errS.Set(uistate.T("budgets.notesSaveFailed"))
+		errS.Set(uistate.T("budgets.notesSaveFailed"))
+	}
+
+	// confirmRemoval asks before discarding text that cannot be recovered. Read
+	// fresh from the store rather than from the budget captured at render, so the
+	// question is asked about what is actually there.
+	confirmRemoval := func(then func()) {
+		title := ""
+		for _, bb := range app.Budgets() {
+			if bb.ID == props.BudgetID {
+				title = budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID))
+			}
+		}
+		uistate.ConfirmModal(uistate.T("budgets.notesRemoveConfirm", title), true, func(ok bool) {
+			if ok {
+				then()
+			}
+		})
+	}
+
+	// noteExists reports whether there is currently a note to lose.
+	noteExists := func() bool {
+		for _, bb := range app.Budgets() {
+			if bb.ID == props.BudgetID {
+				return strings.TrimSpace(bb.Notes) != ""
+			}
+		}
+		return false
+	}
+
+	saveNotes := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			done()
 			return
 		}
-		// Writing through the store updates memory; RequestPersist is what puts it
-		// in the dataset. Without it the note survives only until the next reload.
-		uistate.RequestPersist()
-		uistate.BumpDataRevision()
-		// Say so. The row does change once you are looking at it, but at the instant
-		// of the click the user is looking at the modal, and a modal that just
-		// closes is what made a working save read as a broken one. The budget is
-		// named because notes are per-budget and several get written in a row.
-		uistate.PostNotice(uistate.T("budgets.notesSaved",
-			budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID))), false)
-		done()
+		next := strings.TrimSpace(notesS.Get())
+		// Emptying the box and pressing Save destroys the note exactly as the
+		// Remove button does — and it is the quicker, more natural gesture for
+		// anyone already editing the text. Guarding only the button would leave
+		// the easier path as the unguarded one.
+		if next == "" && noteExists() {
+			confirmRemoval(func() { writeNote("") })
+			return
+		}
+		writeNote(next)
 	}))
 
 	// removeNote clears the note after confirming. Emptying the field and pressing
@@ -529,28 +572,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			done()
 			return
 		}
-		title := budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID))
-		uistate.ConfirmModal(uistate.T("budgets.notesRemoveConfirm", title), true, func(ok bool) {
-			if !ok {
-				return
-			}
-			for _, bb := range app.Budgets() {
-				if bb.ID != props.BudgetID {
-					continue
-				}
-				bb.Notes = ""
-				if err := app.PutBudget(bb); err != nil {
-					errS.Set(err.Error())
-					return
-				}
-				uistate.RequestPersist()
-				uistate.BumpDataRevision()
-				uistate.PostNotice(uistate.T("budgets.notesRemoved", title), false)
-				done()
-				return
-			}
-			errS.Set(uistate.T("budgets.notesSaveFailed"))
-		})
+		confirmRemoval(func() { writeNote("") })
 	}))
 
 	submitTopup := ui.UseEvent(Prevent(func() {
@@ -676,7 +698,13 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		hasNote := strings.TrimSpace(b.Notes) != ""
 		var removeBtn ui.Node = Fragment()
 		if hasNote {
-			removeBtn = Button(css.Class("btn btn-link budget-notes-remove"), Type("button"),
+			// btn-link WITHOUT btn: `.btn` is registered after `.btn-link` in the
+			// generated sheet and overrides every property they share (border,
+			// padding, background, min-height), so "btn btn-link" rendered a
+			// full-weight button that merely happened to be red — the loudest
+			// thing in the footer, for the action that should be the quietest.
+			// The danger tone is a decision; that weight was a cascade accident.
+			removeBtn = Button(css.Class("btn-link budget-notes-remove"), Type("button"),
 				Attr("data-testid", "budget-notes-remove"), OnClick(removeNote),
 				uistate.T("budgets.notesRemove"))
 		}
