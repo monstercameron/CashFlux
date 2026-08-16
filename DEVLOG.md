@@ -116,6 +116,38 @@ The ratchets were mutation-checked rather than assumed: re-adding `/transactions
 fails the period guard, and reverting one picker to `c.Name` fails the qualified-path guard. Both
 pass again on revert. A guard nobody has seen fail is not yet a guard.
 
+Two more findings came out of running the wider gates, and the second one is the better lesson.
+
+`splits.spec.mjs` — a spec I had not touched — started timing out at 60s waiting for a kebab. The
+diagnostic was one number: the ledger renders **25 rows and 58 elements matching
+`[data-testid^="txn-row-"]`**. The row Edit control I added for C563 was `txn-row-edit`, which
+shares the prefix the whole suite uses to select ROWS, so every row contributed a second match and
+`nth(7)` stopped being the seventh row and became a button inside the third. The prefix was already
+impure — `txn-row-tags`, `-note`, `-receipt` all predate me — but those are CONDITIONAL, so they
+only ever perturbed a few rows. An affordance on every row is what turned a latent fragility into a
+hard failure. Renamed to `txn-rowedit`, with a comment saying why, and the affected selectors
+tightened to `tr[data-testid^="txn-row-"]`.
+
+The a11y gate flagged `/recurring` gaining an `aria-required-parent` node. It would have been easy
+to argue it wasn't mine — that surface uses `KebabMenu`, not the `OverflowMenu` I changed — but
+arguing is not evidence, so I wrote a throwaway probe that runs axe and prints the offending node.
+It named `<div class="rhy-finding" role="listitem">` under a plain `div`: `recurring_rows.go`
+declares the listitem role and `recurring.go` never made the container a list. Untouched since
+July, and latent because the strip only renders when the engine actually produces a finding — the
+baseline recorded zero because the seeded data happened to produce none. That surface's detected
+subscriptions changed, a finding rendered, and the ratchet did exactly its job. Fixed in its own
+commit rather than folded into this lane, and the list wraps only the finding rows: a `role=list`
+may not own anything else, so the price-creep block stays a sibling.
+
+The environment was the real cost of the day. Two sessions were driving Playwright against the same
+repo, and the suite pins ports 8099/8198 with `reuseExistingServer: false` on the backend — so runs
+stole each other's ports, produced timeouts that read exactly like product bugs, and once reported
+zero tests. Private ports (`E2E_PORT`/`E2E_RPC_PORT`) fix the ports but not the deeper collision:
+`global-setup.mjs` rebuilds every wasm into the shared `web/bin/` from the shared tree, so a
+concurrent run yields `EBUSY` renaming `services.wasm`, and a build of the other session's
+half-written code fails outright. There is no flag for that one. Recorded in memory so the next
+session does not spend an hour re-deriving it.
+
 ## 2026-08-16 — Three states that could never have agreed
 
 The rest of the Transactions audit (C560, C563, C564, C569, C571, C572). C560 is the one worth
