@@ -22,7 +22,17 @@ type PriceChange struct {
 	Delta         int64     // NewAmount − OldAmount (positive = a price rise)
 	PercentChange int       // Delta as a percent of OldAmount, rounded
 	ChangedAt     time.Time // the date of the first charge at the new amount
+	// OldRun / NewRun are how many consecutive charges were billed at each
+	// amount. They are the evidence that this is a STEP — a flat price, then a
+	// different flat price — rather than a wandering series whose last two
+	// entries happen to differ.
+	OldRun, NewRun int
 }
+
+// minRunCharges is how many consecutive charges must share an amount for it to
+// count as a price the biller was actually charging. Two is the smallest number
+// that distinguishes a settled price from a single unusual month.
+const minRunCharges = 2
 
 // Increased reports whether the price went up (rather than down).
 func (p PriceChange) Increased() bool { return p.Delta > 0 }
@@ -37,9 +47,19 @@ func (p PriceChange) Increased() bool { return p.Delta > 0 }
 // so two charges aren't enough to tell a change from a one-off. Results are
 // sorted most-recent-change first (ties by name).
 //
-// It reports the latest distinct-amount transition in each series, so a genuinely
-// fluctuating (usage-based) charge can produce noise; the cadence check filters
-// most such series out, but callers should present results as a heads-up.
+// A change must be a STEP: the OLD amount must have been billed at least twice
+// in a row, so there was a settled price for the biller to have changed FROM.
+// That single requirement is the difference between a price rise and variable
+// spending (V-sweep C347). Previously the detector took the latest charge as
+// "the new price" and walked back to the first charge with any different amount
+// — so a date-night habit costing $88, $95, $102 and $96 reported "Date night
+// went up 9%", comparing two arbitrary evenings. A wandering series never has a
+// settled old price, so it no longer produces one.
+//
+// The new side is deliberately NOT held to the same bar: a subscription that has
+// billed three times at $10.99 and once at $9.99 has genuinely changed, and
+// waiting a second cycle to say so would trade a real alert for a rule.
+// OldRun/NewRun are reported as evidence either way.
 func DetectPriceChanges(txns []domain.Transaction, rates currency.Rates, minCount int) ([]PriceChange, error) {
 	if minCount < 3 {
 		minCount = 3
@@ -89,9 +109,10 @@ func DetectPriceChanges(txns []domain.Transaction, rates currency.Rates, minCoun
 			continue // not a regular subscription cadence
 		}
 
-		// The current price is the latest charge; walk back to the most recent
-		// charge with a different amount — that's the prior price, and the charge
-		// just after it is when the new price started.
+		// The current price is the latest charge; walk back over the run of
+		// identical charges to find where it started, then measure the run that
+		// preceded it. Both runs must be at least two charges long for this to be
+		// a step rather than a wobble.
 		n := len(g.charges)
 		newAmt := g.charges[n-1].amt
 		prevIdx := -1
@@ -104,7 +125,15 @@ func DetectPriceChanges(txns []domain.Transaction, rates currency.Rates, minCoun
 		if prevIdx < 0 {
 			continue // price never changed
 		}
+		newRun := n - 1 - prevIdx
 		oldAmt := g.charges[prevIdx].amt
+		oldRun := 0
+		for i := prevIdx; i >= 0 && g.charges[i].amt == oldAmt; i-- {
+			oldRun++
+		}
+		if oldRun < minRunCharges {
+			continue // no settled price to have changed FROM — a wandering amount
+		}
 		out = append(out, PriceChange{
 			Name:          g.name,
 			Currency:      rates.Base,
@@ -113,6 +142,8 @@ func DetectPriceChanges(txns []domain.Transaction, rates currency.Rates, minCoun
 			Delta:         newAmt - oldAmt,
 			PercentChange: percentChange(oldAmt, newAmt),
 			ChangedAt:     g.charges[prevIdx+1].date,
+			OldRun:        oldRun,
+			NewRun:        newRun,
 		})
 	}
 

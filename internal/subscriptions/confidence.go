@@ -47,6 +47,23 @@ func steadyGapTolerance(c Cadence) int {
 	}
 }
 
+// FixedPriceMaxVarPct is how far a charge may drift from the median and still
+// count as a set price. A couple of percent absorbs rounding, a tax line, or a
+// currency conversion; beyond that the biller is not charging a fixed price.
+const FixedPriceMaxVarPct = 3
+
+// FixedPrice reports whether this is a set-price charge — the thing people mean
+// by "a subscription" — rather than a recurring pattern in ordinary spending.
+//
+// It is the distinction the /subscriptions page needed and did not have
+// (V-sweep C347): "Household & shopping" recurs every month with an amount that
+// swings 83%, and calling it a subscription put groceries in the same list as
+// Netflix and produced a "share of spending" of 97%. A single charge cannot be
+// fixed-price at all — there is nothing for it to be the same AS.
+func (s Subscription) FixedPrice() bool {
+	return s.Count >= 2 && s.AmountVarPct <= FixedPriceMaxVarPct
+}
+
 // ConfirmKey normalizes a subscription name for the confirmed-names set
 // (case-insensitive, trimmed) — the same key rule the ignore list uses.
 func ConfirmKey(name string) string { return strings.ToLower(strings.TrimSpace(name)) }

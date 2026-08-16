@@ -61,6 +61,13 @@ var vSweepKeys = Catalog{
 	// identical timestamps on the one surface whose job is ranking by urgency.
 	// %d = whole days past the due date.
 	"notifications.overdueBy": "overdue by %d days",
+
+	// ── C347: name why a detection isn't a subscription ─────────────────────
+	// "Review" reads as "we aren't sure yet". The real answer for a recurring
+	// grocery run is that it isn't billed at a set price, which is what the word
+	// subscription means. %d = the largest deviation from the median charge.
+	"subs.varies":     "varies",
+	"subs.variesHint": "Charged a different amount each time (up to %d%% apart) — this is recurring spending, not a set-price subscription",
 }
 
 func init() {

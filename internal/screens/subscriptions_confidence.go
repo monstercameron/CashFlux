@@ -133,7 +133,15 @@ func subsReviewInboxRow(props subsReviewRowProps) ui.Node {
 			Span(css.Class("row-desc"), s.Name,
 				// The shared #68 state token: detected-but-unverified wears the
 				// same Unconfirmed chip here as anywhere else in the app.
-				uiw.StateChip(uiw.StateChipProps{State: uiw.StateUnconfirmed, Title: props.Why, TestID: "state-unconfirmed-" + slug})),
+				uiw.StateChip(uiw.StateChipProps{State: uiw.StateUnconfirmed, Title: props.Why, TestID: "state-unconfirmed-" + slug}),
+				// C347: say WHY in a word. "Review" reads as "we're not sure yet";
+				// the real answer for "Household & shopping" is that it isn't
+				// billed at a set price, which is what "a subscription" means. A
+				// tier hides that behind a confidence word; this doesn't.
+				If(!s.FixedPrice(), Span(css.Class("pill", tw.TextDim),
+					Attr("data-testid", "sub-varies-"+slug),
+					Attr("title", uistate.T("subs.variesHint", s.AmountVarPct)),
+					uistate.T("subs.varies")))),
 			Span(css.Class("row-meta"), props.Why),
 		),
 		Span(css.Class("budget-amount"), fmtMoney(money.New(s.Amount, props.Base))),

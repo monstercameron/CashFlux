@@ -131,3 +131,28 @@ func TestDetectEvidenceSignals(t *testing.T) {
 		t.Errorf("Wobbly should assess Review, got %s", Assess(wb, nil).Level)
 	}
 }
+
+// ─── C347: a set price is what people mean by "a subscription" ───────────────
+
+func TestFixedPriceSeparatesSubscriptionsFromSpending(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		sub   Subscription
+		fixed bool
+		why   string
+	}{
+		{"identical every month", Subscription{Count: 12, AmountVarPct: 0}, true,
+			"Netflix at the same price is the case the page exists for"},
+		{"rounding drift", Subscription{Count: 12, AmountVarPct: 2}, true,
+			"a tax line or an FX conversion is still a set price"},
+		{"groceries", Subscription{Count: 60, AmountVarPct: 83}, false,
+			"\"Household & shopping\" recurs monthly but is spending, not a subscription"},
+		{"just over the line", Subscription{Count: 12, AmountVarPct: 4}, false, ""},
+		{"a single charge", Subscription{Count: 1, AmountVarPct: 0}, false,
+			"one charge cannot be the same AS anything"},
+	} {
+		if got := tc.sub.FixedPrice(); got != tc.fixed {
+			t.Errorf("%s: FixedPrice() = %v, want %v — %s", tc.name, got, tc.fixed, tc.why)
+		}
+	}
+}

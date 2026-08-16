@@ -79,6 +79,21 @@ and every commit updates this file under `Unreleased`.
   "this changes something this app has not described" rather than a reassuring blank.
 
 ### Fixed
+- **The subscription price tracker stops reporting spending as price rises (C347).** It took the
+  latest charge as "the new price" and walked back to the first charge with any different amount, so
+  a date-night habit costing $88, $95, $102 and $96 announced "Date night went up 9%" — two arbitrary
+  evenings compared to each other.
+
+  A price change now requires a settled old price: the previous amount must have been billed at least
+  twice in a row, so there was something for the biller to have changed from. A wandering amount never
+  has one. The new side is deliberately not held to the same bar — three charges at $10.99 and one at
+  $11.99 has genuinely changed, and waiting another cycle to say so would trade a real alert for a
+  rule. Against the sample this takes the price-change list from noise down to the one real rise.
+
+  The needs-review tier also says why now. "Review" reads as "we aren't sure yet", when the real
+  answer for a recurring grocery run is that it isn't billed at a set price — which is what the word
+  subscription means. A "varies" chip names it in place, with the actual spread in its tooltip.
+
 - **The notification center reads top-down again (C345).** It sorted by severity alone, so
   everything inside a tier stayed in whatever order the generators emitted it — "due in 2 days" sat
   below "due in 14 days", and the queue could only be read by scanning all of it. Ordering is now

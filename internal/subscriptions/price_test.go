@@ -133,3 +133,71 @@ func TestDetectPriceChangesSortedMostRecentFirst(t *testing.T) {
 		t.Errorf("order = %q, %q; want B (May) then A (Mar)", changes[0].Name, changes[1].Name)
 	}
 }
+
+// ─── C347: a price alert about variable spending is noise ────────────────────
+
+// TestVariableSpendIsNotAPriceChange is the ticket's exact complaint: the
+// price tracker reported "Date night went up 9%" by comparing two arbitrary
+// evenings out.
+func TestVariableSpendIsNotAPriceChange(t *testing.T) {
+	txns := []domain.Transaction{
+		charge("Date night", 8800, d(2026, time.January, 12)),
+		charge("Date night", 9500, d(2026, time.February, 14)),
+		charge("Date night", 10200, d(2026, time.March, 13)),
+		charge("Date night", 9600, d(2026, time.April, 11)),
+		charge("Date night", 10400, d(2026, time.May, 9)),
+	}
+	changes, err := DetectPriceChanges(txns, usd(), 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(changes) != 0 {
+		t.Errorf("a wandering amount reported %d price changes (%+v) — there was never a "+
+			"settled price for it to change FROM (C347)", len(changes), changes)
+	}
+}
+
+// A genuine hike still reports, and carries the evidence that it was a step.
+func TestRealHikeReportsItsRuns(t *testing.T) {
+	txns := []domain.Transaction{
+		charge("Netflix", 1549, d(2025, time.November, 11)),
+		charge("Netflix", 1549, d(2025, time.December, 11)),
+		charge("Netflix", 1549, d(2026, time.January, 11)),
+		charge("Netflix", 1799, d(2026, time.February, 11)),
+		charge("Netflix", 1799, d(2026, time.March, 11)),
+	}
+	changes, err := DetectPriceChanges(txns, usd(), 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(changes) != 1 {
+		t.Fatalf("got %d changes, want 1", len(changes))
+	}
+	c := changes[0]
+	if c.OldRun != 3 || c.NewRun != 2 {
+		t.Errorf("runs = old %d / new %d, want 3 / 2 — the runs ARE the evidence that "+
+			"this was a step rather than a wobble", c.OldRun, c.NewRun)
+	}
+	if !c.Increased() || c.Delta != 250 {
+		t.Errorf("change = %+v, want +250", c)
+	}
+}
+
+// The new side is deliberately not held to the same bar: three charges at one
+// price and one at another has genuinely changed, and making the user wait a
+// second cycle would trade a real alert for a rule.
+func TestASingleChargeAtANewPriceStillCounts(t *testing.T) {
+	txns := []domain.Transaction{
+		charge("Spotify", 1099, d(2026, time.January, 5)),
+		charge("Spotify", 1099, d(2026, time.February, 5)),
+		charge("Spotify", 1099, d(2026, time.March, 5)),
+		charge("Spotify", 1199, d(2026, time.April, 5)),
+	}
+	changes, err := DetectPriceChanges(txns, usd(), 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(changes) != 1 || changes[0].NewRun != 1 || changes[0].OldRun != 3 {
+		t.Errorf("changes = %+v, want one change with old run 3 / new run 1", changes)
+	}
+}

@@ -5191,12 +5191,26 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   due-dated alert is now stamped with its DEADLINE ("overdue by 3 days" / "due tomorrow" / the date
   itself past 30 days). Tests cover the ticket's exact ordering complaint, the dated-beats-undated
   rule, stability, and the empty-severity-is-info default.
-- [ ] **C347 [MAJOR][UX] Subscription detection over-claims.** HOA dues, "Household & shopping",
-  Gas, Pharmacy, Cigarettes are counted as subscriptions → "Monthly subscriptions $1,807.50 /
-  SHARE OF SPENDING 97%", and the price tracker reports variable spend as hikes ("Date night went
-  up 9%"). Separate true fixed-price subscriptions from detected recurring *spend* (two sections or
-  a confidence tier + the existing "Not a subscription" action), and scope price-change alerts to
-  fixed-price flows.
+- [x] **C347 ✅ DONE (2026-08-16) — Subscription detection over-claimed.** Much of the list half had
+  landed since the audit (`IsLiabilityPayment`, `IsEssentialSpend`, exclusion of names the household
+  already models as recurring flows, and a confidence tier whose review bucket is kept out of the
+  headline totals). Measured against the current sample: 27 raw detections → 5 kept, monthly total
+  $562 not $1,807.50; HOA, Gas, Pharmacy and the coffee habit are all gone.
+  **The price tracker was still wrong, and structurally so.** `DetectPriceChanges` took the LAST
+  charge as "the new price" and walked back to the first charge with any different amount — so a
+  date-night habit costing $88, $95, $102, $96 reported "Date night went up 9%", comparing two
+  arbitrary evenings. A change now requires a **settled old price**: the previous amount must have
+  been billed at least twice in a row, so there was something for the biller to have changed FROM.
+  A wandering series never has one. The new side is deliberately NOT held to the same bar — three
+  charges at $10.99 and one at $11.99 has genuinely changed, and waiting a second cycle would trade
+  a real alert for a rule. `OldRun`/`NewRun` ship as evidence. Measured on the sample: price changes
+  went from noise to exactly one — the real Netflix rise (runs 42/18).
+  **And the tier now says WHY.** "Review" reads as "we aren't sure yet"; the real answer for
+  "Household & shopping" is that it isn't billed at a set price, which is what the word subscription
+  means. `Subscription.FixedPrice()` makes that explicit (≥2 charges within 3% of the median), and a
+  "varies" chip on the review row names it in place instead of hiding it behind a confidence word.
+  Tests: the ticket's date-night case reports zero changes, a real hike still reports and carries its
+  runs, a single charge at a new price still counts, and a table over the fixed-price boundary.
 - [ ] **C352 [MAJOR][UX] Goals "On track" badge contradicts the feasibility insight** ("Baby fund
   needs $1,840/mo but only ~$462/mo is realistically free" — yet the card says On track at
   $1,840/mo). Fold free-cash-flow feasibility into the pace badge (On track / Tight / At risk) so
