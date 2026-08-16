@@ -11,12 +11,9 @@ package engineenv
 // the page. (net_worth itself stays the assets−liabilities molecule.)
 
 import (
-	"time"
-
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 )
 
 // NetWorthVarNames are the fixed net-worth variables addNetWorthVars exposes,
@@ -56,13 +53,12 @@ func addNetWorthVars(out map[string]float64, d Data, major func(int64) float64, 
 		out[name] = 0
 	}
 
-	// Month-to-date change: net worth now vs at the month start.
-	curMonth := dateutil.MonthStart(d.Now)
-	bounds := []time.Time{curMonth, d.Now.AddDate(0, 0, 1)}
-	if series, err := ledger.NetWorthSeries(d.Accounts, d.Transactions, bounds, d.Rates); err == nil && len(series) >= 2 {
-		last, prev := series[len(series)-1].Amount, series[len(series)-2].Amount
-		out["networth_change"] = major(last - prev)
-		if pct, ok := ledger.PercentChange(last, prev); ok {
+	// Month-to-date change, read through the app's one net-worth-change seam
+	// (C341) so a formula or custom widget bound to networth_change cannot
+	// disagree with the dashboard hero that inspired it.
+	if c, err := nwchange.MonthToDateChange(d.Accounts, d.Transactions, d.Rates, d.Now); err == nil && c.Known {
+		out["networth_change"] = major(c.DeltaMinor())
+		if pct, ok := c.PercentChange(); ok {
 			out["networth_change_pct"] = float64(pct)
 		}
 	}

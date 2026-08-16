@@ -7,6 +7,66 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The assistant answered with a token line and no reply (C516 / C545 AI-proxy / L83b).** A question
+  asked on the shared server key came back as `Reply: 479 tokens out · 9,637 in · cost unavailable`
+  and nothing else. The call had succeeded and the model had produced 479 tokens — they just were
+  not an answer.
+
+  The proxy sent every request to `/chat/completions` with `{model, messages, temperature}` and no
+  output budget, while its own allowlist — `gpt-5.4-mini`, `gpt-5.5`, `o4-mini` — is entirely
+  reasoning models. A reasoning model on that endpoint with no room reserved spends the whole
+  completion allowance thinking and returns `content: ""` with `finish_reason: "length"` and a real
+  token bill. Nothing downstream could name that: `ai.ChatResponse` did not decode `finish_reason`
+  at all, `ai.ParseResponse` returned the empty content as a success, and the client wrapped it in a
+  Message with no check. The blank bubble was the last stop on a chain where every link had passed
+  the emptiness along.
+
+  Reasoning models and tool turns now go to the Responses API — the endpoint that reports this case
+  as incomplete with a reason instead of as a success with no text — with an explicit
+  `max_output_tokens` so a single question cannot spend a household's whole daily allowance. Both
+  transports refuse an empty completion and explain it in plain English ("The model used its whole
+  response budget thinking and had no room left to answer. Try a lower thinking level, or ask a
+  shorter question."), and the tokens are still recorded, because the user was charged for them
+  either way.
+
+- **Households on the shared server key got a strictly weaker assistant, silently (C551).** The
+  backend branch of `sendTools` dropped the `tools` argument on the floor, and the wire format
+  copied only Role and Content — so a tool conversation could not have survived the trip even if
+  the tools had been sent. The same person asking the same question got a research assistant with a
+  direct key and a chatbot with the server key, with nothing on screen saying so. Tools, tool calls,
+  tool results and the thinking level now travel through the proxy, so both paths run the same
+  assistant.
+- **"How much did net worth move this month?" now has one answer (C341).** The dashboard hero said
+  ▲ $2,840.00, the /accounts summary said "No change this month", and /reports and /networth both
+  said ▲ $1,350.43 — the same question, three answers, all in the first viewport of the money pages.
+
+  Reading every call site rather than only the reports seam turned up five hand-rolled definitions.
+  The Reports net-worth tab was subtracting the two most recent month boundaries — reporting the
+  whole of *last* month — under a "Change this period" label. The hero's delta chip subtracted the
+  last two points of its six-month sparkline series, a series whose cutoffs exist to draw a shape.
+  The assets KPI beside it compared today's all-transactions net worth, future-dated rows included,
+  against the 1st. /accounts and the widget-builder hero each had their own two-cutoff read. And the
+  annual report printed a bare "▲ $1,350.43" with no window named at all.
+
+  There is now one pure seam, `internal/nwchange`, and one sentence, `screens.nwChangeSub`. A window
+  is half-open and its end is tomorrow midnight, so everything posted today counts and nothing dated
+  in the future does — a delta describes money that has landed, not a schedule. A window that cannot
+  be read reports itself as unknown instead of returning a confident zero. Every surface that prints
+  a net-worth delta now goes through both, including the formula/widget variables
+  (`networth_change`), so a custom widget cannot disagree with the dashboard that inspired it. The
+  Reports tab's label reads "Change this month" and now shows that month; the annual report stamps
+  "over the year" on its own figure.
+
+  Three of the five had baked their English into `fmt.Sprintf`, so the wording could drift and the
+  language setting never reached it; the sentence is catalog copy now. That merge also exposed a
+  formatting bug none of them had noticed: negative amounts render in accounting parentheses, so the
+  percentage phrase printed "▼ 3% (($120.00))". The arrow carries the direction and the amount is a
+  magnitude.
+
+  Guarded by table tests on the seam and three source ratchets: nothing outside the seam may derive
+  the delta from raw cutoffs, nothing outside `networth_change.go` may assemble the sentence, and the
+  wired call sites must keep importing the seam — otherwise the first two guards would pass
+  vacuously.
 - **Budget notes could not be saved — two independent faults, one symptom (C545).** Typing a note
   and saving it appeared to do nothing at all. Neither half was in the save path, which is why it
   read as a broken write.

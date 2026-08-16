@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -496,21 +497,16 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	nw, _ := ledger.NetWorthExplained(accounts, txns, props.Rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
-	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st.
-	// The boundary must be UTC midnight (dateutil.MonthStart), not the local
-	// month start: txn dates are UTC-midnight calendar dates, so a local
-	// boundary (Jul 1 00:00-04:00 = Jul 1 04:00Z) excluded first-of-month
-	// transactions and this tile said "No change this month" while the
-	// dashboard hero (already UTC) showed the real delta (C341).
-	nowTS := time.Now()
-	monthStart := dateutil.MonthStart(nowTS)
-	var nwDelta money.Money
-	haveDelta := false
-	if series, err := ledger.NetWorthSeries(accounts, txns, []time.Time{monthStart, nowTS.AddDate(0, 0, 1)}, props.Rates); err == nil && len(series) == 2 {
-		if d, derr := series[1].Sub(series[0]); derr == nil {
-			nwDelta, haveDelta = d, true
-		}
-	}
+	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st,
+	// read through the one seam every "this month" figure in the app shares
+	// (nwchange, C341) so this tile, the dashboard hero, /networth and /reports
+	// cannot answer the same question differently. The window's UTC-midnight
+	// boundary matters: txn dates are UTC-midnight calendar dates, so a local
+	// month start (Jul 1 00:00-04:00 = Jul 1 04:00Z) used to exclude
+	// first-of-month transactions and this tile said "No change this month"
+	// while the hero showed the real delta.
+	mtd, _ := nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
+	nwDelta, haveDelta := mtd.Delta(), mtd.Known
 
 	smartSettings := uistate.LoadSmartSettings()
 

@@ -1,3 +1,66 @@
+## 2026-08-16 — Five answers to one question
+
+C341 was filed as "the net-worth month delta disagrees three ways", with a partial fix already
+landed and a note pointing at the reports seam as the remaining offender. The note was wrong, and
+usefully so. Grepping every `NetWorthSeries` call site instead of opening the file the ticket
+accused turned up five independent definitions of the same figure.
+
+Two of them are worth recording because neither looks like a bug in isolation. The Reports
+net-worth tab took the last two points of a six-month boundary series and called the difference
+"Change this period" — which is last month, whole, presented as the current one. And the dashboard
+hero built a six-month sparkline, then read its headline delta chip off the final two points of
+that series. The sparkline's cutoffs exist to draw a shape; the last one was `now` rather than a
+day boundary, and the one before it was the month start, so the subtraction *looked* like
+month-to-date and drifted from the assets KPI two inches to its right, which was comparing
+all-transactions net worth (future-dated rows included) against the 1st.
+
+The lesson is the same one in both: a headline number read off a series built for a chart is a
+number nobody defined. The fix is a seam that defines the window as a value — `nwchange.Window`,
+half-open, ending tomorrow midnight so today counts and next Tuesday's scheduled paycheck does not
+— and a `Change` that carries its own bounds, so a view physically cannot print a delta without
+being able to say which window produced it. `Known` exists for the same reason: a missing FX rate
+used to fall through to a zero delta, which reads as "nothing happened".
+
+The sentence got the same treatment. Three of the five surfaces `Sprintf`'d their own
+"▲ %d%% (+%s) this month", which meant the language setting never reached it and the arrow, the
+parentheses and the window name could each drift. Merging them exposed a formatting bug all three
+had shipped: `fmtMoney` renders negatives in accounting parentheses, so the percentage phrase read
+"▼ 3% (($120.00))". Nobody had reported it, which is its own small lesson about how much of a
+dashboard people actually read.
+
+Guards went in as source ratchets rather than behaviour tests, because the failure mode is a sixth
+author adding a sixth definition in a file nobody thinks to look at. Two of them scan for the
+shapes; the third asserts the wired call sites still import the seam, so the first two can't pass
+by protecting nothing.
+
+## 2026-08-16 — A billed answer that was never an answer
+
+The assistant reply that read `479 tokens out · 9,637 in` with no text under it was not a rendering
+bug, and it was not the mount race that L83a fixed. Following the two transports apart gave a
+complete chain, and it was on the server.
+
+The proxy posted `{model, messages, temperature}` to `/chat/completions`. Its allowlist is
+`gpt-5.4-mini`, `gpt-5.5`, `o4-mini` — every one a reasoning model. Those models think inside the
+completion allowance, so with no `max_completion_tokens` reserved they can spend all of it reasoning
+and return `content: ""` with `finish_reason: "length"`, billed. `ai.ChatResponse` never decoded
+`finish_reason`, so the field was not "discarded by the loop" — it was never parsed. `ParseResponse`
+handed the empty string back as a success. `SendProxyChat`'s callback wrapped it in a Message with
+no check. Four layers each did the locally reasonable thing with an empty string, and the sum was a
+feature that looked dead.
+
+The interesting part is which fix to pick. Adding `max_completion_tokens` to the existing call would
+have stopped this particular symptom, but the direct-key path had already been moved to the Responses
+API for a related reason (it is the only endpoint that accepts a thinking level alongside function
+tools), so the server was the odd one out running a second transport with a second set of failure
+modes. Moving the proxy to the same endpoint collapses that, and it makes the tool-parity gap
+(C551) fixable in the same change rather than needing its own transport work later: the pure codec in
+`internal/ai` already spoke both shapes, so the server just needed to use it.
+
+Two things I deliberately did NOT do. I did not make an empty completion return empty text with a
+warning — it returns an error, because a bubble that renders is a bubble the user reads as an answer.
+And I record the tokens before returning that error: the call was billed, and a usage line that
+quietly omits failed calls understates what the month actually cost.
+
 ## 2026-08-16 — The four seconds nobody was counting
 
 C584 read as a data-loss bug in one code path: "a budget created with a new category disappears

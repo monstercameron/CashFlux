@@ -4974,16 +4974,32 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   is a real wall-clock arrival timestamp and correctly stays local. MEASURED live (UTC-4 machine):
   ledger row now "Jul 1, 2026" == /reports "Jul 1, 2026"; 0 page errors; wasm build rc=0. (The
   remaining "which window is 'this month'?" labeling gaps stay open as C343.)
-- [ ] **C341 [MAJOR][DATA-TRUST] Net-worth month delta disagrees three ways.** Dashboard hero
+- [x] **C341 ✅ DONE (2026-08-16) — Net-worth month delta disagreed three ways.** Dashboard hero
   "▲ $2,840.00 this month" vs /accounts summary "No change this month" vs /reports + /networth
-  "▲ $1,350.43". Same question, three answers, all in the first viewport of money pages. One
-  canonical month-to-date delta computed in one pure seam, one shared label.
-  **PARTIAL 2026-07-03:** the /accounts half was the C339 class — its month boundary was built in
-  LOCAL time (excluding the Jul-1-00:00Z transactions → "No change this month") while the dashboard
-  hero already used `dateutil.MonthStart` (UTC); accounts_tiles now uses the same boundary.
-  MEASURED live: dashboard "▲ $2,840.00 this month" == /accounts "+$2,840.00 this month".
-  REMAINING: /reports + /networth report "▲ $1,350.43" for the same question — a different
-  definition in the reports seam (actively churning surface) — unify or label its window.
+  "▲ $1,350.43". **Root cause, found by reading all the call sites rather than the reports seam
+  alone: there were FIVE hand-rolled definitions, not three.** The Reports net-worth tab was
+  subtracting the two most recent month boundaries — i.e. reporting the whole of LAST month — under
+  a "Change this period" label; the dashboard hero's delta chip subtracted the last two points of
+  its 6-month *sparkline* series; the assets KPI compared today's all-transactions net worth
+  (future-dated rows included) against the 1st; /accounts and the widget-builder hero each had
+  their own two-cutoff read; and the annual report printed a bare "▲ $1,350.43" with no window at
+  all. Three of the five also baked their English in via `fmt.Sprintf`, so the sentence itself
+  could drift and the language setting never reached it.
+  **Fixed with one pure seam + one sentence:** `internal/nwchange` (Window / Change, with
+  `MonthToDate`, `PriorMonth`, `Months`; Until is tomorrow-midnight so today's postings count and
+  future-dated rows never do; a failed read reports `Known=false` rather than a confident zero),
+  and `screens.nwChangeSub` renders the one sentence over new `nw.*` i18n keys with the window
+  always named. Wired: dashboard hero chip + assets KPI, /accounts summary, Reports NW tab
+  (label now "Change this month" — it finally shows the window it names), widget-builder hero
+  string surface, `engineenv` `networth_change`/`_pct` (so formulas and custom widgets agree too),
+  and the annual report's summary trend now stamps "over the year". Also fixed a display bug the
+  merge exposed: the percentage phrase printed accounting parens inside its own parens
+  ("▼ 3% (($120.00))") — the arrow carries direction, the amount is now a magnitude.
+  **Guards:** `internal/nwchange` table tests (window bounds, future-dated exclusion, prior-month
+  ≠ month-to-date, unknown-percent cases) + three ratchets in `internal/screenlint/nwchange_test.go`
+  — no file outside the seam may derive the delta from raw cutoffs, no file outside
+  `networth_change.go` may assemble the sentence, and the six wired call sites must keep importing
+  the seam (so the first two can't pass vacuously). `go test` green; wasm build rc=0.
 - [ ] **C342 [MINOR][DATA-TRUST] Savings rate 60% (dashboard KPI) vs 31% (/health factor)** with
   no window label on either. Label the window ("June" / "3-mo avg") or unify the computation.
 - [ ] **C340 [MAJOR][DATA-TRUST] /bills double-counts liability obligations.** Liability-derived

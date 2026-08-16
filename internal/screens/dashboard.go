@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
@@ -748,23 +749,11 @@ func Dashboard() ui.Node {
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if !viewingCurrent {
 		nwSub = uistate.T("dashboard.netWorthAsOfToday")
-	} else if prev, _ := ledger.NetWorthSeries(scopedAccounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
-		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
-			// A flat 0% reads as "nothing moved" rather than "income == spending";
-			// say so plainly with the absolute delta instead of a misleading "▲ 0%"
-			// (G1 §7).
-			delta := money.New(net.Amount-prev[0].Amount, net.Currency)
-			switch {
-			case d < 0:
-				nwTone, nwSub = "text-down", fmt.Sprintf("▼ %d%% (%s) this month", -d, fmtMoney(delta))
-			case d > 0:
-				nwTone, nwSub = "text-up", fmt.Sprintf("▲ %d%% (+%s) this month", d, fmtMoney(delta))
-			case delta.Amount != 0:
-				nwTone, nwSub = "text-dim", fmt.Sprintf("%s this month", fmtMoney(delta))
-			default:
-				nwTone, nwSub = "text-dim", "No change this month"
-			}
-		}
+	} else if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
+		// One seam, one window, one wording for every "this month" net-worth
+		// figure in the app (C341) — the hero, /accounts, /networth and /reports
+		// used to compute this four different ways.
+		nwSub, nwTone = nwChangeSub(mtd)
 	}
 	// A missing FX rate excludes accounts from the total (L4) — say so on the tile,
 	// rather than letting net worth silently collapse.

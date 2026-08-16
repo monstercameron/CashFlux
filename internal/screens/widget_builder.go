@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -676,24 +677,11 @@ func vbStringSurface() map[string]string {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	accounts, txns := app.Accounts(), app.Transactions()
-	net, _, _, err := ledger.NetWorth(accounts, txns, rates)
-	if err != nil {
-		return out
-	}
-	sub := "No change this month"
-	if prev, _ := ledger.NetWorthSeries(accounts, txns, []time.Time{dateutil.MonthStart(time.Now())}, rates); len(prev) == 1 {
-		if d, ok := ledger.PercentChange(net.Amount, prev[0].Amount); ok {
-			delta := money.New(net.Amount-prev[0].Amount, net.Currency)
-			switch {
-			case d < 0:
-				sub = fmt.Sprintf("▼ %d%% (%s) this month", -d, fmtMoney(delta))
-			case d > 0:
-				sub = fmt.Sprintf("▲ %d%% (+%s) this month", d, fmtMoney(delta))
-			case delta.Amount != 0:
-				sub = fmt.Sprintf("%s this month", fmtMoney(delta))
-			}
-		}
-	}
+	// The hero widget's sub-line goes through the same seam and the same
+	// sentence as every other net-worth delta in the app (C341) — a widget the
+	// user drops on the dashboard must not disagree with the dashboard.
+	mtd, _ := nwchange.MonthToDateChange(accounts, txns, rates, time.Now())
+	sub, _ := nwChangeSub(mtd)
 	out["net_worth_sub"] = sub
 	return out
 }

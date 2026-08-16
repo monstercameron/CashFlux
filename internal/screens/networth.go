@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -96,11 +97,13 @@ func NetWorthPanel(p NetWorthPanelProps) ui.Node {
 		nwValueLabels[i] = fmtMoney(money.New(m.Amount, base))
 	}
 
-	// Net-worth change: signed delta over the most recent monthly step.
-	var nwChange int64
-	if n := len(nwSeries); n >= 2 {
-		nwChange = nwSeries[n-1].Amount - nwSeries[n-2].Amount
-	}
+	// Net-worth change: the ONE canonical month-to-date delta (C341). This stat
+	// used to print the step between the two most recent month boundaries — i.e.
+	// the whole of LAST month — under a "Change this period" label, so it
+	// disagreed with the dashboard hero and /accounts by everything that had
+	// happened since the 1st. Same window, same seam, same words as they use.
+	nwMTD, _ := nwchange.MonthToDateChange(accounts, txns, rates, time.Now())
+	nwChange := money.New(nwMTD.DeltaMinor(), base)
 
 	// nwAbsI64 is a pure helper used only in this panel's composition-bar pairs.
 	nwAbsI64 := func(v int64) int64 {
@@ -150,7 +153,7 @@ func NetWorthPanel(p NetWorthPanelProps) ui.Node {
 				stat(uistate.T("accounts.assets"), fmtMoney(nwAssets), "pos"),
 				stat(uistate.T("dashboard.liabilities"), fmtMoney(nwLiab), "neg"),
 				stat(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), accentFor(nwNet)),
-				If(len(nwSeries) >= 2, stat(uistate.T("reports.netWorthChange"), fmtMoney(money.New(nwChange, base)), accentFor(money.New(nwChange, base)))),
+				If(nwMTD.Known, stat(uistate.T("nw.changeMonthLabel"), fmtMoney(nwChange), accentFor(nwChange))),
 			),
 			// R52: assets-vs-liabilities composition bar (visual balance-sheet split).
 			nwCompBar,

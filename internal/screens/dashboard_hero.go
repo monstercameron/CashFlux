@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -95,7 +96,7 @@ func dashboardHero() ui.Node {
 	var spark []float64
 	var delta, deltaTone string
 	if sparkReady {
-		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates, nw.Net.Currency)
+		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates)
 	}
 	// Paged to another period, the "▲ $X this month" chip would sit beside the
 	// selected month's income/spending as if it belonged to that month — net
@@ -130,7 +131,7 @@ func dashboardHero() ui.Node {
 // sparkline) and the month-over-start delta (for the chip). Returns an empty
 // series and delta on any computation error so the hero renders cleanly without
 // them.
-func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base string) (spark []float64, delta, deltaTone string) {
+func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) (spark []float64, delta, deltaTone string) {
 	const months = 6
 	now := time.Now()
 	cur := dateutil.MonthStart(now)
@@ -147,17 +148,15 @@ func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rat
 	for i, m := range series {
 		spark[i] = float64(m.Amount)
 	}
-	// Delta = change since the start of the current month (the last two points).
-	d := series[len(series)-1].Amount - series[len(series)-2].Amount
-	arrow, tone := "▲", "text-up"
-	mag := d
-	switch {
-	case d < 0:
-		arrow, tone, mag = "▼", "text-down", -d
-	case d == 0:
-		arrow, tone = "■", "text-dim"
+	// The chip's delta is the app's one month-to-date net-worth change (C341),
+	// not a subtraction of the last two sparkline points: those cutoffs exist to
+	// draw a shape, and reading a headline figure off them is how this chip came
+	// to disagree with the assets KPI sitting two inches away on the same hero.
+	mtd, err := nwchange.MonthToDateChange(accounts, txns, rates, now)
+	if err != nil || !mtd.Known {
+		return spark, "", ""
 	}
-	delta = arrow + " " + fmtMoney(money.New(mag, base)) + " " + uistate.T("home.thisMonth")
+	delta, tone := nwChangeSub(mtd)
 	return spark, delta, tone
 }
 

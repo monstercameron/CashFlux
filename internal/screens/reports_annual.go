@@ -1740,7 +1740,10 @@ func Reports() ui.Node {
 		if nwChange < 0 {
 			arrow, nwTone = "▼", "down"
 		}
-		nwSub = arrow + " " + fmtMinor(absMinor(nwChange))
+		// Stamp the window: this delta spans the whole report period, not "this
+		// month" — an unlabelled arrow beside net worth reads as month-to-date
+		// and disagrees with every surface that means it (C341/C343).
+		nwSub = arrow + " " + fmtMinor(absMinor(nwChange)) + " " + uistate.T("rpta.overYear")
 	}
 	sumTrends := Div(css.Class("rpta-sum-trends"), Attr("data-testid", "rpta-sum-trends"),
 		trendItem(uistate.T("dashboard.income"), fmtMinor(flow.Income), "", "", sumIncSeries),
