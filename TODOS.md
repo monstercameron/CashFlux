@@ -8318,64 +8318,52 @@ design pass and an end-to-end test rather than a collection of isolated label ch
 
 ---
 
-## C545 — budget notes cannot be saved (found 2026-08-16) ★
+## C613 — budget notes could not be saved (found 2026-08-16, fixed 2026-08-16) ★
 
-- [ ] **C545 [BLOCKER][BUDGET] A note typed into the budget notes editor is silently discarded.** ★
-  Open a budget's ⋯ → Notes, type, Save. The editor closes with no error and the note never appears
-  — not on the card, not after navigating away and back, not after a reload. It is not in the stored
-  dataset either, so nothing is written at all.
+*(Filed as "C545" on 2026-08-16; renumbered to C613 because C545 was already the AI-proxy
+reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID for a day.)*
 
-  **What has been ruled out**, so the next person does not repeat it:
-  - *Not the store.* `TestBudgetNotesRoundTrip` (added with this ticket) proves `Budget.Notes`
-    survives export/import, the SQLite snapshot, and a `PutBudget` → `ListBudgets` round trip.
-  - *Not the row rendering.* `budgets_row.go` renders `notesNode` under `If(hasSide, …
-    If(hasNotes, …))` and both flags derive directly from `s.Budget.Notes`.
-  - *Not a missing match in the save loop.* The handler now reports when it matches no budget
-    (`budgets.notesSaveFailed`) and that error never fires, so the loop matches and `PutBudget`
-    returns nil — it is being handed an EMPTY string.
-  - *Not the shared input helper.* Substituting a raw `Textarea(css.Class("field"), Value(...),
-    OnInput(...))` for `uiw.TextAreaInput` reproduces it exactly.
-  - *Not the handler's argument shape.* Both `func(v string)` and `func(e ui.Event)` with
-    `e.GetValue()` behave identically.
-  - *Not machine-speed typing.* Reproduced at 40–60 ms per character, i.e. human speed. (A plain
-    `<input>` on the same page DOES round-trip state at that speed — the add-budget name field
-    drives its live "will create …" hint correctly.)
+- [x] **C613 [DONE 2026-08-16 — two faults either side of a save path that was correct all along] [BLOCKER][BUDGET] A note typed into the budget notes editor appeared to be discarded.** ★
+  Open a budget's ⋯ → Notes, type, Save. The editor closed with no error and the note never
+  appeared.
 
-  **The live clue.** Typing `PROBE NOTE alpha` left `PROBE NOTE alpa` in the field — a character was
-  dropped mid-word. That means state IS updating and a re-render raced the keystroke, so the value
-  reaches Go at least sometimes, yet the value read at save time is empty. The most likely remaining
-  explanation is that the notes editor's component instance at save time is not the one the
-  keystrokes updated — a remount between typing and submitting would give exactly this: a live
-  field, a clobbered character, and an empty read.
+  **Resolution — the save path was never broken.** `saveNotes` ran, `notesS` held the typed text,
+  `PutBudget` returned nil, and reading `app.Budgets()` back immediately after the write showed the
+  note present in the store. Two separate faults sat on either side of that write and together
+  produced one symptom.
 
-  AC: a typed note appears on the card immediately and survives a reload. Cover it with the existing
-  `budgets.spec.mjs` "notes modal" test, which currently fails on precisely this.
+  1. *The typed value was corrupted on the way in.* `uiw.TextAreaInput` passed its value BOTH as the
+     element's value option and again as a child, so the renderer wrote the text into the textarea
+     twice; each keystroke re-rendered the node and rewrote its content under the cursor. That is the
+     dropped character in `PROBE NOTE alpa`, and in the worst case the field held a single character.
+     Fixed by passing the value once, with each input constructor binding its own handler instead of
+     inheriting one from the shared field arguments.
+  2. *The saved value was invisible on the way out.* The note's text preview is rendered only in the
+     FULL-CARD layout. In compact density the row showed no trace of a saved note, so the panel
+     closed with nothing changed on screen — indistinguishable from a failed write, and exactly how
+     it was reported. The compact row now carries a note marker beside the budget's name, the note as
+     its tooltip, the editor one click away.
 
-  **Second pass, 2026-08-16 — the diagnosis is now sharp, and it is not what the first pass said.**
-  The value was never the problem. `saveNotes` DOES NOT RUN AT ALL. Proved by making it set an error
-  unconditionally as its first statement: the error never appeared, and the panel still closed. A
-  hard-coded `bb.Notes = "SENTINEL-CONST"` also produced nothing, which rules the state out entirely.
+  **Two earlier conclusions in this ticket were WRONG. Recorded because the mistakes are the
+  reusable part:**
+  - *"`saveNotes` DOES NOT RUN AT ALL", proved by setting an error unconditionally as its first
+    statement.* The error line renders INSIDE the same component, so a component that fails to
+    re-render swallows its own evidence. **A probe whose readout shares fate with the thing under
+    test proves nothing.** Re-running it as a global toast — observable regardless of that
+    component — showed the handler running normally every time.
+  - *"The edit path is missing `uistate.RequestPersist()` exactly as the notes path was."* Tested
+    directly: rename a budget, reload immediately, and the new name is still there. The autosave
+    already covers it. There was no second bug.
 
-  Everything ruled out with evidence:
-  - *Not a native form submit.* A sentinel on `window` survives the click and no `framenavigated`
-    fires, so the page is not reloading.
-  - *Not the form markup.* At runtime there is exactly ONE `<form class="acct-edit-form
-    budget-notes-form">`, not nested inside another, with `<button type="submit">` inside it.
-  - *Not the missing component-wrapper indirection.* `BudgetAddForm` wraps its implementation in a
-    second `ui.CreateElement` and `BudgetEditForm` does not; adding the same wrapper changed nothing.
-  - *Not the textarea binding.* Fixed separately and verified (see below), but the note still does
-    not save.
-  - *Not pre-existing damage from this session.* The pre-session build (`c0aba6bc`) fails identically.
+  Also corrected along the way: `--text-muted` does not exist as a token (it is `--muted`), and the
+  first placement of the marker — in the compact row's action cell — overflowed that fixed-width
+  grid column, clipping the status chip to "On trac", and sat beside the drill's receipt icon as a
+  near-identical lined document. The name cell has flexible width and already hosts the rollover
+  badge, so the marker reads as something the budget HAS rather than a third thing to do.
 
-  **The sharpest clue, and where to start next.** `saveEdit` — declared in the SAME component, the
-  same `ui.UseEvent(Prevent(...))` shape, on a `Form(OnSubmit(...))` with a `type="submit"` button —
-  DOES run: renaming a budget updates the card immediately. So handlers in this component fire in
-  `edit` mode and not in `notes` mode. The two differ only in which early-return branch renders. That
-  points at handler registration being tied to the branch taken, not at anything in the notes code.
-
-  Related and separate: renaming a budget updates the card but is NOT written to the dataset — the
-  edit path is missing `uistate.RequestPersist()` exactly as the notes path was. Worth fixing
-  regardless of this ticket.
+  AC met: a typed note appears on the row immediately and survives a reload. `budgets.spec.mjs`
+  "notes modal" now asserts the tooltip in compact density (the text preview only ever held in card
+  density, which is why the old assertion failed) and adds a reload case, which nothing covered.
 
 - [x] **C599 [DONE 2026-08-16 — a signed amount was compared against a median of magnitudes] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
   One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a
