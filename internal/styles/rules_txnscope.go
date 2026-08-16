@@ -212,6 +212,12 @@ func registerTxnScope() {
 	rule(".bento-ledger .txn-table th.td-cat, .bento-ledger .txn-table td.td-cat",
 		width("136px"),
 	)
+	// 136px holds at every width, and that is a measured choice rather than a guess.
+	// Narrowing the category to 112px below 1400px was tried, to give the
+	// description its 40% back: at 1280px it moved five clipped descriptions off the
+	// board and put NINE clipped category names on. Same ink, worse total, and the
+	// column that lost was the one carrying a word plus a mark in a fixed cell.
+	// Description at 36% clips sooner than it did; category clips almost never.
 	// The category cell becomes "name + optional mark". The name truncates; the mark
 	// never does, because a clipped provenance signal is worse than none — it would
 	// read as part of the category.
