@@ -33,6 +33,23 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Fixed
+- **A split transaction is no longer credited to a rule for a category it doesn't show.** Its
+  category cell lists the split lines' categories, while the stored single category is whatever it
+  held before it was split — so a row reading "Dining, Travel" could carry an "auto" mark naming a
+  Groceries rule. A split has no one classification to vouch for, so it carries no mark.
+- **"Recategorize them too?" confirms the rows it files.** It set the category on every matching
+  transaction without recording that a person had decided, so the rows the user had just filed by
+  hand kept telling them a machine did it.
+- **Turning on the Status column doesn't cost returning users their layout.** Status arrives in
+  place of Source, and for anyone with a saved column layout the swap is now applied once rather
+  than adding a column on top of the one it replaces — which would have crushed the description
+  column the ledger's width budget protects.
+- **The "back to what you were doing" crumb is forgotten once you leave.** It was hidden off-route
+  but not cleared, so returning to that page later resurrected a shortcut to a task finished long
+  before.
+- **The Add button's second half looks like a chooser.** It was rendering the app's generic "⋯"
+  more-actions glyph, indistinguishable from every row kebab; it is a chevron, which is what a split
+  button's caret has to be for anyone to find the named kinds behind it.
 - **Filing a transaction by hand stops it reading as automatic.** Picking a category in the edit
   dialog never recorded that a person had made the decision, so the row kept its "auto" mark and
   went on saying a machine chose it — the correction journey ended with the ledger contradicting the

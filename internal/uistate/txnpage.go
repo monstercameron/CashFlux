@@ -109,7 +109,35 @@ func loadTxnCols() TxnCols {
 		return DefaultTxnCols()
 	}
 	c := DefaultTxnCols()
-	_ = json.Unmarshal([]byte(raw), &c)
+	if err := json.Unmarshal([]byte(raw), &c); err != nil {
+		return DefaultTxnCols()
+	}
+	return migrateStatusColumn(c, raw)
+}
+
+// migrateStatusColumn applies the Status-for-Source swap ONCE to a layout saved
+// before the Status column existed.
+//
+// Without it the swap is an ADDITION for every returning user, which is the
+// opposite of what it is. Unmarshalling onto the defaults restores the saved
+// `"source": true` (anyone who ever opened Columns has it on disk) while leaving
+// Status at its new default of on — so both arrive, in a table whose width budget
+// was sized as a strict swap with every pixel accounted for. The result would be
+// the Description-column crush that the uxbatch6 pass existed to fix, delivered
+// silently to the majority of returning users.
+//
+// The absence of a "status" key is the marker: only a pre-Status save can lack it,
+// because PersistTxnCols always writes the full struct. A user who deliberately
+// turns Source back on afterwards has a "status" key in their save and is never
+// touched again.
+func migrateStatusColumn(c TxnCols, raw string) TxnCols {
+	var probe struct {
+		Status *bool `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(raw), &probe); err == nil && probe.Status == nil {
+		c.Status = true
+		c.Source = false
+	}
 	return c
 }
 

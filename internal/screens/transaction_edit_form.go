@@ -470,6 +470,14 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		n := 0
 		for _, c := range simState.Get() {
 			t := c.Txn
+			// C579: pressing "Recategorize them" IS the person deciding, for every row
+			// it touches — so each one is confirmed, exactly as a single hand-edit is.
+			// Without this the rows the user just filed by hand keep their "auto" mark
+			// and go on crediting a rule, which is the contradiction ConfirmsCategory
+			// exists to prevent, reproduced one code path over.
+			if txnprov.ConfirmsCategory(t, domain.Transaction{CategoryID: target.CategoryID}) {
+				t.Reviewed = true
+			}
 			t.CategoryID = target.CategoryID
 			if err := app.PutTransaction(t); err != nil {
 				uistate.PostNotice(err.Error(), true)
@@ -653,8 +661,25 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 						uistate.T("transactions.originalStatement", raw))
 				}(),
 			)),
+		// C561: a TEXT field with inputmode=decimal, NOT type=number with min=0.
+		//
+		// This input silently defeated C547. The Save button is a submit button bound
+		// to this form (`FormID: "txn-edit-form"`), so the browser runs constraint
+		// validation before submitting — and a typed "-32" is out of range for
+		// min="0". Submission was blocked, `OnSubmit` never fired, and the app's save
+		// handler never ran: no error banner, no toast, no change, nothing to see.
+		// The form appeared to accept the edit and silently discard it, which is
+		// worse than the rejection C547 removed.
+		//
+		// The magnitude rule now lives in amountmath.ParseSigned, which understands a
+		// sign; expressing it as an HTML range constraint contradicted that and could
+		// only fail silently. type=number was wrong for a second reason too: browsers
+		// report value === "" for a partially-typed number (a lone "-"), so the
+		// keystroke never reaches the Go state. Quick-add already used text +
+		// inputmode=decimal, which is exactly why C546 worked there and C547 did not
+		// work here.
 		labeledField(uistate.T("transactions.amountPlaceholder"),
-			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
 				Attr("data-testid", "txn-edit-amount"),
 				Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
 		// Direction sits beside the amount because together they ARE the amount.

@@ -61,6 +61,11 @@ type OverflowMenuProps struct {
 	// TriggerClass overrides the trigger button's class (default "btn"). Pass e.g.
 	// "btn btn-tool" so the overflow trigger matches a labeled toolbar's buttons.
 	TriggerClass string
+	// TriggerIcon overrides the ⋯ glyph. The default says "more actions", which is
+	// wrong for a menu that is not a grab-bag: a split button's second half means
+	// "choose a variant of the action next to me" and has to look like a chevron, or
+	// it reads as one more generic kebab and nobody finds the variants (C573).
+	TriggerIcon icon.Name
 }
 
 // OverflowMenu renders the standard CashFlux "⋯" overflow pattern: a trigger
@@ -114,6 +119,10 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 	if trigClass == "" {
 		trigClass = "btn"
 	}
+	trigIcon := props.TriggerIcon
+	if trigIcon == "" {
+		trigIcon = icon.MoreH
+	}
 	triggerArgs := []any{
 		css.Class(trigClass),
 		Type("button"),
@@ -122,7 +131,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		Attr("aria-haspopup", "menu"),
 		Attr("aria-expanded", expanded),
 		OnClick(toggleOpen),
-		Icon(icon.MoreH, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
+		Icon(trigIcon, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 	}
 	// Labeled variant: append the visible text after the glyph (glyph + label), so the
 	// overflow reads as "⋯ More" rather than a bare, ambiguous dots button.

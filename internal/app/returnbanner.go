@@ -49,6 +49,20 @@ func ReturnBanner(props returnBannerProps) uic.Node {
 	}))
 	dismiss := uic.UseEvent(Prevent(func() { crumbAtom.Set(uistate.ReturnTo{}) }))
 
+	// Hiding the crumb off-route is not enough — it has to be FORGOTTEN. Hiding
+	// alone leaves the trip recorded, so: Transactions → Rules (crumb) → Budgets
+	// (hidden) → Rules again for some unrelated reason, and a crumb offering to
+	// return to a correction the user finished or abandoned an hour ago reappears.
+	// Once they are on neither end of the trip, the trip is over. Cleared in an
+	// effect, keyed on the route, because writing state during render re-enters it.
+	uic.UseEffect(func() func() {
+		c := crumbAtom.Get()
+		if c.From != "" && props.ActivePath != c.To && props.ActivePath != c.From {
+			crumbAtom.Set(uistate.ReturnTo{})
+		}
+		return nil
+	}, "return-crumb-scope:"+props.ActivePath)
+
 	// Quiet unless there is a trip to return from AND we are on the page it was for.
 	// If the user is back at the origin the crumb has served its purpose; if they are
 	// somewhere else entirely the side trip is over and a crumb pointing at it would

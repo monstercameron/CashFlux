@@ -73,18 +73,39 @@ func rulePhrase(r rules.Rule) string {
 	return ""
 }
 
-// txnAutoByID classifies every transaction in the current view against the
-// current rules, once per render rather than once per row-render.
+// provenance memo: the classification depends only on the ledger and the rule set,
+// which move together with the data revision — so it is recomputed when the
+// revision moves, not on every sort / select / pagination re-render of the table.
 //
-// Rows re-render on selection, sort and pagination; classification depends only
-// on the data, so doing it per row would re-run the rule engine for every one of
-// those. The map is keyed by transaction id and read O(1) while building a row.
-func txnAutoByID(txns []domain.Transaction, rs []rules.Rule) map[string]txnprov.Provenance {
+// The cache is not an optimisation to be added later. Classifying one row runs the
+// rule engine over the whole rule set, and each rule's legacy match calls
+// payeeclean.Suggest, which is several regex passes. Unmemoized, ticking ONE row's
+// checkbox re-ran that for every visible row — and "All" renders 3,000+ of them.
+// merchantChargeCountsMemo solves the identical problem two files over; this
+// follows it rather than inventing a second answer.
+var (
+	provCache map[string]txnprov.Provenance
+	provRev   = -1
+	provLen   = -1
+)
+
+// txnAutoByID returns the rows whose category is automatic and unconfirmed, keyed
+// by transaction id and read O(1) while building a row.
+//
+// The scoped view is part of the key, not just the revision: filtering changes
+// which rows are classified without touching the data, so the row count is
+// checked too. It is a cheap guard against the common case (a filter narrows the
+// set); an exact-set key would cost more to build than the scan it saves.
+func txnAutoByID(txns []domain.Transaction, rs []rules.Rule, dataRev int) map[string]txnprov.Provenance {
+	if dataRev == provRev && len(txns) == provLen && provCache != nil {
+		return provCache
+	}
 	out := make(map[string]txnprov.Provenance, len(txns))
 	for _, t := range txns {
 		if p := txnprov.Of(t, rs); p.IsAutomatic() {
 			out[t.ID] = p
 		}
 	}
+	provCache, provRev, provLen = out, dataRev, len(txns)
 	return out
 }

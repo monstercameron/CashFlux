@@ -981,7 +981,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			Div(css.Class("btn-split"),
 				toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 				uiw.OverflowMenu(uiw.OverflowMenuProps{
-					TriggerLabel:  uistate.T("transactions.addKindLabel"),
+					TriggerLabel: uistate.T("transactions.addKindLabel"),
+					// A chevron, not the app's ⋯. The default glyph means "more
+					// actions" and is what every row kebab and the toolbar's "More"
+					// wear — with it, this reads as one more generic overflow rather
+					// than "the button beside me has named variants", and nobody finds
+					// the kinds, which is the entire point of C573.
+					TriggerIcon:   icon.ChevronDown,
 					TriggerTestID: "txn-add-kind-btn",
 					TriggerClass:  "btn btn-primary btn-split-caret",
 					Items: []uiw.OverflowMenuItem{

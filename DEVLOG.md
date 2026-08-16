@@ -219,6 +219,48 @@ expect literal `FROM golang:1.26-alpine AS build`, an alpine `adduser` line and 
 while `Dockerfile.server` deliberately uses `--platform=$BUILDPLATFORM` and a distroless nonroot
 runtime. The tests are stale against an intentional change, not a regression.
 
+## 2026-08-16 — Seven things the second adversarial pass found
+
+Ran an adversarial reviewer over the whole C573–C583 body of work. Seven substantiated defects,
+several of them the same mistake I had just fixed elsewhere, which is the useful pattern in them.
+
+**Splits were classified through a category the row does not show.** `txnprov.Of` judged on
+`CategoryID`, but a split transaction's `CategoryID` is the stale single category it carried BEFORE
+it was split, while the row's category cell renders the split lines' names. So a row reading
+"Dining, Travel" could wear an "auto" mark whose tooltip credited a Groceries rule — naming a rule
+for a category that appears nowhere on the row. A split has no single classification to vouch for,
+so it is now `None`, like a transfer leg.
+
+**"Recategorize them too?" filed rows without confirming them.** `applySimilar` set `CategoryID` on
+every candidate and never `Reviewed` — the exact bug `ConfirmsCategory` was written to fix, in a
+sibling function in the same file, one screen away. Pressing that button IS the person deciding, for
+every row it touches.
+
+**The provenance scan had no memo.** `txnAutoByID` re-ran the rule engine over every visible row on
+every render — including ticking one checkbox — and each row's classification runs
+`payeeclean.Suggest` (several regex passes) once per rule. `merchantChargeCountsMemo` solves the
+identical problem two files over; I wrote a second answer instead of following it.
+
+**The Status/Source "swap" was an addition for returning users.** `loadTxnCols` unmarshals the saved
+JSON onto the defaults, so a layout saved before Status existed restores `source:true` from disk and
+keeps `status:true` from the new default — both on, in a table whose width budget was sized as a
+strict swap. That is not an edge case; it is everyone who ever opened the Columns menu. The absence
+of a `"status"` key is the marker for a pre-Status save, so the swap is applied once, there.
+
+**The count line reintroduced the trap the crumb had just taught me.** `txnCountLine` returned a
+bare `Fragment()` for an empty ledger — and a ledger that starts empty and gains its first row is
+precisely the append-to-the-end sequence I had fixed in `ReturnBanner` in the previous commit, with
+a comment explaining why. Same trap, same commit set, one component over.
+
+**The crumb was hidden off-route but never forgotten**, so Transactions → Rules → Budgets → Rules
+resurrected a breadcrumb for a task finished an hour earlier — contradicting the comment I had
+written directly above it.
+
+**And the "caret" was the app's ⋯ glyph.** `OverflowMenu` hardcodes `icon.MoreH` and had no
+override, so the control I described in a commit message as "a caret holding the three creation
+kinds" rendered as an unlabelled kebab, visually identical to every other overflow trigger in the
+app. It says "more actions"; it needed to say "the button beside me has variants".
+
 ## 2026-08-16 — The journey test earned its keep in the first run
 
 C583 asked for the correction loop to be validated as a product journey rather than as a set of

@@ -41,7 +41,16 @@ func txnCountLine(props txnCountLineProps) ui.Node {
 	case props.Total == 0:
 		// The empty state below already explains an empty ledger, and a count line
 		// reading "0 of 0" over it is noise on the emptiest possible screen.
-		return Fragment()
+		//
+		// A hidden PLACEHOLDER, not an empty Fragment: the reconciler has no element
+		// anchor for a fiber whose previous output was empty, so a component that
+		// starts empty and fills in later is appended to the end of its container.
+		// A brand-new ledger starts at zero and gains its first row minutes later —
+		// exactly the sequence that would strand this line at the bottom of the
+		// toolbar tile. (The return crumb hit this for real; this is the same trap
+		// one component over.)
+		return Span(css.Class("txn-countline-slot"), Attr("aria-hidden", "true"),
+			Style(map[string]string{"display": "none"}))
 	case props.Shown == 0:
 		text = uistate.T("transactions.noMatch")
 	case props.Shown < props.Total:

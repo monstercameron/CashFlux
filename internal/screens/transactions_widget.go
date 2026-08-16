@@ -650,7 +650,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// C579: which rows carry a category no person has confirmed, and which rule (if
 	// any) accounts for it. Classified once for the whole view — rows re-render on
 	// selection, sort and pagination, and none of those change the answer.
-	autoProv := txnAutoByID(props.Shown, props.App.Rules())
+	autoProv := txnAutoByID(props.Shown, props.App.Rules(), txnDataRev)
 	// The trend chips are a secondary affordance, so mount them just AFTER the table has
 	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
 	// route-settle so the ledger paints as fast as before, then the chips fade in.

@@ -45,6 +45,26 @@ func TestTransferLegIsNotAttributed(t *testing.T) {
 	}
 }
 
+// A split row shows its SPLIT LINES' categories, while CategoryID still holds the
+// single category it carried before the split. Judging the row by that field puts
+// a mark — and a rule name — on a category that appears nowhere on the row.
+func TestSplitRowIsNotAttributedThroughItsStaleTopCategory(t *testing.T) {
+	split := txn(func(x *domain.Transaction) {
+		x.CategoryID = "c-dining" // stale: what it was before the split
+		x.Splits = []domain.CategorySplit{
+			{CategoryID: "c-groceries", Amount: money.Money{Amount: -400, Currency: "USD"}},
+			{CategoryID: "c-travel", Amount: money.Money{Amount: -275, Currency: "USD"}},
+		}
+	})
+	got := txnprov.Of(split, []rules.Rule{diningRule})
+	if got.Level != txnprov.None {
+		t.Errorf("Level = %v, want None for a split row", got.Level)
+	}
+	if got.RuleMatch != nil {
+		t.Errorf("named rule %v for a split row — that rule describes a category the row does not show", got.RuleMatch)
+	}
+}
+
 // Confirming is the act that transfers ownership of the decision from the machine
 // to the person. A rule that happens to agree must not pull it back.
 func TestReviewedOutranksAMatchingRule(t *testing.T) {
