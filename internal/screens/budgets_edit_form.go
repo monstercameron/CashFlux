@@ -111,11 +111,26 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			if s.Budget.Limit.Amount <= 0 {
 				continue // nothing to give
 			}
+			// C606: what this source can actually give, computed from the SAME
+			// model the card shows — the effective limit (rollover carry and
+			// boosts folded in), what is left after spending, and the part of that
+			// already claimed by this period's recurring charges. The list used to
+			// offer the whole limit under the word "available", which is the plan's
+			// size, not money.
+			bs, be := budgeting.PeriodRangeAnchored(s.Budget.Period, cv.Anchor, pr.WeekStartWeekday(), coverPayAnchor)
+			committed := budgeting.Committed(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be).Committed
+			funds := budgeting.SourceFundsOf(s.Budget.Limit, s.Remaining, committed)
+			if !funds.CanGive() {
+				continue // an overspent or exhausted budget has nothing to offer
+			}
 			coverSrcs = append(coverSrcs, budgetCoverSource{
-				ID:          s.Budget.ID,
-				Label:       budgetTitle(s.Budget.Name, cv.CatName[s.Budget.CategoryID]),
-				RemainMinor: s.Remaining.Amount,
-				LimitMinor:  s.Budget.Limit.Amount,
+				ID:             s.Budget.ID,
+				Label:          budgetTitle(s.Budget.Name, cv.CatName[s.Budget.CategoryID]),
+				RemainMinor:    s.Remaining.Amount,
+				LimitMinor:     s.Budget.Limit.Amount,
+				MovableMinor:   funds.Movable.Amount,
+				CommittedMinor: funds.Committed.Amount,
+				FreeMinor:      funds.Free.Amount,
 			})
 		}
 	}
@@ -288,7 +303,14 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			effWeights, _ = resolveCoverWeights(app, buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor), coverSrcs, coverSelS.Get(), coverWtS.Get(), wtFormulaS.Get())
 		}
 		if amt > 0 {
-			shares := splitCoverAmount(amt, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
+			shares, shortMinor := splitCoverAmountShort(amt, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
+			// C606: the chosen sources cannot fund the amount. Refuse and say by how
+			// much, rather than moving what fits and leaving the user to discover the
+			// difference on the cards.
+			if shortMinor > 0 {
+				errS.Set(uistate.T("budgets.coverShortBy", fmtMoney(money.New(shortMinor, cur))))
+				return
+			}
 			// Pre-validate so a partial failure can't leave a half-applied cover: each
 			// source must keep a positive limit after giving its share.
 			for _, sc := range coverSrcs {
@@ -475,13 +497,6 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				errS.Set(err.Error())
 				return
 			}
-			readback := "MISSING"
-			for _, rb := range app.Budgets() {
-				if rb.ID == props.BudgetID {
-					readback = "[" + rb.Notes + "]"
-				}
-			}
-			uistate.PostNotice("DIAGRB"+readback, false)
 			saved = true
 			break
 		}
@@ -530,7 +545,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					weights[sc.ID] = 1
 				}
 			}
-			shares := splitCoverAmount(amt, coverSrcs, sel, weights, map[string]bool{})
+			shares, shortMinor := splitCoverAmountShort(amt, coverSrcs, sel, weights, map[string]bool{})
+			// C606: refuse a top-up the chosen sources cannot fund. The this-period
+			// path had NO guard at all — it applied a negative period boost per
+			// source, so an over-large share silently pushed a source's effective cap
+			// below what it had already spent and left it overspent.
+			if shortMinor > 0 {
+				errS.Set(uistate.T("budgets.coverShortBy", fmtMoney(money.New(shortMinor, cur))))
+				return
+			}
 			// A permanent move must leave each source with a positive base limit.
 			if permanent {
 				for _, sc := range coverSrcs {
@@ -681,12 +704,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			shareStr, over := "", false
 			if sh, ok := shares[sc.ID]; ok && sh > 0 {
 				shareStr = fmtMoney(money.New(sh, cur))
-				over = sh >= sc.LimitMinor // a share this source can't fully give
+				// C606: "over" means the share exceeds what this source can
+				// actually give — not what its LIMIT is. Comparing against the limit
+				// meant a source could be asked for everything it had left and be
+				// reported as fine.
+				over = sh > coverMaxGive(sc)
 			}
 			return ui.CreateElement(coverSourceRow, coverSourceRowProps{
-				ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.RemainMinor, cur)),
+				ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.MovableMinor, cur)),
 				Selected: selNow[sc.ID], Weight: effWeights[sc.ID], ShareStr: shareStr,
-				Over: over, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)), Max: coverMaxS.Get()[sc.ID],
+				Over: over, AvailStr: fmtMoney(money.New(sc.MovableMinor, cur)), Max: coverMaxS.Get()[sc.ID],
+				CommittedStr: committedCaveat(sc, cur), AfterStr: sourceAfterGiving(sc, shares[sc.ID], cur),
 				WeightLocked: wtFxS.Get(), OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
 			})
 		}
@@ -791,6 +819,14 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if topupCoverOpenS.Get() {
 			coverToggleLabel = uistate.T("budgets.topupCoverHide")
 		}
+		// C606: the split the top-up WOULD take from each source, so every row can
+		// show what it would be left with before anything is written. The same
+		// splitCoverAmount the submit uses, so the preview cannot promise a
+		// different number than the write performs.
+		var topupShares map[string]int64
+		if amt, perr := money.ParseMinor(strings.TrimSpace(topupAmt.Get()), dec); perr == nil && amt > 0 {
+			topupShares = splitCoverAmount(amt, coverSrcs, selNow, nil, nil)
+		}
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
@@ -820,8 +856,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Div(css.Class("cover-sources"),
 							MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
 								return ui.CreateElement(budgetTopupSourceRow, budgetTopupSourceRowProps{
-									ID: sc.ID, Label: sc.Label, AvailStr: fmtMoney(money.New(sc.LimitMinor, cur)),
-									Selected: selNow[sc.ID], OnToggle: onToggleSrc,
+									// C606: the movable amount, not the limit — the figure
+									// this list showed was the size of the source's plan.
+									ID: sc.ID, Label: sc.Label, AvailStr: fmtMoney(money.New(sc.MovableMinor, cur)),
+									CommittedStr: committedCaveat(sc, cur),
+									AfterStr:     sourceAfterGiving(sc, topupShares[sc.ID], cur),
+									Selected:     selNow[sc.ID], OnToggle: onToggleSrc,
 								})
 							})),
 						If(selCount > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cover-split"),
@@ -969,8 +1009,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 // budget in the top-up "cover from other budgets" checklist.
 type budgetTopupSourceRowProps struct {
 	ID, Label, AvailStr string
-	Selected            bool
-	OnToggle            func(string) // plain func — never an On* hook (no-On*-in-loop rule)
+	// CommittedStr / AfterStr carry the same two facts as the cover list (C606):
+	// how much of the movable money is already claimed by this period's recurring
+	// charges, and what the source would have left once its share is taken.
+	CommittedStr, AfterStr string
+	Selected               bool
+	OnToggle               func(string) // plain func — never an On* hook (no-On*-in-loop rule)
 }
 
 // budgetTopupSourceRow is one checkbox row in the top-up funding list. Its own component
@@ -981,7 +1025,13 @@ func budgetTopupSourceRow(props budgetTopupSourceRowProps) ui.Node {
 		Input(append([]any{Type("checkbox"), Attr("data-testid", "topup-src-"+props.ID), OnChange(toggle)}, checkedAttr(props.Selected)...)...),
 		Div(css.Class("row-main"),
 			Span(props.Label),
-			Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.topupSrcAvail", props.AvailStr)),
+			// C606: the amount that can actually be moved, not the budget's limit.
+			Span(css.Class("row-meta", tw.TextDim), Attr("data-testid", "topup-src-avail-"+props.ID),
+				uistate.T("budgets.topupSrcAvail", props.AvailStr)),
+			If(props.CommittedStr != "", Span(css.Class("row-meta", "cover-src-committed"),
+				Attr("data-testid", "topup-src-committed-"+props.ID), props.CommittedStr)),
+			If(props.AfterStr != "", Span(css.Class("row-meta", "cover-src-after"),
+				Attr("data-testid", "topup-src-after-"+props.ID), props.AfterStr)),
 		),
 	)
 }
@@ -1056,126 +1106,107 @@ type budgetCoverSource struct {
 	Label       string
 	RemainMinor int64
 	LimitMinor  int64
+	// C606: the three honest figures, resolved by budgeting.SourceFundsOf from
+	// the same model the budget's card shows. MovableMinor is what can actually
+	// be transferred; CommittedMinor is the part of that already claimed by this
+	// period's recurring charges; FreeMinor is what is left with no consequence.
+	// The list used to display LimitMinor under the word "available" — the size
+	// of the plan, most of which had already been spent.
+	MovableMinor   int64
+	CommittedMinor int64
+	FreeMinor      int64
 }
 
-// coverMaxGive is the most a source can contribute — its remaining room, capped one
-// cent below its limit so the cover leaves it a positive limit.
-func coverMaxGive(sc budgetCoverSource) int64 {
-	g := sc.RemainMinor
-	if capMax := sc.LimitMinor - 1; g > capMax {
-		g = capMax
+// coverMaxGive is the most a source can contribute: what budgeting.SourceFundsOf
+// resolved as movable — its remaining room, capped one cent below its limit so
+// the cover leaves it a positive one.
+func coverMaxGive(sc budgetCoverSource) int64 { return sc.MovableMinor }
+
+// committedCaveat names the part of a source's movable money that this period's
+// recurring charges have already claimed (C606), or "" when nothing is.
+//
+// It is a caveat rather than a cap: the money IS movable and the user may have a
+// good reason. What must not happen is moving it without being told, which is
+// what "$59.16 available" said when only $20.16 was actually free.
+func committedCaveat(sc budgetCoverSource, cur string) string {
+	if sc.CommittedMinor <= 0 {
+		return ""
 	}
-	if g < 0 {
-		g = 0
-	}
-	return g
+	return uistate.T("budgets.coverCommittedNote",
+		fmtMoney(money.New(sc.CommittedMinor, cur)), fmtMoney(money.New(sc.FreeMinor, cur)))
 }
 
-// splitCoverAmount divides totalMinor across the checked sources. Sources in `maxed`
-// are pinned to their full remaining (coverMaxGive) and the rest of the amount is
-// split among the remaining (non-maxed) checked sources by weight — so checking "use
-// all remaining" on one source back-fills the ratios of the others. When the pinned
-// sources already meet or exceed the amount, they're scaled down to sum exactly to it
-// and the non-maxed sources get nothing. Any rounding remainder lands on the last
-// recipient so the shares sum exactly to totalMinor. Returns nil when nothing is
-// selected or the total ≤ 0.
+// sourceAfterGiving is what a source would have left once its share is taken —
+// the post-move balance the funding list never showed.
+func sourceAfterGiving(sc budgetCoverSource, shareMinor int64, cur string) string {
+	if shareMinor <= 0 {
+		return ""
+	}
+	left := sc.MovableMinor - shareMinor
+	if left < 0 {
+		left = 0
+	}
+	return uistate.T("budgets.coverAfterNote", fmtMoney(money.New(left, cur)))
+}
+
+// splitCoverAmount divides totalMinor across the checked sources, never asking
+// any of them for more than it can actually give (C606).
+//
+// The arithmetic — capping, redistributing what a capped source could not take,
+// and reporting a shortfall — lives in budgeting.CoverSplit, where it is
+// table-driven-tested. This is the adapter: it turns the checked rows into that
+// input and drops the shortfall, which callers surface separately.
+//
+// Sources in `maxed` are pinned to their full movable amount and give it first,
+// so checking "use all it has" on one source back-fills the others.
 func splitCoverAmount(totalMinor int64, srcs []budgetCoverSource, sel map[string]bool, weights map[string]int, maxed map[string]bool) map[string]int64 {
+	shares, _ := splitCoverAmountShort(totalMinor, srcs, sel, weights, maxed)
+	return shares
+}
+
+// splitCoverAmountShort is splitCoverAmount plus the amount the selected sources
+// could NOT fund, so a caller can refuse rather than quietly move less than was
+// asked for.
+func splitCoverAmountShort(totalMinor int64, srcs []budgetCoverSource, sel map[string]bool, weights map[string]int, maxed map[string]bool) (map[string]int64, int64) {
 	if totalMinor <= 0 {
-		return nil
+		return nil, 0
 	}
-	byID := map[string]budgetCoverSource{}
-	var maxedIDs, freeIDs []string
+	var in []budgeting.CoverSplitInput
 	for _, sc := range srcs {
 		if !sel[sc.ID] {
 			continue
 		}
-		byID[sc.ID] = sc
-		if maxed[sc.ID] {
-			maxedIDs = append(maxedIDs, sc.ID)
-		} else {
-			freeIDs = append(freeIDs, sc.ID)
-		}
+		in = append(in, budgeting.CoverSplitInput{
+			ID: sc.ID, Cap: coverMaxGive(sc), Weight: weights[sc.ID], Pinned: maxed[sc.ID],
+		})
 	}
-	if len(maxedIDs)+len(freeIDs) == 0 {
-		return nil
+	if len(in) == 0 {
+		return nil, totalMinor
 	}
-	out := make(map[string]int64, len(maxedIDs)+len(freeIDs))
-
-	// Pinned "use all remaining" sources give their full remaining.
-	var pinned int64
-	for _, id := range maxedIDs {
-		g := coverMaxGive(byID[id])
-		out[id] = g
-		pinned += g
-	}
-
-	// Pinned sources already cover the amount → scale them to sum exactly to it.
-	if pinned >= totalMinor {
-		var assigned int64
-		for i, id := range maxedIDs {
-			var share int64
-			if i == len(maxedIDs)-1 {
-				share = totalMinor - assigned
-			} else if pinned > 0 {
-				share = totalMinor * out[id] / pinned
-			}
-			assigned += share
-			out[id] = share
-		}
-		for _, id := range freeIDs {
-			out[id] = 0
-		}
-		return out
-	}
-
-	// Split the remainder across the non-maxed sources by weight.
-	rest := totalMinor - pinned
-	totalWeight := 0
-	for _, id := range freeIDs {
-		w := weights[id]
-		if w <= 0 {
-			w = 1
-		}
-		totalWeight += w
-	}
-	if len(freeIDs) == 0 || totalWeight == 0 {
-		// Nowhere to put the remainder — hand it to a pinned source (best effort).
-		if len(maxedIDs) > 0 {
-			out[maxedIDs[len(maxedIDs)-1]] += rest
-		}
-		return out
-	}
-	var assigned int64
-	for i, id := range freeIDs {
-		w := weights[id]
-		if w <= 0 {
-			w = 1
-		}
-		var share int64
-		if i == len(freeIDs)-1 {
-			share = rest - assigned
-		} else {
-			share = rest * int64(w) / int64(totalWeight)
-		}
-		assigned += share
-		out[id] = share
-	}
-	return out
+	return budgeting.CoverSplit(totalMinor, in)
 }
 
 // coverSourceRowProps drives one row of the cover editor's source list. On* handlers
 // live here (not in the parent's map loop) per the framework's no-hooks-in-loops rule.
 type coverSourceRowProps struct {
-	ID           string
-	Label        string
-	RemainStr    string
-	Selected     bool
-	Weight       int
-	ShareStr     string // formatted amount this source contributes (when selected)
-	Over         bool   // this source's share exceeds what it can give
-	AvailStr     string // formatted amount this source can give (its limit)
-	Max          bool   // "use all remaining" — pin this source to its full remaining
-	WeightLocked bool   // ratio is driven by a formula → the number input is read-only
+	ID        string
+	Label     string
+	RemainStr string
+	Selected  bool
+	Weight    int
+	ShareStr  string // formatted amount this source contributes (when selected)
+	Over      bool   // this source's share exceeds what it can give
+	AvailStr  string // formatted amount this source can actually give (C606)
+	// CommittedStr names the part of the movable money this period's recurring
+	// charges have already claimed, e.g. "$39.00 of that is already committed".
+	// Empty when nothing is committed. Moving it is allowed — it is the user's
+	// money — but doing it unknowingly is how a bill stops fitting (C606).
+	CommittedStr string
+	// AfterStr is what would be left in this source once its share is taken, so
+	// the consequence is on screen before the move, not after it.
+	AfterStr     string
+	Max          bool // "use all remaining" — pin this source to its full remaining
+	WeightLocked bool // ratio is driven by a formula → the number input is read-only
 	OnToggle     func(string)
 	OnWeight     func(string, int)
 	OnToggleMax  func(string)
@@ -1213,8 +1244,13 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 		Label(css.Class("cover-src-main"),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "cover-src-"+props.ID), OnChange(onToggle)}, checkedAttr(props.Selected)...)...),
 			Span(css.Class("cover-src-name"), props.Label),
-			Span(css.Class("cover-src-remain"), props.RemainStr+" left"),
+			// C606: the figure is what can actually be MOVED, not the budget's
+			// limit — and it says so, because "left" beside a limit was the lie.
+			Span(css.Class("cover-src-remain"), Attr("data-testid", "cover-src-avail-"+props.ID),
+				uistate.T("budgets.coverMovable", props.RemainStr)),
 		),
+		If(props.CommittedStr != "", Span(css.Class("cover-src-committed"),
+			Attr("data-testid", "cover-src-committed-"+props.ID), props.CommittedStr)),
 		If(props.Selected, Div(css.Class("cover-src-ratio"),
 			Span(css.Class("cover-src-ratio-label"), uistate.T("budgets.coverRatio")),
 			Input(weightAttrs...),
@@ -1225,6 +1261,9 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 			Div(css.Class("cover-src-shares"),
 				Span(ClassStr(shareCls), If(props.Over, Span(css.Class("cover-src-warn"), "⚠ ")), props.ShareStr),
 				If(props.Over, Span(css.Class("cover-src-avail"), uistate.T("budgets.coverOnlyAvail", props.AvailStr))),
+				// The post-move balance: the consequence, before the move (C606).
+				If(!props.Over && props.AfterStr != "", Span(css.Class("cover-src-after"),
+					Attr("data-testid", "cover-src-after-"+props.ID), props.AfterStr)),
 			),
 		)),
 	)

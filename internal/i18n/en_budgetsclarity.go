@@ -33,6 +33,17 @@ var budgetsClarityKeys = Catalog{
 	"transactions.budgetDrillChipSubTags": "From the %s budget, including its sub-categories and tagged charges",
 	"transactions.budgetDrillChipRemove":  "Show all transactions again",
 
+	// --- C606: funding a cover or top-up shows what can really be moved ---
+	// The lists used to print a source's whole LIMIT under "available" — the size
+	// of its plan, most of which was already spent. %s = the movable amount.
+	"budgets.coverMovable": "%s can move",
+	// %s = the committed amount, %s = what is genuinely free after it.
+	"budgets.coverCommittedNote": "%s of that is already committed this period — %s is free",
+	// %s = what the source would have left once its share is taken.
+	"budgets.coverAfterNote": "→ %s left after this",
+	// %s = the amount the chosen sources fall short by.
+	"budgets.coverShortBy": "The budgets you picked are %s short of that. Choose more sources, or lower the amount.",
+
 	// --- C593: Auto budget shows its financial impact and can be edited in bulk ---
 	// %s = a count phrase like "6 categories".
 	"budgets.autoGroupNew":      "New budgets · %s",

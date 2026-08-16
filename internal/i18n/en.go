@@ -643,7 +643,7 @@ var english = Catalog{
 	"budgets.topupCoverHide":         "Fund it from other budgets",
 	"budgets.topupCoverHint":         "Checked budgets split the amount evenly. Without a source, the raise comes from unassigned income.",
 	"budgets.topupCoverSplit":        "Splitting evenly across %s.",
-	"budgets.topupSrcAvail":          "%s available",
+	"budgets.topupSrcAvail":          "%s can move", // C606: what it can GIVE, not its limit
 	"budgets.toppedUpMonthToast":     "Added %s to this month's budget.",
 	"budgets.tmplBannerTitle":        "Start from a template",
 	"budgets.tmplBannerHint":         "Generate a 50/30/20 set from last month's income.",
@@ -730,7 +730,7 @@ var english = Catalog{
 	"budgets.coverAddMore":           "Add another source",
 	"budgets.coverEntityLabel":       "Coverage rules",
 	"budgets.coverCustomHint":        "Extra details on this standing cover (define fields under Custom fields → Coverage rules).",
-	"budgets.coverOnlyAvail":         "only %s available",
+	"budgets.coverOnlyAvail":         "only %s can move from here", // C606
 	"budgets.coverRecurring":         "Repeat this cover automatically every period",
 	"budgets.recurringBadge":         "↻ Recurring cover",
 	"budgets.coveredBadge":           "✓ Covered this period",
@@ -1966,10 +1966,14 @@ var english = Catalog{
 	"settings.refresh":              "Refresh",
 
 	// Transactions screen
-	"transactions.transfer":            "Transfer",
-	"transactions.noExport":            "No transactions match to export.",
-	"transactions.chooseAccount":       "Choose an account.",
-	"transactions.positiveAmount":      "Enter an amount greater than zero — use Direction to switch between money in and money out.",
+	"transactions.transfer":       "Transfer",
+	"transactions.noExport":       "No transactions match to export.",
+	"transactions.chooseAccount":  "Choose an account.",
+	"transactions.positiveAmount": "Enter an amount greater than zero — use Direction to switch between money in and money out.",
+	// C561: the amount field is text (so a typed minus can mean "money out"),
+	// which means junk now reaches the validator instead of being swallowed by
+	// type="number". Say which of the two problems it actually is.
+	"transactions.amountNotANumber":    "That isn't an amount. Enter a number like 12.34 — a leading minus means money out.",
 	"transactions.splitAmountMismatch": "This transaction is split into categories — update the split below so the parts add up to the new amount.",
 	"transactions.invalidDate":         "Enter a valid date (YYYY-MM-DD).",
 	"transactions.diffDestination":     "Choose a different destination account.",

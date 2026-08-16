@@ -834,8 +834,8 @@ func registerBudgetsSurface() {
 		borderRadius("var(--radius-lg)"),
 		background("var(--bg-card)"),
 	)
-	// The name cell: title + optional rollover badge sharing one grid cell; the
-	// title ellipsizes first, the badge never wraps.
+	// The name cell: title + optional note marker + optional rollover badge sharing
+	// one grid cell; the title ellipsizes first, the markers never wrap or shrink.
 	rule(".budget-crow-head",
 		display("flex"),
 		alignItems("center"),
@@ -913,6 +913,22 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C606: the funding list's two extra facts ---
+	// A caveat and a consequence, both quiet: the headline is still what can be
+	// moved, and these explain it rather than competing with it.
+	rule(".cover-src-committed",
+		display("block"),
+		fontSize("var(--type-12)"),
+		color("var(--warn)"),
+		lineHeight("1.35"),
+	)
+	rule(".cover-src-after",
+		display("block"),
+		fontSize("var(--type-12)"),
+		color("var(--text-faint)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+
 	// --- C593: Auto budget's impact strip, bulk controls and group headings ---
 	// The impact sits ABOVE the list, not in the footer beside Save: the question
 	// it answers ("can I afford this?") is the one being asked while the sliders
@@ -1130,6 +1146,22 @@ func registerBudgetsSurface() {
 		padding("0.25rem"),
 		lineHeight("1"),
 	)
+	// C545: the compact row's note marker, inline after the budget name. It is a
+	// marker first and a control second, so it carries no button chrome — muted,
+	// borderless, sized to the text it follows — and comes forward on hover/focus.
+	rule(".budget-crow-notes",
+		display("inline-flex"),
+		alignItems("center"),
+		flexShrink("0"),
+		padding("0"),
+		border("0"),
+		background("none"),
+		lineHeight("1"),
+		cursor("pointer"),
+		color("var(--muted)"),
+	)
+	rule(".budget-crow-notes:hover", color("var(--text)"))
+	rule(".budget-crow-notes:focus-visible", color("var(--text)"))
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
 	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
 	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu
