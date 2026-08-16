@@ -180,6 +180,17 @@ and every commit updates this file under `Unreleased`.
   slider.
 - **"11 categorys".** The count phrasing used everywhere took a bare "+s". Pluralisation moved into
   `internal/textutil` where it is tested: consonant + y → -ies, sibilants take -es.
+- **Funding a top-up or cover offers what can actually be moved (C606).** The source list printed a
+  budget's whole LIMIT under the word "available" — Groceries offered `$354.85` while its own card
+  said `$76.56 left`. The limit is the size of a plan, most of which has already been spent, so the
+  number on screen and the number the app would move were different and only the smaller one was
+  true. Every source now shows its movable amount (the same rollover/spent/boost model the card
+  uses), names the part already committed to this period's recurring charges, and shows what it would
+  be left with once its share is taken. Underneath, the weighted split had no ceiling at all: a
+  source could be assigned more than it had, and the this-period path — which had no guard — silently
+  pushed its effective cap below what it had already spent. `budgeting.CoverSplit` caps every share,
+  redistributes what a capped source cannot take, and reports a shortfall the form refuses on rather
+  than quietly moving less than was asked for.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —
