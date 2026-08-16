@@ -237,6 +237,9 @@ type aiUpstream struct {
 	path  string
 	body  []byte
 	parse func([]byte) (AICompletion, error)
+	// stream is true when the body asked for a server-sent-event response, so the
+	// reply is read incrementally rather than whole.
+	stream bool
 }
 
 // parseChatUpstream reads a /chat/completions reply, refusing an answer that is
@@ -317,7 +320,48 @@ func (s *AIService) ensureEnabled() error {
 	return nil
 }
 
+// ChatStream runs a chat request with streaming turned on, handing each fragment
+// of the answer to onDelta as it arrives and returning the whole completion at the
+// end. A household on the shared key sees the answer being written exactly as one
+// on a direct key does — the parity that C551 started.
+func (s *AIService) ChatStream(ctx context.Context, req AIChatRequest, onDelta func(string)) (AICompletion, error) {
+	if err := s.ensureEnabled(); err != nil {
+		return AICompletion{}, err
+	}
+	req.Model = strings.TrimSpace(req.Model)
+	if err := s.validateModel(req.Model); err != nil {
+		return AICompletion{}, err
+	}
+	if err := validateAIChatRequest(req); err != nil {
+		return AICompletion{}, err
+	}
+	up, err := s.buildChatUpstream(req)
+	if err != nil {
+		return AICompletion{}, err
+	}
+	// Only the Responses path streams. The chat-completions path is used for
+	// ordinary models and for vision, where the reply is one object; streaming it
+	// would add a second parser for no gain.
+	if up.path != "/responses" {
+		return s.complete(ctx, up)
+	}
+	body, err := ai.BuildStreamingResponsesToolRequest(req.Model, req.Messages, req.Temperature, req.ReasoningEffort, req.Tools, s.maxOutputTokens)
+	if err != nil {
+		return AICompletion{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
+	}
+	up.body, up.stream = body, true
+	return s.completeStreaming(ctx, up, onDelta)
+}
+
 func (s *AIService) complete(ctx context.Context, up aiUpstream) (AICompletion, error) {
+	return s.completeStreaming(ctx, up, nil)
+}
+
+// completeStreaming runs one upstream call. onDelta is nil for a whole-answer
+// request; when it is set and the request asked for a stream, each text fragment
+// is forwarded as it arrives and the authoritative completion still comes from the
+// stream's completed event.
+func (s *AIService) completeStreaming(ctx context.Context, up aiUpstream, onDelta func(string)) (AICompletion, error) {
 	body := up.body
 	if s == nil || s.store == nil {
 		return AICompletion{}, status.Error(codes.FailedPrecondition, "ai service store is not configured")
@@ -384,6 +428,20 @@ func (s *AIService) complete(ctx context.Context, up aiUpstream) (AICompletion, 
 		return AICompletion{}, status.Errorf(codes.Unavailable, "openai request failed: %v", err)
 	}
 	defer resp.Body.Close()
+	if up.stream && resp.StatusCode < 400 {
+		s.recordAIUpstreamSuccess()
+		completion, streamErr := readAIStream(resp.Body, onDelta)
+		next, err := s.store.AddUsage(user.ID, day, 0, int64(completion.Usage.TotalTokens))
+		if err != nil {
+			return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
+		}
+		s.auditAIUsageAlerts(ctx, day, previous, next)
+		s.metrics.ObserveAIProxy(int64(completion.Usage.TotalTokens))
+		if streamErr != nil {
+			return AICompletion{}, status.Error(codes.Internal, streamErr.Error())
+		}
+		return completion, nil
+	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
 		release()
@@ -664,4 +722,58 @@ func openAICode(httpStatus int) codes.Code {
 		}
 		return codes.Unknown
 	}
+}
+
+// aiStreamReadLimit bounds how much of a streamed reply is read, mirroring the
+// whole-answer path's limit. A stream is still untrusted input from a third party.
+const aiStreamReadLimit = 8 << 20
+
+// readAIStream consumes a server-sent-event body, forwarding each text fragment to
+// onDelta and returning the completion built from the stream's completed event.
+//
+// The completion comes from the completed event rather than from the concatenated
+// fragments on purpose: the fragments are the answer's text and nothing else, while
+// the completed event carries the tool calls, the token counts and the finish
+// reason. Reassembling those from deltas would be a second, subtly different parser
+// for the same reply.
+func readAIStream(body io.Reader, onDelta func(string)) (AICompletion, error) {
+	var (
+		dec       ai.StreamDecoder
+		final     []byte
+		streamErr string
+	)
+	buf := make([]byte, 8<<10)
+	limited := io.LimitReader(body, aiStreamReadLimit)
+	for {
+		n, err := limited.Read(buf)
+		if n > 0 {
+			for _, ev := range dec.Feed(buf[:n]) {
+				switch {
+				case ev.Err != "":
+					streamErr = ev.Err
+				case ev.IsFinal():
+					final = append([]byte(nil), ev.Response...)
+				case ev.IsDelta():
+					if onDelta != nil {
+						onDelta(ev.TextDelta)
+					}
+				}
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return AICompletion{}, fmt.Errorf("server ai: read stream: %w", err)
+		}
+	}
+	if streamErr != "" {
+		return AICompletion{}, errors.New(streamErr)
+	}
+	if len(final) == 0 {
+		// The visible text may look finished while the tool calls and token counts
+		// never arrived. Acting on that half-state is worse than saying so.
+		return AICompletion{}, errors.New("The answer stopped part-way through. Try asking again.")
+	}
+	return parseResponsesUpstream(final)
 }

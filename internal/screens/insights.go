@@ -260,6 +260,9 @@ func Insights() ui.Node {
 	pendingApproval := ui.UseState((*approvalReq)(nil))
 	// The rail's conversation search (G2-C7). Empty means "show them all".
 	convSearch := ui.UseState("")
+	// The answer currently being written, fragment by fragment (G2-C7). Empty
+	// between turns.
+	streaming := ui.UseState("")
 
 	// C390: picking a model sticks to THIS conversation as well as to the household
 	// default, so returning to a long analytical thread does not quietly continue it
@@ -360,15 +363,16 @@ func Insights() ui.Node {
 	// sendTools dispatches one model turn. Both paths advertise the same tools: the
 	// direct key goes straight to OpenAI, the shared server key goes through the
 	// backend proxy, and neither is the weaker assistant (C551).
-	sendTools := func(messages []ai.Message, tools []ai.Tool, onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
+	sendTools := func(messages []ai.Message, tools []ai.Tool, onDelta func(string), onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
 		if useBackendAI {
-			return ai.SendProxyChatTools(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp, chatEffort, tools, onResult, onErr)
+			return ai.SendProxyChatToolsStreaming(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
 		}
 		// Route the tool loop through the Responses API: it's the only endpoint that
 		// accepts reasoning.effort together with function tools for the reasoning models
 		// (gpt-5.x / o-series), so the thinking level actually works instead of being
-		// rejected by /chat/completions.
-		return ai.SendResponsesChatTools(key, aiBaseURL, model, messages, chatTemp, chatEffort, tools, onResult, onErr)
+		// rejected by /chat/completions. Streaming rides the same endpoint, so both
+		// paths show the answer being written (G2-C7).
+		return ai.SendResponsesChatToolsStreaming(key, aiBaseURL, model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
@@ -423,7 +427,13 @@ func Insights() ui.Node {
 		go func() {
 			for step := 0; step < 6; step++ {
 				ch := make(chan agentStep, 1)
+				// Each fragment lands in the live-answer atom, which the thread
+				// renders as a growing bubble. It is cleared when the turn resolves,
+				// at which point the real turn takes over — one answer on screen at
+				// any moment, never a draft sitting beside its finished self.
+				streaming.Set("")
 				fc := sendTools(msgs, specs,
+					func(delta string) { streaming.Set(streaming.Get() + delta) },
 					func(m ai.Message, u ai.Usage) { ch <- agentStep{msg: m, usage: u} },
 					func(e string) { ch <- agentStep{err: e} })
 				cancelFn.Set(func() { fc(); closeDone() })
@@ -433,10 +443,12 @@ func Insights() ui.Node {
 				case r = <-ch:
 				case <-done:
 					loading.Set(false)
+					streaming.Set("")
 					return
 				}
 				if r.err != "" {
 					loading.Set(false)
+					streaming.Set("")
 					errMsg.Set(r.err)
 					return
 				}
@@ -446,6 +458,7 @@ func Insights() ui.Node {
 
 				if !ai.WantsTools(r.msg) {
 					loading.Set(false)
+					streaming.Set("")
 					// C516: a completion can come back BILLED but with no content —
 					// a reasoning-only turn, a length cap hit before any visible
 					// text, or a filtered response. The turn was then created with
@@ -495,6 +508,7 @@ func Insights() ui.Node {
 							case <-done:
 								pendingApproval.Set(nil)
 								loading.Set(false)
+								streaming.Set("")
 								return
 							}
 							pendingApproval.Set(nil)
@@ -519,6 +533,7 @@ func Insights() ui.Node {
 				}
 			}
 			loading.Set(false)
+			streaming.Set("")
 			errMsg.Set(uistate.T("insights.tooManySteps"))
 		}()
 	}
@@ -1216,12 +1231,18 @@ func Insights() ui.Node {
 					Sources: t.Sources, Feedback: t.Feedback, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnFeedback: rateTurn})
 			},
 		),
-		If(loading.Get(), Div(css.Class(tw.Flex, tw.JustifyStart),
+		// While a turn is in flight the thread shows either the answer being
+		// written or, before the first fragment lands, the thinking line. They are
+		// mutually exclusive: showing both would put a spinner above text that has
+		// visibly started arriving.
+		If(loading.Get() && strings.TrimSpace(streaming.Get()) == "", Div(css.Class(tw.Flex, tw.JustifyStart),
 			Div(css.Class("chat-row-agent"),
 				Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
 				Div(css.Class("insights-thinking chat-thinking", tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
 			),
 		)),
+		If(loading.Get() && strings.TrimSpace(streaming.Get()) != "",
+			ui.CreateElement(StreamingBubble, streamingBubbleProps{Text: streaming.Get()})),
 	)
 
 	// Composer: always show the Ask input (so the starter chips have a visible box to
@@ -2177,6 +2198,32 @@ func UserBubble(p userBubbleProps) ui.Node {
 				uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4)))),
 			If(p.OnRetry != nil, Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.retry")), Attr("aria-label", uistate.T("insights.retry")), OnClick(retryEvt), uiw.Icon(icon.Refresh, css.Class(tw.W4, tw.H4)))),
 			Button(ClassStr(actBtn), Type("button"), Title(uistate.T("insights.deleteMsg")), Attr("aria-label", uistate.T("insights.deleteMsg")), OnClick(del), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+		),
+	)
+}
+
+type streamingBubbleProps struct{ Text string }
+
+// StreamingBubble renders the answer as it is being written (G2-C7).
+//
+// It shows PLAIN TEXT, not rendered Markdown, and that is deliberate. A partial
+// Markdown document is frequently invalid — a half-written table, an unclosed code
+// fence, a heading whose line has not ended — and re-rendering it on every fragment
+// makes the answer visibly thrash between layouts as it arrives. Plain text grows
+// steadily and is replaced by the properly rendered answer the moment the turn
+// completes. It is aria-live=polite so a screen reader hears the finished answer
+// once, rather than being interrupted by every fragment.
+func StreamingBubble(p streamingBubbleProps) ui.Node {
+	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, p.Text)
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart),
+		Div(css.Class("chat-row-agent"),
+			Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
+			Div(css.Class("insights-answer asst-streaming", tw.Text14),
+				Attr("data-testid", "assistant-streaming"),
+				Attr("aria-live", "polite"), Attr("aria-busy", "true"),
+				p.Text,
+				Span(css.Class("asst-caret"), Attr("aria-hidden", "true")),
+			),
 		),
 	)
 }

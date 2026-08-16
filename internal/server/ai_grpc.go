@@ -141,15 +141,37 @@ func (s *AIService) ChatStreamRPC(req backendrpc.ChatRequest, stream grpc.Server
 			s.metrics.ObserveStreamDuration(backendrpc.MethodAIChatStream, statusCode, time.Since(start))
 		}
 	}()
-	completion, err := s.ChatRPC(stream.Context(), req)
+	// Each fragment goes out as its own chunk, so the browser paints the answer as
+	// it is written instead of waiting for the whole thing. A send failure means the
+	// client has gone; sendErr stops the forwarding rather than letting the upstream
+	// read run on to fill a connection nobody is holding.
+	var sendErr error
+	completion, err := s.ChatStream(stream.Context(), AIChatRequest{
+		Model:           req.Model,
+		Messages:        aiMessages(req.Messages),
+		Temperature:     req.Temperature,
+		Tools:           aiTools(req.Tools),
+		ReasoningEffort: req.ReasoningEffort,
+	}, func(delta string) {
+		if sendErr != nil || delta == "" {
+			return
+		}
+		sendErr = stream.SendMsg(&backendrpc.CompletionChunk{Content: delta})
+	})
 	if err != nil {
 		statusCode = status.Code(err).String()
 		return err
 	}
+	if sendErr != nil {
+		statusCode = status.Code(sendErr).String()
+		return sendErr
+	}
+	// The final chunk carries the accounting and the tool calls, and repeats no
+	// text: the deltas already delivered it, and sending it twice would double the
+	// answer on screen.
 	if err := stream.SendMsg(&backendrpc.CompletionChunk{
-		Content:      completion.Content,
-		Usage:        completion.Usage,
-		ToolCalls:    completion.ToolCalls,
+		Usage:        rpcUsage(completion.Usage),
+		ToolCalls:    rpcToolCalls(completion.ToolCalls),
 		FinishReason: completion.FinishReason,
 		Done:         true,
 	}); err != nil {

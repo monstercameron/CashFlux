@@ -796,6 +796,34 @@ func registerAssistantSurface() {
 	registerConfidenceChip()
 	registerTabJob()
 	registerChatPolish()
+	registerStreaming()
+}
+
+// registerStreaming styles the answer as it is being written (G2-C7). It matches
+// the finished answer's type and width exactly, so the swap from streaming text to
+// rendered Markdown does not shift the layout under the reader's eye. The caret is
+// the only added ornament, and it stops blinking under reduced-motion — a blinking
+// element is one of the few things that reliably triggers discomfort.
+func registerStreaming() {
+	rule(".asst-streaming",
+		prop("white-space", "pre-wrap"),
+		prop("overflow-wrap", "anywhere"),
+		prop("line-height", "1.6"),
+	)
+	rule(".asst-caret",
+		prop("display", "inline-block"),
+		prop("width", "0.45rem"),
+		prop("height", "1em"),
+		prop("margin-left", "0.15rem"),
+		prop("vertical-align", "text-bottom"),
+		prop("background", "var(--accent)"),
+		prop("opacity", "0.7"),
+		prop("animation", "cf-caret 1s steps(2, start) infinite"),
+	)
+	keyframes("cf-caret", Frame{Offset: "50%", Decls: []decl{prop("opacity", "0")}})
+	ruleMedia("(prefers-reduced-motion: reduce)", ".asst-caret",
+		prop("animation", "none"),
+	)
 }
 
 // registerChatPolish styles the conversation-management controls (G2-C7): the

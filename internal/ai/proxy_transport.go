@@ -28,13 +28,20 @@ func SendProxyChat(endpoint, token, model string, messages []Message, temperatur
 // gets the same tool-using assistant as one on a direct key, instead of a quietly
 // weaker one that could only answer from whatever context was injected.
 func SendProxyChatTools(endpoint, token, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onResult func(Message, Usage), onError func(string)) func() {
-	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIChatStream, backendrpc.ChatRequest{
+	return SendProxyChatToolsStreaming(endpoint, token, model, messages, temperature, reasoningEffort, tools, nil, onResult, onError)
+}
+
+// SendProxyChatToolsStreaming is SendProxyChatTools with the answer surfaced as it
+// arrives: onDelta receives each fragment the server forwards. onDelta may be nil
+// for a caller that only wants the finished answer.
+func SendProxyChatToolsStreaming(endpoint, token, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onDelta func(string), onResult func(Message, Usage), onError func(string)) func() {
+	return invokeProxyCompletionStreamDelta(endpoint, token, backendrpc.MethodAIChatStream, backendrpc.ChatRequest{
 		Model:           model,
 		Messages:        rpcMessages(messages),
 		Temperature:     temperature,
 		Tools:           rpcTools(tools),
 		ReasoningEffort: reasoningEffort,
-	}, onResult, onError)
+	}, onDelta, onResult, onError)
 }
 
 func SendProxyStructuredVisionChat(endpoint, token, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
@@ -121,6 +128,10 @@ func rpcUsage(usage backendrpc.Usage) Usage {
 }
 
 func invokeProxyCompletionStream(endpoint, token, method string, req any, onResult func(Message, Usage), onError func(string)) func() {
+	return invokeProxyCompletionStreamDelta(endpoint, token, method, req, nil, onResult, onError)
+}
+
+func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, onDelta func(string), onResult func(Message, Usage), onError func(string)) func() {
 	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	token = strings.TrimSpace(token)
 	if endpoint == "" || token == "" {
@@ -185,6 +196,12 @@ func invokeProxyCompletionStream(endpoint, token, method string, req any, onResu
 				return
 			}
 			content.WriteString(chunk.Content)
+			// Each intermediate chunk is a fragment of the answer being written.
+			// The terminal chunk carries the accounting and repeats no text, so
+			// forwarding its (empty) content would be a no-op either way.
+			if onDelta != nil && chunk.Content != "" && !chunk.Done {
+				onDelta(chunk.Content)
+			}
 			if len(chunk.ToolCalls) > 0 {
 				toolCalls = append(toolCalls, chunk.ToolCalls...)
 			}

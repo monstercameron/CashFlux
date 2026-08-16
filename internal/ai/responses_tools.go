@@ -55,6 +55,7 @@ type responsesToolRequest struct {
 	Temperature     float64                 `json:"temperature,omitempty"`
 	Reasoning       *responsesReasoning     `json:"reasoning,omitempty"`
 	MaxOutputTokens int                     `json:"max_output_tokens,omitempty"`
+	Stream          bool                    `json:"stream,omitempty"`
 	Store           bool                    `json:"store"`
 }
 
@@ -115,7 +116,21 @@ func BuildResponsesToolRequest(model string, messages []Message, temperature flo
 // because the Responses API reports hitting it as incomplete rather than as a
 // success with no text, the cap stays explainable when it bites.
 func BuildBudgetedResponsesToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, maxOutputTokens int) ([]byte, error) {
+	return buildResponsesToolRequest(model, messages, temperature, reasoningEffort, tools, maxOutputTokens, false)
+}
+
+// BuildStreamingResponsesToolRequest is the same request with streaming turned on,
+// so the answer arrives as it is written instead of all at once at the end. The
+// completed event still carries the whole response, so the authoritative message
+// and usage come from the same parser either way — the deltas are for the reader,
+// not for the program.
+func BuildStreamingResponsesToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, maxOutputTokens int) ([]byte, error) {
+	return buildResponsesToolRequest(model, messages, temperature, reasoningEffort, tools, maxOutputTokens, true)
+}
+
+func buildResponsesToolRequest(model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, maxOutputTokens int, stream bool) ([]byte, error) {
 	req := responsesToolRequest{
+		Stream:          stream,
 		Model:           model,
 		Input:           messagesToResponsesInput(messages),
 		Tools:           toolsToResponses(tools),

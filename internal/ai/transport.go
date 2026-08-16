@@ -438,3 +438,184 @@ func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte)
 	attempt(0)
 	return cancel
 }
+
+// SendResponsesChatToolsStreaming is SendResponsesChatTools with the answer
+// arriving as it is written (G2-C7). onDelta receives each fragment of text for
+// live display; onResult still receives the authoritative message and usage from
+// the stream's completed event, parsed by the same code the non-streaming path
+// uses — so what the program acts on never comes from reassembled fragments.
+//
+// A stream that ends without a completed event is an error, not an answer: the
+// visible text may look finished while the tool calls, token counts and finish
+// reason never arrived, and acting on that half-state is worse than retrying.
+func SendResponsesChatToolsStreaming(apiKey, baseURL, model string, messages []Message, temperature float64, reasoningEffort string, tools []Tool, onDelta func(string), onResult func(Message, Usage), onError func(string)) func() {
+	body, err := BuildStreamingResponsesToolRequest(model, messages, temperature, reasoningEffort, tools, 0)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	var dec StreamDecoder
+	var final []byte
+	var streamErr string
+	return postResponsesStream(apiKey, baseURL, body,
+		func(chunk []byte) {
+			for _, ev := range dec.Feed(chunk) {
+				switch {
+				case ev.Err != "":
+					streamErr = ev.Err
+				case ev.IsFinal():
+					final = ev.Response
+				case ev.IsDelta():
+					onDelta(ev.TextDelta)
+				}
+			}
+		},
+		func() {
+			if streamErr != "" {
+				onError(streamErr)
+				return
+			}
+			if len(final) == 0 {
+				onError("The answer stopped part-way through. Try asking again.")
+				return
+			}
+			msg, usage, err := ParseResponsesChat(final)
+			if err != nil {
+				onError(err.Error())
+				return
+			}
+			onResult(msg, usage)
+		}, onError)
+}
+
+// postResponsesStream POSTs to /responses and reads the response body as it
+// arrives, handing each decoded chunk of bytes to onChunk and calling onDone when
+// the body ends.
+//
+// It deliberately does NOT retry. The other helpers here retry transient failures,
+// which is right for a request whose result is delivered once at the end — but a
+// stream that fails halfway has already put text on the screen, and silently
+// starting again would either duplicate that text or replace it with a different
+// answer to the same question. A failed stream reports itself and lets the person
+// decide.
+func postResponsesStream(apiKey, baseURL string, body []byte, onChunk func([]byte), onDone func(), onError func(string)) func() {
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	controller := js.Global().Get("AbortController").New()
+	opts := map[string]any{
+		"method": "POST",
+		"headers": map[string]any{
+			"Authorization": "Bearer " + apiKey,
+			"Content-Type":  "application/json",
+			"Accept":        "text/event-stream",
+		},
+		"body":   string(body),
+		"signal": controller.Get("signal"),
+	}
+
+	cancelled := false
+	cancel := func() {
+		if cancelled {
+			return
+		}
+		cancelled = true
+		controller.Call("abort")
+	}
+
+	// Every js.Func allocated below is tracked so a cancelled or failed stream
+	// releases them all — a leaked callback holds its closure (and the whole
+	// conversation it captured) for the life of the page.
+	var funcs []js.Func
+	track := func(f js.Func) js.Func {
+		funcs = append(funcs, f)
+		return f
+	}
+	release := func() {
+		for _, f := range funcs {
+			f.Release()
+		}
+		funcs = nil
+	}
+
+	fail := func(msg string) {
+		release()
+		if !cancelled {
+			onError(msg)
+		}
+	}
+
+	status := 0
+	var reader js.Value
+	var pump func()
+
+	onRead := track(js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if cancelled {
+			release()
+			return nil
+		}
+		res := args[0]
+		if res.Get("done").Bool() {
+			release()
+			if !cancelled {
+				onDone()
+			}
+			return nil
+		}
+		// The chunk is a Uint8Array; copy it into Go memory before it is reused.
+		value := res.Get("value")
+		buf := make([]byte, value.Get("length").Int())
+		js.CopyBytesToGo(buf, value)
+		onChunk(buf)
+		pump()
+		return nil
+	}))
+	onReadErr := track(js.FuncOf(func(js.Value, []js.Value) any {
+		fail("The connection to OpenAI dropped part-way through the answer. Try asking again.")
+		return nil
+	}))
+	pump = func() {
+		if cancelled {
+			release()
+			return
+		}
+		reader.Call("read").Call("then", onRead).Call("catch", onReadErr)
+	}
+
+	// An error response is JSON, not a stream, so it is read whole and explained.
+	onErrText := track(js.FuncOf(func(_ js.Value, args []js.Value) any {
+		fail(ErrorMessage(status, []byte(args[0].String())))
+		return nil
+	}))
+	onResp := track(js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if cancelled {
+			release()
+			return nil
+		}
+		resp := args[0]
+		status = resp.Get("status").Int()
+		if status >= 400 {
+			resp.Call("text").Call("then", onErrText).Call("catch", onReadErr)
+			return nil
+		}
+		bodyStream := resp.Get("body")
+		if !bodyStream.Truthy() {
+			// No readable body means this browser cannot stream; the caller falls
+			// back rather than showing an empty answer.
+			fail(errStreamUnsupported)
+			return nil
+		}
+		reader = bodyStream.Call("getReader")
+		pump()
+		return nil
+	}))
+	onCatch := track(js.FuncOf(func(js.Value, []js.Value) any {
+		fail("Couldn't reach OpenAI. Check your internet connection and try again.")
+		return nil
+	}))
+
+	js.Global().Call("fetch", baseURL+"/responses", opts).
+		Call("then", onResp).
+		Call("catch", onCatch)
+	return cancel
+}

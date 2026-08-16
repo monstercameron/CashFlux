@@ -7,6 +7,27 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The assistant's answers stream (G2-C7).** A long answer used to read as a stall: a spinner, then
+  everything at once. Text now appears as it is written, on BOTH paths — the direct key streams from
+  the Responses API, and the proxy forwards each fragment down the existing gRPC stream, so a
+  household on the shared key sees the same thing rather than a quietly worse version of it.
+
+  Two decisions worth naming. The streaming bubble shows plain text, not rendered Markdown: a
+  partial Markdown document is frequently invalid — a half-written table, an unclosed code fence —
+  and re-rendering it per fragment makes the answer visibly thrash between layouts. It swaps to the
+  properly rendered answer the moment the turn completes, at matching type and width so nothing
+  shifts. And the authoritative message, tool calls and token counts still come from the stream's
+  completed event, parsed by the same code the non-streaming path uses — the fragments are for the
+  reader, never for the program. A stream that ends without that event is an error, not an answer:
+  the visible text may look finished while the accounting never arrived.
+
+  The SSE framing lives in a pure `internal/ai` decoder with fourteen table tests, because events
+  split across network chunks, multi-line payloads, CRLF and the terminator are exactly where a
+  hand-rolled reader goes wrong and exactly what a browser test would not pin down. Streaming
+  deliberately does not retry: a stream that fails halfway has already put text on the screen, and
+  silently starting again would duplicate it or replace it with a different answer to the same
+  question.
+
 - **Conversation management the assistant was missing (G2-C7).** Chats can now be renamed in place
   (clearing the name goes back to the automatic one rather than leaving a chat called nothing),
   searched across titles AND message text together — somebody hunting for "the chat about the car

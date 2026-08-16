@@ -73,3 +73,40 @@ func decodeResponsesRequest(body string) (map[string]any, error) {
 	}
 	return out, nil
 }
+
+// responsesStream renders a server-sent-event body: the text arriving in
+// fragments, then the completed response. This is what the proxy now asks OpenAI
+// for, so a stub that returns one JSON object no longer exercises the real path.
+func responsesStream(fragments []string, inTokens, outTokens int) string {
+	var b strings.Builder
+	for _, f := range fragments {
+		payload, err := json.Marshal(map[string]any{"type": "response.output_text.delta", "delta": f})
+		if err != nil {
+			panic(fmt.Sprintf("responsesStream: %v", err))
+		}
+		b.WriteString("event: response.output_text.delta\n")
+		b.WriteString("data: " + string(payload) + "\n\n")
+	}
+	var full strings.Builder
+	for _, f := range fragments {
+		full.WriteString(f)
+	}
+	done, err := json.Marshal(map[string]any{
+		"type": "response.completed",
+		"response": map[string]any{
+			"status": "completed",
+			"output": []any{map[string]any{
+				"type": "message", "role": "assistant",
+				"content": []any{map[string]any{"type": "output_text", "text": full.String()}},
+			}},
+			"usage": map[string]any{"input_tokens": inTokens, "output_tokens": outTokens},
+		},
+	})
+	if err != nil {
+		panic(fmt.Sprintf("responsesStream: %v", err))
+	}
+	b.WriteString("event: response.completed\n")
+	b.WriteString("data: " + string(done) + "\n\n")
+	b.WriteString("data: [DONE]\n\n")
+	return b.String()
+}

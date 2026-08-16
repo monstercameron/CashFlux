@@ -101,7 +101,8 @@ func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-stream-secret" {
 			t.Fatalf("authorization = %q", got)
 		}
-		_, _ = w.Write([]byte(responsesTextReply("stream says hi", 10, 11)))
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(responsesStream([]string{"stream ", "says ", "hi"}, 10, 11)))
 	}))
 	defer upstream.Close()
 
@@ -141,12 +142,38 @@ func TestAIServiceGRPCBridgeChatStream(t *testing.T) {
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("ChatStream close send: %v", err)
 	}
-	var chunk backendrpc.CompletionChunk
-	if err := stream.RecvMsg(&chunk); err != nil {
-		t.Fatalf("ChatStream recv: %v", err)
+	// The answer arrives in fragments and the last chunk carries the accounting —
+	// that IS the streaming behaviour, so the test reads it as a stream rather than
+	// as one message.
+	var text strings.Builder
+	var last backendrpc.CompletionChunk
+	chunks := 0
+	for {
+		var chunk backendrpc.CompletionChunk
+		if err := stream.RecvMsg(&chunk); err != nil {
+			t.Fatalf("ChatStream recv: %v", err)
+		}
+		chunks++
+		text.WriteString(chunk.Content)
+		if chunk.Done {
+			last = chunk
+			break
+		}
+		if chunks > 10 {
+			t.Fatal("ChatStream never finished")
+		}
 	}
-	if !chunk.Done || chunk.Content != "stream says hi" || chunk.Usage.TotalTokens != 21 {
-		t.Fatalf("ChatStream chunk = %+v", chunk)
+	if chunks < 2 {
+		t.Fatalf("the answer arrived in %d chunk(s) — it was not streamed", chunks)
+	}
+	if text.String() != "stream says hi" {
+		t.Fatalf("streamed text = %q", text.String())
+	}
+	if last.Usage.TotalTokens != 21 {
+		t.Fatalf("final chunk usage = %+v", last.Usage)
+	}
+	if last.Content != "" {
+		t.Fatalf("the final chunk repeated the text, which would double it on screen: %q", last.Content)
 	}
 	var extra backendrpc.CompletionChunk
 	if err := stream.RecvMsg(&extra); err != io.EOF {
