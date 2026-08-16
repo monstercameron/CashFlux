@@ -7,6 +7,24 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The what-if sandbox (AG2).** "What if I moved to an $1,800 flat?" has no good answer from
+  arithmetic alone: the interesting effects are second-order — the budget that stops fitting, the
+  goal whose date slips, the runway that shortens — and they come out of the same engines that
+  compute the real figures. So rather than model a hypothetical, the sandbox COPIES the dataset,
+  applies the change to the copy, and reports the difference.
+
+  Two guarantees make it safe to hand an agent. The copy is a separate app over its own in-memory
+  store, built from the JSON export the backup feature already relies on — there is no shared
+  pointer and no shared store handle, so a sandbox write has no route back to real money. And it is
+  never persisted; acting on a scenario for real goes back through the ordinary changeset review, one
+  approved step at a time. Because a change that cannot escape needs no argument, the sandbox can be
+  generous about what it allows.
+
+  The baseline is frozen when the sandbox is taken, so an ordinary edit made in another tab while
+  somebody explores a scenario does not show up as an effect OF that scenario. And the copy shares
+  the original's clock — without that, every figure counting from "today" drifts on its own and an
+  untouched sandbox reports changes nobody made, which a test caught before this shipped.
+
 - **One entry point for a picture, three existing pipelines (AG12).** CashFlux could already turn an
   image into a transaction, a split, or a document; what it could not do was choose. Asking somebody
   to classify their own photo before they have seen what was read out of it puts the burden on the
