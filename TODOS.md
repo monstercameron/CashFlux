@@ -7022,7 +7022,7 @@ design pass before any code.
 
 ### Already built, just not surfaced
 
-- [ ] **C517 [MINOR][TXN] Filter by income vs spending.**
+- [x] **C517 [MINOR][TXN] Filter by income vs spending.**
   *"transaction filters need to respect sign, allow filtering for income or debits"*
   The model ALREADY has this: `txnfilter.Criteria.Flow` ("in" keeps positive amounts, "out" keeps
   negative), with chip labels (`transactions.chipFlowIn`/`chipFlowOut`) and matching logic already
@@ -7030,7 +7030,7 @@ design pass before any code.
   filter strip. Add one; no new filtering logic is needed. AC: a visible In/Out/Both control that
   sets `Flow`, and the existing chip appears when it is set.
 
-- [ ] **C518 [MINOR][CAT] Sort category lists alphabetically.**
+- [x] **C518 [MINOR][CAT] Sort category lists alphabetically.**
   *"categories must be alpha/numeric sorted in the list"*
   Pickers render `app.Categories()` in STORE order. `budgetCategoryPicker`
   (`internal/screens/budgets_categories.go:264`) has no sort at all; only `budgets_flex.go:383` and
@@ -7039,7 +7039,7 @@ design pass before any code.
   the flat lists are the outliers. Use a natural (alpha-numeric) comparison so "Category 10" sorts
   after "Category 9". AC: every category picker in the app is ordered identically.
 
-- [ ] **C519 [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
+- [~] **C519 [PARTIAL — the picker now says what it withholds and counts it (shipped 2026-08-16); unhiding income categories still waits on C538] [MAJOR][BUDGET] "What this budget tracks" hides most categories.**
   *"What this budget tracks might not show all categories"*
   Confirmed: `budgetCategoryPicker` skips every category whose `Kind != domain.KindExpense`
   (`budgets_categories.go:268`), so income categories never appear and nothing tells the user they
@@ -7053,7 +7053,7 @@ design pass before any code.
 
 ### Correctness and UX
 
-- [ ] **C520 [MAJOR][TXN] A mistaken income cannot be corrected back into a spend.** ★
+- [x] **C520 [MAJOR][TXN] A mistaken income cannot be corrected back into a spend.** ★
   *"I get 'Enter a positive amount.' at the bottom of the modal out of site … users should be
   allowed to adjust mistaken incomes back into debits"*
   Two separate bugs in one report.
@@ -7086,7 +7086,7 @@ design pass before any code.
 
 ### New capability
 
-- [ ] **C523 [MAJOR][CAT] Merge two categories into one.**
+- [x] **C523 [MAJOR][CAT] Merge two categories into one.**
   *"on the category page, add a way to merge 2 categories into a new category"*
   Nothing like this exists (`MergeCategories` is absent). A merge must move every reference, not just
   transactions: `Transaction.CategoryID`, `CategorySplit.CategoryID`, budgets' `TrackedCategoryIDs`,
@@ -7096,13 +7096,19 @@ design pass before any code.
   a merge no reference to the retired id survives anywhere, proven by a test that scans the exported
   JSON.
 
-- [ ] **C524 [MAJOR][REPORT] Show spend per category.**
+- [ ] **C524 [MAJOR][REPORT] Make spend-per-category FINDABLE (correction: it already exists).**
   *"we need either a page or a section somewhere to show spend per cat"*
-  There is no `SpendByCategory` anywhere. `internal/budgeting` already computes category spend for
-  budget rows (honouring splits and `ExcludeFromReports`), so the arithmetic exists — this is a
-  surface over it, not new maths, and it MUST reuse that path or the two will disagree. Needs a
-  period selector, parent/child rollup (`categorytree.Descendants`) and a drill-through into the
-  filtered ledger. AC: totals reconcile exactly with the budgets page for the same period.
+  **Correction (2026-08-16): the original ticket was wrong.** I filed it saying no `SpendByCategory`
+  exists. It does — `reports.SpendingByCategory` — and it is already surfaced as section "04 ·
+  Categories reviewed" on `/reports` (`reports_annual.go:975+`): a colour-coded magnitude histogram
+  of the top 12 plus an "everything else" bucket, each bar drilling into the filtered ledger; a full
+  table with prior-period deltas, share-of-total and per-category sparklines; tag spend on the same
+  scale; a narrative sentence; and a sub-category rollup toggle. There is also a sankey of
+  income→category flows in section 02.
+  So the real gap is DISCOVERABILITY, not capability: Cam asked for a feature he already has, which
+  means nothing on /budgets or /categories points at it. Fix that instead — a "See where it went"
+  link from the budgets hero and from the categories page, deep-linking to the reports section — and
+  do NOT build a second spend-by-category surface, which would inevitably disagree with the first.
 
 - [ ] **C525 [MAJOR][BUDGET] Budgets should match transactions by pattern, not only category.**
   *"budgets should also be able to regex match individual transactions"*
@@ -7174,7 +7180,7 @@ the budget just like zero-based users". The button is in every method; its EFFEC
 
 So: one live gap (C529), Cam's suggestion (C530), and four correctness issues found while tracing it.
 
-- [ ] **C529 [MAJOR][BUDGET] Saving an income basis changes nothing visible on the default method.** ★
+- [x] **C529 [MAJOR][BUDGET] Saving an income basis changes nothing visible on the default method.** ★
   Under `MethodSimple` (the DEFAULT) the basis feeds only the sinking-fund pool check
   (`budgets_tiles.go:222`), the over-assignment rail (`:361`) and one quiet `.budget-sub` line
   (`budgets-income-actual`, `:288-301`). Under `MethodEnvelope` it feeds NOTHING at all. The
@@ -7185,7 +7191,7 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   offered-but-inert. AC: on each of the four methods, saving a basis either changes something in the
   hero or the button is not offered.
 
-- [ ] **C530 [MAJOR][BUDGET] Show how much of income is budgeted.** ★
+- [x] **C530 [MAJOR][BUDGET] Show how much of income is budgeted.** ★
   *Cam's own suggestion, and the right answer to C529.* The band answers "how much of my budget have
   I spent". It does not answer "how much of my income have I budgeted" — which is the question the
   "Budget income" control implies you just configured. Zero-based already answers it (the To-assign
@@ -7199,7 +7205,7 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   is not. AC: with a basis set on Simple, the hero states the budgeted-of-income relationship, and
   the figure reconciles with the over-assignment rail.
 
-- [ ] **C531 [MAJOR][BUDGET] The modal previews one month and the page uses another.** ★
+- [x] **C531 [MAJOR][BUDGET] The modal previews one month and the page uses another.** ★
   The basis modal computes its running total from `now`
   (`budgets_tiles.go:955` → `PeriodRange(monthly, now, …)`), while the page computes the same figure
   from the VIEW WINDOW's anchor (`budgets.go:615-623`, `ms` derived from `anchor`). Whenever the
@@ -7210,7 +7216,7 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   it is previewing. AC: a test that opens the basis modal with the period set to a past month and
   asserts the previewed total equals the page's `BannerIncome`.
 
-- [ ] **C532 [MINOR][BUDGET] The income basis ignores sub-categories.**
+- [x] **C532 [MINOR][BUDGET] The income basis ignores sub-categories.**
   `ZeroBasedIncome` matches the chosen sources with `allowed[t.CategoryID]` — an EXACT id test
   (`internal/budgeting/income.go:152`). Everywhere else in budgets, tracked categories are expanded
   with `categorytree.DescendantsOfAll` before matching. So checking a parent income category (e.g.
@@ -7221,7 +7227,7 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   distinction is visible. AC: whichever is chosen, the rows' amounts and the running total agree
   with it and neither double-counts a parent and its child.
 
-- [ ] **C533 [MINOR][BUDGET] The income basis ignores splits.**
+- [x] **C533 [MINOR][BUDGET] The income basis ignores splits.**
   Income is bucketed by the transaction's own `CategoryID` and split lines are not decomposed
   (documented at `income.go:120`). A deposit split across two income categories therefore lands
   wholly on the parent transaction's category, or nowhere if it has none. Consistent with
@@ -7262,7 +7268,7 @@ notion of a name collision, so a duplicate is always accepted (C537).
 
 Cam's fix is the right one and it is the cheap one: stop creating categories by default.
 
-- [ ] **C535 [MAJOR][BUDGET] Make "create a category for this budget" an explicit opt-in.** ★
+- [x] **C535 [MAJOR][BUDGET] Make "create a category for this budget" an explicit opt-in.** ★
   *Cam's request.* Replace the "create a new category" DEFAULT with a checkbox that is **off** by
   default, and pre-select the best-matching existing expense category instead. Creating a category
   becomes something the user asks for, which removes the whole failure class rather than patching
@@ -7280,7 +7286,7 @@ Cam's fix is the right one and it is the cheap one: stop creating categories by 
   hint and the behaviour cannot diverge. AC: adding a budget with the box unticked never writes a
   category; with it ticked and a name that already exists, the form says so before submit.
 
-- [ ] **C536 [MAJOR][BUDGET] The duplicate-category guard has three holes.** ★
+- [x] **C536 [MAJOR][BUDGET] The duplicate-category guard has three holes.** ★
   `matchExpenseCategory` is the only thing standing between the default path and a duplicate, and it
   misses in three ways.
   (a) **Stale snapshot.** It is passed `categories`, captured at render (`budgetaddform.go:99`), and
@@ -7300,7 +7306,7 @@ Cam's fix is the right one and it is the cheap one: stop creating categories by 
   of the identity. AC: a table test over (existing tree, typed name) → resolved id, covering a
   same-named child, a same-named income category, and a category created after the form mounted.
 
-- [ ] **C537 [MAJOR][CAT] Nothing prevents duplicate category names anywhere else.**
+- [x] **C537 [MAJOR][CAT] Nothing prevents duplicate category names anywhere else.**
   Eight code paths create categories — `budgetaddform.go:251`, `budgets_flex.go:417`,
   `categoryaddform.go:67`, `categorypicker.go:98` (the review inbox's "+"), `chat_agent.go:943`,
   `dataedit_forms.go:274`, `transaction_edit_form.go:260`, `txn_smartcat.go:233` — and only the
@@ -7393,3 +7399,47 @@ as, and the design must not assume.
   third source of "assigned to savings" would inflate To-assign unless it is reconciled. AC: one
   savings commitment appears in the hero's arithmetic exactly once, proven by a test that sets up an
   account monthly-savings, a sinking-fund goal and a savings budget together.
+
+---
+
+## Defects found while implementing the UF series (2026-08-16) ★
+
+Three pre-existing defects surfaced while building C517–C537. Two were fixed in
+passing because the work depended on them; the first is filed because fixing it
+properly is a framework-interaction problem, not a screen fix.
+
+- [ ] **C541 [BLOCKER][UI] The row kebab menu does not open on /categories or /budgets.** ★
+  Clicking a row's ⋯ leaves `aria-expanded="false"` and the menu keeps its
+  `hidden-menu` class. It is not a hit-testing problem: a native `element.click()`
+  from the console does nothing either, and the button's `onclick` is present.
+  What narrows it: the SAME `uiw.KebabMenu` component works on `/goals` (its
+  `aria-expanded` flips to true), and `/transactions` uses a different component
+  (`uiw.OverflowMenu`) which also works. So the component is fine and the pages
+  that fail have something in common the working ones do not — the row's own
+  state changes but the keyed row never repaints, which is the reconciler
+  behaviour already recorded for the review surface (a load-bearing root
+  attribute was needed there to force the update).
+  This is not cosmetic. Everything configurational on those two pages lives
+  behind that menu: Edit budget, Edit tracking, Notes, Formulas, Remove
+  recurring, Delete, and now Merge. On /budgets it is why five tests in
+  `budgets.spec.mjs` fail, and they fail identically against a clean build of
+  HEAD, so it predates this work.
+  Two things already ruled out: hooks in `CategoryRow` are all unconditional, and
+  passing an explicit `ID` to KebabMenu (which /categories does and /goals does
+  not) is not sufficient to explain a state flag that never flips.
+  AC: clicking ⋯ on a category row and a budget row opens the menu, and the five
+  `budgets.spec.mjs` failures go green.
+
+- [x] **C542 [MAJOR][CAT] The categories page never repainted after a mutation.** *(fixed
+  2026-08-16.)* `Categories()` held a `state.UseAtom` refresh counter and called
+  `bump()` after every delete and reassign — but the render body never READ the
+  atom, and a state atom only re-renders the components that read it during
+  render. So every bump was a no-op. The page looked correct whenever the data
+  revision happened to fire at the same moment, which is what made it read as
+  intermittent rather than broken.
+
+- [x] **C543 [MAJOR][CAT] Category deletes and reassigns were not saved.** *(fixed
+  2026-08-16.)* The page never called `uistate.RequestPersist()`. Writing through
+  the store updates memory; RequestPersist is what puts it in the dataset — so a
+  deleted category came back on the next reload, which reads as the action having
+  silently failed rather than as a save that never happened.
