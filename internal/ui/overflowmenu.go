@@ -32,6 +32,17 @@ type OverflowMenuItem struct {
 	// Preferred over conditional slice-building at the call site so the
 	// item order in the slice always matches intent.
 	Hidden bool
+	// Section, when set, opens a new labelled group starting at this item. A long
+	// menu that mixes routine organization with reporting changes and deletions
+	// reads as one flat list where every entry looks equally safe (C572); a section
+	// heading plus the separator it draws tells the user what KIND of action they
+	// are about to take before they take it. Repeat the same string on consecutive
+	// items to keep them in one group; the heading renders once, at the first.
+	Section string
+	// Danger paints the item as destructive or reporting-altering, so Delete and
+	// Exclude never look like Rename. It is a visual tier, not a behaviour — the
+	// item's own handler still owns any confirmation.
+	Danger bool
 }
 
 // OverflowMenuProps configures an OverflowMenu trigger + popover.
@@ -126,9 +137,23 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		ClassStr("add-menu" + menuHidden),
 		Attr("role", "menu"),
 	}
+	// Sections (C572): a heading is emitted the first time a section name appears,
+	// and the items under it are wrapped in a role=group labelled by that heading —
+	// so a screen reader announces "Remove, group" before "Delete", exactly as a
+	// sighted user reads the heading above the separator. Items with no Section stay
+	// ungrouped at the top, which is what an unsectioned menu (every other caller)
+	// renders today.
+	lastSection := ""
 	for _, item := range props.Items {
 		if item.Hidden {
 			continue
+		}
+		if item.Section != lastSection {
+			lastSection = item.Section
+			if item.Section != "" {
+				menuArgs = append(menuArgs,
+					Div(css.Class("add-menu-section"), Attr("role", "presentation"), item.Section))
+			}
 		}
 		menuArgs = append(menuArgs, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
 			Item:      item,
@@ -160,8 +185,15 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	closeMenu := props.CloseMenu
 	onSelect := item.OnSelect
 
+	// `.danger` is the app's existing destructive overflow-item class (the accounts
+	// kebab's Delete already uses it) — reused rather than forked, so every menu in
+	// the app paints risk the same way.
+	cls := "add-item"
+	if item.Danger {
+		cls += " danger"
+	}
 	btnArgs := []any{
-		css.Class("add-item"),
+		ClassStr(cls),
 		Type("button"),
 		Attr("role", "menuitem"),
 		OnClick(func() {
