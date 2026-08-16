@@ -157,9 +157,6 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	topupCoverOpenS := ui.UseState(false)
 	// Notes mode: the budget's free-text note.
 	notesS := ui.UseState(b.Notes)
-	// The Event form, not func(string): a func(string) handler on a TEXTAREA never
-	// receives the typed text, so the note saved as empty while the field visibly
-	// held it — the editor closed cleanly and the note simply never appeared.
 	onNotes := ui.UseEvent(func(e ui.Event) { notesS.Set(e.GetValue()) })
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked

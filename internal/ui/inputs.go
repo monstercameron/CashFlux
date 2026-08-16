@@ -42,36 +42,41 @@ func fieldArgs(p TextFieldProps) []any {
 	if p.Disabled {
 		args = append(args, Attr("disabled", "true"))
 	}
-	args = append(args, OnInput(p.OnInput))
 	return args
 }
 
 // TextInput renders a single-line text input using the shared .field styling.
 func TextInput(p TextFieldProps) uic.Node {
-	return Input(append(fieldArgs(p), Type("text"))...)
+	return Input(append(fieldArgs(p), Type("text"), OnInput(p.OnInput))...)
 }
 
 // NumberInput renders a numeric input (Step defaults to "1" via the browser).
 func NumberInput(p TextFieldProps) uic.Node {
-	return Input(append(fieldArgs(p), Type("number"))...)
+	return Input(append(fieldArgs(p), Type("number"), OnInput(p.OnInput))...)
 }
 
 // TextAreaInput renders a multi-line text input using the .field styling.
 //
-// The value is carried ONLY by fieldArgs' Value option, which the renderer
-// applies as the element's value PROPERTY. It must not also be passed as a
-// child.
+// It binds the caller's handler to CHANGE, not input — deliberately, and this is
+// the whole reason multi-line fields did not work.
 //
-// It used to be, and the result was that a textarea could hold exactly one
-// character. A textarea's child text is its content, so re-rendering replaced
-// that content: the first keystroke fired OnInput, the state change re-rendered
-// the node, the child text was written back, and every keystroke after that was
-// swallowed. Typing "TYPED NOTE" left "T" in the field. Every multi-line field
-// in the app went through here — budget and account notes, goal notes, the
-// credential form — so all of them were unusable for anything longer than a
-// single letter.
+// Two things went wrong with per-keystroke binding. The value is carried by
+// fieldArgs' Value option, which the renderer writes as the textarea's content;
+// so every keystroke set state, state re-rendered the node, and the re-render
+// rewrote the content under the cursor. That dropped characters mid-word —
+// "PROBE NOTE alpha" arriving as "PROBE NOTE alpa" — and left the value the
+// submit handler read out of step with the text visibly in the box, so a budget
+// note saved as empty while the field plainly showed it.
+//
+// A multi-line field does not need its state updated per character. Committing
+// on blur is both correct and cheaper: no re-render while typing, and the value
+// is captured before any Save button can be clicked, because clicking it blurs
+// the field first.
+//
+// Callers still pass OnInput; the component picks the event a textarea actually
+// wants, so no call site has to know this.
 func TextAreaInput(p TextFieldProps) uic.Node {
-	return Textarea(fieldArgs(p)...)
+	return Textarea(append(fieldArgs(p), OnChange(p.OnInput))...)
 }
 
 // MoneyInputProps configures a currency-aware MoneyInput.

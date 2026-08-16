@@ -8295,3 +8295,81 @@ design pass and an end-to-end test rather than a collection of isolated label ch
 
   AC: a typed note appears on the card immediately and survives a reload. Cover it with the existing
   `budgets.spec.mjs` "notes modal" test, which currently fails on precisely this.
+
+  **Second pass, 2026-08-16 — the diagnosis is now sharp, and it is not what the first pass said.**
+  The value was never the problem. `saveNotes` DOES NOT RUN AT ALL. Proved by making it set an error
+  unconditionally as its first statement: the error never appeared, and the panel still closed. A
+  hard-coded `bb.Notes = "SENTINEL-CONST"` also produced nothing, which rules the state out entirely.
+
+  Everything ruled out with evidence:
+  - *Not a native form submit.* A sentinel on `window` survives the click and no `framenavigated`
+    fires, so the page is not reloading.
+  - *Not the form markup.* At runtime there is exactly ONE `<form class="acct-edit-form
+    budget-notes-form">`, not nested inside another, with `<button type="submit">` inside it.
+  - *Not the missing component-wrapper indirection.* `BudgetAddForm` wraps its implementation in a
+    second `ui.CreateElement` and `BudgetEditForm` does not; adding the same wrapper changed nothing.
+  - *Not the textarea binding.* Fixed separately and verified (see below), but the note still does
+    not save.
+  - *Not pre-existing damage from this session.* The pre-session build (`c0aba6bc`) fails identically.
+
+  **The sharpest clue, and where to start next.** `saveEdit` — declared in the SAME component, the
+  same `ui.UseEvent(Prevent(...))` shape, on a `Form(OnSubmit(...))` with a `type="submit"` button —
+  DOES run: renaming a budget updates the card immediately. So handlers in this component fire in
+  `edit` mode and not in `notes` mode. The two differ only in which early-return branch renders. That
+  points at handler registration being tied to the branch taken, not at anything in the notes code.
+
+  Related and separate: renaming a budget updates the card but is NOT written to the dataset — the
+  edit path is missing `uistate.RequestPersist()` exactly as the notes path was. Worth fixing
+  regardless of this ticket.
+
+- [ ] **C599 [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
+  One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a
+  typical `$6.90` charge. Compute anomaly deltas from the same current transaction and comparison set,
+  format the sign and amount consistently, and suppress the insight when the comparison is incomplete.
+  AC: every anomaly message is mathematically consistent with the visible transaction amount and
+  baseline; automated tests cover below-typical, equal-to-typical, above-typical, and missing-baseline
+  cases.
+
+- [ ] **C600 [MAJOR][TXN][REVIEW][UX] Clarify review status versus assigned category.**
+  The guided card showed the review tier `Uncategorized` while its Category control was already set to
+  `Dining`. Separate queue state from category state with explicit labels such as “Needs review” and
+  “Current category,” or remove the ambiguous tier label when a category is assigned.
+  AC: a reviewer can tell whether a transaction lacks a category, lacks human confirmation, or is simply
+  grouped in an uncategorized review tier without inferring from conflicting labels.
+
+- [ ] **C601 [MAJOR][TXN][DATA][FIXTURE] Resolve the known-bad coffee transaction through the correction workflow.**
+  `CF26-PIPE-S01 known-bad coffee control` remains in `Dining` and `Needs review` despite being the
+  seeded bad-category case. Correct it through the intended review/edit path, preserve its `#coffee`
+  tag and other fields, and verify the result after reload and search.
+  AC: the transaction has the intended category, no unrelated fields change, the review state reflects
+  the completed decision, and the known-bad regression test proves the correction persists.
+
+- [ ] **C602 [MAJOR][TXN][REVIEW][WORKFLOW] Make review progress counts explain their relationship.**
+  The review dialog presents `251 charges → 11 decisions`, but does not immediately explain whether a
+  decision represents a merchant group, a bulk action, or an individual charge. Show both the remaining
+  charge count and decision/group count with labels and update them consistently after selection,
+  confirmation, snooze, and dismissal.
+  AC: a reviewer can predict how one confirmation changes each count before committing it, and the
+  counts remain consistent between one-at-a-time and bulk modes.
+
+- [ ] **C603 [MAJOR][TXN][CALENDAR][UX] Add explicit month and year context to Calendar view.**
+  Calendar view under `All dates` showed a grid of day numbers without a prominent month/year heading,
+  making adjacent-month days and the current scope ambiguous. Display the active month or range, mark
+  leading/trailing days as belonging to adjacent months, and make the relationship between Calendar
+  selection and ledger date filters explicit.
+  AC: users can identify the month represented by every visible day, and selecting a day clearly states
+  the resulting date filter and provides a direct way back to the prior range.
+
+- [ ] **C604 [MAJOR][TXN][NAV][UX] Split and relabel the overloaded Add something else menu.**
+  One menu combines expense, income, transfer, account, budget, goal, task, category, member, rule,
+  and document creation. Group entries by job, prioritize transaction creation, and use clearer labels
+  or separate entry points for financial records versus planning/configuration objects.
+  AC: a first-time user can find Expense, Income, and Transfer immediately, while less frequent setup
+  actions remain discoverable without competing at the same hierarchy level.
+
+- [ ] **C605 [MAJOR][TXN][NAV][WORKFLOW] Preserve transaction context when opening Rules and other linked surfaces.**
+  The Rules button navigates away from the transaction task without an obvious return context. Preserve
+  the originating search, filters, period, selected transaction, and review mode; provide a visible
+  “Back to transaction” action or breadcrumb on linked pages, including rule creation from a row menu.
+  AC: a user can inspect or create a rule and return to the same transaction working set without
+  reconstructing the query or losing their place in the review queue.
