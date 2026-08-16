@@ -416,3 +416,37 @@ func TestCategoryMergeSweepsTheOutOfStoreClasses(t *testing.T) {
 		}
 	}
 }
+
+// ─── C524 deep-link ratchet ──────────────────────────────────────────────────
+
+// TestSpendReportLinkLandsOnItsSection keeps the link and the lander together.
+//
+// C524's real finding was discoverability, not capability: the per-category
+// spend report already existed and nothing pointed at it. The link shipped
+// without a fragment because the report's numbered sections are not in the DOM
+// when a browser processes one, so "#rpta-04" scrolled nowhere — a broken link
+// is worse than a link to the top. The report waits for its own target now;
+// this fails if either half goes away and leaves the other pretending.
+func TestSpendReportLinkLandsOnItsSection(t *testing.T) {
+	files := readInternal(t)
+	link, ok := files["screens/budgets_tiles.go"]
+	if !ok {
+		t.Fatal("screens/budgets_tiles.go not found")
+	}
+	rpt, ok := files["screens/reports_annual.go"]
+	if !ok {
+		t.Fatal("screens/reports_annual.go not found")
+	}
+	linksToSection := strings.Contains(link, `RoutePath("/reports")+"#rpta-04"`)
+	reportLands := strings.Contains(rpt, `strings.TrimPrefix(loc.Get("hash").String(), "#")`)
+	switch {
+	case linksToSection && !reportLands:
+		t.Error("the spend link carries a #rpta- fragment but the report no longer waits " +
+			"for the target — the sections are not in the DOM when the browser would " +
+			"process it, so the link scrolls nowhere (C524)")
+	case reportLands && !linksToSection:
+		t.Error("the report lands fragments nothing sends any more (C524)")
+	case !linksToSection && !reportLands:
+		t.Error("the spend report is unreachable from /budgets again (C524)")
+	}
+}

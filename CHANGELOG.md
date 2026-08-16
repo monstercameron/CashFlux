@@ -18,6 +18,13 @@ and every commit updates this file under `Unreleased`.
   category, and mixed kinds are refused the way the merge panel already refuses them.
 
 ### Fixed
+- **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
+  /categories pointed at the top of a long report, because the report's numbered sections are not in
+  the DOM when a browser processes a fragment — "#rpta-04" scrolled nowhere, and a link that appears
+  to do nothing is worse than one that lands high. The report waits for its own target now, polling
+  briefly rather than scrolling once on a guessed delay, giving up after three seconds so a stale
+  fragment costs nothing, and clearing the hash so returning to the same section works again.
+
 - **Seven problems an adversarial review of this work found.** In severity order:
 
   **Reasoning items were dropped crossing the proxy**, which would have broken step two of nearly

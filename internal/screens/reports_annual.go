@@ -46,6 +46,13 @@ import (
 // problem red, ending on the accent-toned plan. All figures come from the pure
 // internal/reports + internal/healthscore cores, so they match the rest of the
 // app and remain available as report_* engine variables.
+// rptaHashPollMS / rptaHashWindowMS bound the wait for a fragment's target to
+// appear: check this often, for at most this long.
+const (
+	rptaHashPollMS   = 80
+	rptaHashWindowMS = 3000
+)
+
 func Reports() ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -437,6 +444,55 @@ func Reports() ui.Node {
 	// fire rescans the anchors' positions and toggles the class directly on the DOM
 	// (no state → a scroll never re-renders the document). Full mode only; the
 	// summary view has no index.
+	// C524: land a deep link on the section it names.
+	//
+	// The report's numbered sections are not in the DOM when the browser
+	// processes a fragment — the page mounts, then fills in — so "#rpta-04"
+	// scrolled nowhere and read as a broken link. That is why the "See where it
+	// went" links from /budgets and /categories originally shipped pointing at
+	// the top of a long document instead of at the categories breakdown.
+	//
+	// This polls briefly for the target rather than scrolling once: a single
+	// timeout has to guess how long the page takes, and guessing short is
+	// indistinguishable from the bug. It gives up after rptaHashWindowMS so a
+	// stale or misspelled fragment costs nothing, and clears the hash on success
+	// so a later in-page navigation to the same section fires again.
+	ui.UseEffect(func() func() {
+		loc := js.Global().Get("location")
+		doc := js.Global().Get("document")
+		if !loc.Truthy() || !doc.Truthy() {
+			return nil
+		}
+		id := strings.TrimPrefix(loc.Get("hash").String(), "#")
+		if id == "" || !strings.HasPrefix(id, "rpta-") {
+			return nil
+		}
+		var tick js.Func
+		var handle js.Value
+		elapsed := 0
+		tick = js.FuncOf(func(js.Value, []js.Value) any {
+			el := doc.Call("getElementById", id)
+			if el.Truthy() {
+				el.Call("scrollIntoView", map[string]any{"behavior": "smooth", "block": "start"})
+				js.Global().Get("history").Call("replaceState", js.Null(), "",
+					loc.Get("pathname").String()+loc.Get("search").String())
+				js.Global().Call("clearInterval", handle)
+				tick.Release()
+				return nil
+			}
+			if elapsed += rptaHashPollMS; elapsed >= rptaHashWindowMS {
+				js.Global().Call("clearInterval", handle)
+				tick.Release()
+			}
+			return nil
+		})
+		handle = js.Global().Call("setInterval", tick, rptaHashPollMS)
+		return func() {
+			js.Global().Call("clearInterval", handle)
+			tick.Release()
+		}
+	}, "rpta-hash|"+boolStr(summaryMode.Get()))
+
 	ui.UseEffect(func() func() {
 		if summaryMode.Get() {
 			return nil

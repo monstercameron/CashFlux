@@ -2081,13 +2081,13 @@ func sortBudgetStatuses(sts []budgeting.Status, key string) {
 // spendReportLink points at the existing per-category spend report rather than
 // duplicating it.
 //
-// No fragment: the report's numbered sections (including "04 · Categories
-// reviewed") are not in the DOM at load, so "#rpta-04" would scroll nowhere and
-// read as a broken link. Deep-linking to the section needs the report to grow a
-// stable anchor first — noted on C524 rather than faked here.
+// It lands on "04 · Categories reviewed" rather than the top of a long document
+// (C524). The fragment could not be used at first because the report's numbered
+// sections are not in the DOM when the browser processes one — the report waits
+// for its own target now, so the link works.
 func spendReportLink() ui.Node {
 	return A(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
-		Href(uistate.RoutePath("/reports")),
+		Href(uistate.RoutePath("/reports")+"#rpta-04"),
 		Attr("data-testid", "budgets-see-spend"), Title(uistate.T("budgets.seeSpendTitle")),
 		Span(uistate.T("budgets.seeSpend")))
 }

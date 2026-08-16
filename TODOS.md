@@ -7425,24 +7425,21 @@ design pass before any code.
   Continues as **C548**. Cam's literal ask (merge into a NEW category, rather than folding into an
   existing one) is also still unbuilt — **C549**.
 
-- [ ] **C524 [MAJOR][REPORT] Make spend-per-category FINDABLE (correction: it already exists).**
-  *"we need either a page or a section somewhere to show spend per cat"*
-  **Correction (2026-08-16): the original ticket was wrong.** I filed it saying no `SpendByCategory`
-  exists. It does — `reports.SpendingByCategory` — and it is already surfaced as section "04 ·
-  Categories reviewed" on `/reports` (`reports_annual.go:975+`): a colour-coded magnitude histogram
-  of the top 12 plus an "everything else" bucket, each bar drilling into the filtered ledger; a full
-  table with prior-period deltas, share-of-total and per-category sparklines; tag spend on the same
-  scale; a narrative sentence; and a sub-category rollup toggle. There is also a sankey of
-  income→category flows in section 02.
-  So the real gap is DISCOVERABILITY, not capability: Cam asked for a feature he already has, which
-  means nothing on /budgets or /categories points at it. Fix that instead — a "See where it went"
-  link from the budgets hero and from the categories page, deep-linking to the reports section — and
-  do NOT build a second spend-by-category surface, which would inevitably disagree with the first.
-  **Shipped 2026-08-16 (partial):** a "See where it went" link now sits on both /budgets and
-  /categories. It lands on /reports WITHOUT a fragment, because the report's numbered sections are
-  not in the DOM at page load — "#rpta-04" scrolls nowhere and reads as a broken link. Remaining:
-  give the report a stable anchor (or a section query param) so the link can land on the categories
-  breakdown rather than the top of a long document.
+- [x] **C524 ✅ DONE (2026-08-16) — Make spend-per-category FINDABLE.** The original ticket was
+  wrong and the correction is the whole point: `reports.SpendingByCategory` already exists and is
+  already surfaced as "04 · Categories reviewed" on /reports — histogram, full table with
+  prior-period deltas and sparklines, tag spend, narrative, sub-category rollup. Cam asked for a
+  feature he already had, so the gap was discoverability, and building a second spend-by-category
+  surface would have guaranteed two views that disagree.
+  The "See where it went" links from /budgets and /categories shipped first, but deliberately
+  WITHOUT a fragment: the report's numbered sections are not in the DOM when a browser processes
+  one, so "#rpta-04" scrolled nowhere, and a link that appears to do nothing is worse than a link to
+  the top. Closed now by making the report land its own fragment — it polls briefly for the target
+  instead of scrolling once (a single timeout has to guess how long the page takes, and guessing
+  short is indistinguishable from the bug), gives up after 3s so a stale fragment costs nothing, and
+  clears the hash on success so returning to the same section fires again. Ratchet
+  `TestSpendReportLinkLandsOnItsSection` fails if the link keeps its fragment while the lander goes
+  away, or the reverse.
 
 - [ ] **C525 [MAJOR][BUDGET] Budgets should match transactions by pattern, not only category.**
   *"budgets should also be able to regex match individual transactions"*
@@ -7471,7 +7468,7 @@ design pass before any code.
   Suggested shape: `Budget.TrackedConditions []rules.Condition` beside `CategoryIDs`/`TrackedTags`,
   evaluated in the same place `TrackedTags` already is, so the three selectors compose as a union.
 
-- [ ] **C526 [DEFERRED ON EVIDENCE — measured 2026-08-16; virtualization has nothing to fix at the row counts the UI actually produces] [MINOR][TXN][PERF] Virtualize the full transaction list.**
+- [x] **C526 ✅ CLOSED — WILL NOT BUILD (evidence, 2026-08-16) — measured 2026-08-16; virtualization has nothing to fix at the row counts the UI actually produces] [MINOR][TXN][PERF] Virtualize the full transaction list.**
   *"in transactions when viewing all transactions, lets make sure the list is virtualized"*
   The ledger paginates (`internal/pagination`, `txnfilter.DefaultPageSize`) rather than virtualizing,
   so "view all" renders every row. MEASURE FIRST: a CPU profile of one interaction on this page came
@@ -7493,6 +7490,10 @@ design pass before any code.
   **Next step is not to build this.** It is to find the flow where Cam actually sees a long list —
   clearing the date scope, a saved view, or an export preview — and measure THAT. Building a
   virtualizer against the measured numbers above would move nothing.
+  **Closed as will-not-build rather than left open**, because the measurement IS the answer: leaving
+  it in the open column would read as work waiting to be done when the finding is that it should not
+  be. The follow-up (find and measure the flow that actually produces a long list) is the real
+  ticket, and it is a measurement task, not this one.
 
   **CORRECTION 2026-08-16 (verification pass) — the premise above is wrong twice, and the
   measurement is invalid.**
@@ -8977,3 +8978,76 @@ closure until this replay passes against the served build.
   caller). Note the top-level case is genuinely un-prefixable — "Travel" beside "Work > travel" is
   already distinguishable — so the test asserts the two labels DIFFER rather than demanding a parent
   that cannot exist.
+
+---
+
+## TR deep bug bash replay (2026-08-16)
+
+These findings came from a second, deliberately scatter-shot pass over the live `/transactions`
+surface: review modes, bulk selection, pagination, search, calendar, add/edit, and every visible
+per-transaction kebab action. They are user-facing defects reproduced in the served build; the
+known duplicate-DOM/dev-server behavior is intentionally excluded. The deleted probe transaction
+was recreated before ending the pass.
+
+- [ ] **C620 [CRITICAL][TXN][SAFETY] Per-transaction Delete commits immediately without confirmation or undo.**
+  Opening a row's kebab menu and activating Delete removed `UXJ-S04 single gift review` immediately;
+  no confirmation dialog, inline warning, toast, or undo affordance appeared. A fresh search for the
+  same description returned no matching transaction. Require an explicit destructive confirmation
+  naming the payee, date, amount, and account, then provide a time-bounded undo or recovery path.
+  AC: one accidental click cannot permanently remove a transaction, and the result is visible and
+  reversible. Apply the same contract to bulk Delete.
+
+- [ ] **C621 [MAJOR][TXN][TASKS][DATA] Deleting a transaction leaves linked follow-up tasks orphaned or silently detached.**
+  The deleted probe row showed two open follow-up tasks before deletion. After recreating the same
+  transaction through Add transaction, the row no longer showed those linked tasks, while the To-do
+  page still contained transaction-linked QA tasks. Decide whether deletion should block, cascade,
+  unlink with an explicit warning, or retain a recoverable tombstone; never silently strand work.
+  AC: Delete previews the effect on linked tasks and the post-delete To-do state is deterministic,
+  recoverable, and covered by an end-to-end test.
+
+- [ ] **C622 [MAJOR][TXN][RULES][CONTEXT] “Create rule from this transaction” opens an empty rule form.**
+  From a row menu, the app navigated to `/rules` and showed the return shortcut, but Match text and
+  Category to assign were blank instead of being seeded from the transaction. This regresses the
+  previously marked-done C32 context path and turns a one-click correction into manual re-entry.
+  Populate the form from the selected transaction's normalized payee/description and category,
+  preserve the originating row/filter, and add a served-build regression test.
+
+- [ ] **C623 [MAJOR][TXN][RECEIPT][UX] “Split from receipt…” has no usable upload continuation.**
+  The menu action produced only the generic prompt “Choose a photo of the receipt to read.”; no
+  file input, picker, upload target, error state, or durable next step was available, and the prompt
+  disappeared before it could be acted on. Open the receipt workflow with an actual file/select
+  control, or disable the action with an honest explanation when receipt capture is unavailable.
+  AC: activation always yields a visible, actionable next step or a clearly explained limitation.
+
+- [ ] **C624 [MAJOR][TXN][VALIDATION][MONEY] Quick-add accepts a negative amount for an expense.**
+  In Add transaction, entering `-1` enabled Save, while zero correctly kept Save disabled. A negative
+  money-out amount can invert totals or create a direction/amount mismatch unless the app explicitly
+  models signed amounts. Reject negative input for expense/income quick-add, or normalize direction
+  and show the resulting sign before commit; align edit and import validation with the same rule.
+
+- [ ] **C625 [MINOR][TXN][SORT][FEEDBACK] Sort direction can change before the visible ledger catches up.**
+  Clicking Date changed the sort state while the old row order remained visible for roughly a second;
+  a fast user can click or edit a row while reading stale order. `aria-sort` is present, so this is
+  specifically a rendered-order feedback regression against C569, not an accessibility-label gap.
+  Keep metadata and rows synchronized, or show a short `aria-busy`/loading state until the new order
+  is painted; add a rapid-click regression test.
+
+- [ ] **C626 [MINOR][TXN][A11Y][PERF] “All” mode virtualizes rows without exposing table position metadata.**
+  Selecting All announced `1–3284 of 3284`, but only about 40–50 rows existed in the table DOM at a
+  time and the table had no `aria-rowcount`, `aria-rowindex`, or equivalent virtualized-list metadata.
+  This may be intentional for performance, but it makes keyboard and screen-reader navigation
+  unable to understand the announced full set. Expose the virtual range/total and stable row
+  positions, or change the status copy to describe the rendered window; verify with a11y tooling.
+
+- [ ] **C627 [MAJOR][TXN][PAGINATION][CORRECTNESS] Jump to page accepts input but does not navigate.**
+  Entering valid page `132` into Jump to page left the ledger on `1–25 of 3284`; the input then
+  displayed `132` beside rows still from page 1. The control therefore reports a requested page
+  that is not the rendered page. Commit on Enter/blur only after validation, update the rows and
+  previous/next state atomically, and reset the field to the actual page on failure.
+
+- [ ] **C628 [MINOR][TXN][SEARCH][REGRESSION] Served build lacks the pending-search feedback promised by C619.**
+  Typing `UXJ-S02` left the previous ledger visible during the debounce window, but the live searchbox
+  had no `aria-busy` attribute and no visible/accessible `Searching…` status before the result changed.
+  Reconcile the served bundle with the C619 implementation, or update the implementation/test if the
+  contract changed. AC: stale rows are explicitly marked as pending and search completion is announced
+  without making the user guess whether the query was accepted.
