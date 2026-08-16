@@ -798,6 +798,102 @@ func registerAssistantSurface() {
 	registerChatPolish()
 	registerStreaming()
 	registerKeyGate()
+	registerSpendMeter()
+}
+
+// registerSpendMeter styles the AI spend meter (EC-15). The figure is the largest
+// thing in the card because it is the one somebody opened this to read; everything
+// else is context for it. The pace line takes a tone only when it has something to
+// warn about — a meter that is always coloured is a meter nobody looks at twice.
+func registerSpendMeter() {
+	rule(".ai-meter",
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "var(--bg-card)"),
+		prop("padding", "0.9rem 1rem"),
+		prop("margin", "0.75rem 0"),
+		prop("max-width", "40rem"),
+	)
+	rule(".ai-meter-title",
+		prop("font-size", "var(--type-12)"),
+		prop("font-weight", "600"),
+		prop("text-transform", "uppercase"),
+		prop("letter-spacing", "0.03em"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0 0 0.5rem"),
+	)
+	rule(".ai-meter-empty",
+		prop("font-size", "var(--type-13)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0"),
+	)
+	rule(".ai-meter-total",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("align-items", "baseline"),
+		prop("gap", "0.6rem"),
+	)
+	rule(".ai-meter-figure",
+		prop("font-family", "var(--font-display, 'Fraunces', serif)"),
+		prop("font-size", "1.6rem"),
+		prop("line-height", "1.1"),
+		prop("color", "var(--text)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".ai-meter-sub",
+		prop("font-size", "var(--type-12)"),
+		prop("color", "var(--text-faint)"),
+	)
+	rule(".ai-meter-pace",
+		prop("font-size", "var(--type-13)"),
+		prop("color", "var(--text-dim)"),
+		prop("margin", "0.5rem 0 0"),
+	)
+	rule(".ai-meter-pace.is-warn",
+		prop("color", "var(--warn, #d9a23f)"),
+	)
+	rule(".ai-meter-pace.is-over",
+		prop("color", "var(--down, #d1685f)"),
+		prop("font-weight", "600"),
+	)
+	rule(".ai-meter-list",
+		prop("list-style", "none"),
+		prop("margin", "0.7rem 0 0"),
+		prop("padding", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+	)
+	rule(".ai-meter-row",
+		prop("display", "grid"),
+		prop("grid-template-columns", "1fr auto auto"),
+		prop("gap", "0.75rem"),
+		prop("align-items", "baseline"),
+		prop("padding", "0.3rem 0"),
+		prop("border-bottom", "1px solid var(--border)"),
+		prop("font-size", "var(--type-13)"),
+	)
+	rule(".ai-meter-row:last-child",
+		prop("border-bottom", "none"),
+	)
+	rule(".ai-meter-calls",
+		prop("color", "var(--text-faint)"),
+		prop("font-size", "var(--type-11)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".ai-meter-cost",
+		prop("font-variant-numeric", "tabular-nums"),
+		prop("color", "var(--text)"),
+	)
+	rule(".ai-meter-cap",
+		prop("display", "flex"),
+		prop("flex-wrap", "wrap"),
+		prop("gap", "0.5rem"),
+		prop("align-items", "center"),
+		prop("margin-top", "0.7rem"),
+	)
+	rule(".ai-meter-cap .field",
+		prop("max-width", "8rem"),
+	)
 }
 
 // registerKeyGate styles the explanation shown when a feature is waiting for a key

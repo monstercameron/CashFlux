@@ -191,6 +191,10 @@ func smartPostureStrip() ui.Node {
 func smartCatalogDeferred(props smartCatalogDeferredProps) ui.Node {
 	return Fragment(
 		smartPostureStrip(),
+		// EC-15: what these features have actually cost sits beside the switches
+		// that turn them on. Putting the meter anywhere else asks somebody to
+		// remember a number from one screen while deciding on another.
+		ui.CreateElement(AISpendMeter),
 		smartManageSection(props.Settings, props.HasProvider),
 		SmartDigestSection(props.Settings),
 	)

@@ -37,6 +37,26 @@ and every commit updates this file under `Unreleased`.
   and is resizable for the times they write more.
 
 ### Added
+- **An AI spend meter, and starter questions that name what's true today (EC-15, EC-16).** Every AI
+  surface already showed an estimate before a call and a token line after it, but nothing added them
+  up — so "what is this costing me?" could only be answered by the provider's bill, which is the
+  wrong place and a month late. The Automations tab now carries a running total for the month, split
+  by the feature that spent it, with an optional monthly ceiling and a pace warning that fires while
+  there is still time to act on it.
+
+  Three things it is careful about. A month with nothing recorded says "nothing yet" rather than
+  "$0.00" — those are different statements, and the second reads as a broken meter. A total covering
+  calls on an unpriced model reads as "at least $X", because it is a floor. And the projection
+  refuses to extrapolate from the first day or two of a month, since multiplying one day by
+  thirty-one produces a number that is alarming and meaningless in equal measure. Tokens are stored
+  as the fact and cost derived from them, so a drifting price table doesn't silently corrupt the
+  history.
+
+  The Ask box's starter chips are now ordered by what is true right now: "3 budgets are over — what
+  changed?" leads, and the reasonable-in-general questions fill whatever room is left. A chip that
+  names something currently true is a prompt; a chip that asks a good question in general is only a
+  suggestion, and a box full of suggestions is the blank box it was meant to replace.
+
 - **Four more questions the assistant answers without a key, and a period selector on the briefing
   (G2-C8).** The keyless answerer covered seven questions, so obvious ones — "am I over budget?",
   "what did I buy recently?", "what am I subscribed to?", "what was my biggest expense?" — fell

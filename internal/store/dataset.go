@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/aispend"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -44,6 +45,15 @@ type Settings struct {
 	FlexBudget            int64                `json:"flexBudget,omitempty"`        // BG2: the single flex-budgeting number (minor units, base currency); 0 = unset
 	PayoffBaseline        *PayoffBaseline      `json:"payoffBaseline,omitempty"`    // debt-payoff progress baseline (L5)
 	Music                 *MusicState          `json:"music,omitempty"`             // background-music resume point (checkpointed)
+	// AISpend is the running record of what the AI features have cost, split by
+	// month and by the feature that spent it (EC-15). Additive and absent on
+	// datasets saved before the meter existed; trimmed to a rolling year so it
+	// stays small enough to ride along with everything else.
+	AISpend []aispend.Bucket `json:"aiSpend,omitempty"`
+	// AISpendCapUSD is the household's own monthly ceiling on AI spend, in
+	// dollars. Zero means no cap — the meter still counts, it just has nothing to
+	// warn against.
+	AISpendCapUSD float64 `json:"aiSpendCapUsd,omitempty"`
 }
 
 // MusicState is the background music's durable resume point: the on/off choice,

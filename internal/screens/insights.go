@@ -184,10 +184,46 @@ func Insights() ui.Node {
 			}
 		}
 
+		// EC-16: the situational half — what is true about the data RIGHT NOW, so
+		// the first chip names something real rather than asking a reasonable
+		// question in general.
+		overBudgets, uncategorized := 0, 0
+		if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
+			for _, st := range statuses {
+				if st.State == budgeting.StateOver {
+					overBudgets++
+				}
+			}
+		}
+		var largestPayee, largestAmount string
+		var largestMinor int64
+		for _, t := range scopedTxns {
+			if !dateutil.InRange(t.Date, mStart, mEnd) {
+				continue
+			}
+			if t.CategoryID == "" && t.IsExpense() && !t.IsTransfer() {
+				uncategorized++
+			}
+			if !t.IsExpense() || t.IsTransfer() {
+				continue
+			}
+			amount := t.Amount.Abs()
+			if conv, err := rates.Convert(amount, base); err == nil {
+				amount = conv
+			}
+			if amount.Amount > largestMinor {
+				largestMinor, largestPayee = amount.Amount, txnDisplayPayee(t)
+				largestAmount = insightsMoneyFmt(amount.Amount, base)
+			}
+		}
 		return insights.SuggestedQuestions(insights.QuestionContext{
-			TopCategory:     topCat,
-			NearLimitBudget: nearLimitBudget,
-			UpcomingGoal:    upcomingGoal,
+			TopCategory:          topCat,
+			NearLimitBudget:      nearLimitBudget,
+			UpcomingGoal:         upcomingGoal,
+			OverBudgetCount:      overBudgets,
+			UncategorizedCount:   uncategorized,
+			LargestExpensePayee:  largestPayee,
+			LargestExpenseAmount: largestAmount,
 		})
 	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
 
@@ -480,6 +516,10 @@ func Insights() ui.Node {
 					// receipt (cost estimated from the resolved model).
 					cost, costOK := ai.EstimateCostUSD(model, total)
 					uistate.AddAgentCost(convID.Get(), total.TotalTokens, cost, costOK)
+					// EC-15: and into the household's running AI spend meter, so
+					// "what is this costing me?" has an answer here rather than on
+					// next month's provider bill.
+					app.RecordAISpend("assistant", model, total)
 					return
 				}
 				msgs = append(msgs, r.msg)

@@ -57,9 +57,19 @@ func resolveAIConn(app *appstate.App, backendActive bool, serverURL, serverToken
 }
 
 // sendSmartAIOn places one call on a specific model via the resolved transport.
+//
+// Every SMART call is booked against the household's AI spend meter as it lands
+// (EC-15). It happens here rather than at each of the dozen SMART surfaces because
+// one place that always records is worth more than a dozen that mostly do, and a
+// meter that misses calls is worse than no meter — it understates with authority.
 func sendSmartAIOn(c smartAIConn, model string, req smartai.Request, onResult func(string), onError func(string)) {
 	msgs := []ai.Message{{Role: "system", Content: req.System}, {Role: "user", Content: req.User}}
-	onR := func(text string, _ ai.Usage) { onResult(text) }
+	onR := func(text string, u ai.Usage) {
+		if app := appstate.Default; app != nil {
+			app.RecordAISpend("smart", model, u)
+		}
+		onResult(text)
+	}
 	if c.Backend {
 		ai.SendProxyChat(c.ServerURL, c.ServerToken, model, msgs, 0, onR, onError)
 		return
