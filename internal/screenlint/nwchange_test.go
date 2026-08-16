@@ -327,3 +327,26 @@ func TestAllocateScoresAreNotPrintedAsRates(t *testing.T) {
 			"the number the reader was reaching for should actually be there (C353)")
 	}
 }
+
+// ─── C359 page-job ratchet ───────────────────────────────────────────────────
+
+// TestDebtDoesNotRenderTheWholeCreditPage keeps two pages from doing one job.
+//
+// C359: /debt embedded CreditHealthPanel in full, so the credit page's content
+// appeared verbatim on the payoff page and neither surface declared what it was
+// for. /debt shows the headline as context and hands off; the panel's Summary
+// prop is what makes that a shared component rather than a second copy.
+func TestDebtDoesNotRenderTheWholeCreditPage(t *testing.T) {
+	src, ok := readInternal(t)["screens/debt_tiles.go"]
+	if !ok {
+		t.Fatal("screens/debt_tiles.go not found")
+	}
+	if strings.Contains(src, "CreditHealthPanelProps{}") {
+		t.Error("/debt renders the FULL credit panel again — the same content on two " +
+			"pages, with neither able to say what it is for (C359)")
+	}
+	if !strings.Contains(src, "CreditHealthPanelProps{Summary: true}") {
+		t.Error("/debt no longer renders the credit summary — the payoff plan needs the " +
+			"headline as context even though the detail belongs elsewhere (C359)")
+	}
+}

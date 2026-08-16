@@ -5297,11 +5297,22 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   for a value outside the series' range, because a reference clamped to the chart edge misstates
   where zero is. Tested: `ValueY` agrees with `Points` point-for-point, offers zero when it is in
   range, refuses when it is not, and handles a flat series without dividing by zero.
-- [ ] **C359 [MINOR][IA] Page-job overlaps to sharpen:** /networth is two KPI rows + a 2-bar chart
-  with a dead middle (adds nothing over /reports NW tab + /accounts hero — give it per-owner/
-  per-account composition + history table, or fold it); /assistant vs /insights are near-duplicates
-  with the chat (the page's job) *below* merchant stats; /credit duplicates /debt§Credit health
-  verbatim. Document each page's unique question (R58) or fold into the hub.
+- [x] **C359 ✅ DONE (2026-08-16) — Page-job overlaps.** Checked each of the three rather than
+  assuming; two had already resolved. **/networth** is no longer "two KPI rows + a 2-bar chart" —
+  that was the Reports-tab embed (`NetWorthPanel`); the page itself is the attribution bridge ("What
+  moved it" → "What it means" → "Two sides" → per-account movement), which is a question the other
+  surfaces don't answer. **/insights** is not a near-duplicate of /assistant — it routes to the
+  assistant hub's Insights tab, so they are one surface with two entry points. **/credit vs /debt was
+  live:** /debt embedded `CreditHealthPanel` in full, so the credit page's content appeared verbatim
+  on the payoff page and neither could say what it was for. /debt now renders a `Summary` form — the
+  ring, the band, aggregate utilization, and a hand-off link — because its question is "in what order
+  do I pay these off" and the card-habits score is context for that, not the subject. Shared
+  component with a mode, not a second copy.
+  **And each page states its question (R58):** three subtitles described their CONTENTS ("Assets,
+  liabilities, and your net-worth trend"), which is how surfaces come to look like they are doing each
+  other's jobs. They ask something now — "What moved your net worth, and what it means", "The
+  assistant's read on your spending — a tab of the assistant hub", "What your card habits are doing
+  to your score". Ratchet `TestDebtDoesNotRenderTheWholeCreditPage` blocks the full-panel embed.
 - [ ] **C360 [MINOR][UX] Sweep polish batch:** /plans is unstyled prose with no side-by-side plan
   comparison; /split running-balance rows repeat the amount twice ("Marcus Hartley owes $32.00 …
   $32.00"); /recurring shows raw formula-slug chips (`recurring_gym_membership_monthly`) on every

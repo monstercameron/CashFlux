@@ -194,6 +194,16 @@ and every commit updates this file under `Unreleased`.
   The three condition-slot checkboxes were also the only native browser checkboxes left in the app,
   which made the quick-add form look like a different application; they wear the shared control now.
 
+### Changed
+- **/debt stops rendering the credit page inside itself (C359).** It embedded the whole credit-health
+  panel, so identical content appeared on two surfaces and neither declared what it was for. /debt's
+  question is "in what order do I pay these off"; the card-habits score is context for that, not the
+  subject — so it carries the headline and hands off. One shared component with a summary mode, not a
+  second copy.
+
+  Three page subtitles also described their contents rather than their question, which is how
+  surfaces come to look like they are doing each other's jobs. They ask something now.
+
 ### Fixed
 - **A savings plan stops rendering as a failure (C358).** "House down payment in 3 years" starts at
   $19,000, saves $400/mo, and spends $60,000 on a house at month 36 — so it ends below where it

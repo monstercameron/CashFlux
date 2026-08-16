@@ -385,7 +385,18 @@ func fmtMinorAmount(minor int64, decimals int) string {
 
 // CreditHealthPanelProps configures CreditHealthPanel. No external props are
 // required; the panel reads appstate.Default directly.
-type CreditHealthPanelProps struct{}
+type CreditHealthPanelProps struct {
+	// Summary renders the hand-off form: the ring, the band, aggregate
+	// utilization, and a link to /credit — without the per-card breakdown,
+	// demerits, advice, trend bars or limit editors.
+	//
+	// It exists because /debt was embedding the WHOLE panel, so the same content
+	// appeared verbatim on two pages and neither could say what it was for
+	// (V-sweep C359). /debt's question is "in what order do I pay these off";
+	// /credit's is "what are my card habits doing to my score". The payoff page
+	// needs the headline to plan against and nothing more.
+	Summary bool
+}
 
 // CreditHealthPanel renders the credit-health proxy score ring (C208), per-card
 // utilization breakdown with actionable nudges (C209), utilization trend bars
@@ -534,6 +545,14 @@ func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
 	// Privacy + disclaimer note.
 	disclaimer := P(css.Class("t-caption", tw.TextFaint), r.Disclaimer)
 
+	if props.Summary {
+		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3),
+			hero,
+			P(css.Class("t-caption"), Attr("data-testid", "credit-handoff"),
+				A(Href(uistate.RoutePath("/credit")), uistate.T("credit.seeFullPanel"))),
+			disclaimer,
+		)
+	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5),
 		hero, demeritsCard, adviceCard, aiCard, breakdown, missingNote, disclaimer)
 }

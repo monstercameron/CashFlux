@@ -493,9 +493,14 @@ func debtStrategyWidget(props debtPanelProps) ui.Node {
 
 // debtCreditWidget hosts the credit-card health panel (shown only when a card exists).
 func debtCreditWidget(props debtPanelProps) ui.Node {
+	// C359: the SUMMARY, not the whole panel. /debt was rendering /credit's page
+	// verbatim, so two surfaces showed identical content and neither declared
+	// what it was for. This page's question is "in what order do I pay these
+	// off"; the card-habits score is context for that, and its own page is one
+	// click away.
 	body := debtSection("sec-credit", uistate.T("nav.credit"), debtOwnerLink("/accounts", uistate.T("debt.linkCards")), Fragment(
-		P(css.Class("muted"), uistate.T("screen.creditSub")),
-		ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{}),
+		P(css.Class("muted"), uistate.T("debt.creditSummarySub")),
+		ui.CreateElement(CreditHealthPanel, CreditHealthPanelProps{Summary: true}),
 	))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-credit", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

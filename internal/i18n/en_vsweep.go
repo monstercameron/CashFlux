@@ -107,6 +107,18 @@ var vSweepKeys = Catalog{
 	// DESIGN. %s = start, %s = end, %s = when the horizon ends.
 	"plans.arc":          "Starts %s → ends %s by %s",
 	"plans.arcNoHorizon": "the end of the plan",
+
+	// ── C359: each page states its own question ─────────────────────────────
+	// /debt showed /credit's whole panel verbatim. It carries the headline as
+	// context for the payoff plan now, and hands off for the rest.
+	"credit.seeFullPanel":   "See what's driving this score, card by card →",
+	"debt.creditSummarySub": "How your card habits are scoring — the detail lives on Credit habits",
+	// A page's subtitle is where it declares its own question (R58). These three
+	// described their CONTENTS, which is how three surfaces came to look like
+	// they were doing each other's jobs.
+	"screen.netWorthSub": "What moved your net worth, and what it means",
+	"screen.insightsSub": "The assistant's read on your spending — a tab of the assistant hub",
+	"screen.creditSub":   "What your card habits are doing to your score — local, private, no bureau",
 }
 
 func init() {
