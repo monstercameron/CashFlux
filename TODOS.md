@@ -7979,7 +7979,7 @@ These are broader interaction-design concerns observed during the same audit. Th
 larger than individual bug fixes: each one should be resolved as a coherent user workflow, with a
 design pass and an end-to-end test rather than a collection of isolated label changes.
 
-- [ ] **C573 [MAJOR][TXN][UX] Consolidate competing transaction entry points.**
+- [x] **C573 [DONE 2026-08-16 — one primary Add, split, with the three kinds named] [MAJOR][TXN][UX] Consolidate competing transaction entry points.**
   New transaction appears in the page header, Add transaction appears above the ledger, and
   Add something else also contains New transaction, Transfer money, and other creation actions.
   Different entry points suggest different behavior even though they lead to overlapping flows. Define
@@ -7987,7 +7987,7 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   income, and transfer creation. AC: a first-time user can identify the correct starting point in
   one glance, and every entry point makes its destination and transaction type clear.
 
-- [ ] **C574 [MAJOR][TXN][UX] Define a clear state-and-filter ownership model.**
+- [x] **C574 [DONE 2026-08-16 — the member lens actually filters and owns its own chip; one reset that counts] [MAJOR][TXN][UX] Define a clear state-and-filter ownership model.**
   Search has Clear, the filter panel has Close, the page has Clear filters, the active chip has Clear
   all filters, and period/profile controls also affect what users believe they are viewing. The user
   cannot reliably predict which part of the current state each control removes. Establish a visible
@@ -7995,14 +7995,14 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   clear/reset control states exactly what it removes, and returning from Review or another page does
   not silently change the working set.
 
-- [ ] **C575 [MAJOR][TXN][REVIEW][UX] Make global and local counts unmistakably different.**
+- [x] **C575 [DONE 2026-08-16 — a visible count line with its denominator; Review states its household scope] [MAJOR][TXN][REVIEW][UX] Make global and local counts unmistakably different.**
   Review inbox (251), filter counts, and the 20-row filtered ledger appear together without clearly
   stating which counts are household-wide and which are scoped to the current search, member, and
   period. Treat scope as first-class UI state: label counts, show the active scope beside Review, and
   offer an explicit switch between Current view and Entire queue. AC: users can explain every visible
   count without opening another page or guessing whether a filter was ignored. Extends C554 and C568.
 
-- [ ] **C576 [MAJOR][TXN][SAFETY][UX] Establish a consistent action-feedback contract.**
+- [~] **C576 [PARTIAL 2026-08-16] [MAJOR][TXN][SAFETY][UX] Establish a consistent action-feedback contract.**
   Ellipses imply a follow-up form for some actions, while other actions execute immediately; some
   mutations have undo and others do not. Users therefore cannot predict whether a click will open a
   panel, commit data, or do nothing. Define action classes (open, preview, commit, destructive), use
@@ -8011,7 +8011,22 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   activation and produces visible completion feedback afterward. Extends C562, C564, C565, C571,
   and C572.
 
-- [ ] **C577 [MAJOR][TXN][WORKFLOW][UX] Design one coherent transaction-correction journey.**
+  **Where it stands, 2026-08-16.** Most of the contract is now in place, arrived at from two
+  directions. C561/C562/C565/C566/C567/C572 closed the individual cases: bulk categorize splits
+  assign from clear, exclude-from-reports confirms and is undoable, the payment-link Save is live
+  only when something would change, the split editor names an unfinished line, the read-only history
+  modal is Close, and the row kebab is sectioned by risk with destructive entries tinted. The C579
+  work added the missing "accept the machine's answer" action (row menu → Confirm this category),
+  which was a consequence users could see but not act on.
+
+  **What is left is the RULE, not the cases.** Nothing yet states the four action classes in one
+  place or enforces them, so the next control added to this page is as likely to break the pattern as
+  follow it. Finishing this means writing the classes down (open / preview / commit / destructive),
+  auditing the row menu, the bulk bar and the toolbar against them in one pass, and adding a lint or
+  a test that fails when an item's label promises a panel it does not open. Doing that as a
+  by-hand sweep — as the individual tickets did — is what leaves it to drift again.
+
+- [x] **C577 [DONE 2026-08-16 — with C581; the loop is asserted end-to-end by the C583 spec] [MAJOR][TXN][WORKFLOW][UX] Design one coherent transaction-correction journey.**
   The page currently separates finding a transaction, reviewing it, creating a category, creating a
   rule, checking history, and returning to the filtered ledger across several menus and routes. Model
   the intended journey as a persistent workspace: find -> inspect -> correct -> explain automation ->
@@ -8019,42 +8034,58 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   across every branch. AC: a user can complete a correction and return to the same place without
   reconstructing filters or reopening the queue. Extends C559 and C581.
 
-- [ ] **C578 [MINOR][TXN][STATUS][UX] Make transaction status legible without relying on symbols.**
+- [x] **C578 [DONE 2026-08-16 — a Status column in words, default on; every glyph has an accessible name] [MINOR][TXN][STATUS][UX] Make transaction status legible without relying on symbols.**
   Reconciled, Cleared, and Needs review are represented mainly by checkmarks and dots with a separate
   legend above the table. Improve the row treatment with text labels, stable color/shape semantics,
   keyboard-accessible explanations, and a filterable status summary. AC: a user scanning one row can
   understand its state without first locating and interpreting the legend; color is never the only
   signal.
 
-- [ ] **C579 [MAJOR][TXN][AUTOMATION][UX] Make classification provenance visible at the point of trust.**
+- [x] **C579 [DONE 2026-08-16 — an "auto" mark on the category naming the rule, and one-click Confirm] [MAJOR][TXN][AUTOMATION][UX] Make classification provenance visible at the point of trust.**
   Rule-derived, deterministic auto-categorized, imported, manually entered, and human-reviewed
   transactions can look alike even though they carry different levels of confidence. Add a compact
   provenance treatment in the row and edit/review surfaces, with an explanation of why the category
   was selected and a direct correction path. AC: users can distinguish automatic suggestions from
   confirmed decisions and can undo or override automation without hunting through Rules. Extends C557.
 
-- [ ] **C580 [MAJOR][TXN][MODAL][UX] Standardize modal semantics and footer actions.**
+- [~] **C580 [PARTIAL 2026-08-16] [MAJOR][TXN][MODAL][UX] Standardize modal semantics and footer actions.**
   Transaction dialogs vary between Close, Cancel, Save, Link, Confirm, and immediate actions; empty
   or read-only states sometimes still show editing controls. Define modal types (inspect, edit,
   confirm, destructive confirmation), consistent headings, focus behavior, escape behavior, dirty-state
   handling, and footer ordering. AC: the primary action, dismissal action, and unsaved-change behavior
   are predictable in every transaction-related modal. Extends C565-C567.
 
-- [ ] **C581 [MAJOR][TXN][NAV][UX] Preserve context through cross-page correction flows.**
+  **Where it stands, 2026-08-16.** The shared modal turned out to be sound on inspection — the
+  FlipPanel gives every dialog `role=dialog`, `aria-modal`, an `aria-labelledby` pointing at its one
+  visible title, Escape, a focus trap and focus restore — so this was never the rework the ticket
+  assumed. What was actually broken were two layout defects, now fixed: the edit dialog's category
+  select was clipped to "— No categ" by the "New category" button beside it, and the
+  "recategorize the similar ones too?" offer laid its question, evidence and three answers out as
+  three auto-fit grid columns, crushing the answers to 150px and clipping them mid-word.
+
+  **What is left: footer ORDERING, specifically the destructive slot.** Delete still lives at the end
+  of the edit dialog's scrolling body while Cancel and Save are pinned in the footer, so the one
+  destructive action sits at whatever depth the form happens to end. It is now set apart below a
+  hairline, which is an improvement, not the fix. Making it a genuine footer control needs a
+  `FootLead` slot on FlipPanel AND the modal HOST owning the delete handler (the form builds the
+  button, the host builds the panel). That was prototyped and reverted here rather than approximated
+  with `position:sticky`, which keeps the element in flow and floats it over the fields above.
+
+- [x] **C581 [DONE 2026-08-16 — a named one-hop return crumb on the destination page] [MAJOR][TXN][NAV][UX] Preserve context through cross-page correction flows.**
   Rules, Categories, Recurring, Activity, and Review are valid destinations, but navigating to them can
   feel like leaving the transaction task. Add explicit breadcrumbs or return actions that name the
   originating transaction/filter/review card, and restore that context after completion or cancellation.
   AC: every cross-page action has a visible return path and restores the same working set, not merely
   the Transactions route. Extends C559 and C577.
 
-- [ ] **C582 [MINOR][TXN][UX] Reduce above-the-ledger competition and improve progressive disclosure.**
+- [x] **C582 [DONE 2026-08-16 — the pending band collapses; first ledger row 598px → 460px, 9 rows in view] [MINOR][TXN][UX] Reduce above-the-ledger competition and improve progressive disclosure.**
   Profile, period, upcoming items, search, filters, review, rules, views, more actions, and multiple
   add actions compete for attention before the ledger. Reorganize the page around the primary job of
   scanning and correcting transactions; keep secondary planning and import tools available but
   progressively disclosed. AC: the first viewport establishes the current scope, primary action, and
   ledger before secondary tools dominate the visual hierarchy, while power-user access remains fast.
 
-- [ ] **C583 [MAJOR][TXN][UX][E2E] Validate the complete human correction loop as a product journey.**
+- [x] **C583 [DONE 2026-08-16 — e2e/regression/txn_correction_journey.spec.mjs; found two defects on its first run] [MAJOR][TXN][UX][E2E] Validate the complete human correction loop as a product journey.**
   Add a cross-surface usability scenario covering: locate a known-bad transaction, understand its
   provenance, edit its category, create a missing category, optionally create a rule, verify history,
   review the result, and return to the same filtered ledger. Measure steps, route changes, lost state,
@@ -8083,6 +8114,30 @@ design pass and an end-to-end test rather than a collection of isolated label ch
   drawn. Screenshot both routes before theorising further — that is what found it.
   AC: opening quick-add from every route either renders the panel or does not mount it; no route
   leaves focusable, fillable controls in an unrendered panel.
+
+- [ ] **C561 [BLOCKER][TXN] The transaction edit form does not save an AMOUNT change.** ★
+  *Found 2026-08-16 while adding the C547 e2e coverage. Not caused by that work — the same failure
+  reproduces on a path where the C546/C547 code is a no-op.*
+  Driving `/transactions` → open a row → change the amount → Save leaves the ledger row **completely
+  unchanged**: same figure, same tone class, **no error banner, no toast, and the form's own
+  `txn-edit-direction` state unmoved**. Nothing reports a failure; the save simply has no effect.
+  The direction state being unchanged is the sharp clue — it says the handler's body did not reach
+  its own state writes, not merely that the store rejected the transaction.
+  **What isolates it:** a DIRECTION-ONLY edit through the same form persists correctly (the
+  pre-existing C520 spec asserts exactly that and passes). So the form saves, but not when the
+  amount is what changed.
+  **Already ruled out** (each tried and re-probed): Playwright `fill()` vs. real `pressSequentially`
+  keystrokes; blurring the amount field before clicking Save (its TX16 blur handler re-renders the
+  form); clicking Save by `data-testid="txn-edit-save"` vs. by role; and a mid-handler state set
+  ahead of the write (that hazard was real and has been fixed in `transaction_edit_form.go`,
+  `quickadd.go` and `planning.go` — setting a state atom mid-handler re-renders the component while
+  the closure is still running and can lose the rest of the save — but removing it did not fix this).
+  **Next step:** instrument the save handler itself (a `slog` line at entry, after ParseSigned, and
+  after PutTransaction) and drive it once — that separates "handler never ran" from "handler ran and
+  the write was a no-op", which the black-box probes cannot.
+  Coverage is parked, not lost: `e2e/regression/amount_sign.spec.mjs` has the reproduction as a
+  `test.fixme` pointing here; its other five tests pass and cover C546 end to end.
+  AC: an amount edit persists, and any refusal says so on screen.
 
 - [ ] **C584 [CRITICAL][BUDGETS][DATA][E2E] Persist budgets created with a new category.**
   The Add budget flow can appear to succeed when “Create a new category for this budget” is selected,
