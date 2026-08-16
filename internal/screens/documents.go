@@ -12,6 +12,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountselect"
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
@@ -198,8 +199,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	pendingCSV := ui.UseState([]byte(nil))
 
 	accounts := app.Accounts()
-	defaultAcc := ""
-	if len(accounts) > 0 {
+	// C360: the import target defaulted to accounts[0], which is store order —
+	// so a CSV import opened preselected on "Marcus's 401(k)" and quietly filed a
+	// checking statement into a retirement account if the user did not notice.
+	// accountselect.DefaultID is the app's existing answer to "which account did
+	// they most likely mean": most-used recent spend account, then a
+	// checking-like one, never an investment account.
+	defaultAcc := accountselect.DefaultID(accounts, app.Transactions(), "")
+	if defaultAcc == "" && len(accounts) > 0 {
 		defaultAcc = accounts[0].ID
 	}
 	imageURL := ui.UseState("")

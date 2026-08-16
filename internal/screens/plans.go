@@ -55,7 +55,7 @@ func Plans() ui.Node {
 				uistate.T("plans.cloudTitle"),
 				uistate.T("plans.cloudTagline"),
 				priceAnnual,
-				"or "+priceMonthly+" billed monthly",
+				uistate.T("plans.orMonthly", priceMonthly),
 				[]string{
 					uistate.T("plans.cloudFeature1"),
 					uistate.T("plans.cloudFeature2"),

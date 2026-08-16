@@ -200,10 +200,14 @@ func Split() ui.Node {
 		if bal.IsZero() {
 			continue
 		}
-		label := m.Name + " is owed " + fmtMoney(bal)
+		// C360: the label used to carry the amount too, so every row printed the
+		// same figure twice — "Marcus Hartley owes $32.00 … $32.00". The label says
+		// WHO and WHICH WAY; the amount column says how much, like every other row
+		// in the app.
+		label := uistate.T("split.netIsOwed", m.Name)
 		amtCls := "budget-amount"
 		if bal.IsNegative() {
-			label = m.Name + " owes " + fmtMoney(bal.Neg())
+			label = uistate.T("split.netOwes", m.Name)
 			amtCls = "budget-amount text-down"
 		}
 		netRows = append(netRows, Div(css.Class("row"),

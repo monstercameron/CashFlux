@@ -119,6 +119,20 @@ var vSweepKeys = Catalog{
 	"screen.netWorthSub": "What moved your net worth, and what it means",
 	"screen.insightsSub": "The assistant's read on your spending — a tab of the assistant hub",
 	"screen.creditSub":   "What your card habits are doing to your score — local, private, no bureau",
+
+	// ── C360: sweep polish ──────────────────────────────────────────────────
+	// /split's running-balance rows printed the amount in the label AND in the
+	// amount column. The label says who and which way. %s = a member's name.
+	"split.netOwes":   "%s owes",
+	"split.netIsOwed": "%s is owed",
+	// /plans built this sub-price by concatenating English around a catalog
+	// value, which the hardcoded-copy scanner does not see in an argument
+	// position. %s = the monthly price.
+	"plans.orMonthly": "or %s billed monthly",
+	// The spending breakdown with exactly one category: a full-width bar reading
+	// "Groceries 100%" claims a composition the data does not have. %s = the
+	// category name.
+	"dashboard.breakdownSingle": "Everything spent this period is in %s so far.",
 }
 
 func init() {

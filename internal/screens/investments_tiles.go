@@ -84,19 +84,27 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 	}
 	gainTone := gainToneClass(v.SecSummary.TotalGainMinor)
 
-	chips := Div(css.Class("debt-chips"),
-		Div(css.Class("debt-stat"),
-			Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.totalGain")),
-			Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(gainTone)),
-				fmtSignedMoney(v.SecSummary.TotalGainMinor, v.Sym, v.Dec))),
-		Div(css.Class("debt-stat"),
-			Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.returnPct")),
-			Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(gainTone)),
-				fmt.Sprintf("%.2f%%", v.SecSummary.ReturnPct))),
-		Div(css.Class("debt-stat"),
-			Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.totalCost")),
-			Div(css.Class("debt-stat-value", tw.FontDisplay), fmtSignedMoney(v.SecSummary.TotalCostMinor, v.Sym, v.Dec))),
-	)
+	// C360: with no tracked holdings the securities KPIs are all zero, and a
+	// "RETURN 0.00% · GAIN/LOSS $0.00" row sitting beside a "▲ +11.5%" growth
+	// figure reads as a contradiction rather than as an absence. A household
+	// whose investment accounts are balance-tracked has no positions to summarise;
+	// the row goes away rather than reporting zeroes about nothing.
+	var chips ui.Node = Fragment()
+	if len(v.Securities) > 0 {
+		chips = Div(css.Class("debt-chips"),
+			Div(css.Class("debt-stat"),
+				Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.totalGain")),
+				Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(gainTone)),
+					fmtSignedMoney(v.SecSummary.TotalGainMinor, v.Sym, v.Dec))),
+			Div(css.Class("debt-stat"),
+				Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.returnPct")),
+				Div(ClassStr("debt-stat-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(gainTone)),
+					fmt.Sprintf("%.2f%%", v.SecSummary.ReturnPct))),
+			Div(css.Class("debt-stat"),
+				Div(css.Class("debt-stat-label", tw.TextDim), uistate.T("investments.totalCost")),
+				Div(css.Class("debt-stat-value", tw.FontDisplay), fmtSignedMoney(v.SecSummary.TotalCostMinor, v.Sym, v.Dec))),
+		)
+	}
 
 	body := Div(css.Class("inv-hero"), Attr("id", "sec-overview"),
 		Div(css.Class("inv-hero-main"),

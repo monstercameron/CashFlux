@@ -5313,15 +5313,32 @@ number agreement, period labeling, dedup/grouping, and a sample dataset that und
   other's jobs. They ask something now — "What moved your net worth, and what it means", "The
   assistant's read on your spending — a tab of the assistant hub", "What your card habits are doing
   to your score". Ratchet `TestDebtDoesNotRenderTheWholeCreditPage` blocks the full-panel embed.
-- [ ] **C360 [MINOR][UX] Sweep polish batch:** /plans is unstyled prose with no side-by-side plan
-  comparison; /split running-balance rows repeat the amount twice ("Marcus Hartley owes $32.00 …
-  $32.00"); /recurring shows raw formula-slug chips (`recurring_gym_membership_monthly`) on every
-  row at rest, "Post due now (0)" while a row is flagged OVERDUE, and weekly flows chipped "/mo";
-  /investments hero shows "RETURN 0.00% · GAIN/LOSS $0.00" beside "▲ +11.5%" growth (hide
-  securities KPIs when there are no holdings) and says "add your first position below" when the
-  button is above; dashboard "Spending breakdown" renders a single 100% bar (early-period, C344);
-  /categories chip-map duplicates the list below it; /documents CSV import defaults its target
-  account to "Marcus's 401(k)" (first-alphabetical — default to last-used/checking).
+- [x] **C360 ✅ DONE (2026-08-16) — Sweep polish batch.** Checked each of the seven; three had
+  already been fixed since the audit, four were live.
+  **Already fixed:** /plans is a two-card `.plans-grid` comparison with prices and feature lists,
+  not unstyled prose; /recurring's formula slug moved into the row's ⋯ as "Copy variable", the
+  "Post due now (0)" pairing gained `recurring.postDueTitleManual` explaining that overdue items are
+  hand-entered, and the "/mo" figure is the cadence-normalized equivalent with the real cadence on
+  the meta line beside it.
+  **Fixed here:** (1) **/split** printed the amount in the row label AND in the amount column —
+  "Marcus Hartley owes $32.00 … $32.00". The label says who and which way; the column says how much,
+  like every other row in the app. (2) **/investments** showed "RETURN 0.00% · GAIN/LOSS $0.00"
+  beside a "▲ +11.5%" growth figure when no positions are tracked — zeroes about nothing reading as
+  a contradiction. The securities KPI row is gone when there are no holdings. (3) **/categories'**
+  map was forty category names above a ledger of the same forty names, with the second copy carrying
+  all the information. Its chips are jump links into the ledger now, so it does a job the trees
+  can't — reach one category in a taxonomy of forty without scrolling — and the duplication becomes
+  navigation. Anchors rather than buttons, deliberately: a per-chip click handler would be a hook
+  inside a variable-length loop. (4) **/documents'** CSV import defaulted to `accounts[0]`, i.e.
+  store order, so it opened preselected on "Marcus's 401(k)" and would quietly file a checking
+  statement into a retirement account. It uses `accountselect.DefaultID` — the app's existing,
+  tested answer to "which account did they most likely mean" (most-used recent spend account, then
+  a checking-like one, never an investment account).
+  **Plus, found while in there:** the dashboard's spending breakdown drew a full-width single bar
+  reading "Groceries 100%" whenever one category had all the spending — claiming a composition the
+  data does not have — and now says so in a line instead; and /plans built its sub-price by
+  concatenating English around a catalog value ("or " + price + " billed monthly"), a hardcoded-copy
+  leak the scanner misses in an argument position.
 
 ### i18n coverage sweep — 2026-07-03 (Cam: "make sure every page is using i18n eng translations")
 Method: an AST scanner over display positions (element children incl. `+`-concatenations and

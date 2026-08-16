@@ -225,6 +225,25 @@ and every commit updates this file under `Unreleased`.
   surfaces come to look like they are doing each other's jobs. They ask something now.
 
 ### Fixed
+- **Sweep polish across five surfaces (C360).** /split printed each running balance twice —
+  "Marcus Hartley owes $32.00 … $32.00" — because the label carried the amount as well as the amount
+  column; the label says who and which way now. /investments showed "RETURN 0.00% · GAIN/LOSS $0.00"
+  beside a "▲ +11.5%" growth figure when no positions are tracked, so the row is gone when there are
+  no holdings: zeroes about nothing read as a contradiction, not as an absence. /documents' CSV
+  import defaulted to whichever account came first in store order, so it opened preselected on a
+  401(k) and would quietly file a checking statement into a retirement account — it uses the app's
+  existing "which account did they most likely mean" helper now, which never picks an investment
+  account. And the dashboard's spending breakdown drew a full-width single bar reading "Groceries
+  100%" when one category had all the spending, claiming a composition the data doesn't have; it says
+  so in a line instead.
+
+### Changed
+- **The category map became navigation (C360).** It listed forty category names above a ledger of the
+  same forty names, with the second copy carrying all the information. Its chips are jump links into
+  the ledger now, so the map does something the trees can't — reach one category in a large taxonomy
+  without scrolling — and the repetition becomes a way through the page rather than a second reading
+  of it.
+
 - **A savings plan stops rendering as a failure (C358).** "House down payment in 3 years" starts at
   $19,000, saves $400/mo, and spends $60,000 on a house at month 36 — so it ends below where it
   began, by design. The card toned itself on "ends lower than it started", which made a plan to buy a

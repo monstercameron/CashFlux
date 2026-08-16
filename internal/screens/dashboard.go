@@ -1390,6 +1390,13 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	body := Div(
 		Div(css.Class(tw.H25, tw.RoundedFull, tw.OverflowHidden, tw.Flex), barParts),
 		Div(css.Class("t-caption", tw.Flex, tw.FlexWrap, tw.GapX4, tw.GapY1, tw.Mt3, tw.TextDim), legend),
+		// C360: with one category there is no composition to show, and a full-width
+		// single bar reading "Groceries 100%" claims a shape the data does not have
+		// — which is what it looked like three days into a period. Say what is
+		// actually true instead of drawing a chart of one thing.
+		If(fr.Rows == 1, P(css.Class("t-caption", tw.TextFaint, tw.Mt1),
+			Attr("data-testid", "breakdown-single"),
+			uistate.T("dashboard.breakdownSingle", segs[0].name))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "breakdown", Title: uistate.T("dashboard.breakdown"), Draggable: true, Resizable: true, GridColumn: "3 / span 2", GridRow: "7",

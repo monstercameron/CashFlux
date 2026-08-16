@@ -33,6 +33,14 @@ import (
 // mermaid flowchart. A flowchart laid every top-level category out as an isolated
 // node, so dagre stacked them in a single tall column that wasted ~75% of the
 // horizontal space; a wrapping grid fills the width and stays glanceable (GI2).
+//
+// Every chip is a jump link into the ledger below (C360). The sweep read the map
+// as duplicating the list, and it was right while the chips were inert text: the
+// same forty names, twice, with the second copy carrying all the information. As
+// links they do a job the trees cannot — get you to one category in a taxonomy
+// of forty without scrolling — and the duplication becomes navigation. Anchors,
+// not buttons, deliberately: a per-chip click handler would be a hook inside a
+// variable-length loop.
 func categoryMapGrid(roots []categorytree.Node) ui.Node {
 	if len(roots) == 0 {
 		return Fragment()
@@ -41,12 +49,12 @@ func categoryMapGrid(roots []categorytree.Node) ui.Node {
 	groups = append(groups, css.Class("cat-map"))
 	for _, r := range roots {
 		items := []any{css.Class("cat-map-group")}
-		items = append(items, Span(css.Class("cat-map-chip"), r.Category.Name))
+		items = append(items, A(css.Class("cat-map-chip"), Href("#cat-row-"+r.Category.ID), r.Category.Name))
 		for _, ch := range r.Children {
-			items = append(items, Span(css.Class("cat-map-sub"), ch.Category.Name))
+			items = append(items, A(css.Class("cat-map-sub"), Href("#cat-row-"+ch.Category.ID), ch.Category.Name))
 			// one level of grandchildren keeps the map readable without nesting noise
 			for _, gc := range ch.Children {
-				items = append(items, Span(css.Class("cat-map-sub", "cat-map-sub2"), gc.Category.Name))
+				items = append(items, A(css.Class("cat-map-sub", "cat-map-sub2"), Href("#cat-row-"+gc.Category.ID), gc.Category.Name))
 			}
 		}
 		groups = append(groups, Div(items...))

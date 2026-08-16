@@ -80,6 +80,17 @@ func registerVSweep() {
 		marginTop("0.1rem"),
 	)
 
+	// ── C360: the category map is navigation, so its chips look reachable ───
+	rule("a.cat-map-chip, a.cat-map-sub",
+		textDecoration("none"),
+		color("inherit"),
+		cursor("pointer"),
+	)
+	rule("a.cat-map-chip:hover, a.cat-map-sub:hover, a.cat-map-chip:focus-visible, a.cat-map-sub:focus-visible",
+		borderColor("var(--accent)"),
+		color("var(--text)"),
+	)
+
 	rule(".home-hero-stats-window",
 		margin("0"),
 		letterSpacing("0.04em"),
