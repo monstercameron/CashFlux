@@ -415,6 +415,14 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
 	onFilterCustomValText := ui.UseEvent(func(v string) { debFilter("customval", func(x *uistate.TxFilter) { x.CustomVal = v }) })
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
+	// C573: the type-scoped entries behind the primary Add. Plain closures — the
+	// OverflowMenu item component owns each click hook — and each one lands the user
+	// somewhere that matches what its label promised, which is the whole point: three
+	// buttons that all opened the same neutral form told nobody anything.
+	transferOpenAtom := uistate.UseAcctTransferOpen()
+	addExpense := func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }
+	addIncome := func() { uistate.OpenQuickAddAs(uistate.QuickAddIncome) }
+	addTransfer := func() { transferOpenAtom.Set(true) }
 
 	// doExportCSV downloads the filtered ledger as CSV. It's a plain closure (not a
 	// UseEvent hook) because it's invoked from the "More" overflow menu's OnSelect
@@ -569,6 +577,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				RemoveLabel: uistate.T("transactions.lensChipRemove"),
 			})
 		}
+	}
+	// C585: when this view was opened from a budget, name the budget ahead of the
+	// filter sentence. The drill applies one chip per tracked category AND per
+	// descendant, which is the correct scope but arrives unattributed; saying
+	// where it came from lets the reader check it against the card they clicked,
+	// and its ✕ drops the whole scope in one action.
+	if bd := uistate.BudgetDrillFor(fOwn); bd.BudgetID != "" {
+		lensChips = append(lensChips, uiw.Chip{
+			Key:         budgetDrillChipKey + chipKeySep + bd.BudgetID,
+			Label:       uistate.T(budgetDrillChipKeyFor(bd), bd.Name),
+			Class:       "filter-chip-lens",
+			RemoveLabel: uistate.T("transactions.budgetDrillChipRemove"),
+		})
 	}
 	chips := make([]uiw.Chip, 0, len(active))
 	for _, af := range active {
@@ -884,6 +905,14 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				uistate.ClearMemberLens()
 				return
 			}
+			// The budget-origin chip owns the whole drill scope: dropping it clears
+			// the categories, tags and period the budget applied, and forgets the
+			// origin — not one category out of the set (C585).
+			if field == budgetDrillChipKey {
+				uistate.ClearBudgetDrill()
+				clearAllFilters()
+				return
+			}
 			setFilter(func(x *uistate.TxFilter) { *x = x.RemoveValue(txnfilter.FilterField(field), value) })
 		},
 		OnClearAll: clearAllFilters,
@@ -929,7 +958,30 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			// folded into the "⋯ More" overflow built above.
 			moreMenu,
 			// Primary action last → right end of the left-justified group.
-			toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
+			//
+			// C573: the page offered three ways to start a transaction — this button,
+			// the top bar's "+", and "Add something else" — and all three opened the
+			// same neutral form, so none of them said what was about to be created.
+			// This is now the page's one primary, with a caret holding the three
+			// creation kinds by name. Pressing the button still opens the form in one
+			// click for the common case; pressing the caret says which kind first, and
+			// the form arrives already set that way, so the label is a promise the
+			// destination keeps.
+			Div(css.Class("btn-split"),
+				toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
+				uiw.OverflowMenu(uiw.OverflowMenuProps{
+					TriggerLabel:  uistate.T("transactions.addKindLabel"),
+					TriggerTestID: "txn-add-kind-btn",
+					TriggerClass:  "btn btn-primary btn-split-caret",
+					Items: []uiw.OverflowMenuItem{
+						{Label: uistate.T("transactions.addExpense"), Icon: icon.ArrowDown, TestID: "txn-add-expense", OnSelect: addExpense},
+						{Label: uistate.T("transactions.addIncome"), Icon: icon.ArrowUp, TestID: "txn-add-income", OnSelect: addIncome},
+						{Label: uistate.T("transactions.addTransfer"), Icon: icon.Repeat, TestID: "txn-add-transfer", OnSelect: addTransfer},
+						{Label: uistate.T("transactions.importBtn"), Icon: icon.Upload, TestID: "txn-add-import", Section: uistate.T("transactions.addFromFile"),
+							OnSelect: func() { importPanelAtom.Set(true) }},
+					},
+				}),
+			),
 		},
 	})
 

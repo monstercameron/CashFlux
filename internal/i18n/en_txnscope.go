@@ -48,6 +48,18 @@ var txnScopeKeys = Catalog{
 	"transactions.confirmCategory":    "Confirm this category",
 	"transactions.confirmedCategory":  "Category confirmed — this row no longer reads as automatic.",
 
+	// The one primary entry point and its type-scoped menu (C573). Each label names
+	// the KIND of thing being created, and the form it opens is already set that way.
+	"transactions.addKindLabel": "Choose what kind of transaction to add",
+	"transactions.addExpense":   "Expense — money going out",
+	"transactions.addIncome":    "Income — money coming in",
+	"transactions.addTransfer":  "Transfer between your accounts",
+	"transactions.addFromFile":  "Or bring them in",
+	// The global "+" menu names the same three kinds the page's Add menu does, so a
+	// user meets one vocabulary wherever they start (C573).
+	"addmenu.expense": "Expense — money going out",
+	"addmenu.income":  "Income — money coming in",
+
 	// The Status column (C578): the row's state as a word, in a lane of its own.
 	"transactions.colStatus":      "Status",
 	"transactions.statusReviewed": "Reviewed",

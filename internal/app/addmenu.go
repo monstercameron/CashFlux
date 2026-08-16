@@ -123,7 +123,15 @@ func AddMenu() uic.Node {
 		),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+hidden+menuDir), Attr("role", "menu"),
-			item("addmenu.transaction", icon.Transactions, func() { quickAdd.Set(true) }),
+			// C573: the same three creation kinds, named the same way, as the
+			// Transactions page's own Add menu. The global menu used to offer one
+			// undifferentiated "New transaction" beside "Transfer money" while the page
+			// offered a third, differently-worded button — three entry points speaking
+			// three vocabularies for two underlying flows. Naming the direction here
+			// also means this path lands on a form that is already set up, exactly as
+			// the page's does.
+			item("addmenu.expense", icon.ArrowDown, func() { uistate.OpenQuickAddAs(uistate.QuickAddExpense) }),
+			item("addmenu.income", icon.ArrowUp, func() { uistate.OpenQuickAddAs(uistate.QuickAddIncome) }),
 			// The transfer workflow, reachable from the global add path — not only
 			// from Accounts (2026-07-18 assessment: ledger-entry mental model).
 			item("addmenu.transfer", icon.Repeat, func() { transferOpen.Set(true) }),

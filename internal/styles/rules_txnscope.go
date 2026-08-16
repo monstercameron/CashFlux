@@ -88,6 +88,27 @@ func registerTxnScope() {
 		padding("0"),
 	)
 
+	// --- The primary Add, split (C573) --------------------------------------------
+	// One control, two targets: press the label to add, press the caret to say what
+	// kind first. They read as one object — a seam rather than a gap — so the caret
+	// is unmistakably a modifier of the button beside it and not a fifth toolbar
+	// action competing with it.
+	rule(".btn-split",
+		display("inline-flex"),
+		alignItems("stretch"),
+	)
+	rule(".btn-split > .btn:first-child",
+		prop("border-top-right-radius", "0"),
+		prop("border-bottom-right-radius", "0"),
+	)
+	rule(".btn-split .btn-split-caret",
+		prop("border-top-left-radius", "0"),
+		prop("border-bottom-left-radius", "0"),
+		borderLeft("1px solid rgba(0,0,0,0.22)"),
+		paddingLeft("0.5rem"),
+		paddingRight("0.5rem"),
+	)
+
 	// --- Row status badges say what they mean (C578) ------------------------------
 	// Glyph and word sit on one line and never wrap or shrink: a status split across
 	// two lines, or clipped to "Needs rev…", is worse than the bare dot it replaced.

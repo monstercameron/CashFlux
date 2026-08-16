@@ -35,7 +35,7 @@ var english = Catalog{
 
 	// "+ Add" menu (C23)
 	"addmenu.transaction": "New transaction",
-	"addmenu.transfer":    "Transfer money",
+	"addmenu.transfer":    "Transfer between your accounts",
 	"addmenu.more":        "Add something else",
 	"addmenu.account":     "New account",
 	"addmenu.budget":      "New budget",
@@ -3573,7 +3573,6 @@ var english = Catalog{
 	"duplicates.keepBadge":     "Keep",
 	"duplicates.deleteBtn":     "Delete duplicate",
 	"duplicates.deleteAria":    "Delete duplicate transaction %s",
-	"duplicates.deleteConfirm": "Delete this duplicate transaction? This can't be undone.",
 	"duplicates.deleted":       "Duplicate deleted.",
 	"duplicates.emptyTitle":    "No duplicate transactions found",
 	"duplicates.emptyBody":     "Your ledger looks clean — no accidental double entries detected.",

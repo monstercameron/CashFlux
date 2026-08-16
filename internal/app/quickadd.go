@@ -5,6 +5,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ import (
 // hook order stays stable across opens; the result is reported via the toast.
 func QuickAddHost() uic.Node {
 	open := uistate.UseQuickAdd()
+	// C573: the direction a menu item promised ("Income…"), consumed as the panel
+	// opens. Read unconditionally here so the atom is captured on every render, not
+	// only the renders where the panel happens to be showing.
+	seedKind := uistate.UseQuickAddKind()
 	transferOpen := uistate.UseAcctTransferOpen()
 	notice := uistate.UseNotice()
 	dataRev := uistate.UseDataRevision()
@@ -154,6 +159,21 @@ func QuickAddHost() uic.Node {
 		reset()
 		open.Set(false)
 	}
+	// C573: apply the direction the entry point promised. Done in an effect rather
+	// than during render — writing state while rendering re-enters the render — and
+	// keyed on both the open flag and the seed, so it runs when the panel opens with
+	// a seed waiting and again if a second menu choice arrives while it is open.
+	// TakeQuickAddKind clears the seed, so the next plain "+ Add transaction" does
+	// not silently inherit the last menu choice.
+	uic.UseEffect(func() func() {
+		if !open.Get() {
+			return nil
+		}
+		if k := uistate.TakeQuickAddKind(); k != "" {
+			kind.Set(k)
+		}
+		return nil
+	}, "quickadd-seed:"+strconv.FormatBool(open.Get())+":"+seedKind.Get())
 	// saveCore validates + persists the transaction, returning true on success. It is
 	// shared by the panel's Save (which then closes) and "Save & add another" (C40),
 	// which keeps the panel open and resets the form for the next entry.

@@ -21,6 +21,13 @@ and every commit updates this file under `Unreleased`.
 
 
 ### Changed
+- **One way to add a transaction, and it says what kind.** Three entry points — the top bar's "+",
+  "Add something else", and "Add transaction" above the ledger — all opened the same neutral form,
+  so none of them told a first-time user what they were about to create. The ledger's button is now
+  the page's one primary, with a caret holding the three kinds by name ("Expense — money going out",
+  "Income — money coming in", "Transfer between your accounts", and importing from a file). The form
+  arrives already set to the kind that was chosen, so the label is a promise the destination keeps,
+  and the global "+" menu now uses the same words for the same things.
 - **A transaction's state reads as a word, not a symbol you have to look up.** Reconciled, cleared
   and needs-review were a ✓✓ / ✓ / • with a key above the table, so understanding one row meant
   going and finding the key — and to a screen reader "✓✓" is "check check" and "•" is nothing at
