@@ -905,12 +905,23 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				uistate.ClearMemberLens()
 				return
 			}
-			// The budget-origin chip owns the whole drill scope: dropping it clears
-			// the categories, tags and period the budget applied, and forgets the
-			// origin — not one category out of the set (C585).
+			// The budget-origin chip owns the SCOPE the drill applied — its
+			// categories, tags and period — and drops all of it at once, because
+			// removing one category out of a rolled-up set leaves a filter that
+			// still claims to be the budget while no longer being it.
+			//
+			// It drops only what the budget contributed. Anything the user added
+			// after arriving (a search, an account, a member) is their work, not the
+			// budget's, and a control labelled for the origin note must not throw it
+			// away (C585).
 			if field == budgetDrillChipKey {
 				uistate.ClearBudgetDrill()
-				clearAllFilters()
+				setFilter(func(x *uistate.TxFilter) {
+					x.Category, x.Categories = "", ""
+					x.Tag, x.Tags = "", ""
+					x.ScopeAny = false
+					x.From, x.To = "", ""
+				})
 				return
 			}
 			setFilter(func(x *uistate.TxFilter) { *x = x.RemoveValue(txnfilter.FilterField(field), value) })

@@ -326,6 +326,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// the row loop). Filters the To-do list to transaction-linked tasks, then navigates.
 	openFollowUps := func() {
 		uistate.SetTodoFilterLink(uistate.TodoLinkTransaction)
+		txnLeaveFor("/todo") // C581: leave a named way back to this working set
 		nav.Navigate(uistate.RoutePath("/todo"))
 	}
 	// Clicking a tag chip on a row narrows the ledger to that single tag (replacing any
@@ -423,6 +424,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			if t.ID == id {
 				phrase := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc))
 				uistate.SetRuleDraft(phrase, t.CategoryID)
+				// C581: writing a rule from a row is the deepest side trip the ledger
+				// offers — a different page, a form to fill, and the filtered view you
+				// were working through left behind. Leave a named way back.
+				txnLeaveFor("/rules")
 				nav.Navigate(uistate.RoutePath("/rules"))
 				return
 			}

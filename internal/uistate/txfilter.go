@@ -27,6 +27,12 @@ func UseTxFilter() state.Atom[TxFilter] {
 	return state.UseAtom(txFilterAtomID, loadTxFilter())
 }
 
+// CurrentTxFilter reads the persisted filter WITHOUT subscribing to the atom, for
+// callers outside a render — a click handler that is about to navigate away and
+// wants to name the working set it is leaving (C581). Inside a render, use
+// UseTxFilter: this one will not re-render anything when the filter changes.
+func CurrentTxFilter() TxFilter { return loadTxFilter() }
+
 // PersistTxFilter saves the filter to localStorage.
 func PersistTxFilter(f TxFilter) {
 	data, err := json.Marshal(f.Normalize())

@@ -88,6 +88,27 @@ func registerTxnScope() {
 		padding("0"),
 	)
 
+	// --- The one-hop return crumb (C581) ------------------------------------------
+	// A thin band under the top bar on the page a side trip landed on. Quiet — it is
+	// a thread back, not an alert — but the back control is a real button, because a
+	// link styled as prose is the thing users do not find when they want out.
+	rule(".return-crumb",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+		padding("0.4rem 1.25rem"),
+		borderBottom("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+		fontSize("var(--type-13)"),
+	)
+	rule(".return-crumb-note",
+		fontSize("var(--type-12)"),
+	)
+	rule(".return-crumb-x",
+		marginLeft("auto"),
+	)
+
 	// --- The primary Add, split (C573) --------------------------------------------
 	// One control, two targets: press the label to add, press the caret to say what
 	// kind first. They read as one object — a seam rather than a gap — so the caret

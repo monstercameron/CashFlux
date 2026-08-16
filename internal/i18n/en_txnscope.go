@@ -60,6 +60,15 @@ var txnScopeKeys = Catalog{
 	"addmenu.expense": "Expense — money going out",
 	"addmenu.income":  "Income — money coming in",
 
+	// The one-hop breadcrumb out of a cross-page correction (C581).
+	"returnTo.back":          "Back to %s",
+	"returnTo.aria":          "Return to %s",
+	"returnTo.note":          "your filters and page are still there",
+	"returnTo.dismiss":       "Dismiss this shortcut back",
+	"returnTo.labelSearch":   "Transactions, filtered to \"%s\"",
+	"returnTo.labelFiltered": "Transactions, with %s applied",
+	"returnTo.labelPlain":    "Transactions",
+
 	// The Status column (C578): the row's state as a word, in a lane of its own.
 	"transactions.colStatus":      "Status",
 	"transactions.statusReviewed": "Reviewed",

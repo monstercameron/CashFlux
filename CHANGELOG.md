@@ -57,6 +57,13 @@ and every commit updates this file under `Unreleased`.
   navigated away on any click — going to the schedule is a named link inside it.
 
 ### Added
+- **A named way back out of a cross-page correction.** Writing a rule, opening Activity or checking
+  a follow-up sends you off the ledger, and the way back was the browser's Back button and the hope
+  that your filter survived — while the nav rail highlighted the destination, so the trip read as
+  having left the task rather than stepped out of it. A crumb now appears at the top of the page you
+  landed on, naming what it returns you to ("Back to Transactions, filtered to \"coffee\"") and
+  saying your filters and page are still there. It shows only on the page the trip was for, and
+  clears the moment you go elsewhere.
 - **The ledger says what it is showing, in words, where you can see it.** The page put a review
   backlog ("Review inbox (249)"), quick-filter counts and a pager range ("1–25 of 3,227") side by
   side, each measured against a different population — and the one statement that tied a number to
