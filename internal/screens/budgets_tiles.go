@@ -1372,16 +1372,12 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		)
 	}
 
-	title := uistate.T("budgets.issuesRailOne")
-	if count != 1 {
-		title = uistate.T("budgets.issuesRail", count)
-	}
-	if props.Hist {
-		title = uistate.T("budgets.histIssuesRailOne")
-		if count != 1 {
-			title = uistate.T("budgets.histIssuesRail", count)
-		}
-	}
+	// C588: the header NAMES what is in the rail. "2 items to review from this
+	// period" told the reader nothing about whether opening it led to
+	// transactions, budgets, tasks or goals — three different destinations hide
+	// behind it, and the wording read like a transaction review inbox, which is
+	// the one thing it never is.
+	title := budgetIssuesTitle(props.OverAssigned > 0, fundShort, props.Hist && props.FollowUps > 0, props.Hist)
 	// Over-assignment is the page's to-do: the Resolve figure rides the header.
 	var resolve ui.Node = Fragment()
 	if props.OverAssigned > 0 {
@@ -1416,7 +1412,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-resolve-alloc"),
 				Title(uistate.T("budgets.issueReviewAllocTitle")), OnClick(goAllocate),
-				uistate.T("budgets.issueReviewAlloc")),
+				uistate.T("budgets.issueGoAllocate")),
 		))
 	}
 	if props.FollowUps > 0 {
@@ -1430,7 +1426,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 				Span(css.Class("budget-issue-body"), uistate.T("budgets.followUpsRowBody")),
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-followups-view"),
-				Title(uistate.T("budgets.followUpsRowView")), OnClick(goTodos), uistate.T("budgets.followUpsRowView")),
+				Title(uistate.T("budgets.followUpsRowView")), OnClick(goTodos), uistate.T("budgets.issueGoTodo")),
 		))
 	}
 	if fundShort {
@@ -1477,7 +1473,7 @@ func budgetFundShortAlert(props budgetFundShortProps) ui.Node {
 			Span(css.Class("budget-fundshort-body"), body),
 		),
 		Button(css.Class("btn btn-sm budget-fundshort-btn"), Type("button"), Attr("data-testid", "budgets-fund-short-review"),
-			Title(uistate.T("budgets.fundShortReviewTitle")), OnClick(goToGoals), uistate.T("budgets.fundShortReview")),
+			Title(uistate.T("budgets.fundShortReviewTitle")), OnClick(goToGoals), uistate.T("budgets.issueGoGoals")),
 	)
 }
 
@@ -1563,12 +1559,51 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	uiw.DismissPopover(settingsOpen.Get(), "budgets-settings-wrap", func() { settingsOpen.Set(false) })
 	uiw.AnchorPopover(settingsOpen.Get(), "budgets-settings-wrap")
 	// C112: switch the budgeting methodology right from /budgets.
+	//
+	// C590: this control is the HOUSEHOLD's method, and the page has a second,
+	// identically-worded one per budget — so changing this while thinking you were
+	// editing one card was an easy mistake with a page-wide result. It now says
+	// what it governs, previews how many budgets actually move (a budget with its
+	// own method keeps it), and the change is undoable.
+	methodImpact := budgeting.MethodChangeImpact(app.Budgets())
 	onMethod := ui.UseEvent(func(e ui.Event) {
-		s := app.Settings()
-		s.BudgetMethodology = e.GetValue()
-		_ = app.PutSettings(s)
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("settings.methodSaved"), false) // QA L2
+		next := e.GetValue()
+		cur := app.Settings()
+		if next == cur.BudgetMethodology {
+			return
+		}
+		prev := cur.BudgetMethodology
+		apply := func() {
+			s := app.Settings()
+			s.BudgetMethodology = next
+			_ = app.PutSettings(s)
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+		}
+		commit := func() {
+			apply()
+			uistate.PostUndoable(uistate.T("budgets.methodGlobalSaved",
+				methodDisplayName(next), plural(methodImpact.Following, "budget")))
+		}
+		// With budgets that override the household method, the change is not what
+		// the label implies on its own — say so, and name what stays put, before
+		// touching anything.
+		if methodImpact.Overriding > 0 {
+			uistate.ConfirmModalLabeled(
+				uistate.T("budgets.methodGlobalConfirm", methodDisplayName(next),
+					plural(methodImpact.Following, "budget"), plural(methodImpact.Overriding, "budget")),
+				uistate.T("budgets.methodGlobalConfirmAction"), false,
+				func(ok bool) {
+					if !ok {
+						uistate.BumpDataRevision() // re-render so the select springs back to `prev`
+						return
+					}
+					commit()
+				})
+			_ = prev
+			return
+		}
+		commit()
 	})
 	sortVal := sortAtom.Get()
 	// July-19 review #2: a SINGLE control row. Everything that shapes the view (method,
@@ -1583,15 +1618,22 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	viewSection := Div(css.Class("bud-set-sec"),
 		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionView")),
 		Label(css.Class("bud-set-field"),
-			Span(css.Class("bud-set-lbl"), uistate.T("settings.budgetMethod")),
+			// C590: the label states the SCOPE. "Budgeting method" beside a
+			// per-budget control with the same name is what made a page-wide switch
+			// look like a card-level one.
+			Span(css.Class("bud-set-lbl"), uistate.T("budgets.methodGlobalLabel")),
 			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-method"),
-				Attr("aria-label", uistate.T("settings.budgetMethod")), Title(uistate.T("settings.budgetMethod")), OnChange(onMethod),
+				Attr("aria-label", uistate.T("budgets.methodGlobalLabel")), Title(uistate.T("budgets.methodGlobalTitle")), OnChange(onMethod),
 				Option(Value(string(budgeting.MethodSimple)), SelectedIf(method == budgeting.MethodSimple), uistate.T("settings.budgetMethodSimple")),
 				Option(Value(string(budgeting.MethodZeroBased)), SelectedIf(method == budgeting.MethodZeroBased), uistate.T("settings.budgetMethodZero")),
 				Option(Value(string(budgeting.MethodEnvelope)), SelectedIf(method == budgeting.MethodEnvelope), uistate.T("settings.budgetMethodEnvelope")),
 				Option(Value(string(budgeting.MethodFlex)), SelectedIf(method == budgeting.MethodFlex), uistate.T("settings.budgetMethodFlex")),
 			),
 		),
+		// C590: what this control governs, and what it will leave alone. The
+		// per-budget overrides are the part nobody could see from here.
+		P(css.Class("bud-set-hint"), Attr("data-testid", "budgets-method-scope"),
+			methodScopeText(methodImpact)),
 		Label(css.Class("bud-set-field"),
 			Span(css.Class("bud-set-lbl"), uistate.T("budgets.sortLabel")),
 			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-sort"),

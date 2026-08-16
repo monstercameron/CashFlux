@@ -160,6 +160,26 @@ and every commit updates this file under `Unreleased`.
   blank, zero, non-numeric and out-of-range values, a live preview of the total budgeted before →
   after plus every affected budget's own before → after, and an explicit acknowledgement for any
   reduction or outsized raise. Cancel changes nothing.
+- **The budgets rail names what is in it and where each row goes (C588).** "2 items to review from
+  this period" reads like a transaction inbox and hid three different destinations: an
+  over-assignment opens Allocate, follow-ups open the To-do list, a sinking-fund shortfall opens
+  Goals. The header now names the contents ("an over-assignment and open follow-ups"), and each row's
+  button names the page it opens.
+- **Two controls called "method" now say which is which (C590).** Budget settings holds the
+  household's budgeting method and Add/Edit holds a per-budget one, with nothing distinguishing them
+  — so changing the global picker while editing one card switched the whole page. The household
+  control is labelled for its scope and carries a sentence saying how many budgets follow it and how
+  many set their own; changing it confirms first when any budget overrides, reports how many actually
+  moved, and is undoable. Each budget's own picker says where it currently gets its method from and
+  that a choice there stops with that budget.
+- **Auto budget shows what it does to the plan (C593).** The review list had a per-category total and
+  no answer to "can I afford this?" — a suggestion that replaces an existing budget changes the
+  household total by the difference, not by its own size. The modal now carries that arithmetic above
+  the list (budgeted before → after, and what it leaves of your income), splits the rows into new
+  budgets versus limits it would overwrite, and offers select-all/none plus a reset of every tuned
+  slider.
+- **"11 categorys".** The count phrasing used everywhere took a bare "+s". Pluralisation moved into
+  `internal/textutil` where it is tested: consonant + y → -ies, sibilants take -es.
 - **"View as" actually scopes the transactions ledger.** The top bar's member perspective moved to
   the multi-dimensional scope atom some time ago; the ledger kept reading the retired one, which
   nothing writes. Choosing "View as Priya" therefore relabelled the switcher and changed nothing —

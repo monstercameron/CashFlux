@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -113,6 +114,51 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		}
 	}
 
+	// C593: bulk controls, so a long list is not edited one row at a time. Select
+	// all / none and a reset that returns every slider to the learned figure —
+	// without them, undoing a run of tuning meant dragging each slider back by eye.
+	setAll := func(on bool) {
+		nm := make(map[string]bool, len(suggestions))
+		for _, s := range suggestions {
+			nm[s.CategoryID] = on
+		}
+		picked.Set(nm)
+	}
+	selectAll := ui.UseEvent(Prevent(func() { setAll(true) }))
+	selectNone := ui.UseEvent(Prevent(func() { setAll(false) }))
+	resetTuning := ui.UseEvent(Prevent(func() {
+		nm := make(map[string]int, len(suggestions))
+		for _, s := range suggestions {
+			nm[s.CategoryID] = 100
+		}
+		pct.Set(nm)
+	}))
+	tuned := 0
+	for _, s := range suggestions {
+		if pct.Get()[s.CategoryID] != 100 {
+			tuned++
+		}
+	}
+
+	// C593: the financial consequence, in the modal, before Save. The list showed
+	// a per-category total and nothing about what it did to the plan — so the one
+	// question the screen exists to answer ("can I afford this?") was answered
+	// after saving, on another page. This is the household's budgeted total and
+	// income basis WITH the pending changes folded in.
+	pending := map[string]int64{}
+	for _, s := range suggestions {
+		if sel[s.CategoryID] {
+			if amt := amountFor(s); amt > 0 {
+				pending[s.CategoryID] = amt
+			}
+		}
+	}
+	now := time.Now()
+	monthStart := dateutil.MonthStart(now)
+	autoIncome := budgeting.IncomeForBudgets(uistate.CurrentPrefs().MonthlyIncomeMinor,
+		app.Transactions(), dateutil.AddMonths(monthStart, -1), monthStart, base, rates)
+	impact := budgeting.AutoBudgetImpactOf(app.Budgets(), autoIncome, pending)
+
 	apply := ui.UseEvent(Prevent(func() {
 		saved := 0
 		for _, s := range suggestions {
@@ -174,7 +220,19 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	}
 
 	keyOf := func(s budgeting.BudgetSuggestion) any { return s.CategoryID }
-	rows := MapKeyed(suggestions, keyOf, func(s budgeting.BudgetSuggestion) ui.Node {
+	// C593: the list is split into what this run would CREATE and what it would
+	// REWRITE. Both were one undifferentiated column, distinguished only by a
+	// small tag on the rows that already had a budget — which is the difference
+	// between "add these" and "overwrite the numbers you tuned by hand".
+	var fresh, rewrite []budgeting.BudgetSuggestion
+	for _, s := range suggestions {
+		if _, has := existing[s.CategoryID]; has {
+			rewrite = append(rewrite, s)
+		} else {
+			fresh = append(fresh, s)
+		}
+	}
+	renderRow := func(s budgeting.BudgetSuggestion) ui.Node {
 		_, has := existing[s.CategoryID]
 		return ui.CreateElement(autoBudgetRow, autoBudgetRowProps{
 			CategoryID: s.CategoryID, CategoryName: s.CategoryName,
@@ -182,7 +240,58 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			Pct: pct.Get()[s.CategoryID], Picked: sel[s.CategoryID], HasExisting: has,
 			OnPct: setPct, OnToggle: toggle,
 		})
-	})
+	}
+	group := func(titleKey string, items []budgeting.BudgetSuggestion, testID string) ui.Node {
+		if len(items) == 0 {
+			return Fragment()
+		}
+		return Fragment(
+			Div(css.Class("autobudget-group"), Attr("data-testid", testID),
+				uistate.T(titleKey, plural(len(items), "category"))),
+			MapKeyed(items, keyOf, renderRow),
+		)
+	}
+	rows := Fragment(
+		group("budgets.autoGroupNew", fresh, "autobudget-group-new"),
+		group("budgets.autoGroupExisting", rewrite, "autobudget-group-existing"),
+	)
+
+	// The bulk controls, above the list: tick or clear everything, and put every
+	// slider back to what was learned.
+	bulkBar := Div(css.Class("autobudget-bulk"), Attr("data-testid", "autobudget-bulk"),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-all"),
+			OnClick(selectAll), uistate.T("budgets.autoSelectAll")),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-none"),
+			OnClick(selectNone), uistate.T("budgets.autoSelectNone")),
+		If(tuned > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-reset"),
+			OnClick(resetTuning), uistate.T("budgets.autoResetTuning", plural(tuned, "slider")))),
+	)
+
+	// The plan-level consequence, kept in view above the list: what the household
+	// budgets now, what it would budget after saving, and what that leaves of the
+	// income the plan is measured against.
+	var impactNode ui.Node = Fragment()
+	if nSel > 0 {
+		var leftLine ui.Node = Fragment()
+		if impact.HasIncome() {
+			leftKey := "budgets.autoImpactLeft"
+			leftCls := "autobudget-impact-left"
+			if impact.LeftAfter() < 0 {
+				leftKey, leftCls = "budgets.autoImpactOver", "autobudget-impact-left is-over"
+			}
+			leftLine = Span(ClassStr(leftCls), Attr("data-testid", "autobudget-impact-left"),
+				uistate.T(leftKey, fmtMoney(money.New(absMinor(impact.LeftAfter()), base)),
+					fmtMoney(money.New(impact.Income, base))))
+		}
+		impactNode = Div(css.Class("autobudget-impact"), Attr("data-testid", "autobudget-impact"),
+			Span(css.Class("autobudget-impact-lbl"), uistate.T("budgets.autoImpactLabel")),
+			Span(css.Class("autobudget-impact-before", tw.TextFaint), fmtMoney(money.New(impact.BudgetedBefore, base))),
+			Span(css.Class(tw.TextFaint), "→"),
+			Span(css.Class("autobudget-impact-after", tw.FontDisplay), Attr("data-testid", "autobudget-impact-after"),
+				fmtMoney(money.New(impact.BudgetedAfter, base))),
+			leftLine,
+		)
+	}
 
 	// Use the standard modal shell (.acct-edit-form: min-height:100% flex column) so the
 	// .modal-scroll body fills the FlushBody panel and the .modal-foot stays pinned to
@@ -193,6 +302,8 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
 				Attr("data-testid", "autobudget-intro"),
 				uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
+			impactNode,
+			bulkBar,
 			Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"),

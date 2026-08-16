@@ -10,8 +10,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -727,13 +727,19 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 							})),
 						Div(css.Class("ba-full"),
 							Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-owner-hint"), ownerHint)))),
+					// C590: name the scope. This picker and the page's "Budgeting
+					// method" popover were both called "method", and neither said
+					// which budgets it moved.
 					labeledField(uistate.T("budgets.methodLabel"),
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options:   budgetMethodOptions(methodology.Get()),
-							Selected:  methodology.Get(),
-							OnChange:  func(v string) { methodology.Set(v) },
-							AriaLabel: uistate.T("budgets.methodLabel"),
-						})),
+						Fragment(
+							uiw.SelectInput(uiw.SelectInputProps{
+								Options:   budgetMethodOptions(methodology.Get()),
+								Selected:  methodology.Get(),
+								OnChange:  func(v string) { methodology.Set(v) },
+								AriaLabel: uistate.T("budgets.methodLabel"),
+							}),
+							Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-add-method-hint"),
+								budgetOwnMethodHint(app.Settings().BudgetMethodology, methodology.Get())))),
 					// Rollover gets its own full-width row so the label never wraps.
 					Label(css.Class("ba-full", "ba-check"),
 						Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),

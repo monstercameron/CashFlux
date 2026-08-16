@@ -45,3 +45,40 @@ func FirstNonEmpty(a, b string) string {
 	}
 	return b
 }
+
+// Plural renders "N thing" / "N things" — the count phrase this app puts in
+// almost every confirmation, heading and toast.
+//
+// It lives here rather than in the view layer because the pluralisation rule is
+// pure text logic that needs testing: a bare "+s" is right for most of what
+// CashFlux counts (budgets, sliders, filters) but produced "11 categorys" in the
+// Auto-budget group headings, which is the kind of defect that only shows up on
+// screen and only if someone reads it.
+func Plural(n int, singular string) string {
+	if n == 1 {
+		return "1 " + singular
+	}
+	return strconv.Itoa(n) + " " + Pluralize(singular)
+}
+
+// Pluralize turns an English noun into its plural: consonant + y → -ies, the
+// sibilant endings take -es, everything else takes -s. Deliberately not a
+// general-purpose inflector — it covers the shapes this app's nouns actually
+// have, and an irregular word ("person") should be written out by its caller
+// rather than taught to a rule table nobody maintains.
+func Pluralize(singular string) string {
+	if singular == "" {
+		return ""
+	}
+	if n := len(singular); n > 1 && singular[n-1] == 'y' && !isVowel(singular[n-2]) {
+		return singular[:n-1] + "ies"
+	}
+	for _, suffix := range []string{"s", "x", "z", "ch", "sh"} {
+		if strings.HasSuffix(singular, suffix) {
+			return singular + "es"
+		}
+	}
+	return singular + "s"
+}
+
+func isVowel(b byte) bool { return strings.IndexByte("aeiouAEIOU", b) >= 0 }

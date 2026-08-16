@@ -33,6 +33,49 @@ var budgetsClarityKeys = Catalog{
 	"transactions.budgetDrillChipSubTags": "From the %s budget, including its sub-categories and tagged charges",
 	"transactions.budgetDrillChipRemove":  "Show all transactions again",
 
+	// --- C593: Auto budget shows its financial impact and can be edited in bulk ---
+	// %s = a count phrase like "6 categories".
+	"budgets.autoGroupNew":      "New budgets · %s",
+	"budgets.autoGroupExisting": "Already budgeted · %s — ticking these overwrites the limit you set",
+	"budgets.autoSelectAll":     "Select all",
+	"budgets.autoSelectNone":    "Select none",
+	// %s = a count phrase like "3 sliders".
+	"budgets.autoResetTuning": "Reset %s to the suggestion",
+	"budgets.autoImpactLabel": "Budgeted each month",
+	// %s = the amount left, %s = the income it is measured against.
+	"budgets.autoImpactLeft": "leaves %s of your %s income",
+	"budgets.autoImpactOver": "%s MORE than your %s income",
+
+	// --- C588: the plan rail names its contents and its destinations ---
+	// The header used to read "2 items to review from this period", which sounds
+	// like a transaction inbox and hides three different destinations. %s = the
+	// joined list of what is actually in there.
+	"common.and":                    "and",
+	"budgets.issuesRailNamed":       "%s to sort out",
+	"budgets.issuesRailHist":        "%s left from this period",
+	"budgets.issuePartOverAssigned": "an over-assignment",
+	"budgets.issuePartFundShort":    "a sinking-fund shortfall",
+	"budgets.issuePartFollowUps":    "open follow-ups",
+	// Each row's button names the PAGE it opens, so the destination is readable
+	// before the click rather than discovered after it.
+	"budgets.issueGoAllocate": "Open Allocate",
+	"budgets.issueGoTodo":     "Open To-do",
+	"budgets.issueGoGoals":    "Open Goals",
+
+	// --- C590: which method control governs what ---
+	// The household picker names its own scope; the per-budget one says where the
+	// budget currently gets its method from and that a choice here stops with it.
+	"budgets.methodGlobalLabel":         "Budgeting method (whole household)",
+	"budgets.methodGlobalTitle":         "How budgeting works across this page. Individual budgets can set their own.",
+	"budgets.methodScopeNone":           "Applies to every budget you add.",
+	"budgets.methodScopeAll":            "Applies to all %s here, and to every budget you add.",
+	"budgets.methodScopeMixed":          "Applies to the %s following it. %s set their own method and will not change.",
+	"budgets.methodGlobalConfirm":       "Switch the household to %s? This changes the %s following the household method. %s set their own and will keep it.",
+	"budgets.methodGlobalConfirmAction": "Switch the household",
+	"budgets.methodGlobalSaved":         "Household method is now %s — %s changed.",
+	"budgets.methodOwnFollowing":        "Following the household method (%s). Choosing another applies to this budget only.",
+	"budgets.methodOwnOverriding":       "This budget uses %s regardless of the household method (%s).",
+
 	// --- C592: "Adjust all" is a form with a preview, not a bare prompt ---
 	"budgets.adjustAllTitleHeading": "Adjust every budget",
 	"budgets.adjustAllIntro":        "Raise or lower every budget's limit by the same percentage. Nothing changes until you apply it.",

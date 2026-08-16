@@ -913,6 +913,74 @@ func registerBudgetsSurface() {
 	)
 	rule(".budget-crow-chip", whiteSpace("nowrap"), justifySelf("end"))
 	rule(".budget-crow > .add-wrap", justifySelf("end"))
+	// --- C593: Auto budget's impact strip, bulk controls and group headings ---
+	// The impact sits ABOVE the list, not in the footer beside Save: the question
+	// it answers ("can I afford this?") is the one being asked while the sliders
+	// are moving, and a figure that only appears next to the commit button is read
+	// once, at the end.
+	rule(".autobudget-impact",
+		display("flex"),
+		alignItems("baseline"),
+		flexWrap("wrap"),
+		gap("0.15rem 0.5rem"),
+		padding("0.5rem 0.65rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius)"),
+	)
+	rule(".autobudget-impact-lbl",
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+	)
+	rule(".autobudget-impact-after",
+		fontSize("1.05rem"),
+		fontWeight("800"),
+		color("var(--text)"),
+	)
+	rule(".autobudget-impact-left",
+		fontSize("var(--type-13)"),
+		color("var(--text-dim)"),
+	)
+	// Over income is the one state worth a colour: the plan does not fit.
+	rule(".autobudget-impact-left.is-over",
+		color("var(--danger)"),
+		fontWeight("700"),
+	)
+	rule(".autobudget-bulk",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+		marginTop("0.15rem"),
+	)
+	rule(".autobudget-group",
+		marginTop("0.7rem"),
+		paddingBottom("0.25rem"),
+		fontSize("0.66rem"),
+		fontWeight("700"),
+		letterSpacing("0.05em"),
+		textTransform("uppercase"),
+		color("var(--text-faint)"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".autobudget-rows > .autobudget-group:first-child",
+		marginTop("0"),
+	)
+
+	// C590: the scope sentence under the household method picker. Quiet, but a
+	// full line — it is the only thing on the page that distinguishes this control
+	// from the identically-named one on each budget.
+	rule(".bud-set-hint",
+		margin("0.15rem 0 0.5rem"),
+		fontSize("var(--type-12)"),
+		lineHeight("1.4"),
+		color("var(--text-faint)"),
+		maxWidth("20rem"),
+	)
+
 	// --- C592: the "Adjust all" form ---
 	// The percentage field carries its unit inside the control, so the number and
 	// the "%" read as one value rather than a number beside a stray symbol.

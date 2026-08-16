@@ -2,6 +2,8 @@
 
 package budgeting
 
+import "github.com/monstercameron/CashFlux/internal/domain"
+
 // Methodology is the budgeting approach a household uses. It shapes the Budgets
 // view's affordances; the per-category limit evaluation (Evaluate) is the same
 // across methodologies.
@@ -48,4 +50,44 @@ func ParseMethodology(s string) Methodology {
 // (the budgets exceed income). Amounts are minor units in the base currency.
 func ToAssign(income, totalBudgeted int64) int64 {
 	return income - totalBudgeted
+}
+
+// MethodImpact describes what changing the HOUSEHOLD's budgeting method will
+// actually touch (C590).
+//
+// The page offers two method controls — a global one in Budget settings and a
+// per-budget one in Add/Edit — with no statement of the relationship between
+// them, so a user can change the whole page believing they are editing one card.
+// The difference is real: a budget that sets its own method keeps it, and a
+// global change moves only the budgets that were following along.
+type MethodImpact struct {
+	// Following counts budgets with no per-budget override. These are the ones a
+	// global change moves.
+	Following int
+	// Overriding counts budgets that set their own method and will not change.
+	Overriding int
+	// Overrides tallies those budgets by the method they chose, so the UI can name
+	// what stays put instead of only counting it.
+	Overrides map[Methodology]int
+}
+
+// Total is how many budgets were considered.
+func (i MethodImpact) Total() int { return i.Following + i.Overriding }
+
+// MethodChangeImpact splits budgets into those that follow the household method
+// and those that override it. An unknown or empty per-budget value counts as
+// following, matching ParseMethodology's rule that anything unrecognised behaves
+// as the default rather than as a private setting.
+func MethodChangeImpact(budgets []domain.Budget) MethodImpact {
+	out := MethodImpact{Overrides: map[Methodology]int{}}
+	for _, b := range budgets {
+		m := Methodology(b.Methodology)
+		if m == "" || !m.Valid() {
+			out.Following++
+			continue
+		}
+		out.Overriding++
+		out.Overrides[m]++
+	}
+	return out
 }

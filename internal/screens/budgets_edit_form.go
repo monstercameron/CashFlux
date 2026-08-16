@@ -475,6 +475,13 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				errS.Set(err.Error())
 				return
 			}
+			readback := "MISSING"
+			for _, rb := range app.Budgets() {
+				if rb.ID == props.BudgetID {
+					readback = "[" + rb.Notes + "]"
+				}
+			}
+			uistate.PostNotice("DIAGRB"+readback, false)
 			saved = true
 			break
 		}
@@ -608,7 +615,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			),
 			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-notes-save"), uistate.T("action.save")),
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budget-notes-save"),
+					OnClick(saveNotes), uistate.T("action.save")),
 			),
 		)
 	}

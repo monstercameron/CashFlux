@@ -75,3 +75,44 @@ func TestCommaFields(t *testing.T) {
 		})
 	}
 }
+
+func TestPluralize(t *testing.T) {
+	cases := map[string]string{
+		"budget":   "budgets",
+		"slider":   "sliders",
+		"category": "categories", // the C593 defect: "categorys" shipped
+		"day":      "days",       // vowel + y keeps the simple rule
+		"box":      "boxes",
+		"match":    "matches",
+		"dish":     "dishes",
+		"class":    "classes",
+		// "quizzes" doubles its z — an irregular this rule deliberately does not
+		// know. Pinned so the limit is documented rather than discovered.
+		"quiz": "quizes",
+		"":     "",
+	}
+	for in, want := range cases {
+		if got := Pluralize(in); got != want {
+			t.Errorf("Pluralize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestPlural(t *testing.T) {
+	cases := []struct {
+		n        int
+		singular string
+		want     string
+	}{
+		{1, "budget", "1 budget"},
+		{0, "budget", "0 budgets"},
+		{2, "budget", "2 budgets"},
+		{1, "category", "1 category"},
+		{11, "category", "11 categories"},
+	}
+	for _, c := range cases {
+		if got := Plural(c.n, c.singular); got != c.want {
+			t.Errorf("Plural(%d, %q) = %q, want %q", c.n, c.singular, got, c.want)
+		}
+	}
+}

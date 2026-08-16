@@ -34,6 +34,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -2490,12 +2491,11 @@ func attentionGlyph(s attention.Severity) ui.Node {
 
 // plural renders a count with a singular/plural noun, e.g. "1 deposit" or
 // "3 deposits".
-func plural(n int, singular string) string {
-	if n == 1 {
-		return "1 " + singular
-	}
-	return fmt.Sprintf("%d %ss", n, singular)
-}
+// The rule itself lives in textutil, where it is unit-tested on native Go: bare
+// "+s" produced "11 categorys" in the Auto-budget headings (C593), and a
+// pluralisation rule is exactly the kind of pure string logic that has no
+// business being untestable inside a wasm-only view file.
+func plural(n int, singular string) string { return textutil.Plural(n, singular) }
 
 // kpiBody renders a KPI tile's body: a large accounting figure with a small
 // subline. figTone/subTone are color classes (e.g. "text-up", "text-dim").

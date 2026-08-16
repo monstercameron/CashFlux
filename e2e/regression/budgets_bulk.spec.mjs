@@ -2,21 +2,22 @@
 // workflow. Both replaced controls that changed the app BEFORE the user could see
 // what they would do, so every test here asserts the same shape: the preview is
 // visible and correct first, and nothing has moved until the explicit apply.
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, openVia } from "./fixtures.mjs";
 
 // openAdjustAll opens the Budget settings popover and the Adjust-all form. The
 // popover swallows a click while the tile is still re-rendering, so the trigger
 // is retried until its menu item is actually visible (the openVia pattern).
+// The check has to be VISIBILITY, not presence: the popover's contents stay in
+// the DOM and are hidden by a class, so a count-based check passes against a
+// closed menu.
+const SETTINGS_MENU = ".bud-set-menu:not(.hidden-menu)";
+// Same trap on the period pill: its popover is hidden by a class, not unmounted.
+const PERIOD_POP = ".period-pop:not(.hidden-menu)";
+
 async function openAdjustAll(app) {
-  const settings = app.getByTestId("budgets-settings");
-  await settings.scrollIntoViewIfNeeded();
-  const item = app.getByTestId("budgets-adjust-all");
-  for (let i = 0; i < 8 && !(await item.isVisible()); i++) {
-    await settings.click();
-    await app.waitForTimeout(300);
-  }
-  await item.click();
-  await expect(app.getByTestId("adjustall-form")).toBeVisible();
+  await app.getByTestId("budgets-settings").scrollIntoViewIfNeeded();
+  await openVia(app, app.getByTestId("budgets-settings"), app.locator(SETTINGS_MENU));
+  await openVia(app, app.getByTestId("budgets-adjust-all"), app.getByTestId("adjustall-form"));
 }
 
 // budgetTotals reads every budget row's "spent / limit" pair, so a test can prove
@@ -103,9 +104,11 @@ test.describe("period: custom range", () => {
     const pill = app.getByTestId("period-pill");
     const applied = (await pill.innerText()).trim();
 
-    await pill.click();
-    await app.getByTestId("period-range-open").click();
-    await expect(app.getByTestId("period-range-editor")).toBeVisible();
+    // The pill's popover, then the range editor. Both openings are retried: the
+    // page keeps re-rendering briefly after mount and a click landing in that
+    // window is discarded (the openVia pattern).
+    await openVia(app, pill, app.locator(PERIOD_POP));
+    await openVia(app, app.locator(PERIOD_POP).getByTestId("period-range-open"), app.getByTestId("period-range-editor"));
 
     // Opening the editor must not relabel the pill — nothing has been chosen yet.
     expect((await pill.innerText()).trim()).toBe(applied);
