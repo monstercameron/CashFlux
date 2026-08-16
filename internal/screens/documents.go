@@ -1342,7 +1342,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 									Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
 									Button(css.Class("btn btn-plus", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "extract-ai-btn"),
 										OnClick(extractWithAI),
-										uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("documents.extractAI"))),
+										uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("documents.extractAI")),
+										// R24: the control says it needs a key BEFORE it is pressed. The
+										// plain "Parse" button beside it is the no-key sibling and works
+										// regardless, which is what makes this a label rather than a wall.
+										KeyGateMark(AIKeyConfigured())),
 								),
 								Textarea(css.Class("field field-wide"), Attr("rows", "4"),
 									Placeholder(uistate.T("documents.stmtSample")),

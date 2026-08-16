@@ -802,6 +802,24 @@ func registerAssistantSurface() {
 	registerMonthlyReview()
 	registerSpotlight()
 	registerCapabilitySheet()
+	registerKeyGateMark()
+}
+
+// registerKeyGateMark styles the "needs a key" label on an AI-gated control (R24).
+// It is a quiet inline note rather than a badge: the control still works as a
+// control, and the mark's job is to answer "will this do anything?" before the
+// click, not to decorate.
+func registerKeyGateMark() {
+	rule(".key-gate-mark",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+		prop("gap", "0.2rem"),
+		prop("margin-left", "0.4rem"),
+		prop("font-size", "var(--type-11)"),
+		prop("color", "var(--text-faint)"),
+		prop("font-weight", "400"),
+		prop("white-space", "nowrap"),
+	)
 }
 
 // registerCapabilitySheet styles the "everything it can change" disclosure (PS7).

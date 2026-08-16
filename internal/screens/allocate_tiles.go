@@ -303,7 +303,11 @@ func allocExplainTile(props allocExplainProps) ui.Node {
 			If(props.AlgoSummary != "", P(css.Class("alloc-algo"), props.AlgoSummary)),
 			Div(css.Class("alloc-ai"),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "allocate-explain"),
-					OnClick(props.OnExplain), uistate.T("allocate.aiExplain")),
+					OnClick(props.OnExplain), uistate.T("allocate.aiExplain"),
+					// R24: an AI-gated control says so before it is pressed. The
+					// per-criterion breakdown beside it is the no-key sibling and
+					// answers the same question without a provider.
+					KeyGateMark(AIKeyConfigured())),
 				aiBody,
 			),
 		))

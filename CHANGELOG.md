@@ -318,6 +318,19 @@ and every commit updates this file under `Unreleased`.
   the same here.
 
 ### Changed
+- **AI-gated controls say so before they're pressed (R24).** Every one of them already refused
+  politely when clicked without a key — which is the wrong moment. The person has decided to use the
+  feature, clicked, and only then been told it is unavailable, which reads as the app changing its
+  mind rather than as a prerequisite they could have seen. Each now carries a quiet "needs a key"
+  note that disappears once one is configured, and names the no-key sibling that answers the same
+  question.
+
+  The audit is now a lint rather than a one-off, because the failure mode is drift: it had been done
+  once before and the surfaces added since had quietly reintroduced it. A second lint guards the
+  other half — a surface that checks only the direct key and forgets the configured backend tells a
+  household on the shared server key that a working feature is unavailable, and that condition had
+  been hand-written at ten separate sites.
+
 - **Discussing a flagged finding starts with the evidence, not with a question (AG8).** The Discuss
   chip attached the flag's headline and left the assistant to work out what it meant — which bought
   either a first reply asking what the user already knew ("which transaction do you mean?") or a

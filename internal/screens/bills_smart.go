@@ -418,7 +418,8 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 			planBody,
 			suggestBody,
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "bills-smart-explain"), OnClick(explain), uistate.T("allocate.aiExplain")),
+				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "bills-smart-explain"), OnClick(explain),
+					uistate.T("allocate.aiExplain"), KeyGateMark(AIKeyConfigured())),
 			),
 			aiBody,
 		)
