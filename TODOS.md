@@ -7240,7 +7240,8 @@ So: one live gap (C529), Cam's suggestion (C530), and four correctness issues fo
   without deciding what an income budget means ships a budget that is broken by construction.
   Decide first — either income categories stay out of budgets (and C519 says so plainly), or an
   income budget means a target to HIT rather than a cap not to exceed, which is a different
-  evaluation and a different row. Blocks/blocked-by **C519**.
+  evaluation and a different row. Blocks/blocked-by **C519**. **ANSWERED 2026-08-16 by Cam:** income-side
+  budgets are wanted (savings/investments) — the target-to-hit reading. See **C538-C540**.
 
 ---
 
@@ -7312,3 +7313,83 @@ Cam's fix is the right one and it is the cheap one: stop creating categories by 
   (merge categories) — merge is the repair tool for duplicates that already exist, and users will
   reach for it the moment this is enforced, so the two want to ship near each other. AC: the write
   seam rejects a sibling-name collision; every one of the eight paths either reuses or reports it.
+
+---
+
+## Budgets that track money going IN — savings, investments, income (Cam, 2026-08-16) ★
+
+*"budgets need to also track income cats for example savings or investments"*
+
+This is **C534's open question answered**: yes, income-side budgets should exist. It is not a small
+change, because every layer of the budget stack assumes money flows OUT and that less is better.
+
+**What blocks it, precisely.** Three filters, each in a different place:
+
+1. `matchesScope` (`internal/budgeting/budgeting.go:57-60`) opens with `if !t.IsExpense() { return
+   false }`. `IsExpense()` is `!IsTransfer() && Amount.IsNegative()` (`entities.go:643`) — so it
+   rejects BOTH deposits and transfers. A contribution to a savings or investment account you own is
+   normally posted as a transfer, so it is excluded twice over.
+2. The budget category picker skips every non-expense category (**C519**), so income-kind categories
+   cannot be selected in the first place.
+3. Even if both were lifted, `Status`/`State` polarity is inverted: `StateOver` fires when spend
+   exceeds the limit, and the hero band turns amber at 85% and stripes the overage. On a savings
+   budget, passing the number is the GOOD outcome. Nothing in the stack knows that.
+
+Note the domain has only two kinds — `KindIncome` and `KindExpense` (`enums.go:148-157`); there is
+no savings kind. So "savings/investments" here means whatever the household typed those categories
+as, and the design must not assume.
+
+- [ ] **C538 [MAJOR][BUDGET] Budgets can track income-side categories, with the polarity inverted.** ★
+  *Design pass first — the evaluation, not just the picker.* A savings or income budget is a FLOOR
+  to reach, not a ceiling not to breach: "$500 into investments this month", "$7,000 of salary".
+  Under it, at-or-above target is healthy, short is the warning, and the progress bar fills toward
+  the number rather than consuming it. That means `Status`, `State`, `Percent`, the near/over
+  thresholds, `ProjectPace`, the hero band's tone rules and the issues rail all need a direction,
+  and the direction has to come from the budget rather than be inferred at each call site — inferring
+  it in eight places is how the two halves drift apart.
+  Answer these before coding: does direction come from the tracked categories' kind, or is it an
+  explicit field on the Budget? (Explicit is safer — a household with a mistyped category then gets
+  a wrong-looking budget rather than a silently inverted one.) What does a MIXED budget mean, and is
+  it allowed? And does an income budget count toward "Budgeted" in the hero total, which today sums
+  spending caps — almost certainly not, or the totals become meaningless.
+  Depends on **C519** (the picker filter) and **C534** (which records that an income-tracking budget
+  currently cannot accrue at all). AC: one stated direction model, applied in the evaluation, the
+  row, the hero and the rail — no call site deciding for itself.
+
+- [ ] **C539 [MAJOR][BUDGET] Contributions to your own savings account are transfers, so they never
+  count.** ★
+  The common shape of "I put $500 into investments" is a TRANSFER from checking to the brokerage,
+  and `matchesScope` excludes transfers by construction — `IsExpense()` requires `!IsTransfer()`.
+  So even after C538 inverts the polarity, the money will not appear unless transfers into a tracked
+  account can count toward a budget. That is deliberate today and for a good reason: counting a
+  transfer as spend would double-report money that merely moved. The savings case is the exception —
+  the money left the spending pool even though it did not leave the household.
+  This is the same question **C527** (owned-account transfers, and the "not yet consumed" flag)
+  has to answer, so it should be answered ONCE for both: a transfer into a savings/investment
+  account is a real budget event; a transfer between two checking accounts is not. Resolve C527's
+  model first, then let a savings budget count the qualifying leg. AC: a transfer into a tracked
+  savings account accrues toward its budget exactly once, and a checking-to-checking transfer still
+  accrues nowhere.
+
+- [ ] **C540 [MAJOR][BUDGET] Three systems already do part of this — pick one before adding a fourth.** ★
+  Savings targets exist in the codebase three times over, and none of them is what Cam asked for:
+  - **Per-account monthly savings.** `Account.MonthlySavings` (`entities.go:153-158`) plus the
+    "Savings & investments" tile (`budgetSavingsWidget`, `budgets_tiles.go:966+`) already assigns a
+    monthly savings amount per account, counts it toward assigned, spreads leftover across accounts
+    and syncs to a goal. But it is keyed by ACCOUNT, not category, and it returns `Fragment()` on
+    any method other than zero-based (`:993`) — so Cam, on Simple, has never seen it.
+  - **Budget funding targets.** `TargetRefillUpTo` / `TargetSetAside` / `TargetByDate` (BG1) are
+    already fields on `domain.Budget` with a picker (`budgets_targets_ui.go`) and a pure evaluator
+    (`budgeting.Needed`). This is the closest existing vocabulary to "put $500 aside monthly" — but
+    `Needed` reads `status.Remaining`, which comes from the same expense-only `spentCovered`, so a
+    set-aside target on a savings category is dead for exactly the reason above.
+  - **Sinking-fund goals.** `Goal.IsSinkingFund` + `FundSetAsideMinor`, summed into the hero as
+    `TotalFundSetAside`.
+  Deciding which of these C538 extends — rather than adding a fourth — is most of the design work.
+  `TargetSetAside` looks like the right host: it is already on the Budget, already has a picker and
+  a tested evaluator, and would inherit the row and rail for free once the evaluation can see the
+  money. Whatever is chosen, the others must not double-count it: `TotalFundSetAside` and
+  `SavingsAssigned` are already summed into the same hero arithmetic (`budgets_tiles.go:219`), so a
+  third source of "assigned to savings" would inflate To-assign unless it is reconciled. AC: one
+  savings commitment appears in the hero's arithmetic exactly once, proven by a test that sets up an
+  account monthly-savings, a sinking-fund goal and a savings budget together.
