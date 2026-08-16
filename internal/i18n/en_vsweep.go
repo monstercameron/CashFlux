@@ -187,6 +187,19 @@ var vSweepKeys = Catalog{
 	"investments.driftOnTarget":  "On target",
 	"investments.driftAdd":       "Would add about %s",
 	"investments.driftTrim":      "Would move about %s out",
+
+	// ── C400: the distinction both goal figures exist to draw ───────────────
+	"goals.savedVsSetAside": "Saved = money you've moved into a linked account. Set aside = money earmarked for this goal that stays where it is — nothing moves.",
+
+	// ── C401: resolve a "Needs a plan" goal without opening it ──────────────
+	// %s = the date this goal could actually be met by at its fair share of free
+	// cash. Naming the date is the point — "push it out" without one is not an
+	// action, it is a shrug.
+	"goals.retargetAction": "Move the deadline to %s",
+	"goals.retargetTitle":  "The earliest date this goal could be met at its fair share of your free monthly cash",
+	// %s = goal name, %s = the old date, %s = the new one.
+	"goals.retargetedNotice": "%s: deadline moved from %s to %s.",
+	"goals.archiveTitle":     "Stop tracking this goal — it stays in your history",
 }
 
 func init() {

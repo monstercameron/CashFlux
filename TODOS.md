@@ -5660,11 +5660,36 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   log exists (cap 50, undo-last). Add a per-goal contribution history panel (calendar/list) + a
   planned-vs-actual monthly chart; roll entries older than the cap into monthly aggregates so
   history survives the 50-entry cap.
-- [ ] **C400 [MINOR][GOAL] Persistent saved-vs-set-aside explainer.** Card legend exists; add a
-  page-level one-liner ("Saved = money in linked accounts · Set aside = earmarked, nothing moves")
-  + glossary popover.
-- [ ] **C401 [MINOR][GOAL] One-click actions from Needs a plan.** Re-date, increase contribution,
-  pause, archive — directly on the Needs-a-plan rows (today they require opening the goal).
+- [x] **C400 DONE (2026-08-16) - Persistent saved-vs-set-aside explainer.** A page-level line under
+  the goals summary states the distinction in full: saved is money moved into a linked account, set
+  aside is money earmarked that stays where it is.
+  The per-card legend already existed, which is why this reads as small - but a reader meeting the
+  surface for the first time had to infer the difference from two abbreviated chips, and that
+  difference is the entire reason both figures exist. One is money that moved; the other is money
+  that has not. Stating it once, above the cards, costs a line and removes the inference.
+  Shipped without the glossary popover the ticket also suggested: with the sentence stated plainly in
+  place there is nothing left for a popover to explain, and adding a click-to-reveal for copy that
+  already fits on one line would be motion for its own sake.
+- [x] **C401 DONE (2026-08-16) - One-click actions from Needs a plan.** Pause was already on the
+  row's kebab; archive was offered only on COMPLETE goals, which is precisely the set a
+  "Needs a plan" goal is not in. Both are there now, plus the action the section actually calls for.
+  **Re-date names the date.** There are only two honest ways out of an infeasible deadline - find
+  more money or move the date - and the app cannot do the first, so it offers the second. "Push it
+  out" without a date is not an action, it is a shrug, so the menu item reads "Move the deadline to
+  <date>", computed by the new pure `goals.WorkableTargetDate`: the earliest month this goal could
+  be met at its FAIR SHARE of free cash, not the whole surplus. Solving one goal by assuming every
+  other goal gets nothing would replace one infeasible plan with several, and the share used is the
+  same one the verdict that flagged the goal was computed from. It refuses absurd horizons - past
+  fifty years the answer is not a date, and a suggestion of 2061 looks like advice - and refuses
+  entirely when there is no free cash, because no date is reachable by saving nothing.
+  Applying it posts a notice naming the old and new dates: a silent date change on a click would be
+  the app deciding something on the household's behalf without saying so. Tests cover ceiling
+  rounding (four months at $300/mo for $1,000, not three-and-a-third), the exactly-divisible case,
+  no-contribution, the horizon cap, and the fair-share split.
+  **Not shipped: "increase contribution."** A goal has no contribution FIELD to raise - the monthly
+  figure is derived from target, saved and deadline - so the one-click version would have to write a
+  contribution the household never agreed to. Re-dating is the same decision made in the direction
+  the data supports.
 
 ### W8 — To-do: bulk, reminders, automations (reviewer priority 7)
 

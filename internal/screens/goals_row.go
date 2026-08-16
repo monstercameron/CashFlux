@@ -46,6 +46,18 @@ func GoalRow(props goalRowProps) ui.Node {
 		captureRowDeleteFocus(".goal-list", "[data-testid^='goal-row-']")
 		props.OnDelete(g.ID)
 	}))
+	// C401: hooks at a stable position (never inside the conditional above).
+	doRetarget := ui.UseEvent(Prevent(func() {
+		if props.OnRetarget == nil {
+			return
+		}
+		when, ok := goalsvc.WorkableTargetDate(g, props.Health.SurplusMinor,
+			goalsvc.FairShareCount(props.Health.SurplusMinor, props.Health.FairMinor), time.Now())
+		if !ok {
+			return
+		}
+		props.OnRetarget(g.ID, when)
+	}))
 	doArchive := ui.UseEvent(Prevent(func() {
 		if props.OnArchive != nil {
 			props.OnArchive(g.ID, true)
@@ -596,6 +608,30 @@ func GoalRow(props goalRowProps) ui.Node {
 			Attr("data-testid", "goal-archive-"+g.ID), OnClick(doArchive), uistate.T("goals.archive"))
 	}
 
+	// C401: the two things a goal on "Needs a plan" can be resolved with in one
+	// click. There are only two honest ways out of an infeasible deadline — find
+	// more money, or move the date — and the app cannot do the first, so it
+	// offers the second, and offers stopping entirely.
+	//
+	// The date is not "later": it is the month this goal could actually be met
+	// by at its FAIR SHARE of free cash. Computing it from the whole surplus
+	// would solve one goal by assuming the others get nothing, replacing one
+	// infeasible plan with several.
+	var retargetItem, planArchiveItem ui.Node = Fragment(), Fragment()
+	if !g.Archived && !complete && financial {
+		if props.Health.Health == goalsvc.HealthWatch || props.Health.Health == goalsvc.HealthAtRisk {
+			if when, ok := goalsvc.WorkableTargetDate(g, props.Health.SurplusMinor, goalsvc.FairShareCount(props.Health.SurplusMinor, props.Health.FairMinor), now); ok && when.After(g.TargetDate) {
+				retargetItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "goal-retarget-"+g.ID),
+					Title(uistate.T("goals.retargetTitle")),
+					OnClick(doRetarget), uistate.T("goals.retargetAction", uistate.LoadPrefs().FormatDate(when)))
+			}
+		}
+		planArchiveItem = Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Attr("data-testid", "goal-archive-plan-"+g.ID),
+			Title(uistate.T("goals.archiveTitle")), OnClick(doArchive), uistate.T("goals.archive"))
+	}
+
 	// Contribution controls in the ⋯ menu (financial goals only): undo the most
 	// recent contribution when there's a logged one, and reset saved progress to
 	// zero when the goal holds anything. Both are hidden on archived goals.
@@ -843,7 +879,9 @@ func GoalRow(props goalRowProps) ui.Node {
 				AriaLabel:    uistate.T("goals.moreActions") + " — " + g.Name,
 				ToggleTestID: "goal-menu-btn-" + g.ID,
 				Items: []ui.Node{
+					retargetItem,
 					pauseItem,
+					planArchiveItem,
 					resetItem,
 					Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "goal-delete-btn-"+g.ID), Attr("aria-label", uistate.T("goals.deleteTitle")), Title(uistate.T("goals.deleteTitle")), OnClick(del), uistate.T("action.delete")),
 				},

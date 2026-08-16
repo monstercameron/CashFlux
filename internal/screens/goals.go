@@ -320,16 +320,19 @@ func sortGoals(gs []domain.Goal, key string, tasks []domain.Task, now time.Time)
 }
 
 type goalRowProps struct {
-	Goal               domain.Goal
-	Accounts           []domain.Account
-	Members            []domain.Member
-	Tasks              []domain.Task // linked-to-do source for checklist-goal progress
-	OnDelete           func(string)
-	OnDrillAccount     func(accountID string)        // open Transactions filtered to the linked account
-	OnArchive          func(id string, archive bool) // move goal to/from the Achieved section
-	OnRedirect         func()                        // a completed goal frees its monthly — jump to Allocate (L20)
-	OnUndoContribution func(string)                  // reverse the goal's most recent contribution
-	OnResetGoal        func(string)                  // reset the goal's saved progress to zero
+	Goal           domain.Goal
+	Accounts       []domain.Account
+	Members        []domain.Member
+	Tasks          []domain.Task // linked-to-do source for checklist-goal progress
+	OnDelete       func(string)
+	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
+	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section
+	// OnRetarget moves a goal's deadline to a date it could actually be met by
+	// (C401), so a "Needs a plan" row can be resolved without opening the goal.
+	OnRetarget         func(id string, to time.Time)
+	OnRedirect         func()       // a completed goal frees its monthly — jump to Allocate (L20)
+	OnUndoContribution func(string) // reverse the goal's most recent contribution
+	OnResetGoal        func(string) // reset the goal's saved progress to zero
 	// C189/C192: sinking-fund display data (zero values = not a fund / no link).
 	// FundSetAside is the monthly set-aside in minor units (from FundSetAsideMinor).
 	// LinkedCategoryName is the resolved name of CategoryID (empty when unlinked).

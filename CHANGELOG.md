@@ -183,6 +183,22 @@ and every commit updates this file under `Unreleased`.
   A class you hold but never planned for still appears, as pure overweight, because that is the case
   where drift matters most.
 
+### Added
+- **Resolve a goal that needs a plan without opening it (C400, C401).** A goal lands on "Needs a
+  plan" because its deadline needs more money per month than you have, and there are only two honest
+  ways out: find more money or move the date. The app cannot do the first, so it offers the second -
+  and names the date. "Move the deadline to March 2028" is the earliest month the goal could actually
+  be met at its fair share of your free cash, not at the whole surplus, because solving one goal by
+  assuming the others get nothing would replace one impossible plan with several. Applying it says
+  what changed rather than silently re-dating your goal.
+
+  Archive is on those rows too now; it was previously offered only on completed goals, which is
+  exactly the set these are not in.
+
+  And the goals page states the saved-vs-set-aside distinction in full, once, above the cards. Each
+  card carried a legend, but the difference between money that moved and money that has not is the
+  whole reason both figures exist, and it should not have to be inferred from two abbreviated chips.
+
 ### Fixed
 - **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
   /categories pointed at the top of a long report, because the report's numbered sections are not in

@@ -96,6 +96,15 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 		// against "Total target" (2026-07-18 assessment: users had to
 		// reverse-engineer which cards contribute).
 		fundScopeNote(app, v),
+		// C400: the saved-vs-set-aside distinction, stated once at page level.
+		//
+		// Each card carries a legend, but a reader meeting the surface for the
+		// first time has to infer the difference from two abbreviated chips — and
+		// the difference is the whole reason both figures exist: one is money that
+		// moved, the other is money that has not. Saying it plainly, once, above
+		// the cards costs a line and removes the inference.
+		P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "goals-saved-explainer"),
+			uistate.T("goals.savedVsSetAside")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -231,6 +240,28 @@ func goalListWidget(props goalListProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 	}
+	// C401: move a goal's deadline to a date it could actually be met by. One
+	// write, undoable through the normal edit path, and it posts a notice naming
+	// the new date — a silent date change on a click would be the app deciding
+	// something on the household's behalf without telling them.
+	retargetGoal := func(goalID string, to time.Time) {
+		for _, g := range app.Goals() {
+			if g.ID != goalID {
+				continue
+			}
+			was := g.TargetDate
+			g.TargetDate = to
+			if err := app.PutGoal(g); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+			pr := uistate.LoadPrefs()
+			uistate.PostNotice(uistate.T("goals.retargetedNotice",
+				g.Name, pr.FormatDate(was), pr.FormatDate(to)), false)
+			uistate.BumpDataRevision()
+			return
+		}
+	}
 	undoContribution := func(goalID string) {
 		for _, g := range app.Goals() {
 			if g.ID != goalID {
@@ -281,7 +312,8 @@ func goalListWidget(props goalListProps) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
 			OnDelete:       deleteGoal,
-			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRedirect: redirectToAllocate,
+			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRetarget: retargetGoal,
+			OnRedirect:         redirectToAllocate,
 			OnUndoContribution: undoContribution, OnResetGoal: resetGoal,
 			FundSetAside: fundSetAside, LinkedCategoryName: catName,
 			EarmarkOverbooked: overbooked[g.ID],
