@@ -150,6 +150,13 @@ var vSweepKeys = Catalog{
 	"categories.mergeIntoNew":            "＋ New category…",
 	"categories.mergeNewNameLabel":       "Name for the new category",
 	"categories.mergeNewNamePlaceholder": "e.g. Groceries",
+
+	// ── C372: a rule's durable record, beside its live match count ──────────
+	// The live count says what the rule would catch today; this says what it has
+	// actually done. %d = lifetime matches, %s = the date it last fired.
+	"rules.hitsEver":    "%d filed all-time",
+	"rules.hitsLastRun": "Last filed a transaction on %s",
+	"rules.hitsNoDate":  "Filed transactions before this app started recording when",
 }
 
 func init() {

@@ -36,6 +36,19 @@ and every commit updates this file under `Unreleased`.
   any data moves. Duplicate sibling names are refused by the same rule that governs every other
   category, and mixed kinds are refused the way the merge panel already refuses them.
 
+### Added
+- **Rules record what they have actually done (C372).** The workbench showed a live match count,
+  recomputed every render — which answers "what would this catch in today's ledger", not "has this
+  rule ever done anything". A rule whose merchant stopped appearing showed zero and read as broken,
+  when it had filed forty charges and gone quiet.
+
+  Each rule now carries a lifetime hit count and the date it last filed something, shown beside the
+  live count. Credit is given only where a transaction is actually written through a rule — the
+  backfills and the import batch. Auto-categorization is deliberately not a crediting point even
+  though it is where rules fire, because the review surface calls it to preview what a rule *would*
+  do, and a preview that inflates the count would make the number worthless. The import path also
+  credits only rows that actually land, not skipped duplicates.
+
 ### Fixed
 - **"See where it went" lands on the spending breakdown (C524).** The link from /budgets and
   /categories pointed at the top of a long report, because the report's numbered sections are not in

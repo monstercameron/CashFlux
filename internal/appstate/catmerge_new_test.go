@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
 // ─── C549: merge into a category that does not exist yet ─────────────────────
@@ -126,5 +127,61 @@ func TestMergeCategoriesIntoNewDedupesSources(t *testing.T) {
 	}
 	if got := a.Transactions()[0].CategoryID; got != newID {
 		t.Errorf("transaction files into %q, want the new category", got)
+	}
+}
+
+// ─── C372: the durable hit count is credited where work happens ──────────────
+
+func TestApplyRulesCreditsHitsButPreviewDoesNot(t *testing.T) {
+	a := mergeApp(t)
+	putCat(t, a, "c-food", "Groceries", domain.KindExpense)
+	if err := a.PutRule(rules.Rule{ID: "r1", Match: "market", SetCategoryID: "c-food"}); err != nil {
+		t.Fatalf("put rule: %v", err)
+	}
+	for _, id := range []string{"t1", "t2"} {
+		if err := a.PutTransaction(domain.Transaction{
+			ID: id, AccountID: "acct", Desc: "Greenfield Market", Payee: "Greenfield Market",
+			Date:   time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+			Amount: money.New(-1500, "USD"),
+		}); err != nil {
+			t.Fatalf("put %s: %v", id, err)
+		}
+	}
+
+	hits := func() (int, bool) {
+		for _, r := range a.Rules() {
+			if r.ID == "r1" {
+				return r.HitCount, !r.LastRunAt.IsZero()
+			}
+		}
+		t.Fatal("rule r1 vanished")
+		return 0, false
+	}
+
+	// A dry run must not touch the record: a preview that inflated the count
+	// would make the number mean nothing.
+	a.PreviewApplyRules()
+	if n, _ := hits(); n != 0 {
+		t.Fatalf("PreviewApplyRules credited %d hits", n)
+	}
+
+	if _, _, err := a.ApplyRulesWithCounts(); err != nil {
+		t.Fatalf("ApplyRulesWithCounts: %v", err)
+	}
+	n, dated := hits()
+	if n != 2 {
+		t.Errorf("HitCount = %d, want 2", n)
+	}
+	if !dated {
+		t.Error("LastRunAt was not stamped")
+	}
+
+	// Re-running when there is nothing left to change credits nothing further —
+	// the count is what the rule DID, not how often the backfill was pressed.
+	if _, _, err := a.ApplyRulesWithCounts(); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if n, _ := hits(); n != 2 {
+		t.Errorf("HitCount = %d after a no-op re-run, want 2", n)
 	}
 }

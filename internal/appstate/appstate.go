@@ -228,6 +228,10 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 		memPairs = append(memPairs, [2]string{m.ID, m.Name})
 	}
 	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
+	// C372: which rule files each row, noted BEFORE the transform (a rename
+	// action rewrites the description, so re-deriving the match afterwards can
+	// pick a different rule) and credited only for rows that actually land.
+	ruleByIndex := make(map[int]string, len(txns))
 	for i := range txns {
 		txns[i].AccountID = resolveAcc(txns[i].AccountID)
 		if txns[i].AccountID == "" && fallbackAccountID != "" {
@@ -236,6 +240,13 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
 		txns[i].MemberID = resolveMem(txns[i].MemberID)
+		// C372: note which rule files this row BEFORE the transform, so the import
+		// credits the same rule the transform will use — and tally, rather than
+		// writing the rule once per row.
+		if !txns[i].IsTransfer() {
+			ruleByIndex[i] = a.autoRuleFor(txns[i].Payee, txns[i].Desc, txns[i].Amount.Amount,
+				txns[i].AccountID, rules.NewTxnDate(txns[i].Date))
+		}
 		txns[i] = a.AutoCategorizeTransaction(txns[i])
 	}
 
@@ -260,7 +271,8 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 	a.triggersSuspended = true
 	prevSuppressObs := a.suppressTxnObservers
 	a.suppressTxnObservers = true
-	for _, t := range txns {
+	importRuleHits := map[string]int{}
+	for i, t := range txns {
 		sig := t.AccountID + "|" + dedupe.Signature(t)
 		if seen[sig] {
 			dupes++
@@ -270,7 +282,15 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 			seen[sig] = true
 			importedTxns = append(importedTxns, t)
 			n++
+			// Only a row that actually landed counts: a skipped duplicate did not
+			// give its rule anything to do.
+			if rid := ruleByIndex[i]; rid != "" {
+				importRuleHits[rid]++
+			}
 		}
+	}
+	if cerr := a.CreditRuleHits(importRuleHits); cerr != nil {
+		a.log.Error("credit rule hits after import", "err", cerr)
 	}
 	a.triggersSuspended = prevSuspended
 	a.suppressTxnObservers = prevSuppressObs
@@ -2284,6 +2304,10 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		total++
 		perRule[r.ID]++
 	}
+	// C372: the rule's durable record of what it has actually done.
+	if cerr := a.CreditRuleHits(perRule); cerr != nil {
+		return total, perRule, cerr
+	}
 	a.log.Info("applied rules to existing transactions", "updated", total)
 	return total, perRule, nil
 }
@@ -2340,6 +2364,11 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 			return total, err
 		}
 		total++
+	}
+	// C372: PreviewApplyRules is deliberately NOT a crediting seam — a dry run
+	// that inflated the count would make the number mean nothing.
+	if cerr := a.creditOneRule(ruleID, total); cerr != nil {
+		return total, cerr
 	}
 	a.log.Info("applied one rule to existing transactions", "rule", ruleID, "updated", total)
 	return total, nil

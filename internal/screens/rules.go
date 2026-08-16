@@ -649,6 +649,14 @@ func RuleRow(props ruleRowProps) ui.Node {
 		inner := Fragment(
 			Span(css.Class("rule-figure-n"), plural(props.MatchCount, "transaction")),
 			Span(css.Class("rule-figure-sub"), uistate.T("rules.caughtSub")),
+			// C372: the DURABLE record beside the live one. The live count answers
+			// "what would this catch in today's ledger"; this answers "has it ever
+			// done anything" — a rule whose merchant stopped appearing shows a live
+			// zero and reads as broken, when it filed forty charges and went quiet.
+			If(r.HitCount > 0, Span(css.Class("rule-figure-sub", tw.TextFaint),
+				Attr("data-testid", "rule-hits-"+r.ID),
+				Attr("title", ruleLastRunTitle(r)),
+				uistate.T("rules.hitsEver", r.HitCount))),
 		)
 		if props.MatchCount > 0 && props.PreviewMatches != nil {
 			figure = Button(css.Class("rule-figure"), Type("button"),
@@ -867,4 +875,14 @@ func smartSuggestionRow(props smartSuggestionRowProps) ui.Node {
 		Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.acceptTitle")),
 			Attr("data-testid", "rules-smart-add"), OnClick(add), uistate.T("rules.accept")),
 	)
+}
+
+// ruleLastRunTitle is the hover detail on a rule's durable hit count: when it
+// last filed something (C372). A rule that has fired but has no timestamp
+// predates the field, and says so rather than inventing a date.
+func ruleLastRunTitle(r rules.Rule) string {
+	if r.LastRunAt.IsZero() {
+		return uistate.T("rules.hitsNoDate")
+	}
+	return uistate.T("rules.hitsLastRun", uistate.LoadPrefs().FormatDate(r.LastRunAt))
 }

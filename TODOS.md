@@ -5484,10 +5484,24 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W2 — Transaction rules workbench maturity + review triage (reviewer priority 1)
 
-- [ ] **C372 [MAJOR][RULES] Persist per-rule hit counts + last-run status.** Today the workbench
-  shows a live recomputed match count (`MatchCountFull` each render) — there is no durable
-  "fired N times, last run <date>". Add `HitCount`/`LastRunAt` to the rule entity, increment on
-  auto-apply/backfill/bulk apply, render as chips on each rule row. (Benchmark: Monarch rules.)
+- [x] **C372 ✅ DONE (2026-08-16) — Persist per-rule hit counts + last-run status.**
+  `rules.Rule` gained `HitCount`/`LastRunAt` with a `RecordHits(n, at)` builder that accumulates and
+  never drags "last fired" backwards (a backfill over old data adds to the count without rewriting
+  the date). Rendered beside the live count on each rule row, with the date on hover; a rule that
+  fired before the field existed says so rather than inventing a date.
+  **The distinction is the point.** The live count answers "what would this catch in today's
+  ledger"; the durable one answers "has it ever done anything". A rule whose merchant stopped
+  appearing shows a live zero and reads as broken, when in fact it filed forty charges and went
+  quiet — which is what the user needs to decide whether to keep it.
+  **Credited only where a transaction is actually WRITTEN through a rule:** the full backfill, a
+  single-rule backfill, and the import batch. `AutoCategorizeTransaction` is deliberately NOT a
+  crediting seam even though it is where a rule fires — the review surface calls it to PREVIEW what
+  a rule would do, and a preview that inflates the count makes the number meaningless. The import
+  path notes which rule files each row BEFORE the transform (a rename action rewrites the
+  description, so re-deriving afterwards can pick a different rule) and credits only rows that
+  actually land, not skipped duplicates. Tests: accumulation, the out-of-order credit, the no-op
+  credit, and an end-to-end check that a dry run credits nothing while a real backfill credits twice
+  and a no-op re-run adds nothing.
 - [ ] **C373 [MAJOR][RULES] Rule-action coverage audit vs the commercial benchmark.** Reviewer
   benchmark set: rename, categorize, tag, member assignment, review status, exclude, split,
   goal-link. Audit `internal/rules` action coverage and fill the gaps (member assignment, review

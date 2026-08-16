@@ -8,6 +8,7 @@ package rules
 
 import (
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/payeeclean"
 )
@@ -79,6 +80,35 @@ type Rule struct {
 	SetBillAccountID string          `json:",omitempty"`
 	Order            int             `json:",omitempty"` // precedence: lower runs first (first match wins)
 	Conditions       []RuleCondition `json:",omitempty"` // C105: structured conditions (ANDed); overrides Match when non-empty
+	// HitCount and LastRunAt are the rule's DURABLE record of what it has
+	// actually done: how many transactions it has filed since it was created, and
+	// when it last filed one (C372).
+	//
+	// The workbench already shows a live match count, recomputed every render —
+	// but that answers "what would this rule catch in today's ledger", which is a
+	// different question from "has this rule ever done anything". A rule whose
+	// merchant stopped appearing shows a live count of zero and looks broken;
+	// with a hit count it reads as a rule that worked forty times and has gone
+	// quiet, which is what the user needs to decide whether to keep it.
+	//
+	// Incremented by every path that files a transaction through a rule:
+	// auto-apply on add/import, the full backfill, and a single-rule backfill.
+	HitCount  int       `json:",omitempty"`
+	LastRunAt time.Time `json:",omitempty"`
+}
+
+// RecordHits returns a copy of the rule credited with n more matches at the
+// given time. A non-positive count is a no-op, so a caller can hand it a tally
+// without checking first.
+func (r Rule) RecordHits(n int, at time.Time) Rule {
+	if n <= 0 {
+		return r
+	}
+	r.HitCount += n
+	if at.After(r.LastRunAt) {
+		r.LastRunAt = at
+	}
+	return r
 }
 
 // matches reports whether pattern (trimmed, case-insensitive) is a substring of

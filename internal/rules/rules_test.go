@@ -2,7 +2,10 @@
 
 package rules
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func sampleRules() []Rule {
 	return []Rule{
@@ -102,5 +105,46 @@ func TestConflicts(t *testing.T) {
 	// No conflicts among distinct, non-overlapping phrases.
 	if c := Conflicts([]Rule{{Match: "uber"}, {Match: "lyft"}}); len(c) != 0 {
 		t.Errorf("expected no conflicts, got %+v", c)
+	}
+}
+
+// ─── C372: a rule's durable record of what it has done ───────────────────────
+
+func TestRecordHitsAccumulatesAndAdvancesTheDate(t *testing.T) {
+	t1 := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
+
+	r := Rule{ID: "r1"}.RecordHits(3, t1)
+	if r.HitCount != 3 || !r.LastRunAt.Equal(t1) {
+		t.Fatalf("first credit = %d @ %s", r.HitCount, r.LastRunAt)
+	}
+	r = r.RecordHits(2, t2)
+	if r.HitCount != 5 {
+		t.Errorf("HitCount = %d, want 5 — credits accumulate", r.HitCount)
+	}
+	if !r.LastRunAt.Equal(t2) {
+		t.Errorf("LastRunAt = %s, want %s", r.LastRunAt, t2)
+	}
+	// An out-of-order credit (a backfill over old data) adds to the count but
+	// must not drag "last fired" backwards.
+	r = r.RecordHits(1, t1)
+	if r.HitCount != 6 {
+		t.Errorf("HitCount = %d, want 6", r.HitCount)
+	}
+	if !r.LastRunAt.Equal(t2) {
+		t.Errorf("LastRunAt moved backwards to %s", r.LastRunAt)
+	}
+}
+
+// A zero or negative credit is a no-op, so a caller can hand it a tally without
+// checking first.
+func TestRecordHitsIgnoresNothingToRecord(t *testing.T) {
+	at := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
+	base := Rule{ID: "r1", HitCount: 4, LastRunAt: at}
+	for _, n := range []int{0, -1} {
+		got := base.RecordHits(n, at.AddDate(0, 1, 0))
+		if got.HitCount != base.HitCount || !got.LastRunAt.Equal(base.LastRunAt) {
+			t.Errorf("RecordHits(%d) changed the rule: %d @ %s", n, got.HitCount, got.LastRunAt)
+		}
 	}
 }
