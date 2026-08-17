@@ -45,6 +45,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditimpact"
+	"github.com/monstercameron/CashFlux/internal/auditundo"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -60,6 +61,10 @@ import (
 type activityRowProps struct {
 	Entry   auditlog.Entry
 	IsFirst bool // first (newest) entry — may have an inline Undo affordance
+	// All is the whole timeline, so a row can say how many LATER changes a
+	// checkpoint restore would also reverse (WF-AUDIT). A row cannot answer that
+	// from itself.
+	All []auditlog.Entry
 }
 
 // activityRow renders a single audit timeline row with an optional inline Undo
@@ -170,6 +175,23 @@ func activityRow(props activityRowProps) ui.Node {
 			uistate.T("activity.recalc", strings.Join(imp, " · ")))
 	}
 
+	// WF-AUDIT: "undo where safe" — say what, if anything, could take this back.
+	//
+	// The log records DISPLAY TEXT, not values, so it cannot revert a field on its
+	// own; a checkpoint from before the change can roll the whole dataset back to
+	// that moment. Both facts are stated rather than hidden behind a disabled
+	// button, because a control that does nothing and says nothing is read as a
+	// broken feature rather than an honest limit.
+	var undoLine ui.Node = Fragment()
+	if a := auditundo.Assess(e, props.All, uistate.Checkpoints()); a.Possible() {
+		undoLine = Div(css.Class("act-undo", tw.TextFaint), Attr("data-testid", "act-undo-"+e.ID),
+			uistate.T("activity.undoCheckpoint",
+				uistate.LoadPrefs().FormatDate(a.CheckpointAt), a.AlsoReverses))
+	} else if len(e.Details) > 0 {
+		undoLine = Div(css.Class("act-undo", tw.TextFaint), Attr("data-testid", "act-undo-"+e.ID),
+			uistate.T("activity.undoNone"))
+	}
+
 	actorCls := css.Class("row-meta", tw.TextFaint)
 	if causeCls != "" {
 		actorCls = css.Class(causeCls)
@@ -183,6 +205,7 @@ func activityRow(props activityRowProps) ui.Node {
 			),
 			Span(css.Class("row-meta"), e.Summary),
 			If(len(detailNodes) > 0, Div(css.Class("act-diff"), detailNodes)),
+			undoLine,
 			recalcLine,
 		),
 		Div(css.Class("row-aside"),
@@ -357,6 +380,7 @@ func Activity() ui.Node {
 			nodes = append(nodes, ui.CreateElement(activityRow, activityRowProps{
 				Entry:   e,
 				IsFirst: i == 0,
+				All:     entries,
 			}))
 		}
 		timeline = hhRowsList(nodes)

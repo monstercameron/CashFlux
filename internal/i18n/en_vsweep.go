@@ -744,6 +744,10 @@ var vSweepKeys = Catalog{
 	"budgets.snoozedNotice":   "Paused %s's target until %s. It comes back on its own — nothing to remember.",
 	"budgets.resumedNotice":   "%s's target is active again.",
 
+	// WF-AUDIT — what could take a recorded change back, said plainly.
+	"activity.undoCheckpoint": "Can be rolled back to the snapshot from %s — which also reverses %d later changes.",
+	"activity.undoNone":       "No snapshot from before this change, so there is nothing to roll back to. The record shows what changed but stores the text, not the values, so it cannot reverse a field on its own.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",
