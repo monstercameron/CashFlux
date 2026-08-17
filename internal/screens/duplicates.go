@@ -9,9 +9,11 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -28,6 +30,7 @@ type dupeGroupProps struct {
 	Txns     map[string]domain.Transaction // keyed by ID, for full field access
 	AccByID  map[string]domain.Account
 	BaseCur  string
+	Prefs    prefs.Prefs // the user's date format, for the confirmation copy (C652)
 	OnDelete func(id string)
 	OnMerge  func(g dedupe.Group) // C87: merge-group action
 }
@@ -135,11 +138,17 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 				accName = a.Name
 			}
 			isFirst := len(g.IDs) > 0 && id == g.IDs[0]
+			kept := ""
+			if !isFirst && len(g.IDs) > 0 {
+				kept = dupEntryIdentity(props.Txns[g.IDs[0]], props.AccByID, g, props.Prefs)
+			}
 			return ui.CreateElement(dupeRow, dupeRowProps{
 				TxnID:    id,
 				Date:     g.Date,
 				AccName:  accName,
 				Label:    dupEntryLabel(t, g.Description),
+				Removed:  dupEntryIdentity(t, props.AccByID, g, props.Prefs),
+				Kept:     kept,
 				IsFirst:  isFirst,
 				OnDelete: props.OnDelete,
 			})
@@ -204,7 +213,48 @@ func dupMergeCarryItems(txns map[string]domain.Transaction, ids []string) []stri
 	fill(survivor.Payee, func(t domain.Transaction) string { return t.Payee }, uistate.T("duplicates.carryPayee"))
 	fill(survivor.BillAccountID, func(t domain.Transaction) string { return t.BillAccountID }, uistate.T("duplicates.carryLink"))
 	fill(survivor.SubscriptionName, func(t domain.Transaction) string { return t.SubscriptionName }, uistate.T("duplicates.carryLink"))
+	// C652: tags and cleared status are UNIONED by dedupe.Merge — the kept entry
+	// comes out carrying tags it did not have, and cleared if any copy was. Both
+	// change how the row reads and how it counts in reconciliation, so they belong
+	// in the preview rather than being discovered afterwards.
+	// Literal keys on both branches, not a key held in a variable: the i18n
+	// coverage scan only sees literal keys passed to T, and a dynamic key is a
+	// missing string nobody finds until it renders as its own name.
+	if tags := dupMergeNewTags(survivor, others); len(tags) == 1 {
+		items = append(items, uistate.T("duplicates.carryTags", tags[0]))
+	} else if len(tags) > 1 {
+		items = append(items, uistate.T("duplicates.carryTagsMany", strings.Join(tags, ", ")))
+	}
+	if !survivor.Cleared {
+		for _, o := range others {
+			if o.Cleared {
+				items = append(items, uistate.T("duplicates.carryCleared"))
+				break
+			}
+		}
+	}
 	return items
+}
+
+// dupMergeNewTags is the tags a merge will add to the kept entry — the ones only
+// a removed copy carries, compared case-insensitively the way dedupe.Merge does.
+func dupMergeNewTags(survivor domain.Transaction, others []domain.Transaction) []string {
+	seen := make(map[string]bool, len(survivor.Tags))
+	for _, tg := range survivor.Tags {
+		seen[strings.ToLower(tg)] = true
+	}
+	var out []string
+	for _, o := range others {
+		for _, tg := range o.Tags {
+			k := strings.ToLower(tg)
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, "#"+tg)
+		}
+	}
+	return out
 }
 
 // dupEntryLabel names one entry of a duplicate group for a confirmation sentence:
@@ -221,14 +271,36 @@ func dupEntryLabel(t domain.Transaction, groupDesc string) string {
 	return groupDesc
 }
 
+// dupEntryIdentity names one entry of a duplicate group the way the ledger row
+// does: description, date, amount, account. It is the smallest description that
+// still distinguishes two near-identical copies, which is exactly what a
+// duplicate confirmation has to do (C652).
+func dupEntryIdentity(t domain.Transaction, accByID map[string]domain.Account, g dedupe.Group, pr prefs.Prefs) string {
+	acct := uistate.T("duplicates.noAccount")
+	if a, ok := accByID[t.AccountID]; ok && strings.TrimSpace(a.Name) != "" {
+		acct = a.Name
+	}
+	// The user's own date format. `dedupe.Group.Date` is a raw ISO string, and
+	// printing it here would put "2026-08-14" in the one dialog whose job is to be
+	// legible, while every other date on screen follows the preference.
+	return uistate.T("duplicates.entryIdentity",
+		dupEntryLabel(t, g.Description), pr.FormatDate(t.Date), fmtMoney(t.Amount), acct)
+}
+
 // dupeRowProps is the props bag for a single transaction entry within a group.
 type dupeRowProps struct {
-	TxnID    string
-	Date     string
-	AccName  string
-	Label    string // this entry's own name, for the delete confirmation (C571)
-	IsFirst  bool   // first = "keep" row; others = deletable duplicates
-	OnDelete func(id string)
+	TxnID   string
+	Date    string
+	AccName string
+	Label   string // this entry's own name, for the delete confirmation (C571)
+	IsFirst bool   // first = "keep" row; others = deletable duplicates
+	// C652: the two identities the confirmation has to hold side by side. The
+	// sentence "the entry kept at the top of the group is untouched" was true and
+	// unusable — in a group of near-identical rows the only thing that separates
+	// them is the account and the amount, so the confirmation has to print both,
+	// for the copy being removed AND for the one being kept.
+	Removed, Kept string
+	OnDelete      func(id string)
 }
 
 // dupeRow is a single entry row inside a duplicate group card. It is its own
@@ -243,8 +315,12 @@ func dupeRow(props dupeRowProps) ui.Node {
 	// toast. A confirmation that overstates the risk teaches people to click through
 	// confirmations. It now names the entry, says the kept one is untouched, and
 	// states the reversal path the app actually provides.
+	//
+	// C652: it now prints the two entries as a pair. Naming only the one being
+	// removed still leaves the reader unable to check WHICH copy survives, which
+	// is the whole question in a group of three rows that differ by one account.
 	del := ui.UseEvent(func() {
-		msg := uistate.T("duplicates.deleteConfirmNamed", props.Label, props.Date, props.AccName)
+		msg := uistate.T("duplicates.deleteConfirmPair", props.Removed, props.Kept)
 		uistate.ConfirmModalLabeled(msg, uistate.T("duplicates.deleteConfirmBtn"), true, func(ok bool) {
 			if ok {
 				props.OnDelete(props.TxnID)
@@ -297,6 +373,9 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 	_ = uistate.UseDataRevision().Get()
+	// C652: the confirmation prints dates, and they follow the user's format like
+	// every other date on screen — not the raw ISO string the dedupe group carries.
+	pr := uistate.UsePrefs().Get()
 
 	txns := app.Transactions()
 	accounts := app.Accounts()
@@ -319,13 +398,21 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 	}
 
 	// Plain func passed down as a prop — no hook here.
+	//
+	// C652: the undo point is captured BEFORE the delete, not after. postUndoStory
+	// captured it afterwards, which seals the state that already has the row
+	// missing — so the toast offered an Undo whose nearest restore point was
+	// whatever the 4-second autosave ticker happened to have taken. The
+	// confirmation promises recovery; this is what makes the promise true. Same
+	// rule the ledger's own row delete follows ("capture BEFORE the write").
 	deleteTxn := func(id string) {
+		auditview.CaptureNow()
 		if err := app.DeleteTransaction(id); err != nil {
 			uistate.PostNotice(err.Error(), false)
 			return
 		}
 		// C364: name the reversal path (Ctrl+Z / Activity) on duplicate resolution.
-		postUndoStory(uistate.T("duplicates.deleted"))
+		uistate.PostUndoable(uistate.T("toast.undoStory", uistate.T("duplicates.deleted")))
 		uistate.BumpDataRevision() // re-render the panel so the resolved group drops off
 	}
 
@@ -346,6 +433,9 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 				others = append(others, t)
 			}
 		}
+		// C652: same rule as the delete — the restore point goes in before the
+		// writes, not after them.
+		auditview.CaptureNow()
 		merged := dedupe.Merge(survivor, others)
 		if err := app.PutTransaction(merged); err != nil {
 			uistate.PostNotice(err.Error(), false)
@@ -360,8 +450,9 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 		// C364: a merge collapses several rows into one — tell the undo story.
 		// C571: name the survivor in the result too, so the toast confirms the same
 		// fact the confirmation promised rather than a generic "merged".
-		postUndoStory(uistate.T("duplicates.merged") + " " +
-			uistate.T("duplicates.survivorLabel", dupEntryLabel(survivor, g.Description)))
+		uistate.PostUndoable(uistate.T("toast.undoStory",
+			uistate.T("duplicates.merged")+" "+
+				uistate.T("duplicates.survivorLabel", dupEntryLabel(survivor, g.Description))))
 		uistate.BumpDataRevision() // re-render the panel so the merged group drops off
 	}
 
@@ -402,6 +493,7 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 				Txns:     txnByID,
 				AccByID:  accByID,
 				BaseCur:  base,
+				Prefs:    pr,
 				OnDelete: deleteTxn,
 				OnMerge:  mergeTxns,
 			})
