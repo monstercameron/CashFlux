@@ -80,10 +80,16 @@ narrower than "take screenshots": an assertion that fires at the moment of arriv
 whose whole shape is what happens next, and any DOM the framework does not own needs a test with a
 delay in it.
 
-Still open, same root cause, different surface: `rptaFlowView` (sankey), `chartd3` and `mermaidview`
-all inject into vdom-owned nodes keyed on their content, so an unchanged-content re-render blanks
-them too. Separate commit — they are not the assistant, and I want to verify each one blanks in a
-browser before touching it rather than assuming from the shape.
+`rptaFlowView` (sankey), `chartd3` and `mermaidview` are built the same way — inject into a
+vdom-owned node from an effect keyed on their content — so I expected the same defect there and went
+looking for it. It does not reproduce: 71 charts on the dashboard and 63 on /reports survive a theme
+flip and a resize intact. Which is worth knowing, because it sharpens what the actual trigger is.
+Those hosts are the only child of their parent; the answer body sits among SIBLINGS whose shape
+changes — the action row's classes flip when a rating is given, the citation panel appears when
+sources arrive — and it is the sibling churn that makes the reconciler rebuild the parent's children
+and take the injected content with it. So the rule is not "imperative DOM is fragile", it is
+"imperative DOM with siblings that come and go is fragile". The charts are left alone; a fix to code
+that is not broken is just a change with no test behind it.
 
 ## 2026-08-16 — a saved view has to know when it stopped being true (C404)
 
