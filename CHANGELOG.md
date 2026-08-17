@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"What I'll remember" on Allocate (WF-SM4).** Tell it to keep at least so much cash, or never to
+  suggest drawing from an account, and it stops asking. These shape what the app SUGGESTS and never what
+  you can do — if you go below your own floor it says so and blocks nothing.
+
+### Added
 - **"What to do next" on Insights (WF-SM3).** The things worth doing, in order, each saying what it is
   worth and why it sits above the next one — or that the two are level and either will do. Findings that
   do not say what acting on them is worth are counted and left out rather than ranked on a guess.

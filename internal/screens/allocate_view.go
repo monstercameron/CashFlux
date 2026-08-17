@@ -116,6 +116,19 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 
 	v.TotalMinor, _ = money.ParseMinor(strings.TrimSpace(in.AmountStr), in.Dec)
 	v.ReserveMinor, _ = money.ParseMinor(strings.TrimSpace(in.ReserveStr), in.Dec)
+	// WF-SM4: a household that said "keep at least $15,000 in cash" should not
+	// have to say it again here. The floor applies only when no buffer was typed
+	// — a number somebody entered on this screen is a decision about THIS split,
+	// and silently overriding it would be the app arguing with the person using
+	// it. When the floor is what is holding money back, the screen says so
+	// (ReserveFromStanding), because a figure that appeared on its own reads as a
+	// bug.
+	if strings.TrimSpace(in.ReserveStr) == "" {
+		if floor, ok := uistate.LoadStanding().KeepLiquidMinor(); ok && floor > 0 {
+			v.ReserveMinor = floor
+			v.ReserveFromStanding = true
+		}
+	}
 	v.MaxPerMinor, _ = money.ParseMinor(strings.TrimSpace(in.MaxPerStr), in.Dec)
 	if v.TotalMinor > 0 {
 		var plans []allocate.Plan

@@ -736,10 +736,49 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   action is currently reported as low-effort, reversible and undated, because inventing an effort rating
   no detector supplies would be worse than not having one. Those need declaring at the detector too, the
   same way the amount kind now is. And the remaining ~191 findings need their amounts classified.
-- [ ] **WF-SM4 — Local financial memory.** Remember decisions: "this merchant is always groceries",
+- [~] **WF-SM4 — Local financial memory.** Remember decisions: "this merchant is always groceries",
   "don't flag this annual payment", "keep ≥$15k liquid", "Priya owns this", "intentionally over budget
   in travel months", "never recommend selling retirement". Prevents repeated corrections; personalizes
   recommendations.
+  — THE TWO THAT WERE ACTUALLY MISSING ARE DONE (2026-08-17). New pure `internal/standing`, surfaced as a
+  "What I'll remember" panel on /allocate.
+
+  AUDITED FIRST, and four of the six examples already existed: "this merchant is always groceries" is
+  `internal/rules` (applied at import, editable in the workbench); "don't flag this annual payment" is
+  `internal/flagverdict` (built earlier today under WF-SM1); "Priya owns this" is a MemberID on the record
+  itself; "intentionally over budget in travel months" is the budget target snooze. Re-modelling any of
+  them here would have created a second place to look and a second answer when the two disagree — the
+  package doc says so explicitly, so the next reader does not "fix" the omission.
+
+  The genuinely missing pair were the two that constrain ADVICE: keep at least this much cash, and never
+  suggest drawing from that account.
+
+  IT CONSTRAINS ADVICE, NOT THE HOUSEHOLD. The rule that shaped the whole package: there is no `Allowed`
+  or `Blocked` in it. An app that refuses to record a withdrawal because it breaks a rule the user set
+  last March has mistaken itself for the bank — and would be wrong at exactly the moment it mattered,
+  since the reason to break your own emergency-fund floor is usually an emergency. So the API is
+  `SpendableMinor` (what the app may PROPOSE) and `Breached` (an observation, never a refusal), and the
+  account question is `MayProposeDrawingFrom`, which is long on purpose because it is not "may withdraw".
+
+  "NOTHING SAID" IS NOT "KEEP ZERO". `KeepLiquidMinor` returns `(value, ok)`; an emptied box lifts the
+  instruction rather than setting a floor of zero. A second floor REPLACES the first, because two floors
+  is not a state a household can hold and choosing between them silently would be picking a number
+  nobody said.
+
+  WHERE IT BITES: /allocate's buffer now defaults to the floor — but ONLY when nothing was typed there,
+  since a number entered on that screen is a decision about that split and overriding it would be the app
+  arguing with the person using it. When the floor is what is holding money back, the tile says so; a
+  figure that appears on its own reads as a bug. And "what to do next" (WF-SM3) drops any suggestion whose
+  action targets a protected account, which is the ticket's "never recommend selling retirement".
+
+  VERIFIED IN A BROWSER: 11/11 (`e2e/_standing_check.mjs`) — set, read back in plain English, the buffer
+  note, protecting an account, that account dropping out of the picker, lifting an instruction, and
+  everything surviving a reload.
+
+  STILL OPEN: the ticket wants ONE place to see what the app remembers, and this panel shows only the two
+  kinds it owns. The delegated memories — categorization rules, flag verdicts, snoozed budget targets —
+  should appear here as read-only lines pointing at where they live, so "what does it remember about us"
+  has a single answer even though it has several homes.
 
 **SMART+ (opt-in, BYO OpenAI key — interpret & explain only; app does the arithmetic + preview/confirm)**
 - [ ] **WF-SP1 — Explain-my-finances conversationally.** "Why did safe-to-spend fall?" / "What changed

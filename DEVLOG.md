@@ -1,3 +1,36 @@
+## 2026-08-17 - it remembers what you told it, and constrains only itself (WF-SM4)
+
+The audit was most of this ticket. Four of its six examples already existed: "this merchant is always
+groceries" is the rules engine, "don't flag this annual payment" is the flag verdicts built earlier
+today, "Priya owns this" is a MemberID on the record, and "intentionally over budget in travel months" is
+the budget target snooze. Re-modelling any of them would have created a second place to look and a second
+answer when the two disagreed. The package doc names all four and says why they are not here, so the next
+reader does not helpfully "fix" the omission.
+
+The genuinely missing pair were the two that constrain advice: keep at least this much cash, and never
+suggest drawing from that account.
+
+That framing is the whole design. There is no Allowed or Blocked in this package. An app that refuses to
+record a withdrawal because it breaks a rule somebody set last March has mistaken itself for the bank, and
+would be wrong at exactly the moment it mattered - the reason to break your own emergency-fund floor is
+usually an emergency. So the API is SpendableMinor, which is what the app may PROPOSE, and Breached,
+which is an observation. The account question is called MayProposeDrawingFrom, long on purpose, because it
+is not "may withdraw".
+
+The (value, ok) discipline turned up again: "nothing said" is not "keep zero", an emptied box lifts the
+instruction rather than setting a floor of zero, and a second floor replaces the first because two floors
+is not a state a household can hold.
+
+Where it bites matters as much as what it says. The allocate buffer now defaults to the floor, but only
+when nothing was typed there - a number entered on that screen is a decision about that split, and
+overriding it silently would be the app arguing with the person using it. And when the floor IS what is
+holding money back, the tile says so, because a figure that appeared without anybody typing it reads as a
+bug. The "what to do next" list drops any suggestion aimed at a protected account, which is the ticket's
+"never recommend selling retirement" in its concrete form.
+
+Still open: the ticket wants one place to see what the app remembers, and this panel shows only the two
+kinds it owns. The delegated memories should appear here as read-only lines pointing at their real homes.
+
 ## 2026-08-17 - the ranking is the easy half (WF-SM3)
 
 Any weighted sum produces an order. The ticket's actual requirement is the sentence after it: why does

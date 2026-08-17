@@ -2842,11 +2842,26 @@ var english = Catalog{
 	"habits.payday":  "Spending runs hotter for the %d days after payday: about %d%% more per day, roughly %s a day extra, in %d of the last %d months.",
 	"habits.title":   "Habits I notice",
 	// WF-SM3: what to do next, and WHY one thing sits above another.
-	"nextact.title":    "What to do next",
-	"nextact.empty":    "Nothing to rank yet — an action gets ranked once a finding says what doing it is worth.",
-	"nextact.perMonth": "%s a month",
-	"nextact.perYear":  "%s a year",
-	"nextact.once":     "%s once",
+	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
+	// — never what the household may do with its own money.
+	"standing.title":                 "What I'll remember",
+	"standing.hint":                  "Decisions I'll hold on to, so you don't have to say them twice. They shape what I suggest — never what you can do.",
+	"standing.keepLiquid":            "Keep at least this much cash",
+	"standing.keepLiquidPlaceholder": "e.g. 15000 (%s)",
+	"standing.protectAria":           "Account I should never suggest drawing from",
+	"standing.protectPick":           "Never suggest drawing from…",
+	"standing.protectAdd":            "Remember this",
+	"standing.empty":                 "Nothing remembered yet.",
+	"standing.lift":                  "Forget this",
+	"standing.lineKeepLiquid":        "Keep at least %s in cash — I won't suggest spending below it.",
+	"standing.lineNeverDraw":         "Never suggest drawing from %s.",
+	"standing.reserveFromFloor":      "Holding back %s because you asked me to keep that much cash.",
+	"standing.breached":              "You're %s below the cash floor you set. Just so you know — nothing here is blocked.",
+	"nextact.title":                  "What to do next",
+	"nextact.empty":                  "Nothing to rank yet — an action gets ranked once a finding says what doing it is worth.",
+	"nextact.perMonth":               "%s a month",
+	"nextact.perYear":                "%s a year",
+	"nextact.once":                   "%s once",
 	// Phrased over a year rather than "every month": annual amounts are ranked on
 	// their monthly equivalent, so "saves more every month" would be a false
 	// sentence beside a figure the row itself states as yearly.

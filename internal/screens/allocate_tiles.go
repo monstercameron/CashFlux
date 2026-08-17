@@ -187,6 +187,11 @@ func allocStrategyTile(props allocStrategyProps) ui.Node {
 		Fragment(
 			P(css.Class("muted"), uistate.T("allocate.profileDesc")),
 			Div(chips...),
+			// WF-SM4: a buffer that appeared without anybody typing it reads as a
+			// bug, so when it came from the household's standing cash floor, say so.
+			If(props.View.ReserveFromStanding && props.ReserveMinor > 0,
+				P(css.Class("muted"), Attr("data-testid", "alloc-reserve-standing"),
+					uistate.T("standing.reserveFromFloor", fmtMoney(money.New(props.ReserveMinor, base))))),
 			toolbar,
 		))
 	return allocTile("alloc-controls", body)

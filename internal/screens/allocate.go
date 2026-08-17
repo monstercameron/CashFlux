@@ -12,12 +12,12 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/allocate"
-	"github.com/monstercameron/CashFlux/internal/marginal"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/marginal"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -116,9 +116,13 @@ type allocView struct {
 	PlanByID     map[string]int64
 	TotalMinor   int64 // amount to allocate (after parsing the input)
 	ReserveMinor int64
-	MaxPerMinor  int64
-	Remainder    int64 // unallocated leftover (buffer + caps/rounding)
-	MonthIncome  money.Money
+	// ReserveFromStanding says the buffer came from the household's standing cash
+	// floor rather than this screen's box (WF-SM4), so the surface can say where
+	// the number came from. A figure that appears on its own reads as a bug.
+	ReserveFromStanding bool
+	MaxPerMinor         int64
+	Remainder           int64 // unallocated leftover (buffer + caps/rounding)
+	MonthIncome         money.Money
 	// Marginal describes each destination for the money-per-year comparison
 	// (WF10): what another dollar there actually earns or avoids.
 	Marginal []marginal.Destination
@@ -211,6 +215,9 @@ func Allocate() ui.Node {
 	}
 
 	showFormulas := ui.UseState(false)
+	// Bumped when a standing instruction changes, so the buffer it feeds
+	// re-computes on the same render rather than on the next unrelated one.
+	standingRev := ui.UseState(0)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
 	profileOpen := uistate.UseAllocProfileOpen()
 	openStrategy := ui.UseEvent(Prevent(func() { profileOpen.Set(true) }))
@@ -239,6 +246,7 @@ func Allocate() ui.Node {
 	}
 
 	// --- build the view model (candidates → ranked → split) ---
+	_ = standingRev.Get() // re-read the standing book after an instruction changes
 	v := computeAllocView(app, computeAllocInput{
 		Base: base, Dec: dec, Rates: rates, ActiveMember: activeMemberID,
 		Mode: mode.Get(), Excluded: excluded.Get(), MonthIncome: monthIncome, Weights: weights,
@@ -432,6 +440,13 @@ func Allocate() ui.Node {
 			HasRanked: len(v.Ranked) > 0, AiResult: aiResult.Get(), AiLoading: aiLoading.Get(),
 			AiErr: aiErr.Get(), AlgoSummary: allocAlgoSummary(v.Ranked, profile.Get()),
 			OnExplain: explain, OnGoToSettings: goToSettings,
+		}),
+		// WF-SM4: what the app has been told to remember, next to the plan it
+		// shapes. It lives here rather than in Settings because this is where a
+		// standing instruction actually bites — the buffer being held back — and a
+		// rule kept somewhere else is a rule somebody re-states instead of finding.
+		ui.CreateElement(StandingPanel, standingPanelProps{
+			App: app, Base: base, OnChanged: func() { standingRev.Set(standingRev.Get() + 1) },
 		}),
 		ui.CreateElement(allocApplyTile, allocApplyProps{
 			HasAmount: v.TotalMinor > 0, Confirming: applyConfirming.Get(),

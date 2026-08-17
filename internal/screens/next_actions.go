@@ -30,10 +30,19 @@ type nextActionRow struct {
 // left out rather than guessed at, and the count of them is reported so the
 // omission is visible rather than silent.
 func rankNextActions(ins []smart.Insight) (rows []nextActionRow, skipped int) {
+	// WF-SM4: a household that said "never suggest drawing from the Roth" should
+	// not be shown "move idle cash out of the Roth" as the top thing to do. The
+	// instruction constrains the SUGGESTION only — nothing stops them moving that
+	// money themselves, and nothing here reports it if they do.
+	book := uistate.LoadStanding()
+
 	var actions []actionrank.Action
 	byID := map[string]smart.Insight{}
 	for _, i := range ins {
 		if !i.HasAmount || i.Action == nil {
+			continue
+		}
+		if i.Action.RelatedType == "account" && !book.MayProposeDrawingFrom(i.Action.RelatedID) {
 			continue
 		}
 		a := actionrank.Action{
