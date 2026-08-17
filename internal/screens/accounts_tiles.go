@@ -253,7 +253,11 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 func acctTransferOptions(accounts []domain.Account, fromID, toID string) (fromOpts, toOpts []uiw.SelectOption) {
 	fromOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferFromPlaceholder")}}
 	toOpts = []uiw.SelectOption{{Value: "", Label: uistate.T("accounts.transferToPlaceholder")}}
-	for _, ac := range accounts {
+	// Ordered for a picker rather than left in store order — which is the order the
+	// accounts happened to be created, and answers no question anyone has while
+	// looking for one. See acctsort.ForPicker for why this is not the risk-first
+	// order the accounts page itself uses.
+	for _, ac := range acctsort.ForPicker(accounts) {
 		if ac.Archived {
 			continue
 		}

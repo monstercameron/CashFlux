@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
@@ -956,7 +957,7 @@ func isLiabilityAccount(app *appstate.App, accountID string) bool {
 // refusal (a currency the account cannot hold) also shows here rather than after
 // the button.
 func accountField(app *appstate.App, txn domain.Transaction, selected string, onSelect func(string)) ui.Node {
-	accounts := app.Accounts()
+	accounts := acctsort.ForPicker(app.Accounts())
 	if len(accounts) < 2 {
 		// One account is not a choice, and a picker with a single option is a
 		// question with one answer.
@@ -1021,7 +1022,9 @@ func accountField(app *appstate.App, txn domain.Transaction, selected string, on
 // state it writes.
 func classifyField(app *appstate.App, txn domain.Transaction, selected string, debtPay bool,
 	onSelect func(string), onDebtPay ui.Handler) ui.Node {
-	choices := txnclassify.Counterparties(txn, app.Accounts())
+	// Sorted for the PICKER, not left in store order. txnclassify.Counterparties
+	// preserves whatever order it is given, so the ordering decision belongs here.
+	choices := txnclassify.Counterparties(txn, acctsort.ForPicker(app.Accounts()))
 	if len(choices) == 0 {
 		// Nothing to move money to or from. A picker whose only option is "none"
 		// is a question with one answer, so it is not asked.

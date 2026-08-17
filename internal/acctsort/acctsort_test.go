@@ -5,6 +5,8 @@ package acctsort
 import (
 	"sort"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
 func TestRiskFirstLess(t *testing.T) {
@@ -53,4 +55,55 @@ func TestRiskFirstSortStable(t *testing.T) {
 			t.Errorf("position %d = %q, want %q", i, in[i].id, w)
 		}
 	}
+}
+
+// A picker is answering "where is the one I already have in mind", so the order
+// has to be predictable — not the creation order every account dropdown used
+// before, and not the risk-first order the accounts PAGE uses, which reshuffles
+// as balances move.
+func TestForPickerOrdersByNameCaseInsensitively(t *testing.T) {
+	in := []domain.Account{
+		{ID: "3", Name: "savings"},
+		{ID: "1", Name: "Checking"},
+		{ID: "2", Name: "amex"},
+		{ID: "4", Name: "Brokerage"},
+	}
+	got := ForPicker(in)
+	want := []string{"amex", "Brokerage", "Checking", "savings"}
+	for i, w := range want {
+		if got[i].Name != w {
+			t.Errorf("position %d = %q, want %q (full: %v)", i, got[i].Name, w, names(got))
+		}
+	}
+}
+
+// Two accounts really can share a name — "Checking" at two banks. They must not
+// swap places between renders.
+func TestForPickerIsStableForDuplicateNames(t *testing.T) {
+	in := []domain.Account{
+		{ID: "b", Name: "Checking"},
+		{ID: "a", Name: "Checking"},
+	}
+	got := ForPicker(in)
+	if got[0].ID != "a" || got[1].ID != "b" {
+		t.Errorf("order = %v, want ids a then b", []string{got[0].ID, got[1].ID})
+	}
+}
+
+// The caller's slice is shared app state; sorting it in place would reorder the
+// accounts list for every other surface reading it.
+func TestForPickerDoesNotMutateTheInput(t *testing.T) {
+	in := []domain.Account{{ID: "1", Name: "Zebra"}, {ID: "2", Name: "Apple"}}
+	_ = ForPicker(in)
+	if in[0].Name != "Zebra" {
+		t.Errorf("input was reordered: %v", names(in))
+	}
+}
+
+func names(a []domain.Account) []string {
+	out := make([]string, len(a))
+	for i, x := range a {
+		out[i] = x.Name
+	}
+	return out
 }
