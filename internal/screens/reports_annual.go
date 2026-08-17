@@ -103,16 +103,29 @@ func Reports() ui.Node {
 			Attr("title", uistate.T(titleKey)), uistate.T("rpta.hhChip"))
 	}
 
-	// ── The review window: 12 whole months ending with the month the top-bar
-	// period lands in (so stepping the period walks the year; the newest month may
-	// be the in-progress one). Prior year = the same window shifted back 12 months.
+	// ── The review window (C383). It was a fixed twelve trailing months with
+	// automatic year-over-year, which answers one question well and every other
+	// question not at all. Both are now settings: the window is a preset resolved
+	// against the month the top-bar period lands in, and the comparison is the
+	// reader's choice of same-months-last-year, the equally-long window before
+	// this one, or nothing. Windows are always WHOLE months — every figure below
+	// is bucketed by month, so a partial last bucket would silently understate it.
 	w := uistate.UsePeriod().Get()
 	uistate.PersistPeriodWindow(w)
 	_, wEnd := w.Range()
 	lastMonth := dateutil.MonthStart(wEnd.AddDate(0, 0, -1))
-	as := dateutil.AddMonths(lastMonth, -11) // annual start (inclusive)
-	ae := dateutil.AddMonths(lastMonth, 1)   // annual end (exclusive)
-	ps, pe := dateutil.AddMonths(as, -12), as
+	rangeCfg := uistate.LoadReportRange()
+	primarySpan, cmpSpan, hasCompare := rangeCfg.Windows(lastMonth)
+	as, ae := primarySpan.Start, primarySpan.End // annual start (incl) / end (excl)
+	months := primarySpan.Months()
+	// With the comparison off, the prior window collapses to an empty range. Every
+	// prior-period figure downstream then reads zero, which is what "nothing to
+	// compare against" should look like — not last year's numbers left on screen.
+	ps, pe := as, as
+	if hasCompare {
+		ps, pe = cmpSpan.Start, cmpSpan.End
+	}
+	lastMonth = primarySpan.LastMonth()
 
 	// Reading-posture toggles (persisted): rollup + YoY drive the category review.
 	cfg := uistate.ReportsConfigGet()
@@ -182,8 +195,8 @@ func Reports() ui.Node {
 	decimals := currency.Decimals(base)
 
 	// Monthly bounds → the per-month flows, savings-rate + category trend series.
-	bounds := make([]time.Time, 0, 13)
-	for k := 0; k <= 12; k++ {
+	bounds := make([]time.Time, 0, months+1)
+	for k := 0; k <= months; k++ {
 		bounds = append(bounds, dateutil.AddMonths(as, k))
 	}
 	monthFlows, _ := reports.IncomeExpenseSeries(scopedTxns, bounds, rates)
@@ -193,8 +206,8 @@ func Reports() ui.Node {
 	for _, tr := range catTrends {
 		trendByCat[tr.CategoryID] = tr.Spend
 	}
-	monthLabels := make([]string, 0, 12)
-	for k := 0; k < 12; k++ {
+	monthLabels := make([]string, 0, months)
+	for k := 0; k < months; k++ {
 		monthLabels = append(monthLabels, bounds[k].Format("Jan"))
 	}
 
@@ -223,7 +236,7 @@ func Reports() ui.Node {
 	// Health: the deterministic score + factors + prioritized steps.
 	health := healthscore.Evaluate(liveHealthInputs(app, time.Now()))
 
-	// Credit proxy score at each month end (bounds[1..12] are the month-end
+	// Credit proxy score at each month end (bounds[1..N] are the month-end
 	// cutoffs; transactions strictly before each cutoff count, mirroring
 	// NetWorthSeries). Scoped like net worth (QA CF-01): a report narrowed to
 	// accounts with no cards simply omits the credit section.
@@ -641,9 +654,23 @@ func Reports() ui.Node {
 				OnClick(onResetScope), uistate.T("rpta.scopeReset")),
 		)
 	}
+	// C383: the window and its comparison are the report's two most consequential
+	// parameters, so they sit in the masthead under the title rather than behind a
+	// toolbar popover — a reader must never have to hunt for what period they are
+	// looking at.
+	cmpLabel := ""
+	if hasCompare {
+		cmpLabel = spanLabel(cmpSpan)
+	}
+	rangePicker := ui.CreateElement(reportRangePicker, reportRangePickerProps{
+		Settings:     rangeCfg,
+		PrimaryLabel: spanLabel(primarySpan),
+		CompareLabel: cmpLabel,
+	})
 	masthead := Div(css.Class("rpta-masthead"), Attr("data-testid", "rpt-hero"), Attr("id", "rpta-top"),
 		P(css.Class("rpta-eyebrow"), uistate.T("rpta.eyebrow")),
 		H1(css.Class("rpta-title", tw.FontDisplay), windowLine),
+		rangePicker,
 		partialChip,
 		scopeLine,
 		Div(ClassStr("rpta-verdict rpta-tone-"+verdictTone), Attr("data-testid", "rpta-verdict"),
@@ -838,7 +865,7 @@ func Reports() ui.Node {
 
 	// ── 03 · The year in motion (monthly review table + trends). ─────────────
 	var monthRows []ui.Node
-	for i := 0; i < 12 && i < len(monthFlows); i++ {
+	for i := 0; i < months && i < len(monthFlows); i++ {
 		f := monthFlows[i]
 		if f.Income == 0 && f.Expense == 0 {
 			continue
@@ -880,8 +907,8 @@ func Reports() ui.Node {
 			Td(css.Class("rpta-td-num", "rpta-td-kept"), rate, keptMeter),
 		))
 	}
-	netSeries := make([]float64, 0, 12)
-	for i := 0; i < 12 && i < len(monthFlows); i++ {
+	netSeries := make([]float64, 0, months)
+	for i := 0; i < months && i < len(monthFlows); i++ {
 		netSeries = append(netSeries, float64(monthFlows[i].Net()))
 	}
 	srSeries := make([]float64, 0, len(srInts))

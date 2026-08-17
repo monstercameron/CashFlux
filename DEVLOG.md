@@ -1,3 +1,33 @@
+## 2026-08-16 — two constants that were doing the work of two settings (C383)
+
+The annual report opened with three lines that decided everything about it: twelve months back from
+the top-bar period, and the same twelve months a year earlier. Those two constants are the report
+parameters, and having them as constants is why "how did this quarter go" and "how does this half
+compare to the one before" were not questions the surface could answer.
+
+The refactor was smaller than expected because most of the report already looped on `len(bounds)`.
+Only five sites hardcoded 12, and once the window length became a variable they were mechanical.
+
+Three decisions are worth keeping:
+
+**Whole months, not arbitrary days.** Every figure is bucketed by calendar month. A range ending on
+the 17th makes the final bucket a partial month compared against whole ones, and nothing on the page
+would say so — the chart just shows a short bar and the reader concludes spending fell. Offering day
+precision would be promising a resolution the numbers do not have. It is written into the package
+doc so nobody "fixes" it later.
+
+**Prior-period matches length.** "Versus the period just before" over a three-month window has to be
+the three months before it. Comparing three against twelve is the kind of thing that produces a
+plausible-looking ratio and a completely wrong conclusion.
+
+**Comparison off means the prior figures go to zero, not stale.** With no comparison chosen the prior
+window collapses to an empty span, so every year-over-year figure downstream reads zero. The
+alternative — leaving last year's numbers on screen beside a window that no longer claims to describe
+them — is the failure mode this whole feature exists to prevent.
+
+And a stored preference that does not parse degrades to the default report. The user cannot hand-edit
+a settings blob, so an error state helps nobody; the twelve-month view is always a reasonable answer.
+
 ## 2026-08-16 — the SMART/SMART+ micro-features, built bottom-up (SM-2…SM-16)
 
 Fifteen open items in the SMART / SMART+ section, all sharing one shape: a small,

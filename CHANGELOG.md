@@ -7,6 +7,20 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Choose the report window, and what it is compared against (C383).** The annual review was a
+  fixed twelve trailing months with automatic year-over-year — one question answered well and every
+  other question not at all. Both are now controls in the masthead: the window can be the last 12,
+  6 or 3 months, the year so far, the last calendar year, or a chosen span of months; the comparison
+  can be the same months last year, the equally-long period immediately before, or nothing at all.
+  Prior-period always matches the primary window length, because comparing three months against
+  twelve would make every ratio on the page meaningless, and turning the comparison off blanks the
+  prior figures rather than leaving last year on screen next to a window it does not describe. The
+  picker states the resolved months in words underneath, so "this year so far" is never a range the
+  reader has to infer from the charts.
+
+  Windows are whole calendar months by design. Every figure in the report is bucketed by month, so a
+  range ending mid-month would compare a partial bucket against whole ones and understate it without
+  saying so.
 - **"pay rent friday" becomes a dated to-do without an API key (SM-14 core).** `internal/duedate`
   reads a due date, a repeat cadence, and a clean title out of a typed sentence — weekdays, today
   and tomorrow, "in 3 days", "next month", "the 20th", "april 15", ISO and slash dates, and repeats

@@ -5603,10 +5603,20 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   20 — reviewer missed it, so also surface it better.) Build the general layer: dimension picker
   (date range, accounts, members, categories, tags, transaction types) × metric → table + chart,
   saveable as a named view via the existing `savedreports` seam.
-- [ ] **C383 [MAJOR][RPT] First-class date-range + comparison-period pickers on the live report.**
+- [x] **C383 [MAJOR][RPT] First-class date-range + comparison-period pickers on the live report.**
   The annual report is fixed 12-trailing-months with automatic YoY (`yoy.go`). Add a visible
   arbitrary range picker and a user-chosen comparison period ("vs same period last year / prior
-  period / custom").
+  period / custom"). — DONE (2026-08-16). New pure `internal/reportrange`: presets (trailing
+  12/6/3, year-to-date, last calendar year, custom) and comparison modes (same months last year,
+  the equally-long period just before, none), with `Windows()` degrading a broken stored preference
+  to the default report rather than a blank one. The report masthead carries the picker and states
+  the resolved months in words. The 12-month assumption is gone from the bucket loops — the window
+  length now drives them.
+
+  SCOPE NOTE: windows are whole CALENDAR MONTHS, not arbitrary days, and this is deliberate rather
+  than unfinished. Every figure in the report is bucketed by month, so a range ending on the 17th
+  would compare a partial bucket against whole ones and understate it silently. A day-level report
+  is a different report; if it is wanted, file it as its own ticket.
 - [ ] **C384 [MINOR][RPT] Export coverage audit.** CSV exists for ~9 typed tables and "Save as PDF"
   is browser print. Audit: every table gets CSV; add a print stylesheet pass so print-to-PDF is
   clean (page breaks per chapter, no nav chrome).

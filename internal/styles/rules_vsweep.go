@@ -283,4 +283,39 @@ func registerVSweep() {
 		color("var(--text-faint)"),
 	)
 
+	// ─── C383: the report window picker ──────────────────────────────────────
+	rule(".rpta-range",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		margin("0.5rem 0 0.75rem"),
+	)
+	rule(".rpta-range-row",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("flex-end"),
+		gap("0.6rem"),
+	)
+	rule(".rpta-range-ctrl",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+	)
+	rule(".rpta-range-custom",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("flex-end"),
+		gap("0.6rem"),
+	)
+	rule(".rpta-range-hint, .rpta-range-resolved",
+		margin("0"),
+		fontSize("0.72rem"),
+		color("var(--text-faint)"),
+	)
+	// The resolved-window line is the answer to "what am I looking at", so it
+	// reads a step stronger than the hint beside it.
+	rule(".rpta-range-resolved",
+		color("var(--text-dim)"),
+	)
+
 }
