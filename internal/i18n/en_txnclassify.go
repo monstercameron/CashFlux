@@ -11,6 +11,18 @@ package i18n
 // spending, so the word alone has proved it does not tell anyone what the app
 // will do with the row. The control says what changes instead.
 var txnClassifyKeys = Catalog{
+	// Which account the row is posted to — the fix for a mis-import. Distinct from
+	// the classifier below, which names the account on the OTHER side of a move,
+	// and easy to confuse with it, so the label says "this" out loud.
+	"transactions.accountLabel":      "Account this is on",
+	"transactions.accountMoveEffect": "Moves from %s to %s.",
+	// Said because it is invisible from the picker: the far leg names this row's
+	// account as its counterparty, so it has to travel too or the pair describes a
+	// movement with no row on one end.
+	"transactions.accountMovePartner": "The other side of this transfer moves with it.",
+	// Also invisible from the picker, and the more alarming of the two.
+	"transactions.accountMoveReconciled": "%s is reconciled through this date, so its balance will change.",
+
 	// C673: the group heading. "Other account this money moved to or from" named
 	// a FIELD and left the reader to work out what filling it in would do; it read
 	// as optional metadata beside the category, which is exactly how a row ends up

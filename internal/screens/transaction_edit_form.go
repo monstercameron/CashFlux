@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txnmove"
 	"github.com/monstercameron/CashFlux/internal/txnprov"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -223,6 +224,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	// thousands of dollars of earning and spending that never happened.
 	transferToS := ui.UseState(txn.TransferAccountID)
 	debtPayS := ui.UseState(txn.BillAccountID != "")
+	// Which account this row is POSTED to — distinct from the classifier above,
+	// which names the account on the OTHER side of a move. An import can land a row
+	// on the wrong account, and every other fact about it was correctable here
+	// while this one was not: the only fix was to delete the row and retype it,
+	// discarding its links, splits, history and id.
+	accountS := ui.UseState(txn.AccountID)
 	errMsg := ui.UseState("")
 	// TX7: after a category change is saved, hold the similar-transaction candidates
 	// so the inline "N more look like this" offer can render. Empty means no offer.
@@ -421,12 +428,36 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			errMsg.Set(uistate.T("transactions.splitAmountMismatch"))
 			return
 		}
+		// Reposting to another account goes through txnmove rather than assigning
+		// AccountID here, because two things have to travel with it: a transfer
+		// leg's partner names THIS row's account as its counterparty and would
+		// otherwise be left pointing at an account the money is no longer on, and a
+		// currency mismatch has to be refused rather than saved — balances drop the
+		// whole account when a row does not fold into its currency.
+		var movedPartner domain.Transaction
+		haveMovedPartner := false
+		if accountS.Get() != "" && accountS.Get() != t.AccountID {
+			moved, partner, hasPartner, merr := txnmove.Apply(t, accountS.Get(), app.Accounts(), app.Transactions())
+			if merr != nil {
+				errMsg.Set(merr.Error())
+				return
+			}
+			t, movedPartner, haveMovedPartner = moved, partner, hasPartner
+		}
 		// C629: a transfer is two rows. Writing only the one the user opened left the
 		// other account stale and the pair no longer summing to zero, so pass the
 		// pre-edit copy too and let appstate keep the counterpart in step.
 		if err := app.PutTransactionWithTransferPair(txn, t); err != nil {
 			errMsg.Set(err.Error())
 			return
+		}
+		// The partner follows the move. Written after the row itself so a failure
+		// on the first leaves the pair as it was rather than half-relocated.
+		if haveMovedPartner {
+			if err := app.PutTransaction(movedPartner); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
 		}
 		// C33-style learn tally: record the payee→category correction on an explicit set.
 		if t.CategoryID != "" {
@@ -800,6 +831,11 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
 				Attr("aria-label", uistate.T("transactions.noteLabel")),
 				Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
+		// Which account the row is POSTED to. Sits above the movement classifier
+		// because it answers a more basic question — whose ledger is this even on —
+		// and because confusing the two is easy: one names this row's account, the
+		// other names the account on the far side of a move.
+		accountField(app, txn, accountS.Get(), func(v string) { accountS.Set(v) }),
 		// The movement classifier sits directly above "exclude from budgets and
 		// reports" because the two answer the same question — should this row count
 		// as income or spending — and a person who reaches for the blunt exclude
@@ -890,6 +926,63 @@ func isLiabilityAccount(app *appstate.App, accountID string) bool {
 	}
 	acc, ok := domain.AccountByID(app.Accounts(), accountID)
 	return ok && acc.Class == domain.ClassLiability
+}
+
+// accountField renders the "which account is this on" picker — the correction
+// for a row that arrived on the wrong one.
+//
+// Every other fact about an imported row was already editable here; this was not,
+// so the only fix for a mis-import was to delete the row and retype it, throwing
+// away its links, splits, history and id.
+//
+// It previews rather than only validating on save, because the two consequences
+// worth knowing about are both invisible from the picker: that a transfer's other
+// leg comes along, and that moving a cleared row disturbs a reconciled balance. A
+// refusal (a currency the account cannot hold) also shows here rather than after
+// the button.
+func accountField(app *appstate.App, txn domain.Transaction, selected string, onSelect func(string)) ui.Node {
+	accounts := app.Accounts()
+	if len(accounts) < 2 {
+		// One account is not a choice, and a picker with a single option is a
+		// question with one answer.
+		return Fragment()
+	}
+	opts := make([]uiw.SelectOption, 0, len(accounts))
+	for _, a := range accounts {
+		opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
+	}
+
+	note := Fragment()
+	if selected != "" && selected != txn.AccountID {
+		p := txnmove.PlanMove(txn, selected, accounts, app.Transactions())
+		switch {
+		case p.Err != nil:
+			note = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-account-note"),
+				Attr("role", "status"), p.Err.Error())
+		default:
+			lines := []ui.Node{Span(uistate.T("transactions.accountMoveEffect", p.FromName, p.ToName))}
+			if p.HasPartner {
+				lines = append(lines, Span(" "+uistate.T("transactions.accountMovePartner")))
+			}
+			if p.BreaksReconciliation {
+				lines = append(lines, Span(" "+uistate.T("transactions.accountMoveReconciled", p.FromName)))
+			}
+			note = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-account-note"),
+				Attr("role", "status"), lines)
+		}
+	}
+
+	return Div(css.Class("txn-account-field", tw.FlexCol, tw.Gap1), Attr("data-testid", "txn-edit-account-field"),
+		uiw.FormField(uistate.T("transactions.accountLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   opts,
+				Selected:  selected,
+				AriaLabel: uistate.T("transactions.accountLabel"),
+				OnChange:  onSelect,
+				TestID:    "txn-edit-account",
+			})),
+		note,
+	)
 }
 
 // classifyField renders the movement classifier: the counterparty picker, the
