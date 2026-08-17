@@ -1309,7 +1309,13 @@ func agToolsReports(app *appstate.App, base string, rates currency.Rates, tier a
 				c := agBuildRptCtx(app, base, rates, a.Period, a.From, a.To, a.Field)
 				rows, what := sec.Trace(c, a.Row)
 				if what == "" {
-					return fmt.Sprintf("Couldn't find a row called %q in %s. Pass %s. Read the section first with report_section to see its rows.", a.Row, sec.ID, sec.RowHint)
+					// Two different things land here and the message has to cover
+					// both honestly: no row goes by that name, OR the row is a
+					// computed figure rather than a group of records. Savings is
+					// income minus spending — returning a plausible set of rows
+					// for it would be worse than saying it has none.
+					return fmt.Sprintf("%q is not a row of %s that can be opened — either nothing goes by that name, or it is a computed figure rather than a group of records (savings, for instance, is income minus spending; trace the categories on either side of it instead). Pass %s. Read the section first with report_section to see its rows.",
+						a.Row, sec.ID, sec.RowHint)
 				}
 				limit := a.Limit
 				if limit <= 0 {

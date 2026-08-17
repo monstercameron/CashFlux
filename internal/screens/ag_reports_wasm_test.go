@@ -151,8 +151,8 @@ func TestAgTraceSavingsRefusesRatherThanGuessing(t *testing.T) {
 	app := agrApp(t)
 	out := agrTool(t, app, "trace_report_row", aicontext.TierFull).
 		run(json.RawMessage(`{"section":"money_flow","row":"Savings",` + agrArgs + `}`))
-	if !strings.Contains(out, "Couldn't find a row") {
-		t.Errorf("expected a refusal for the savings node, got:\n%s", out)
+	if !strings.Contains(out, "computed figure") {
+		t.Errorf("expected the savings node to be explained, not merely rejected:\n%s", out)
 	}
 }
 

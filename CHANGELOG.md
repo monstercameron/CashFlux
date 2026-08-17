@@ -22,6 +22,12 @@ and every commit updates this file under `Unreleased`.
   level the sections that name individual merchants, and the tracers themselves, are withheld rather than
   merely discouraged.
 
+### Fixed
+- **Asking to open a report figure that has no transactions behind it says why (C690).** The money-flow
+  diagram's "Savings" bar is income minus spending, not a group of records, and asking the assistant to
+  open it was answered as though no such row existed. It now says what the figure is and points at the
+  categories on either side of it.
+
 ### Changed
 - **The money-flow diagram's data moved out of the view (C690).** Which nodes exist, what each is worth and
   which categories sit behind it are now computed in the pure reports layer, so the picture the Annual
