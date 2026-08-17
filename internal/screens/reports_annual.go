@@ -1922,6 +1922,9 @@ func Reports() ui.Node {
 			watch,
 			problems,
 			plan,
+			// FP-T1e: the business-and-tax section, given the SAME window as the
+			// report above it so the two can never describe different periods.
+			ui.CreateElement(taxDepthSection, taxSectionProps{From: as, To: ae, Year: as.Year()}),
 			appendix,
 		)),
 		If(showFormulas.Get(), metricsModal),

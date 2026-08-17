@@ -1,3 +1,63 @@
+## 2026-08-17 - tax depth, and a crash hiding under it (FP-T1e)
+
+Three engines and a report section. The engines were the straightforward part; the two bugs the browser
+found are the part worth writing down.
+
+**A crash that killed the whole app.** `internal/ui/fieldcore.go` (from another session's field-value
+sweep, f9d3a629) clamped a caret with `el.Get("value").Get("length").Int()`. `value` comes back as a JS
+string, and a string is not an object in syscall/js - Get on one panics and takes the entire Go runtime
+down. Every field seeded while focused was a live crash; opening the category editor was enough.
+`Length()` panics on a string too, so the fix measures UTF-16 units in Go from the string we already
+hold. No DOM call at all, which is also faster and cannot drift.
+
+Worth noting how it surfaced: the probe reported "Go program has already exited" as a page error, which
+looks like a test-harness problem and is not. Chasing it rather than suppressing it found a crash on a
+path a user reaches in three clicks.
+
+**A control that could never appear.** I first hid the Schedule C picker behind the deductible
+checkbox - reasonable, since the question does not arise otherwise. Inside that modal, ticking the box
+does not trigger a re-render: the checkbox went checked and the picker never appeared, so the entire
+taxonomy was unreachable. It renders unconditionally now, its label says when it applies, and saving
+clears it on a category that is not deductible. The general rule: a control that depends on a re-render
+its surface does not perform is a control that does not exist.
+
+On the design of the three parts:
+
+The taxonomy is the REAL form's, not a tidier internal scheme. A neat scheme has to be mapped to the
+form eventually, and that mapping is where the categories nobody thought about go missing. Rows come
+out in form order rather than by size, because the thing they are transcribed onto runs in that order.
+And unclassified spending is named as unclassified rather than swept into "Other expenses" - line 27a
+is a real line with real rules, and treating "we do not know" as "put it there" turns an open question
+into a filed position.
+
+Depletion, depreciation and the COGS worksheet are deliberately absent. They are computed on their own
+schedules from facts this app does not hold, and offering a bucket to drop receipts into would produce
+a number that looks filed-ready and is not.
+
+For capital gains, short and long stay apart at every level. They are taxed differently, and one netted
+figure loses the fact that decides the bill. A profitable year reports no deductible loss rather than
+"0 deductible, 0 carried forward" - two zeroes read as a failed calculation, not as good news.
+
+For the quarterly estimate, the safe harbour leads and the projection follows. A projection of this
+year's tax is a guess about income that has not finished happening; the harbour is a rule about last
+year's tax, a number that is already final, and paying it removes the penalty however the year turns
+out. The target is the lower of the two, because either satisfies the rule and asking for the larger is
+asking for an interest-free loan.
+
+Two smaller things I would defend: the quarters are not calendar quarters (Jan-Mar, Apr-May, Jun-Aug,
+Sep-Dec, the fourth due in January), which is the detail that catches people and which a calendar
+reading gets wrong twice; and income is scaled by elapsed days rather than by quarter, so crossing a
+boundary does not jump the projection by a third overnight on no new information.
+
+The effective rate is asked for, never derived. The app does not know the filing status, the state, or
+the other income that sets it, and a rate invented from a bracket table would be wrong in a way that
+looks computed.
+
+Verified in a browser, 12/12 across two runs, including the loop end to end: mark a category
+deductible, give it line 18, watch $2,041.00 land on "18 - Office expense"; supply a rate and last
+year's tax, watch the target fall from the $38,003.67 projection to the $9,000 harbour and the amount
+due follow it to $6,750.
+
 ## 2026-08-17 - what a position pays you, not just what it is worth (FP-T1f)
 
 A dividend and a price rise move a brokerage balance identically. The growth chart cannot tell them

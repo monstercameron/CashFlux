@@ -6,6 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **A "Business and tax" section on the full report (FP-T1e).** Three things a household with untaxed
+  income needs and had to assemble by hand. Deductible spending grouped by the Schedule C line it goes
+  on, in form order, with a CSV export — and spending that has no line yet named as unassigned rather
+  than quietly counted as "other expenses". The year's realized gains, short-term and long-term kept
+  apart because they are taxed differently, with the individual sales listed underneath. And what to
+  send this quarter, led by the amount that avoids a penalty regardless of how the year turns out
+  rather than by a projection of income that has not finished happening.
+- **Categories can carry a Schedule C line**, on the category editor, used when the category is
+  deductible.
+
+### Fixed
+- **The category Edit button is reachable to automated checks**, like every other control on its row.
+
 ### Fixed
 - **The app no longer terminates when a text field is filled in while focused.** A caret clamp asked
   JavaScript for a string's length in a way that ends the whole program; opening the category editor was

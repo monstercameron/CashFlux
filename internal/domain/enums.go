@@ -572,3 +572,10 @@ func (s TxnSource) Label() string {
 		return "—"
 	}
 }
+
+// TaxLine is a Schedule C line number as the form writes it ("8", "16b", "24b").
+//
+// The valid set and its labels live in internal/schedulec — the taxonomy is data
+// about a tax form, not a property of the domain, and it changes when the form
+// does rather than when the model does.
+type TaxLine string

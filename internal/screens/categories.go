@@ -746,7 +746,11 @@ func CategoryRow(props categoryRowProps) ui.Node {
 			bar,
 		),
 		figure,
-		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
+		// Every other control on this row carries a data-testid; this one did not,
+		// which made the edit path the one flow no browser check could drive.
+		Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+			Attr("data-testid", "cat-edit-"+c.ID),
+			Title(uistate.T("categories.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("action.edit"))),
 		uiw.KebabMenu(uiw.KebabMenuProps{
 			ID:           "cat-menu-" + c.ID,
 			AriaLabel:    uistate.T("categories.menuAria"),

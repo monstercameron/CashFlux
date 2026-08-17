@@ -1268,10 +1268,60 @@ bottom-up per SDLC.
   VERIFIED IN A BROWSER: 14/14 end to end — record two purchases, watch the refusal while the history is
   partial, complete it, see the gain and its short/long split, switch the method and watch the answer
   invert, record the sale, and confirm the position drops to exactly what the remaining lots say.
-- [ ] **FP-T1e — Tax depth for the small-business persona.** Today a category is a single `Deductible`
+- [x] **FP-T1e — Tax depth for the small-business persona.** Today a category is a single `Deductible`
   bool. Add (1) Schedule C line taxonomy (`TaxLine` on Category + grouped export), (2) realized
   capital-gains report (needs FP-T1d), (3) estimated quarterly tax (income × rate + safe-harbor). Quicken's
   signature small-biz area; `reports/deductible.go`+`yeartax.go`+`taxgather.go` already exist to build on.
+  — DONE (2026-08-17), all three parts: `internal/schedulec`, `internal/capgains`, `internal/esttax`, plus
+  a "Business and tax" section on the full report and a Schedule C picker on the category editor.
+
+  (1) THE TAXONOMY IS THE REAL FORM'S, not a tidier invention. A neat internal scheme has to be mapped
+  to the form eventually, and that mapping is where the categories nobody thought about go missing. Line
+  codes are STRINGS because the form's numbering is not numeric — 16a and 16b are separate deductions.
+  Rows come out in FORM ORDER rather than by size, because the report is transcribed onto a document
+  that runs in that order. Unclassified deductible spending is surfaced as unclassified, never swept
+  into 27a: "Other expenses" is a real line with real rules, and treating "we do not know" as "put it
+  there" turns an open question into a filed position. Depletion, depreciation and the COGS worksheet
+  are deliberately absent — they are computed on their own schedules from facts this app does not hold,
+  and a bucket to drop receipts into would produce a number that looks filed-ready and is not.
+
+  (2) SHORT AND LONG STAY APART at every level, because they are taxed differently and one netted figure
+  loses the fact that decides the bill. The individual sales stay visible under the totals — a total
+  nobody can decompose is a total nobody can check. A net LOSS reports what can offset ordinary income
+  and what carries forward; a profitable year reports nothing rather than two zeroes that read as a
+  failed calculation. Mixed basis methods across a year are surfaced: legitimate, but the figures are
+  then not reproducible from one rule.
+
+  (3) THE SAFE HARBOUR LEADS, not the projection. A projection of this year's tax is a guess about
+  income that has not finished happening; the harbour is a rule about last year's tax, a number already
+  final, and paying it removes the penalty however the year turns out. The target is the LOWER of the
+  two — either satisfies the rule, and asking for the larger is asking for an interest-free loan. The
+  quarters are NOT calendar quarters (Jan–Mar, Apr–May, Jun–Aug, Sep–Dec, the fourth due in January),
+  which is the detail that catches people. Income is scaled by ELAPSED DAYS, so crossing a quarter
+  boundary does not jump the projection by a third overnight on no new information. The effective rate
+  is stated by the user and never derived: the app does not know the filing status, the state, or the
+  other income that sets it, and a rate invented from a bracket table would be wrong in a way that looks
+  computed.
+
+  TWO REAL BUGS FOUND WHILE VERIFYING:
+  - A CRASH in `internal/ui/fieldcore.go` (from f9d3a629, not mine): `el.Get("value").Get("length")` —
+    `value` comes back as a JS string, and a string is not an object in syscall/js, so Get panics and
+    takes the entire Go runtime with it. Every field seeded while focused was a live crash; opening the
+    category editor killed the app. `Length()` panics on a string too — measured in Go instead, from the
+    string we already hold.
+  - The tax-line picker was first hidden behind the deductible checkbox. Inside that modal the tick does
+    not trigger a re-render, so the box went checked and the picker never appeared — the whole taxonomy
+    was unreachable. Rendered unconditionally now, with the label saying when it applies and the save
+    clearing it on a non-deductible category. A control that depends on a re-render its surface does not
+    perform is a control that does not exist.
+
+  Also added a `data-testid` to the category Edit button: every other control on that row had one, which
+  made the edit path the single flow no browser check could drive.
+
+  VERIFIED IN A BROWSER: 12/12, stable across two runs, including the whole loop — mark a category
+  deductible, give it line 18, and watch $2,041.00 land on "18 · Office expense" in the report; then
+  supply a rate and last year's tax and watch the target drop from the $38,003.67 projection to the
+  $9,000 harbour and the amount due follow it to $6,750.
 - [x] **FP-T1f — Dividend / investment-income tracking.** No field/flow today; tag income txns to a holding
   + roll up investment income. Pillar of the Empower/Monarch investment view.
   — DONE (2026-08-17). One field (`Transaction.HoldingID`), a pure `internal/investincome`, and a

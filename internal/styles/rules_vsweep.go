@@ -899,4 +899,43 @@ func registerVSweep() {
 		borderRadius("var(--radius-md, 8px)"),
 	)
 
+	// ─── FP-T1e: the business-and-tax section ────────────────────────────────
+	rule(".tax-block",
+		marginTop("1rem"),
+	)
+	rule(".tax-table",
+		width("100%"),
+		borderCollapse("collapse"),
+		fontSize("var(--type-13)"),
+		fontVariantNumeric("tabular-nums"),
+		marginTop("0.5rem"),
+	)
+	rule(".tax-table th",
+		textAlign("left"),
+		padding("0.3rem 0.5rem"),
+		color("var(--text-dim)"),
+		fontWeight("500"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".tax-table td",
+		padding("0.3rem 0.5rem"),
+		verticalAlign("top"),
+	)
+	// Amounts right-align so a column of figures can be read down; the line code
+	// and the description stay left.
+	rule(".tax-table th:nth-child(3), .tax-table td:nth-child(3)",
+		textAlign("right"),
+		whiteSpace("nowrap"),
+	)
+	rule(".tax-table tfoot td",
+		borderTop("1px solid var(--border)"),
+		fontWeight("600"),
+	)
+	rule(".tax-inputs",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(10rem, 1fr))"),
+		gap("0.6rem"),
+		margin("0.5rem 0 0.75rem"),
+	)
+
 }

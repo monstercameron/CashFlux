@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/schedulec"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -252,6 +253,7 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 	parentS := ui.UseState(c.ParentID)
 	colorS := ui.UseState(catColor(c.Color))
 	deductibleS := ui.UseState(c.Deductible)
+	taxLineS := ui.UseState(string(c.TaxLine))
 	onName := ui.UseEvent(func(v string) { nameS.Set(v) })
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onDeductible := ui.UseEvent(func(e ui.Event) { deductibleS.Set(e.IsChecked()) })
@@ -269,6 +271,13 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 		c.ParentID = parentS.Get()
 		c.Color = colorS.Get()
 		c.Deductible = deductibleS.Get()
+		// The tax line is cleared with the deductible flag rather than kept: a line
+		// on a category the household decided is not deductible is a stale answer
+		// waiting to be re-counted the next time the flag flips back.
+		c.TaxLine = domain.TaxLine(taxLineS.Get())
+		if !c.Deductible {
+			c.TaxLine = ""
+		}
 		if err := app.PutCategory(c); err != nil {
 			errS.Set(err.Error())
 			return
@@ -325,8 +334,38 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 			Input(Type("checkbox"), Attr("id", "cat-edit-deductible-"+c.ID), Attr("aria-label", uistate.T("categories.deductible")), Attr("data-testid", "cat-deductible-"+c.ID), CheckedIf(deductibleS.Get()), OnChange(onDeductible)),
 			Text(" "+uistate.T("categories.deductible")),
 		),
+		// FP-T1e: which Schedule C line this category's spending belongs on.
+		//
+		// Rendered unconditionally rather than behind the deductible checkbox. The
+		// first attempt hid it until the box was ticked, and inside this modal the
+		// tick does not trigger a re-render — the checkbox went checked and the
+		// picker never appeared, so the whole taxonomy was unreachable. A control
+		// that depends on a re-render this surface does not perform is a control
+		// that does not exist. Its label says when it applies, and saving clears it
+		// on a category that is not deductible, so nothing stale survives.
+		labeledField(uistate.T("categories.taxLine"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   taxLineOptions(),
+				Selected:  taxLineS.Get(),
+				OnChange:  func(v string) { taxLineS.Set(v) },
+				AriaLabel: uistate.T("categories.taxLine"),
+				TestID:    "cat-taxline-" + c.ID,
+			})),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
 	)
+}
+
+// taxLineOptions is the Schedule C taxonomy as a picker (FP-T1e).
+//
+// The first option is an explicit "not assigned yet" rather than a blank: a blank
+// select reads as a value nobody chose, and this one is a real state the report
+// counts and surfaces separately.
+func taxLineOptions() []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("categories.taxLineNone")}}
+	for _, l := range schedulec.Lines {
+		opts = append(opts, uiw.SelectOption{Value: l.Code, Label: l.Code + " · " + l.Label})
+	}
+	return opts
 }
 
 // ── Rule editor ───────────────────────────────────────────────────────────────

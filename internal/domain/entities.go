@@ -280,6 +280,18 @@ type Category struct {
 	Color      string       `json:"color,omitempty"`
 	ParentID   string       `json:"parentId,omitempty"`
 	Deductible bool         `json:"deductible,omitempty"`
+	// TaxLine is the Schedule C line this category's spending belongs on
+	// (FP-T1e), e.g. "18" for office expense or "24b" for deductible meals.
+	//
+	// A string, and the FORM's own numbering, because the form's lines are not
+	// numeric: 16a and 16b are separate deductions, and normalizing them to 16
+	// would merge two things the form keeps apart on purpose.
+	//
+	// Empty means UNASSIGNED, which reports as unassigned rather than being swept
+	// into "Other expenses" — line 27a is a real line with real rules, and
+	// treating "we do not know" as "put it there" turns an open question into a
+	// filed position. Only meaningful when Deductible is true.
+	TaxLine TaxLine `json:"taxLine,omitempty"`
 	// CategoryClass groups the category for flex budgeting (BG2): fixed,
 	// non-monthly, or flex. Empty reads as ClassFlex — see Category.ClassOf.
 	CategoryClass CategoryClass  `json:"categoryClass,omitempty"`
