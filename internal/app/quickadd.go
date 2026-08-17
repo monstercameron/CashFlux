@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smarttext"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -641,7 +642,15 @@ func QuickAddHost() uic.Node {
 		// the Account/Amount fields the user needs first now lead the form.
 		Div(css.Class("txt-zone"),
 			screens.TxnTemplatePicker(onPick),
-			saveTemplateBtn,
+			// DP-F5c: the save action sits beside the PICKER, so it is genuinely
+			// ambiguous whether it saves the template you just picked or the form you
+			// just filled. The zone's move to the bottom (TXT) fixed the ordering
+			// complaint; this fixes the remaining one, which is that the button's own
+			// label cannot say what it snapshots. One line does.
+			Div(css.Class("txt-save-row"),
+				saveTemplateBtn,
+				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("txnTemplates.saveHint")),
+			),
 		),
 	)
 

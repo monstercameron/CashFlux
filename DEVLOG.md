@@ -1,3 +1,31 @@
+## 2026-08-16 — three P3s, and two of them were half-done (DP-F5a/b/c)
+
+A cluster of deferred design-critic polish. Worth a note because two of the three had shifted since
+they were filed, in opposite directions.
+
+**F5a** was as described: an empty board column said "nothing here" and stopped. The ticket even
+predicts the implementation constraint — the add button needs its own component, because registering a
+click hook inside the columns loop breaks the hook-position rule. The part the ticket does not mention
+is the one that makes it worth doing: the add SEEDS the lane. An add button in the High column that
+opens a form defaulting to Medium has saved the user nothing; they still have to set the priority, and
+now they have to notice that they do. The Done lane is the deliberate exception — nobody adds a task in
+order to have already finished it.
+
+**F5b** was straightforward, with one judgement: show the subtitle only when the date was SEEDED. On an
+ordinary add it would restate a field the user typed a second ago, which is noise. On a calendar-opened
+one it confirms a value they did NOT type, and choosing the wrong day is the exact mistake the calendar
+entry point exists to prevent.
+
+**F5c** was half fixed already and I nearly closed it as done. The complaint is "Save as template reads
+before the fields it snapshots" — and the TXT work has since moved the whole templates zone from the
+top of the form to the bottom, which resolves that literally. But the residual problem survives the
+move: the button sits beside the template PICKER, so it is ambiguous whether it saves the template you
+just picked or the form you just filled, and no label on a button can disambiguate its own subject. A
+line of text can.
+
+The lesson is the same one as LF-1 earlier today: a ticket's diagnosis ages, and closing it against the
+original wording — either as done or as still-broken — misses what is actually left.
+
 ## 2026-08-16 — the month heading made it worse (DP1)
 
 The ticket describes overdue rows sitting under "Next 30 days", told apart only by a small OVERDUE

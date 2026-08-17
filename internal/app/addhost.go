@@ -108,6 +108,7 @@ func AddHost() uic.Node {
 			Back: uic.CreateElement(screens.TaskAddForm, screens.TaskAddFormProps{
 				OnDone: close, ParentID: taskParent.Get(), PresetDue: taskDue.Get(),
 				PresetTitle: taskSeed.Get().Title, PresetNotes: taskSeed.Get().Notes, PresetLinkType: taskSeed.Get().LinkType, PresetLinkID: taskSeed.Get().LinkID,
+				PresetPriority: taskSeed.Get().Priority,
 			}),
 		})
 	case "category":

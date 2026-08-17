@@ -115,6 +115,10 @@ type TaskAddFormProps struct {
 	// PresetNotes pre-fills the notes field — used by the "Track cancellation" /
 	// "Negotiation tips" helpers to seed a step-by-step checklist.
 	PresetNotes string
+	// PresetPriority pre-selects the priority (a domain.TaskPriority value), so an
+	// add opened from the board's High lane lands in High (DP-F5a). Empty leaves
+	// the form's own default.
+	PresetPriority string
 }
 
 // TaskAddForm is the standalone add-a-task form. It owns all its state and
@@ -141,7 +145,14 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 
 	pr := uistate.UsePrefs().Get()
 	title := ui.UseState(props.PresetTitle)
-	priority := ui.UseState(string(domain.PriorityMedium))
+	// The preset seeds the INITIAL value only. UseState ignores its argument after
+	// the first render, which is the behaviour wanted here: a user who changes the
+	// priority must not have it snap back on the next re-render.
+	initialPriority := string(domain.PriorityMedium)
+	if p := domain.TaskPriority(props.PresetPriority); p.Valid() {
+		initialPriority = props.PresetPriority
+	}
+	priority := ui.UseState(initialPriority)
 	dueStr := ui.UseState(props.PresetDue)
 	notes := ui.UseState(props.PresetNotes)
 	errMsg := ui.UseState("")
@@ -307,7 +318,21 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 	}
 	summary := strings.Join(sum, " · ")
 
+	// DP-F5b: when the form was opened from a calendar day, say which day. The
+	// native date input shows the value, but a date field the user did not fill is
+	// easy to read past — and picking the wrong day on a calendar is exactly the
+	// mistake this form is used to avoid. Only when SEEDED: on an ordinary add the
+	// subtitle would restate a field the user just typed.
+	var seededDay ui.Node = Fragment()
+	if props.PresetDue != "" {
+		if d, derr := dateutil.ParseDate(props.PresetDue); derr == nil {
+			seededDay = P(css.Class("tc-seeded-day"), Attr("data-testid", "task-add-seeded-day"),
+				uistate.T("todo.schedulingFor", pr.FormatDate(d)))
+		}
+	}
+
 	return Form(css.Class("tc"), Attr("data-testid", "task-add-form"), OnSubmit(add),
+		seededDay,
 		Div(css.Class("tc-main"),
 			// LEFT — the writing zone. A live priority "spine" (the coloured left edge)
 			// glows faint / green / red as you pick priority: the slip is tinted by its urgency.

@@ -497,6 +497,14 @@ var vSweepKeys = Catalog{
 	// DP1 — overdue rows are not "next 30 days".
 	"rhythm.agendaOverdue": "Overdue",
 
+	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
+	"todoboard.addHere":     "+ Add one here",
+	"todoboard.addHereAria": "Add a task in this column",
+	"todo.schedulingFor":    "Scheduling for %s",
+
+	// DP-F5c — say what "Save as template" snapshots.
+	"txnTemplates.saveHint": "Saves what you have filled in above",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

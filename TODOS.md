@@ -542,13 +542,27 @@ adversarial design-critic loop (SHIP): standardized reusable `uiw.Calendar` prim
 (`internal/calendargrid`), To-do Board (kanban) + Calendar (schedule) views, per-goal savings-trajectory
 chart (`internal/goaltrajectory`), notification history/archive (`internal/notifyhistory`, KV-backed),
 transaction quick-templates (`internal/txntemplate`, KV-backed).
-- [ ] **DP-F5a — Empty board column add:** an empty board column (e.g. Done, or a Low-priority lane) is
-  dead-end text; add an in-column "+ Add task" (needs a small wrapper component to satisfy the
-  no-`On*`-in-loop rule). *(design-critic P3, deferred)*
-- [ ] **DP-F5b — Calendar day-add confirmation:** the add-task modal opened from a calendar day relies
-  on the native date field to show which day; add a "Scheduling for &lt;date&gt;" subtitle. *(P3)*
-- [ ] **DP-F5c — Save-as-template IA:** "Save as template" is grouped with the top-of-form picker, so it
-  reads before the fields it snapshots; consider a subtitle or mirroring it beside the footer Save. *(P3)*
+- [x] **DP-F5a — Empty board column add:** an empty board column is dead-end text; add an in-column
+  "+ Add task" (needs a small wrapper component to satisfy the no-`On*`-in-loop rule).
+  — DONE (2026-08-16). `boardEmptyColumn` is its own component exactly as the ticket anticipates. The
+  add SEEDS the lane it was pressed in (new `TaskAddSeed.Priority` → `PresetPriority`), because an add
+  button that ignores which column it was pressed in is a shortcut that saves no steps. The Done lane
+  is the one column that deliberately does NOT seed its status — nobody adds a task in order to have
+  already finished it. The preset seeds the INITIAL state only, so a user who changes the priority
+  does not have it snap back on the next re-render.
+- [x] **DP-F5b — Calendar day-add confirmation:** the add-task modal opened from a calendar day relies
+  on the native date field to show which day; add a "Scheduling for <date>" subtitle.
+  — DONE (2026-08-16). Shown only when the due date was SEEDED. On an ordinary add the subtitle would
+  restate a field the user just typed, which is noise; on a calendar-seeded one it confirms a value
+  they did not type, and picking the wrong day is exactly the mistake the calendar entry point exists
+  to avoid.
+- [x] **DP-F5c — Save-as-template IA:** "Save as template" is grouped with the top-of-form picker, so it
+  reads before the fields it snapshots; consider a subtitle.
+  — DONE (2026-08-16). Half of this had already been fixed: the TXT work moved the whole templates
+  zone from the top of the form to the BOTTOM, which resolves the "reads before the fields it
+  snapshots" complaint. What remained is that the button still sits beside the PICKER, so it is
+  genuinely ambiguous whether it saves the template you just picked or the form you just filled — and
+  the button's own label cannot say. A one-line hint says it.
 
 ### SMART / SMART+ micro-features (curated with Cam, 2026-07-15)
 **Tier definitions:** **SMART** = clever *deterministic* code (rules/heuristics, no LLM, 100% local).

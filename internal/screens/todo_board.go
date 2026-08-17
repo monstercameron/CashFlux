@@ -68,7 +68,14 @@ func TaskBoardView(props TaskBoardProps) ui.Node {
 
 				var body ui.Node
 				if len(c.Tasks) == 0 {
-					body = Div(css.Class("tdb-empty"), uistate.T("todoboard.emptyColumn"))
+					// DP-F5a: an empty column was dead-end text. It is also the one place
+					// on the board where the user's intent is unambiguous — they are
+					// looking at an empty lane — so it is the cheapest possible place to
+					// offer the add. Its own component because the handler would otherwise
+					// be registered inside this MapKeyed loop, which the hook model forbids.
+					body = ui.CreateElement(boardEmptyColumn, boardEmptyColumnProps{
+						ColumnKey: c.Key, By: props.By,
+					})
 				} else {
 					cards := MapKeyed(c.Tasks,
 						func(t domain.Task) any { return t.ID },
@@ -229,5 +236,45 @@ func BoardCard(props boardCardProps) ui.Node {
 			dueNode,
 			nextNode,
 		),
+	)
+}
+
+// boardEmptyColumnProps identifies which lane the add would land in.
+type boardEmptyColumnProps struct {
+	ColumnKey string
+	By        taskboard.GroupBy
+}
+
+// boardEmptyColumn renders an empty lane's message with an add affordance
+// (DP-F5a).
+//
+// It is a component, not inline markup, for the reason the ticket anticipates:
+// the button owns a click hook, and this renders inside a MapKeyed over columns
+// where registering one would violate the hook-position rule.
+//
+// The add SEEDS the new task with the lane it was opened from, so dropping a
+// card into "High" by adding it there does not then require moving it. An add
+// button that ignores which column it was pressed in is a shortcut that saves no
+// steps.
+func boardEmptyColumn(props boardEmptyColumnProps) ui.Node {
+	add := ui.UseEvent(Prevent(func() {
+		seed := uistate.TaskAddSeed{}
+		switch props.By {
+		case taskboard.GroupByPriority:
+			seed.Priority = props.ColumnKey
+		case taskboard.GroupByStatus:
+			// A "Done" lane is the one column where seeding the status would be
+			// perverse — nobody adds a task in order to have already finished it — so
+			// the status seed is deliberately not set and the task lands open.
+		}
+		uistate.SetTaskAddSeed(seed)
+		uistate.SetAddTarget("task")
+	}))
+	return Div(css.Class("tdb-empty"),
+		Span(uistate.T("todoboard.emptyColumn")),
+		Button(css.Class("btn-link", tw.Text12), Type("button"),
+			Attr("data-testid", "tdb-add-"+props.ColumnKey),
+			Attr("aria-label", uistate.T("todoboard.addHereAria")),
+			OnClick(add), uistate.T("todoboard.addHere")),
 	)
 }

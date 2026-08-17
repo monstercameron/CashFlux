@@ -12,6 +12,10 @@ type TaskAddSeed struct {
 	Notes    string // pre-filled task notes (e.g. a cancellation / negotiation checklist)
 	LinkType string // domain.RelatedType value ("transaction", …); "" = no link
 	LinkID   string
+	// Priority pre-selects the new task's priority (a domain.TaskPriority value).
+	// Empty leaves the form's own default alone (DP-F5a): an add opened from the
+	// board's High lane should land in High, or the shortcut has saved no steps.
+	Priority string
 }
 
 // capturedTaskAddSeed lets a click handler on another page (e.g. the transactions row

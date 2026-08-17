@@ -734,4 +734,27 @@ func registerVSweep() {
 		color("var(--warn, var(--text-dim))"),
 	)
 
+	// ─── DP-F5a/b: empty-lane add, and the seeded-day subtitle ───────────────
+	rule(".tdb-empty",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("center"),
+		gap("0.3rem"),
+	)
+	// The seeded day is a statement of context, not a field label, so it reads
+	// above the form rather than inside it.
+	rule(".tc-seeded-day",
+		margin("0 0 0.5rem"),
+		fontSize("0.8rem"),
+		color("var(--text-dim)"),
+	)
+
+	// ─── DP-F5c: what "Save as template" actually snapshots ──────────────────
+	rule(".txt-save-row",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.4rem"),
+	)
+
 }
