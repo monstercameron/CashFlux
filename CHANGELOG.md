@@ -7,6 +7,16 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Loans can show every payment (FP-T2a).** "Show all N payments" opens the full amortization schedule:
+  each payment's date, how much goes to the balance and how much to interest, and what is left. On a
+  long loan the first payments are almost all interest, which no single total conveys. With an extra
+  payment set, the table shows the accelerated schedule rather than the original one.
+
+### Fixed
+- **A loan's term is remembered.** It was session-only, so the payoff date and monthly payment quietly
+  reverted to a guessed default on reload while still looking like something you had entered.
+
+### Added
 - **You can update a holding's price without deleting it (FP-T2c).** "Update price" on a position's ⋯
   menu takes the new price and the date it was true — editable, because the price you have is usually
   last night's close, and stamping it "now" would make stale data look fresh. Every row says how old its

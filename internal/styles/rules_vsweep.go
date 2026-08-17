@@ -798,4 +798,41 @@ func registerVSweep() {
 		fontSize("0.95rem"),
 	)
 
+	// ─── FP-T2a: the amortization schedule table ─────────────────────────────
+	// Capped and scrollable: a 30-year mortgage is 360 rows, and a table that
+	// pushes everything below it off the page is not a disclosure, it is a
+	// takeover.
+	rule(".loan-sched-wrap",
+		marginTop("0.6rem"),
+		maxHeight("22rem"),
+		overflowY("auto"),
+		overflowX("auto"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md, 8px)"),
+		padding("0.5rem 0.6rem"),
+	)
+	rule(".loan-sched",
+		width("100%"),
+		borderCollapse("collapse"),
+		fontSize("var(--type-13)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".loan-sched th",
+		textAlign("right"),
+		position("sticky"),
+		top("0"),
+		background("var(--surface, var(--bg))"),
+		padding("0.25rem 0.5rem"),
+		color("var(--text-dim)"),
+		fontWeight("500"),
+	)
+	rule(".loan-sched td",
+		textAlign("right"),
+		padding("0.2rem 0.5rem"),
+		whiteSpace("nowrap"),
+	)
+	rule(".loan-sched th:first-child, .loan-sched td:first-child",
+		textAlign("left"),
+	)
+
 }

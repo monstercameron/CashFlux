@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -44,6 +45,10 @@ func defaultTermMonths(t domain.AccountType) int {
 
 // loanCardProps is the props bag for a single per-loan amortization card.
 type loanCardProps struct {
+	// OnTerm persists a changed term on the account (FP-T2a). Nil leaves the term
+	// session-only.
+	OnTerm func(a domain.Account, months int)
+
 	Account domain.Account
 	Balance int64  // balance in minor units (positive = principal owed)
 	BaseCur string // household base currency
@@ -70,10 +75,34 @@ func loanCard(props loanCardProps) ui.Node {
 	// Per-card hook state. All UseState/UseEvent calls are at unconditional,
 	// stable positions because loanCard is its own component (not inlined in a
 	// loop body).
-	termS := ui.UseState(strconv.Itoa(defaultTerm))
+	// FP-T2a: the term is seeded from the ACCOUNT when it knows one. It used to be
+	// session-only state, so the payoff date and the modeled payment reset to a
+	// guessed default on every reload — figures a household plans around, quietly
+	// reverting to something nobody entered.
+	seedTerm := strconv.Itoa(defaultTerm)
+	if a.TermMonths > 0 {
+		seedTerm = strconv.Itoa(a.TermMonths)
+	}
+	termS := ui.UseState(seedTerm)
 	extraS := ui.UseState("")
+	scheduleOpen := uistate.UseLoanScheduleOpen()
 
-	onTerm := ui.UseEvent(func(v string) { termS.Set(v) })
+	onTerm := ui.UseEvent(func(v string) {
+		termS.Set(v)
+		// Persist only a term that parses. Half-typed input arrives on every
+		// keystroke, and writing "1" on the way to "180" would store a loan that
+		// pays off next month.
+		if t, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && t > 0 && t <= 1200 && props.OnTerm != nil {
+			props.OnTerm(a, t)
+		}
+	})
+	toggleSchedule := ui.UseEvent(Prevent(func() {
+		if scheduleOpen.Get() == a.ID {
+			scheduleOpen.Set("")
+			return
+		}
+		scheduleOpen.Set(a.ID)
+	}))
 	onExtra := ui.UseEvent(func(v string) { extraS.Set(v) })
 
 	// Parse the user-editable inputs; fall back to defaults on bad input.
@@ -262,6 +291,66 @@ func loanCard(props loanCardProps) ui.Node {
 		)
 	}
 
+	// --- FP-T2a: the schedule itself ---
+	//
+	// The summary tiles say what the loan costs; the schedule says WHERE the money
+	// goes, which is the thing that surprises people. On a 30-year mortgage the
+	// first payment is most interest and almost no principal, and no amount of
+	// "total interest $X" conveys that as well as one row of it does.
+	//
+	// Rendered only while expanded, and only one loan at a time: 360 rows is a
+	// real cost to pay for a panel nobody is reading.
+	var scheduleNode ui.Node = Fragment()
+	if len(baseRows) > 0 {
+		rows := baseRows
+		note := uistate.T("loans.scheduleNoteBase")
+		if hasExtra && len(extraRows) > 0 {
+			// When an extra payment is set, show the schedule the reader is actually
+			// asking about — the accelerated one. Showing the base schedule beneath an
+			// "18 months saved" figure would contradict it row by row.
+			rows = extraRows
+			note = uistate.T("loans.scheduleNoteExtra")
+		}
+		open := scheduleOpen.Get() == a.ID
+		label := uistate.T("loans.scheduleShow", len(rows))
+		if open {
+			label = uistate.T("loans.scheduleHide")
+		}
+		var table ui.Node = Fragment()
+		if open {
+			table = Div(css.Class("loan-sched-wrap"),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "loan-sched-note-"+a.ID), note),
+				Table(css.Class("loan-sched"), Attr("data-testid", "loan-sched-"+a.ID),
+					Thead(Tr(
+						Th(uistate.T("loans.colNo")),
+						Th(uistate.T("loans.colDate")),
+						Th(uistate.T("loans.colPayment")),
+						Th(uistate.T("loans.colPrincipal")),
+						Th(uistate.T("loans.colInterest")),
+						Th(uistate.T("loans.colBalance")),
+					)),
+					Tbody(MapKeyed(rows,
+						func(r payoff.AmortRow) any { return r.PaymentNo },
+						func(r payoff.AmortRow) ui.Node {
+							return Tr(
+								Td(strconv.Itoa(r.PaymentNo)),
+								Td(fmtMonthYear(r.Date)),
+								Td(fmtMoney(r.PaymentMinor)),
+								Td(fmtMoney(r.PrincipalMinor)),
+								Td(fmtMoney(r.InterestMinor)),
+								Td(fmtMoney(r.BalanceMinor)),
+							)
+						})),
+				))
+		}
+		scheduleNode = Div(css.Class(tw.Mt3),
+			Button(css.Class("btn", "btn-quiet"), Type("button"),
+				Attr("data-testid", "loan-sched-toggle-"+a.ID),
+				Attr("aria-expanded", boolAttr(open)),
+				OnClick(toggleSchedule), label),
+			table)
+	}
+
 	return uiw.Card(uiw.CardProps{
 		Body: Div(css.Class(tw.FlexCol),
 			header,
@@ -269,6 +358,7 @@ func loanCard(props loanCardProps) ui.Node {
 			summaryNode,
 			extraRow,
 			savingsNode,
+			scheduleNode,
 		),
 	})
 }
@@ -292,6 +382,21 @@ func LoansPanel(props LoansPanelProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
+	}
+
+	// FP-T2a: persist a changed term on the account. The schedule, the payoff date
+	// and the modeled payment are all derived from it, and a figure that resets to
+	// a guessed default on reload is worse than no figure — it looks entered.
+	onTerm := func(a domain.Account, months int) {
+		if a.TermMonths == months {
+			return
+		}
+		a.TermMonths = months
+		if err := app.PutAccount(a); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.RequestPersist()
 	}
 
 	settings := app.Settings()
@@ -339,6 +444,7 @@ func LoansPanel(props LoansPanelProps) ui.Node {
 			Account: a,
 			Balance: balMinor,
 			BaseCur: baseCur,
+			OnTerm:  onTerm,
 		}
 		cards = append(cards, ui.CreateElement(loanCard, p))
 	}

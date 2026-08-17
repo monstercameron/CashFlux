@@ -244,6 +244,14 @@ func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:sho
 // tile so the form and the button stay in sync across the widgetized surface).
 func UseInvestAddOpen() state.Atom[bool] { return state.UseAtom("invest:addOpen", false) }
 
+// UseLoanScheduleOpen returns the shared atom naming the loan whose full
+// amortization schedule is expanded ("" = none) (FP-T2a).
+//
+// One at a time, and shared rather than per-card: a thirty-year mortgage is 360
+// rows, and rendering several schedules at once — or re-rendering one that a
+// background update silently reopened — costs more than the answer is worth.
+func UseLoanScheduleOpen() state.Atom[string] { return state.UseAtom("loans:scheduleOpen", "") }
+
 // UseHoldingPriceEdit returns the shared atom naming the holding whose price is
 // being edited ("" = none), plus the draft price and as-of date (FP-T2c).
 //

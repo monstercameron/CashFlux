@@ -543,6 +543,18 @@ var vSweepKeys = Catalog{
 	"investments.pricedOn":        "priced %s",
 	"investments.priceNoDate":     "price date not recorded",
 
+	// FP-T2a — the amortization schedule table.
+	"loans.scheduleShow":      "Show all %d payments",
+	"loans.scheduleHide":      "Hide the payment schedule",
+	"loans.scheduleNoteBase":  "Every scheduled payment, and how much of each one goes to interest rather than to the balance.",
+	"loans.scheduleNoteExtra": "Every payment with your extra amount included — this is the accelerated schedule, not the original one.",
+	"loans.colNo":             "#",
+	"loans.colDate":           "Date",
+	"loans.colPayment":        "Payment",
+	"loans.colPrincipal":      "Principal",
+	"loans.colInterest":       "Interest",
+	"loans.colBalance":        "Balance left",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

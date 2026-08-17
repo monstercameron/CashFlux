@@ -1234,10 +1234,35 @@ bottom-up per SDLC.
   + roll up investment income. Pillar of the Empower/Monarch investment view.
 
 **Tier 2 — engine already built + tested, only the UI is missing (highest leverage/$):**
-- [ ] **FP-T2a — Loan amortization schedule table.** `payoff.AmortizeFixed`/`AmortizeWithExtra` return
+- [x] **FP-T2a — Loan amortization schedule table.** `payoff.AmortizeFixed`/`AmortizeWithExtra` return
   every principal/interest/balance row; NO screen renders them (`loanCard` shows summary tiles only). Add a
   schedule table/disclosure. Also **persist loan term** (`TermMonths`/origination date) — today it's
   session-only UI state (`termS`), which weakens payoff-date accuracy and the R21 aggregate double-count.
+  — DONE (2026-08-17), both halves.
+
+  WHY THE TABLE EARNS ITS SPACE: the summary tiles say what the loan costs; the schedule says where the
+  money goes, which is the part that surprises people. On a long loan the first payment is mostly
+  interest and barely touches the balance, and no "total interest $X" figure conveys that the way one
+  row of it does.
+
+  When an extra payment is set, the table shows the ACCELERATED schedule, not the original. A base
+  schedule printed underneath an "18 months saved" figure would contradict that figure row by row, and
+  the reader would have no way to know which one to believe.
+
+  Rendered only while expanded, and only one loan at a time (a shared atom, not per-card state). A
+  thirty-year mortgage is 360 rows; that is a real cost to pay for a panel nobody is reading. The
+  container is capped and scrolls — a table that pushes the rest of the page away is not a disclosure,
+  it is a takeover.
+
+  THE TERM NOW PERSISTS on the account (`TermMonths`, from C204/C206) and seeds the card. It was
+  session-only, so the payoff date and the modeled payment — figures a household plans around — reset to
+  a guessed default on every reload while still looking entered. Only a term that PARSES is written:
+  half-typed input arrives on every keystroke, and storing "1" on the way to "180" would persist a loan
+  that pays off next month.
+
+  VERIFIED IN A BROWSER: 8/8, stable across three runs, including the property the table exists to show
+  — principal rises and interest falls across the term ($297.26/$165.51 on the first payment against
+  $459.77/$2.84 on the last) and the balance ends at zero. The term survives navigating away and back.
 - [x] **FP-T2b — Surface category/payee trend sparklines.** `reports.CategoryTrends` + `PayeeTrends` are
   written + unit-tested but wired into zero screens; just render the existing series on `/reports`.
   — DONE (2026-08-17), and the ticket was HALF STALE: `CategoryTrends` had since been wired — every

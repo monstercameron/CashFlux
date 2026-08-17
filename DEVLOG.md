@@ -1,3 +1,40 @@
+## 2026-08-17 - the schedule, and a term that forgot itself (FP-T2a)
+
+Two halves, and the smaller one was the more serious.
+
+The loan term lived in `ui.UseState`. Everything on the card derives from it - the modeled payment, the
+total interest, the payoff date - so on every reload those figures silently reverted to a guessed
+default (360 months for a mortgage, 60 for everything else) while still looking like numbers the user
+had entered. A figure that resets to a guess is worse than a blank, because a blank asks and a guess
+asserts. It now persists on the account via `TermMonths`.
+
+Only a term that PARSES is written. Half-typed input arrives on every keystroke, and storing "1" on the
+way to "180" would persist a loan that pays off next month.
+
+The schedule itself: the summary tiles say what a loan costs, the schedule says where the money goes,
+and the second is the part that surprises people. On a long loan the first payment is mostly interest
+and barely touches the balance. "Total interest $47,000" states that fact and does not convey it; one
+row of $297 principal against $166 interest does.
+
+Three decisions in the table.
+
+With an extra payment set, it shows the ACCELERATED schedule. Printing the base schedule beneath an "18
+months saved" figure would contradict that figure row by row, and the reader has no way to tell which
+to believe.
+
+It renders only while expanded, and only one loan at a time - a shared atom rather than per-card state,
+which also avoids the remount-wipe problem I hit yesterday on the holdings price editor. A thirty-year
+mortgage is 360 rows and that is a real cost to pay for a panel nobody is reading.
+
+The container is capped and scrolls. A table that pushes the rest of the page off the screen is not a
+disclosure, it is a takeover.
+
+The browser check asserts the property the table exists for rather than that it rendered: principal
+rises and interest falls across the term, and the balance ends at zero. And once again a fixed
+`waitForTimeout` produced a false failure on the persistence check - waiting for the value to be
+non-empty made it stable. Third time this week; fixed sleeps against an async re-render are simply not
+a way to verify anything.
+
 ## 2026-08-17 - a form that closed itself (FP-T2c)
 
 The feature is small: update a holding's price without deleting the position. The bug found while
