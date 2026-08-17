@@ -36,6 +36,18 @@ ARG BUILD_DATE=unknown
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
+# The final `gzip` line is not an optimization, it is what makes the app load.
+# web/index.html asks for ./bin/main.wasm.gz FIRST — its own comment says "the
+# deploy ships main.wasm.gz alongside main.wasm" — and this image never built it.
+# So every visitor 404'd on the gz and fell back to the raw binary: 93 MB
+# uncompressed over a link measured at 428 KB/s. That transfer did not finish; it
+# was cut off partway, so instantiateStreaming never received a whole module and
+# the app sat on its splash screen forever with no error in the console.
+#
+# gzip -9 brings it to ~17.6 MB — the ~4x the loader already promised. The client
+# decompresses it itself through DecompressionStream, so this is a plain file with
+# no Content-Encoding negotiation to get wrong, and the raw binary stays beside it
+# for browsers that lack DecompressionStream.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     mkdir -p /src/web/bin /src/web/admin /src/web/portal \
@@ -48,7 +60,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/portal/portal.wasm ./cmd/cashflux-portal \
     && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /src/web/wasm_exec.js \
     && cp /src/web/wasm_exec.js /src/web/admin/wasm_exec.js \
-    && cp /src/web/wasm_exec.js /src/web/portal/wasm_exec.js
+    && cp /src/web/wasm_exec.js /src/web/portal/wasm_exec.js \
+    && gzip -9 -c /src/web/bin/main.wasm > /src/web/bin/main.wasm.gz
 
 # An empty, pre-owned data directory staged here because the runtime stage has no
 # shell to mkdir with. It also gives a NAMED volume correct ownership on first
