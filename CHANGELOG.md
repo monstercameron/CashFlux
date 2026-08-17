@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The Smart+ half of the item-scoped micro-features (SM-3/4/5/7/13/14/15 prompts).** Seven prompts
+  and three strict parsers for affordances that act on ONE row or card: propose a split for this
+  charge, explain this over-budget, explain this unusual balance move, explain this alert, one line
+  on this goal's pace, parse this sentence into a to-do, parse this sentence into a transaction. Two
+  rules run through all of them. The model never does arithmetic — the split prompt asks for
+  *percentages*, and the app apportions the money itself, because a model asked for dollars produces
+  a set that misses by a cent often enough to matter and sounds authoritative doing it. And anything
+  naming a category is resolved against the household's real list and dropped when it does not match,
+  so an invented category leaves the field empty for you rather than filling it with a guess. The two
+  date-parsing prompts are told today's date, which is the difference between "friday" landing this
+  week and landing in whatever week the model believes it is.
 - **Choose the report window, and what it is compared against (C383).** The annual review was a
   fixed twelve trailing months with automatic year-over-year — one question answered well and every
   other question not at all. Both are now controls in the masthead: the window can be the last 12,
