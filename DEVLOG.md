@@ -1,3 +1,34 @@
+## 2026-08-16 — a saved view has to know when it stopped being true (C404)
+
+The saving half of saved views is trivial: copy eight strings into a struct, name it, persist. The
+part worth thinking about is the picker's claim. If it shows "Monday triage" as selected, that has to
+mean the screen IS Monday triage — and the moment someone flips hide-done, it is not, but nothing
+told the picker. A stale highlight is worse than no highlight: it tells you the list in front of you
+is a thing it is not.
+
+`ActiveName` is the answer and it is deliberately dumb: compare every field, ignore the name, return
+the match or nothing. Which is why the View struct mirrors the atoms' own string types instead of
+using enums. A mapping layer between "saved" and "live" is exactly where the two would drift, and the
+equality check would start returning false for views that are actually active.
+
+Two smaller decisions:
+
+**Overwrite keeps its slot.** Saving over "Monday triage" is the most common edit there is, and a
+picker that reshuffled on every tweak would be maddening. Refusing the overwrite would be worse —
+delete-then-save for a one-field change.
+
+**Unmarshal is forgiving and bounded.** A corrupt preference must never stop the screen rendering,
+and there is nothing the user could do with the error anyway. It also drops nameless entries (they
+could never be picked, deleted or overwritten — permanent dead rows) and truncates past the cap, so
+a store written by a future version with a higher limit cannot make this one unbounded.
+
+On the toolbar: the reviewer called three control rows "density", and the fix is not fewer controls
+but fewer ALWAYS-VISIBLE controls. Sort, priority, link type, board grouping and hide-done went into
+the shared FilterToolbar popover; the badge and chips are what keep the collapse honest, because a
+narrowed list with no visible sign of narrowing is how people conclude their data is missing. Sort
+stayed out of the chips on purpose — reordering hides nothing, so a "clear filters" that reset it
+would be claiming to undo something it did not do.
+
 ## 2026-08-16 — the preset that needed a new variable (C405)
 
 Four presets were requested. Three were a morning's work: they are complete workflows made of

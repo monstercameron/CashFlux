@@ -5726,9 +5726,16 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   `<taskID>@<due>` so it is idempotent across opens and re-arms on recurrence; expires 30 days past
   due (backlog is not a reminder); severity critical when due/overdue. Settings gets its own on/off
   row, and the alert offers "Mark done" via the C409 resolution seam.
-- [ ] **C404 [MINOR][TODO] Saved views + single adaptive toolbar.** Reviewer: "Three control rows
+- [x] **C404 [MINOR][TODO] Saved views + single adaptive toolbar.** Reviewer: "Three control rows
   create toolbar density." Persist named filter/sort/view combos; collapse the three rows into one
-  toolbar + a filters popover (FilterToolbar pattern).
+  toolbar + a filters popover (FilterToolbar pattern). — DONE (2026-08-16). New pure
+  `internal/todoview` (Store with fold-by-name overwrite that keeps its slot, 12-view cap, rune-safe
+  name truncation, `ActiveName` equality highlight, forgiving+bounded Unmarshal), persisted in the
+  PRESERVED settings KV so a dataset wipe does not eat hand-built views. The toolbar collapsed to one
+  row: view switch + quick lens + a `uiw.FilterToolbar` holding search, a Filters popover (sort,
+  priority, link, board group-by, hide-done), removable chips and a badge, with Add / Views / Tools
+  as trailing actions. Sort is deliberately NOT a chip — reordering hides nothing, and "clear
+  filters" must not silently reset it.
 - [x] **C405 [MINOR][TODO] Automation-rule presets + template gallery.** Only 2 templates exposed.
   Ship the reviewer's four as workflow-engine presets surfaced from More tools (subscription price
   change → task; overdue bill → task; monthly reconciliation; quarterly account update) + grow the
@@ -9155,7 +9162,7 @@ per-transaction kebab action. They are user-facing defects reproduced in the ser
 known duplicate-DOM/dev-server behavior is intentionally excluded. The deleted probe transaction
 was recreated before ending the pass.
 
-- [ ] **C620 [CRITICAL][TXN][SAFETY] Per-transaction Delete commits immediately without confirmation or undo.**
+- [x] **C620 [DONE 2026-08-16] [CRITICAL][TXN][SAFETY] Per-transaction Delete commits immediately without confirmation or undo.**
   Opening a row's kebab menu and activating Delete removed `UXJ-S04 single gift review` immediately;
   no confirmation dialog, inline warning, toast, or undo affordance appeared. A fresh search for the
   same description returned no matching transaction. Require an explicit destructive confirmation
@@ -9163,33 +9170,69 @@ was recreated before ending the pass.
   AC: one accidental click cannot permanently remove a transaction, and the result is visible and
   reversible. Apply the same contract to bulk Delete.
 
-- [ ] **C621 [MAJOR][TXN][TASKS][DATA] Deleting a transaction leaves linked follow-up tasks orphaned or silently detached.**
+  **The undo the no-confirm decision rested on was never wired.** `deleteRow` carried a comment
+  saying the ⋯-menu Delete "needs no modal confirm" because it is "undoable via the toast" — but the
+  toast only renders an Undo button when the undo stack is non-empty, and this handler never called
+  `auditview.CaptureNow()`, the function whose own doc says delete handlers must call it "right
+  before showing an Undo toast so the undo stack is ready when the user clicks Undo". So the single
+  most dangerous path was the one with no confirm AND no working undo, while BULK delete has had a
+  confirm, a checkpoint and a snapshot all along.
+  Fixed: a destructive `ConfirmModal` naming the row the way the user is looking at it — payee, date,
+  amount, account — and `CaptureNow()` immediately before the write so Undo has a point to return to.
+  Bulk already met the contract and is unchanged.
+  Expected behavior: the confirmation should say exactly what will be removed (payee/description,
+  date, amount, account, and any linked tasks), put Cancel/Keep as the safe default, and require a
+  deliberate Delete action. After success, the row, totals, counts, pagination, and Review state
+  should update together; show a success message with Undo. Undo must restore the same transaction
+  identity, category, tags, cleared state, provenance, and links rather than creating a replacement.
+
+- [x] **C621 [DONE 2026-08-16] [MAJOR][TXN][TASKS][DATA] Deleting a transaction leaves linked follow-up tasks orphaned or silently detached.**
   The deleted probe row showed two open follow-up tasks before deletion. After recreating the same
   transaction through Add transaction, the row no longer showed those linked tasks, while the To-do
   page still contained transaction-linked QA tasks. Decide whether deletion should block, cascade,
   unlink with an explicit warning, or retain a recoverable tombstone; never silently strand work.
   AC: Delete previews the effect on linked tasks and the post-delete To-do state is deterministic,
   recoverable, and covered by an end-to-end test.
+  Expected behavior: if tasks exist, the confirmation should show their count and titles and offer a
+  clearly named policy. The preferred safe policy is to preserve the tasks as unlinked To-do items,
+  mark their transaction link as removed, and provide a route to clean them up; deleting tasks should
+  require a separate explicit choice. Undo must restore both the transaction and the original task
+  links. The transaction row and To-do list must never disagree about whether the link exists.
 
-- [ ] **C622 [MAJOR][TXN][RULES][CONTEXT] “Create rule from this transaction” opens an empty rule form.**
+- [x] **C622 [DONE 2026-08-16] [MAJOR][TXN][RULES][CONTEXT] “Create rule from this transaction” opens an empty rule form.**
   From a row menu, the app navigated to `/rules` and showed the return shortcut, but Match text and
   Category to assign were blank instead of being seeded from the transaction. This regresses the
   previously marked-done C32 context path and turns a one-click correction into manual re-entry.
   Populate the form from the selected transaction's normalized payee/description and category,
   preserve the originating row/filter, and add a served-build regression test.
+  Expected behavior: Match text should use the normalized merchant/payee value while retaining a
+  visible explanation of the source transaction. Category to assign should be selected to the current
+  category when one exists, with a clear empty state when it does not. Saving or canceling should offer
+  a named return to the originating Transactions view and restore its search, member, period, sort,
+  and row context without silently broadening the scope.
 
-- [ ] **C623 [MAJOR][TXN][RECEIPT][UX] “Split from receipt…” has no usable upload continuation.**
+- [x] **C623 [DONE 2026-08-16] [MAJOR][TXN][RECEIPT][UX] “Split from receipt…” has no usable upload continuation.**
   The menu action produced only the generic prompt “Choose a photo of the receipt to read.”; no
   file input, picker, upload target, error state, or durable next step was available, and the prompt
   disappeared before it could be acted on. Open the receipt workflow with an actual file/select
   control, or disable the action with an honest explanation when receipt capture is unavailable.
   AC: activation always yields a visible, actionable next step or a clearly explained limitation.
+  Expected behavior: opening the action should present Choose receipt, Cancel, supported file types,
+  and a visible upload/select control. After selection, show upload/OCR progress, then a preview that
+  identifies the transaction and proposed line items before applying anything. Reject unsupported or
+  unreadable files in the same surface with a retry path; never close silently and never alter the
+  transaction until the user accepts the split preview.
 
-- [ ] **C624 [MAJOR][TXN][VALIDATION][MONEY] Quick-add accepts a negative amount for an expense.**
+- [x] **C624 [DONE 2026-08-16] [MAJOR][TXN][VALIDATION][MONEY] Quick-add accepts a negative amount for an expense.**
   In Add transaction, entering `-1` enabled Save, while zero correctly kept Save disabled. A negative
   money-out amount can invert totals or create a direction/amount mismatch unless the app explicitly
   models signed amounts. Reject negative input for expense/income quick-add, or normalize direction
   and show the resulting sign before commit; align edit and import validation with the same rule.
+  Expected behavior: Expense and Income forms should accept a positive magnitude only, show the
+  resulting signed ledger value according to the selected direction, and keep every Save action
+  disabled while the amount is zero, negative, non-numeric, or over the supported precision/range.
+  If signed entry is intentionally supported, changing the sign must visibly change Direction and
+  explain the normalization before saving; Add, Edit, Import, Review, and Split must use one rule.
 
 - [ ] **C625 [MINOR][TXN][SORT][FEEDBACK] Sort direction can change before the visible ledger catches up.**
   Clicking Date changed the sort state while the old row order remained visible for roughly a second;
@@ -9197,6 +9240,10 @@ was recreated before ending the pass.
   specifically a rendered-order feedback regression against C569, not an accessibility-label gap.
   Keep metadata and rows synchronized, or show a short `aria-busy`/loading state until the new order
   is painted; add a rapid-click regression test.
+  Expected behavior: a sort request should be treated as one atomic transition. Either keep the old
+  direction announced until the new rows render, or immediately mark the table busy and temporarily
+  disable row actions/second sort clicks. Once settled, the header direction, first/last visible rows,
+  pagination, and screen-reader announcement must all describe the same ordering.
 
 - [ ] **C626 [MINOR][TXN][A11Y][PERF] “All” mode virtualizes rows without exposing table position metadata.**
   Selecting All announced `1–3284 of 3284`, but only about 40–50 rows existed in the table DOM at a
@@ -9204,12 +9251,20 @@ was recreated before ending the pass.
   This may be intentional for performance, but it makes keyboard and screen-reader navigation
   unable to understand the announced full set. Expose the virtual range/total and stable row
   positions, or change the status copy to describe the rendered window; verify with a11y tooling.
+  Expected behavior: keep the performance optimization only if the table exposes the total row count,
+  each rendered row's absolute position, and a keyboard/screen-reader path to scroll or request the
+  next range. The status should distinguish total matches from currently rendered rows. Selecting All
+  must not imply that assistive technology can tab through 3,284 rows when only the viewport exists.
 
-- [ ] **C627 [MAJOR][TXN][PAGINATION][CORRECTNESS] Jump to page accepts input but does not navigate.**
+- [x] **C627 [DONE 2026-08-16] [MAJOR][TXN][PAGINATION][CORRECTNESS] Jump to page accepts input but does not navigate.**
   Entering valid page `132` into Jump to page left the ledger on `1–25 of 3284`; the input then
   displayed `132` beside rows still from page 1. The control therefore reports a requested page
   that is not the rendered page. Commit on Enter/blur only after validation, update the rows and
   previous/next state atomically, and reset the field to the actual page on failure.
+  Expected behavior: entering `5` and pressing Enter should render rows 101-125, set the field to 5,
+  enable Previous, and keep Next consistent with the total page count. Blank, fractional, out-of-range,
+  or non-numeric values should leave the current page intact and show an inline error. Enter, blur,
+  Previous, Next, filters, and row-count changes must all share one canonical page state.
 
 - [ ] **C628 [MINOR][TXN][SEARCH][REGRESSION] Served build lacks the pending-search feedback promised by C619.**
   Typing `UXJ-S02` left the previous ledger visible during the debounce window, but the live searchbox
@@ -9217,6 +9272,65 @@ was recreated before ending the pass.
   Reconcile the served bundle with the C619 implementation, or update the implementation/test if the
   contract changed. AC: stale rows are explicitly marked as pending and search completion is announced
   without making the user guess whether the query was accepted.
+  Expected behavior: on the first keystroke, announce Searching, set `aria-busy=true`, and make stale
+  row actions unavailable until the debounced query completes. On success, replace rows and counts
+  together and announce the result scope; on no match, show a stable empty state with Clear search.
+  Clear search must immediately restore the full query and remove only the search criterion, not the
+  period/member/category filters.
+
+---
+
+## TR post-change replay deltas (2026-08-16)
+
+This section records what changed since the prior bug bash. Completed items below were verified in the
+served build during this replay; the open items are new or still reproducible. The review probe did
+change seeded data: confirming the first one-at-a-time Blue Bottle card categorized/reviewed 122
+merchant charges, which is itself tracked below.
+
+- [x] **C622 live behavior now passes:** Create rule from this transaction opens `/rules` with the
+  normalized payee (`UXJ Single Coffee`) and the current category (`Dining`) prefilled, and the
+  return control preserves the originating `UXJ-S01` filter. Keep the existing source/e2e guard so
+  this previously regressed context handoff cannot silently regress again.
+
+- [x] **C553/C616 live behavior now passes for the tested card:** one-at-a-time Categorize & next
+  advanced only after the write, reduced the queue, and the confirmed ledger row persisted as
+  `Reviewed` after returning to the ledger. The probe also exposed the broader scope issue in C653.
+
+- [x] **C611 home quick-add live behavior now passes:** the dashboard quick-add panel rendered,
+  accepted focus, and exposed its fields and Save/Cancel controls on the first activation.
+
+- [ ] **C651 [MINOR][TXN][TAGS][UX] “Filter to #coffee” is a no-op from a filtered row.**
+  With `UXJ-S01` filtered to one row, activating the row's `Filter to #coffee` control left the
+  search text, active filter chip, result count, and ledger unchanged. The control promises a tag
+  drill-down but does not add a Tag filter or replace the query. AC: the action visibly applies the
+  tag filter, announces the resulting scope, and has a clear way back.
+  Expected behavior: clicking the control should add a visible `Tag: coffee` chip (or replace the
+  free-text query with the equivalent canonical tag filter), recalculate the count, and leave the
+  user able to remove only that tag. If the current query already narrows to one matching row, the
+  UI should still show that the tag was applied rather than silently doing nothing.
+
+- [ ] **C652 [MAJOR][TXN][DUPES][SAFETY] Duplicate review still exposes direct destructive deletion.**
+  Review duplicates currently shows `Delete duplicate` as an immediately actionable button while
+  explaining only that one entry will be kept. No confirmation or undo is presented before the
+  destructive operation. Re-open the C571 acceptance criteria: name the retained/removed entries,
+  confirm explicitly, and provide recovery.
+  Expected behavior: selecting Delete duplicate should open a confirmation that identifies the
+  duplicate being removed and the transaction being retained, including date, amount, account, and
+  description. Merge should disclose tag/history behavior. Neither action should commit from the
+  first click; success must update counts and show Undo that restores the removed identity and its
+  metadata.
+
+- [ ] **C653 [MAJOR][TXN][REVIEW][SCOPE][SAFETY] One-at-a-time review can confirm an entire merchant group under a singular CTA.**
+  The first card showed one Blue Bottle charge plus “121 more charges from this merchant are waiting.”
+  Clicking `Categorize & next` moved the queue from 251 to 129, and the ledger showed 122 Blue Bottle
+  entries categorized/reviewed. If merchant-wide confirmation is intended, say so on the CTA and
+  require an explicit “apply to all 122” choice; if this mode is truly per-charge, only commit the
+  current charge. AC: the user can predict exactly how many transactions one click will change.
+  Expected behavior: the card must show an explicit scope such as `1 selected charge` versus
+  `122 merchant charges`, and the primary action must name its scope. A safe design is
+  `Categorize this charge` as the default, with a separate opt-in `Categorize all 122` confirmation
+  that previews the category, total amount, and affected date range. The queue count, ledger status,
+  Review history, and Undo must reflect exactly the selected scope after commit.
 
 ---
 

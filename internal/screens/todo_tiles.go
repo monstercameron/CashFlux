@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/taskchecklist"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
+	"github.com/monstercameron/CashFlux/internal/todoview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -124,17 +125,27 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	view := uistate.UseTodoView()
 	boardGroup := uistate.UseTodoBoardGroup()
 	quickView := uistate.UseTodoQuickView()
+	// C404: saved views. The store is re-read per render rather than held in a
+	// hook, so a view saved on one tile is visible on the next render of another
+	// — the same reason the notification rule config is re-read on toggle.
+	savedRev := ui.UseState(0)
+	_ = savedRev.Get()
+	savedViews := uistate.LoadTodoViews()
 
 	// Changing any filter/search/sort resets to the first page so the view can't land on a
 	// now-empty page.
 	toggleHideDone := ui.UseEvent(Prevent(func() { hideDone.Set(!hideDone.Get()); page.Set(1) }))
 	onFilterPrio := ui.UseEvent(func(e ui.Event) { filterPrio.Set(e.GetValue()); page.Set(1) })
 	onSort := ui.UseEvent(func(e ui.Event) { sortMode.Set(e.GetValue()); page.Set(1) })
+	// The FilterToolbar owns the search box now (C404); it takes a plain func, so
+	// this stays a hook only to keep the hook order in this function stable.
 	onSearch := ui.UseEvent(func(v string) { search.Set(v); page.Set(1) })
+	_ = onSearch
 	// Changing the link-type filter clears any specific-entity narrowing (deep-link) so the
 	// dropdown always means what it says.
 	onLink := ui.UseEvent(func(e ui.Event) { linkFilter.Set(e.GetValue()); linkID.Set(""); page.Set(1) })
 	clearSearch := ui.UseEvent(Prevent(func() { search.Set(""); page.Set(1) }))
+	_ = clearSearch
 	addTask := ui.UseEvent(Prevent(func() { uistate.SetAddTarget("task") }))
 	// Checklist templates: one click instantiates a parent task + its steps
 	// (taskchecklist.Instantiate) for the recurring rituals — the month-end
@@ -287,24 +298,6 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	if hideDone.Get() {
 		hideToggleCls += " is-on"
 	}
-	searchCls := "todo-ctrl todo-ctrl-search"
-	if search.Get() != "" {
-		searchCls += " is-active"
-	}
-	// One standardized command bar of two fixed rows (never a wrap-dependent single
-	// line): TOP = search filling the slack + the primary action cluster (Add task and
-	// the "More" menu of uncommon tools — the checklist templates) pinned right;
-	// BOTTOM = the display-view switch and quick-view lens on the left, with sort and
-	// the task filters grouped on the right. Rows are laid out by .todo-cmdbar
-	// (registerTodoPolish).
-	searchCtrl := Label(ClassStr(searchCls),
-		uiw.Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-		Input(css.Class("todo-search-input"), Type("search"), Attr("data-testid", "todo-search"),
-			Attr("aria-label", uistate.T("todo.searchLabel")), Placeholder(uistate.T("todo.searchPlaceholder")),
-			Value(search.Get()), OnInput(onSearch)),
-		If(search.Get() != "", Button(css.Class("todo-search-clear"), Type("button"), Attr("data-testid", "todo-search-clear"),
-			Attr("aria-label", uistate.T("todo.searchClear")), OnClick(clearSearch), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
-	)
 	sortCtrl := Label(css.Class("todo-ctrl"),
 		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 		Span(css.Class("todo-ctrl-label"), uistate.T("todo.sortShort")),
@@ -339,6 +332,98 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	)
 	hideToggle := Button(css.Class(hideToggleCls), Type("button"), Attr("aria-pressed", ariaBool(hideDone.Get())),
 		Attr("data-testid", "todo-hide-done"), OnClick(toggleHideDone), Text(hideLabel))
+	// ─── C404: saved views ───────────────────────────────────────────────────
+	//
+	// currentView is the live screen expressed as a todoview.View, which is what
+	// makes both directions cheap: saving is a copy, and highlighting the active
+	// entry is an equality check. The fields are the atoms' own strings, so
+	// applying a view is assignment rather than translation — a mapping layer is
+	// somewhere the saved state and the live state could disagree.
+	currentView := todoview.View{
+		Display: string(view.Get()), Quick: quickView.Get(), Sort: sortMode.Get(),
+		Priority: filterPrio.Get(), Link: linkFilter.Get(), BoardGroup: boardGroup.Get(),
+		HideDone: hideDone.Get(), Search: search.Get(),
+	}
+	activeView := savedViews.ActiveName(currentView)
+	applyView := func(v todoview.View) {
+		view.Set(v.Display)
+		quickView.Set(v.Quick)
+		sortMode.Set(v.Sort)
+		filterPrio.Set(v.Priority)
+		linkFilter.Set(v.Link)
+		// A saved view names a KIND of link, never one specific entity: a deep-link
+		// narrowing survives only for the navigation that set it.
+		linkID.Set("")
+		boardGroup.Set(v.BoardGroup)
+		hideDone.Set(v.HideDone)
+		search.Set(v.Search)
+		page.Set(1)
+	}
+	saveCurrentView := func() {
+		uistate.PromptModal(uistate.T("todo.viewSavePrompt"), activeView, func(name string) {
+			if strings.TrimSpace(name) == "" {
+				return
+			}
+			v := currentView
+			v.Name = name
+			store := uistate.LoadTodoViews()
+			if err := store.Save(v); err != nil {
+				uistate.PostNotice(viewSaveError(err), true)
+				return
+			}
+			uistate.SaveTodoViews(store)
+			savedRev.Set(savedRev.Get() + 1)
+			uistate.PostNotice(uistate.T("todo.viewSaved", strings.TrimSpace(name)), false)
+		})
+	}
+	deleteActiveView := func() {
+		if activeView == "" {
+			return
+		}
+		name := activeView
+		uistate.ConfirmModal(uistate.T("todo.viewDeleteConfirm", name), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			store := uistate.LoadTodoViews()
+			if store.Delete(name) {
+				uistate.SaveTodoViews(store)
+				savedRev.Set(savedRev.Get() + 1)
+				uistate.PostNotice(uistate.T("todo.viewDeleted", name), false)
+			}
+		})
+	}
+	viewItems := make([]uiw.OverflowMenuItem, 0, len(savedViews.Views)+2)
+	for _, v := range savedViews.Views {
+		label := v.Name
+		if v.Name == activeView {
+			// A check mark, not a disabled row: re-picking the active view is a
+			// harmless way to undo an accidental control change.
+			label = "✓ " + v.Name
+		}
+		viewItems = append(viewItems, uiw.OverflowMenuItem{
+			Label: label, Icon: icon.Filter, TestID: "todo-view-apply-" + todoview.Key(v.Name),
+			OnSelect: func() { applyView(v) },
+		})
+	}
+	viewItems = append(viewItems,
+		uiw.OverflowMenuItem{Label: uistate.T("todo.viewSave"), Icon: icon.Check,
+			TestID: "todo-view-save", OnSelect: saveCurrentView},
+		uiw.OverflowMenuItem{Label: uistate.T("todo.viewDelete"), Icon: icon.Trash,
+			TestID: "todo-view-delete", OnSelect: deleteActiveView, Hidden: activeView == ""},
+	)
+	viewsLabel := uistate.T("todo.views")
+	if activeView != "" {
+		viewsLabel = activeView
+	}
+	viewsMenu := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerText:   viewsLabel,
+		TriggerLabel:  uistate.T("todo.viewsLabel"),
+		TriggerTestID: "todo-views-btn",
+		TriggerClass:  "btn btn-tool",
+		Items:         viewItems,
+	})
+
 	// The "Templates & tools" menu — the checklist templates (month-end close, tax prep,
 	// quarterly account review) that instantiate a parent task + ordered steps. Named for
 	// what it holds rather than a vague "More".
@@ -361,23 +446,75 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 		uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("todo.addTask")))
 
+	// C404: ONE toolbar row instead of three. The reviewer's complaint was density
+	// — sort, priority, link and hide-done were four always-visible controls that
+	// most sessions never touch, competing with the two that every session does
+	// (search, and which view you are in). They move into the shared FilterToolbar
+	// popover, which brings chips summarizing what is narrowed and a badge counting
+	// it, so nothing becomes invisible by becoming collapsed.
+	filterFields := Div(css.Class("todo-filter-fields"),
+		sortCtrl, prioCtrl, linkCtrl, boardGroupCtrl,
+		Div(css.Class("todo-filter-row"), hideToggle),
+	)
+	// Chips name only what is actually narrowing the list. Sort is deliberately
+	// NOT a chip: changing the order does not hide anything, and a "clear all
+	// filters" that silently reset the sort would be doing more than it says.
+	var chips []uiw.Chip
+	if filterPrio.Get() != "" {
+		chips = append(chips, uiw.Chip{Key: "prio",
+			Label: uistate.T("todo.chipPriority", todoPriorityName(filterPrio.Get()))})
+	}
+	if lf != uistate.TodoLinkAll {
+		chips = append(chips, uiw.Chip{Key: "link", Label: uistate.T("todo.chipLink", todoLinkName(lf))})
+	}
+	if hideDone.Get() {
+		chips = append(chips, uiw.Chip{Key: "hidedone", Label: uistate.T("todo.chipHideDone")})
+	}
+	removeChip := func(key string) {
+		switch key {
+		case "prio":
+			filterPrio.Set("")
+		case "link":
+			linkFilter.Set(uistate.TodoLinkAll)
+			linkID.Set("")
+		case "hidedone":
+			hideDone.Set(false)
+		}
+		page.Set(1)
+	}
+	clearAllFilters := func() {
+		filterPrio.Set("")
+		linkFilter.Set(uistate.TodoLinkAll)
+		linkID.Set("")
+		hideDone.Set(false)
+		page.Set(1)
+	}
+
 	toolbar := Div(css.Class("todo-cmdbar"),
-		Div(css.Class("cmdbar-row cmdbar-top"),
-			searchCtrl,
-			Div(css.Class("cmdbar-actions"),
-				addBtn,
-				moreMenu,
-			),
-		),
-		Div(css.Class("cmdbar-row cmdbar-views"),
+		Div(css.Class("cmdbar-row cmdbar-single"),
 			viewSwitch,
 			quickSwitch,
-			boardGroupCtrl,
-			Div(css.Class("cmdbar-filters"),
-				sortCtrl,
-				prioCtrl,
-				linkCtrl,
-				hideToggle,
+			Div(css.Class("cmdbar-grow"),
+				uiw.FilterToolbar(uiw.FilterToolbarProps{
+					Search:       search.Get(),
+					SearchLabel:  uistate.T("todo.searchLabel"),
+					OnSearch:     func(v string) { search.Set(v); page.Set(1) },
+					FiltersLabel: uistate.T("todo.filters"),
+					FiltersTitle: uistate.T("todo.filtersTitle"),
+					FilterFields: filterFields,
+					ActiveAriaLabel: func(n int) string {
+						if n == 0 {
+							return uistate.T("todo.filters")
+						}
+						return uistate.T("todo.filtersActiveAria", n)
+					},
+					Chips:         chips,
+					OnRemoveChip:  removeChip,
+					OnClearAll:    clearAllFilters,
+					ClearAllLabel: uistate.T("todo.clearFilters"),
+					RemoveLabel:   uistate.T("todo.removeFilter"),
+					Actions:       []ui.Node{addBtn, viewsMenu, moreMenu},
+				}),
 			),
 		),
 	)

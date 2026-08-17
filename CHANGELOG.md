@@ -7,6 +7,20 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Saved to-do views, and one toolbar instead of three rows (C404).** The to-do screen had every
+  control it needed and no memory: someone who works "everything overdue, assigned to me, oldest
+  first" every Monday rebuilt it from four separate controls every Monday. A view now saves the whole
+  combination — display mode, lens, sort, priority, link type, board grouping, hide-done and search —
+  under a name, and the picker marks the saved view as active only while the screen still exactly
+  matches it, going quiet the moment any control changes rather than continuing to claim otherwise.
+  Re-saving under an existing name updates it in place and keeps its slot in the picker. Views live
+  in preserved settings, so a dataset wipe does not eat them.
+
+  The toolbar itself collapsed from three control rows to one. Sort, priority, link type, board
+  grouping and hide-done — four to five always-visible controls that most sessions never touch — move
+  into the shared FilterToolbar popover, which brings a count badge and removable chips so nothing
+  became invisible by becoming collapsed. Sort is deliberately not a chip: changing the order hides
+  nothing, and a "clear filters" that silently reset it would be doing more than it says.
 - **A gallery of ready-made automations, and the variable one of them needed (C405).** The workflow
   composer could already express a great deal, which was the problem: a blank form asking for a
   trigger, a condition in a formula language, and a list of actions is a wall, and two templates was

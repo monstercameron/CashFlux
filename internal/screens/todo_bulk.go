@@ -5,8 +5,11 @@
 package screens
 
 import (
+	"errors"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/taskbulk"
+	"github.com/monstercameron/CashFlux/internal/todoview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -163,4 +166,49 @@ func todoBulkBar(props todoBulkBarProps) ui.Node {
 		),
 		undoBanner,
 	)
+}
+
+// viewSaveError turns a todoview save failure into copy a person can act on
+// (C404). The package returns sentinel errors precisely so the message can be
+// translated here rather than baked into a pure package in English.
+func viewSaveError(err error) string {
+	switch {
+	case errors.Is(err, todoview.ErrNameRequired):
+		return uistate.T("todo.viewNeedsName")
+	case errors.Is(err, todoview.ErrTooMany):
+		return uistate.T("todo.viewTooMany", todoview.MaxViews)
+	}
+	return err.Error()
+}
+
+// todoPriorityName is a priority filter value as its human label, for a filter
+// chip. An unknown value renders as itself rather than as an empty chip that
+// says nothing was filtered when something was.
+func todoPriorityName(p string) string {
+	switch domain.TaskPriority(p) {
+	case domain.PriorityHigh:
+		return uistate.T("priority.high")
+	case domain.PriorityMedium:
+		return uistate.T("priority.medium")
+	case domain.PriorityLow:
+		return uistate.T("priority.low")
+	}
+	return p
+}
+
+// todoLinkName is a link-type filter value as its human label, for a filter chip.
+func todoLinkName(l string) string {
+	switch l {
+	case uistate.TodoLinkGoal:
+		return uistate.T("todo.linkGoalPl")
+	case uistate.TodoLinkBudget:
+		return uistate.T("todo.linkBudgetPl")
+	case uistate.TodoLinkAccount:
+		return uistate.T("todo.linkAccountPl")
+	case uistate.TodoLinkTransaction:
+		return uistate.T("todo.linkTransactionPl")
+	case uistate.TodoLinkNone:
+		return uistate.T("todo.linkFilterNone")
+	}
+	return l
 }

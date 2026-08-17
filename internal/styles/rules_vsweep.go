@@ -186,4 +186,33 @@ func registerVSweep() {
 		gap("0.35rem"),
 	)
 
+	// ─── C404: one adaptive to-do toolbar ────────────────────────────────────
+	// The row holds the two controls every session touches (which view, which
+	// lens) and hands the rest to the FilterToolbar, which grows into the slack.
+	rule(".todo-cmdbar .cmdbar-single",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.6rem"),
+	)
+	rule(".cmdbar-grow",
+		flex("1 1 22rem"),
+		minWidth("0"),
+	)
+	// Inside the popover the controls stack: they were cramped side by side in the
+	// old bar, which is a large part of why they read as clutter.
+	rule(".todo-filter-fields",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.55rem"),
+	)
+	rule(".todo-filter-fields .todo-ctrl",
+		width("100%"),
+		justifyContent("space-between"),
+	)
+	rule(".todo-filter-row",
+		display("flex"),
+		gap("0.4rem"),
+	)
+
 }
