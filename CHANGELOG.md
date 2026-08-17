@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **An over-budget now has a reason, not just a number (SM-4 core).** "Over by $180" is what the
+  meter already says; the useful sentence is the one after it. `internal/whyover` decides which of
+  four things happened — one purchase did it, more trips than usual, the same trips costing more, or
+  genuinely nothing in particular — because each has a different fix and guessing wrong sends you to
+  the wrong one. It also fires *before* the limit breaks, when the pace projects over, but only once
+  enough of the period has elapsed for a linear projection to mean anything: a big purchase on day
+  two projects to an absurd total, and leading with that is crying wolf. Judgment only — the spend,
+  pace and per-merchant drivers stay in `internal/budgeting`, and the result is data the UI phrases.
 - **A charge can be split the way this merchant is usually split (SM-3 core).** The warehouse run
   that is always three categories was three categories to re-type, every time. `internal/splitsuggest`
   reads the merchant's own past split charges and proposes the same shape for a new one. Shares are
