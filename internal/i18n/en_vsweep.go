@@ -494,6 +494,9 @@ var vSweepKeys = Catalog{
 	"backup.unlockPrompt":       "Passphrase for this backup",
 	"backup.unlockFailed":       "That did not open the file — wrong passphrase, or the file is damaged. Nothing was changed.",
 
+	// DP1 — overdue rows are not "next 30 days".
+	"rhythm.agendaOverdue": "Overdue",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

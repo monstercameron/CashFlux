@@ -726,4 +726,12 @@ func registerVSweep() {
 		fontWeight("600"),
 	)
 
+	// ─── DP1: the overdue break in the agenda ────────────────────────────────
+	// It is a heading like the month labels beside it, not an alarm — the rows
+	// under it already carry their own OVERDUE pills, and a loud divider would
+	// double the shouting.
+	rule(".rhy-ag-month.rhy-ag-overdue",
+		color("var(--warn, var(--text-dim))"),
+	)
+
 }

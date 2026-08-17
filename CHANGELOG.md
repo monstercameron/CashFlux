@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Overdue bills no longer sit under a future month's heading (DP1).** The "Up next" agenda groups by
+  month, so an already-overdue payment appeared beneath a heading naming a month that has passed, in a
+  section about what is coming — reading, until you spotted the small OVERDUE badge, as a claim that
+  July is upcoming. Overdue items now have their own heading above the months.
+
+### Fixed
 - **Quick-add says which way a typed minus will be stored (C624).** The earlier fix took the
   ticket's "normalize the direction and show it" option and shipped only the normalizing half: a
   typed minus flips the kind toggle to Expense, but the toggle already defaults to Expense, so on the

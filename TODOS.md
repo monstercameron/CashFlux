@@ -958,10 +958,16 @@ survived the duplicate/scope filters but didn't make the engine cut):
   nothing teaches people to ignore it.
 
 ### UX polish backlog (deferred from the v1.0.33 design-review loop)
-- [ ] **DP1 — Recurring "Next 30 days" overdue grouping:** already-overdue occurrences (dates in the
+- [x] **DP1 — Recurring "Next 30 days" overdue grouping:** already-overdue occurrences (dates in the
   past) surface under the forward-looking "Next 30 days" heading, disambiguated only by the small
-  OVERDUE pill. Add a short "Overdue" sub-label / visual break above those rows so it doesn't
-  momentarily read as a contradiction. (POLISH; non-blocking — the release-quality gate passed.)
+  OVERDUE pill. Add a short "Overdue" sub-label / visual break above those rows.
+  — DONE (2026-08-16). The agenda breaks by month, which made the contradiction sharper than the
+  ticket describes: an overdue row got a heading naming a PAST month underneath a forward-looking
+  section title. Overdue occurrences now sit under their own "Overdue" heading, and the month tracker
+  resets at the break — without that reset an overdue July row and an upcoming July row would share
+  one label across the divider and end up back in the same group. The heading is toned like the month
+  labels beside it, not like an alarm: the rows under it already carry their own OVERDUE pills, and a
+  loud divider would double the shouting.
 
 ### Competitive-parity backlog — browser-only, local-first (2026-07-15 assessment; DEFERRED)
 Gap review of the first-8 pages found feature depth at/above the leaders; the real losses are

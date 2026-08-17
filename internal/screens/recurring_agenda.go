@@ -319,9 +319,30 @@ func rhyAgendaCompact(items []agendaItem, base string, showAll bool, onToggleAll
 	if !showAll && len(items) > maxRows {
 		shown = items[:maxRows]
 	}
+	// DP1: overdue occurrences get their own heading rather than sitting under a
+	// month label. They are dated in the PAST, so the month break above them says
+	// something like "July 2026" beneath a forward-looking "Up next" — which reads,
+	// for the moment it takes to spot the OVERDUE pill, as a claim that a past
+	// month is upcoming. A heading costs one dim line and removes the contradiction
+	// instead of asking the reader to resolve it from a small badge.
 	month := ""
+	overdueHeaded := false
 	for _, it := range shown {
 		row := it
+		if row.Past {
+			if !overdueHeaded {
+				overdueHeaded = true
+				// Reset the month so the first FORWARD row re-emits its heading; without
+				// this an overdue July row and an upcoming July row would share one
+				// label across the break, putting them back in the same group.
+				month = ""
+				rows = append(rows, Div(css.Class("rhy-ag-month rhy-ag-overdue"),
+					Attr("role", "presentation"), Attr("data-testid", "rhy-agenda-overdue-head"),
+					uistate.T("rhythm.agendaOverdue")))
+			}
+			rows = append(rows, ui.CreateElement(rhyAgendaRow, rhyAgendaRowProps{Item: row, Base: base}))
+			continue
+		}
 		if m := monthLabel(row.Date); m != month {
 			month = m
 			// No testid: it would have to carry the month, and a testid that changes

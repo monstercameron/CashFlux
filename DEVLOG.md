@@ -1,3 +1,23 @@
+## 2026-08-16 — the month heading made it worse (DP1)
+
+The ticket describes overdue rows sitting under "Next 30 days", told apart only by a small OVERDUE
+pill. The agenda has since gained month headings, and that turned a mild ambiguity into a sharper one:
+an overdue row now got a heading naming a month that has already passed, sitting inside a section
+titled "Up next". For the moment it takes to find the badge, the page says July is upcoming.
+
+Worth noting because it is a common shape — a good change (month grouping, added to stop a monthly bill
+appearing twice from reading as owing it twice) making an unrelated existing weakness more visible.
+Neither change was wrong; the interaction was unowned.
+
+The fix is a heading, and the detail that matters is resetting the month tracker at the break. Without
+it, an overdue July row followed by an upcoming July row would share one month label across the
+divider — the two would land back in the same visual group, which is the exact thing the break exists
+to prevent.
+
+Toned like the month labels rather than like a warning. The rows underneath already carry OVERDUE
+pills; a loud divider would say the same thing twice, and two alarms for one fact is how a surface
+teaches people to tune out the first one.
+
 ## 2026-08-16 — whose secret encrypts a backup (LF-2)
 
 The crypto was already there: `encryptDataset`/`decryptDataset` do PBKDF2-600k → AES-GCM through
