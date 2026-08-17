@@ -2137,6 +2137,11 @@ func rptaSectionWithAction(id, num, title, zone, sub, ask string, action, body u
 			Div(css.Class("rpta-sec-actions"), action, askBtn),
 		),
 		Div(css.Class("rpta-sec-body"), body),
+		// C385: every section that computes something says how, what it leaves
+		// out, and — where it judges a figure as healthy or not — what standard it
+		// is judging against and where that standard came from. Closed by default;
+		// sections with nothing to explain render nothing.
+		rptaMethodDrawer(id),
 	)
 }
 

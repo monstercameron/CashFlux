@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"How this is computed" on every report section (C385).** The report called a savings rate healthy
+  without saying what it was measured against or where that standard came from, which asks the reader
+  to trust a comparison they cannot check. Each section now carries a closed drawer with three things:
+  the calculation in plain English, what the figures deliberately leave out, and — where the section
+  judges a figure — the benchmark with its source on the same line as its value. Sources say plainly
+  when the answer is "a CashFlux convention", rather than dressing a house rule as an industry
+  standard. Transfers are declared as an exclusion on every money-flow section, enforced by a test,
+  because a total that silently counts money moved between your own accounts is the most common
+  reason a report gets disbelieved.
 - **The Smart+ half of the item-scoped micro-features (SM-3/4/5/7/13/14/15 prompts).** Seven prompts
   and three strict parsers for affordances that act on ONE row or card: propose a split for this
   charge, explain this over-budget, explain this unusual balance move, explain this alert, one line

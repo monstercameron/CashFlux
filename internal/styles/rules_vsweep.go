@@ -318,4 +318,50 @@ func registerVSweep() {
 		color("var(--text-dim)"),
 	)
 
+	// ─── C385: the per-section methodology drawer ────────────────────────────
+	// Quiet by default and quiet when open: reference material sits under the
+	// section it explains without competing with it.
+	rule(".rpta-method",
+		marginTop("0.75rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px dashed var(--border)"),
+		fontSize("0.78rem"),
+	)
+	rule(".rpta-method-sum",
+		cursor("pointer"),
+		color("var(--text-dim)"),
+		listStyle("none"),
+	)
+	rule(".rpta-method-sum:hover",
+		color("var(--text)"),
+	)
+	rule(".rpta-method-body",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(16rem, 1fr))"),
+		gap("0.9rem"),
+		marginTop("0.6rem"),
+	)
+	rule(".rpta-method-list",
+		margin("0.3rem 0 0"),
+		paddingLeft("1.1rem"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+		color("var(--text-dim)"),
+		lineHeight("1.5"),
+	)
+	rule(".rpta-method-bmks > li",
+		display("flex"),
+		flexDirection("column"),
+	)
+	rule(".rpta-method-bmk",
+		color("var(--text)"),
+	)
+	// The source sits directly under the value it attributes, never as a
+	// footnote — an unsourced-looking benchmark is what this drawer exists to fix.
+	rule(".rpta-method-src",
+		color("var(--text-faint)"),
+		fontSize("0.72rem"),
+	)
+
 }

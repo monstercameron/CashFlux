@@ -5620,10 +5620,17 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 - [ ] **C384 [MINOR][RPT] Export coverage audit.** CSV exists for ~9 typed tables and "Save as PDF"
   is browser print. Audit: every table gets CSV; add a print stylesheet pass so print-to-PDF is
   clean (page breaks per chapter, no nav chrome).
-- [ ] **C385 [MINOR][RPT] Methodology drawer.** Reviewer: "broad benchmark language without
+- [x] **C385 [MINOR][RPT] Methodology drawer.** Reviewer: "broad benchmark language without
   exposing the benchmark source inline." Per-section "How this is computed" drawer: score
   formulas, benchmark values + where they come from, exclusions (feed from `internal/provenance`
-  where applicable).
+  where applicable). — DONE (2026-08-16). New pure `internal/methodology`: a per-section catalog of
+  formulas, exclusions and benchmarks, where a benchmark ALWAYS carries its source (a test enforces
+  it — an unattributed threshold is the exact defect the ticket names). Rendered as a closed native
+  `<details>` under each section by `rptaSection`, so it needs no hooks, works from inside loops,
+  is keyboard-operable for free, and prints open when the reader left it open. Sources say plainly
+  when the answer is "a CashFlux convention" rather than dressing a house rule as an industry
+  standard. A test also enforces that every money-flow section declares the transfer exclusion —
+  transfers are the most common reason a total looks too big.
 - [ ] **C386 [MINOR][RPT] Clickable drill-downs on every chart.** Some exist (annual-grid cells,
   category links). Audit all report charts; every mark drills to the filtered transaction list.
 

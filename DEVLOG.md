@@ -1,3 +1,32 @@
+## 2026-08-16 — an unsourced benchmark is a claim (C385)
+
+The reviewer wrote "broad benchmark language without exposing the benchmark source inline". It is
+easy to read that as a copy request and answer it with a tooltip. The real content is that the report
+tells you a 12% savings rate is low, and 12% is only low against something, and the report never says
+what.
+
+So the drawer carries three things, and they are three because they fail differently:
+
+- The **formula**, so a figure that looks wrong can be reasoned about rather than merely disbelieved.
+- The **exclusions**, because what a number leaves out is the top source of "that is not what I
+  spent" — transfers above all. A test enforces that every money-flow section declares them.
+- The **benchmarks with sources**, on the same line as the value. Splitting them — value here,
+  attribution in a footnote — is exactly how a claim ends up looking unsourced even when the source
+  exists.
+
+A test fails the build if any benchmark has no source. That is the ticket's actual requirement
+expressed as a constraint rather than as a habit, which matters because the next person adding a
+section will not have read the ticket.
+
+The wording of the sources was the part that took longest. "20% or more" is the 50/30/20 rule of
+thumb, which is a convention, not a law, and saying so is more useful than the number. The health
+bands are a CashFlux convention with nothing behind them but internal consistency, and the drawer
+says that too — dressing a house rule as an industry standard is worse than having a house rule.
+
+Implementation note: a native `<details>` rather than a state-driven panel. No hooks, so it can be
+called from inside `rptaSection` wherever that is used; keyboard-operable for free; and it prints in
+whatever state the reader left it, which is the right behaviour for print-to-PDF.
+
 ## 2026-08-16 — two constants that were doing the work of two settings (C383)
 
 The annual report opened with three lines that decided everything about it: twelve months back from
