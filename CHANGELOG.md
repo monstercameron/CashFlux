@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Top payees on the full report now show their shape over the year (FP-T2b).** A single total cannot
+  tell a steady $200 a month from one $2,400 January, and those call for opposite responses. Each payee
+  row carries a small sparkline of its monthly spending, named for screen readers.
+
+### Added
 - **Planning says what a projection is worth in today's money (FP-T2d).** The twelve-month forecast is
   stated in the dollars of twelve months from now; it now also says what that is worth in money you
   spend today, and names the inflation rate it used. Inflation is a single household assumption shared

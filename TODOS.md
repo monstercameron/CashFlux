@@ -1238,8 +1238,27 @@ bottom-up per SDLC.
   every principal/interest/balance row; NO screen renders them (`loanCard` shows summary tiles only). Add a
   schedule table/disclosure. Also **persist loan term** (`TermMonths`/origination date) — today it's
   session-only UI state (`termS`), which weakens payoff-date accuracy and the R21 aggregate double-count.
-- [ ] **FP-T2b — Surface category/payee trend sparklines.** `reports.CategoryTrends` + `PayeeTrends` are
+- [x] **FP-T2b — Surface category/payee trend sparklines.** `reports.CategoryTrends` + `PayeeTrends` are
   written + unit-tested but wired into zero screens; just render the existing series on `/reports`.
+  — DONE (2026-08-17), and the ticket was HALF STALE: `CategoryTrends` had since been wired — every
+  category row on the full report already carries a `.rpta-cat-spark`. Only `PayeeTrends` was
+  unrendered, which is what this change draws.
+
+  Why it is worth drawing at all: a payee row states one total for the window, and a total cannot
+  distinguish a steady $200 a month from a single $2,400 January. Those call for opposite responses,
+  and the report was giving them the same line.
+
+  The lookup keys on the lower-cased, trimmed payee exactly as `TopPayees` does — the two functions
+  already agreed on what a payee IS, so the shape and the amount on a row can never describe different
+  payees.
+
+  Sized deliberately smaller than the category sparkline (64px against 120px). It sits inside a row
+  beside a name and an amount; at full width it reads as the row's subject rather than an aside about
+  it.
+
+  VERIFIED IN A BROWSER: 6/6, including the assertion that matters — six rows draw six DISTINCT
+  polylines. An identical shape on every row is exactly what a broken per-payee lookup would produce,
+  and it would look fine.
 - [ ] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
   delete + re-add, so current value is stale-by-design. Add an Edit form reusing `PutHolding`'s replace-by-ID
   + a `PriceAsOf` field.

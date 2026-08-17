@@ -1,3 +1,27 @@
+## 2026-08-17 - half a stale ticket (FP-T2b)
+
+FP-T2b said `CategoryTrends` and `PayeeTrends` were "wired into zero screens". Half of that had stopped
+being true: category rows on the full report already carry a sparkline. Only the payee series was
+unrendered.
+
+Worth stating because the ticket would have been easy to close as "already done" after finding the
+category sparklines, and half the described work would have quietly disappeared. Checking BOTH names
+in a ticket that lists two is not pedantry.
+
+The payee sparkline earns its place for one reason: a row states a total for the window, and a total
+cannot distinguish a steady $200 a month from a single $2,400 January. Those two facts call for
+opposite responses - one is a subscription to reconsider, the other is a one-off already behind you -
+and the report was giving them the same line.
+
+Two details. The lookup keys on the lower-cased, trimmed payee exactly as `TopPayees` does, because
+the two functions already agreed on what a payee IS and re-deriving it would be a second definition to
+drift. And the sparkline is 64px where the category one is 120px: it sits in a row beside a name and
+an amount, and at full width it reads as the row's subject rather than an aside about it.
+
+The browser check that mattered was not "does a line appear" but "are the six lines DIFFERENT". A
+broken per-payee lookup draws the same shape on every row and looks completely fine. Six distinct
+polylines out of six.
+
 ## 2026-08-17 - one inflation assumption, not two (FP-T2d)
 
 The remaining half of FP-T2d was "a household-level inflation setting", and the reason it mattered had

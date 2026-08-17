@@ -926,6 +926,20 @@ func registerReportsAnnual() {
 		justifyContent("center"),
 		color("var(--text-dim)"),
 	)
+	// FP-T2b: the payee row's shape sparkline. Narrower than the category one —
+	// it sits inside a row beside a name and an amount, and at full width it would
+	// read as the row's subject rather than an aside about it.
+	rule(".rpta-payee-spark",
+		display("flex"),
+		alignItems("center"),
+		color("var(--text-dim)"),
+		opacity("0.8"),
+		flex("0 0 auto"),
+	)
+	rule(".rpta-payee-spark svg",
+		width("64px"),
+		height("18px"),
+	)
 	rule(".rpta-cat-delta",
 		fontSize("var(--type-13)"),
 		fontVariantNumeric("tabular-nums"),

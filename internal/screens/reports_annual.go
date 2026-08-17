@@ -207,6 +207,17 @@ func Reports() ui.Node {
 	for _, tr := range catTrends {
 		trendByCat[tr.CategoryID] = tr.Spend
 	}
+	// FP-T2b: the per-payee series the reports package has always computed and no
+	// screen has ever drawn. A payee row states one total for the window, which
+	// cannot distinguish a steady $200 a month from one $2,400 January — the same
+	// argument that put a sparkline beside every category.
+	payeeTrends, _ := reports.PayeeTrends(scopedTxns, bounds, rates, 10)
+	trendByPayee := make(map[string][]int64, len(payeeTrends))
+	for _, tr := range payeeTrends {
+		// PayeeTrends and TopPayees key payees identically (lower-cased, trimmed),
+		// so the sparkline and the amount on a row always describe the same payee.
+		trendByPayee[strings.ToLower(strings.TrimSpace(tr.Payee))] = tr.Spend
+	}
 	monthLabels := make([]string, 0, months)
 	for k := 0; k < months; k++ {
 		monthLabels = append(monthLabels, bounds[k].Format("Jan"))
@@ -1218,6 +1229,9 @@ func Reports() ui.Node {
 					From: as, To: ae, Text: p.Name, ExpenseOnly: true,
 					Class: "rpta-drill rpta-row-drill",
 				})),
+			Span(css.Class("rpta-payee-spark"), Attr("data-testid", "rpta-payee-spark-"+strconv.Itoa(i)),
+				sparklineSVG(trendByPayee[strings.ToLower(strings.TrimSpace(p.Name))],
+					uistate.T("rpta.payeeSparkAlt", nm))),
 			Span(css.Class("budget-amount"), fmtMinor(p.Amount))))
 	}
 	var largestNodes []ui.Node
