@@ -51,6 +51,11 @@ func ReturnBanner(props returnBannerProps) uic.Node {
 		if c.TxnID != "" {
 			uistate.SetTxnFocusRow(c.TxnID)
 		}
+		// C559: a trip that started inside Review ends inside Review. The session
+		// atom still holds the scope, mode and card, so reopening is all it takes.
+		if c.ReopenReview {
+			uistate.OpenReviewInbox()
+		}
 		nav.Navigate(uistate.RoutePath(c.From))
 	}))
 	dismiss := uic.UseEvent(Prevent(func() { crumbAtom.Set(uistate.ReturnTo{}) }))

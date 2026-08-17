@@ -36,6 +36,12 @@ type ReturnTo struct {
 	// list of 122 rows that is most of what "where I was" means. Empty when the trip
 	// did not start from a particular row (the toolbar's Rules button).
 	TxnID string
+	// ReopenReview reopens the Review surface on return (C559). A trip that starts
+	// INSIDE Review — "this charge needs a category that does not exist yet" — ends
+	// on the ledger with the queue closed unless someone says otherwise, which is
+	// the same stranding the crumb exists to prevent, one level in. The card and
+	// scope come back with it because ReviewSession outlives the surface.
+	ReopenReview bool
 }
 
 const returnToAtomID = "nav:returnTo"

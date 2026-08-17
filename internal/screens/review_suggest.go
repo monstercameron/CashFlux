@@ -9,7 +9,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/learntally"
-	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -84,7 +83,7 @@ func reviewWhy(s catsuggest.Suggestion) string {
 // It exists because the batch flag used to be read by only one of the three
 // (C496): checking "also apply to N others" and then clicking a different button
 // silently categorized a single transaction while looking like a batch. Routing
-// every caller through here means a fourth action cannot forget the flag.
+// every caller through here means a fourth action cannot forget the scope.
 // applyReviewChoice reports whether the categorization actually LANDED.
 //
 // C553: it used to return nothing, so the caller advanced to the next card
@@ -92,31 +91,21 @@ func reviewWhy(s catsuggest.Suggestion) string {
 // from an item it did not save is worse than one that refuses to move, because
 // the user has no way to tell the two apart. The boolean is what lets the caller
 // hold position and show the reason instead.
-func applyReviewChoice(app *appstate.App, cur domain.Transaction, categoryID string, batch bool) bool {
-	if app == nil || categoryID == "" {
+//
+// C653: `ids` replaced a `batch bool`. A boolean meant the write path re-derived
+// its own population from a merchant key, so the card could say "one charge" while
+// the store took 122 — and a mis-derived key (C616) could just as easily take
+// none. The caller now hands over the exact charges it drew and counted, which is
+// the only version of this the user can predict.
+func applyReviewChoice(app *appstate.App, ids []string, categoryID string) bool {
+	if app == nil || categoryID == "" || len(ids) == 0 {
 		return false
 	}
-	if batch {
-		// C616: the key MUST be reviewqueue.MerchantKey, not the raw payee.
-		// assignReviewByMerchant matches on `reviewqueue.MerchantKey(t) == key`,
-		// and MerchantKey is payeealias.Normalize + lowercase — so passing the raw
-		// descriptor ("VENMO PAYMENT 1042778120") could never equal the normalized
-		// key of the very transaction it came from. Every single-mode confirm
-		// therefore matched ZERO rows, returned 0, and (since C553 made a failed
-		// write honest) reported "That didn't save" while the card sat still. Bulk
-		// worked the whole time because it passes the group's own MerchantKey.
-		// This is C498's raw-vs-cleaned mismatch, reintroduced on one call path.
-		n := assignReviewByMerchant(app, reviewqueue.MerchantKey(cur), categoryID)
-		if n > 0 {
-			postCategorizedUndo(app, categoryID, n)
-		}
-		return n > 0
+	n := assignReviewToCharges(app, ids, categoryID)
+	if n > 0 {
+		postCategorizedUndo(app, categoryID, n)
 	}
-	if assignReviewCategory(app, cur.ID, categoryID) {
-		postCategorizedUndo(app, categoryID, 1)
-		return true
-	}
-	return false
+	return n > 0
 }
 
 // rememberReviewChoice records a confirmed categorization so the next charge

@@ -14,16 +14,18 @@
 // caller, and had to be applied again in review_surface.go to reach a user. It is
 // deleted (C-review cleanup), along with the seven helpers only it used.
 //
-// What remains is what the live surface calls: the functions that actually write a
+// What remains is what the live surface calls: the function that actually writes a
 // review decision to the store. Categorizing a charge clears its #needs-review tag
 // (that is what resolves it), captures an undo point, and persists — an in-memory
 // write that never reaches the dataset is undone by the next reload. The pure
-// queue selection lives in internal/reviewqueue.
+// queue selection lives in internal/reviewqueue, and the pure "how many charges
+// does this click change?" decision in internal/reviewscope.
 package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -39,14 +41,43 @@ func removeReviewTag(tags []string) []string {
 	return out
 }
 
-// assignReviewCategory sets one transaction's category (clearing the review flag,
-// since categorizing resolves it) and persists. A failed write (e.g. a read-only
-// Viewer identity) is surfaced as a notice — swallowing it left the inbox frozen
-// on the same item with zero feedback (QA CF-02). Returns whether the write
-// landed, so callers can offer an undo toast only for real changes.
-func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
-	for _, t := range app.Transactions() {
-		if t.ID == txnID {
+// assignReviewToCharges categorizes exactly the listed transactions — clearing
+// the review flag, since categorizing resolves it — in one pass, and persists.
+// It returns how many were written (0 when nothing matched or every write
+// failed), so callers can offer an undo toast only for real changes.
+//
+// The caller names the charges. This used to be two functions, one keyed on a
+// transaction id and one that re-derived a merchant key and swept the whole
+// ledger for matches — and the sweep is where C616 lived (a raw payee passed
+// where a normalized reviewqueue.MerchantKey was required matched zero rows) and
+// where C653 lived (a card depicting ONE charge quietly wrote 122). Taking the id
+// list the surface already built to draw and count the card makes both impossible:
+// the number on the button and the number written come from the same slice.
+//
+// A failed write (e.g. a read-only Viewer identity) is surfaced as a notice —
+// swallowing it left the inbox frozen on the same item with zero feedback
+// (QA CF-02). Charges that have left the queue since the card was drawn are
+// skipped rather than silently re-categorized.
+func assignReviewToCharges(app *appstate.App, ids []string, catID string) int {
+	if app == nil || catID == "" || len(ids) == 0 {
+		return 0
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if id != "" {
+			want[id] = true
+		}
+	}
+	if len(want) == 0 {
+		return 0
+	}
+	var writeErr error
+	n := 0
+	app.BulkMutate(func() {
+		for _, t := range app.Transactions() {
+			if !want[t.ID] || !reviewqueue.Needs(t) {
+				continue
+			}
 			t.CategoryID = catID
 			t.Tags = removeReviewTag(t.Tags)
 			// C617: a confirmed decision IS the review. Clearing only the queue's
@@ -55,58 +86,34 @@ func assignReviewCategory(app *appstate.App, txnID, catID string) bool {
 			// the app disagreeing with itself about the same transaction.
 			t.Reviewed = true
 			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				uistate.BumpDataRevision()
-				return false
+				if writeErr == nil {
+					writeErr = err
+				}
+				continue
 			}
 			// Learn from the confirmation, so the next charge from this merchant
 			// is suggested locally instead of costing a SMART+ call (C513).
 			rememberReviewChoice(t, catID)
-			// C553: PutTransaction writes the in-memory store; RequestPersist is
-			// what puts it in the dataset. Without this the card advanced and the
-			// queue count dropped, but a reload brought the transaction back
-			// Uncategorized — the write looked like it landed and had not. Same
-			// defect as C543 on the categories page, in a second surface.
-			uistate.RequestPersist()
-			uistate.BumpDataRevision()
-			return true
-		}
-	}
-	return false
-}
-
-// assignReviewByMerchant categorizes every queued transaction sharing the merchant
-// key (the current one included) in one pass, so a repeated charge clears in a
-// single action. Returns how many transactions were written (0 when the write
-// failed), so callers can offer an undo toast only for real changes.
-func assignReviewByMerchant(app *appstate.App, key, catID string) int {
-	var writeErr error
-	n := 0
-	app.BulkMutate(func() {
-		for _, t := range app.Transactions() {
-			if !reviewqueue.Needs(t) {
-				continue
-			}
-			if reviewqueue.MerchantKey(t) == key {
-				t.CategoryID = catID
-				t.Tags = removeReviewTag(t.Tags)
-				t.Reviewed = true // C617: same rule as the single path — confirming IS reviewing.
-				if err := app.PutTransaction(t); err != nil {
-					if writeErr == nil {
-						writeErr = err
-					}
-					continue
-				}
-				rememberReviewChoice(t, catID)
-				n++
-			}
+			n++
 		}
 	})
 	if writeErr != nil {
 		uistate.PostNotice(writeErr.Error(), true)
 	}
-	// C553: persist the batch for the same reason the single path does — an
-	// in-memory write that never reaches the dataset is undone by a reload.
+	// The caller showed a count before the click — "Categorize all 122" — and that
+	// count came from a memoized snapshot. If anything resolved one of these charges
+	// in between (a SMART+ scan callback landing, a rule firing, another surface),
+	// fewer are written than were promised, and the user has no way to notice: the
+	// dialog they read said 122 and the queue simply drops by 119. Saying so is the
+	// difference between a count that was wrong and a count that corrected itself.
+	if n > 0 && n < len(want) && writeErr == nil {
+		uistate.PostNotice(uistate.T("review.wroteFewer", n, len(want)), false)
+	}
+	// C553: PutTransaction writes the in-memory store; RequestPersist is what puts
+	// it in the dataset. Without this the card advanced and the queue count
+	// dropped, but a reload brought the transaction back Uncategorized — the write
+	// looked like it landed and had not. Same defect as C543 on the categories
+	// page, in a second surface.
 	if n > 0 {
 		uistate.RequestPersist()
 	}
@@ -127,13 +134,24 @@ func postCategorizedUndo(app *appstate.App, catID string, batch int) {
 	uistate.PostUndoable(uistate.T("review.categorizedUndo", name))
 }
 
+// reviewCatName names a category the way the picker the user chose from does.
+//
+// It used to return the bare leaf while `categorySelectNodes` renders every
+// option through `catname.Label` — so a confirmation reading "as Home
+// maintenance" and an undo toast reading "Categorized 122 transactions as Home
+// maintenance" both dropped the parent the user had actually navigated, at
+// exactly the moment (a 122-charge batch) where knowing WHICH "Home maintenance"
+// matters most. C619's rule is one naming convention app-wide, and catname.Label
+// qualifies only when the leaf is genuinely ambiguous, so this costs nothing when
+// there is nothing to disambiguate.
 func reviewCatName(app *appstate.App, id string) string {
 	if id == "" {
 		return uistate.T("review.uncategorized")
 	}
-	for _, c := range app.Categories() {
+	cats := app.Categories()
+	for _, c := range cats {
 		if c.ID == id {
-			return c.Name
+			return catname.Label(cats, c)
 		}
 	}
 	return uistate.T("review.uncategorized")

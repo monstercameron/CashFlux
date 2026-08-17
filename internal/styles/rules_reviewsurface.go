@@ -45,6 +45,95 @@ func registerReviewSurface() {
 		color("var(--text-faint)"),
 		fontSize("var(--type-12)"),
 	)
+
+	// ---- scope strip (C554) --------------------------------------------------
+	// Which population Review is working through, above everything else, because
+	// every count below it is relative to this one. Quiet — it is context for the
+	// work, not part of it — but never absent: the strip renders over the empty
+	// state too, where "nothing here" and "nothing anywhere" have to read apart.
+	rule(".rvs-scope",
+		display("flex"),
+		alignItems("center"),
+		gap("0.75rem"),
+		flexWrap("wrap"),
+		flex("none"),
+		padding("0.75rem var(--rvs-gutter) 0.7rem"),
+		borderBottom("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".rvs-scope-note",
+		color("var(--text-dim)"),
+		fontSize("var(--type-12)"),
+		minWidth("0"),
+	)
+	ruleMedia("(max-width: 560px)", ".rvs-scope",
+		alignItems("stretch"),
+		flexDirection("column"),
+		gap("0.45rem"),
+	)
+
+	// ---- commit scope + its confirmation (C653) ------------------------------
+	rule(".rvs-cscope",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+		marginTop("0.85rem"),
+	)
+	rule(".rvs-cscope .seg button",
+		whiteSpace("nowrap"),
+	)
+	// The one-charge card's static answer, sized to sit where the control would.
+	rule(".rvs-cscope-label",
+		color("var(--text-dim)"),
+		fontSize("var(--type-12)"),
+	)
+	rule(".rvs-cscope-fixed",
+		color("var(--text)"),
+		fontSize("var(--type-14)"),
+	)
+	// The second step of a merchant-wide write takes the whole action bar, so the
+	// question cannot be missed beside the buttons it replaced.
+	rule(".rvs-confirm-all",
+		display("flex"),
+		alignItems("center"),
+		gap("0.6rem"),
+		flexWrap("wrap"),
+		marginLeft("auto"),
+		padding("0.5rem 0.7rem"),
+		border("1px solid var(--severity-warn)"),
+		borderRadius("var(--radius-md)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".rvs-confirm-q",
+		color("var(--text)"),
+		fontSize("var(--type-14)"),
+	)
+	rule(".rvs-confirm-facts",
+		color("var(--text-dim)"),
+		fontSize("var(--type-12)"),
+	)
+
+	// ---- cross-page corrections (C559) ---------------------------------------
+	rule(".rvs-links",
+		display("flex"),
+		alignItems("center"),
+		gap("0.7rem"),
+		flexWrap("wrap"),
+		marginTop("0.75rem"),
+		paddingTop("0.7rem"),
+		borderTop("1px dashed var(--border)"),
+		fontSize("var(--type-12)"),
+	)
+	rule(".rvs-links-lead",
+		color("var(--text-faint)"),
+	)
+	// The "this leaves" mark. Quiet, but present on the links that navigate and
+	// absent from the New category button beside them, which does not.
+	rule(".rvs-links-out",
+		marginLeft("0.2rem"),
+		color("var(--text-faint)"),
+	)
 	rule(".rvs-body",
 		flex("1"),
 		minHeight("0"),
