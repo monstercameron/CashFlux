@@ -4038,8 +4038,18 @@ ALREADY DONE: `PasscodeStrength`/`isTrivialPasscode`/strength enum (`applock.go:
   the shipped OWASP-minimum parameters (t=2, 19 MiB) derivation is single-digit milliseconds and does
   not stall the unlock; at 64 MiB it would, so this is filed against that change rather than built
   speculatively.
-- [ ] [C285][MAJOR] Add `"applock.section"` to `settingsNavKeys` (`settingssectionnav.go:22-36`).
-- [ ] [C286][MINOR] Dark-mode gate card: bg `var(--surface,#fff)` undefined in dark → change to `var(--bg-card,#121214)` + explicit text color — `applockgate.go:125`.
+- [x] [C285][MAJOR] Add `"applock.section"` to `settingsNavKeys` (`settingssectionnav.go:22-36`).
+  — VERIFIED MOOT (2026-08-16). `settingssectionnav.go` no longer exists and there is no
+  `settingsNavKeys`: Settings was restructured into a flat run of `set-label` headings with no section
+  index to register into. The security section itself renders correctly (`settings_section.go:393`,
+  key `applock.section` = "Security", present in the catalog). Nothing to add; closing rather than
+  inventing a nav index the current design does not have.
+- [x] [C286][MINOR] Dark-mode gate card: bg `var(--surface,#fff)` undefined in dark → change to `var(--bg-card,#121214)` + explicit text color — `applockgate.go:125`.
+  — VERIFIED ALREADY DONE (2026-08-16). No `var(--surface,#fff)` remains anywhere in `applockgate.go`;
+  the gate card, its input, and the passcode-change overlay all use `var(--bg-elev,#1a1a1d)` with an
+  explicit `color:var(--text,#f4f4f5)` — which is exactly what the ticket asked for, with a dark
+  fallback rather than a light one. Fixed at some point after the ticket was filed; recording the
+  verification so it is not re-opened.
 - [ ] [C287][MINOR] Reject `StrengthWeak` (e.g. "000000") in setup `submit()` (`applockgate.go:419`) + i18n `applock.tooWeak` + live strength meter.
 - [x] ~~[C288][DESIGN] Rename "App lock" heading → "Security" (`i18n en.go:357`) (+ optional `/security` route).~~ — DONE (verified 2026-06-27): see top-level C288 entry above.
 
