@@ -41,6 +41,21 @@ func labeledField(label string, control ui.Node) ui.Node {
 	)
 }
 
+// labeledFieldRequired is labeledField for a field the form will not commit
+// without (C666). The marker is doubled deliberately: an asterisk carries it to a
+// sighted user at a glance, and a screen-reader-only word carries it to everyone
+// else, because a bare "*" read aloud is a glyph, not a requirement. The input
+// itself still needs aria-required — this labels, it does not validate.
+func labeledFieldRequired(label string, control ui.Node) ui.Node {
+	return Label(css.Class("labeled-field"),
+		Style(map[string]string{"display": "flex", "flex-direction": "column", "gap": "0.25rem"}),
+		Span(css.Class("t-caption", tw.TextDim), label,
+			Span(css.Class(tw.TextDanger), Attr("aria-hidden", "true"), " *"),
+			Span(css.Class("sr-only"), " "+uistate.T("budgets.fieldRequired"))),
+		control,
+	)
+}
+
 // groupedField mirrors labeledField for a GROUP of controls (a checklist).
 // It must be a fieldset+legend, never a <label> wrapper: wrapping a group in
 // <label> makes the FIRST checkbox inside the label's implicit control, so its

@@ -96,8 +96,18 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	coverDefaultStr, coverShortfallStr := "", ""
 	var selfStatus budgeting.Status // this budget's live status (for the formulas view)
 	selfFound := false
+	// C669: the effective cap this period and the arithmetic that produced it —
+	// the very figures the card shows — so the top-up dialog can name the number it
+	// is about to change instead of quoting the base limit under the word
+	// "currently" beside a card reading a different one.
+	selfEffCap, selfCapMath := "", ""
+	// C667: the period the card is reporting on. computeBudgetView anchors every
+	// budget to this, so anything that quotes history beside those figures — the
+	// quick-fill chips — has to walk back from here, not from the wall clock.
+	viewAnchor := budgetViewAnchor(vw, time.Now())
 	if app != nil {
 		cv := computeBudgetView(app, activeMemberID, vw, pr, false)
+		selfEffCap, selfCapMath = cv.RollEffCap[props.BudgetID], cv.RollEffCapMath[props.BudgetID]
 		for _, s := range cv.Statuses {
 			if s.Budget.ID == props.BudgetID {
 				selfStatus, selfFound = s, true
@@ -415,9 +425,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				return
 			}
 			bb.VarName = strings.TrimSpace(ev.VarName.Get())
-			amt, err := money.ParseMinor(strings.TrimSpace(limitS.Get()), dec)
-			if err != nil || amt <= 0 {
-				errS.Set(uistate.T("budgets.limitRequired"))
+			// C665: the save boundary refuses the same values the field does, and
+			// says which one it refused. "Enter a positive limit" was the only
+			// answer for blank, "abc" and -1 alike.
+			amt, prob := budgeting.ParseLimitMajor(limitS.Get(), dec)
+			if !prob.OK() {
+				errS.Set(budgetLimitError(prob, cur))
 				return
 			}
 			bb.Limit = money.New(amt, cur)
@@ -897,6 +910,13 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if topupPermanentS.Get() {
 			durHint = "budgets.topupPermanentHint"
 		}
+		// C669: the dialog used to open with "Increase Groceries (currently $500.00)"
+		// beside a card reading an effective cap of $721.71, and never said which of
+		// the two the typed amount would land on. Both figures are named now, with
+		// the arithmetic between them (the same string the card's cap line carries),
+		// and the duration hint states which one the top-up changes and what happens
+		// to it next period.
+		capLine, changesLine := budgetTopupCapCopy(fmtMoney(b.Limit), selfEffCap, selfCapMath, topupPermanentS.Get())
 		selNow := coverSelS.Get()
 		selCount := 0
 		for _, sc := range coverSrcs {
@@ -919,7 +939,9 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-					uistate.T("budgets.topupHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)), fmtMoney(b.Limit))),
+					uistate.T("budgets.topupHintPlain", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
+					Style(map[string]string{"margin": "0"}), capLine),
 				labeledField(uistate.T("budgets.amountToAdd"),
 					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
 						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt), uiw.FieldValue(topupAmt.Get()))),
@@ -940,6 +962,10 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				// answers the same four questions in the same words.
 				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"),
 					uistate.T(durHint)+" "+fundsImpactLine(budgeting.TopUpImpact(topupPermanentS.Get(), selCount > 0))),
+				// C669: which of the two figures above the amount lands on, and what
+				// happens to it at the period boundary.
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-changes"),
+					Style(map[string]string{"margin": "0"}), changesLine),
 				// Optional: fund the top-up by pulling from budgets that have room to give.
 				If(len(coverSrcs) > 0, Fragment(
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(topupCoverOpenS.Get())),
@@ -978,6 +1004,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// current period's figures silently on save.
 	periodChanged := periodS.Get() != string(b.Period)
 	methodChanged := methodologyS.Get() != b.Methodology
+	// C665: the limit's live verdict, shared by the field, its inline message and
+	// the Save button, so the three can never disagree about whether the form is
+	// committable.
+	_, limitProblem := budgeting.ParseLimitMajor(limitS.Get(), dec)
+	limitErrMsg := budgetLimitError(limitProblem, cur)
+	limitSaveTitle := uistate.T("action.save")
+	if limitErrMsg != "" {
+		limitSaveTitle = uistate.T("budgets.limitSaveBlocked")
+	}
 	advEditLabel := uistate.T("budgets.advancedShow")
 	if advEditOpen.Get() {
 		advEditLabel = uistate.T("budgets.advancedHide")
@@ -1016,8 +1051,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			// The core budget params pair into two columns so the form reads calmly and fits
 			// the panel instead of a long single stack: amount + cadence, then owner + method.
 			Div(css.Class("budget-edit-row"),
+				// C665: min + live validation. The field accepted "-1" and left Save
+				// enabled; a negative limit inverts every figure computed from it
+				// (remaining, percent used, over/under), so it is refused while it is
+				// being typed rather than argued about after a commit attempt.
 				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Step("0.01"), OnInput(onLimit), uiw.FieldValue(limitS.Get()))),
+					Fragment(
+						Input(append(append([]any{css.Class("field"), Type("number"), Attr("data-testid", "budget-edit-limit"), Attr("aria-label", uistate.T("budgets.limitLabel")),
+							Placeholder(uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), Attr("aria-required", "true"), OnInput(onLimit)},
+							errAttrs("budget-edit-limit-err", limitErrMsg)...), uiw.FieldValue(limitS.Get()))...),
+						errText("budget-edit-limit-err", limitErrMsg))),
 				labeledField(uistate.T("budgets.period"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
@@ -1026,7 +1069,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			If(periodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-period-hint"),
 				Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeHint"))),
 			// BG4: one-tap fill chips (last month, 3/6-mo average, last period, to target).
-			budgetQuickFillRow(app, b, selfStatus, budgetTargetDraft{
+			budgetQuickFillRow(app, b, selfStatus, viewAnchor, budgetTargetDraft{
 				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
 				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
 			}, onFillPick),
@@ -1093,9 +1136,37 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			// C665: Save is dead while the limit is unusable, and its tooltip says
+			// why. The handler refuses the same values, so a keyboard submit cannot
+			// slip past a disabled button.
+			Button(append([]any{css.Class("btn btn-primary"), Type("submit"),
+				Attr("data-testid", "budget-edit-save"), Title(limitSaveTitle), uistate.T("action.save")},
+				disabledAttr(limitErrMsg != "")...)...),
 		),
 	)
+}
+
+// budgetTopupCapCopy builds the two sentences the top-up dialog opens with (C669):
+// the arithmetic from the base limit to this period's effective cap, and which of
+// those two numbers the typed amount is added to.
+//
+// The dialog used to say "Increase Groceries (currently $500.00)" while the card
+// beside it showed a cap of $721.71 after rollover, and named neither figure as
+// the one about to change. Both facts come from the SAME view the card renders —
+// effCap and capMath are budgetView.RollEffCap / RollEffCapMath — so the dialog
+// cannot quote a cap the card disagrees with. An empty effCap means nothing is
+// carried in or boosted, and the base limit IS the cap.
+func budgetTopupCapCopy(baseLimit, effCap, capMath string, permanent bool) (capLine, changesLine string) {
+	capLine = uistate.T("budgets.topupCapPlain", baseLimit)
+	effective := baseLimit
+	if effCap != "" {
+		effective = effCap
+		capLine = uistate.T("budgets.topupCapMath", capMath, effCap)
+	}
+	if permanent {
+		return capLine, uistate.T("budgets.topupChangesPerm", baseLimit)
+	}
+	return capLine, uistate.T("budgets.topupChangesMonth", effective, baseLimit)
 }
 
 // budgetTopupSourceRowProps carries data + the toggle callback for one fundable source

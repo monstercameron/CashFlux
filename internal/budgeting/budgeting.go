@@ -171,6 +171,19 @@ func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time,
 	return spentCovered(budget, all, start, end, rates, budget.TracksCategory)
 }
 
+// SpentRollup is Spent over the same category population EvaluateRollup counts:
+// the budget's tracked categories plus every category in covers (typically their
+// descendants, from categorytree.DescendantsOfAll). Anything that quotes a
+// budget's spending outside of a Status — the quick-fill history suggestions, for
+// one — has to use this rather than Spent, or a parent-category budget whose
+// spend sits in sub-categories reports two different totals for the same budget
+// on the same screen (C667). An empty covers is exactly Spent.
+func SpentRollup(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
+	return spentCovered(budget, all, start, end, rates, func(id string) bool {
+		return budget.TracksCategory(id) || covers[id]
+	})
+}
+
 // evaluateWith builds the Status using the given category-cover predicate.
 func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
 	limit := normalizedLimit(budget, rates)

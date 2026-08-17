@@ -27,13 +27,26 @@ var budgetTargetKeys = Catalog{
 	"budgets.targetByDateMet":   "%s by %s · on track",         // target, date
 
 	// Quick-fill chips (budget edit form).
-	"budgets.fillHeading":     "Quick fill from history",
-	"budgets.fillLastMonth":   "Last month",
-	"budgets.fillAvg3":        "Avg 3 mo",
-	"budgets.fillAvg6":        "Avg 6 mo",
-	"budgets.fillLastPeriod":  "Last period",
+	//
+	// C667: the chips name what each figure IS. Three of them are spending and one
+	// is a plan, and calling the prior LIMIT "Last period" in a row of spend figures
+	// invited a budget to be rewritten to its own old number. The heading and the
+	// explanation line say which categories and which periods the history covers,
+	// because those have to be the ones the card's spending bar counts.
+	"budgets.fillHeading":     "Quick fill",
+	"budgets.fillLastPeriod":  "Last period spend",
+	"budgets.fillAvg3":        "Avg spend · 3 periods",
+	"budgets.fillAvg6":        "Avg spend · 6 periods",
+	"budgets.fillPriorLimit":  "Prior limit",
 	"budgets.fillUnderfunded": "To target",
-	"budgets.fillApply":       "Set the amount to %s (%s)", // label, value
+	// Explanation under the chips: cadence, window, and population.
+	"budgets.fillExplain":     "Spend figures cover %d whole %s periods (%s – %s), counted from the same categories and tags as this budget's spending bar.", // periods, cadence, from, to
+	"budgets.fillExplainNone": "Spending history isn't available for this budget right now — only the prior limit is offered.",
+	"budgets.fillLimitNote":   "“%s” is the budget that was set last period, not money that was spent.", // prior-limit label
+	"budgets.fillKindSpend":   "actual spend",
+	"budgets.fillKindLimit":   "a previous limit, not spend",
+	"budgets.fillKindTarget":  "what this budget's target still needs",
+	"budgets.fillApplyKind":   "Set the amount to %s — %s (%s)", // label, kind, value
 }
 
 func init() {

@@ -637,7 +637,6 @@ var english = Catalog{
 	"budgets.showFormulas":           "Budget metrics",
 	"budgets.hideFormulas":           "Hide metrics",
 	"budgets.addFunds":               "Add funds",
-	"budgets.topupHint":              "Increase %s (currently %s) by:",
 	"budgets.topupDuration":          "Apply this top-up",
 	"budgets.topupThisMonth":         "Just this month",
 	"budgets.topupPermanent":         "Permanently",

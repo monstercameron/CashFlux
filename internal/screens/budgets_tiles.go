@@ -527,6 +527,22 @@ func budgetDensityTitleKey(density string) string {
 	return "budgets.densityTitleOff"
 }
 
+// budgetDensityStateKey picks the screen-reader-only suffix that makes the
+// toggle's ACCESSIBLE name stateful (C670).
+//
+// C596 fixed a contradiction by freezing the visible label, and left a keyboard
+// or screen-reader user with a control whose name never says which view is on
+// screen or what pressing it will produce — the tooltip said both, and a tooltip
+// is a mouse affordance. The suffix restores the resulting-view wording where the
+// assistive tech reads it, while the visible label and aria-pressed keep saying
+// the same thing they say now.
+func budgetDensityStateKey(density string) string {
+	if density == uistate.BudgetDensityCompact {
+		return "budgets.densityStateOn"
+	}
+	return "budgets.densityStateOff"
+}
+
 // budgetAssignBanner renders the method-specific income context line: simple mode
 // shows income · budgeted · the unbudgeted/over gap; zero-based shows the amount left
 // to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
@@ -1678,10 +1694,18 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 		Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityOn)),
 		Title(uistate.T(budgetDensityTitleKey(densityAtom.Get()))), OnClick(toggleDensity),
 		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		// A STABLE name, so the pressed state means what it says. No aria-label
-		// override: the visible text is the accessible name, which is what lets a
-		// screen-reader user and a sighted user talk about the same control.
-		Span(uistate.T("budgets.densityCompact")))
+		// A STABLE visible name, so the pressed state means what it says. No
+		// aria-label override: the visible text is the accessible name, which is
+		// what lets a screen-reader user and a sighted user talk about the same
+		// control.
+		Span(uistate.T("budgets.densityCompact")),
+		// C670: aria-pressed alone left the label saying nothing about which view
+		// is on screen or what a click produces — the tooltip carried both, and a
+		// tooltip is not reachable from the keyboard. This suffix puts them in the
+		// accessible name without changing the visible label back into a moving
+		// target (the C596 failure: "Card view, pressed" over a compact list).
+		Span(css.Class("sr-only"), Attr("data-testid", "budgets-density-state"),
+			" — "+uistate.T(budgetDensityStateKey(densityAtom.Get()))))
 	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeSettings),
 		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionTools")),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),

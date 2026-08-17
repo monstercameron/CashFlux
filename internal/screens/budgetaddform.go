@@ -263,9 +263,11 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			errMsg.Set(uistate.T("budgets.nameRequired"))
 			return
 		}
-		amt, err := money.ParseMinor(strings.TrimSpace(limit.Get()), currency.Decimals(base))
-		if err != nil || amt <= 0 {
-			errMsg.Set(uistate.T("budgets.limitRequired"))
+		// C666: the same parse the field and the Add button use, so the three agree
+		// on what "valid" means and the message names the actual problem.
+		amt, limitProb := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(base))
+		if !limitProb.OK() {
+			errMsg.Set(budgetLimitError(limitProb, base))
 			return
 		}
 		// Reject a variable name that collides with an existing budget's handle.
@@ -587,6 +589,37 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		advLabel = uistate.T("budgets.advancedHide")
 	}
 
+	// C666: what the draft is still missing, recomputed every render.
+	//
+	// The modal opened with both required fields empty, no required markers, and a
+	// live "Add budget" — so the only way to learn what the form wanted was to
+	// press it. The button is dead until there is a minimum valid draft, the
+	// labels say which fields are required, and the line above the button names
+	// what is still outstanding. The create-a-new-category path is covered by the
+	// same rule: a blank category-name field falls back to the budget's name, so a
+	// nameless budget cannot mint a nameless category either.
+	nameMissing := strings.TrimSpace(name.Get()) == ""
+	_, limitProblem := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(base))
+	// A field-level message for a value that is present but unusable. A blank
+	// field is not an error yet — the required marker and the blocker line say so
+	// without shouting at a form the user has only just opened.
+	limitFieldErr := ""
+	if !limitProblem.OK() && limitProblem != budgeting.LimitBlank {
+		limitFieldErr = budgetLimitError(limitProblem, base)
+	}
+	addBlocked := nameMissing || !limitProblem.OK()
+	blockerMsg := ""
+	switch {
+	case nameMissing && limitProblem == budgeting.LimitBlank:
+		blockerMsg = uistate.T("budgets.addNeedsBoth")
+	case nameMissing:
+		blockerMsg = uistate.T("budgets.addNeedsName")
+	case limitProblem == budgeting.LimitBlank:
+		blockerMsg = uistate.T("budgets.addNeedsLimit")
+	case !limitProblem.OK():
+		blockerMsg = limitFieldErr
+	}
+
 	// ---- 50/30/20 review mode -------------------------------------------------------
 	if tmplOpen.Get() {
 		excluded := tmplExcluded.Get()
@@ -651,7 +684,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Div(css.Class("form-grid", "budget-add-grid"),
 				// The essentials: Name, then Limit + Period. Everything else is Advanced.
 				Div(css.Class("ba-full"),
-					labeledField(uistate.T("common.name"),
+					labeledFieldRequired(uistate.T("common.name"),
 						Input(append(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
 				// What this budget measures, before what it watches: the direction
 				// changes which categories are even offered below.
@@ -674,8 +707,15 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				// This used to live behind Advanced with "create a new category" as
 				// the silent default, which is how adding a budget minted twins.
 				catRow,
-				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), OnInput(onLimit), uiw.FieldValue(limit.Get()))),
+				// C666/C665: required, floored at a cent, and validated as it is typed —
+				// a zero, a negative or a malformed limit says so under the field
+				// instead of waiting to be discovered by a failed commit.
+				labeledFieldRequired(uistate.T("budgets.limitLabel"),
+					Fragment(
+						Input(append(append([]any{css.Class("field"), Type("number"), Attr("data-testid", "budget-add-limit"), Attr("aria-required", "true"),
+							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), OnInput(onLimit)},
+							errAttrs("budget-limit-err", limitFieldErr)...), uiw.FieldValue(limit.Get()))...),
+						errText("budget-limit-err", limitFieldErr))),
 				labeledField(uistate.T("budgets.period"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   periodOptions(period.Get()),
@@ -775,8 +815,14 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		// Action bar pinned to the bottom of the modal: a quiet Cancel and the primary,
 		// full-width-feeling "Add budget".
 		Div(css.Class("modal-foot"),
+			// C666: a disabled button is only honest if it says what it is waiting
+			// for. This line sits with the action, so the answer is where the
+			// question gets asked.
+			If(blockerMsg != "", Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-add-blockers"), blockerMsg)),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), uistate.T("budgets.add")),
+			Button(append([]any{css.Class("btn btn-primary", "ba-submit"), Type("submit"),
+				Attr("data-testid", "budget-add-submit"), uistate.T("budgets.add")},
+				disabledAttr(addBlocked)...)...),
 		),
 	)
 }

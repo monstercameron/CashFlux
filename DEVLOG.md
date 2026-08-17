@@ -1,3 +1,41 @@
+## 2026-08-17 - the same number, computed twice, two different ways (C665-C670)
+
+Six findings off a /budgets recheck. Four were copy and validation and went the way those go. Two were the
+same class of bug wearing different clothes, and that is the part worth writing down.
+
+C667 was reported as "quick-fill values do not match the card": the Transportation card said $1,455.74 spent,
+the edit form offered Last month $0.00 and Avg 3 mo $5.42. Two figures about one budget, on one screen,
+disagreeing by three orders of magnitude. The cause was that they were computed by different code. The card
+calls EvaluateRollup with the category descendants folded in; the chips called Spent, which counts only the
+budget's own tracked categories. Every charge on that budget lands in a sub-category, so one function saw all
+of it and the other saw none of it.
+
+Fixing that exposed the second copy of the same mistake. The chips also averaged whole calendar months while
+the card evaluates the budget's own cadence, and walked back from time.Now() while the card anchors to the
+period being VIEWED. So a weekly budget got monthly history, and paging back to March and opening the editor
+quoted history counted from August. I only caught the anchor half because I asked an adversarial reviewer to
+try to break the fix, and it read budgetViewAnchor against what the row was doing. The category axis was the
+reported symptom; the time axis was the same defect nobody had happened to hit yet.
+
+The structural answer was to stop having two ways to ask the question. SpentRollup takes the cover set
+EvaluateRollup takes, QuickFills takes the anchor and the cadence, and the row is handed the card's own anchor
+rather than the clock. A suggestion that cannot be sourced from the same population and the same window as the
+number it sits under has no business being offered as a one-tap overwrite of a budget.
+
+C665 was three editors each deciding on submit what a valid limit was, which is how one of them ended up
+advertising min="0.01" and honouring it nowhere. ParseLimitMajor makes the decision once and returns a named
+problem, so the field, its message and the commit button cannot disagree — and the inline editor stops closing
+on a refusal, which was the actual harm: a rejected edit and a saved one looked identical.
+
+C670 needed care rather than work. C596 had deliberately frozen that toggle's visible label to stop it
+announcing "Card view, pressed" over a compact list, so the obvious fix for C670 - label it by destination -
+was C596's bug re-filed. The state went into a screen-reader-only suffix instead, which says both halves
+without the label contradicting aria-pressed.
+
+Everything is mutation-tested rather than merely covered: each guard was verified to fail when its production
+line is broken, one mutation at a time. Two of my first attempts proved nothing because the mutation did not
+compile, which is worth remembering - a green run after a mutation means nothing until you check the build.
+
 ## 2026-08-17 - the plan lines are the winners (EC-12)
 
 The payday funding preview lists the goals it funds, and a goal that received nothing does not appear in

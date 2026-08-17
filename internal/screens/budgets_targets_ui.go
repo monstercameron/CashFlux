@@ -5,10 +5,12 @@
 package screens
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
@@ -184,6 +186,7 @@ func budgetTargetLine(s budgeting.Status) ui.Node {
 type budgetQuickFillChipProps struct {
 	Key    string
 	Label  string
+	Kind   string // localized "what this figure is" phrase, for the accessible name
 	Value  string // formatted money for display
 	Major  string // major-units string applied to the amount field on pick
 	OnPick func(string)
@@ -191,11 +194,16 @@ type budgetQuickFillChipProps struct {
 
 // budgetQuickFillChip is one quick-fill chip. Its own component so the click hook
 // stays at a stable call-site inside the variable-length chip list.
+//
+// C667: the accessible name says what the figure IS as well as what it is worth.
+// Picking a chip overwrites the budget's target, and "Prior limit · $1,300.00"
+// read aloud beside three spend figures gave a screen-reader user nothing to
+// separate a plan from a fact.
 func budgetQuickFillChip(props budgetQuickFillChipProps) ui.Node {
 	pick := ui.UseEvent(Prevent(func() { props.OnPick(props.Major) }))
 	return Button(css.Class("budget-fill-chip"), Type("button"),
 		Attr("data-testid", "budget-fill-"+props.Key),
-		Attr("aria-label", uistate.T("budgets.fillApply", props.Label, props.Value)),
+		Attr("aria-label", uistate.T("budgets.fillApplyKind", props.Label, props.Kind, props.Value)),
 		OnClick(pick),
 		Span(css.Class("budget-fill-chip-label"), props.Label),
 		Span(css.Class("budget-fill-chip-value", tw.TextDim), " · "+props.Value),
@@ -205,23 +213,51 @@ func budgetQuickFillChip(props budgetQuickFillChipProps) ui.Node {
 // budgetQuickFillLabel maps a QuickFill key to its localized chip label.
 func budgetQuickFillLabel(key string) string {
 	switch key {
-	case budgeting.QuickFillLastMonth:
-		return uistate.T("budgets.fillLastMonth")
+	case budgeting.QuickFillLastPeriod:
+		return uistate.T("budgets.fillLastPeriod")
 	case budgeting.QuickFillAvg3:
 		return uistate.T("budgets.fillAvg3")
 	case budgeting.QuickFillAvg6:
 		return uistate.T("budgets.fillAvg6")
-	case budgeting.QuickFillLastPeriod:
-		return uistate.T("budgets.fillLastPeriod")
+	case budgeting.QuickFillPriorLimit:
+		return uistate.T("budgets.fillPriorLimit")
 	case budgeting.QuickFillUnderfunded:
 		return uistate.T("budgets.fillUnderfunded")
 	}
 	return key
 }
 
+// budgetQuickFillKind maps a suggestion's kind to the phrase that says what its
+// figure actually is — spending, a limit that was set, or a target's shortfall.
+func budgetQuickFillKind(kind budgeting.QuickFillKind) string {
+	switch kind {
+	case budgeting.QuickFillLimit:
+		return uistate.T("budgets.fillKindLimit")
+	case budgeting.QuickFillTarget:
+		return uistate.T("budgets.fillKindTarget")
+	default:
+		return uistate.T("budgets.fillKindSpend")
+	}
+}
+
 // budgetQuickFillRow renders the quick-fill chip strip beside the amount field
 // (BG4). onPick receives the chosen major-units string to seed the amount input.
-func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Status, draft budgetTargetDraft, onPick func(string)) ui.Node {
+//
+// C667: the suggestions are computed over the budget's OWN cadence, from the
+// SAME period the card is reporting on, and over the SAME category population —
+// the tracked categories plus their descendants, the set computeBudgetView hands
+// EvaluateRollup. Missing any of the three is what put "Last month $0.00 / Avg
+// 3 mo $5.42" under a card reading $1,455.74 spent: the chips read the parent
+// category over calendar months while the bar rolled up the sub-categories over
+// the budget's period.
+//
+// anchor is the view's period anchor (budgetViewAnchor) — NOT time.Now(). The
+// card evaluates against the viewed window, so paging back to March and opening
+// the editor would otherwise offer history counted backwards from today: the same
+// mismatch the ticket describes, arriving down the time axis instead of the
+// category one. The caption underneath states the window and the population, so a
+// figure that still looks surprising can be checked rather than guessed at.
+func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Status, anchor time.Time, draft budgetTargetDraft, onPick func(string)) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
@@ -231,19 +267,39 @@ func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Sta
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	now := time.Now()
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	var payAnchor time.Time
+	if pr.PayCycleAnchor != "" {
+		if t, err := time.Parse("2006-01-02", pr.PayCycleAnchor); err == nil {
+			payAnchor = t
+		}
+	}
 
-	need := budgetTargetNeed(app, budgetDraftTarget(b, draft), status, now)
+	// The target's remaining need is a forward-looking figure about today's
+	// funding, so it keeps the wall clock — the same reference budgetTargetLine
+	// uses on the card, which is the line this chip has to agree with.
+	need := budgetTargetNeed(app, budgetDraftTarget(b, draft), status, time.Now())
 	in := budgeting.QuickFillInput{
-		Now:            now,
+		Now:            anchor,
 		WeekStart:      pr.WeekStartWeekday(),
+		PayAnchor:      payAnchor,
 		Rates:          rates,
+		Covers:         categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs()),
 		Underfunded:    need.Needed,
 		HasUnderfunded: domain.TargetKind(draft.Kind).Valid() && domain.TargetKind(draft.Kind) != domain.TargetNone && need.Needed.IsPositive(),
 	}
-	fills := budgeting.QuickFills(b, app.Transactions(), in)
+	fills, win := budgeting.QuickFills(b, app.Transactions(), in)
 	if len(fills) == 0 {
 		return Fragment()
+	}
+	// Name the window the spend figures cover, or say plainly that there is none —
+	// silence there reads as "this IS your history".
+	explain := uistate.T("budgets.fillExplainNone")
+	if win.Periods > 0 {
+		explain = uistate.T("budgets.fillExplain", win.Periods, strings.ToLower(periodLabel(win.Period)),
+			pr.FormatDate(win.From), pr.FormatDate(win.To.AddDate(0, 0, -1)))
 	}
 	return Div(css.Class("budget-fill-row"),
 		Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.fillHeading")),
@@ -252,11 +308,15 @@ func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Sta
 				return ui.CreateElement(budgetQuickFillChip, budgetQuickFillChipProps{
 					Key:    f.Key,
 					Label:  budgetQuickFillLabel(f.Key),
+					Kind:   budgetQuickFillKind(f.Kind),
 					Value:  fmtMoney(f.Amount),
 					Major:  money.FormatMinor(f.Amount.Amount, currency.Decimals(f.Amount.Currency)),
 					OnPick: onPick,
 				})
 			}),
 		),
+		Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-quickfill-explain"), explain),
+		Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-quickfill-limit-note"),
+			uistate.T("budgets.fillLimitNote", uistate.T("budgets.fillPriorLimit"))),
 	)
 }

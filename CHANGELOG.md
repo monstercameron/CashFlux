@@ -6,6 +6,33 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Budget limits cannot be negative, anywhere (C665).** All three limit editors — the card's inline one, the
+  full editor, the add form — now share one tested parser. A bad amount kills the commit control, says why
+  under the field, and keeps the typed text so it can be corrected. The inline editor used to accept `-1`,
+  then throw the edit away in silence.
+
+- **The blank Add budget form no longer offers a live commit (C666).** Name and Limit are marked required,
+  Add budget is disabled until the draft is valid, and a line beside the action says what is still missing —
+  instead of the button being the only way to find out.
+
+- **Budget quick-fill history now matches the card it sits under (C667).** The chips counted the budget's own
+  categories over calendar months walked back from today; the card's bar counts the category rollup over the
+  budget's cadence in the viewed period. A parent-category budget was being offered "$0.00 of history" beside
+  a card reading $1,455.74 spent. All three now agree, and a caption states the cadence, the window and the
+  categories the figures came from. "Prior limit" is labelled as a plan rather than sitting unmarked among
+  three spend figures.
+
+- **Each "What's driving this?" control names its budget (C668).** Several cards offer the control at once and
+  every one of them had the same accessible name.
+
+- **Top-up says which number it changes (C669).** "Increase Groceries (currently $500.00)" sat beside a card
+  showing a $721.71 cap after rollover. The dialog now shows `$500.00 limit + $221.71 carried in = $721.71`
+  and states whether the amount lands on the cap for this period or on the base limit for good.
+
+- **The compact-list toggle exposes the resulting view (C670).** Its accessible name now says which view is on
+  screen and what a click produces, keeping the stable visible label and `aria-pressed` that C596 established.
+
 ### Added
 - **The payday funding preview says who pays (EC-12).** When a paycheck cannot cover every goal's quota,
   it names the goal that comes up short and how much later it lands — or that it stops moving entirely.

@@ -11937,3 +11937,64 @@ is not visible from the browser.
   Measured on the same 3,230-row ledger, typing "coffee": **settle time 9,500ms → 2,432ms**, and the
   longest main-thread block **1,237ms → 610ms** (no blocks over 1s remain, against two before).
   AC: search latency scales with typing bursts, not with characters typed.
+
+---
+
+## Budget page recheck — live UX and correctness sweep (2026-08-17)
+
+- [x] **C665 [MAJOR][BUDGETS][VALIDATION][MONEY] Budget limit editing accepted a negative limit — FIXED.**
+  Three editors take a budget limit and each decided for itself, on submit, what counted as valid. The card's
+  inline editor advertised `min="0.01"` and honoured it nowhere: typing `-1` left ✓ live, and pressing it
+  closed the editor without saving and without a word, so a refused edit and a saved one looked identical.
+  Fixed by moving the decision into pure, tested code — `budgeting.ParseLimitMajor` returns the amount plus a
+  `LimitProblem` (blank / malformed / not-positive), and `budgetLimitError` turns that into one sentence in the
+  budget's own currency. All three editors now validate on every keystroke: the commit control goes dead, the
+  reason appears under the field, the typed text survives, and each save handler refuses the same values so a
+  keyboard submit cannot slip past a disabled button.
+  AC: a negative, zero or malformed limit cannot be committed from any editor, and the editor says which.
+
+- [x] **C666 [MAJOR][BUDGETS][CREATE][VALIDATION] The blank Add budget form left its commit button enabled — FIXED.**
+  The only way to learn what the form wanted was to press Add and be told. Name and Limit now carry a required
+  marker (an asterisk for sighted users, a screen-reader-only "(required)" beside it), Add budget is disabled
+  until a minimum valid draft exists, a line beside the action names what is still outstanding, and a limit
+  that is present but unusable gets a field-level error as it is typed. The create-a-new-category path needs no
+  rule of its own: a blank category name falls back to the budget's name, so requiring the name covers both.
+  AC: Add budget is dead on a blank form and says what it is waiting for.
+
+- [x] **C667 [MAJOR][BUDGETS][SUGGESTIONS][CORRECTNESS] Budget history quick-fill values did not match the card's displayed spending — FIXED.**
+  Two independent mismatches, both real. On the CATEGORY axis the chips called `budgeting.Spent`, which counts
+  the budget's own tracked categories, while the card's bar calls `EvaluateRollup` with the category descendants
+  folded in — so a parent-category budget whose charges all land in sub-categories was offered a history of
+  about zero beside a card reading $1,455.74. On the TIME axis the chips averaged whole calendar months
+  regardless of the budget's cadence, and walked back from `time.Now()` while the card evaluates against the
+  VIEWED period — so paging back a month and opening the editor quoted history counted from today.
+  Fixed in the pure layer: `QuickFills` walks the budget's own cadence through `PeriodRangeAnchored` (pay-cycle
+  anchor included), counts spend through the new `budgeting.SpentRollup` with the same cover set
+  `computeBudgetView` hands `EvaluateRollup`, and returns a `QuickFillWindow` naming what it read. The row is
+  handed `budgetViewAnchor(vw, now)` — the card's anchor, not the clock. Each suggestion also carries a
+  `QuickFillKind`, so "Prior limit" is labelled as the plan it is rather than sitting unmarked in a row of spend
+  figures, and a caption under the chips states the cadence, the window and the population.
+  AC: every chip is computed from the same population and period the card's spent total is.
+
+- [x] **C668 [MINOR][BUDGETS][A11Y][CONTROLS] Repeated driver controls were not scoped by budget name — FIXED.**
+  Every near-or-over budget offers a control called `What's driving this?`, so a role-based lookup resolved
+  several and none of them said which card would expand. The visible label stays short — the card around it
+  supplies the context a sighted reader has — and the accessible name now carries the budget:
+  `What's driving this? — Transportation`. `aria-controls` already pointed at the card's own region.
+  AC: each driver control names its budget.
+
+- [x] **C669 [MINOR][BUDGETS][TOPUP][COPY] Top-up copy conflated the base limit with the effective rollover cap — FIXED.**
+  The dialog opened with "Increase Groceries (currently $500.00)" beside a card showing a cap of $721.71 after
+  rollover, and never said which of the two the typed amount would land on. It now shows the arithmetic —
+  "This period's cap: $500.00 limit + $221.71 carried in = $721.71." — drawn from the same `RollEffCap` /
+  `RollEffCapMath` the card renders, so the dialog cannot quote a cap the card disagrees with. A second line
+  states which figure changes: a this-period top-up adds to the cap and leaves the base limit alone, reverting
+  next period; a permanent one raises the base limit. Both match what `submitTopup` actually writes.
+  AC: the dialog names both figures, shows how one becomes the other, and says which one it changes.
+
+- [x] **C670 [MINOR][BUDGETS][VIEW][A11Y] Compact-list toggle did not clearly expose the resulting view — FIXED.**
+  C596 froze the visible label deliberately, to stop the control announcing "Card view, pressed" over a compact
+  list — so relabelling it by destination would have been a straight regression. Instead the accessible name
+  gains a screen-reader-only suffix that states both halves without contradicting anything: "Compact list —
+  currently off, activating this shows the compact list". The visible label and `aria-pressed` are unchanged.
+  AC: the control's name says which view is on screen and what a click produces.

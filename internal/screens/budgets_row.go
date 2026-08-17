@@ -62,6 +62,19 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	limitEditing := ui.UseState(false)
 	limitDraft := ui.UseState("")
 	limitDec := currency.Decimals(s.Budget.Limit.Currency)
+	// C665: the field advertises min="0.01" and the browser's own validation does
+	// nothing for it, because the value is read out of state on submit rather than
+	// through form validity. Typing -1 left ✓ live, and pressing it silently threw
+	// the edit away — a negative limit is refused, but so is any feedback that it
+	// happened. The draft is now validated on every keystroke: ✓ goes dead, the
+	// reason is stated inline, and the editor stays open with the text intact.
+	_, limitProblem := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
+	limitErrID := "budget-limit-err-" + s.Budget.ID
+	limitErrMsg := budgetLimitError(limitProblem, s.Budget.Limit.Currency)
+	limitSaveTitle := uistate.T("action.save")
+	if limitErrMsg != "" {
+		limitSaveTitle = uistate.T("budgets.limitSaveBlocked")
+	}
 	startLimitEdit := ui.UseEvent(Prevent(func() {
 		// Seed from the STORED base limit — s.Budget here is the evaluation copy whose
 		// Limit has rollover carry / period boosts folded in (the effective cap). If the
@@ -82,9 +95,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	cancelLimitEdit := ui.UseEvent(Prevent(func() { limitEditing.Set(false) }))
 	onLimitDraft := ui.UseEvent(func(v string) { limitDraft.Set(v) })
 	saveLimitEdit := ui.UseEvent(Prevent(func() {
-		amt, perr := money.ParseMinor(strings.TrimSpace(limitDraft.Get()), limitDec)
-		if perr != nil || amt <= 0 {
-			limitEditing.Set(false)
+		amt, prob := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
+		if !prob.OK() {
+			// Hold the editor open on a bad value. Closing it discarded the typed
+			// text and left the old figure back on the card as though nothing had
+			// been attempted — the failure mode that made a rejected negative
+			// indistinguishable from a saved one.
 			return
 		}
 		if app := appstate.Default; app != nil {
@@ -842,12 +858,16 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						// number swap on open doesn't read as a glitch (the capmath line below
 						// carries the arithmetic).
 						If(props.EffectiveCap != "", Span(css.Class("budget-limit-basetag"), Attr("data-testid", "budget-limit-basetag-"+s.Budget.ID), uistate.T("budgets.baseLimitTag"))),
-						Input(css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
-							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft), uiw.FieldValue(limitDraft.Get())),
-						Button(css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
-							Attr("aria-label", uistate.T("action.save")), Title(uistate.T("action.save")), uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))),
+						Input(append(append([]any{css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)},
+							errAttrs(limitErrID, limitErrMsg)...), uiw.FieldValue(limitDraft.Get()))...),
+						Button(append([]any{css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
+							Attr("aria-label", uistate.T("action.save")), Title(limitSaveTitle),
+							uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))}, disabledAttr(limitErrMsg != "")...)...),
 						Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+s.Budget.ID),
 							Attr("aria-label", uistate.T("action.cancel")), Title(uistate.T("action.cancel")), OnClick(cancelLimitEdit), uiw.Icon(icon.Close, css.Class(tw.W35, tw.H35))),
+						// C665: say why ✓ is dead, right where the number was typed.
+						errText(limitErrID, limitErrMsg),
 					),
 					Span(css.Class("budget-amount"),
 						Span(css.Class("budget-spent"), barSpent), Span(" / "),
@@ -926,7 +946,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// a budget is near or over — exactly when "why" is the question — and it is
 				// already collapsed and lazy.
 				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
-					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Anchor: props.Anchor})),
+					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Title: title, Anchor: props.Anchor})),
 				// SM-12: this budget's own trailing average, when the limit has drifted
 				// far enough from it to be worth saying. Not shown in last-month mode:
 				// the figures there describe a closed period, and offering to rewrite a
@@ -1110,6 +1130,10 @@ func recurringLabelSet() map[string]bool {
 // budgetDriversPanelProps configures the "what's driving this" disclosure.
 type budgetDriversPanelProps struct {
 	Budget domain.Budget
+	// Title is the budget's display title ("name · category"), which scopes the
+	// toggle's accessible name (C668). Several budgets can be near or over at
+	// once, and every one of them offers a control called "What's driving this?".
+	Title  string
 	Anchor time.Time // the view's period anchor (QA CF-05); zero falls back to now
 }
 
@@ -1132,8 +1156,20 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 		discLabel = uistate.T("budgets.driversHide")
 	}
 	listID := "budget-drivers-list-" + props.Budget.ID
+	// C668: name the control by its budget. The page can show several of these at
+	// once — one per near-or-over budget — and "What's driving this?" identified
+	// none of them, so a role-based lookup resolved two matches and a screen-reader
+	// user had no way to tell which card was about to expand. The visible label
+	// stays short (the card around it supplies the context a sighted user needs);
+	// the accessible name carries the budget, and aria-controls already points at
+	// this card's own region.
+	discName := discLabel
+	if props.Title != "" {
+		discName = discLabel + " — " + props.Title
+	}
 	head := Button(css.Class("budget-drivers-toggle"), Type("button"),
 		Attr("data-testid", "budget-drivers-toggle-"+props.Budget.ID),
+		Attr("aria-label", discName), Title(discName),
 		Attr("aria-expanded", ariaBool(open)), Attr("aria-controls", listID), OnClick(toggle),
 		Span(discLabel),
 		uiw.Icon(icon.ChevronDown, css.Class("budget-drivers-chev", tw.W35, tw.H35)))

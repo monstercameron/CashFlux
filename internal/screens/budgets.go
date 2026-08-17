@@ -1059,6 +1059,36 @@ func budgetTitle(name, category string) string {
 	}
 }
 
+// budgetLimitError maps a parsed limit's problem to the message the editor shows
+// beneath the field, or "" when the typed value may be written (C665, C666).
+//
+// Three surfaces take a budget limit — the card's inline editor, the full edit
+// form, and the add form — and each one used to decide for itself, on submit,
+// what counted as valid and what to say about it. The shared pure parser makes
+// the decision; this makes them all say the same sentence about the same input,
+// in the budget's own currency, while the value is still being typed.
+func budgetLimitError(problem budgeting.LimitProblem, cur string) string {
+	switch problem {
+	case budgeting.LimitBlank:
+		return uistate.T("budgets.limitBlank")
+	case budgeting.LimitNotPositive:
+		return uistate.T("budgets.limitPositive", fmtMoney(money.Zero(cur)))
+	case budgeting.LimitMalformed:
+		return uistate.T("budgets.limitMalformed")
+	}
+	return ""
+}
+
+// disabledAttr returns the `disabled` attribute when a commit control has nothing
+// valid to commit, and nothing otherwise. It registers no hooks, so appending it
+// to a button's args keeps the hook count stable in both states.
+func disabledAttr(disabled bool) []any {
+	if disabled {
+		return []any{Disabled(true)}
+	}
+	return nil
+}
+
 // periodLabel localizes a budget period for the UI (the domain layer's Period.Label()
 // is hardcoded English by design — domain stays i18n-free). C116.
 func periodLabel(p domain.Period) string {
