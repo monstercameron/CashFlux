@@ -1,3 +1,30 @@
+## 2026-08-16 — the calendar that existed and was not routed (LF-7)
+
+The ticket says to reuse the standardized `uiw.Calendar` primitive for bills. Checking first turned up
+something more interesting than a missing feature: there WAS a bills calendar, hand-rolled as a
+`cal-grid` in `bills_screen.go`, and its own file comment says the panel it belongs to is "no longer
+routed". So the code existed, ran nowhere, and the page it used to serve had been replaced by the
+unified Bills & Recurring surface.
+
+That makes the ticket's framing exactly right for a reason it does not state. Rebuilding on the
+primitive is not tidiness — it is the difference between one calendar in the app and two divergent
+ones. Week-start handling, keyboard behaviour, cell test ids and month paging all come free and all
+stay consistent with the to-do board's calendar.
+
+The decision I care most about: the grid is fed the SAME `rv.Agenda` occurrences the list renders,
+not recomputed from `bills.UpcomingAll`. Recomputing is easy, local, and precisely the shape that
+produces "the list shows a payment the grid does not" — two views of one truth, each correct on its
+own terms, disagreeing. It is the same class of defect E3 exists to catch, and the cheapest place to
+prevent it is at the point where a second computation would be introduced.
+
+Markers carry state rather than presence. A settled payment and an overdue one are opposite readings,
+and rendering both as a neutral dot makes the calendar something you have to interrogate rather than
+read. Settled strikes through, overdue stands out, everything else is quiet.
+
+Days with several payments collapse to a count and a total, with the breakdown in the tooltip. The
+grid's job is "what lands when"; the agenda underneath already answers "what exactly", and repeating
+it in a 40-pixel cell would serve neither.
+
 ## 2026-08-16 — the palette could not find anything (LF-4)
 
 The ticket asks to "confirm no first-class one exists" first, which was worth doing: there are two
