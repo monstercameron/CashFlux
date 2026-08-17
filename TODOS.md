@@ -816,8 +816,25 @@ survived the duplicate/scope filters but didn't make the engine cut):
   JSON/CSV). Dovetails with the encrypted-sync vision; crypto primitives already exist (vault/artifactcrypto).
 - [ ] **LF-3 Universal Undo** — a consistent "Deleted — Undo" toast on destructive actions everywhere,
   backed by the existing `mutationrev` + `auditlog`.
-- [ ] **LF-4 Global spotlight search** — one instant local substring search across accounts / txns /
-  budgets / goals / tasks (confirm no first-class one exists; NL search is the separate SMART+ path).
+- [x] **LF-4 Global spotlight search** — one instant local substring search across accounts / txns /
+  budgets / goals / tasks.
+  — DONE (2026-08-16). Confirmed first: nothing existed. The Ctrl+K palette ranks COMMANDS
+  (`cmdmatch`), and `internal/spotlight` is about pointing the assistant at UI CONTROLS — neither
+  finds a thing the household recorded. New pure `internal/entitysearch`, wired into the palette as a
+  "Found in your data" group.
+
+  Three design decisions, each a test. **Substring, not fuzzy**: the palette's fuzzy matcher is right
+  for twenty fixed commands and produces confident nonsense over ten thousand transactions, because
+  with enough candidates something always matches loosely. **Ranked by KIND first, not by score**: an
+  account and a transaction are not competing for one slot, and ordering by score alone buries every
+  account under a wall of matching ledger rows. **Every hit carries where to go AND what to do there**
+  — a transaction result applies the search text as a ledger filter, because navigating to
+  /transactions unfiltered moves the reader to a haystack and calls it an answer.
+
+  Entity rows sit BELOW the commands: a palette query is far more often a verb than a merchant, and
+  burying "Add a transaction" under twenty ledger rows would break the common case to serve the rarer
+  one. Archived accounts/goals and completed to-dos are excluded — they are not places the reader can
+  act, and including them makes every result need a liveness check.
 - [x] **LF-5 Notification delivery prefs + quiet hours** — finish `internal/notify` (was CP3).
   — VERIFIED DONE (2026-08-16). `notify.RuleConfig` carries per-rule Enabled, per-rule Thresholds, an
   account-wide quiet-hours window (QuietStartMin/QuietEndMin, wrap-past-midnight supported) and a
@@ -10348,3 +10365,66 @@ reproduced it live, a $77 transfer edited to $120 drifted the ledger net by $43;
 `appstate.PutTransactionWithTransferPair` with 5 new tests), **C632** (Amounts↔Percent round trip),
 **C634** (negative/zero split line reported as balanced), and **C640** (a re-flagged reviewed row lost
 its settlement detail).
+
+---
+
+## Re-test of the six reported-as-still-open tickets (2026-08-16)
+
+All six were re-tested against a freshly built and deployed `web/bin/main.wasm` on `:8080`. **Four
+were already fixed and did not reproduce**, one reproduced and is fixed below, and one was a
+measurement artefact of the test harness rather than app behaviour. Recorded in full because
+"still broken" and "you are looking at a stale bundle" need different responses, and the difference
+is not visible from the browser.
+
+**Did not reproduce (already fixed; verified live):**
+- **C625** — the table carries `aria-busy="true"` while re-sorting and its `tbody` drops to
+  `pointer-events: none` for the same window (13 of 40 samples). Stale rows are inert, not merely
+  dimmed.
+- **C628 (feedback half)** — the search box carries `aria-busy="true"`, a `role=status` note reading
+  "Searching…" renders, and the table is marked busy too. Observed on every run.
+- **C651** — clicking `#coffee-run` narrowed the ledger from 3,230 to 197 rows and produced a
+  removable `Tag: coffee-run` chip plus a "1 filter" summary.
+- **C652** — the duplicates panel's `Delete duplicate` opens a confirmation that names BOTH entries
+  and marks which one survives ("First entry is kept", "Keep this one · KEEP").
+- **C620** — the row kebab's Delete opens a confirmation naming payee, date, amount and account
+  ("Delete Car payment (Priya) from 2026-08-17 for ($480.00) in Joint Checking?"), and an
+  undoable toast follows ("Transaction deleted. Undo") with a working Undo button; Ctrl+Z restores
+  the row as well.
+- **C621** — for a transaction carrying follow-ups the same confirmation adds "2 open follow-up
+  task(s) link to it and will lose that link."
+
+  > A note on C620, because the first measurement said the opposite: the undo toast lives ~3.6
+  > seconds, and the initial probe read the DOM at 3.5 seconds and found nothing. The finding was an
+  > artefact of the probe's timing, not a defect. Recorded so it is not "re-fixed" later.
+
+  > The most likely reason these read as open in the field is a **stale served bundle** — the PWA
+  > service worker serves the cached wasm on a plain reload, so a hard refresh (Ctrl+Shift+R) is
+  > required after a rebuild. C628 and C652's own write-ups reach the same conclusion independently.
+
+- [x] **C624 [MAJOR][TXN][VALIDATION][MONEY] Quick-add stated nothing about which way a typed minus would be stored — FIXED.**
+  This one did reproduce. The C624 fix had taken the ticket's second option — normalize the
+  direction and SHOW it — and implemented only the normalizing half: `onAmount` flips the kind
+  toggle to Expense when a minus is typed, but the toggle **defaults to Expense**, so on the
+  reported path there was nothing to flip and therefore nothing to see. The form sat reading
+  "Expense" over "-1" with Save enabled, which is a double negative the reader has to resolve in
+  their head, and no part of the screen said whether that would store a dollar out, a dollar in, or
+  be rejected. (The stored value was always correct — `ParseSigned` reads the magnitude plus the
+  toggle — so this was never wrong money, only a form that would not admit what it was about to do.)
+  Fixed in two places: a live `role=status` note under the amount field reading "Saving as money
+  out: 1.00." while the minus is present, and blur-time normalisation of the field to its magnitude
+  so the committed form reads "Expense · 1" instead of "Expense · -1".
+  AC: with a minus typed, the form states the resulting direction and amount before commit, and the
+  field and the kind toggle never disagree. Verified live.
+
+- [x] **C664 [MAJOR][TXN][SEARCH][PERF] Typing in the ledger search cost one full re-filter per keystroke — FIXED.**
+  The remaining half of C628's report ("can feel slow") was real and was not a feedback problem.
+  `onFilterText` called `searchPending.Set(true)` on **every** keystroke. That atom is shared, so each
+  set re-rendered the surface, and this surface's render re-runs `txnfilter.ApplyWithLabels` across
+  the whole ledger — about 1.5s at 3,230 rows. Typing six characters therefore bought six full
+  re-filters to keep asserting something the screen was already showing, and the 400ms debounce could
+  not help because it coalesces the filter WRITE, not these renders.
+  Fixed by raising the flag only when it is not already up: one re-render per typing burst, one when
+  it commits.
+  Measured on the same 3,230-row ledger, typing "coffee": **settle time 9,500ms → 2,432ms**, and the
+  longest main-thread block **1,237ms → 610ms** (no blocks over 1s remain, against two before).
+  AC: search latency scales with typing bursts, not with characters typed.

@@ -460,6 +460,9 @@ var vSweepKeys = Catalog{
 	"health.hygiene.stale-accounts": "%d stale balances",
 	"health.hygiene.unreconciled":   "%d never reconciled",
 
+	// LF-4 — the command palette can find things, not only run commands.
+	"palette.groupFound": "Found in your data",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

@@ -6,6 +6,24 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Quick-add says which way a typed minus will be stored (C624).** The earlier fix took the
+  ticket's "normalize the direction and show it" option and shipped only the normalizing half: a
+  typed minus flips the kind toggle to Expense, but the toggle already defaults to Expense, so on the
+  reported path nothing moved and nothing was said. The form read "Expense" over "-1" with Save
+  enabled — a double negative the reader has to resolve — and no part of it stated whether that meant
+  a dollar out, a dollar in, or a rejection. The money was always stored correctly; the form simply
+  would not admit what it was about to do. A live note now reads "Saving as money out: 1.00." while
+  the minus is present, and leaving the field normalises it to its magnitude so the toggle and the
+  box stop disagreeing.
+- **Searching the ledger no longer costs a full re-filter per keystroke (C664).** `onFilterText` set
+  the shared `searchPending` atom on every character. Each set re-rendered the surface, and this
+  surface's render re-runs the filter across the whole ledger — ~1.5s at 3,230 rows — so typing six
+  characters bought six full re-filters to keep asserting something already on screen, and the 400ms
+  debounce could not help because it coalesces the filter write, not the renders. The flag is now
+  raised once per typing burst. Typing "coffee" on a 3,230-row ledger: **settle 9,500ms → 2,432ms**,
+  longest main-thread block **1,237ms → 610ms**, with no blocks over a second remaining.
+
 ### Changed
 - **Budget rollup arithmetic moved out of the screen (R-LEAK).** The budgets page ran its own
   aggregation loop over the evaluated statuses, including re-deriving each budget's limit as

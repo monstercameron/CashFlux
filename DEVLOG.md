@@ -1,3 +1,33 @@
+## 2026-08-16 — the palette could not find anything (LF-4)
+
+The ticket asks to "confirm no first-class one exists" first, which was worth doing: there are two
+things in the tree that sound like global search and neither is. `cmdmatch` ranks the palette's fixed
+command list. `internal/spotlight` points the assistant at UI CONTROLS — "the Add button is top
+right". Neither can find a thing the household recorded.
+
+Three decisions carried the design:
+
+**Substring, not fuzzy.** This is the one I would defend hardest. The palette's fuzzy subsequence
+matcher is exactly right for twenty commands, where a loose match is a helpful guess. Over ten
+thousand transactions it is a liability: with enough candidates, something always matches loosely, so
+every query returns a confident list of things you did not mean. A person searching their own records
+knows what they typed.
+
+**Ranked by kind first, not by score.** An account named "Roof fund" and two hundred transactions
+mentioning roof are not competing for one slot — the account is a place, the transactions are events.
+Pure score ordering buries every account under the wall of ledger rows, which makes the search useless
+for precisely the thing it is best at (there are five accounts and you want one of them).
+
+**Every hit carries a destination AND what to do on arrival.** A transaction result that navigates to
+/transactions and stops has moved the reader to a haystack and called it an answer. It applies the
+search text as a ledger filter on the way.
+
+Placement mattered too: entity rows go BELOW the commands. A palette query is far more often a verb
+than a merchant, and burying "Add a transaction" under twenty ledger rows would break the common case
+to serve the rarer one. The commands keep their fuzzy ranking; the entity hits arrive already ordered
+and are appended as-is, since re-ranking literal substring matches through a fuzzy scorer would
+scramble a good order for nothing.
+
 ## 2026-08-16 — chores are not errors (LF-8)
 
 The data-health panel already existed and already had drill-throughs, over nine integrity checks. What

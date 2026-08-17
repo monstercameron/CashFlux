@@ -11,6 +11,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cmdmatch"
+	"github.com/monstercameron/CashFlux/internal/entitysearch"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -256,7 +257,8 @@ type paletteCmd struct {
 }
 
 var (
-	cmdPaletteCmds  []paletteCmd // built once, on first open
+	cmdPaletteBase  []paletteCmd // the static commands, rebuilt on open
+	cmdPaletteCmds  []paletteCmd // base + this query's entity results
 	cmdPaletteShown []int        // command indices currently displayed (filtered)
 	cmdPaletteSel   int          // selection within cmdPaletteShown
 )
@@ -465,7 +467,8 @@ func closeCommandPalette() {
 // openCommandPalette reveals the palette, clears the query, focuses the input,
 // and renders the full command list.
 func openCommandPalette(doc, ov js.Value) {
-	cmdPaletteCmds = buildPaletteCommands() // rebuild so the workspace list stays current
+	cmdPaletteBase = buildPaletteCommands() // rebuild so the workspace list stays current
+	cmdPaletteCmds = cmdPaletteBase
 	ov.Get("style").Set("display", "grid")
 	if inp := doc.Call("getElementById", cmdInputID); !inp.IsNull() && !inp.IsUndefined() {
 		inp.Set("value", "")
@@ -581,8 +584,23 @@ func renderPalette(doc js.Value, query string) {
 	}
 	// Rank with the shared fuzzy matcher (subsequence + keyword aliases) so a verb
 	// query like "add" or "export" surfaces a noun-labeled command, best match first.
-	ranked := make([]cmdmatch.Command, len(cmdPaletteCmds))
-	for i, c := range cmdPaletteCmds {
+	if cmdPaletteBase == nil {
+		cmdPaletteBase = buildPaletteCommands()
+	}
+	// LF-4: the palette ranks COMMANDS. It could not find a THING — someone who
+	// remembers paying Greenfield Market but not which month had to guess which
+	// page to open and then use that page's own filter, which is the app asking
+	// the user to know its information architecture before it will help them.
+	// Entity results are appended per keystroke, in their own group, BELOW the
+	// commands: a query is far more often a verb than a merchant, and burying
+	// "Add a transaction" under twenty ledger rows would break the common case to
+	// serve the rarer one.
+	entities := paletteEntityCommands(query)
+	cmdPaletteCmds = append(append(make([]paletteCmd, 0, len(cmdPaletteBase)+len(entities)),
+		cmdPaletteBase...), entities...)
+
+	ranked := make([]cmdmatch.Command, len(cmdPaletteBase))
+	for i, c := range cmdPaletteBase {
 		ranked[i] = cmdmatch.Command{ID: strconv.Itoa(i), Title: c.label, Keywords: c.keywords}
 	}
 	cmdPaletteShown = cmdPaletteShown[:0]
@@ -590,6 +608,13 @@ func renderPalette(doc js.Value, query string) {
 		if ci, err := strconv.Atoi(m.ID); err == nil {
 			cmdPaletteShown = append(cmdPaletteShown, ci)
 		}
+	}
+	// Entity hits arrive already ranked by entitysearch (kind, then match
+	// position). Re-ranking them through the fuzzy command matcher would scramble
+	// that ordering for no gain — they matched by substring, so every one is an
+	// equally literal hit.
+	for i := range entities {
+		cmdPaletteShown = append(cmdPaletteShown, len(cmdPaletteBase)+i)
 	}
 	cmdPaletteSel = 0
 
@@ -698,4 +723,56 @@ func runPaletteCmd(ci int) {
 	if r := cmdPaletteCmds[ci].run; r != nil {
 		r()
 	}
+}
+
+// paletteEntityCommands turns a query into palette rows for the things the
+// household has recorded — accounts, budgets, goals, to-dos, transactions (LF-4).
+//
+// Each row navigates to the entity's page, and a transaction row ALSO applies
+// the search text as a ledger filter. A result that navigated to /transactions
+// and left the reader in the full ledger would have moved them to a haystack and
+// called it an answer.
+//
+// Returns nothing for a short query or before the app is ready, so the palette
+// behaves exactly as it did until there is something real to add.
+func paletteEntityCommands(query string) []paletteCmd {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	hits := entitysearch.Search(query, entitysearch.Input{
+		Accounts:     app.Accounts(),
+		Transactions: app.Transactions(),
+		Budgets:      app.Budgets(),
+		Goals:        app.Goals(),
+		Tasks:        app.Tasks(),
+	})
+	if len(hits) == 0 {
+		return nil
+	}
+	out := make([]paletteCmd, 0, len(hits))
+	for i, h := range hits {
+		route, filter := h.Route, h.Query
+		label := h.Title
+		if h.Subtitle != "" {
+			label += " — " + h.Subtitle
+		}
+		group := ""
+		if i == 0 {
+			group = uistate.T("palette.groupFound")
+		}
+		out = append(out, paletteCmd{
+			label:    label,
+			keywords: nil,
+			group:    group,
+			run: func() {
+				if filter != "" {
+					f := uistate.TxFilter{Text: filter}.Normalize()
+					uistate.PersistTxFilter(f)
+				}
+				uistate.NavigateTo(route)
+			},
+		})
+	}
+	return out
 }
