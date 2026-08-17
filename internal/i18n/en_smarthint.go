@@ -56,6 +56,8 @@ var smartHintKeys = Catalog{
 	// %s = the cadence (monthly, weekly…), %s = the typical amount.
 	"sm6.rowMeta": "%s · about %s",
 	"sm6.empty":   "Nothing on this account repeats on a schedule yet.",
+	// %s = the charge now being tracked.
+	"sm6.trackedUndo": "Now tracking %s as recurring.",
 
 	// SM-8 — a likely duplicate charge.
 	"sm8.chip":   "Duplicate?",

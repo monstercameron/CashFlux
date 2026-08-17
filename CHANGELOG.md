@@ -69,6 +69,13 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **The repeats found on one account, with the action worth having on them (SM-6).** The detector
+  already said "6 recurring charges on Joint Checking" and linked to Subscriptions — where the
+  account context is gone and the list is the household's, not this account's. The row now carries a
+  collapsed disclosure of the repeats found *here*, each with its cadence, typical amount, and a
+  "Track as recurring" button. Confirming goes through the same path the review surface uses,
+  back-claim included: a commitment confirmed without linking the cycles it was detected from looks
+  like it has never been paid, and the bills surface immediately reports every past cycle as missed.
 - **Type a whole transaction in words (SM-15).** "spent 40 at whole foods yesterday" fills the
   quick-add amount, merchant, date and direction in one click. The local read is two parsers that
   already existed doing the halves each does well and had never been introduced: `rapidcapture` for

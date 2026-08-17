@@ -127,6 +127,53 @@ func registerSmartRowHint() {
 		overflowWrap("anywhere"),
 	)
 
+	// --- SM-6: the repeats found on one account -------------------------------
+	// Reuses the budget card's disclosure toggle (.budget-drivers-toggle) so the two
+	// "opt-in detail under a record" affordances are visibly the same control, then
+	// lists each repeat as a name/meta pair with its action pinned right.
+	rule(".acct-recur",
+		marginTop("0.35rem"),
+	)
+	rule(".acct-recur-list",
+		display("flex"),
+		flexDirection("column"),
+		marginTop("0.35rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		overflow("hidden"),
+	)
+	rule(".acct-recur-row",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.6rem"),
+		padding("0.45rem 0.6rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 60%, transparent)"),
+	)
+	rule(".acct-recur-list .acct-recur-row:first-child",
+		borderTop("0"),
+	)
+	rule(".acct-recur-main",
+		display("flex"),
+		flexDirection("column"),
+		minWidth("0"),
+	)
+	rule(".acct-recur-name",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+		color("var(--text)"),
+		fontWeight("600"),
+		fontSize("var(--type-13)"),
+	)
+	rule(".acct-recur-meta",
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".acct-recur-track",
+		flexShrink("0"),
+		whiteSpace("nowrap"),
+	)
+
 	// --- SM-4: the "why this went over" sentence -------------------------------
 	// It leads the budget card's drivers disclosure, so it is styled as the lede of
 	// that panel rather than as another aside: no tint, no rule, just a slightly

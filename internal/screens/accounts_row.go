@@ -470,6 +470,9 @@ func AccountRow(props accountRowProps) ui.Node {
 			// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
 			// when the account has more than 90 days of history.
 			accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange),
+			// C381: and where it goes next. The history chart above answers where the
+			// account has been; this answers whether it survives until payday.
+			accountForwardLine(a, props.Balance, props.Projection, time.Now()),
 			// XC7: warn when goals have earmarked more against this account than it
 			// holds (goal money has been spent). Own component; healthy → Fragment().
 			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),
@@ -614,6 +617,10 @@ func AccountRow(props accountRowProps) ui.Node {
 		// acted on. Gated at Standard density and up — at Minimal the row keeps only
 		// the dot it has always had.
 		smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, a.ID, accountRowSmartCodes),
+		// SM-6: the repeats found on THIS account, each with the one action worth
+		// having on them. Collapsed by default — the row is already dense, and this
+		// is opt-in detail, exactly like the budget card's drivers disclosure.
+		ui.CreateElement(accountRecurringPanel, accountRecurProps{Account: a}),
 	)
 }
 

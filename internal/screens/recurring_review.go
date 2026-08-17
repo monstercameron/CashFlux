@@ -16,7 +16,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
@@ -342,26 +341,13 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		txnByID[t.ID] = t
 	}
 
+	// The confirm + back-claim is shared with the per-account "repeating charges
+	// here" panel (SM-6). Linking the evidence transactions is the load-bearing
+	// half — a commitment confirmed without them looks like it has never been paid,
+	// and the bills surface reports every past cycle as missed — so it lives in one
+	// place rather than in two that stay identical only until one is edited.
 	onConfirm := func(c recurdiscover.Candidate) {
-		mag := c.Evidence.Amount.Typical
-		m := money.New(mag, base)
-		if c.Direction == recurdiscover.Out {
-			m = m.Neg()
-		}
-		cad := recurdiscover.DomainCadence(c.Evidence.Cadence)
-		next := rhyNextDue(cad, c.Evidence.LastSeen, now)
-		r := domain.Recurring{ID: id.New(), Label: c.Payee, Amount: m, Cadence: cad, NextDue: next, AccountID: c.AccountID}
-		if err := app.PutRecurring(r); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		for _, tid := range c.Evidence.TxnIDs {
-			_ = app.PutTxnLink(domain.TxnLink{
-				ID: id.New(), Kind: domain.TxnLinkBillMatch, TxnIDs: []string{tid},
-				RecurringID: r.ID, OccurrenceDate: txnByID[tid].Date, CreatedAt: now,
-			})
-		}
-		uistate.BumpDataRevision()
+		ConfirmRecurCandidate(app, c, now, base)
 	}
 	onReject := func(c recurdiscover.Candidate) {
 		// The display name rides along so Detection preferences can offer the way
