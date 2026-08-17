@@ -1,3 +1,44 @@
+## 2026-08-16 — the SM series is closed (SM-2…SM-16)
+
+All fifteen shipped. The survey at the start was the decision that shaped the rest: most of
+these features already had their arithmetic, and what they were missing was a surface. A1,
+A2, A7, A8, A9, T2, T6 and T7 had all been detecting correctly for months and reporting to a
+hub — which is the one place a finding cannot be acted on cheaply, because acting means
+finding the row again. Four items needed a genuinely new pure package (`splitsuggest`,
+`whyover`, `duedate`, plus the Smart+ prompt/parse layer); one needed a new function in
+`budgeting`; the rest were surfacing.
+
+Three patterns emerged and then paid for themselves repeatedly:
+
+**One hint surface, three gates in one place.** `smartRowHintFor` checks enabled, density,
+and dismissed together. Ten hand-rolled copies of that check is how a hint nobody can turn
+off gets shipped, and the drift would have been in tone and spacing too.
+
+**Reuse the renderer, not the fields.** `smartRowInsightsFor` renders findings through the
+existing `smartInsightCard` in Compact mode rather than re-rendering title/detail/action. That
+component already executes every ActionKind and owns dismissal; a second renderer is a second
+place for action semantics to drift. Same reasoning drove extracting `ConfirmRecurCandidate`
+when SM-6 gave the recurring confirm a second home — the back-claim is the load-bearing half,
+and a commitment confirmed without it reports every past cycle as missed.
+
+**Free code, AI code, and never one gating the other.** The first cut of SM-2 gated its local,
+no-key suggestion on `SMART-T1`. AI-tier features default OFF, so the chip would have been
+invisible to everyone who never enabled Smart+ — which is most people. The catalog already had
+the right precedent in `SMART-T3F`/`SMART-T3`; the series now follows it (T1F, T21F, T22F,
+B15F, D4F). Worth remembering as a rule: an AI code may never gate a deterministic tier.
+
+The model never does arithmetic anywhere in this series. `SplitSuggest` asks for percentages
+and the app apportions; `WhyOver`, `BalanceAnomaly`, `GoalPace` and `ExplainAlert` are handed a
+finished finding and asked for phrasing; every category a model names resolves through the
+Catalog and is dropped when it does not match. That is what makes a paid answer defensible
+next to a figure the app computed.
+
+One caveat for whoever picks this up. Two row-wiring edits — the ledger row's SM-2 chip, kebab
+entry and SM-8/SM-10 flag props in `transactions_widget.go`, and the SM-15 mount in
+`quickadd.go` — are live in the worktree but not in my commits: both files carry another
+session's in-flight work, and committing them would have shipped it under these messages. That
+session commits with everything staged, so those hunks will land with its next commit.
+
 ## 2026-08-16 — routing is not permission (C407)
 
 Per-member notifications sound like an access-control feature and are not one. If assigning an alert

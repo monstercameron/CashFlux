@@ -562,40 +562,55 @@ Agreed (Cam picked these):
   (`PayeeCleanHost`/`PayeeCleanBody`): pure `internal/payeeclean` normalizer (SMART) + `smartai.MerchantCleanup`
   (SMART+); scope = map-all-charges (payee alias — same `store/payeealias` the /rules manager writes) or
   rename-this-transaction. The /rules manager stays. *(catalog SMART-T5)*
-- [ ] **SM-2 Categorize this** — suggest a category for one uncategorized txn. **SMART** = rules + payee
+- [x] **SM-2 Categorize this** — suggest a category for one uncategorized txn. **SMART** = rules + payee
   history; **SMART+** = LLM. Surface it as a one-click row affordance AND **add it to the txn-row kebab
   menu as a secondary per-txn entry point.** *(catalog SMART-T1)*
-- [ ] **SM-3 Split suggestion (subtle)** — for a big multi-category merchant, quietly offer a proposed
+  *DONE 2026-08-16. Chip in the category cell files a confident local suggestion in one click (`txn_catsuggest_chip.go`); the kebab opens the fuller modal — evidence, full picker, merchant-wide apply, Smart+ ask. Gate is the NEW Free code SMART-T1F (AI codes default OFF, so gating the free half on SMART-T1 would have hidden it); SMART-T1 gates only the model ask. Apply path is local to the feature, not the review inbox's queue semantics.*
+- [x] **SM-3 Split suggestion (subtle)** — for a big multi-category merchant, quietly offer a proposed
   category split to speed entry; non-intrusive (a faint hint, not a modal). **SMART** = merchant→typical
   split heuristics; **SMART+** = LLM from line-items/receipt. Builds on `domain/category_split`.
-- [ ] **SM-4 Why over? (one line)** — for one over-budget category, a single sentence + the top-3
+  *DONE 2026-08-16. `internal/splitsuggest` averages the merchant's past splits per PRECEDENT (not pooled across their money) and apportions by largest remainder so lines sum exactly; offered as a hint atop the split editor, seeding through the same state XC11 uses. Smart+ (SMART-T21) only when there is no history to copy, and it is asked for PERCENTAGES, never amounts.*
+- [x] **SM-4 Why over? (one line)** — for one over-budget category, a single sentence + the top-3
   contributing txns. **SMART** = deterministic (delta vs pace + top contributors); **SMART+** = contextual
   narrative. Static output, not a thread.
-- [ ] **SM-5 Balance anomaly flag** — per-account badge + one-sentence reason when a balance move is
+  *DONE 2026-08-16. `internal/whyover` picks one-charge / more-often / pricier / early-pace / steady; renders as the lede of the budget card's drivers disclosure. Added `budgeting.ContributingCount` (mirrors spentCovered branch-for-branch; a split receipt is ONE trip) so the count claim is a fact, not an estimate. Smart+ = SMART-B15, handed the finished diagnosis and told not to recompute.*
+- [x] **SM-5 Balance anomaly flag** — per-account badge + one-sentence reason when a balance move is
   unusual. **SMART** = statistical (z-score vs the account's own history); **SMART+** = explanation.
   *(catalog SMART-A1)*
-- [ ] **SM-6 Recurring charges here** — list the repeats detected on one account, with one-click "make it
+  *DONE 2026-08-16. The A1 finding renders INLINE on the account row (sentence + action) instead of only a severity dot; Smart+ SMART-A12 explains the move. `smart_rowinsights.go`, gated at Standard density and up (Minimal keeps the dot).*
+- [x] **SM-6 Recurring charges here** — list the repeats detected on one account, with one-click "make it
   a recurring rule / template" (feeds the v1.0.43 txn-templates). **SMART** = periodicity detection.
   *(catalog SMART-A7)*
-- [ ] **SM-7 Explain this notification** — a one-sentence plain-English gloss on a single alert (what it
+  *DONE 2026-08-16. Collapsed per-account panel listing the repeats found HERE, each with "Track as recurring". Confirm+back-claim extracted to `ConfirmRecurCandidate` and shared with the review surface (confirming without linking the evidence makes every past cycle read as missed). Reads rhyDiscover's frame memo — one sweep, not one per account; capped at 6.*
+- [x] **SM-7 Explain this notification** — a one-sentence plain-English gloss on a single alert (what it
   means + what to do). **SMART+** (LLM adds the useful context). *(pairs with the v1.0.43 notif archive)*
 
 More candidates (brainstormed 2026-07-15 — for review, not yet agreed):
-- [ ] **SM-8 Duplicate nudge** (SMART) — flag a likely duplicate txn on entry/import. *(catalog SMART-T2)*
-- [ ] **SM-9 Missing-transaction gap** (SMART) — spot a gap in a normally-regular series (a bill that
+  *DONE 2026-08-16. `smartExplainBlock` on the notification row (SMART-EXPLAIN). Smart+ only — the alert's own copy IS the deterministic version, so a rule-based gloss would restate it.*
+- [x] **SM-8 Duplicate nudge** (SMART) — flag a likely duplicate txn on entry/import. *(catalog SMART-T2)*
+  *DONE 2026-08-16. "Duplicate?" chip on the ledger row, opening the review. Resolved once per table render (`buildTxnRowFlags`), never per row — both this and the spike cost a full ledger scan.*
+- [x] **SM-9 Missing-transaction gap** (SMART) — spot a gap in a normally-regular series (a bill that
   didn't post). *(catalog SMART-T7)*
-- [ ] **SM-10 Spending-spike alert** (SMART) — one category spiked vs its baseline. *(catalog SMART-T6)*
-- [ ] **SM-11 Low-balance / overdraft forecast** (SMART) — "at this burn your balance dips below $0 by
+  *DONE 2026-08-16. T7 now carries the subscription NAME as RelatedID (a detected sub has no stable id), and `mergeEntityInsights` folds it into the Subscriptions page index — its Page is Transactions but its subject is a subscription, so the one row that could act on it never saw it.*
+- [x] **SM-10 Spending-spike alert** (SMART) — one category spiked vs its baseline. *(catalog SMART-T6)*
+  *DONE 2026-08-16. "Unusual" chip on the ledger row, with the DETECTOR's own sentence as its tooltip. One chip per row max: a duplicate outranks a spike.*
+- [x] **SM-11 Low-balance / overdraft forecast** (SMART) — "at this burn your balance dips below $0 by
   <date>" on one account. *(catalog SMART-A9)*
-- [ ] **SM-12 Suggested budget amount** (SMART) — set one category to its 3-month average, one-click.
-- [ ] **SM-13 Goal pace nudge** (SMART+) — one line on the v1.0.43 trajectory card: "add $X/mo to hit
+  *DONE 2026-08-16. The A8 overdraft forecast renders inline on the account row via `smartRowInsightsFor`.*
+- [x] **SM-12 Suggested budget amount** (SMART) — set one category to its 3-month average, one-click.
+  *DONE 2026-08-16. `budgetSuggestHint` offers the budget's own 3-month average (`budgeting.SuggestLimitIn` — the same figure auto-budget uses, so the two cannot disagree). Declines when: no history, already within 10%, saving-direction, or a non-monthly period.*
+- [x] **SM-13 Goal pace nudge** (SMART+) — one line on the v1.0.43 trajectory card: "add $X/mo to hit
   your <month> target." Augments the deterministic ETA.
-- [ ] **SM-14 Parse this task** (SMART+) — `pay rent friday` → title + due date (+ recurring guess) into
+  *DONE 2026-08-16. One Smart+ line under the goal trajectory (SMART-G22), handed the finished projection so every figure in the answer is already on the card.*
+- [x] **SM-14 Parse this task** (SMART+) — `pay rent friday` → title + due date (+ recurring guess) into
   the To-do add form. One parse.
-- [ ] **SM-15 NL transaction entry** (SMART+) — "spent 40 at whole foods yesterday" → a filled txn draft.
-- [ ] **SM-16 Fee-bleed / dormant-account nudge** (SMART) — a fee-charging account with no activity.
+  *DONE 2026-08-16. `internal/duedate` reads date + cadence + clean title with NO key; offered under the title field, never auto-applied. Smart+ (SMART-D4) for the tail. A repeat the form's select cannot display is dropped rather than written as a blank-looking value.*
+- [x] **SM-15 NL transaction entry** (SMART+) — "spent 40 at whole foods yesterday" → a filled txn draft.
+  *DONE 2026-08-16. `rapidcapture` (amount+merchant) + `duedate` (the date word, lifted FIRST so it cannot become the payee) fill quick-add; Smart+ (SMART-T22) for the rest and for the category. A bare number is always money out.*
+- [x] **SM-16 Fee-bleed / dormant-account nudge** (SMART) — a fee-charging account with no activity.
   *(catalog SMART-A10 / A3)*
 
+  *DONE 2026-08-16. The A9/A2 fee-bleed finding renders inline on the account row.*
 ### E-series — cognitive-compression engines (agreed with Cam, 2026-07-19) ★
 **Thesis:** the intelligence layer is *cognitive compression* — CashFlux continuously notices what the
 user would miss, explains it in seconds, and prepares the safest next action. Not 100 more buttons:
