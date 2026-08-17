@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Will the money last" as a probability (FP-T3d).** The retirement card now also reports how often the
+  money lasted across two thousand simulated futures, because a projection at a fixed rate is a story
+  about one future that will not happen — and during drawdown the ORDER returns arrive in matters as much
+  as the average. The method is on screen: how many runs, the fixed seed so the number is the same every
+  time and can be checked, and an admission that real markets have more extreme years than the
+  distribution used.
+
+### Fixed
+- **Printing from the dark theme produces a readable page.** Browsers drop background colours when
+  printing but keep the text colour, so a dark-theme report came out near-white on white paper.
+
+### Added
 - **Plans can model a raise and a rate of return (FP-T3a).** A plan's monthly amount can grow by a
   percentage each year, and its balance can earn one. The raise lands on its anniversary rather than
   being spread across the year, because that is when a raise actually arrives; the return applies to the

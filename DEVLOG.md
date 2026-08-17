@@ -1,3 +1,42 @@
+## 2026-08-17 - auditing before building (FP-T3d)
+
+FP-T3d listed six things. I audited before building, and four of them already existed: rebalancing
+suggestions, fee and expense-ratio analysis, benchmark comparison, and the sector/geography breakdown
+are all built and surfaced. The print CSS was substantial too - chrome hidden, cards kept whole, page
+margins, repeating table headers.
+
+Second time this week a ticket has been mostly stale (FP-T2b was the other). Worth the fifteen minutes
+of grepping every time: the alternative is reimplementing working features next to themselves.
+
+**Monte Carlo.** The genuinely missing piece, and the one the ticket flagged as straining the
+determinism rule. It does not have to.
+
+The generator lives in the package rather than coming from `math/rand`. A standard-library stream is
+free to change between Go versions, which would silently move every household's success rate on an
+upgrade that had nothing to do with them. The seed is a constant rather than a clock reading, and is
+reported with the result so a figure can be reproduced and argued with. A test asserts that the same
+inputs give the same answer, and another asserts that a different seed gives a different one - because
+if it did not, reproducibility would be an accident rather than a property.
+
+The method is on screen, including the admission that a normal distribution understates how often
+extreme years happen. Saying so is the difference between a model and a claim.
+
+My own test caught a design bug: `StdDevPct: 0` meant "use the default 15%", so a deterministic run was
+inexpressible - asking for zero volatility silently got a 15% simulation answering a different question.
+Added an explicit `NoVolatility` flag. That is the same "zero is a real value and unset is not" trap as
+`payoff.RemainingMonths`, `inflation.RealMinor` and the rest of this series, wearing a new disguise. It
+keeps arriving because the zero value of a float is a perfectly plausible setting.
+
+**Printing from the dark theme.** Browsers drop background colours when printing but keep the text
+colour. In dark mode that is near-white text on a white page: a report that looks perfect on screen and
+comes out of the printer blank. The colour tokens are forced to light values inside `@media print` - on
+the tokens rather than on elements, so every component that already reads them follows without knowing
+printing exists.
+
+What I did not build: the visual custom-report builder, which the ticket bundles into a line about PDF
+export. It is a surface with real interaction design in it, not a finishing touch, so it is filed as
+FP-T3d-b rather than half-done.
+
 ## 2026-08-17 - plans that are not straight lines (FP-T3a)
 
 Per-scenario start balances already existed. What was missing was everything that makes a projection

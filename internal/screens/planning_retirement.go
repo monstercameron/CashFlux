@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/montecarlo"
 	"github.com/monstercameron/CashFlux/internal/retirement"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -122,6 +123,39 @@ func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
 		}
 	}
 
+	// FP-T3d: the same drawdown as a PROBABILITY. The line above is one future at
+	// a fixed rate; this is how often the money lasted across two thousand of them.
+	// Sequence-of-returns risk is invisible to a single-rate projection — the same
+	// average with the bad years first can exhaust a portfolio the same years at
+	// the end would have left intact.
+	var mcNode ui.Node = Fragment()
+	if cfg.AnnualSpendMinor > 0 {
+		mc, ok := montecarlo.Run(proj.FinalNominalMinor, cfg.AnnualSpendMinor, retirementDrawdownYears,
+			montecarlo.Config{MeanReturnPct: a.ReturnPct, InflationPct: a.InflationPct})
+		if ok {
+			tone := "retire-ok"
+			if mc.SuccessRatePct < 80 {
+				tone = "retire-short"
+			}
+			var failNode ui.Node = Fragment()
+			if mc.Depleted {
+				// "92% success" with the failures in year 4 is a different situation
+				// from "92%" with them in year 28, and the bare percentage hides which.
+				failNode = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "plan-retire-mc-fail"),
+					uistate.T("retire.mcFail", mc.WorstDepletionYear))
+			}
+			mcNode = Fragment(
+				P(ClassStr("retire-read "+tone), Attr("data-testid", "plan-retire-mc"),
+					uistate.T("retire.mc", mc.SuccessRatePct, retirementDrawdownYears)),
+				failNode,
+				// The method is stated, not implied. A probability with no method is
+				// a number people plan a decade around and cannot check.
+				P(css.Class("muted", tw.Text12), Attr("data-testid", "plan-retire-mc-method"),
+					uistate.T("retire.mcMethod", mc.Iterations, mc.Seed)),
+			)
+		}
+	}
+
 	var fireNode ui.Node = Fragment()
 	if n, ok := retirement.FIRENumber(cfg.AnnualSpendMinor, retirement.DefaultSWRPct); ok {
 		years, reachable := retirement.YearsToFI(
@@ -149,6 +183,7 @@ func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
 				fmtMoney(money.New(proj.ContributedMinor, base)),
 				fmtMoney(money.New(proj.GrowthMinor(), base)))),
 		drawNode,
+		mcNode,
 		fireNode,
 		// The assumptions, restated under the figures they produced.
 		P(css.Class("muted", tw.Text12), Attr("data-testid", "plan-retire-assumptions"),

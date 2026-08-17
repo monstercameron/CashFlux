@@ -958,4 +958,24 @@ func registerVSweep() {
 		marginBottom("0.25rem"),
 	)
 
+	// ─── FP-T3d: printing from the dark theme ────────────────────────────────
+	//
+	// Browsers drop background colours when printing but KEEP the text colour. In
+	// the dark theme that is near-white text on a white page: a report that looks
+	// perfect on screen and comes out of the printer blank. The tokens are forced
+	// to light values here so a printed page is readable whatever theme produced
+	// it, and it is done on the tokens rather than on elements so every component
+	// that already reads them follows without knowing about printing.
+	rawBlock(`@media print{
+  :root, :root[data-theme="dark"], :root[data-theme="light"]{
+    --bg:#ffffff; --surface:#ffffff; --card:#ffffff;
+    --text:#111111; --text-dim:#444444; --text-faint:#666666;
+    --border:#cccccc; --accent:#1a4d8f;
+  }
+  body{background:#ffffff !important; color:#111111 !important;}
+  .rpta-sec, .tax-block, .accel-block{break-inside:avoid-page;}
+  .tax-table thead, .loan-sched thead{display:table-header-group;}
+  .tax-table tr, .loan-sched tr, .lot-row{break-inside:avoid; page-break-inside:avoid;}
+}`)
+
 }

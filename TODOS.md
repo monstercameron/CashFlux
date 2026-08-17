@@ -1607,10 +1607,51 @@ bottom-up per SDLC.
 
   VERIFIED IN A BROWSER: 11/11, including both directions — 6% saves, 39% is reported as costing
   $148,313.05 MORE, and an 8% financed fee visibly eats into the saving.
-- [ ] **FP-T3d — Portfolio power features:** rebalancing suggestions (target weights + drift — nearest
+- [x] **FP-T3d — Portfolio power features:** rebalancing suggestions (target weights + drift — nearest
   PARTIAL→HAVE since allocation already computed), expense-ratio/fee analysis, benchmark comparison,
   sector/geography breakdown. Plus styled PDF export + a visual custom-report builder (today PDF = `window.print()`).
   Monte Carlo probability-of-success is here too but strains the determinism rule (needs a fixed seed + shown method).
+  — DONE (2026-08-17), and the ticket was MOSTLY STALE. Audited before building rather than after:
+  rebalancing (`portfolio.Rebalance` + `investRebalanceWidget`), fee/expense-ratio analysis
+  (`portfolio.Fees`, surfaced), benchmark comparison (C380's import panel) and sector/geography breakdown
+  (`AllocationBySector`/`ByRegion`, both rendered) were ALL already built and surfaced. The print CSS was
+  also substantial — chrome hidden, cards kept whole, `@page` margins, repeating table headers.
+
+  WHAT WAS ACTUALLY MISSING, and what this ships:
+
+  (1) MONTE CARLO, in a new pure `internal/montecarlo`, on the retirement card. A projection at a fixed
+  7% is a story about one future that will not happen; the ORDER of returns matters enormously during
+  drawdown, and no single-rate line can show sequence-of-returns risk.
+
+  The determinism rule is MET rather than strained. The generator is IN THE PACKAGE, not `math/rand` —
+  a standard-library stream may change between Go versions, which would silently move every household's
+  success rate on an unrelated upgrade. The seed is a constant, not a clock reading, and is REPORTED
+  with the result so a figure can be reproduced and disputed. The method is stated on screen, including
+  that a normal distribution understates how often extreme years happen: saying so is the difference
+  between a model and a claim.
+
+  BUG FOUND BY MY OWN TEST: `StdDevPct: 0` meant "use the default 15%", so a deterministic run was
+  inexpressible — asking for zero volatility silently got a 15% simulation answering a different
+  question. Added an explicit `NoVolatility` flag. Same "zero is a real value and unset is not" trap as
+  `payoff.RemainingMonths` and the rest of this series, in a new disguise.
+
+  (2) A PRINTED PAGE THAT IS READABLE FROM THE DARK THEME. Browsers drop background colours when
+  printing but KEEP the text colour, so a dark-theme report came out near-white on white — perfect on
+  screen, blank on paper. The colour tokens are forced to light values inside `@media print`, on the
+  TOKENS rather than on elements, so every component that already reads them follows without knowing
+  about printing.
+
+  NOT BUILT, and filed rather than half-done: the visual custom-report builder. It is a genuinely large
+  feature bundled into this ticket's last line, not a finishing touch. See FP-T3d-b.
+
+  VERIFIED IN A BROWSER: 9/9 — the rate responds (0% at $48k a year, 68% at $4k), it is identical after
+  a reload, the method and seed are on screen, printed body text is near-black from the dark theme, and
+  the navigation is not printed.
+- [ ] **FP-T3d-b — A visual custom-report builder.** Split out of FP-T3d, which bundled it into a line
+  about PDF export. Pick sections, order them, save the arrangement, run it over a chosen period. The
+  pieces exist — `/reports` is already section-based and `savedreports` persists named reports — so this
+  is composition and persistence rather than new analysis. Sized as its own ticket because it is a
+  surface with real interaction design in it, not a finishing touch on an export.
 
 **Cleanup:** a stray file `CUsersmrecaDesktopCashFluxcmd_biweekly_check.go` sits in the repo ROOT (accidental
 path-mangled scratch file, not part of `payoff`/`loans`) — verify + remove.

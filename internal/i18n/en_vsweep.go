@@ -707,6 +707,11 @@ var vSweepKeys = Catalog{
 	"plans.returnLabel": "Balance earns each year (%)",
 	"plans.ratesNote":   "A raise lands on its anniversary rather than being spread across the year, and a negative balance earns nothing — you pay interest on an overdraft, you do not collect it.",
 
+	// FP-T3d — the drawdown as a probability, with its method stated.
+	"retire.mc":       "Across two thousand simulated futures, the money lasted %.0f%% of the time over %d years.",
+	"retire.mcFail":   "In the runs that ran out, the earliest was year %d.",
+	"retire.mcMethod": "Method: %d runs, returns drawn from a normal distribution around your expected return, fixed seed %d so this number is the same every time and can be checked. Real markets have more extreme years than a normal distribution does.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",
