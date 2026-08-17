@@ -1504,8 +1504,36 @@ bottom-up per SDLC.
   visibly agreeing. Setting it to zero removes the line rather than repeating the nominal figure.
 
 **Tier 3 — differentiators (more effort, valued by power users):**
-- [ ] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,
+- [x] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,
   per-scenario start balances, rate-of-return; scaffolding (Plan + overlay-compare) already exists.
+  — DONE (2026-08-17). Per-scenario start balances already existed (`Plan.StartBalance`); the two missing
+  pieces were `PlanItem.AnnualGrowthPct` and `Plan.AnnualReturnPct`, plus the fields to set them.
+
+  A FLAT PLAN STILL GOES THROUGH THE FORECAST ENGINE, untouched. The compounding path only runs when a
+  plan actually has growth or a return, so the linear case is not reimplemented and cannot drift from
+  every other forecast in the app. A test asserts the two produce identical curves.
+
+  A RAISE LANDS ON ITS ANNIVERSARY, not smoothed across the year. That is how the thing being modelled
+  happens — a raise arrives in one month and the eleven before it are unaffected — and smoothing would
+  misstate every intermediate month to make one number at the end come out the same. Growth COMPOUNDS on
+  the already-raised amount: a 10% raise in year three is 10% of 110, not of 100.
+
+  THE RETURN APPLIES TO THE OPENING BALANCE, then the month's flows land. Crediting a return on money
+  that arrives during the month would pay a full month's return on a deposit made on the last day.
+
+  A NEGATIVE BALANCE EARNS NOTHING. A positive rate on a negative balance would make debt shrink by
+  itself — a household in overdraft pays interest, it does not collect it — and a plan that quietly
+  repaid its own debt would be the most flattering possible bug.
+
+  Negative growth is ALLOWED, not clamped: a subscription being wound down or a loan payment falling is
+  real, and clamping would silently model something else. One-time items ignore growth — a single payment
+  in month 7 has no year over which to grow.
+
+  Both rates are IGNORED when they do not parse rather than defaulting to zero, so a half-typed "1" on
+  the way to "12" is not saved as a plan nobody described.
+
+  VERIFIED IN A BROWSER: 6/6 with the arithmetic visible — three plans over 36 months at $1,000/month end
+  at $36,000 flat, $39,720 with a 10% annual raise, and $43,076.88 at a 12% return.
 - [x] **FP-T3b — Reports: recurring-vs-discretionary split + budget-variance view.** `domain.CategoryClass`
   already classifies Fixed/NonMonthly/Flex and budgeting has pace/variance math — reuse both as `/reports` cards.
   — DONE (2026-08-17). New pure `internal/spendmix` plus a "Commitments and choices" section on the full

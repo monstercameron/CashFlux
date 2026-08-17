@@ -10,6 +10,8 @@
 package planning
 
 import (
+	"math"
+
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/forecast"
 )
@@ -34,9 +36,86 @@ func toForecastInputs(p domain.Plan) ([]forecast.Recurring, []forecast.OneTime) 
 // plan's horizon, starting from its StartBalance and applying recurring items
 // every month plus one-time items in their scheduled month. A non-positive
 // horizon yields an empty slice.
+//
+// A plan with no growth and no return delegates to the forecast engine exactly
+// as it always did — the linear case is not reimplemented here, so it cannot
+// drift from every other forecast in the app (FP-T3a).
 func Project(p domain.Plan) []int64 {
-	rec, one := toForecastInputs(p)
-	return forecast.Project(p.StartBalance, rec, one, p.HorizonMonths)
+	if !isCompounding(p) {
+		rec, one := toForecastInputs(p)
+		return forecast.Project(p.StartBalance, rec, one, p.HorizonMonths)
+	}
+	return projectCompounding(p)
+}
+
+// isCompounding reports whether a plan needs the month-by-month path.
+func isCompounding(p domain.Plan) bool {
+	if p.AnnualReturnPct != 0 {
+		return true
+	}
+	for _, it := range p.Items {
+		if it.Kind == domain.PlanItemRecurring && it.AnnualGrowthPct != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// projectCompounding walks the horizon a month at a time, applying a return to
+// the balance and letting recurring items grow on their anniversaries.
+//
+// ORDER MATTERS and is stated here because it is the kind of thing that is
+// invisible in the output and wrong forever: the return is applied to the
+// balance the month OPENED with, then the month's flows land. Crediting a return
+// on money that arrives during the month would pay a full month's return on a
+// deposit made on the last day.
+//
+// The return is applied only to a POSITIVE balance. A positive rate on a
+// negative balance would make debt shrink by itself — a household in overdraft
+// pays interest, it does not earn it — and a plan that quietly repaid its own
+// debt would be the most flattering possible bug.
+func projectCompounding(p domain.Plan) []int64 {
+	if p.HorizonMonths <= 0 {
+		return nil
+	}
+	monthlyReturn := p.AnnualReturnPct / 100.0 / 12.0
+	out := make([]int64, 0, p.HorizonMonths)
+	balance := p.StartBalance
+
+	for m := 1; m <= p.HorizonMonths; m++ {
+		if balance > 0 && monthlyReturn != 0 {
+			balance += int64(math.Round(float64(balance) * monthlyReturn))
+		}
+		// Anniversaries are 0-based year counts: months 1–12 are year 0 and carry
+		// no growth, month 13 opens year 1 with one year's growth applied.
+		years := (m - 1) / 12
+		for _, it := range p.Items {
+			switch it.Kind {
+			case domain.PlanItemRecurring:
+				balance += grownAmount(it, years)
+			case domain.PlanItemOneTime:
+				if it.Month == m {
+					balance += it.Amount
+				}
+			}
+		}
+		out = append(out, balance)
+	}
+	return out
+}
+
+// grownAmount is a recurring item's amount after a whole number of years of
+// growth.
+//
+// Growth compounds on the item's own amount, so a 3% raise in year two is 3% of
+// the already-raised figure. Rounding once per year rather than accumulating a
+// rounded delta keeps a long horizon from drifting cents at a time.
+func grownAmount(it domain.PlanItem, years int) int64 {
+	if it.AnnualGrowthPct == 0 || years <= 0 {
+		return it.Amount
+	}
+	factor := math.Pow(1+it.AnnualGrowthPct/100.0, float64(years))
+	return int64(math.Round(float64(it.Amount) * factor))
 }
 
 // MonthlyNet is the steady monthly change implied by the plan's recurring items

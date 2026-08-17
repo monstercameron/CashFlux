@@ -418,6 +418,18 @@ type PlanItem struct {
 	Kind   PlanItemKind `json:"kind"`
 	Amount int64        `json:"amount"`
 	Month  int          `json:"month,omitempty"` // one-time only: 1-based month within the horizon
+	// AnnualGrowthPct makes a RECURRING item change every year — a raise, or an
+	// expense that tracks inflation (FP-T3a). Zero means flat, which is what
+	// every plan did before this existed.
+	//
+	// Applied on ANNIVERSARIES, not smoothed across the year, because that is how
+	// the thing being modelled actually happens: a raise arrives in one month and
+	// the eleven months before it are unaffected. Smoothing would misstate every
+	// intermediate month to make one number at the end come out the same.
+	//
+	// Ignored on one-time items — a single payment in month 7 has no year over
+	// which to grow.
+	AnnualGrowthPct float64 `json:"annualGrowthPct,omitempty"`
 }
 
 // Plan is a saved what-if scenario: a starting balance (the base scenario)
@@ -430,6 +442,14 @@ type Plan struct {
 	HorizonMonths int        `json:"horizonMonths"`
 	StartBalance  int64      `json:"startBalance"`
 	Items         []PlanItem `json:"items,omitempty"`
+	// AnnualReturnPct makes the projected balance EARN a return each month
+	// (FP-T3a). Zero means the balance only moves by the plan's items, which is
+	// what every plan did before this existed.
+	//
+	// Applied to a POSITIVE balance only. A return on a negative balance would
+	// make debt shrink by itself, which is the opposite of what happens: a
+	// household in overdraft pays interest, it does not earn it.
+	AnnualReturnPct float64 `json:"annualReturnPct,omitempty"`
 }
 
 // RecurringCadence is how often a recurring cash flow repeats.

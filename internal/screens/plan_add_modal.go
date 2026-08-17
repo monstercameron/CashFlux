@@ -52,9 +52,15 @@ func PlanAddForm(props PlanAddFormProps) ui.Node {
 	monthly := ui.UseState("")
 	onceAmt := ui.UseState("")
 	onceMonth := ui.UseState("")
+	// FP-T3a: the two things that make a plan more than a straight line — a
+	// recurring amount that changes each year, and a balance that earns a return.
+	growth := ui.UseState("")
+	returnPct := ui.UseState("")
 	errS := ui.UseState("")
 	savedS := ui.UseState("")
 
+	onGrowth := ui.UseEvent(func(v string) { growth.Set(v) })
+	onReturn := ui.UseEvent(func(v string) { returnPct.Set(v) })
 	onName := ui.UseEvent(func(v string) { name.Set(v) })
 	onHorizon := ui.UseEvent(func(v string) { horizon.Set(v) })
 	onStart := ui.UseEvent(func(v string) { start.Set(v) })
@@ -96,10 +102,20 @@ func PlanAddForm(props PlanAddFormProps) ui.Node {
 		startMinor, _ := money.ParseMinor(strings.TrimSpace(start.Get()), currency.Decimals(base))
 		monthlyMinor, _ := money.ParseMinor(strings.TrimSpace(monthly.Get()), currency.Decimals(base))
 		p := domain.Plan{ID: id.New(), Name: nm, HorizonMonths: months, StartBalance: startMinor}
+		// Both rates are optional and are IGNORED when they do not parse, rather
+		// than defaulting to zero: a half-typed "1" on the way to "12" would
+		// otherwise be saved as a plan the user never described.
+		if f, err := strconv.ParseFloat(strings.TrimSpace(returnPct.Get()), 64); err == nil && f > -100 && f <= 100 {
+			p.AnnualReturnPct = f
+		}
 		if monthlyMinor != 0 {
-			p.Items = append(p.Items, domain.PlanItem{
+			item := domain.PlanItem{
 				ID: id.New(), Label: uistate.T("plans.monthlyLabel"), Kind: domain.PlanItemRecurring, Amount: monthlyMinor,
-			})
+			}
+			if f, err := strconv.ParseFloat(strings.TrimSpace(growth.Get()), 64); err == nil && f > -100 && f <= 100 {
+				item.AnnualGrowthPct = f
+			}
+			p.Items = append(p.Items, item)
 		}
 		// Optional one-time amount in a chosen month (e.g. a bonus or big expense).
 		// Only added when both an amount and an in-horizon month are given.
@@ -125,6 +141,8 @@ func PlanAddForm(props PlanAddFormProps) ui.Node {
 		monthly.Set("")
 		onceAmt.Set("")
 		onceMonth.Set("")
+		growth.Set("")
+		returnPct.Set("")
 		errS.Set("")
 		savedS.Set(uistate.T("plans.addedFlash", nm))
 	}))
@@ -164,7 +182,16 @@ func PlanAddForm(props PlanAddFormProps) ui.Node {
 				Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onOnceAmt), uiw.FieldValue(onceAmt.Get()))),
 			labeledField(uistate.T("plans.onceMonthPlaceholder"),
 				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", horizon.Get()), Step("1"), OnInput(onOnceMonth), uiw.FieldValue(onceMonth.Get()))),
+			// FP-T3a. The growth field sits next to the monthly amount it applies
+			// to; the return field next to the balance it applies to.
+			labeledField(uistate.T("plans.growthLabel"),
+				Input(css.Class("field"), Type("number"), Step("0.1"), Attr("data-testid", "plan-growth"),
+					OnInput(onGrowth), uiw.FieldValue(growth.Get()))),
+			labeledField(uistate.T("plans.returnLabel"),
+				Input(css.Class("field"), Type("number"), Step("0.1"), Attr("data-testid", "plan-return"),
+					OnInput(onReturn), uiw.FieldValue(returnPct.Get()))),
 		),
+		P(css.Class("t-caption", tw.TextDim), uistate.T("plans.ratesNote")),
 		errText("plan-err", errS.Get()),
 		If(errS.Get() == "" && savedS.Get() != "", P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), savedS.Get())),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),

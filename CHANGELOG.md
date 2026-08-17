@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Plans can model a raise and a rate of return (FP-T3a).** A plan's monthly amount can grow by a
+  percentage each year, and its balance can earn one. The raise lands on its anniversary rather than
+  being spread across the year, because that is when a raise actually arrives; the return applies to the
+  balance a month opened with, not to money that turned up during it; and a negative balance earns
+  nothing, because you pay interest on an overdraft rather than collecting it. Plans with neither behave
+  exactly as before.
+
+### Added
 - **"Two ways to pay this off faster" on Debt (FP-T3c).** What paying every two weeks would actually do —
   with the extra annual cost stated as plainly as the saving, because the whole effect is a thirteenth
   payment a year and someone who cannot afford one cannot afford the plan. And what combining your debts

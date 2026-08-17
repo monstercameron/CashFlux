@@ -702,6 +702,11 @@ var vSweepKeys = Catalog{
 	"accel.termDriven":     "Most of that comes from the shorter term, not the rate — %d months instead of %d. You would save something similar by paying your current debts down that fast, and the higher monthly payment is what buys it.",
 	"accel.unmodelled":     "Left out because they have no monthly payment recorded, or a payment that never clears the balance: %s. The comparison above is incomplete without them.",
 
+	// FP-T3a — a plan that is more than a straight line.
+	"plans.growthLabel": "Monthly amount grows each year (%)",
+	"plans.returnLabel": "Balance earns each year (%)",
+	"plans.ratesNote":   "A raise lands on its anniversary rather than being spread across the year, and a negative balance earns nothing — you pay interest on an overdraft, you do not collect it.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

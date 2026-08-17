@@ -1,3 +1,35 @@
+## 2026-08-17 - plans that are not straight lines (FP-T3a)
+
+Per-scenario start balances already existed. What was missing was everything that makes a projection
+curve rather than slope: a recurring amount that grows, and a balance that earns.
+
+The decision I am most sure about is that a flat plan still goes through the forecast engine, untouched.
+The compounding path only runs when a plan actually has growth or a return. The linear case is not
+reimplemented, so it cannot drift from every other forecast in the app, and a test asserts the two
+produce identical curves for a plan with neither.
+
+Four rules, and each of them is a place where the obvious implementation is wrong:
+
+**A raise lands on its anniversary.** Smoothing it across the year would misstate every intermediate
+month in order to make one number at the end come out the same. A raise arrives in one month; the eleven
+before it are unaffected.
+
+**Growth compounds on the already-raised amount.** A 10% raise in year three is 10% of 110, not of 100.
+
+**The return applies to the opening balance**, then the month's flows land. Crediting it on money that
+arrives during the month pays a full month's return on a deposit made on the last day.
+
+**A negative balance earns nothing.** A positive rate on a negative balance makes debt shrink by itself.
+A household in overdraft pays interest, it does not collect it, and a plan that quietly repaid its own
+debt would be the most flattering possible bug - the kind nobody reports because the number looks good.
+
+Two smaller ones: negative growth is allowed rather than clamped, because a subscription being wound down
+is real and clamping would silently model something else; and one-time items ignore growth, because a
+single payment in month 7 has no year over which to grow.
+
+The probe check I actually care about is that the flat plan still ends at exactly $36,000 - 36 months of
+$1,000, unchanged by any of this. The raise and the return then read $39,720 and $43,076.88 against it.
+
 ## 2026-08-17 - two pieces of advice, finally with arithmetic (FP-T3c)
 
 Biweekly payments and debt consolidation are advice people are given constantly and almost never given
