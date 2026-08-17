@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Round-ups say what they are worth (EC-13).** When the spare change you have actually been accruing
+  would bring a goal's date forward, the jar says by how much — and stays quiet when it would not.
+
+### Added
 - **The monthly recap now compares against typical, not just last month (EC-1).** "Versus typical ·
   $2,483.50 · below your usual, going on 6 months" — a median of the same span across recent months, so
   one unusual month cannot define normal.

@@ -42,6 +42,58 @@ type Accrual struct {
 // HasSpareChange reports whether anything accrued.
 func (a Accrual) HasSpareChange() bool { return a.TotalCents > 0 }
 
+// MinRateDays is how long round-ups must have been running before a rate can be
+// projected from them (EC-13).
+//
+// Sixty days. "This goal finishes seven weeks sooner" is a promise, and a
+// promise extrapolated from a fortnight of spare change is a fantasy — one
+// holiday week of shopping would double the rate and halve the estimate.
+const MinRateDays = 60
+
+// MonthlyRateCents is the spare change this household actually accrues per
+// month, and whether that is knowable yet.
+//
+// It is the OBSERVED rate rather than a theoretical one: how much rounded up in
+// the window, scaled to a month. A rate nobody has sustained is not a rate, so
+// too short a window and too few contributions both report false rather than a
+// confident number — the honest failure for a figure whose whole job is to set
+// an expectation.
+func (a Accrual) MonthlyRateCents(days int) (int64, bool) {
+	if days < MinRateDays || a.TotalCents <= 0 || len(a.Contributions) < MinRateDays/10 {
+		return 0, false
+	}
+	return a.TotalCents * 30 / int64(days), true
+}
+
+// MonthsSooner is how much earlier a goal lands once the round-up rate is added
+// to what is already being put aside.
+//
+// remainingCents is what is left to save and monthlyCents is the current
+// contribution. It reports false when the answer would not be a fact: nothing
+// being contributed at all (the goal has no date to bring forward), or a rate so
+// small it changes nothing — "0 months sooner" dressed up as an accelerator is
+// worse than saying nothing.
+func MonthsSooner(remainingCents, monthlyCents, rateCents int64) (int, bool) {
+	if remainingCents <= 0 || monthlyCents <= 0 || rateCents <= 0 {
+		return 0, false
+	}
+	before := ceilDiv(remainingCents, monthlyCents)
+	after := ceilDiv(remainingCents, monthlyCents+rateCents)
+	if before <= after {
+		return 0, false
+	}
+	return int(before - after), true
+}
+
+// ceilDiv rounds up, because a goal is not reached until the last partial month
+// has actually happened.
+func ceilDiv(a, b int64) int64 {
+	if b <= 0 {
+		return 0
+	}
+	return (a + b - 1) / b
+}
+
 // Accrue computes the virtual round-up jar for the window (since, now]:
 //
 //   - Only expenses count — income and transfers are skipped (transfers move

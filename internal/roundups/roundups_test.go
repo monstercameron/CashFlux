@@ -79,3 +79,59 @@ func TestAccrueWindowBounds(t *testing.T) {
 		t.Fatalf("total = %d, want 53 (window bounds)", got.TotalCents)
 	}
 }
+
+// EC-13: "this goal finishes seven weeks sooner" is a promise, and a promise
+// extrapolated from a fortnight of spare change is a fantasy.
+func TestMonthlyRateNeedsASustainedWindow(t *testing.T) {
+	a := Accrual{TotalCents: 4_000, Currency: "USD"}
+	for i := range 12 {
+		a.Contributions = append(a.Contributions, Contribution{TxnID: string(rune('a' + i))})
+	}
+	if _, ok := a.MonthlyRateCents(14); ok {
+		t.Error("a fortnight produced a projectable rate")
+	}
+	rate, ok := a.MonthlyRateCents(90)
+	if !ok {
+		t.Fatal("90 days of round-ups produced no rate")
+	}
+	// $40 over 90 days is about $13.33 a month.
+	if rate < 1_300 || rate > 1_360 {
+		t.Errorf("rate = %d, want about 1333", rate)
+	}
+}
+
+func TestAnEmptyJarHasNoRate(t *testing.T) {
+	if _, ok := (Accrual{}).MonthlyRateCents(120); ok {
+		t.Error("an empty jar produced a rate")
+	}
+	// Plenty of days but barely any activity is not a habit either.
+	thin := Accrual{TotalCents: 300, Contributions: []Contribution{{TxnID: "a"}, {TxnID: "b"}}}
+	if _, ok := thin.MonthlyRateCents(120); ok {
+		t.Error("two contributions in four months produced a rate")
+	}
+}
+
+func TestMonthsSoonerIsTheDifferenceInWholeMonths(t *testing.T) {
+	// $1,200 to go at $100/mo is 12 months; at $150/mo it is 8.
+	got, ok := MonthsSooner(120_000, 10_000, 5_000)
+	if !ok {
+		t.Fatal("no acceleration reported")
+	}
+	if got != 4 {
+		t.Errorf("months sooner = %d, want 4", got)
+	}
+}
+
+// "0 months sooner" dressed up as an accelerator is worse than saying nothing.
+func TestNoRealAccelerationSaysNothing(t *testing.T) {
+	if _, ok := MonthsSooner(120_000, 10_000, 10); ok {
+		t.Error("a rate that changes nothing was reported as acceleration")
+	}
+	// Nothing being contributed means there is no date to bring forward.
+	if _, ok := MonthsSooner(120_000, 0, 5_000); ok {
+		t.Error("a goal with no contribution reported a date brought forward")
+	}
+	if _, ok := MonthsSooner(0, 10_000, 5_000); ok {
+		t.Error("a finished goal reported acceleration")
+	}
+}

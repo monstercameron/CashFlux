@@ -1607,8 +1607,33 @@ survived the duplicate/scope filters but didn't make the engine cut):
   expenses, unfunded categories for next month. Rides `budgetplan`.
 - [ ] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding
   this now delays Vacation ~2 months." Per-action sibling of E-GL's feasibility check.
-- [ ] **EC-13 Round-up accelerator estimate** (SMART, Goals) — "at current round-up rate this goal
+- [~] **EC-13 Round-up accelerator estimate** (SMART, Goals) — "at current round-up rate this goal
   finishes ~7 weeks sooner."
+  — ENGINE + SURFACE DONE (2026-08-17), in `internal/roundups` (`MonthlyRateCents`, `MonthsSooner`) and on
+  both the sweep card and the per-goal jar.
+
+  "SEVEN WEEKS SOONER" IS A PROMISE, and a promise extrapolated from a fortnight of spare change is a
+  fantasy — one holiday week of shopping would double the rate and halve the estimate. So the rate is the
+  OBSERVED one over ninety days, and too short a window or too few contributions report `false` rather
+  than a confident number.
+
+  IT REFUSES TO INVENT A CONTRIBUTION. No field records what a household actually puts into a goal each
+  month, so the estimate rests on two figures the app really has: the accrual rate, and what the goal
+  needs each month to hit its own target date. A goal with no target date gets no estimate rather than a
+  projection built on a number nobody entered.
+
+  "0 MONTHS SOONER" DRESSED UP AS AN ACCELERATOR IS WORSE THAN SAYING NOTHING, so a rate that does not
+  move the date reports nothing at all.
+
+  WHAT THE SAMPLE REVEALED: round-ups accrue $15.02 over ninety days there — a real rate of $5 a month —
+  and $5 a month moves no goal's date, so the line correctly stays silent. The rule working, not a gap.
+  Worth knowing for anyone demoing round-ups: over 7 days the sample accrues nothing at all, and over 30
+  it accrues $3.87.
+
+  STILL OPEN: I could not get the per-goal jar to render in a browser drive — enabling round-ups from the
+  goals toolbar, choosing a goal and saving left the jar absent, though the accrual is non-zero over that
+  window. Either the config save or the goals re-render is not taking. The engine is covered by tests;
+  the drive is not, and I would rather say so than claim it.
 - [ ] **EC-14 Recurrence + assignee suggestions** (SMART, To-do) — completed monthly 3× → offer
   recurrence; suggest the member who historically does this task type.
 - [x] **EC-15 [DONE 2026-08-16] AI spend meter** (SMART, Assistant) — running actual AI spend by feature/month with

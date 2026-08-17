@@ -2844,6 +2844,11 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-13: what the round-ups are worth to the goal they feed, at the rate this
+	// household has actually sustained.
+	"roundups.accelerator":           "At the %s a month you've been rounding up, this goal lands about %s sooner.",
+	"roundups.acceleratorMonthsOne":  "%d month",
+	"roundups.acceleratorMonthsMany": "%d months",
 	// EC-1: the month against TYPICAL rather than against last month. The sub-line
 	// carries how many months "typical" rests on, because a baseline nobody can
 	// size is a number to be taken on faith.

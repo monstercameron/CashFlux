@@ -1,3 +1,27 @@
+## 2026-08-17 - a promise extrapolated from a fortnight (EC-13)
+
+"At your current round-up rate this goal finishes seven weeks sooner" is a promise, and the interesting
+question is what makes one honest. Two weeks of spare change is not a rate: one holiday week of shopping
+would double it and halve the estimate. So the figure is the observed accrual over ninety days, and a
+window shorter than sixty days - or a handful of contributions inside it - reports that it does not know.
+
+The harder refusal was the contribution. No field records what a household actually puts into a goal each
+month, so a "months sooner" built on one would be a projection resting on a number nobody entered. The
+estimate uses what the app really has: the accrual rate, and what the goal needs monthly to hit its own
+target date. A goal with no target date gets nothing.
+
+And a rate that does not move the date reports nothing at all, because "0 months sooner" dressed up as an
+accelerator is worse than silence.
+
+That last rule is what the sample demonstrated. Round-ups there accrue $15.02 over ninety days - a real
+$5 a month - and $5 a month moves no goal's date, so the line stays quiet. It is the rule working rather
+than a gap, though it does mean the feature has nothing to show on demo data.
+
+What I could not do is drive it in a browser: turning round-ups on from the goals toolbar, choosing a
+goal and saving left the jar absent even though the accrual over that window is non-zero. Either the save
+or the goals re-render is not taking. The engine is covered by tests; the drive is not, and the ticket
+says so rather than implying otherwise.
+
 ## 2026-08-17 - "below last month" and "below typical" are different claims (EC-1)
 
 The audit halved this ticket, which is becoming the pattern. The driver half already existed: recap has

@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
@@ -120,6 +121,10 @@ func goalsRoundUpCard() ui.Node {
 		hidden.Set(true)
 	})
 
+	// EC-13: what the round-ups are actually worth to the goal they feed, at the
+	// rate this household has really been accruing — not a theoretical one.
+	accelerator := roundUpAcceleratorLine(app, cfg.TargetGoalID, now, base)
+
 	// Gate: enabled, a goal chosen, spare change accrued, and not already handled
 	// for this cadence period, and not locally hidden this render.
 	if !cfg.Enabled || cfg.TargetGoalID == "" || !acc.HasSpareChange() ||
@@ -138,6 +143,10 @@ func goalsRoundUpCard() ui.Node {
 				Div(css.Class("catchup-card-text"),
 					Strong(uistate.T("roundups.cardTitle")),
 					P(uistate.T("roundups.cardBody", totalStr, cadencePhrase(cfg.EffectiveCadence()), goalName)),
+					// EC-13: what the round-ups are worth to the goal they feed, at
+					// the rate this household has really been accruing.
+					If(accelerator != "",
+						P(css.Class("muted"), Attr("data-testid", "roundups-accelerator"), accelerator)),
 				),
 			),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
@@ -180,9 +189,14 @@ func goalRoundUpJar(app *appstate.App, goalID string) (ui.Node, bool) {
 		cur = base
 	}
 	totalStr := currency.Symbol(cur) + money.FormatMinor(acc.TotalCents, currency.Decimals(cur))
+	// EC-13: the jar says what has accrued; this says what it is WORTH — the
+	// difference between a number and a reason to keep the habit.
+	accelerator := roundUpAcceleratorLine(app, goalID, now, base)
 	return Span(css.Class("budget-sub", tw.TextDim), Attr("data-testid", "goal-roundup-jar-"+goalID),
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-		Span(uistate.T("roundups.jar", totalStr))), true
+		Span(uistate.T("roundups.jar", totalStr)),
+		If(accelerator != "",
+			Span(Attr("data-testid", "goal-roundup-accel-"+goalID), " "+accelerator))), true
 }
 
 // roundupConfigToolbarButton is the "Round-ups" btn-tool for the goals toolbar.
@@ -384,4 +398,57 @@ func roundUpEligibleAccounts(accounts []domain.Account, participating map[string
 		}
 	}
 	return out
+}
+
+// roundUpAcceleratorEstimateDays is the window the accrual rate is read over.
+//
+// Ninety days: long enough to be a rate somebody has actually sustained (see
+// roundups.MinRateDays), short enough that a habit abandoned six months ago
+// does not keep making promises.
+const roundUpAcceleratorEstimateDays = 90
+
+// roundUpAcceleratorLine says what the round-ups are worth to the goal they
+// feed, or "" when there is nothing honest to say (EC-13).
+//
+// It rests on TWO figures the app actually has: the rate this household has
+// really been accruing over the last quarter, and what the goal needs each month
+// to hit its own target date. It does NOT invent a current contribution — no
+// such field is recorded — so a goal without a target date gets no estimate
+// rather than a projection built on a number nobody entered.
+func roundUpAcceleratorLine(app *appstate.App, goalID string, now time.Time, base string) string {
+	if goalID == "" {
+		return ""
+	}
+	var goal domain.Goal
+	for _, g := range app.Goals() {
+		if g.ID == goalID {
+			goal = g
+			break
+		}
+	}
+	if goal.ID == "" {
+		return ""
+	}
+	needed, ok, err := goals.MonthlyNeeded(goal, now)
+	if err != nil || !ok || needed.Amount <= 0 {
+		return "" // no target date means no date to bring forward
+	}
+	remaining, err := goals.CoveredRemaining(goal)
+	if err != nil || remaining.Amount <= 0 {
+		return ""
+	}
+	since := now.AddDate(0, 0, -roundUpAcceleratorEstimateDays)
+	cfg := uistate.RoundUpConfigGet()
+	acc := roundups.Accrue(app.Transactions(), cfg.ParticipatingSet(), app.TxnLinks(), since, now)
+	rate, ok := acc.MonthlyRateCents(roundUpAcceleratorEstimateDays)
+	if !ok {
+		return "" // not a rate anybody has sustained yet
+	}
+	months, ok := roundups.MonthsSooner(remaining.Amount, needed.Amount, rate)
+	if !ok {
+		return ""
+	}
+	return uistate.T("roundups.accelerator",
+		fmtMoney(money.New(rate, base)),
+		uistate.TN("roundups.acceleratorMonthsOne", "roundups.acceleratorMonthsMany", months))
 }
