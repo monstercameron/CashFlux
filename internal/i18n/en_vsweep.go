@@ -748,6 +748,10 @@ var vSweepKeys = Catalog{
 	"activity.undoCheckpoint": "Can be rolled back to the snapshot from %s — which also reverses %d later changes.",
 	"activity.undoNone":       "No snapshot from before this change, so there is nothing to roll back to. The record shows what changed but stores the text, not the values, so it cannot reverse a field on its own.",
 
+	// WF12 — did a cancelled subscription actually stop charging?
+	"rhythm.findStillCharging":    "%s has charged you %d times since you cancelled, totalling %s — most recently on %s.",
+	"rhythm.findStillChargingOne": "%s charged you again after you cancelled — %s on %s.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

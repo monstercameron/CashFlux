@@ -1,3 +1,37 @@
+## 2026-08-17 - cancelling is the easy half (WF12)
+
+The starred clause of WF12 is post-cancellation monitoring: using later imports to confirm the charge
+actually stopped. Cancelling is the easy half. The half that costs people money is finding out four
+months later that it never stopped, and the app already held the only evidence that could tell them.
+
+Something existed - `subscriptions.ChargedAfterCancel` lists every charge dated after a cancellation.
+But that flags the EXPECTED final charge, the one for the period already used, as a problem. A warning
+that is usually wrong is one people learn to dismiss, so the finding that matters was buried among
+findings that did not.
+
+What was missing was a verdict, and the distinction I care most about is "too soon to tell" versus
+"stopped". Declaring success the day after somebody cancels is how a monitor becomes reassurance.
+Silence counts as stopped only after 65 days - two billing cycles, because one quiet cycle can be a
+billing date that moved and two is a pattern. A single charge inside 35 days is the expected ending, and
+if two quiet cycles then pass the verdict becomes stopped on its own.
+
+Matching is substring, not fuzzy, and that is deliberate. The worst possible output here is telling
+somebody a cancellation failed when it did not: that sends them to argue with a company that already did
+what they asked. Being slightly under-sensitive costs a missed finding; being over-sensitive costs
+somebody an afternoon and their credibility with a support desk.
+
+On the sample it reads "MasterClass charged you again after you cancelled - $18.00 on Mar 16, 2025".
+That was in the data the whole time.
+
+One copy bug on the way: a single charge read "charged you 1 times". Second time this week - FP-T1f had
+"1 payments". Both got their own catalog key rather than a plural hack, and this one especially, because
+the finding asks somebody to go argue with a company and has to read like a person wrote it.
+
+I marked the ticket in-progress rather than done. Post-cancellation monitoring is finished and verified,
+but the bundle also asks for suggested-awaiting-review states, missing-payment detection, amount-changed
+alerts, duplicate-subscription detection, trial-ending notices and a cancellation checklist. Closing the
+whole ticket on one clause would misrepresent what is built.
+
 ## 2026-08-17 - the browser printed the number out loud (WF8, continued)
 
 Yesterday I marked WF8 in-progress because I could not drive the saved-views popover, and flagged the

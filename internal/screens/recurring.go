@@ -29,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
 	"github.com/monstercameron/CashFlux/internal/runway"
+	"github.com/monstercameron/CashFlux/internal/cancelwatch"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -226,6 +227,10 @@ type rhythmView struct {
 	Agenda      []recurOccurrence
 	Discover    recurdiscover.Result
 	LateCharges []subscriptions.LateCharge
+	// Cancellations and Txns feed the post-cancellation watch (WF12): whether a
+	// cancelled subscription actually stopped charging.
+	Cancellations []domain.SubscriptionCancellation
+	Txns          []domain.Transaction
 	Stopped     []recurdiscover.StopSignal
 	LiquidMinor int64
 	Rates       currency.Rates
@@ -285,6 +290,7 @@ func computeRhythm(app *appstate.App, now time.Time, withDiscovery bool) rhythmV
 	// charged-after-cancel scan is cheap and stays on the first paint; the stopped
 	// check rides on discovery and so arrives with it.
 	rv.LateCharges, _ = subscriptions.ChargedAfterCancel(app.Transactions(), app.Cancellations(), rv.Rates)
+	rv.Cancellations, rv.Txns = app.Cancellations(), app.Transactions()
 	for _, cm := range rv.Discover.CycleMatches {
 		if ss, ok := recurdiscover.DetectStopped(cm.CommitmentID, cm.Evidence.Cadence, cm.Evidence.LastSeen, now, 7); ok {
 			rv.Stopped = append(rv.Stopped, ss)
@@ -551,8 +557,26 @@ func rhyOverdueSection(rv rhythmView, acts rhyActions) ui.Node {
 // accept flow), and "seems stopped" — each with a one-click verb.
 func rhyFindingsSection(rv rhythmView, acts rhyActions) ui.Node {
 	var rows []any
+	// WF12: a verdict per cancellation, not a row per charge. ChargedAfterCancel
+	// lists EVERY charge after the cancellation date, which flags the expected
+	// final charge as a problem — and a warning that is usually wrong is one
+	// people learn to dismiss. cancelwatch separates "one last charge, as
+	// expected" from "this never stopped".
+	watched := cancelwatch.Check(rv.Cancellations, rv.Txns, time.Now())
+	acting := map[string]bool{}
+	for _, w := range cancelwatch.StillCharging(watched) {
+		acting[strings.ToLower(strings.TrimSpace(w.Name))] = true
+		rows = append(rows, ui.CreateElement(rhyFindingRow, rhyFindingRowProps{
+			Kind: findingCharged, Name: w.Name,
+			Text: stillChargingText(w, rv.Base),
+		}))
+	}
 	for _, lc := range rv.LateCharges {
 		c := lc
+		if acting[strings.ToLower(strings.TrimSpace(c.SubName))] {
+			// Already reported above as a pattern rather than as one loose charge.
+			continue
+		}
 		rows = append(rows, ui.CreateElement(rhyFindingRow, rhyFindingRowProps{
 			Kind: findingCharged, Name: c.SubName,
 			Text: uistate.T("rhythm.findCharged", c.SubName, fmtMoney(money.New(c.Amount, rv.Base))),
@@ -683,4 +707,19 @@ func Recurring() ui.Node {
 // rhythmSurfaceFocused renders the unified surface for a deep-link route.
 func rhythmSurfaceFocused(f rhythmFocus) ui.Node {
 	return ui.CreateElement(RhythmSurface, rhythmSurfaceProps{Focus: f})
+}
+
+// stillChargingText phrases a still-charging verdict.
+//
+// A single charge gets its own wording. "charged you 1 times" is the kind of
+// seam that makes a reader trust the finding less than it deserves — and this
+// finding is asking them to go argue with a company, so it has to read like
+// somebody wrote it.
+func stillChargingText(w cancelwatch.Status, base string) string {
+	amount := fmtMoney(money.New(w.TotalSinceMinor, base))
+	when := uistate.LoadPrefs().FormatDate(w.LastChargeOn)
+	if w.ChargesSince == 1 {
+		return uistate.T("rhythm.findStillChargingOne", w.Name, amount, when)
+	}
+	return uistate.T("rhythm.findStillCharging", w.Name, w.ChargesSince, amount, when)
 }

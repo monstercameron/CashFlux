@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Cancelled subscriptions are watched to see whether they actually stopped (WF12).** Recurring findings
+  now separate "one last charge, as expected" from "this never stopped", and say how many times, how much
+  in total, and when the most recent one landed. Silence only counts as stopped after two billing cycles,
+  because declaring success the day after you cancel is reassurance rather than information.
+
+### Fixed
+- **A single post-cancellation charge no longer reads as "1 times".**
+
+### Added
 - **A funding target can be paused instead of deleted (WF17).** Skipping a contribution for a month or
   two used to mean deleting the target and remembering the amount, the kind and the date to put it back.
   A paused target still shows what it is paused at and when it resumes — it comes back on its own.

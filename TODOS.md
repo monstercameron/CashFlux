@@ -190,11 +190,46 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
 - [ ] **WF11 — Transaction relationship graph.** Auto-connect transfers, card payments, refunds↔
   purchases, reimbursements, split purchases, duplicate imports, receipt↔payment, recurring series —
   to prevent double-counting and make unusual activity legible.
-- [ ] **WF12 — Recurring-charge lifecycle.** Turn recurring into a full workflow: suggested-awaiting-
+- [~] **WF12 — Recurring-charge lifecycle.** Turn recurring into a full workflow: suggested-awaiting-
   review, missing expected payment, amount/date changed, duplicate/overlapping subs, annualized cost,
   renewal/trial-ending notice, cancellation intent + checklist + reference number, "expect one final
   charge", and **post-cancellation monitoring using later imports** to confirm the charge stopped.
   Local analysis only — never claim to have contacted the merchant. (Rocket Money's useful half.)
+  — POST-CANCELLATION MONITORING DONE (2026-08-17), which was the ticket's starred clause. The rest of
+  the bundle is partly present already (price-creep detection, a "seems stopped" finding, cancellation
+  records, subscription ignores) and partly still open — see the list at the end.
+
+  WHAT WAS THERE AND WHY IT WAS NOT ENOUGH: `subscriptions.ChargedAfterCancel` lists EVERY charge dated
+  after a cancellation. That flags the expected final charge — the one for the period already used — as
+  a problem, and a warning that is usually wrong is one people learn to dismiss. Cancelling is the easy
+  half; the half that costs money is not noticing four months later that it never stopped, and a finding
+  nobody reads does not help with that.
+
+  New pure `internal/cancelwatch` adds the VERDICT that was missing: too-soon / final-charge / stopped /
+  still-charging.
+
+  THE DISTINCTION THAT MATTERS is "too soon to tell" versus "stopped". Declaring success the day after
+  somebody cancels is how a monitor becomes reassurance. Silence counts as stopped only after 65 days —
+  two billing cycles, because one quiet cycle can be a billing date that moved and two is a pattern. A
+  single charge inside 35 days is the expected ending, not a failure; if it is then followed by two quiet
+  cycles the verdict becomes stopped on its own.
+
+  MATCHING IS SUBSTRING, NOT FUZZY, deliberately. The worst possible output here is telling somebody a
+  cancellation failed when it did not — that sends them to argue with a company that already did what
+  they asked. A future-dated charge is not counted either: it has not happened.
+
+  On the sample it reads "MasterClass charged you again after you cancelled — $18.00 on Mar 16, 2025",
+  which is a real finding the old list buried among ordinary late charges.
+
+  ONE COPY BUG FIXED: a single charge read "charged you 1 times". Second time this week (see FP-T1f); it
+  gets its own catalog key rather than a plural hack, because this finding asks somebody to go argue with
+  a company and has to read like a person wrote it.
+
+  VERIFIED IN A BROWSER: 5/5.
+
+  STILL OPEN in this bundle: suggested-awaiting-review states, missing-expected-payment detection,
+  amount/date-changed alerts, duplicate/overlapping subscription detection, renewal and trial-ending
+  notices, and the cancellation checklist with a reference number.
 - [ ] **WF13 — Customizable dashboard & saved views.** Reorder/hide cards, compact vs analytical card
   variants, pin saved reports/watchlists/accounts, change comparison periods, save filtered txn views,
   per-member/household dashboard emphasis.
