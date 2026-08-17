@@ -341,6 +341,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	openReview := ui.UseEvent(Prevent(func() { uistate.OpenReviewInbox() }))
 	importPanelAtom := uistate.UseImportPanelOpen()
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
+	transferReviewAtom := uistate.UseTransferReviewOpen()
 	// C363: the Rules workbench (/rules) is a full first-class surface, but nothing
 	// on Transactions pointed there. A labeled toolbar entry (with the active-rule
 	// count) makes it reachable in one visible click.
@@ -897,6 +898,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// is only visible when BOTH rows are in the population, so a filter that hides
 	// one half would hide the duplicate entirely.
 	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
+	// C676: rows that look like transfers and are not linked. Counted over the
+	// WHOLE ledger like the duplicate count above, not the filtered view: the badge
+	// is a claim about the household's data, and one that shrank when you typed in
+	// the search box would be describing the search.
+	suspectCount := transferSuspectCount(app)
 	importBtnLabel := uistate.T("transactions.importBtn")
 	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
 	if dupCount > 0 {
@@ -926,6 +932,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			{Label: regLabel, Icon: icon.List, TestID: "txn-register-btn", OnSelect: onRegister, Hidden: !(singleAcct && !calActive)},
 			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
 			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
+			{Label: transferReviewBtnLabel(suspectCount), Icon: icon.Repeat, TestID: "txn-transfer-review-btn",
+				OnSelect: func() { transferReviewAtom.Set(true) }},
 			{Label: uistate.T("smartcat.button"), Icon: icon.Sparkles, TestID: "txn-smartcat-btn", OnSelect: func() { smartCatAtom.Set(true) }},
 			// Select-all joined the overflow (2026-07-17 audit): a bulk-selection
 			// setup step, not an everyday resting-row verb.

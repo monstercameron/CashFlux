@@ -89,6 +89,65 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 	return best, found
 }
 
+// AmbiguousLeg reports whether the far side of t inside counterpartyID is
+// genuinely uncertain: two or more candidate rows there are equally good, so
+// nothing but a person can say which one is this row's partner.
+//
+// This does NOT make the classification wrong. The row did move to that account,
+// and this package never writes the far side — so refusing the classification
+// over an uncertain pairing would reject a correct answer because a fact nobody
+// is recording is unknown. It is reported so the surface can say "these are
+// linked, but which row on the other side is their partner is a guess" rather
+// than letting a user infer a precision that is not there.
+//
+// "Equally good" means the same tier: two exact matches, or (absent any exact
+// one) two near matches the same number of days away. An exact match beside a
+// near one is not ambiguous — the exact one is the partner.
+func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Transaction) bool {
+	if counterpartyID == "" || t.Amount.Amount == 0 {
+		return false
+	}
+	// Exact and near candidates are counted separately, because they mean
+	// different things. Two exactly-opposite rows are both perfect answers and the
+	// date tiebreak between them is arbitrary — that is ambiguous however far
+	// apart they are dated. Two NEAR rows are only ambiguous when they are equally
+	// close; a nearer one is meaningfully the better answer.
+	exactCount, nearCount := 0, 0
+	var nearBestGap time.Duration
+	for _, c := range txns {
+		if c.ID == t.ID || c.AccountID != counterpartyID {
+			continue
+		}
+		if (c.Amount.Amount > 0) == (t.Amount.Amount > 0) {
+			continue
+		}
+		if c.IsTransfer() && c.TransferAccountID != t.AccountID {
+			continue
+		}
+		gap := c.Date.Sub(t.Date)
+		if gap < 0 {
+			gap = -gap
+		}
+		if gap > PairWindow {
+			continue
+		}
+		if c.Amount.Amount == -t.Amount.Amount && c.Amount.Currency == t.Amount.Currency {
+			exactCount++
+			continue
+		}
+		switch {
+		case nearCount == 0, gap < nearBestGap:
+			nearBestGap, nearCount = gap, 1
+		case gap == nearBestGap:
+			nearCount++
+		}
+	}
+	if exactCount > 0 {
+		return exactCount > 1
+	}
+	return nearCount > 1
+}
+
 // Preview is what classifying a row would do, computed before anything is
 // written so the consequence can be shown rather than discovered.
 type Preview struct {

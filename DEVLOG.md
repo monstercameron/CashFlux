@@ -1,3 +1,43 @@
+## 2026-08-17 - the suggestion is not the answer (C676)
+
+The bulk planner for transfer classification already existed, with no surface. So did Suspects, which finds
+the rows. The missing middle was the part that makes the feature usable: an import produces every savings
+sweep for a year, and asking "which account?" forty times is not a workflow, it is a punishment for importing.
+
+So route.go infers the counterparty and Batches groups the column into decisions. The whole design rests on
+one rule: every inference requires EXACTLY ONE candidate, or it declines. Two accounts that could be the far
+side, two accounts named in the text, two cards in a household - no suggestion, and the rows land in a pile a
+person places by hand. Under-suggesting costs a few clicks. Over-suggesting puts money in the wrong account
+and the user finds out at the bank, weeks later, from a balance that disagrees.
+
+The review found four things I got wrong, and the most instructive was the one where the obvious fix was
+worse than the bug. The category rule could suggest a row's own account - a card's own payment credit routing
+to the card itself. Skip that account, obviously. Except that with a Visa and an Amex, excluding the Visa
+leaves the Amex as "exactly one candidate", so the credit routes to the wrong card instead of a harmless
+no-op. The actual defect was conceptual: a row already sitting on an account of the named shape is the
+RECEIVING leg, and its counterparty is whatever asset account paid, which that rule cannot see. It declines
+outright now. I only found that because I wrote the test for the shallow fix and it failed.
+
+Currency was the serious one. The pure package documents that its totals are not FX-converted, because it has
+no rate table, and says the caller must convert. My caller did not: it summed across currencies and stamped
+the household's symbol on the result. A figure with a currency symbol on it that means nothing is worse than
+no figure. Batches now split on currency as well as counterparty so each total IS money, and the footer
+refuses to sum across them. The same mistake had a second head - FindReciprocal's near-match tolerance exists
+for wire fees, not exchange rates, so a coincidental same-magnitude row in another currency was ranking as the
+strongest evidence tier.
+
+Two atomicity holes, both in code I wrote to be atomic. A row deleted between the plan and the apply had no
+prior to restore, so PutTransaction created it and the rollback left it there - a batch that "rolled back"
+resurrecting a transaction the ledger had deliberately lost. And observers fired between the failure and the
+restore, showing a half-classified ledger. Fixing the first I wrote a `return` inside the BulkMutate closure
+that skipped the rollback entirely; the test caught it in under a minute, which is the argument for writing
+the test with the fix rather than after it.
+
+The ticket asked for per-row errors on "ambiguous legs" and nothing implemented it. It is a note, not a
+refusal. The row did move to that account; what is uncertain is which row on the far side is its twin, and
+this app never records that anywhere. Refusing a correct classification over a fact the model does not hold
+would be optimizing for a precision the feature was never designed to have.
+
 ## 2026-08-17 - six rounds on one button (C671)
 
 The ticket was a disclosure complaint: a prominent action offered to fix one underfunded month and quietly

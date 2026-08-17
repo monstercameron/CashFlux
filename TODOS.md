@@ -5351,7 +5351,29 @@ Remaining atomic todos:
 - [ ] **[C673][MAJOR][TXN][TRANSFER][UX]** Make the transfer action explicit in the transaction editor — replace the easy-to-miss `Other account this money moved to or from` field with a clearly grouped **Mark as transfer** control that explains that positive/negative signs are account-relative and that the row will leave income, spending, budgets, and reports. Keep category assignment separate and prevent a user from believing that choosing a `Transfer` category alone is sufficient.
 - [ ] **[C674][MAJOR][TXN][TRANSFER][PAIR][WORKFLOW]** Add a first-class unmatched-leg pairing workflow — from Review inbox and the transaction row, let a user choose the owned counterparty account for an imported leg, preview the resulting classification, and show whether a reciprocal leg was found. Never invent a counterpart transaction as a side effect of classification. Handle one-sided card/loan payments and duplicated same-account legs with an explicit repair path; fold the domain decision into C527 rather than guessing from description text.
 - [ ] **[C675][MAJOR][TXN][TRANSFER][UX][VISUAL]** Add unmistakable transfer and debt-payment affordances in the ledger — show a Transfer badge/relationship summary for both legs, show Debt payment when `BillAccountID` is set, and avoid relying on income-green/spending-red amount color for transfer rows. The row and editor should make clear that a transfer affects balances but not cash-flow totals.
-- [ ] **[C676][MAJOR][TXN][TRANSFER][BULK]** Support bulk classification from Review inbox — select multiple compatible rows, choose one counterparty account, choose whether liability rows count as debt payments, preview affected rows and totals, and apply atomically with per-row errors for incompatible accounts or ambiguous legs. Bulk review must preserve amount/date/sign/category and must not create extra counterpart rows.
+- [x] **[C676][MAJOR][TXN][TRANSFER][BULK]** Bulk classification from the transfer review panel — DONE.
+  The bulk planner existed with no surface, and neither did the diagnostic that finds the rows. An import
+  does not produce one mis-filed transfer, it produces every savings sweep for a year, so a panel that asked
+  "which account?" once per row would have turned a bad import into an afternoon.
+  New `txnclassify.Suggest`/`Batches` work out the probable counterparty and group the column into a handful
+  of decisions: the far side actually found in another account, the account named in the row's own words, or
+  a payment category where the household holds exactly one account of that shape — each requiring EXACTLY ONE
+  candidate or it declines, because a wrong counterparty applied in bulk is two balances wrong, found at the
+  bank. `appstate.ClassifyTransfers` writes the batch as one mutation and puts everything back on any failure,
+  including deleting rows the batch itself created. The panel pre-selects nothing, says WHY each group was
+  grouped, and states the whole consequence before the button.
+  Five defects found by adversarial review and fixed before landing: the category rule could route a card's
+  own payment credit to a different card (it now declines when the row already sits on an account of that
+  shape — the receiving leg's counterparty is the asset account that paid, which that rule cannot see); a
+  cross-currency row of the same magnitude ranked as the strongest evidence (`FindReciprocal`'s tolerance is
+  for wire fees, not exchange rates); batches and totals mixed currencies and printed a sum with one symbol on
+  it; a rollback resurrected a row deleted between plan and apply; and a selection keyed on the counterparty
+  alone could carry onto rows the user never saw when the ledger moved under an open panel.
+  `AmbiguousLeg` implements the ticket's "ambiguous legs" as a per-row NOTE rather than a refusal: the row did
+  move to that account, and refusing would reject a correct classification over a fact — which row on the far
+  side is its twin — that this app never records anywhere.
+  AC: many rows, one counterparty, one debt choice, a preview that cannot mislead, and an apply that either
+  happens or does not.
 - [ ] **[C677][MAJOR][TXN][TRANSFER][DEBT]** Separate transfer relationship from payment intent in the UI and data contract — selecting a card/loan as the counterparty should exclude the row from income/spending, while the optional “count as payment” choice controls debt-surface attribution only. Validate that the payment choice is unavailable for asset accounts, survives save/reopen, and is cleared when the counterparty changes away from a liability.
 - [ ] **[C681][MAJOR][TXN][TRANSFER][LEDGER]** Exclude structural transfer legs from the transaction-list net figure, or label the figure as a gross visible-row sum. The current toolbar net sums every shown amount, so a filtered one-sided transfer can look like spending/income even though it is excluded from reports and budgets. Acceptance: a complete checking→savings pair shows net $0; filtering to either leg does not describe that leg as spending or income; unmatched transfers show an explicit “unpaired movement” state instead of a misleading cash-flow net.
 - [ ] **[C679][MAJOR][BUDGET][SAVINGS][TRANSFER]** Reconcile actual savings transfers with planned savings allocations. A generated transfer changes account balances, while the zero-based “Savings & investments” section is driven by `Account.MonthlySavings`; category-scoped saving budgets can also miss generated transfer legs with no category. Define one source of truth and show planned, transferred, and remaining-to-transfer separately. Acceptance: a $500 checking→savings transfer counts once toward the intended savings target, never counts as spending, does not double-count with `MonthlySavings` or sinking-fund goals, and a savings→checking reversal subtracts only the returned amount.

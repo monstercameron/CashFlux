@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Fix a statement's worth of mis-filed transfers in a few clicks (C676).** A new "Review transfers" panel
+  on the ledger finds the rows that look like money moved between your own accounts but were never linked —
+  they are counting as income or spending right now — works out where each probably went, and groups them so
+  a year of savings sweeps is one decision instead of forty. Every group says why it was grouped: whether the
+  other side of the move was actually found sitting in that account, or the app only read the label. Nothing
+  is pre-selected, the whole consequence is stated before the button, and the write either happens or does
+  not. Rows it cannot place are shown rather than guessed at.
+
 ### Fixed
 - **"Bring the plan down to what arrived" says what it will change, and for how long (C671).** The action
   read as a fix for one underfunded month and pre-filled a permanent rewrite of every budget, disclosed

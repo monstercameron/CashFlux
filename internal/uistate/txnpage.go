@@ -170,6 +170,18 @@ func UseDuplicatesModalOpen() state.Atom[bool] {
 	return state.UseAtom("transactions:duplicatesModal", false)
 }
 
+// UseTransferReviewOpen returns the shared atom selecting whether the "Review
+// transfers" flip modal is open (C676). The transactions toolbar sets it; the
+// shell-root TransferReviewHost renders the modal when true.
+//
+// Same shape as the duplicates panel deliberately: both are "here is a pile of
+// rows the app believes are wrong, resolve them in place", and giving them two
+// different containers would make one of them look like a different KIND of
+// problem than it is.
+func UseTransferReviewOpen() state.Atom[bool] {
+	return state.UseAtom("transactions:transferReview", false)
+}
+
 // BulkSnapshot is the before-state of the last bulk operation, captured so the
 // undo tile can restore it. Label is the human-readable description shown in the
 // undo banner ("Recategorized 5 transactions"); Prior holds the affected
