@@ -463,6 +463,13 @@ var vSweepKeys = Catalog{
 	// LF-4 — the command palette can find things, not only run commands.
 	"palette.groupFound": "Found in your data",
 
+	// LF-7 — bills and recurring cash flows as a month grid.
+	"rhyCal.open":   "Show the month",
+	"rhyCal.close":  "Hide the month",
+	"rhyCal.today":  "Back to this month",
+	"rhyCal.label":  "Bills and recurring payments by month",
+	"rhyCal.legend": "Each day shows what is due. Dimmed means settled; highlighted means overdue.",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

@@ -859,8 +859,22 @@ survived the duplicate/scope filters but didn't make the engine cut):
   a current fact). Capped at ten years so a household spending almost nothing reads as "over ten
   years" rather than a five-figure day count that looks like a bug. The variable surface has no
   "unknown", so it exposes 0 and the catalog doc says explicitly that 0 means not-applicable.
-- [ ] **LF-7 Bill/due-date calendar** — reuse the v1.0.43 `uiw.Calendar` primitive for bills + recurring
+- [x] **LF-7 Bill/due-date calendar** — reuse the v1.0.43 `uiw.Calendar` primitive for bills + recurring
   cash flows (dogfoods the standardized calendar further).
+  — DONE (2026-08-16). The page HAD a calendar — a hand-rolled `cal-grid` in `bills_screen.go` that
+  the unified Bills & Recurring surface no longer routes to, so in practice there was none. Rebuilt on
+  `uiw.Calendar` as a collapsible month view on the rhythm surface, which is the point of the ticket:
+  one calendar means one week-start rule, one set of keyboard behaviours, one cell test-id convention
+  and a month pager that behaves as it does on the to-do board.
+
+  It is fed the SAME `rv.Agenda` occurrences the list beside it renders rather than recomputing from
+  `bills.UpcomingAll`. Recomputing would be the classic two-screens-disagree shape — the list showing
+  a payment the grid did not, with neither wrong on its own terms.
+
+  Day markers carry STATE, not just presence: settled days strike through, overdue days highlight. One
+  neutral dot for both would be information that costs a click to interpret. Multiple payments on a
+  day collapse to a count plus the total, with the breakdown in the tooltip — the grid answers "what
+  lands when" and the agenda answers "what exactly".
 - [x] **LF-8 Data health check** — a small "12 uncategorized · 3 stale accounts · 2 unreconciled" panel
   with one-click jumps to fix each.
   — DONE (2026-08-16). The panel already existed (`datahealth_section.go`, over `internal/integrity`'s

@@ -419,6 +419,10 @@ func RhythmSurface(props rhythmSurfaceProps) ui.Node {
 		// element pins the position instead.
 		rhySlot(If(settled, ui.CreateElement(rhyReviewSection, rhyReviewProps{}))),
 		ui.CreateElement(rhyAgendaSection, rhyAgendaProps{Focus: props.Focus, Acts: acts}),
+		// LF-7: the same occurrences as a month grid, on the shared uiw.Calendar
+		// primitive. Fed from rv.Agenda rather than recomputed, so the grid and the
+		// list beside it cannot disagree about what is due when.
+		ui.CreateElement(rhyCalendarSection, rhyCalendarProps{Occurrences: rv.Agenda}),
 		rhySlot(If(settled, ui.CreateElement(rhyRosterSection, rhyRosterProps{Focus: props.Focus, Acts: acts}))),
 		rhyFindingsSection(rv, acts),
 		rhyToolbar(rv, postMsg.Get(), showMetrics.Get(), postDue, toggleMetrics, csv),

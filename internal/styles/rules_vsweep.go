@@ -694,4 +694,36 @@ func registerVSweep() {
 		margin("0.35rem 0 0.5rem"),
 	)
 
+	// ─── LF-7: bills + recurring as a month grid ─────────────────────────────
+	rule(".rhy-cal-head",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		marginBottom("0.5rem"),
+	)
+	rule(".rhy-cal-entry",
+		display("flex"),
+	)
+	// The day marker carries STATE, not just presence: an overdue day and a
+	// settled day are opposite readings, and one neutral dot for both costs a
+	// click to interpret.
+	rule(".rhy-cal-dot",
+		display("block"),
+		marginTop("0.1rem"),
+		fontSize("0.6rem"),
+		lineHeight("1.2"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	rule(".rhy-cal-dot.is-paid",
+		color("var(--text-faint)"),
+		textDecoration("line-through"),
+	)
+	rule(".rhy-cal-dot.is-overdue",
+		color("var(--warn, var(--text))"),
+		fontWeight("600"),
+	)
+
 }
