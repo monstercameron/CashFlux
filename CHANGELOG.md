@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"pay rent friday" becomes a dated to-do without an API key (SM-14 core).** `internal/duedate`
+  reads a due date, a repeat cadence, and a clean title out of a typed sentence — weekdays, today
+  and tomorrow, "in 3 days", "next month", "the 20th", "april 15", ISO and slash dates, and repeats
+  from "weekly" to "every other week". The ticket files this as Smart+, and the model can still have
+  the ambiguous tail, but the common case should not cost a paid call. Two rules shape the grammar:
+  it never guesses — a bare `15` stays in the title because in a task sentence that is far more often
+  an amount than a day of the month — and it reports the phrase it consumed, so the form can show
+  what it read instead of asking to be trusted.
 - **An over-budget now has a reason, not just a number (SM-4 core).** "Over by $180" is what the
   meter already says; the useful sentence is the one after it. `internal/whyover` decides which of
   four things happened — one purchase did it, more trips than usual, the same trips costing more, or
