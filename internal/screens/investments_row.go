@@ -47,18 +47,19 @@ func holdingRow(props holdingRowProps) ui.Node {
 	// position and re-entering it, which loses the record and is enough friction
 	// that nobody does it — so a portfolio was stale by design and said nothing
 	// about it.
-	pricing := ui.UseState(false)
-	priceS := ui.UseState("")
-	asOfS := ui.UseState("")
+	editID := uistate.UseHoldingPriceEdit()
+	priceS := uistate.UseHoldingPriceDraft()
+	asOfS := uistate.UseHoldingPriceAsOf()
+	pricing := editID.Get() == h.ID
 	openPrice := func() {
 		priceS.Set(strconv.FormatFloat(
 			float64(h.CurrentPriceMinorPerShare)/float64(minorMul(props.Dec)), 'f', -1, 64))
 		asOfS.Set(time.Now().Format("2006-01-02"))
-		pricing.Set(true)
+		editID.Set(h.ID)
 	}
 	onPriceIn := ui.UseEvent(func(v string) { priceS.Set(v) })
 	onAsOfIn := ui.UseEvent(func(v string) { asOfS.Set(v) })
-	cancelPrice := ui.UseEvent(Prevent(func() { pricing.Set(false) }))
+	cancelPrice := ui.UseEvent(Prevent(func() { editID.Set("") }))
 	savePrice := ui.UseEvent(Prevent(func() {
 		f, err := strconv.ParseFloat(strings.TrimSpace(priceS.Get()), 64)
 		if err != nil || f < 0 {
@@ -75,7 +76,7 @@ func holdingRow(props holdingRowProps) ui.Node {
 		if props.OnPrice != nil {
 			props.OnPrice(h, int64(f*float64(minorMul(props.Dec))), asOf)
 		}
-		pricing.Set(false)
+		editID.Set("")
 	}))
 	ph := portfolio.FromDomain(h)
 	valueMinor := portfolio.HoldingValueMinor(ph)
@@ -120,16 +121,16 @@ func holdingRow(props holdingRowProps) ui.Node {
 				Span(css.Class("inv-sep"), " · "),
 				holdingPriceAge(h),
 			),
-			If(pricing.Get(), Form(css.Class("inv-price-form"), Attr("data-testid", "holding-price-form-"+h.ID),
+			If(pricing, Form(css.Class("inv-price-form"), Attr("data-testid", "holding-price-form-"+h.ID),
 				OnSubmit(savePrice),
 				labeledField(uistate.T("investments.priceLabelPer", props.Sym),
 					Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
 						Attr("data-testid", "holding-price-input-"+h.ID),
-						Value(priceS.Get()), OnInput(onPriceIn))),
+						uiw.FieldValue(priceS.Get()), OnInput(onPriceIn))),
 				labeledField(uistate.T("investments.priceAsOfLabel"),
 					Input(css.Class("field"), Type("date"),
 						Attr("data-testid", "holding-price-date-"+h.ID),
-						Value(asOfS.Get()), OnInput(onAsOfIn))),
+						uiw.FieldValue(asOfS.Get()), OnInput(onAsOfIn))),
 				Div(css.Class("inv-price-actions"),
 					Button(css.Class("btn", "btn-primary"), Type("submit"),
 						Attr("data-testid", "holding-price-save-"+h.ID), uistate.T("action.save")),

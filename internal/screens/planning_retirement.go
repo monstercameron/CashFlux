@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/retirement"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -171,7 +172,7 @@ func retirementInputs(cfg uistate.RetirementPlan, base string,
 			Span(css.Class("t-caption"), label),
 			Input(css.Class("field"), Type("number"), Attr("step", step),
 				Attr("data-testid", testid), Attr("aria-label", label),
-				Value(val), OnChange(h)))
+				uiw.FieldValue(val), OnChange(h)))
 	}
 	return Div(css.Class("retire-inputs"),
 		num(uistate.T("retire.years"), "plan-retire-years", strconv.Itoa(cfg.YearsToRetirement), onYears, "1"),

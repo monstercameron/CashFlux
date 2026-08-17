@@ -1,3 +1,40 @@
+## 2026-08-17 - a form that closed itself (FP-T2c)
+
+The feature is small: update a holding's price without deleting the position. The bug found while
+verifying it is the part worth writing down.
+
+Built first with per-row `ui.UseState`, the editor closed at random. Sometimes mid-typing, sometimes
+before the first keystroke, and the browser probe reproduced it about half the time - which is exactly
+the shape of bug that survives a "works on my machine" check.
+
+The cause: a row's own state does not survive the list remounting, and the list remounts on any
+background re-render - a notification arriving, another surface bumping the data revision. Nothing the
+user did caused it and nothing on screen explained it. Moved to shared atoms
+(`UseHoldingPriceEdit`/`Draft`/`AsOf`), which outlive a remount. The rule generalises: state that must
+outlive a re-render does not belong to a row.
+
+Two probe lessons came with it, and both were my error rather than the product's. A fixed
+`waitForTimeout` after saving raced the store write plus the data-revision bump, so the same code
+reported 7/9 and 9/9 on alternate runs; waiting for the VALUE TO CHANGE instead made it stable across
+three consecutive runs. And re-resolving `.first()` after the update was reading a different holding,
+because a bigger price re-sorts the list - the locator has to be keyed by ID once the data it sorts on
+is the thing under test.
+
+On the feature itself, the decision I would defend hardest is that the as-of date is EDITABLE and not
+stamped. It defaults to today, but the price someone is entering is usually last night's close or a
+statement from last week. Stamping it "now" would make stale data look fresh, which is the precise
+failure the field exists to prevent. And a zero date reads as "price date not recorded" rather than as a
+blank, because a price of unknown age and a price from this morning are different claims about the same
+number - and every value, weight and return on that page is computed from it.
+
+Separately: I landed on top of another session's sweep (f9d3a629) that documents `Value()` as the
+character-losing path and replaces it with `uiw.FieldValue`. Migrated this form's inputs. A price field
+losing digits is a wrong portfolio, not a typing annoyance.
+
+That same session's commit also swept several of my in-flight files (entities.go, investments_tiles.go,
+en_vsweep.go) into its own. The content is correct and on main; noting it because the shared worktree
+makes that possible and the history now attributes those hunks to a commit about something else.
+
 ## 2026-08-17 - half a stale ticket (FP-T2b)
 
 FP-T2b said `CategoryTrends` and `PayeeTrends` were "wired into zero screens". Half of that had stopped

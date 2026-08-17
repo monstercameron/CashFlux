@@ -1259,9 +1259,36 @@ bottom-up per SDLC.
   VERIFIED IN A BROWSER: 6/6, including the assertion that matters — six rows draw six DISTINCT
   polylines. An identical shape on every row is exactly what a broken per-payee lookup would produce,
   and it would look fine.
-- [ ] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
+- [x] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
   delete + re-add, so current value is stale-by-design. Add an Edit form reusing `PutHolding`'s replace-by-ID
   + a `PriceAsOf` field.
+  — DONE (2026-08-17). "Update price" on each position's kebab opens an inline form; saving replaces by
+  ID through `PutHolding`, so cost basis, sector, security type and expense ratio survive — the old
+  delete-and-re-add path destroyed all four every time somebody corrected a number.
+
+  The AS-OF DATE is editable, not stamped. It defaults to today, but the price being entered is usually
+  last night's close or a statement from last week, and stamping it "now" would quietly make stale data
+  look fresh — the precise failure this field exists to prevent.
+
+  `PriceAsOf` zero means NO DATE RECORDED and reads as exactly that, never as a blank and never as
+  today. A price of unknown age and a price from this morning are different claims about the same
+  number, and every value, weight and return on the page is computed from it. Past 30 days the line
+  raises its voice, because the failure mode is silent: a stale portfolio looks exactly like a fresh one.
+
+  REAL BUG FOUND AND FIXED WHILE VERIFYING: the editor was first built on per-row `ui.UseState`, and it
+  closed at random mid-typing. A background re-render — a notification, another surface bumping the data
+  revision — remounts the list and wipes a row's own state, so the form vanished for reasons a user
+  could neither see nor connect to anything they did. Moved to shared atoms
+  (`UseHoldingPriceEdit`/`Draft`/`AsOf`). The general rule: state that must outlive a re-render does not
+  belong to a row.
+
+  Also migrated this form's inputs to `uiw.FieldValue` after landing on the sweep documented in
+  f9d3a629 — `Value()` is the character-losing path, and a price field losing digits is a wrong
+  portfolio, not a typing annoyance.
+
+  VERIFIED IN A BROWSER: 9/9, stable across three consecutive runs. The value follows the new price
+  ($16,999.12 → $412,187.40), the row states the date ENTERED rather than today, and the cost basis is
+  still there afterwards.
 - [x] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(...)` threaded
   through forecast/goal/retirement projections so every long-horizon figure stops being misleadingly
   nominal.

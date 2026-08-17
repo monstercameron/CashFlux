@@ -244,6 +244,23 @@ func UseInvestShowFormulas() state.Atom[bool] { return state.UseAtom("invest:sho
 // tile so the form and the button stay in sync across the widgetized surface).
 func UseInvestAddOpen() state.Atom[bool] { return state.UseAtom("invest:addOpen", false) }
 
+// UseHoldingPriceEdit returns the shared atom naming the holding whose price is
+// being edited ("" = none), plus the draft price and as-of date (FP-T2c).
+//
+// SHARED atoms rather than per-row component state, and that is the whole point:
+// a row's own state is wiped whenever a background re-render remounts the list —
+// a notification arriving, another surface bumping the data revision — and the
+// editor was closing mid-typing for reasons the user could not see or connect to
+// anything they did. State that must outlive a re-render does not belong to a
+// row.
+func UseHoldingPriceEdit() state.Atom[string] { return state.UseAtom("invest:priceEditID", "") }
+
+// UseHoldingPriceDraft returns the draft price being typed, in major units.
+func UseHoldingPriceDraft() state.Atom[string] { return state.UseAtom("invest:priceDraft", "") }
+
+// UseHoldingPriceAsOf returns the draft as-of date, as YYYY-MM-DD.
+func UseHoldingPriceAsOf() state.Atom[string] { return state.UseAtom("invest:priceAsOf", "") }
+
 // UseInvestGrowthMonths returns the shared atom for the /investments growth-chart window in
 // months (1, 6, or 12; default 12), toggled by the chart's segmented 1M/6M/1Y control.
 func UseInvestGrowthMonths() state.Atom[int] { return state.UseAtom("invest:growthMonths", 12) }

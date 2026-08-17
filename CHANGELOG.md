@@ -6,6 +6,14 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **You can update a holding's price without deleting it (FP-T2c).** "Update price" on a position's ⋯
+  menu takes the new price and the date it was true — editable, because the price you have is usually
+  last night's close, and stamping it "now" would make stale data look fresh. Every row says how old its
+  price is, and says "price date not recorded" rather than nothing when it does not know. Updating keeps
+  the cost basis, sector, security type and expense ratio, all of which the old delete-and-re-add
+  workaround destroyed.
+
 ### Security
 - **The app lock rejects argon2id parameters too large for the types it uses them at.**
   `verifyArgon2id` reads time, memory and threads out of the stored hash — deliberately, since that
