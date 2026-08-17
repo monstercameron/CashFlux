@@ -431,7 +431,8 @@ func bl13StatementClarity(in Input) []smart.Insight {
 		}.
 			WithTitle("smart.bl13.title", "Paying only the minimum on %s is costing you", a.Name).
 			WithDetail("smart.bl13.detail", "%s owes %s at %s APR. The %s minimum payment leaves about %s/mo in interest — paying more would cut that down.", a.Name, in.hmoney(owed), fmtPct(rate), in.hmoney(minPay), in.hmoney(monthlyInterest)).
-			WithAmount(in.baseMoney(monthlyInterest)).
+			// Paying more than the minimum is worth roughly this every month (WF-SM3).
+			WithMonthlyAmount(in.baseMoney(monthlyInterest)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
 				WithLabel("smart.bills.openAction", labelOpenBills)))
 	}

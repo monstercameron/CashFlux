@@ -102,6 +102,26 @@ func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insi
 	return flagged
 }
 
+// runActionableFindings returns every free-tier finding the user has not
+// dismissed, for surfaces that rank ACTIONS rather than flag anomalies (WF-SM3).
+//
+// It is deliberately separate from runAnomalyDetectors: that one filters to the
+// four anomaly codes because a "flagged activity" list is about things that look
+// wrong, while a "what to do next" list is about things worth doing, and most of
+// those are not anomalies at all — a subscription that crept up in price is not
+// an anomaly, it is a decision.
+func runActionableFindings(app *appstate.App, weekStart time.Weekday) []smart.Insight {
+	all := smartengine.Run(buildSmartInput(app, weekStart), smart.EnableFreeOnly(smart.Settings{}))
+	dismissed := uistate.LoadSmartSettings()
+	out := make([]smart.Insight, 0, len(all))
+	for _, ins := range all {
+		if !dismissed.IsDismissed(ins.Key) {
+			out = append(out, ins)
+		}
+	}
+	return out
+}
+
 // aiProviderConfigured reports whether the user has an inference provider set up
 // (a stored OpenAI key, or the hosted backend AI). It drives the "needs a
 // provider" hint on AI features so the cost story stays honest.

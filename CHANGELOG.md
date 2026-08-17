@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"What to do next" on Insights (WF-SM3).** The things worth doing, in order, each saying what it is
+  worth and why it sits above the next one — or that the two are level and either will do. Findings that
+  do not say what acting on them is worth are counted and left out rather than ranked on a guess.
+
+### Added
 - **"Habits I notice" on Insights (WF-SM2).** Spending that repeats — money going out faster in the days
   after payday, or at weekends — with how much extra a day and in how many months it held. Nothing is
   reported unless it kept happening: one expensive weekend is an anomaly, not a habit.

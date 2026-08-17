@@ -2838,9 +2838,27 @@ var english = Catalog{
 	// WF-SM2: habits, not incidents. Each line carries the evidence — how much a
 	// day, and in how many of the months looked at — because a bare percentage
 	// cannot be argued with.
-	"habits.weekend":                     "You spend about %d%% more per day at weekends — roughly %s a day extra, in %d of the last %d months.",
-	"habits.payday":                      "Spending runs hotter for the %d days after payday: about %d%% more per day, roughly %s a day extra, in %d of the last %d months.",
-	"habits.title":                       "Habits I notice",
+	"habits.weekend": "You spend about %d%% more per day at weekends — roughly %s a day extra, in %d of the last %d months.",
+	"habits.payday":  "Spending runs hotter for the %d days after payday: about %d%% more per day, roughly %s a day extra, in %d of the last %d months.",
+	"habits.title":   "Habits I notice",
+	// WF-SM3: what to do next, and WHY one thing sits above another.
+	"nextact.title":    "What to do next",
+	"nextact.empty":    "Nothing to rank yet — an action gets ranked once a finding says what doing it is worth.",
+	"nextact.perMonth": "%s a month",
+	"nextact.perYear":  "%s a year",
+	"nextact.once":     "%s once",
+	// Phrased over a year rather than "every month": annual amounts are ranked on
+	// their monthly equivalent, so "saves more every month" would be a false
+	// sentence beside a figure the row itself states as yearly.
+	"nextact.whyMonthly":                 "Above the next one because it's worth more over a year.",
+	"nextact.whyOneTime":                 "Above the next one because it is worth more up front.",
+	"nextact.whyUrgency":                 "Above the next one because its deadline is closer.",
+	"nextact.whyEffort":                  "Above the next one because it takes less work.",
+	"nextact.whyReversible":              "Above the next one because it can be undone.",
+	"nextact.whyConfidence":              "Above the next one because the figure is surer.",
+	"nextact.whyClose":                   "About level with the next one — take either.",
+	"nextact.skippedOne":                 "%d other finding isn't ranked: it doesn't say what acting on it is worth.",
+	"nextact.skippedMany":                "%d other findings aren't ranked: they don't say what acting on them is worth.",
 	"habits.empty":                       "Nothing that repeats yet — habits need a few months before they can be told apart from a busy week.",
 	"insights.verdictAria":               "What do you make of the %s flag?",
 	"insights.verdictNone":               "Not judged",

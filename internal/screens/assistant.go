@@ -576,9 +576,37 @@ func assistantInsightsDataPanel() ui.Node {
 	}
 	habitsTile := astTile("ast-habits", "span 2", astSection("sec-ast-habits", uistate.T("habits.title"), nil, habitsBody))
 
+	// ── What to do next, and why it is in that order (WF-SM3) ─────────────────
+	nextRows, nextSkipped := rankNextActions(runActionableFindings(app, pr.WeekStartWeekday()))
+	var nextBody ui.Node
+	if len(nextRows) == 0 {
+		nextBody = P(css.Class("empty"), Attr("data-testid", "ast-next-empty"), uistate.T("nextact.empty"))
+	} else {
+		rows := make([]ui.Node, 0, len(nextRows)+1)
+		for _, r := range nextRows {
+			rows = append(rows, Div(css.Class("insight-row"), Attr("data-testid", "ast-next-row"),
+				Span(css.Class(tw.Flex1),
+					Span(css.Class(tw.Block), r.Title),
+					Span(css.Class("muted"), css.Class(tw.Block), css.Class(tw.TextXs),
+						Attr("data-testid", "ast-next-impact"), r.Impact),
+					If(r.Why != "", Span(css.Class("muted"), css.Class(tw.Block), css.Class(tw.TextXs),
+						Attr("data-testid", "ast-next-why"), r.Why)),
+				)))
+		}
+		if nextSkipped > 0 {
+			// Named rather than dropped: a list that silently omits findings reads
+			// as a complete ranking of everything the app knows.
+			rows = append(rows, P(css.Class("muted"), css.Class(tw.TextXs),
+				Attr("data-testid", "ast-next-skipped"),
+				uistate.TN("nextact.skippedOne", "nextact.skippedMany", nextSkipped)))
+		}
+		nextBody = Div(css.Class("insight-list"), rows)
+	}
+	nextTile := astTile("ast-next", "span 2", astSection("sec-ast-next", uistate.T("nextact.title"), nil, nextBody))
+
 	// ── Assemble the surface ───────────────────────────────────────────────────
 
-	tiles := []ui.Node{heroTile, toolbar, flaggedTile, highlightsTile, habitsTile, trendTile, merchantsTile, pinnedTile}
+	tiles := []ui.Node{heroTile, toolbar, flaggedTile, highlightsTile, nextTile, habitsTile, trendTile, merchantsTile, pinnedTile}
 	if showFormulas.Get() {
 		tiles = append(tiles, astTile("ast-formula", "1 / span 4", Fragment(
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("assistant.formulaHint")),

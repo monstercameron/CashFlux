@@ -145,7 +145,8 @@ func a4CashPositioning(in Input) []smart.Insight {
 		}.
 			WithTitle("smart.a4.title", "Move idle cash from %s to earn more", a.Name).
 			WithDetail("smart.a4.detail", "%s sits at %s in %s. Moving it to %s (%s) would earn about %s/yr.", hm(bal), fmtPct(a.ExpectedReturnAPR), a.Name, best.Name, fmtPct(bestAPR), in.hmoney(gain)).
-			WithAmount(in.baseMoney(gain)).
+			// The detector's own sentence says "/yr" (WF-SM3).
+			WithAnnualAmount(in.baseMoney(gain)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/accounts", RelatedType: "account", RelatedID: a.ID}.
 				WithLabel("smart.a4.action", "Open accounts")))
 	}

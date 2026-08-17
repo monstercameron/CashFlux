@@ -692,8 +692,50 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   final week; subscription increases offsetting debt progress; and "small" purchases collectively
   outweighing large ones. The last two are ratio comparisons rather than phase comparisons, so they do not
   fit `spendpattern` and should not be forced into it.
-- [ ] **WF-SM3 — Next-best-action ranking.** Rank actions by monthly impact, one-time impact, effort,
+- [~] **WF-SM3 — Next-best-action ranking.** Rank actions by monthly impact, one-time impact, effort,
   reversibility, urgency, and confidence — and show *why* one outranks another.
+  — DONE for the findings that can honestly declare their worth (2026-08-17). New pure
+  `internal/actionrank`, surfaced as a "What to do next" tile on /insights.
+
+  THE RANKING IS THE EASY HALF. Any weighted sum produces an order; the ticket's real requirement is the
+  sentence after it. A list of scores does not answer "why is this above that" — a reader comparing two
+  rows of numbers is doing the work the app was supposed to do — so `Why` names the ONE criterion that
+  decided each pair, and reports a close call rather than manufacturing a reason when the gap is inside
+  5%. On the sample four of the seven pairs come back "About level — take either", which is the honest
+  answer and the one a score list would never give.
+
+  CONFIDENCE MULTIPLIES, IT DOES NOT ADD. A saving you are unsure of is worth less than the same saving
+  you are certain of — but added to the score, a completely pointless action somebody is perfectly sure
+  about climbs the list on certainty alone. It scales the benefit and contributes nothing by itself.
+  Effort and irreversibility are COSTS: they can only pull a score down. Being easy and reversible does
+  not make an action worth doing, it makes it cheap to try.
+
+  A RECURRING SAVING IS NOT A ONE-OFF OF THE SAME SIZE, so both are converted to a 12-month value before
+  comparison — infinity would make every recurring item beat every one-off regardless of size, and face
+  value ranks a $200 rebate above $50/month forever. Money is scored on a log scale so one large item
+  cannot flatten every other criterion to noise.
+
+  THE BLOCKER WAS UPSTREAM, and finding it was the useful part: `smart.Insight` had no way to say whether
+  its amount recurs. "$40 from a cancelled subscription" and "$40 from a one-off refund" are not the same
+  size, and ranking them alike puts the wrong thing first every time. Added `smart.AmountKind` +
+  `WithMonthlyAmount` / `WithAnnualAmount` / `WithOneTimeAmount`. Calling one is a CLAIM that the amount
+  is what DOING the action is worth — a subscription that needs assigning to a member carries its cost
+  for context and saves nothing, so it keeps plain `WithAmount` and stays out of the ranking.
+
+  FIVE DETECTORS DECLARE SO FAR: SMART-SU7 (unused subscription, monthly), SMART-SU6 (price creep,
+  monthly), SMART-BL13 (minimum-payment interest, monthly), SMART-A4 (idle cash, annual), SMART-A9 (fee
+  bleed, annual). Everything else is EXCLUDED and the count is shown — on the sample, "191 other findings
+  aren't ranked: they don't say what acting on them is worth". Naming the omission matters: a list that
+  silently drops findings reads as a complete ranking of everything the app knows.
+
+  VERIFIED IN A BROWSER: 7/7 (`e2e/_nextact_check.mjs`). Eight ranked actions, each stating its impact in
+  the terms its detector declared, with an annual $1,161.72 correctly slotting between $121.90/mo and
+  $86.16/mo on its monthly equivalent.
+
+  STILL OPEN: effort, reversibility and urgency are ranking INPUTS with no source — every detector-derived
+  action is currently reported as low-effort, reversible and undated, because inventing an effort rating
+  no detector supplies would be worse than not having one. Those need declaring at the detector too, the
+  same way the amount kind now is. And the remaining ~191 findings need their amounts classified.
 - [ ] **WF-SM4 — Local financial memory.** Remember decisions: "this merchant is always groceries",
   "don't flag this annual payment", "keep ≥$15k liquid", "Priya owns this", "intentionally over budget
   in travel months", "never recommend selling retirement". Prevents repeated corrections; personalizes

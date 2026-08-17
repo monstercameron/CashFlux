@@ -252,6 +252,9 @@ type Insight struct {
 	// Valid only when HasAmount is true.
 	Amount    money.Money
 	HasAmount bool
+	// AmountCadence says whether Amount repeats monthly or happens once. The zero
+	// value means the detector did not say (WF-SM3) — see AmountKind.
+	AmountCadence AmountKind
 	// Action is an optional one-tap follow-up; nil means info-only.
 	Action *Action
 	// Confidence says what kind of claim this finding makes — a restatement of
@@ -312,6 +315,61 @@ func (a Action) WithLabel(key, format string, args ...any) Action {
 func (i Insight) WithAmount(m money.Money) Insight {
 	i.Amount = m
 	i.HasAmount = true
+	return i
+}
+
+// AmountKind says whether an insight's Amount repeats or happens once.
+//
+// It is deliberately NOT called Cadence: that name is already taken in this
+// package for how often a FEATURE RUNS, and the two would be confused on sight.
+//
+// It exists because ranking findings against each other is impossible without
+// it: "$40" from a cancelled subscription and "$40" from a one-off refund are
+// not the same size, and a ranker that treats them alike puts the wrong thing
+// first every time (WF-SM3). The zero value is CadenceUnknown — "the detector
+// did not say" — and a ranker must leave those out rather than guess, because
+// guessing wrong here is invisible in the output and wrong in the advice.
+type AmountKind int
+
+const (
+	// AmountUnknown: the detector has not classified its amount.
+	AmountUnknown AmountKind = iota
+	// AmountMonthly: the amount recurs every month.
+	AmountMonthly
+	// AmountOneTime: the amount happens once.
+	AmountOneTime
+	// AmountAnnual: the amount recurs every year. Kept distinct from monthly
+	// rather than divided at the detector, because a detector that says "about
+	// $240/yr" and one that says "$20 a month" are describing different evidence
+	// — a yearly fee is not twelve monthly ones — and the conversion belongs
+	// where the comparison happens, once.
+	AmountAnnual
+)
+
+// WithMonthlyAmount records an amount that recurs every month.
+//
+// Calling one of these setters is a claim that the amount is what DOING the
+// action is worth — not merely a figure the finding mentions. A subscription
+// that needs assigning to a household member carries its cost for context and
+// saves nothing, so it must keep using WithAmount; declaring it would rank
+// "assign this to someone" as though cancelling it were the outcome.
+func (i Insight) WithMonthlyAmount(m money.Money) Insight {
+	i = i.WithAmount(m)
+	i.AmountCadence = AmountMonthly
+	return i
+}
+
+// WithOneTimeAmount records an amount that happens once.
+func (i Insight) WithOneTimeAmount(m money.Money) Insight {
+	i = i.WithAmount(m)
+	i.AmountCadence = AmountOneTime
+	return i
+}
+
+// WithAnnualAmount records an amount that recurs every year.
+func (i Insight) WithAnnualAmount(m money.Money) Insight {
+	i = i.WithAmount(m)
+	i.AmountCadence = AmountAnnual
 	return i
 }
 

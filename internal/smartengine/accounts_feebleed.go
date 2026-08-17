@@ -78,7 +78,8 @@ func a9FeeBleed(in Input) []smart.Insight {
 				"The only activity on %s in the last %s is %s totaling %s — about %s/yr on a dormant account. Consider closing it to stop the bleed.",
 				a.Name, plural(feeBleedMonths, "month"), plural(int64(feeCount), "fee-like charge"),
 				in.hmoney(feeTotalMinor), in.hmoney(annualMinor)).
-			WithAmount(in.baseMoney(annualMinor)).
+			// Closing it stops this much a year (WF-SM3).
+			WithAnnualAmount(in.baseMoney(annualMinor)).
 			WithAction(smart.Action{
 				Kind:        smart.ActionCreateTask,
 				TaskTitle:   "Close " + a.Name + " and stop the monthly fee",

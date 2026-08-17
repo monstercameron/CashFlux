@@ -167,7 +167,8 @@ func su7UsageVsCost(in Input) []smart.Insight {
 		}.
 			WithTitle("smart.su7.title", "You may be paying for %s without using it", s.Name).
 			WithDetail("smart.su7.detail", "%s is the only activity in %s — %s a month with nothing else in that category. Worth a look.", s.Name, catName, hmoneyc(s.Amount, s.Currency)).
-			WithAmount(mny(s.Amount, s.Currency)).
+			// Cancelling it saves this every month (WF-SM3).
+			WithMonthlyAmount(mny(s.Amount, s.Currency)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
 				WithLabel("smart.su7.action", "Review subscriptions")))
 	}
@@ -303,7 +304,8 @@ func su6CostCreep(in Input) []smart.Insight {
 		}.
 			WithTitle("smart.su6.title", "%s costs %s%% more than before", c.Name, itoa64(int64(c.PercentChange))).
 			WithDetail("smart.su6.detail", "%s has crept from %s to %s — a silent price walk-up worth noticing.", c.Name, hmoneyc(c.OldAmount, in.Base), hmoneyc(c.NewAmount, in.Base)).
-			WithAmount(mny(c.Delta, in.Base)).
+			// The walk-up is what reversing it is worth, every month (WF-SM3).
+			WithMonthlyAmount(mny(c.Delta, in.Base)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/subscriptions"}.
 				WithLabel("smart.su6.action", "Review subscriptions")))
 	}

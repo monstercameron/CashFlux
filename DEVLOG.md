@@ -1,3 +1,38 @@
+## 2026-08-17 - the ranking is the easy half (WF-SM3)
+
+Any weighted sum produces an order. The ticket's actual requirement is the sentence after it: why does
+this outrank that. A list of scores does not answer it - a reader comparing two rows of numbers is doing
+the work the app was supposed to do - so Why names the single criterion that decided each pair, and
+reports a close call rather than manufacturing a reason when the gap is inside five percent. On the
+sample, four of the seven pairs come back "About level - take either", which is the honest answer and the
+one a score list would never give.
+
+Two scoring decisions were worth the argument. Confidence multiplies rather than adds: a saving you are
+unsure of is worth less than the same saving you are certain of, but added to the score, a completely
+pointless action somebody is perfectly sure about climbs on certainty alone. And effort and
+irreversibility are costs that can only subtract - being easy and reversible does not make an action
+worth doing, it makes it cheap to try.
+
+The blocker was upstream, and finding it was the useful part. smart.Insight had no way to say whether its
+amount recurs, and "$40 from a cancelled subscription" is not the same size as "$40 from a one-off
+refund". So the insight type now carries an amount kind, and calling one of the new setters is a CLAIM -
+that the amount is what DOING the action is worth. A subscription that needs assigning to a household
+member carries its cost for context and saves nothing; it keeps the plain setter and stays out of the
+ranking entirely.
+
+Five detectors declare so far. Everything else is excluded, and the count is shown: "191 other findings
+aren't ranked: they don't say what acting on them is worth". That line is doing real work - a list that
+silently drops findings reads as a complete ranking of everything the app knows, and this one is
+emphatically not that yet.
+
+A naming collision was a useful accident: Cadence was already taken in package smart for how often a
+FEATURE RUNS. The compiler caught it, and the field became AmountKind, which is the better name anyway -
+the two would have been confused on sight.
+
+Still open, and stated in the ticket: effort, reversibility and urgency are ranking inputs with no
+source. Every detector-derived action is currently reported as low-effort, reversible and undated,
+because inventing an effort rating no detector supplies would be worse than not having one.
+
 ## 2026-08-17 - a habit is a thing that repeats (WF-SM2)
 
 "Spend rises after payday" and "weekend delivery is accelerating" are the same question asked twice: is
