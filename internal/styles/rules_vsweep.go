@@ -884,4 +884,19 @@ func registerVSweep() {
 		fontSize("1rem"),
 	)
 
+	// ─── FP-T1f: the income recorder ─────────────────────────────────────────
+	rule(".income-wrap",
+		marginTop("0.4rem"),
+	)
+	rule(".income-form",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(8rem, 1fr))"),
+		alignItems("end"),
+		gap("0.5rem"),
+		marginTop("0.4rem"),
+		padding("0.5rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md, 8px)"),
+	)
+
 }

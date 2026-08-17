@@ -1272,8 +1272,37 @@ bottom-up per SDLC.
   bool. Add (1) Schedule C line taxonomy (`TaxLine` on Category + grouped export), (2) realized
   capital-gains report (needs FP-T1d), (3) estimated quarterly tax (income × rate + safe-harbor). Quicken's
   signature small-biz area; `reports/deductible.go`+`yeartax.go`+`taxgather.go` already exist to build on.
-- [ ] **FP-T1f — Dividend / investment-income tracking.** No field/flow today; tag income txns to a holding
+- [x] **FP-T1f — Dividend / investment-income tracking.** No field/flow today; tag income txns to a holding
   + roll up investment income. Pillar of the Empower/Monarch investment view.
+  — DONE (2026-08-17). One field (`Transaction.HoldingID`), a pure `internal/investincome`, and a
+  recorder on each position.
+
+  WHY IT IS A SEPARATE FACT: a dividend and a price rise move the account balance identically, so the
+  growth chart cannot tell them apart — but one is cash the household received and was taxed on in the
+  year it arrived, and the other is a number on a screen. A position can be flat for a decade and still
+  have paid for a holiday every year, and nothing in the app could say so.
+
+  A TAG, NOT A PARALLEL LEDGER. The payment posts as a real income transaction on the account, because
+  the money genuinely arrived there; a separate record of it would drift from the balance. The tag adds
+  attribution, which is the only thing a balance cannot supply.
+
+  UNTAGGED INCOME IS REPORTED AS UNTAGGED, never apportioned across positions. A yield assembled from
+  guesses is worse than an absent one, because it looks like a measurement. And untagged income only
+  counts when it landed in an INVESTMENT account — otherwise a paycheck would read as portfolio yield.
+
+  YIELD ON COST, not on current value. A position bought at $10, now worth $100, paying $1, yields 10%
+  on what was actually spent and 1% on what it is worth. The first answers "was this a good buy"; the
+  second reprices the past.
+
+  ANNUALIZING REFUSES under 90 days, and a SINGLE payment refuses outright — one dividend says nothing
+  about cadence, and multiplying it by four is a confident answer to a question the data cannot support.
+  `Span` closes the period the last payment stands for, so a year of quarterly dividends spans a year
+  rather than the nine months between the first and the last.
+
+  VERIFIED IN A BROWSER: 9/9. One payment reports 0.92% of cost and is NOT annualized; four quarterly
+  payments report $480 (3.66% of cost) and 3.67% a year; and the payment appears on the ledger as real
+  income, not as an investments-only record. One copy bug fixed on the way — a single payment read "1
+  payments", which is the kind of seam that makes a reader trust a number less than it deserves.
 
 **Tier 2 — engine already built + tested, only the UI is missing (highest leverage/$):**
 - [x] **FP-T2a — Loan amortization schedule table.** `payoff.AmortizeFixed`/`AmortizeWithExtra` return

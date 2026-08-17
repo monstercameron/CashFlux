@@ -15,6 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/investincome"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
@@ -406,6 +408,44 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 		uistate.BumpDataRevision()
 	}
 
+	// FP-T1f: what each position has paid out. Gathered once for the whole list
+	// rather than per row — a per-row scan of every transaction would be the same
+	// work repeated for each holding.
+	invAcctIDs := make(map[string]bool, 4)
+	for _, a := range app.Accounts() {
+		if !a.Archived && isInvestmentAccount(a.Type) {
+			invAcctIDs[a.ID] = true
+		}
+	}
+	incomeRates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
+	// Five years back: long enough that a yield-on-cost means something, short
+	// enough that a position's ancient history does not dominate a reading about
+	// what it pays now.
+	incomeSummary := investincome.Gather(app.Transactions(), invAcctIDs,
+		time.Now().AddDate(-5, 0, 0), time.Now().AddDate(0, 0, 1), incomeRates)
+
+	// FP-T1f: record a payout as a real income transaction, tagged to the
+	// position. A tag, not a separate ledger: the money genuinely arrived in the
+	// account, and a parallel record of it would drift from the balance.
+	onRecordIncome := func(h domain.Holding, amountMinor int64, when time.Time, note string) {
+		desc := uistate.T("income.defaultDesc", h.Name)
+		if note != "" {
+			desc = note
+		}
+		t := domain.Transaction{
+			ID: id.NewWithPrefix("txn"), AccountID: h.AccountID, HoldingID: h.ID,
+			Date: when, Desc: desc, Payee: h.Name,
+			Amount: money.New(amountMinor, v.Base), Source: domain.TxnSourceManual,
+		}
+		if err := app.PutTransaction(t); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("income.recorded",
+			fmtSignedMoney(amountMinor, v.Sym, v.Dec), h.Name), false)
+		uistate.BumpDataRevision()
+	}
+
 	// FP-T1d: persist a changed purchase history.
 	onSaveHolding := func(h domain.Holding) {
 		if err := app.PutHolding(h); err != nil {
@@ -464,7 +504,8 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 				weight = float64(portfolio.HoldingValueMinor(portfolio.FromDomain(h))) / float64(total) * 100
 			}
 			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete, OnPrice: onPrice,
-				Base: v.Base, OnSaveHolding: onSaveHolding, OnSell: onSell})
+				Base: v.Base, OnSaveHolding: onSaveHolding, OnSell: onSell,
+				Income: incomeSummary.ByHolding[h.ID], OnRecordIncome: onRecordIncome})
 		})
 		listBody = Div(css.Class("inv-list"), rows)
 	}

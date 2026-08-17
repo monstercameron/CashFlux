@@ -1,3 +1,36 @@
+## 2026-08-17 - what a position pays you, not just what it is worth (FP-T1f)
+
+A dividend and a price rise move a brokerage balance identically. The growth chart cannot tell them
+apart, so it reads both as the portfolio doing well - but one is cash the household received and was
+taxed on in the year it arrived, and the other is a number on a screen. A position can be flat for a
+decade and still have paid for a holiday every year, and nothing in the app could say so.
+
+The seam is one field on the transaction. Worth being explicit about what that choice rules out: the
+payment posts as a REAL income transaction on the account, because the money genuinely arrived there. A
+parallel investments-only record would drift from the balance within a month, and then there would be
+two answers about the same dollars.
+
+Three rules, each of the same kind - refuse rather than estimate.
+
+Untagged income is reported AS untagged, never spread across positions. A household whose dividends are
+mostly untagged needs to see the attributed figure is incomplete; the same figure with the untagged part
+quietly dropped reads as the whole truth. And untagged income only counts when it landed in an
+investment account, or a paycheck would read as portfolio yield.
+
+Yield is on COST, not on current value. A position bought at $10, now worth $100, paying $1, yields 10%
+on what was spent and 1% on what it is worth. The first answers "was this a good buy". The second
+reprices the past.
+
+Annualizing refuses under 90 days, and a single payment refuses outright. Most positions pay quarterly,
+so one payment says nothing about cadence and multiplying it by four is a confident answer to a question
+the data cannot support. `Span` also closes the period the last payment stands for - measuring
+first-to-last would make a year of quarterly dividends span nine months and understate the yield.
+
+Verified in a browser, 9/9, including that the dividend lands on the ledger and not only on the
+investments page. One copy bug found on the way: a single payment read "1 payments". Small, but it is
+exactly the kind of seam that makes a reader trust a number less than it deserves, so it got its own
+catalog key rather than a plural hack.
+
 ## 2026-08-17 - what a sale actually earned (FP-T1d)
 
 Selling a position used to delete it. The unrealized gain went with it, so the one figure a household

@@ -324,6 +324,19 @@ type Transaction struct {
 	// "split with Priya, she owes half"), distinct from Desc (the payee/what) and
 	// Tags. Empty = none. (TXC-2.)
 	Note string `json:"note,omitempty"`
+	// HoldingID tags this transaction as income PAID OUT BY a specific investment
+	// position — a dividend, a distribution, bond interest (FP-T1f).
+	//
+	// It is a tag, not a link that changes the money: the transaction still posts
+	// to its account exactly as before. What it adds is attribution, which is the
+	// only way to answer "what has this position actually paid me" — a question a
+	// balance chart cannot answer, because a dividend and a price rise move the
+	// balance identically while being different facts about the same money.
+	//
+	// Empty means untagged, and untagged income is reported AS untagged rather
+	// than apportioned across positions.
+	HoldingID string `json:"holdingId,omitempty"`
+
 	// BillAccountID marks this transaction as a recurring BILL PAYMENT toward a
 	// liability account (id). The Debt page reads the most recent such payment as
 	// the account's actual monthly payment (distinct from its minimum), and links

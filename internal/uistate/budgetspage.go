@@ -260,6 +260,10 @@ func UseHoldingLotsOpen() state.Atom[string] { return state.UseAtom("invest:lots
 // for none (FP-T1d).
 func UseHoldingSellOpen() state.Atom[string] { return state.UseAtom("invest:sellOpen", "") }
 
+// UseHoldingIncomeOpen returns the shared atom naming the holding whose income
+// recorder is open, "" for none (FP-T1f).
+func UseHoldingIncomeOpen() state.Atom[string] { return state.UseAtom("invest:incomeOpen", "") }
+
 // UseHoldingPriceEdit returns the shared atom naming the holding whose price is
 // being edited ("" = none), plus the draft price and as-of date (FP-T2c).
 //

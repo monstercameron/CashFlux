@@ -588,6 +588,23 @@ var vSweepKeys = Catalog{
 	"sell.record":      "Record this sale",
 	"sell.recorded":    "Recorded the sale of %s — %s realized.",
 
+	// FP-T1f — what a position has PAID OUT, as distinct from what it grew.
+	"income.add":           "Record a dividend",
+	"income.amount":        "Amount received (%s)",
+	"income.date":          "Paid on",
+	"income.note":          "Note",
+	"income.notePlaceholder": "Quarterly dividend",
+	"income.record":        "Record it",
+	"income.defaultDesc":   "Dividend from %s",
+	"income.recorded":      "Recorded %s from %s.",
+	"income.paid":          "Has paid you %s across %d payments.",
+	"income.paidOne":       "Has paid you %s in one payment.",
+	"income.paidYield":     "Has paid you %s across %d payments — %.2f%% of what the shares cost.",
+	"income.paidYieldOne":  "Has paid you %s in one payment — %.2f%% of what the shares cost.",
+	"income.annual":        "That is about %.2f%% a year on what you paid.",
+	"income.errAmount":     "Enter how much you received.",
+	"income.errDate":       "Enter the date it was paid — income is taxed in the year it arrives.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

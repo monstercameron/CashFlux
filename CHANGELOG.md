@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Investments tracks what your positions PAY you (FP-T1f).** Dividends and distributions are recorded
+  against the position that paid them, so each one can say what it has actually handed you and what that
+  is as a percentage of what the shares cost — a figure a balance chart can never show, because a
+  dividend and a price rise move a balance identically. Payments post to the ledger as real income, and
+  a yield is only annualized once there are enough payments to imply a cadence.
+
+### Added
 - **Investments records what a sale actually earned (FP-T1d).** Positions now carry a purchase history —
   what you bought, when, and what it cost — and "Record a sale" works out the real gain from it, split
   into short-term and long-term, with the answer previewed before you commit it. You choose which shares

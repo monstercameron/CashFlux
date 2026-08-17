@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/investincome"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	"github.com/monstercameron/CashFlux/internal/taxlot"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -42,6 +43,10 @@ type holdingRowProps struct {
 	OnSaveHolding func(domain.Holding)
 	// OnSell records a disposal and what it left behind (FP-T1d).
 	OnSell func(h domain.Holding, sale taxlot.Sale, remaining []taxlot.Lot, when time.Time, method taxlot.Method)
+	// Income is what this position has paid out, and OnRecordIncome adds to it
+	// (FP-T1f).
+	Income         investincome.HoldingIncome
+	OnRecordIncome func(h domain.Holding, amountMinor int64, when time.Time, note string)
 }
 
 // holdingRow renders one security position as a card: a security-type badge + name/ticker,
@@ -151,6 +156,10 @@ func holdingRow(props holdingRowProps) ui.Node {
 			// FP-T1d: purchase history, then the sale form it makes possible.
 			ui.CreateElement(holdingLotsPanel, holdingLotsProps{
 				H: h, Sym: props.Sym, Dec: props.Dec, Base: props.Base, OnSave: props.OnSaveHolding}),
+			// FP-T1f: what the position has paid out, and a way to record more.
+			ui.CreateElement(holdingIncomePanel, holdingIncomeProps{
+				H: h, Sym: props.Sym, Dec: props.Dec, Base: props.Base,
+				Income: props.Income, OnRecord: props.OnRecordIncome}),
 			ui.CreateElement(holdingSellForm, holdingSellProps{
 				H: h, Sym: props.Sym, Dec: props.Dec, Base: props.Base, OnSell: props.OnSell}),
 			Div(css.Class("inv-weight"),

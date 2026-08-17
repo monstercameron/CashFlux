@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/investincome"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	"github.com/monstercameron/CashFlux/internal/taxlot"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -346,4 +347,124 @@ func holdingSellForm(props holdingSellProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "sell-cancel-"+h.ID),
 				OnClick(cancel), uistate.T("action.cancel"))),
 	)
+}
+
+// --- recording income a position paid out (FP-T1f) --------------------------------
+
+// holdingIncomeProps is the dividend/distribution recorder for one position.
+type holdingIncomeProps struct {
+	H    domain.Holding
+	Sym  string
+	Dec  int
+	Base string
+	// Income is what this position has already paid out, over the window the
+	// surface chose.
+	Income investincome.HoldingIncome
+	// OnRecord posts the payment as income tagged to this holding.
+	OnRecord func(h domain.Holding, amountMinor int64, when time.Time, note string)
+}
+
+// holdingIncomePanel shows what a position has paid out and records a new
+// payment.
+//
+// A dividend and a price rise move the account balance identically, so the
+// growth chart cannot tell them apart — but one is cash the household received
+// and was taxed on, and the other is a number on a screen. This is where the
+// difference gets recorded.
+func holdingIncomePanel(props holdingIncomeProps) ui.Node {
+	h := props.H
+	openAtom := uistate.UseHoldingIncomeOpen()
+	amountS := ui.UseState("")
+	dateS := ui.UseState("")
+	noteS := ui.UseState("")
+
+	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
+	onDate := ui.UseEvent(func(v string) { dateS.Set(v) })
+	onNote := ui.UseEvent(func(v string) { noteS.Set(v) })
+	toggle := ui.UseEvent(Prevent(func() {
+		if openAtom.Get() == h.ID {
+			openAtom.Set("")
+			return
+		}
+		dateS.Set(time.Now().Format("2006-01-02"))
+		openAtom.Set(h.ID)
+	}))
+	record := ui.UseEvent(Prevent(func() {
+		amt, aerr := strconv.ParseFloat(strings.TrimSpace(amountS.Get()), 64)
+		if aerr != nil || amt <= 0 {
+			uistate.PostNotice(uistate.T("income.errAmount"), true)
+			return
+		}
+		when, derr := time.Parse("2006-01-02", strings.TrimSpace(dateS.Get()))
+		if derr != nil {
+			// The date is the whole point of recording it — income is taxed in the
+			// year it arrived, whatever was done with it afterwards.
+			uistate.PostNotice(uistate.T("income.errDate"), true)
+			return
+		}
+		if props.OnRecord != nil {
+			props.OnRecord(h, currency.MinorFromMajor(amt, props.Base), when, strings.TrimSpace(noteS.Get()))
+		}
+		amountS.Set("")
+		noteS.Set("")
+		openAtom.Set("")
+	}))
+
+	// The reading comes first, and it is stated against COST. A position bought at
+	// $10 now worth $100 and paying $1 yields 10% on what was actually spent and
+	// 1% on what it is worth; the first answers "was this a good buy", the second
+	// reprices the past.
+	var reading ui.Node = Fragment()
+	if props.Income.TotalMinor > 0 {
+		// One payment gets its own wording. "1 payments" is the kind of seam that
+		// makes a reader trust the number less than the number deserves.
+		amount := fmtSignedMoney(props.Income.TotalMinor, props.Sym, props.Dec)
+		one := props.Income.Count == 1
+		line := uistate.T("income.paid", amount, props.Income.Count)
+		if one {
+			line = uistate.T("income.paidOne", amount)
+		}
+		if y, ok := investincome.YieldOnCostPct(props.Income.TotalMinor, h.CostBasisMinor); ok {
+			line = uistate.T("income.paidYield", amount, props.Income.Count, y)
+			if one {
+				line = uistate.T("income.paidYieldOne", amount, y)
+			}
+		}
+		reading = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "holding-income-"+h.ID), line)
+		// Annualizing is offered only when the payments cover enough time to
+		// support it — otherwise one quarterly dividend becomes a yearly yield.
+		if span := investincome.Span(props.Income); span > 0 {
+			if ay, ok := investincome.AnnualizedYieldPct(props.Income.TotalMinor, h.CostBasisMinor, span); ok {
+				reading = Fragment(reading,
+					P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "holding-income-annual-"+h.ID),
+						uistate.T("income.annual", ay)))
+			}
+		}
+	}
+
+	var form ui.Node = Fragment()
+	if openAtom.Get() == h.ID {
+		form = Form(css.Class("income-form"), Attr("data-testid", "income-form-"+h.ID), OnSubmit(record),
+			labeledField(uistate.T("income.amount", props.Sym),
+				Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+					Attr("data-testid", "income-amount-"+h.ID),
+					uiw.FieldValue(amountS.Get()), OnInput(onAmount))),
+			labeledField(uistate.T("income.date"),
+				Input(css.Class("field"), Type("date"), Attr("data-testid", "income-date-"+h.ID),
+					uiw.FieldValue(dateS.Get()), OnInput(onDate))),
+			labeledField(uistate.T("income.note"),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "income-note-"+h.ID),
+					Placeholder(uistate.T("income.notePlaceholder")),
+					uiw.FieldValue(noteS.Get()), OnInput(onNote))),
+			Button(css.Class("btn", "btn-primary"), Type("submit"),
+				Attr("data-testid", "income-save-"+h.ID), uistate.T("income.record")),
+		)
+	}
+	return Div(css.Class("income-wrap"),
+		reading,
+		Button(css.Class("btn", "btn-quiet"), Type("button"),
+			Attr("data-testid", "holding-income-toggle-"+h.ID),
+			Attr("aria-expanded", boolAttr(openAtom.Get() == h.ID)),
+			OnClick(toggle), uistate.T("income.add")),
+		form)
 }
