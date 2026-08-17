@@ -2724,23 +2724,44 @@ func (a *App) RestoreTransactions(txns []domain.Transaction) error {
 // transfer legs ONCE from a single ledger snapshot (instead of re-fetching the whole
 // ledger per id, which made a large bulk delete O(N²) and appear frozen), then deletes
 // them all inside BulkMutate so the surface re-renders once.
-func (a *App) DeleteTransactionsBulk(ids []string) error {
+// ExpandTransferPairs returns ids plus the reciprocal leg of every transfer among
+// them — exactly the set DeleteTransactionsBulk will remove. Callers that snapshot
+// before a bulk delete must snapshot THIS set, not the ids they selected: a
+// selection holding one leg of a transfer takes its counterpart down with it, and
+// an undo built from the selection alone silently restores half a transfer,
+// leaving the other account permanently short.
+func (a *App) ExpandTransferPairs(ids []string) []string {
 	all := a.Transactions()
 	byID := make(map[string]domain.Transaction, len(all))
 	for _, t := range all {
 		byID[t.ID] = t
 	}
-	toDel := make(map[string]bool, len(ids))
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	add := func(id string) {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
 	for _, id := range ids {
-		toDel[id] = true
+		add(id)
 		if t, ok := byID[id]; ok && t.IsTransfer() {
 			for _, u := range all {
 				if isReciprocalTransferLeg(t, u) {
-					toDel[u.ID] = true
+					add(u.ID)
 					break
 				}
 			}
 		}
+	}
+	return out
+}
+
+func (a *App) DeleteTransactionsBulk(ids []string) error {
+	toDel := make(map[string]bool, len(ids))
+	for _, id := range a.ExpandTransferPairs(ids) {
+		toDel[id] = true
 	}
 	var firstErr error
 	a.BulkMutate(func() {

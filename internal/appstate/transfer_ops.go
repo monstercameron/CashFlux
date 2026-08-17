@@ -47,6 +47,109 @@ type TransferParams struct {
 	FeeMinor int64
 }
 
+// PutTransactionWithTransferPair writes an edited transaction and, when it is one
+// leg of a transfer, mirrors the edit onto the reciprocal leg so the pair stays
+// balanced. It takes the transaction as it was BEFORE the edit (prior) as well as
+// the edited copy (next), because the reciprocal leg is located by matching the
+// pair's old amount and date — after the edit lands they no longer agree.
+//
+// C629: a transfer is two independent rows, and the edit form only ever wrote the
+// one row the user opened. Correcting a transfer's amount from the ledger updated
+// one account and not the other: the legs stopped summing to zero, so the net
+// total moved by the edit even though no money entered or left the household, and
+// every downstream figure that sums transactions inherited the error. It also
+// broke delete-both, because isReciprocalTransferLeg matches on equal dates and
+// exactly opposite amounts — an edited leg no longer looks reciprocal, so deleting
+// it silently orphaned its counterpart.
+//
+// Only the two fields that define the pairing are mirrored: the amount (through
+// the same FX and liability-signing path CreateTransferPair uses, so a
+// cross-currency pair converts rather than being copied) and the date. Per-leg
+// fields are deliberately left alone — Payee in particular is the OTHER account's
+// name on each leg, so copying it across would be wrong.
+//
+// Observers fire once, after both legs are written.
+func (a *App) PutTransactionWithTransferPair(prior, next domain.Transaction) error {
+	if !next.IsTransfer() {
+		return a.PutTransaction(next)
+	}
+	amountChanged := prior.Amount.Amount != next.Amount.Amount
+	dateChanged := !prior.Date.Equal(next.Date)
+	if !amountChanged && !dateChanged {
+		return a.PutTransaction(next)
+	}
+
+	// Locate the counterpart against the PRE-edit values, while the pair still matches.
+	var pair domain.Transaction
+	found := false
+	for _, t := range a.Transactions() {
+		if isReciprocalTransferLeg(prior, t) {
+			pair, found = t, true
+			break
+		}
+	}
+	if !found {
+		// Nothing to keep in step (an already-orphaned leg, or a cross-currency pair
+		// that isReciprocalTransferLeg cannot match). Write the one row and let the
+		// caller's own validation speak.
+		return a.PutTransaction(next)
+	}
+
+	if amountChanged {
+		pair.Amount = a.mirroredLegAmount(next, pair)
+	}
+	if dateChanged {
+		pair.Date = next.Date
+	}
+
+	// Suppress per-leg firings so the surface re-renders once, with both legs written.
+	prev := a.suppressTxnObservers
+	a.suppressTxnObservers = true
+	err := a.PutTransaction(next)
+	if err == nil {
+		err = a.PutTransaction(pair)
+	}
+	a.suppressTxnObservers = prev
+	if err != nil {
+		return err
+	}
+	a.fireTxnMutated()
+	return nil
+}
+
+// mirroredLegAmount returns the amount the counterpart leg must carry so the pair
+// still represents one move of money: the negation of the edited leg, converted
+// into the counterpart's own currency and liability-signed the same way
+// CreateTransferPair signs a payment into a debt account.
+func (a *App) mirroredLegAmount(edited, pair domain.Transaction) money.Money {
+	abs := edited.Amount.Amount
+	if abs < 0 {
+		abs = -abs
+	}
+	out := money.New(abs, pair.Amount.Currency)
+	if edited.Amount.Currency != pair.Amount.Currency {
+		s := a.Settings()
+		rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
+		if conv, cerr := rates.Convert(money.New(abs, edited.Amount.Currency), pair.Amount.Currency); cerr == nil {
+			out = conv
+		}
+	}
+	// The counterpart carries the opposite sign: whichever leg the user edited, the
+	// other one is the far side of the same move.
+	if !edited.Amount.IsNegative() {
+		out.Amount = -out.Amount
+	}
+	if out.Amount > 0 {
+		for _, acc := range a.Accounts() {
+			if acc.ID == pair.AccountID && acc.Class == domain.ClassLiability {
+				out.Amount = liabilityPaymentMinor(acc, a.Transactions(), out.Amount)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // CreateTransferPair records a paired inter-account transfer: a negative "out"
 // leg on the source account and a positive "in" leg on the destination account.
 // The in-leg amount is FX-converted via the app's current exchange-rate table
