@@ -22,6 +22,12 @@ var txnClassifyKeys = Catalog{
 	"transactions.accountMovePartner": "The other side of this transfer moves with it.",
 	// Also invisible from the picker, and the more alarming of the two.
 	"transactions.accountMoveReconciled": "%s is reconciled through this date, so its balance will change.",
+	// Refusals, in the user's terms. The underlying errors name a Go package and
+	// explain the problem in terms of the code ("balance uncomputable"), which is
+	// how the app is built and none of the reader's business.
+	"transactions.accountMoveCurrency": "This amount is in %s and %s is kept in a different currency, so it cannot move there. Pick an account in the same currency as the amount.",
+	"transactions.accountMoveSelf":     "%s is already the other side of this transfer, so this row cannot sit on it too.",
+	"transactions.accountMoveRefused":  "This row cannot move to %s.",
 
 	// C673: the group heading. "Other account this money moved to or from" named
 	// a FIELD and left the reader to work out what filling it in would do; it read

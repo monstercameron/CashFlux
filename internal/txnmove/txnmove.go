@@ -40,11 +40,35 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 )
 
+// Reason is why a move would be refused, as a value the UI can turn into its own
+// sentence. Err carries the same fact for programmatic callers and for logs, but
+// a UI must never render it: "txnmove: this row is in USD and …" tells a person
+// the name of a Go package, which is a detail of how the app is built and none of
+// their business.
+type Reason string
+
+const (
+	// ReasonNone means the move is allowed.
+	ReasonNone Reason = ""
+	// ReasonUnknownAccount means the target account does not exist.
+	ReasonUnknownAccount Reason = "unknown-account"
+	// ReasonSelfTransfer means the row is a transfer leg and the target is its own
+	// counterparty, which would put one account on both sides of a move.
+	ReasonSelfTransfer Reason = "self-transfer"
+	// ReasonCurrency means the row's currency is not the target account's, which
+	// would leave that account's balance uncomputable.
+	ReasonCurrency Reason = "currency"
+)
+
 // Plan is what moving a transaction would do, computed before anything is
 // written so the consequence can be shown and confirmed.
 type Plan struct {
-	// Err is why the move would be refused, if it would be.
+	// Err is why the move would be refused, if it would be. For callers and logs;
+	// see Reason for the value a UI should render copy from.
 	Err error
+	// Reason is Err as a switchable value, so the surface can write the sentence
+	// in the user's language rather than printing a Go error.
+	Reason Reason
 	// NoOp reports that the row is already on the requested account. Not an error:
 	// re-choosing the current account is a person confirming, not a mistake.
 	NoOp bool
@@ -73,7 +97,7 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 	}
 	to, ok := domain.AccountByID(accounts, toAccountID)
 	if !ok {
-		p.Err = fmt.Errorf("txnmove: account %q not found", toAccountID)
+		p.Err, p.Reason = fmt.Errorf("txnmove: account %q not found", toAccountID), ReasonUnknownAccount
 		return p
 	}
 	p.ToName = to.Name
@@ -85,15 +109,15 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 	// counterparty would make it exactly that, so it is refused with the reason
 	// rather than silently clearing the transfer.
 	if t.IsTransfer() && t.TransferAccountID == toAccountID {
-		p.Err = fmt.Errorf("txnmove: %s is already the other side of this transfer, so the row cannot move onto it", to.Name)
+		p.Err, p.Reason = fmt.Errorf("txnmove: %s is already the other side of this transfer", to.Name), ReasonSelfTransfer
 		return p
 	}
 	// Currency: refused, not converted. See the package doc — a mismatch drops the
 	// whole account out of the balance map, and converting would rewrite what the
 	// bank recorded.
 	if t.Amount.Currency != "" && to.Currency != "" && t.Amount.Currency != to.Currency {
-		p.Err = fmt.Errorf("txnmove: this row is in %s and %s is in %s — moving it would leave the account's balance uncomputable",
-			t.Amount.Currency, to.Name, to.Currency)
+		p.Err, p.Reason = fmt.Errorf("txnmove: row is %s, account %s is %s",
+			t.Amount.Currency, to.Name, to.Currency), ReasonCurrency
 		return p
 	}
 

@@ -437,9 +437,24 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		var movedPartner domain.Transaction
 		haveMovedPartner := false
 		if accountS.Get() != "" && accountS.Get() != t.AccountID {
+			plan := txnmove.PlanMove(t, accountS.Get(), app.Accounts(), app.Transactions())
+			if plan.Err != nil {
+				// Same reasoning as the inline note: say it in the user's terms, not
+				// the package's. This path is reachable when the picker changed and the
+				// save came before the preview re-rendered.
+				switch plan.Reason {
+				case txnmove.ReasonCurrency:
+					errMsg.Set(uistate.T("transactions.accountMoveCurrency", t.Amount.Currency, plan.ToName))
+				case txnmove.ReasonSelfTransfer:
+					errMsg.Set(uistate.T("transactions.accountMoveSelf", plan.ToName))
+				default:
+					errMsg.Set(uistate.T("transactions.accountMoveRefused", plan.ToName))
+				}
+				return
+			}
 			moved, partner, hasPartner, merr := txnmove.Apply(t, accountS.Get(), app.Accounts(), app.Transactions())
 			if merr != nil {
-				errMsg.Set(merr.Error())
+				errMsg.Set(uistate.T("transactions.accountMoveRefused", plan.ToName))
 				return
 			}
 			t, movedPartner, haveMovedPartner = moved, partner, hasPartner
@@ -957,8 +972,19 @@ func accountField(app *appstate.App, txn domain.Transaction, selected string, on
 		p := txnmove.PlanMove(txn, selected, accounts, app.Transactions())
 		switch {
 		case p.Err != nil:
+			// The REASON, not the error. p.Err says "txnmove: row is USD, account
+			// Travel Card (EUR) is EUR" — which names a Go package at somebody who
+			// only wanted to fix a mis-import, and explains the failure in terms of
+			// the code rather than of their money.
+			msg := uistate.T("transactions.accountMoveRefused", p.ToName)
+			switch p.Reason {
+			case txnmove.ReasonCurrency:
+				msg = uistate.T("transactions.accountMoveCurrency", txn.Amount.Currency, p.ToName)
+			case txnmove.ReasonSelfTransfer:
+				msg = uistate.T("transactions.accountMoveSelf", p.ToName)
+			}
 			note = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-account-note"),
-				Attr("role", "status"), p.Err.Error())
+				Attr("role", "status"), msg)
 		default:
 			lines := []ui.Node{Span(uistate.T("transactions.accountMoveEffect", p.FromName, p.ToName))}
 			if p.HasPartner {
