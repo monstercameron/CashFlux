@@ -112,8 +112,19 @@ func TestJumpToTheCurrentPageIsANoOp(t *testing.T) {
 // must never sit there displaying a page the ledger is not on.
 func TestJumpBoxShowsTheRealPageWhenIdle(t *testing.T) {
 	f, _ := pagerJump(t, 7)
-	// The framework applies `value` as a DOM property, not an attribute.
-	got, _ := jumpBox(t, f).Property("value").(string)
+	// Read the ATTRIBUTE, not the property. A text field's value stopped being a
+	// value prop when it moved to uiw.FieldValue — it is declared as data-cf-value
+	// and carried into the DOM property at runtime by the delegated input listener
+	// and MutationObserver that FieldValue installs. Those are browser machinery,
+	// and this fixture is a mock DOM that does not run them, so asking for the
+	// property here measures the testkit rather than the app: it reads "" no matter
+	// what the pager declares.
+	//
+	// The user-facing contract is unchanged and still checked — the attribute IS
+	// what the component says the page is. Confirmed in a real browser against this
+	// commit: the idle box reads 1, and after two Next clicks reads 3 while the
+	// range label says "51–75 of 3230".
+	got := jumpBox(t, f).Attr(fieldValueAttr)
 	if got != "7" {
 		t.Errorf("jump box value = %q, want %q — an idle box must read the page actually shown", got, "7")
 	}
