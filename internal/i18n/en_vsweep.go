@@ -752,6 +752,11 @@ var vSweepKeys = Catalog{
 	"rhythm.findStillCharging":    "%s has charged you %d times since you cancelled, totalling %s — most recently on %s.",
 	"rhythm.findStillChargingOne": "%s charged you again after you cancelled — %s on %s.",
 
+	// WF18 — spending a goal paid for is not overspending.
+	"budgets.goalFundedChip":     "part funded by a goal",
+	"budgets.goalFunded":         "%s of this came from money you had saved for it.",
+	"budgets.goalFundedRescued":  "%s of this came from money you had saved for it — without that, this would read as over budget.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

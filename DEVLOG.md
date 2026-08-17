@@ -1,3 +1,36 @@
+## 2026-08-17 - the budget could not tell two identical spends apart (WF18)
+
+Two transactions can look the same in a ledger - same amount, same category, same day - and mean
+opposite things. One blew the month's budget. The other came out of a fund saved over months for exactly
+this purchase.
+
+Both are real spending; only one is overspending. A budget that cannot tell them apart punishes somebody
+for executing their own plan, which is the fastest way to teach them the budget is wrong and can be
+ignored.
+
+The gap was a data-model one, and the codebase had already named it. `internal/rules/rules.go` says of a
+goal-link rule action: "GOAL-LINK has no target: a transaction carries no goal reference at all - goals
+attach to accounts and categories - so it is a data-model question, not a missing action." So the first
+thing this ticket needed was `Transaction.GoalID`.
+
+The rule I care most about: goal-funded spending is SEPARATED, never deducted. The money still left the
+account, still appears in the ledger, still counts toward what was spent. A budget screen that quietly
+shrank its own totals would be a worse lie than the one being fixed.
+
+And the sentence that does the work is conditional. "$420 of this came from money you had saved for it -
+without that, this would read as over budget" fires only when the ordinary spend is inside the limit and
+the goal-funded part is what would have tipped it. On the sample the plain form appears instead, because
+shopping is already over on its own. Claiming the goal rescued it would be precisely the lie this
+feature exists to avoid, so the browser check asserts that distinction rather than the happier string.
+
+Then I walked straight into the compact-row trap - put the line in the card layout, which /budgets omits
+- one day after writing that lesson up under WF17. The fix was quick because the note existed; the note
+did not stop me making the mistake. Knowing a trap and avoiding it turn out to be different skills, and
+the honest conclusion is that the check has to be part of the routine rather than something I remember.
+
+Fourth sample-data gap this week too: a feature with no example reads as unbuilt, so a crib bought from
+the baby fund now sits in the current month.
+
 ## 2026-08-17 - cancelling is the easy half (WF12)
 
 The starred clause of WF12 is post-cancellation monitoring: using later imports to confirm the charge

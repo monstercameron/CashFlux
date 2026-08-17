@@ -282,10 +282,47 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
 
   STILL OPEN in this bundle: starting balances, last-month / 3-month-average presets, priority-plus-due-
   date auto-assign, and the available-cash vs planned-income split.
-- [ ] **WF18 — Goal-funded spending bridge.** When money saved for a goal is spent, the budget treats
+- [x] **WF18 — Goal-funded spending bridge.** When money saved for a goal is spent, the budget treats
   it as *funded* spending, not overspend: link goal→account/virtual allocation, link a purchase to the
   goal, reduce the goal balance, raise that purchase's funded budget availability, preserve the
   ordinary-vs-planned distinction. (Copilot benchmark.)
+  — DONE (2026-08-17). New `Transaction.GoalID`, a pure `internal/goalfunded`, and the marker on the
+  budget row.
+
+  THIS CLOSED A GAP THE CODEBASE HAD ALREADY NAMED. `internal/rules/rules.go` says of a goal-link rule
+  action: "GOAL-LINK has no target: a transaction carries no goal reference at all — goals attach to
+  accounts and categories — so it is a data-model question, not a missing action." This is that question
+  answered.
+
+  WHY IT MATTERS: two transactions can look identical in the ledger — same amount, same category, same
+  day — and mean opposite things. One blew the month's budget; the other came out of a fund saved over
+  months for exactly this. Both are real spending and only one is overspending, and a budget that cannot
+  tell them apart punishes somebody for executing their own plan, which is the fastest way to teach them
+  the budget is wrong and can be ignored.
+
+  SEPARATED, NEVER DEDUCTED. Goal money still left the account, still appears in the ledger, and still
+  counts toward what was spent. A budget screen that quietly shrank its own totals would be a worse lie
+  than the one being fixed.
+
+  THE SENTENCE THAT DOES THE WORK is the conditional one: "$420 of this came from money you had saved
+  for it — without that, this would read as over budget" fires ONLY when the ordinary spend is inside
+  the limit and the goal-funded part is what would have tipped it. On the sample the plain form appears
+  instead, because shopping is already over on its own — claiming the goal rescued it would be exactly
+  the lie this feature exists to avoid, and the browser check asserts that distinction rather than the
+  happier string.
+
+  `RemainingMinor` never goes negative: spending more than a goal held is real (the difference came from
+  elsewhere), but a negative balance would read as a debt the household does not owe.
+
+  I HIT THE COMPACT-ROW TRAP AGAIN — put the line in the card layout, which `/budgets` omits — one day
+  after writing that lesson up under WF17. The marker now renders in both densities. Worth recording that
+  knowing a trap and avoiding it are different things: the fix was fast because the note existed, but the
+  note did not stop me walking into it.
+
+  A sample purchase (a crib from the baby fund, dated in the current month) demonstrates it, because a
+  feature with no sample data reads as unbuilt — the fourth time this week.
+
+  VERIFIED IN A BROWSER: 8/8.
 
 **Trust & recoverability**
 - [ ] **WF-AUDIT — Full history & audit trail.** ★ For important values (balances, ownership, rules,

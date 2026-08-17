@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending a goal paid for is no longer treated as overspending (WF18).** A purchase can be linked to
+  the goal that funded it, and the budget says so — including when the goal is the only reason the budget
+  would otherwise read as over. The spending is separated, never hidden: the money still left the account
+  and still counts toward the total.
+
+### Added
 - **Cancelled subscriptions are watched to see whether they actually stopped (WF12).** Recurring findings
   now separate "one last charge, as expected" from "this never stopped", and say how many times, how much
   in total, and when the most recent one landed. Silence only counts as stopped after two billing cycles,

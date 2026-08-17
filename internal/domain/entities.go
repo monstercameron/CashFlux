@@ -349,6 +349,23 @@ type Transaction struct {
 	// than apportioned across positions.
 	HoldingID string `json:"holdingId,omitempty"`
 
+	// GoalID links this purchase to the goal that FUNDED it (WF18).
+	//
+	// The gap this closes was named in internal/rules/rules.go: "a transaction
+	// carries no goal reference at all — goals attach to accounts and categories
+	// — so it is a data-model question, not a missing action". This is that
+	// question answered.
+	//
+	// It exists so a budget can tell apart two spends that look identical in the
+	// ledger: money that blew the month's grocery budget, and money that came out
+	// of a fund saved for exactly this. Both are real spending; only one is
+	// overspending, and a budget that cannot see the difference punishes people
+	// for executing the plan they made.
+	//
+	// Empty means ordinary spending, which is what every existing transaction
+	// loads as.
+	GoalID string `json:"goalId,omitempty"`
+
 	// BillAccountID marks this transaction as a recurring BILL PAYMENT toward a
 	// liability account (id). The Debt page reads the most recent such payment as
 	// the account's actual monthly payment (distinct from its minimum), and links

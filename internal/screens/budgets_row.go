@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goalfunded"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -517,6 +518,51 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// a status chip, and the ⋯ menu (which absorbs the money moves above). Everything
 	// analytical (pie, metrics, captions, notes, to-dos) belongs to the card layout;
 	// compact is for reading fifteen budgets without scrolling (design critique #9).
+	// WF18: spending a goal paid for is not overspending. Two transactions can
+	// look identical in the ledger and mean opposite things — one blew the budget,
+	// the other came out of a fund saved for exactly this — and a budget that
+	// cannot tell them apart punishes somebody for executing their own plan.
+	//
+	// The funded amount is SEPARATED, never deducted: the money still left the
+	// account, and a budget that quietly shrank its own totals would be a worse
+	// lie than the one being fixed.
+	var fundedLine ui.Node = Fragment()
+	fundedChip, fundedTitle := "", ""
+	if app := appstate.Default; app != nil && !lastMonthMode {
+		cats := map[string]bool{}
+		if s.Budget.CategoryID != "" {
+			cats[s.Budget.CategoryID] = true
+		}
+		for _, c := range s.Budget.TrackedCategoryIDs() {
+			cats[c] = true
+		}
+		base := app.Settings().BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		// The row does not carry its period bounds, so derive them the same way the
+		// page does — from the budget's own period against the household's week
+		// start. Re-deriving here rather than threading a new prop keeps this
+		// additive, and both paths call the same function so they cannot disagree.
+		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, time.Now(),
+			uistate.LoadPrefs().WeekStartWeekday())
+		split := goalfunded.Summarize(app.Transactions(), cats, pStart, pEnd,
+			currency.Rates{Base: base, Rates: app.Settings().FXRates})
+		if split.HasFunded() {
+			key := "budgets.goalFunded"
+			if _, rescued := split.OverBy(s.Limit.Amount); rescued {
+				// The sentence worth showing: without the goal this would read as
+				// overspent, and saying so is the difference between a budget that
+				// understands the plan and one that only counts.
+				key = "budgets.goalFundedRescued"
+			}
+			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)))
+			fundedChip = uistate.T("budgets.goalFundedChip")
+			fundedLine = Span(css.Class("budget-sub", tw.TextDim),
+				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle)
+		}
+	}
+
 	if props.Compact {
 		crowCls := "budget-crow " + budgetRowStateClass(s, props.PaceOver)
 		// C591: the name is a HEADING, not a second copy of the Transactions
@@ -580,6 +626,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					// taken the width it needs, and drops out entirely on narrow panes.
 					Span(css.Class("budget-crow-notes-text"), noteText))),
 				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
+				// WF18: and so does goal-funded spending, for the same reason — the
+				// card's line lives behind a disclosure this density omits, so a budget
+				// that only looks over because a goal paid for part of it would read as
+				// a plain overspend here. Exactly the trap WF17 hit one line below.
+				If(fundedChip != "", Span(css.Class("pill budget-crow-chip", tw.TextDim),
+					Attr("data-testid", "budget-goalfunded-chip-"+s.Budget.ID),
+					Attr("title", fundedTitle), fundedChip)),
 				// WF17: a paused target has to show HERE too. The card's target line
 				// lives behind the details disclosure, which compact mode omits — so
 				// pausing from the ⋯ menu produced no visible change at all, and the
@@ -832,6 +885,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				effectiveCapLine,
 				envLine,
 				envDebtLine,
+				fundedLine,
 				paceLine,
 				// --- Everything explanatory, behind one disclosure (C595). The card used to
 				// stack all of it between the bar and the actions, so "how much is left?"

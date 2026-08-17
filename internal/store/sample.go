@@ -763,6 +763,16 @@ func SampleDatasetAt(now time.Time) Dataset {
 	// balance stays single-currency; NetWorth converts at the account level.
 	add(domain.Transaction{ID: "tx-rome-hotel-2024-09", AccountID: travelcard, Date: date(2024, time.September, 10), Payee: "Hotel Roma", Desc: "Hotel (Rome)", CategoryID: catTravel, Amount: eur(-45000), MemberID: marcus, Cleared: true, Tags: []string{"vacation", "fx"}})
 	add(domain.Transaction{ID: "tx-rome-dinner-2024-09", AccountID: travelcard, Date: date(2024, time.September, 12), Payee: "Trattoria Roma", Desc: "Dinner (Rome)", CategoryID: catDining, Amount: eur(-8500), MemberID: priya, Cleared: true, Tags: []string{"vacation", "fx"}})
+	// WF18: a purchase the baby fund paid for, dated in the CURRENT month so the
+	// separation is demonstrable on a first run. Without the goal link it reads as
+	// a shopping blowout; with it, the budget can say the money was set aside on
+	// purpose. The feature is invisible without an example — the same gap that hid
+	// funding targets and retirement accounts.
+	add(domain.Transaction{ID: "tx-goalfunded-crib", AccountID: checking,
+		Date: time.Date(now.Year(), now.Month(), 6, 0, 0, 0, 0, time.UTC),
+		Payee: "Northside Goods", Desc: "Crib and nursery setup — from the baby fund",
+		CategoryID: catShopping, Amount: usd(-42000), MemberID: priya,
+		Cleared: true, GoalID: "goal-baby"})
 	// A returned online purchase — a positive amount on an expense category (refund),
 	// so refund/return handling and category nets have a real case to chew on.
 	add(domain.Transaction{ID: "tx-return-2026-03", AccountID: card, Date: date(2026, time.March, 20), Payee: "Amazon", Desc: "Refund — returned item", CategoryID: catShopping, Amount: usd(6500), MemberID: priya, Cleared: true, Tags: []string{"refund"}})
