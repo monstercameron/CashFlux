@@ -5347,6 +5347,15 @@ Remaining atomic todos:
 - [ ] **[C68][MAJOR]** Guard `ActionFlagReview` against transfer legs — `internal/appstate/appstate.go` `case workflow.ActionFlagReview:` (~l1226) — add `if t.IsTransfer() { return }` (audit other applyEffect cases for the same).
 - [ ] **[C69][MAJOR]** "From account" `<select>` in the new modal — exclude archived + the selected "To" account (mirror `accounts_row.go:406-431`); block submit if `fromID == toID`.
 - [ ] **[C70][MAJOR]** Branch delete-confirm on `t.IsTransfer()` — `internal/screens/transactions_row.go:~64` — new i18n key `transactions.deleteTransferConfirm` ("Both sides of this transfer will be removed…").
+- [ ] **[C672][BLOCKER][REPORTS][TRANSFER][DATA]** Prevent category-only transfer rows from leaking into income/spending — production Money Flow currently shows positive rows categorized `Transfer` as income and negative rows categorized `Transfers` as expenditure when `TransferAccountID` is empty. The structural relationship, not the category label or sign, must decide whether a row is a transfer. Add an import/backfill diagnostic for canonical transfer categories and transfer-like descriptions, route ambiguous rows to review, and repair confirmed rows by setting the counterparty account (plus `BillAccountID` only for an intentional card/loan payment). Do not globally hide every category named Transfer, because that could conceal legitimate income or spending. Acceptance: the supplied 40-row statement produces zero transfer income/spending after review; Money Flow, reports, and spending budgets agree; unresolved rows are visibly flagged rather than silently counted.
+- [ ] **[C673][MAJOR][TXN][TRANSFER][UX]** Make the transfer action explicit in the transaction editor — replace the easy-to-miss `Other account this money moved to or from` field with a clearly grouped **Mark as transfer** control that explains that positive/negative signs are account-relative and that the row will leave income, spending, budgets, and reports. Keep category assignment separate and prevent a user from believing that choosing a `Transfer` category alone is sufficient.
+- [ ] **[C674][MAJOR][TXN][TRANSFER][PAIR][WORKFLOW]** Add a first-class unmatched-leg pairing workflow — from Review inbox and the transaction row, let a user choose the owned counterparty account for an imported leg, preview the resulting classification, and show whether a reciprocal leg was found. Never invent a counterpart transaction as a side effect of classification. Handle one-sided card/loan payments and duplicated same-account legs with an explicit repair path; fold the domain decision into C527 rather than guessing from description text.
+- [ ] **[C675][MAJOR][TXN][TRANSFER][UX][VISUAL]** Add unmistakable transfer and debt-payment affordances in the ledger — show a Transfer badge/relationship summary for both legs, show Debt payment when `BillAccountID` is set, and avoid relying on income-green/spending-red amount color for transfer rows. The row and editor should make clear that a transfer affects balances but not cash-flow totals.
+- [ ] **[C676][MAJOR][TXN][TRANSFER][BULK]** Support bulk classification from Review inbox — select multiple compatible rows, choose one counterparty account, choose whether liability rows count as debt payments, preview affected rows and totals, and apply atomically with per-row errors for incompatible accounts or ambiguous legs. Bulk review must preserve amount/date/sign/category and must not create extra counterpart rows.
+- [ ] **[C677][MAJOR][TXN][TRANSFER][DEBT]** Separate transfer relationship from payment intent in the UI and data contract — selecting a card/loan as the counterparty should exclude the row from income/spending, while the optional “count as payment” choice controls debt-surface attribution only. Validate that the payment choice is unavailable for asset accounts, survives save/reopen, and is cleared when the counterparty changes away from a liability.
+- [ ] **[C681][MAJOR][TXN][TRANSFER][LEDGER]** Exclude structural transfer legs from the transaction-list net figure, or label the figure as a gross visible-row sum. The current toolbar net sums every shown amount, so a filtered one-sided transfer can look like spending/income even though it is excluded from reports and budgets. Acceptance: a complete checking→savings pair shows net $0; filtering to either leg does not describe that leg as spending or income; unmatched transfers show an explicit “unpaired movement” state instead of a misleading cash-flow net.
+- [ ] **[C679][MAJOR][BUDGET][SAVINGS][TRANSFER]** Reconcile actual savings transfers with planned savings allocations. A generated transfer changes account balances, while the zero-based “Savings & investments” section is driven by `Account.MonthlySavings`; category-scoped saving budgets can also miss generated transfer legs with no category. Define one source of truth and show planned, transferred, and remaining-to-transfer separately. Acceptance: a $500 checking→savings transfer counts once toward the intended savings target, never counts as spending, does not double-count with `MonthlySavings` or sinking-fund goals, and a savings→checking reversal subtracts only the returned amount.
+- [ ] **[C680][MAJOR][TXN][TRANSFER][PAIR][DATA]** Persist a durable transfer-pair/group identifier instead of relying only on reciprocal date, amount, account, and sign matching. Pair edits, deletes, FX amounts, delayed imported legs, and duplicate-looking movements can otherwise become ambiguous. Acceptance: both legs retain the same relationship ID through amount/date edits and reclassification; missing or ambiguous counterparts require review; no unrelated row is auto-mutated.
 - Gotchas: `CreateTransferPair` is non-atomic (documented) — surface partial-failure errors, don't swallow; logic stays out of view code; `ConfirmModal(msg, dangerous=true, cb)`.
 # Granular todo decomposition — batch 12 (research, 2026-06-25)
 
@@ -11998,3 +12007,41 @@ is not visible from the browser.
   gains a screen-reader-only suffix that states both halves without contradicting anything: "Compact list —
   currently off, activating this shows the compact list". The visible label and `aria-pressed` are unchanged.
   AC: the control's name says which view is on screen and what a click produces.
+
+- [x] **C671 [MAJOR][BUDGETS][SAFETY][SCOPE][UX] "Bring the plan down to what arrived" hid its future-period impact until after activation — FIXED.**
+  The action read as a fix for one underfunded month and pre-filled a permanent rewrite of every budget,
+  disclosed only once the form was open. The root cause was that the form had ONE behaviour and never named
+  it: reach and magnitude are different questions, and only magnitude was ever asked.
+  Fixed in the pure layer — `budgeting.AdjustScope`, `AdjustNeedsAck` (a permanent change is acknowledged
+  whatever its size, because what makes it consequential is how long it lasts), and `ApplyAdjust`, which makes
+  the two scopes two genuinely different writes: permanent rewrites the base limit, this-period records a
+  `PeriodBoost` of the delta that lapses at the next boundary. The reconcile action seeds this-period and says
+  so on the button, in its tooltip, and in a summary naming the affected budget count and percentage before
+  the click; on a CLOSED period the button itself says the period has ended and names the month. The form
+  offers the choice, states what each scope does, names the reach in the confirmation, and labels the Apply
+  button and undo toast by scope.
+  Two defects found by adversarial review and fixed before landing: the preview scaled the BASE limit while a
+  this-period write lands on the EFFECTIVE cap, so any rollover carry or prior boost made the previewed figure
+  false and repeated applies could drive the cap negative (`AdjustAllPreviewFor` now previews on the basis the
+  chosen scope actually writes, taking caps from the same `Status.Limit` the cards render); and a permanent
+  apply over an existing this-period boost could still invert the cap, which is now refused and reported
+  rather than written. Budgets left out of an adjustment say why instead of silently vanishing from the list.
+  AC: the reach is stated before the click and inside the form, both scopes are offered, and no adjustment can
+  leave a budget's effective cap at or below zero.
+
+- [ ] **C678 [MAJOR][BUDGETS][ROLLOVER][CORRECTNESS] A period's one-off change is invisible to the NEXT period's rollover carry-in.**
+  Found while reviewing C671; the machinery is older than that ticket. When `computeBudgetViewRaw` works out a
+  rollover budget's carry-in it evaluates the PREVIOUS period with the raw budget — base `Limit` only — because
+  `normalizedLimit` never consults `PeriodBoosts`. So a period whose cap was lowered by a top-up, a release, or
+  a bulk this-period adjustment carries forward as though that change never happened.
+  Concretely: March base $400, lowered to $250 for March only, $200 actually spent. March's own row reads
+  "$50 left" against the reduced cap, and it is right. April's carry-in evaluates March against $400 and carries
+  in $200 — four times what the March row said was left — silently reversing the reduction for every period
+  after it. Nothing surfaces the discrepancy; `rollCarry` is built from the same boost-blind figure.
+  C671 raises the stakes rather than causing this: a reconcile now routinely writes 40%-class boosts across a
+  dozen budgets at once, where the mechanism was built around the occasional manual top-up.
+  **Expected behavior:** evaluate the previous period against its EFFECTIVE cap, so carry-in equals what that
+  period's own row reported as left; keep a carried-in deficit unclamped as today; and cover the top-up, release
+  and bulk-adjust paths with tests asserting the next period's carry-in against the prior row.
+  **Also check:** `monthclose.CopyBoosts` offers to carry a period's boosts forward at month close. Verify the
+  review screen states each boost's size clearly enough that a large reconcile boost cannot roll forward unnoticed.

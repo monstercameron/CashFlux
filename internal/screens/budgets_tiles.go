@@ -376,7 +376,14 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		// C587: directly under the allocation bar, because that bar is what makes
 		// "fully assigned" look like "fully funded". Renders nothing when the plan
 		// IS funded, so it is a state rather than a permanent fixture.
-		ui.CreateElement(budgetFundedCallout, budgetFundedProps{Funding: funding, Base: v.Base, Historical: hist}),
+		// ScalableCount comes from the SAME preview the Adjust-all form builds, under
+		// the SAME scope the button seeds, so the count promised here is the count
+		// the form shows (C671).
+		ui.CreateElement(budgetFundedCallout, budgetFundedProps{
+			Funding: funding, Base: v.Base, Historical: hist,
+			PeriodLabel:   vw.FromLabel(),
+			ScalableCount: budgetReconcileCount(app, activeMemberID, v, vw, pr, funding.ReduceToFitPct()),
+		}),
 		Div(css.Class("budget-hero-cap"),
 			incomeActual,
 			Div(css.Class("budget-hero-side"),

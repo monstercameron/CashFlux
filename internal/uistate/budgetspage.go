@@ -310,12 +310,23 @@ func UseBudgetAdjustOpen() state.Atom[bool] { return state.UseAtom("budgets:adju
 // manual open starts blank.
 var budgetAdjustSeed string
 
-// SetBudgetAdjustSeed pre-fills the next "Adjust all" open with a percentage.
-func SetBudgetAdjustSeed(pct string) { budgetAdjustSeed = pct }
+// budgetAdjustScopeSeed pre-selects how long the next "Adjust all" open lasts
+// (C671). It travels with the percentage because the two together are what the
+// originating action promised: the reconcile button says it lowers this period's
+// plan, so the form it opens has to open on this period, not on a permanent
+// rewrite the button never mentioned. Empty leaves the form's own default.
+var budgetAdjustScopeSeed string
 
-// TakeBudgetAdjustSeed returns the pending pre-fill and clears it.
-func TakeBudgetAdjustSeed() string {
-	v := budgetAdjustSeed
-	budgetAdjustSeed = ""
-	return v
+// SetBudgetAdjustSeed pre-fills the next "Adjust all" open with a percentage and
+// the scope the caller is promising. Pass an empty scope to leave the default.
+func SetBudgetAdjustSeed(pct, scope string) {
+	budgetAdjustSeed, budgetAdjustScopeSeed = pct, scope
+}
+
+// TakeBudgetAdjustSeed returns the pending pre-fill (percentage, scope) and
+// clears it, so a later manual open starts from the form's own defaults.
+func TakeBudgetAdjustSeed() (pct, scope string) {
+	pct, scope = budgetAdjustSeed, budgetAdjustScopeSeed
+	budgetAdjustSeed, budgetAdjustScopeSeed = "", ""
+	return pct, scope
 }

@@ -6,6 +6,26 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **"Bring the plan down to what arrived" says what it will change, and for how long (C671).** The action
+  read as a fix for one underfunded month and pre-filled a permanent rewrite of every budget, disclosed
+  only after the form opened. It now says on the button how many budgets it lowers, by what percentage,
+  and for which period — and on a closed month, that the month has ended and this changes what is
+  reported about it. The form offers "This period only" against "Every period", states what each does,
+  names the reach in its confirmation whatever the size of the change, and labels the commit and the undo
+  toast by scope. A this-period change records a one-off adjustment that lapses at the next boundary and
+  leaves each budget's own limit alone.
+
+- **A bulk adjustment can no longer promise one figure and write another (C671).** The preview scaled a
+  budget's base limit while a this-period change lands on its effective cap, so any rollover carry or
+  earlier one-off change made the previewed number false — and applying twice in a period looked
+  identical each time while the underlying change compounded. Both scopes are now previewed on the figure
+  they actually write, taken from the same reading the cards render.
+
+- **No bulk adjustment can leave a budget's plan at or below zero (C671).** A permanent cut applied over
+  a change already made for the same period could invert the budget silently. Such budgets are now
+  refused and named, along with any left out for other reasons, instead of quietly missing from the list.
+
 ### Added
 - **An imported row can now be told it is a transfer.** The "Edit this transaction" modal gained a movement
   classifier: "Other account this money moved to or from". Choosing one of your own accounts drops the row

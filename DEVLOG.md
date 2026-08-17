@@ -1,3 +1,49 @@
+## 2026-08-17 - six rounds on one button (C671)
+
+The ticket was a disclosure complaint: a prominent action offered to fix one underfunded month and quietly
+pre-filled a permanent rewrite of twelve budgets. The fix for that is half an hour of copy and a segmented
+control. What took the rest of the day was everything the fix broke on the way in, and I would not have
+found most of it alone.
+
+The shape of the original defect is that the form had ONE behaviour and never named it. Reach and magnitude
+are different questions - a 5% cut that never ends can matter more than a 40% cut that reverts in a
+fortnight - and only magnitude was ever asked. So the acknowledgement now fires on any permanent change
+whatever its size, and the two scopes became two genuinely different writes rather than one write with a
+flag: permanent rewrites the base limit, this-period records a boost that lapses.
+
+Then the adversarial review started finding what I had done.
+
+Round one: the preview scaled the base limit while the this-period write lands on the effective cap. On a
+clean budget those are the same number, which is why it looked right. On any budget carrying rollover they
+are not, and applying twice in a period previewed identically both times while the boost compounded - far
+enough and the cap goes negative. Same class as C667 earlier today: two numbers about one thing, computed
+two ways. Fixed the same way, by deleting the second way.
+
+Round three: the guard I added read `hasCap && ...`. Go short-circuits, so when a budget's cap could not be
+resolved the check did not run at all - and a cap is unresolvable exactly when that budget's evaluation
+failed, which is to say the guard switched itself off for the one budget nobody had looked at.
+
+Round four: fixing that by requiring caps coupled a permanent base-limit rewrite to spend and FX data it has
+no business depending on. A budget carrying nothing got dropped from the tool because an unrelated
+transaction lacked an exchange rate. The answer was that the invariant never wanted the cap, it wanted the
+OVERLAY - and an overlay of zero is knowable without any of that.
+
+Round five: changing the parameter from caps to overlays, I migrated one call site of two. Both are
+map[string]int64, so nothing complained; the button counted against base+cap while the form counted against
+base+overlay. That one is the lesson worth keeping. I did not fix it by correcting the argument. The two
+maps are now distinct named types, so the substitution is a compile error, and the count is computed once in
+a function both callers share. A review catches a mistake; a type stops the next one.
+
+Sixteen mutations across six rounds, each verified to fail exactly its intended test - twice the mutation
+proved nothing because it did not compile, which is worth remembering: a green run after a mutation means
+nothing until you check the build.
+
+One finding I deliberately did not fix. The next period's rollover carry-in evaluates the previous period
+against the raw base limit, ignoring boosts entirely, so a period reduced to $250 with $200 spent reads
+"$50 left" on its own row and carries $200 forward. C671 does not cause it but makes it far likelier to hit,
+since a reconcile now writes 40%-class boosts across a dozen budgets at once. It changes rollover semantics
+app-wide and belongs in its own change: filed as C678.
+
 ## 2026-08-17 - a transfer could only be born one, never become one
 
 Cam pasted forty rows out of his credit union. Every one described a transfer, and every one was filed as

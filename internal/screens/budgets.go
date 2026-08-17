@@ -1059,6 +1059,105 @@ func budgetTitle(name, category string) string {
 	}
 }
 
+// adjustAllScope is the set of budgets a bulk adjustment acts on: the ones
+// visible under the current member perspective, which is the set the page is
+// showing and therefore the only one "every budget" is a checkable claim about.
+//
+// Shared by the Adjust-all form and by the funding callout that quotes the count
+// before opening it (C671), so the number on the button and the number in the
+// preview cannot drift apart.
+func adjustAllScope(app *appstate.App, activeMemberID string) []domain.Budget {
+	if app == nil {
+		return nil
+	}
+	var out []domain.Budget
+	for _, b := range app.Budgets() {
+		if ownerVisibleTo(b.OwnerID, activeMemberID) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// budgetEffectiveCaps maps each visible budget to the cap it is actually being
+// scored against this period — its base limit with rollover carry-in and any
+// one-time boost already folded in.
+//
+// It is what a THIS-PERIOD bulk adjustment scales (C671): that write records a
+// boost, and a boost lands on this figure, not on the stored limit. Taking it
+// from the same Statuses the cards render means the preview cannot promise a cap
+// the cards would then disagree with.
+func budgetEffectiveCaps(v budgetView) budgetCaps {
+	caps := make(budgetCaps, len(v.Statuses))
+	for _, s := range v.Statuses {
+		caps[s.Budget.ID] = s.Limit.Amount
+	}
+	return caps
+}
+
+// budgetCaps maps each budget to its effective cap this period. Distinct from
+// budgeting.AdjustOverlays on purpose: the two differ by exactly the base limit,
+// and passing one where the other belongs is a mistake that reads correctly and
+// computes nonsense — so it is made a compile error rather than a review item.
+type budgetCaps map[string]int64
+
+// budgetAdjustOverlays maps each budget to how far its effective cap sits above
+// (or below) its stored limit this period — rollover carry-in plus any one-off
+// change — which is what a bulk adjustment needs to preview either scope
+// honestly (C671).
+//
+// It is not simply "cap minus limit for everything in the view", because a
+// budget drops out of the view entirely when its spend cannot be evaluated: one
+// transaction in a currency with no exchange rate is enough. Requiring a cap
+// would then exclude that budget from a PERMANENT adjustment, which rewrites a
+// base limit and has no business depending on spend or FX data at all. So a
+// budget without rollover — whose cap can only be offset by boosts recorded on
+// the budget itself — gets its overlay computed directly. Only a rollover budget
+// whose evaluation failed is genuinely unknowable, and only that one is left out.
+func budgetAdjustOverlays(v budgetView, budgets []domain.Budget, periodStart func(domain.Budget) time.Time) budgeting.AdjustOverlays {
+	caps := budgetEffectiveCaps(v)
+	out := make(budgeting.AdjustOverlays, len(budgets))
+	for _, b := range budgets {
+		if cap, ok := caps[b.ID]; ok {
+			out[b.ID] = cap - b.Limit.Amount
+			continue
+		}
+		if !b.Rollover && periodStart != nil {
+			out[b.ID] = b.PeriodBoost(periodStart(b))
+		}
+	}
+	return out
+}
+
+// budgetPeriodStarts resolves each budget's current period start, anchored to the
+// viewed window and the household's pay cycle — the same grid the cards score
+// against. Shared by every caller that needs it, so two of them cannot anchor a
+// write and a preview differently.
+func budgetPeriodStarts(vw period.Window, pr prefs.Prefs) func(domain.Budget) time.Time {
+	anchor := budgetViewAnchor(vw, time.Now())
+	var payAnchor time.Time
+	if pr.PayCycleAnchor != "" {
+		if t, err := time.Parse("2006-01-02", pr.PayCycleAnchor); err == nil {
+			payAnchor = t
+		}
+	}
+	return func(b domain.Budget) time.Time {
+		start, _ := budgeting.PeriodRangeAnchored(b.Period, anchor, pr.WeekStartWeekday(), payAnchor)
+		return start
+	}
+}
+
+// budgetReconcileCount is how many budgets the funding callout's reconcile action
+// would actually change, computed exactly as the Adjust-all form computes it —
+// same scope, same overlays, same preview — so the count promised on the button
+// is the count the form shows. Two call sites computing it two ways is how they
+// came to disagree.
+func budgetReconcileCount(app *appstate.App, activeMemberID string, v budgetView, vw period.Window, pr prefs.Prefs, pct float64) int {
+	scoped := adjustAllScope(app, activeMemberID)
+	overlays := budgetAdjustOverlays(v, scoped, budgetPeriodStarts(vw, pr))
+	return budgeting.AdjustAllPreviewFor(scoped, pct, budgeting.AdjustThisPeriod, overlays).Count()
+}
+
 // budgetLimitError maps a parsed limit's problem to the message the editor shows
 // beneath the field, or "" when the typed value may be written (C665, C666).
 //

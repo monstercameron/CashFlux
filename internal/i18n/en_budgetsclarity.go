@@ -77,12 +77,10 @@ var budgetsClarityKeys = Catalog{
 	// A plan can be 100% assigned against an expected $10,709.16 while $6,961.00
 	// has arrived; "fully assigned" then looks exactly like "fully funded".
 	// %s = the unfunded amount / the assigned total / the received total.
-	"budgets.fundedTitle":          "%s of your plan isn't funded yet",
-	"budgets.fundedBody":           "You've assigned %s, and %s has actually arrived. The rest is planned against income you haven't received.",
-	"budgets.fundedTitleHist":      "%s of that plan was never funded",
-	"budgets.fundedBodyHist":       "%s was assigned and %s arrived. The difference was planned against income that did not come in.",
-	"budgets.fundedReconcile":      "Bring the plan down to what arrived",
-	"budgets.fundedReconcileTitle": "Scale every budget down so the plan matches the money you have — previewed budget by budget, and undoable",
+	"budgets.fundedTitle":     "%s of your plan isn't funded yet",
+	"budgets.fundedBody":      "You've assigned %s, and %s has actually arrived. The rest is planned against income you haven't received.",
+	"budgets.fundedTitleHist": "%s of that plan was never funded",
+	"budgets.fundedBodyHist":  "%s was assigned and %s arrived. The difference was planned against income that did not come in.",
 
 	// --- C597: every funds-moving action explains its reach in the same words ---
 	// Assembled by screens.fundsImpactLine. Kept as fragments so six flows read
@@ -178,7 +176,6 @@ var budgetsClarityKeys = Catalog{
 	"budgets.adjustAllMixedCurrency":   "These budgets are in different currencies, so there is no single total — each budget's own before and after is listed below.",
 	"budgets.adjustAllAckLower":        "I want to lower %s by %s%%. Every one of these plans will have less to spend.",
 	"budgets.adjustAllAckRaise":        "I want to raise %s by %s%% — a change this size is usually a typo.",
-	"budgets.adjustAllApply":           "Apply to every budget",
 
 	// --- C589: custom range as an explicit workflow, not a mode flag ---
 	// The draft range is previewed in words and applied deliberately. %s = start
