@@ -374,9 +374,18 @@ type Transaction struct {
 	Splits            []CategorySplit `json:"splits,omitempty"`
 	TransferAccountID string          `json:"transferAccountId,omitempty"`
 	Cleared           bool            `json:"cleared,omitempty"`
-	Tags              []string        `json:"tags,omitempty"`
-	MemberID          string          `json:"memberId,omitempty"`
-	SourceDocID       string          `json:"sourceDocId,omitempty"`
+	// ClearedAt is WHEN this transaction was marked cleared. Zero means it has
+	// not cleared, or that it cleared before the app began recording the moment
+	// (EC-4) — the two are indistinguishable in old data, and neither is evidence.
+	//
+	// It exists because "cleared" as a bare bool cannot answer how long an account
+	// usually takes to clear a charge, and without that there is no window to be
+	// late against. Set it through MarkCleared rather than by hand, so the flag
+	// and the moment can never disagree.
+	ClearedAt   time.Time `json:"clearedAt,omitempty"`
+	Tags        []string  `json:"tags,omitempty"`
+	MemberID    string    `json:"memberId,omitempty"`
+	SourceDocID string    `json:"sourceDocId,omitempty"`
 	// Source records how this transaction entered the ledger (manual entry, CSV
 	// import, document scan, recurring rule, AI assistant). Empty = not recorded
 	// (e.g. created before provenance tracking); reads as "—". See domain.TxnSource.
@@ -827,6 +836,45 @@ func (t Transaction) IsIncome() bool { return !t.IsTransfer() && t.Amount.IsPosi
 // IsExpense reports whether the transaction counts as an expense (negative,
 // non-transfer).
 func (t Transaction) IsExpense() bool { return !t.IsTransfer() && t.Amount.IsNegative() }
+
+// MarkCleared returns a copy with the cleared flag set and, when it is being
+// cleared, the moment recorded (EC-4).
+//
+// Re-marking an already-cleared transaction keeps the ORIGINAL moment: a bulk
+// action that touches a row again did not clear it a second time, and letting it
+// restamp would quietly reset every learned clearing window to zero days.
+//
+// Un-clearing drops the stamp, because a transaction that has not cleared has no
+// moment at which it did.
+func (t Transaction) MarkCleared(v bool, at time.Time) Transaction {
+	if !v {
+		t.Cleared = false
+		t.ClearedAt = time.Time{}
+		return t
+	}
+	if !t.Cleared || t.ClearedAt.IsZero() {
+		t.ClearedAt = at
+	}
+	t.Cleared = true
+	return t
+}
+
+// DaysToClear is how long this transaction took to clear, and whether that is
+// known.
+//
+// Unknown covers both "not cleared yet" and "cleared before the app recorded
+// when" — neither is evidence of a clearing time, and a caller that treated the
+// zero value as "same day" would learn a window of nothing from old data.
+func (t Transaction) DaysToClear() (int, bool) {
+	if !t.Cleared || t.ClearedAt.IsZero() || t.Date.IsZero() {
+		return 0, false
+	}
+	d := int(t.ClearedAt.Sub(t.Date).Hours() / 24)
+	if d < 0 {
+		return 0, false // cleared before it happened; the data disagrees with itself
+	}
+	return d, true
+}
 
 // CountsInReports reports whether this transaction should feed budget spend,
 // income/expense totals, category spend, and reports. Excluded transactions

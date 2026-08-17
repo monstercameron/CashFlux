@@ -299,11 +299,30 @@ func SampleDatasetAt(now time.Time) Dataset {
 	}
 
 	var txns []domain.Transaction
+	// clearingDays is how long each account usually takes to post a charge. Real
+	// accounts differ — a debit card settles overnight while a credit card takes
+	// a few days — and EC-4's whole question is whether a charge is late FOR THIS
+	// ACCOUNT, which is unanswerable if the demo data clears everything the same
+	// day.
+	clearingDays := map[string]int{
+		checking: 1, bizchk: 1, cash: 0,
+		card: 3, travelcard: 5,
+	}
 	add := func(t domain.Transaction) {
 		// Tag a plausible provenance so the ledger's Source column shows a realistic
 		// mix in the demo data (real entries get their source at their creation path).
 		if t.Source == "" {
 			t.Source = sampleSourceFor(t)
+		}
+		// Stamp WHEN a cleared entry cleared (EC-4). One funnel, so the flag and the
+		// moment cannot disagree, and the variation is the same deterministic hash
+		// the rest of the sample uses — an e2e run must see the same data twice.
+		if t.Cleared && t.ClearedAt.IsZero() && !t.Date.IsZero() {
+			base, ok := clearingDays[t.AccountID]
+			if !ok {
+				base = 2
+			}
+			t.ClearedAt = t.Date.AddDate(0, 0, base+int(vr("clearing", len(t.ID), 2)))
 		}
 		txns = append(txns, t)
 	}

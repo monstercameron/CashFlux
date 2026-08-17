@@ -98,6 +98,7 @@ var catalog = []Feature{
 	rule("SMART-T21F", PageTransactions, "Split suggestion from this merchant", "On a charge you usually split, quietly propose the same breakdown you gave this merchant before — fully local, no key."),
 	ai("SMART-T21", PageTransactions, "Split suggestion (AI)", "When there is no split history to copy, the assistant proposes a breakdown across your existing categories.", false, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T22F", PageTransactions, "Type a transaction in words", "\"spent 40 at whole foods yesterday\" fills the add form — fully local, no key."),
+	rule("SMART-T23", PageTransactions, "Stale-uncleared watch", "Flag a charge still pending well past the point this account's own charges normally clear."),
 	ai("SMART-T22", PageTransactions, "Type a transaction in words (AI)", "When the local parser can't read a phrasing, the assistant fills the same draft.", false, tokLanguageIn, tokLanguageOut),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────

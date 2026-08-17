@@ -1415,8 +1415,49 @@ survived the duplicate/scope filters but didn't make the engine cut):
   of the existing deterministic breakdown (RuleCore). Dashboard sibling of E-RP ask-this-chart.
 - [ ] **EC-3 Split-template suggestion** (SMART, Transactions) — merchants you historically split
   (Costco pattern) get a pre-offered split at creation. Extends SM-3.
-- [ ] **EC-4 Stale-uncleared watch** (SMART, Transactions) — flag entries uncleared past that
+- [~] **EC-4 Stale-uncleared watch** (SMART, Transactions) — flag entries uncleared past that
   account's typical clearing window; feeds reconciliation.
+  — ENGINE + DETECTOR DONE (2026-08-17). Needed a model change first: new `Transaction.ClearedAt`, new
+  pure `internal/clearwatch`, detector SMART-T23.
+
+  THE TICKET WAS UNBUILDABLE AS WRITTEN. "That account's typical clearing window" has to be LEARNED, and
+  `Cleared` was a bare bool — the app recorded THAT a charge cleared and never WHEN, so there was no data
+  to learn from. `ClearedAt` now records the moment, set through `MarkCleared` so the flag and the moment
+  cannot disagree; every flip site (toggle, bulk clear, edit form, reconcile, dedupe merge, fingerprint
+  merge) routes through it.
+
+  RE-MARKING KEEPS THE ORIGINAL MOMENT. A bulk action that touches a row again did not clear it a second
+  time, and letting it restamp would quietly reset every learned window to zero days. Un-clearing drops
+  the stamp, because a transaction that has not cleared has no moment at which it did.
+
+  OLD ROWS REPORT UNKNOWN, NOT ZERO. Existing data has the flag and no stamp; treating that as "cleared
+  same day" would teach every account a window of nothing and then flag everything in it. `DaysToClear`
+  returns `(days, ok)` and the detector ignores the unknowns — there is a test whose whole job is to fail
+  if twenty legacy rows ever produce a verdict.
+
+  THE WINDOW IS THE ACCOUNT'S OWN. A debit card settles overnight and a credit card takes days, so one
+  "flag anything over 5 days" rule nags about every card charge and stays silent about a debit that
+  vanished. Median rather than mean (one six-week dispute would drag a mean far enough that nothing ever
+  looks late again), minimum eight samples, three days' grace because half of "late" is a weekend, and a
+  median over thirty days yields NO window — an account like that is telling you its entries are being
+  keyed late, not how long its bank takes.
+
+  ONE FINDING, NOT ONE PER ACCOUNT. The first cut produced eight, and the transactions strip shows three:
+  it would have pushed everything else off the page, at which point the reader stops reading the strip
+  rather than clearing the charges. The worst is named — worst meaning furthest past ITS OWN account's
+  normal, not merely oldest — and the rest are counted.
+
+  SAMPLE DATA: every cleared entry now carries a clearing time, stamped in the one funnel every sample
+  transaction passes through, with a per-account cadence (debit 1 day, card 3, travel card 5). A test pins
+  that the sample produces exactly one finding with a real learned window.
+
+  STILL OPEN — the SURFACE. The detector lands correctly in `RunPage(PageTransactions)` at position 2 of
+  17, but the inline Smart strip renders NOTHING on /transactions in a browser even after enabling the
+  free features from the Smart hub: the peek control is in the DOM but never visible, and no pre-existing
+  detector shows there either (the duplicate and unusual-spend findings are equally absent). That is a
+  pre-existing surface condition, not this ticket's, but it means EC-4 has no user-visible proof yet.
+  Worth someone tracing `SmartStripForPath` → `smart-peek-<page>` visibility before more SMART features
+  are built against that surface.
 - [ ] **EC-5 What is this charge?** (SMART+, Transactions) — one cryptic row → "this is likely X"
   from model merchant knowledge. Explains an unknown; distinct from SM-1 rename.
 - [x] **EC-6 Effective-rate detector** (SMART, Accounts) — realized APY/interest cost per account

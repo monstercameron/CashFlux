@@ -384,7 +384,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		if confirmsCat {
 			t.Tags = removeReviewTag(t.Tags)
 		}
-		t.Cleared = clearedS.Get()
+		t = t.MarkCleared(clearedS.Get(), time.Now())
 		t.Note = strings.TrimSpace(noteS.Get())
 		t.ExcludeFromReports = excludeS.Get()
 		// C58: an amount edit must not silently desync an existing category breakdown —

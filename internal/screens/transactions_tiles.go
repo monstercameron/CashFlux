@@ -1221,7 +1221,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				if !sel[t.ID] || t.Cleared == val {
 					continue
 				}
-				t.Cleared = val
+				t = t.MarkCleared(val, time.Now())
 				if err := app.PutTransaction(t); err != nil {
 					uistate.PostNotice(uistate.T("transactions.bulkClearErr", err.Error()), true)
 				}

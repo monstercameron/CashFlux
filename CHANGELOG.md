@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Notices a charge that never posted (EC-4).** The app now records WHEN a transaction cleared, learns
+  how long each account normally takes, and flags a charge still pending well past that account's own
+  normal — with the window it learned and how many charges that rests on.
+
+### Added
 - **Checks what an account actually paid (EC-6).** If a savings account is recorded at 4.2% but the
   interest it really posted works out at a fraction of that, the app now says so — with the money it
   actually paid, over how long, and how far short that is.

@@ -128,7 +128,10 @@ func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Tran
 
 	for _, other := range others {
 		if other.Cleared {
-			out.Cleared = true
+			// The surviving row inherits the moment too, or a merge would erase how
+			// long the charge took to clear (EC-4). MarkCleared keeps the earlier
+			// stamp when one is already set.
+			out = out.MarkCleared(true, other.ClearedAt)
 		}
 		for _, tag := range other.Tags {
 			key := strings.ToLower(tag)

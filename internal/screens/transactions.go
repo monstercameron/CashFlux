@@ -258,7 +258,7 @@ func transactionsLegacy() ui.Node {
 	}
 
 	toggleCleared := func(t domain.Transaction) {
-		t.Cleared = !t.Cleared
+		t = t.MarkCleared(!t.Cleared, time.Now())
 		if err := app.PutTransaction(t); err != nil {
 			errMsg.Set(err.Error())
 			return
@@ -495,7 +495,7 @@ func transactionsLegacy() ui.Node {
 			if !sel[t.ID] || t.Cleared == val {
 				continue
 			}
-			t.Cleared = val
+			t = t.MarkCleared(val, time.Now())
 			if err := app.PutTransaction(t); err != nil {
 				notifyErr(uistate.T("transactions.bulkClearErr", err.Error()))
 			}

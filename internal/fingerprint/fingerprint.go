@@ -221,9 +221,11 @@ func MergeResolve(a, b domain.Transaction) domain.Transaction {
 		merged.CategoryID = b.CategoryID
 	}
 
-	// Cleared: true wins.
+	// Cleared: true wins, and the moment comes with it — a merge that kept the
+	// flag but dropped the timestamp would erase how long the charge took to
+	// clear (EC-4). MarkCleared keeps an earlier stamp if merged already has one.
 	if b.Cleared {
-		merged.Cleared = true
+		merged = merged.MarkCleared(true, b.ClearedAt)
 	}
 
 	// Reviewed: true wins.

@@ -277,7 +277,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			return
 		}
 		for _, t := range pending {
-			t.Cleared = true
+			t = t.MarkCleared(true, time.Now())
 			if err := app.PutTransaction(t); err != nil {
 				uistate.PostNotice(err.Error(), true)
 				return
@@ -670,7 +670,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 		if app == nil {
 			return
 		}
-		t.Cleared = !t.Cleared
+		t = t.MarkCleared(!t.Cleared, time.Now())
 		_ = app.PutTransaction(t)
 		onRefresh(a) // bumps the data revision → this modal re-derives the difference
 	}

@@ -1,3 +1,39 @@
+## 2026-08-17 - the ticket was unbuildable, so the model changed first (EC-4)
+
+"Flag entries uncleared past that account's typical clearing window" cannot be built against a bare
+bool. The app recorded THAT a charge had cleared and never WHEN, so there was no data from which to learn
+a window, and any threshold I picked would have been my number wearing the account's name.
+
+So Transaction.ClearedAt exists now, set through MarkCleared so the flag and the moment cannot disagree,
+with every flip site routed through it - the row toggle, the bulk clear, the edit form, the reconcile
+sweep, and both merge paths. Two rules came out of writing it. Re-marking an already-cleared row keeps
+the ORIGINAL moment, because a bulk action that touches a row again did not clear it a second time and
+restamping would reset every learned window to zero days. And un-clearing drops the stamp, because a
+transaction that has not cleared has no moment at which it did.
+
+The one that mattered most is what happens to old data: it has the flag and no stamp. Treating that as
+"cleared the same day" would teach every account a window of nothing and then flag every charge in it, so
+DaysToClear reports (days, ok) and the detector ignores the unknowns. There is a test whose only job is
+to fail if twenty legacy rows ever produce a verdict.
+
+The window has to be the account's own. A debit card settles overnight and a credit card takes days, so
+one flat rule nags about every card charge and stays quiet about a debit that vanished. Median rather
+than mean, because a single six-week dispute would drag a mean far enough that nothing ever looks late
+again. Eight samples minimum, three days' grace because half of "late" is a weekend, and a median past
+thirty days yields no window at all - an account like that is telling you its entries are keyed late, not
+how long its bank takes.
+
+The first cut produced eight findings, one per account, against a strip that shows three. That would have
+pushed everything else off the page, and a reader who stops reading the strip does not clear the charges
+either. One finding now names the worst - furthest past its own account's normal, not merely oldest - and
+counts the rest.
+
+What I could not prove is the surface. The detector lands correctly at position 2 of 17 in the
+transactions page run, but the inline Smart strip renders nothing in a browser even after enabling the
+free features: the peek control is in the DOM and never visible, and no pre-existing detector shows there
+either. That is not this ticket's doing, but it means EC-4 has no user-visible proof, and it is worth
+tracing before more SMART features are built against that surface.
+
 ## 2026-08-17 - the rate you were promised is not the rate you received (EC-6)
 
 Only the second is evidence, and nothing in the app checked it. A "high-yield" account quietly paying

@@ -2844,6 +2844,11 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-4 (SMART-T23): a charge still pending past this account's own normal.
+	"smart.t23.title":      "A charge on %s still hasn't cleared",
+	"smart.t23.detail":     "%s from %s is %s old and still pending. Charges on %s usually clear in %s, going on the last %s.",
+	"smart.t23.detailMore": "%s from %s is %s old and still pending. Charges on %s usually clear in %s, going on the last %s. %s also have one.",
+	"smart.t23.action":     "Open transactions",
 	// EC-6 (SMART-A13): what an account actually paid, from its own postings.
 	"smart.a13.title":                "%s isn't paying what it says",
 	"smart.a13.detail":               "%s is recorded at %s, but the %s of interest it actually posted over the last %s works out at %s a year — about %s short.",
