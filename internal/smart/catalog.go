@@ -70,8 +70,10 @@ var catalog = []Feature{
 	rule("SMART-A9", PageAccounts, "Fee-bleed on a dormant account", "Catch a recurring fee draining an otherwise-inactive account, and offer to close it."),
 	ai("SMART-A10", PageAccounts, "Account health score", "A 0–100 health score per account, explained in plain language.", true, tokClassifyIn, tokClassifyOut),
 	ai("SMART-A11", PageAccounts, "AI credit-health analysis", "A personalized read of your credit-health estimate — the biggest demerits and the highest-impact fix.", true, tokLanguageIn, tokLanguageOut),
+	ai("SMART-A12", PageAccounts, "Explain an unusual balance move", "A plain-English read of a flagged balance change: what most likely explains it, and whether it needs you.", true, tokLanguageIn, tokLanguageOut),
 
 	// ── Transactions ──────────────────────────────────────────────────────────
+	rule("SMART-T1F", PageTransactions, "Category suggestion on a charge", "Offer the category your rules and history already imply for one uncategorized charge — fully local, no key."),
 	ai("SMART-T1", PageTransactions, "Auto-categorization", "Assign a category from merchant, amount, and your history. Learns from corrections.", true, tokClassifyIn, tokClassifyOut),
 	rule("SMART-T2", PageTransactions, "Smart duplicate detection", "Flag likely duplicate entries and offer one-tap merge or dismiss."),
 	rule("SMART-T3F", PageTransactions, "Natural-language search", "Type \"coffee over $20 last month\" and turn it into removable filter chips — fully local, no key."),
@@ -92,6 +94,10 @@ var catalog = []Feature{
 	ai("SMART-T18", PageTransactions, "Statement import", "Attach a bank or credit-card statement PDF; the AI reads it and lists the transactions to review — categories mapped to your existing ones — before you import.", false, tokVisionIn, tokVisionOut),
 	rule("SMART-T19", PageTransactions, "New-merchant awareness", "Flag the first time you've ever paid a merchant — a fraud/awareness signal keyed on the clean merchant name."),
 	rule("SMART-T20", PageTransactions, "New-subscription detection", "Notice a second similar charge about a month after the first and offer to track it as recurring."),
+	rule("SMART-T21F", PageTransactions, "Split suggestion from this merchant", "On a charge you usually split, quietly propose the same breakdown you gave this merchant before — fully local, no key."),
+	ai("SMART-T21", PageTransactions, "Split suggestion (AI)", "When there is no split history to copy, the assistant proposes a breakdown across your existing categories.", false, tokClassifyIn, tokClassifyOut),
+	rule("SMART-T22F", PageTransactions, "Type a transaction in words", "\"spent 40 at whole foods yesterday\" fills the add form — fully local, no key."),
+	ai("SMART-T22", PageTransactions, "Type a transaction in words (AI)", "When the local parser can't read a phrasing, the assistant fills the same draft.", false, tokLanguageIn, tokLanguageOut),
 
 	// ── Budgets ───────────────────────────────────────────────────────────────
 	rule("SMART-B7", PageBudgets, "Seasonal budget adjustment", "Detect seasonal categories and suggest month-specific budget amounts."),
@@ -102,6 +108,8 @@ var catalog = []Feature{
 	rule("SMART-B12", PageBudgets, "Healthy budget average", "Review each category's spending over time and suggest a sustainable monthly target that ignores one-off spikes."),
 	rule("SMART-B13", PageBudgets, "Budget true-up", "Notice when a budget has run persistently above its limit and suggest raising it to match — seasonal when there's a year of history, else your recent average."),
 	rule("SMART-B14", PageBudgets, "Cover overages in one pass", "Clear every over-budget at once — cover each from another budget's slack, or borrow it from next month's budget for the same category."),
+	rule("SMART-B15F", PageBudgets, "Why this budget went over", "One sentence naming what drove an overage — one purchase, more trips, or pricier ones — with the merchants behind it."),
+	ai("SMART-B15", PageBudgets, "Why this budget went over (AI)", "The assistant narrates the same finding and names the single most useful thing to do next.", true, tokLanguageIn, tokLanguageOut),
 
 	// ── Goals ─────────────────────────────────────────────────────────────────
 	rule("SMART-G1", PageGoals, "Suggested contribution amount", "Compute the per-month amount needed and check it against your slack."),
@@ -123,9 +131,11 @@ var catalog = []Feature{
 	rule("SMART-G19", PageGoals, "Borrow-from-goal warning", "Warn about the setback before a withdrawal pulls from a goal-linked account."),
 	rule("SMART-G20", PageGoals, "Shared goal contributions", "Track who contributed what toward a shared household goal."),
 	rule("SMART-G21", PageGoals, "Emergency-fund resize", "Notice when your essential month has drifted and re-suggest the fund target."),
+	ai("SMART-G22", PageGoals, "Goal pace nudge", "One line on the trajectory card: the monthly amount that would land this goal on its target date.", true, tokClassifyIn, tokClassifyOut),
 
 	// ── To-dos ────────────────────────────────────────────────────────────────
 	rule("SMART-D1", PageTodos, "Auto-generated financial to-dos", "Turn detected events (spikes, missed bills, unused subs) into to-dos."),
+	rule("SMART-D4F", PageTodos, "Read the date out of a to-do", "\"pay rent friday\" becomes a dated — and if you said so, repeating — to-do. Fully local, no key."),
 	ai("SMART-D4", PageTodos, "Natural-language quick-add", "Type \"move $200 to savings next Friday\" into a structured to-do.", false, tokLanguageIn, tokLanguageOut),
 
 	// ── Planning ──────────────────────────────────────────────────────────────
@@ -179,6 +189,7 @@ var catalog = []Feature{
 
 	// ── Hub (cross-app) ───────────────────────────────────────────────────────
 	rule("SMART-DIGEST", PageHub, "Proactive money digest", "Post a brief summary of your top active insights to the notification feed on a chosen cadence."),
+	ai("SMART-EXPLAIN", PageHub, "Explain an alert", "A one-sentence plain-English gloss on a single notification: what it means, and what to do about it.", false, tokClassifyIn, tokClassifyOut),
 	ai("SMART-QUOTE", PageHub, "Quote of the day", "A short money-mindset quote on the dashboard, written fresh each day in a theme you choose.", false, 120, 40),
 }
 

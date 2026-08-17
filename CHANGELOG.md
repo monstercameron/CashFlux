@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Categorize one charge without leaving the ledger (SM-2).** An uncategorized row now offers the
+  category your rules and history already imply, as a chip in the category cell — one click and it is
+  filed, undoably. Only confident suggestions get the chip: a merchant you have filed both ways is a
+  signal, not an answer, and a one-click apply for it would just train you to accept without reading.
+  Those go to the kebab's new "Categorize this…", which shows the *evidence* ("6 of 7 charges from
+  this merchant"), the full category list when the suggestion is wrong, an offer to file every other
+  unfiled charge from the same merchant in the same decision, and — only with Smart+ configured — the
+  model ask. Anything the model names is matched against your real categories and dropped when it
+  does not fit, so it can never invent one. The local half is a new Free catalog entry that defaults
+  on, because gating a no-key local suggestion behind a paid toggle would have hidden it from nearly
+  everyone.
 - **"How this is computed" on every report section (C385).** The report called a savings rate healthy
   without saying what it was measured against or where that standard came from, which asks the reader
   to trust a comparison they cannot check. Each section now carries a closed drawer with three things:
