@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/payoff"
+	"github.com/monstercameron/CashFlux/internal/trust"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -247,6 +248,30 @@ func loanCard(props loanCardProps) ui.Node {
 		summaryNode = P(css.Class("t-caption", tw.TextDim), uistate.T("loans.noSchedule"))
 	}
 
+	// WF4: say how far these figures can be trusted, and exactly why. A payoff
+	// date computed from a real APR and one computed from a blank APR render
+	// identically, and the second is a guess wearing the first one's clothes.
+	//
+	// A reason, never a bare score: "62% confident" cannot be acted on, argued
+	// with, or improved. Naming the field makes the next step obvious.
+	assessment := trust.Assess([]trust.Input{
+		{Name: uistate.T("trust.inLoanApr"), Required: true, Missing: apr <= 0},
+		{Name: uistate.T("trust.inLoanTerm"), Required: true, Missing: term <= 0,
+			Assumed: a.TermMonths <= 0},
+		{Name: uistate.T("trust.inLoanBalance"), Required: true,
+			Missing: balance <= 0, AgeDays: accountAgeDays(a, now)},
+	})
+	var trustNode ui.Node = Fragment()
+	if assessment.Level != trust.LevelSolid {
+		key := "trust.qualified"
+		tone := tw.TextDim
+		if assessment.Level == trust.LevelUnreliable {
+			key, tone = "trust.unreliable", tw.TextWarn
+		}
+		trustNode = P(css.Class("t-caption", tone), Attr("data-testid", "loan-trust-"+a.ID),
+			uistate.T(key, strings.Join(assessment.Reasons(), ", ")))
+	}
+
 	// Extra-payment simulation section (C205).
 	extraRow := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap3, tw.Mt3, tw.Mb2),
 		Label(css.Class("t-caption", tw.TextDim),
@@ -356,6 +381,7 @@ func loanCard(props loanCardProps) ui.Node {
 			header,
 			termRow,
 			summaryNode,
+			trustNode,
 			extraRow,
 			savingsNode,
 			scheduleNode,
@@ -456,4 +482,21 @@ func LoansPanel(props LoansPanelProps) ui.Node {
 // The panel owns all hooks and state so it can also be embedded in /debt.
 func LoansScreen() ui.Node {
 	return ui.CreateElement(LoansPanel, LoansPanelProps{})
+}
+
+// accountAgeDays is how long since the account's balance was stated, or zero
+// when that is unknown.
+//
+// Unknown reports zero rather than a large number: an account nobody has ever
+// reconciled is a different problem from one reconciled last year, and inventing
+// an age would report the wrong one.
+func accountAgeDays(a domain.Account, now time.Time) int {
+	if a.BalanceAsOf.IsZero() {
+		return 0
+	}
+	d := int(now.Sub(a.BalanceAsOf).Hours() / 24)
+	if d < 0 {
+		return 0
+	}
+	return d
 }

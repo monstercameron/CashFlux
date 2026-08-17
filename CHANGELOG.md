@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Loan figures say how far they can be trusted (WF4).** Where a payoff date rests on something missing,
+  stale or assumed, the card now names it — "missing the interest rate, so the payoff date is arithmetic
+  over a number nobody supplied" — rather than showing a confidence score you cannot act on. A figure
+  with everything it needs says nothing at all.
+
+### Added
 - **The report flags money counted twice (WF11).** A transfer entered as two separate transactions shows
   up as both spending and income, quietly overstating every figure built on either. The annual report now
   names those movements, says which totals are affected, and says what fixes it. It reports rather than

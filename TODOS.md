@@ -57,11 +57,55 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   reconcile balances → confirm recurring → review budget variances → review income/savings → explain
   net-worth movement → check goals & debt → set next-month adjustments → save a **read-only monthly
   snapshot**. Produces a concise "June is complete" report and preserves what the user knew then.
-- [ ] **WF4 — Financial Data-Quality Center.** ★ A dedicated trust surface scoring the reliability of
+- [~] **WF4 — Financial Data-Quality Center.** ★ A dedicated trust surface scoring the reliability of
   the app's own conclusions: missing APR/min/limit/term/due-day, stale balances, unmatched transfers,
   inconsistent currencies, accounts excluded from plans, estimated-vs-recorded values, calculation
   assumptions, last-update date, confidence. Every calculated insight traceable to its inputs. No
   competitor exposes the reliability of its own numbers — this strengthens every other feature.
+  — THE TRUST ENGINE DONE (2026-08-17), and applied to the loan payoff figures as the first surface.
+  New pure `internal/trust`.
+
+  A REASON, NEVER A BARE SCORE. "Confidence: 62%" is the thing this package exists NOT to do — a score
+  with no reason cannot be acted on, argued with, or improved, and the reader learns only that the app is
+  unsure rather than what would make it sure. Every assessment names the specific inputs that weakened
+  it, so the next step is obvious. On the sample: "These figures are missing the interest rate, so the
+  payoff date is arithmetic over a number nobody supplied."
+
+  MISSING IS NOT THE SAME AS STALE. A required input that is absent makes a figure UNRELIABLE; a stale or
+  assumed one merely QUALIFIES it. "Computed from a balance you last updated in March" and "computed with
+  no interest rate at all" are different kinds of wrong, and collapsing them into one warning teaches
+  people to ignore both.
+
+  NO DECLARED INPUTS IS UNRELIABLE, NOT SOLID. A figure whose dependencies nobody listed has not been
+  shown to be trustworthy — it has merely not been examined, and defaulting that to "solid" would make
+  the whole package a rubber stamp. `Worst` takes the least trustworthy rather than averaging, because
+  averaging lets two solid inputs hide one that is missing entirely.
+
+  REASONS ARE ORDERED BY WHAT TO DO ABOUT THEM: missing-required (go and enter it), stale (go and refresh
+  it), assumed (decide whether you agree), missing-optional.
+
+  A SAMPLE TENSION WORTH RECORDING. To demonstrate the warning I added a liability with no APR — and two
+  existing invariants rejected it: C349 ("the demo opens on STALE badges instead of a working ledger")
+  and `TestSampleLoansCarryTheirTerms`, which I wrote myself under FP-T2a. They are right: demonstrating
+  a warning is not worth making the first run read as neglected. The loan now carries a term, an
+  origination date and a current balance, and lacks only the rate — realistic for money borrowed from
+  family, and enough to show the feature without making the sample look broken.
+
+  KNOWN WEAKNESS, not fixed here: the loan surface treats `InterestRateAPR <= 0` as "missing", which
+  conflates a genuine 0% loan with one nobody filled in. The domain has no "unset" state for a rate, so
+  distinguishing them is a data-model change. Noted in WF4-b rather than papered over.
+
+  VERIFIED IN A BROWSER: 5/5.
+
+  STILL OPEN, and it is most of the ticket: the dedicated data-quality SURFACE, the per-account model
+  (last transaction date, last reconciliation, missing APR/min/limit/term/due-day, currency consistency,
+  accounts excluded from plans), and trust lines on the other calculated conclusions — runway, net worth,
+  projections. This is one engine and one surface, not the centre.
+- [ ] **WF4-b — A rate of zero is not a missing rate.** `domain.Account.InterestRateAPR` has no "unset"
+  state, so every consumer treats `<= 0` as missing — including the new trust assessment, which will tell
+  a household with a genuine 0% loan that its payoff date is unreliable. Needs an explicit unset
+  representation (a pointer, a paired bool, or a sentinel) and a sweep of the callers that assume the
+  conflation. Small model change, wide blast radius, worth doing deliberately.
   *Refined 2026-07-23 (external review):* the per-account model is: last transaction date, last
   balance date, **expected update cadence** (user-set), reconciliation state, source type
   (imported/manual/calculated), confidence. Every aggregate derives a four-state freshness label —

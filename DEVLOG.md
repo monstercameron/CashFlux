@@ -1,3 +1,41 @@
+## 2026-08-17 - a score you cannot act on is not information (WF4)
+
+WF4 asks for a surface "scoring the reliability of the app's own conclusions", and notes that no
+competitor exposes the reliability of its own numbers. The trap in that sentence is the word "scoring".
+
+"Confidence: 62%" is the thing I deliberately did not build. A score with no reason cannot be acted on,
+cannot be argued with, and cannot be improved - the reader learns only that the app is unsure, not what
+would make it sure. Every assessment names the inputs that weakened it, so the next step is obvious: go
+and fill that field in. On the sample it reads "These figures are missing the interest rate, so the
+payoff date is arithmetic over a number nobody supplied."
+
+Missing is not the same as stale. A required input that is absent makes a figure unreliable; a stale or
+assumed one merely qualifies it. "Computed from a balance you last updated in March" and "computed with
+no interest rate at all" are different kinds of wrong, and one warning covering both teaches people to
+ignore both.
+
+Two smaller rules I would defend. No declared inputs reports UNRELIABLE, not solid - a figure whose
+dependencies nobody listed has not been shown to be trustworthy, it has merely not been examined, and
+defaulting that to solid would make the package a rubber stamp. And `Worst` takes the least trustworthy
+rather than averaging, because averaging lets two solid inputs hide one that is missing entirely.
+
+The interesting part was the sample. To demonstrate the warning I added a liability with no APR - and two
+existing invariants immediately rejected it: C349, "the demo opens on STALE badges instead of a working
+ledger", and TestSampleLoansCarryTheirTerms, which I wrote myself six tickets ago.
+
+They were right, and I was wrong to reach for it. Demonstrating a warning is not worth making the first
+run read as neglected. The loan now carries a term, an origination date and a current balance, and lacks
+only the rate - realistic for money borrowed from family, and enough to show the feature without
+degrading the demo. My own test caught me taking a shortcut, which is the best argument for having
+written it.
+
+One weakness I am naming rather than hiding: the check treats an APR of zero as missing, which will tell
+a household with a genuine 0% loan that its payoff date is unreliable. The domain has no "unset" state
+for a rate, so fixing it properly is a model change with a wide blast radius. Filed as WF4-b.
+
+And the honest scope: this is one engine and one surface. The dedicated data-quality centre, the
+per-account model, and trust lines on runway, net worth and the projections are all still ahead.
+
 ## 2026-08-17 - deleting the half I had already written (WF11)
 
 WF11 lists eight kinds of relationship to auto-connect. Most already exist: refund pairs, order groups,

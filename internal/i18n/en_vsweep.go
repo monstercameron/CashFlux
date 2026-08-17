@@ -775,6 +775,13 @@ var vSweepKeys = Catalog{
 	"rpta.doubleCounted":    "%d movements totalling %s look like transfers recorded as two separate transactions — counted once as spending and once as income, so both figures above are overstated. Marking them as transfers fixes it.",
 	"rpta.doubleCountedOne": "A movement of %s looks like a transfer recorded as two separate transactions — counted once as spending and once as income, so both figures above are overstated. Marking it as a transfer fixes it.",
 
+	// WF4 — how far a calculated figure can be trusted, and exactly why.
+	"trust.qualified":    "These figures rest on %s — worth knowing before acting on the payoff date.",
+	"trust.unreliable":   "These figures are missing %s, so the payoff date is arithmetic over a number nobody supplied.",
+	"trust.inLoanApr":    "the interest rate",
+	"trust.inLoanTerm":   "the loan term",
+	"trust.inLoanBalance": "the balance",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

@@ -861,6 +861,17 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: mortgage, Name: "Mortgage", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD", OpeningBalance: usd(-24400000), BalanceAsOf: date(2026, time.July, 1), InterestRateAPR: 4.1, DueDayOfMonth: 1, MinPayment: usd(148000), Lender: "Beacon Bank Home Loans", TermMonths: 360, OriginationDate: date(2019, time.September, 1)},
 			{ID: carM, Name: "Marcus's Car Loan", OwnerID: marcus, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 15), InterestRateAPR: 7.4, DueDayOfMonth: 15, MinPayment: usd(62000), Lender: "Apex Auto Finance", TermMonths: 72, OriginationDate: date(2023, time.March, 15)},
 			{ID: carP, Name: "Priya's Car Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-2600000), BalanceAsOf: date(2026, time.June, 17), InterestRateAPR: 6.9, DueDayOfMonth: 17, MinPayment: usd(48000), Lender: "Apex Auto Finance", TermMonths: 60, OriginationDate: date(2024, time.January, 17)},
+			// WF4: a loan with no interest rate recorded — realistic for money
+			// borrowed from family, and exactly what the trust assessment exists to
+			// catch, because a payoff date computed from a blank APR renders
+			// identically to one computed from a real rate.
+			//
+			// It still carries a term, an origination date and a recent balance: two
+			// existing invariants (C349's "the demo must not open on stale badges"
+			// and TestSampleLoansCarryTheirTerms) say the sample must not look
+			// broken, and they are right — demonstrating a warning is not worth
+			// making the first run read as neglected.
+			{ID: "acct-familyloan", Name: "Loan from Priya's parents", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypePersonalLoan, Currency: "USD", OpeningBalance: usd(-800000), BalanceAsOf: date(2026, time.July, 1), DueDayOfMonth: 1, MinPayment: usd(20000), Lender: "Family", TermMonths: 48, OriginationDate: date(2025, time.March, 1)},
 			{ID: sloan, Name: "Priya's Student Loan", OwnerID: priya, Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD", OpeningBalance: usd(-3800000), BalanceAsOf: date(2026, time.June, 5), InterestRateAPR: 5.5, DueDayOfMonth: 5, MinPayment: usd(32000), Lender: "EdFinance Servicing", TermMonths: 120, OriginationDate: date(2018, time.June, 5)},
 			{ID: card, Name: "Rewards Credit Card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", OpeningBalance: usd(-380000), BalanceAsOf: date(2026, time.June, 22), CreditLimit: usd(1500000), InterestRateAPR: 24.99, DueDayOfMonth: 22, MinPayment: usd(22000), Lender: "Beacon Bank"},
 			{ID: travelcard, Name: "Travel Card (EUR)", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "EUR", OpeningBalance: eur(0), BalanceAsOf: date(2026, time.June, 20), CreditLimit: eur(300000), InterestRateAPR: 19.9, Lender: "Wise"},
