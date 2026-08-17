@@ -541,9 +541,42 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   cancelling rather than actually wiping the dataset.
 
 **SMART (deterministic / local statistics)**
-- [ ] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three
+- [~] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three
   purchases explain 82% of it, two materially larger than your usual." Let the user classify:
   one-time / expected / wrong category / new normal / investigate.
+  — THE EXPLANATION DONE (2026-08-17). New pure `internal/anomalyattrib`; surfaced under every
+  spending-highlight row on /insights.
+
+  THE NEGATIVE ANSWER IS THE HALF THAT EARNS THE PACKAGE. One big purchase is a one-off; thirty small
+  ones are a habit, and they call for completely different responses. A flag that always implies a
+  culprit sends somebody hunting for a mistake that does not exist, so when the spending is diffuse the
+  culprit list is DROPPED rather than shown as a weak suggestion — a list labelled "these might explain
+  it" is read as "these explain it".
+
+  CONCENTRATION IS FEW PURCHASES EXPLAINING MOST, NOT A CUMULATIVE SHARE. The first cut used a 60%
+  threshold alone, and a test caught it: six identical dinners "explain 67%" once you count four of
+  them, which is arithmetic, not a cause. Culprits must also be a minority of the period's purchases —
+  naming half of what somebody bought hands back the list they already have.
+
+  NOTHING EXPLAINS MORE THAN ALL OF IT. Culprits are measured against the OVERAGE, and a single receipt
+  easily exceeds it: the sample's one $420 purchase against a $270 usual first reported "explains 280%
+  of it", which reads as a broken calculation because it is one. Capped at 100, with `Everything` so the
+  surface can say "accounts for the whole of it" instead of printing a suspiciously round number.
+
+  Also added `uistate.TN` — the count-aware catalog lookup. This was the FOURTH plural seam this session
+  ("1 payments", "1 times", "1 movement(s)"), each previously fixed with its own extra key, and there is
+  always a next counted string. Both keys are named at the call site so the i18n key-coverage scan sees
+  them; the scan was extended in the same change rather than left with a hole in it.
+
+  VERIFIED IN A BROWSER: 6/6, both branches. Concentrated on the sample ("1 purchase accounts for the
+  whole of it: Northside Goods $420.00. That one is bigger than usual for them."), then twelve ordinary
+  same-size purchases imported into the same category to flip it ("Spread across 13 purchases — no single
+  one explains it"). `e2e/_attrib_diffuse.mjs`.
+
+  STILL OPEN: the ticket's SECOND clause — letting the user classify a flag as one-time / expected /
+  wrong category / new normal / investigate, and remembering that verdict so the same flag does not
+  return unchanged next month. Also unwired: the dashboard's attention widget, which renders the same
+  anomaly as a single line and does not carry the explanation.
 - [ ] **WF-SM2 — Behavioral pattern detection.** Surface patterns users miss: spend rises after
   payday; weekend delivery accelerating; savings dips in irregular-income months; a card paid just
   after interest posts; a category blows its budget in the final week; sub increases offsetting debt

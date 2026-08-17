@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
+	"github.com/monstercameron/CashFlux/internal/anomalyattrib"
 	"github.com/monstercameron/CashFlux/internal/anomalyprobe"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -1273,7 +1274,9 @@ func Insights() ui.Node {
 		}
 		return detectSpendingAnomalies(scopedTxns, app.Categories(), rates)
 	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), railReady.Get())
-	highlights := spendingHighlights(spendingAnoms, base, viewCategoryTransactions)
+	highlights := spendingHighlights(spendingAnoms, base, func(a insights.Anomaly) string {
+		return anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, time.Now())
+	}, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
 	// transaction, balance anomaly) into /insights unconditionally — no Smart gate.
@@ -3581,7 +3584,10 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready boo
 type insightsHighlightRowProps struct {
 	Anomaly insights.Anomaly
 	Base    string
-	OnDrill func(catName string)
+	// Attribution is what explains the overspend, or the finding that nothing
+	// single-handedly does. Empty when there is nothing honest to say.
+	Attribution string
+	OnDrill     func(catName string)
 }
 
 // insightsHighlightRow renders a single clickable spending-highlight row. It is
@@ -3597,7 +3603,12 @@ func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 		Attr("aria-label", uistate.T("insights.highlightDrillAria", a.Category)),
 		OnClick(drill),
 		Span(ClassStr("insight-dot "+highlightTone(a)), uiw.Icon(highlightArrow(a), css.Class(tw.W4, tw.H4))),
-		Span(css.Class(tw.Flex1, tw.TextLeft), highlightText(a, props.Base)),
+		Span(css.Class(tw.Flex1, tw.TextLeft),
+			Span(css.Class(tw.Block), highlightText(a, props.Base)),
+			If(props.Attribution != "",
+				Span(css.Class("muted"), css.Class(tw.Block), css.Class(tw.TextXs),
+					Attr("data-testid", "insight-attribution"), props.Attribution)),
+		),
 		insightSourceCue(),
 	)
 }
@@ -3613,7 +3624,7 @@ func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 // detection builds four monthly per-category spend series over every transaction,
 // and this card re-renders on every chat keystroke — so recomputing it inline was
 // per-character waste. This function is now a pure renderer of pre-computed data.
-func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(catName string)) ui.Node {
+func spendingHighlights(anomalies []insights.Anomaly, base string, attrib func(insights.Anomaly) string, onDrill func(catName string)) ui.Node {
 	if len(anomalies) == 0 {
 		return Fragment()
 	}
@@ -3621,10 +3632,15 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(
 	rows := MapKeyed(anomalies,
 		func(a insights.Anomaly) any { return a.Category },
 		func(a insights.Anomaly) ui.Node {
+			line := ""
+			if attrib != nil {
+				line = attrib(a)
+			}
 			return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
-				Anomaly: a,
-				Base:    base,
-				OnDrill: onDrill,
+				Anomaly:     a,
+				Base:        base,
+				Attribution: line,
+				OnDrill:     onDrill,
 			})
 		},
 	)
@@ -3638,6 +3654,106 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, onDrill func(
 			Div(css.Class("insight-list"), rows),
 		),
 	})
+}
+
+// anomalyPurchases collects the current month's spending behind one flagged
+// category, using EXACTLY the filters the detection itself used
+// (ledger.CategorySpendSeries): expenses that count in reports, converted to the
+// base currency, taken as magnitudes and grouped by the transaction's own
+// category. Any looser filter here would produce a culprit list that contradicts
+// the total it claims to explain — an excluded reimbursement named as the cause
+// of an overspend it was deliberately kept out of.
+//
+// Larger marks a purchase materially bigger than what that payee usually costs,
+// judged against the same three baseline months the anomaly was measured over. A
+// payee never seen before is not "larger" — it has no usual to be larger than.
+func anomalyPurchases(catID string, txns []domain.Transaction, rates currency.Rates, now time.Time) []anomalyattrib.Purchase {
+	curStart, _ := dateutil.MonthRange(now)
+	baseStart := dateutil.AddMonths(curStart, -3)
+	curEnd := dateutil.AddMonths(curStart, 1)
+
+	var cur []anomalyattrib.Purchase
+	priorSum := map[string]int64{}
+	priorN := map[string]int{}
+	for _, t := range txns {
+		if t.CategoryID != catID || !t.IsExpense() || !t.CountsInReports() {
+			continue
+		}
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			continue
+		}
+		minor := conv.Abs().Amount
+		switch {
+		case dateutil.InRange(t.Date, curStart, curEnd):
+			payee := strings.TrimSpace(t.Payee)
+			if payee == "" {
+				payee = strings.TrimSpace(t.Desc)
+			}
+			if payee == "" {
+				payee = uistate.T("insights.attribUnnamedPayee")
+			}
+			cur = append(cur, anomalyattrib.Purchase{ID: t.ID, Payee: payee, Minor: minor})
+		case dateutil.InRange(t.Date, baseStart, curStart):
+			key := strings.ToLower(strings.TrimSpace(t.Payee))
+			priorSum[key] += minor
+			priorN[key]++
+		}
+	}
+	for i, p := range cur {
+		key := strings.ToLower(p.Payee)
+		if n := priorN[key]; n > 0 {
+			usual := priorSum[key] / int64(n)
+			// Half again as much as usual, so ordinary variation in a repeat
+			// purchase is not reported as remarkable.
+			cur[i].Larger = usual > 0 && p.Minor*2 > usual*3
+		}
+	}
+	return cur
+}
+
+// anomalyAttributionText answers the question a spending flag leaves hanging:
+// what did I actually buy. Returns "" when there is nothing honest to add.
+//
+// The negative answer is carried too, and is the more useful half. If the
+// overspend is spread across every purchase in the category, saying so stops the
+// reader hunting for a culprit that does not exist — the habit moved, and no
+// single receipt is at fault (WF-SM1).
+func anomalyAttributionText(a insights.Anomaly, catID string, txns []domain.Transaction, rates currency.Rates, base string, now time.Time) string {
+	if a.Direction != insights.Up || a.Delta <= 0 {
+		return "" // nothing was overspent, so nothing needs explaining
+	}
+	ps := anomalyPurchases(catID, txns, rates, now)
+	att := anomalyattrib.Explain(a.Delta, ps)
+	if !att.Known {
+		return ""
+	}
+	if !att.Concentrated {
+		return uistate.TN("insights.attribDiffuseOne", "insights.attribDiffuseMany", len(ps))
+	}
+	names := make([]string, 0, len(att.Culprits))
+	for _, c := range att.Culprits {
+		names = append(names, c.Payee+" "+fmtMoney(money.New(c.Minor, base)))
+	}
+	joined := strings.Join(names, ", ")
+	var line string
+	if att.Everything {
+		// Not "explains 100%", which reads as a suspiciously round number and
+		// invites the reader to check the arithmetic. They account for the whole
+		// of it, so say that.
+		line = uistate.TN("insights.attribAllOne", "insights.attribAllMany", len(att.Culprits), joined)
+	} else {
+		line = uistate.TN("insights.attribOne", "insights.attribMany",
+			len(att.Culprits), int64(att.ExplainedPct+0.5), joined)
+	}
+	switch {
+	case att.UnusuallyLarge == 0:
+	case len(att.Culprits) == 1:
+		line += " " + uistate.T("insights.attribLargerThatOne")
+	default:
+		line += " " + uistate.TN("insights.attribLargerOne", "insights.attribLargerMany", att.UnusuallyLarge)
+	}
+	return line
 }
 
 // spendAnomaliesCache backs detectSpendingAnomaliesMemo (single dashboard surface;

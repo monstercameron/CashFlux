@@ -448,9 +448,10 @@ func assistantInsightsDataPanel() ui.Node {
 			func(a insights.Anomaly) any { return a.Category },
 			func(a insights.Anomaly) ui.Node {
 				return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
-					Anomaly: a,
-					Base:    base,
-					OnDrill: viewCategoryTransactions,
+					Anomaly:     a,
+					Base:        base,
+					Attribution: anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, now),
+					OnDrill:     viewCategoryTransactions,
 				})
 			},
 		)

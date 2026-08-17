@@ -101,6 +101,28 @@ func T(key string, args ...any) string {
 	return bundle.T(activeLang, key, args...)
 }
 
+// TN is T for a counted thing: it picks the singular key when n is exactly one
+// and the plural key otherwise, then formats it with n followed by args.
+//
+// It exists because "1 payments", "1 times" and "1 movement(s)" all shipped
+// before it did. Each was fixed with its own extra catalog key, which works
+// until the next counted string, and there is always a next counted string.
+// Parenthesised "(s)" is the other common dodge and reads like a form, not a
+// sentence.
+//
+// Counts stay in the catalog rather than in a rule here, because the rule is not
+// the same in every language — several have no separate plural at all, and
+// others have more than two. A caller naming both keys lets each catalog answer
+// for itself; a language that does not distinguish them simply gives both keys
+// the same string.
+func TN(one, other string, n int, args ...any) string {
+	key := other
+	if n == 1 {
+		key = one
+	}
+	return T(key, append([]any{n}, args...)...)
+}
+
 // Languages lists the languages available to pick (default first).
 func Languages() []i18n.Lang { ensureI18n(); return bundle.Languages() }
 

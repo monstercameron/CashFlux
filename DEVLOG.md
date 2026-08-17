@@ -1,3 +1,44 @@
+## 2026-08-17 - the useful answer is often "nothing explains it" (WF-SM1)
+
+"Dining is $135 above normal" prompts exactly one question - what did I buy - and leaves the reader to
+scan a list and do the arithmetic. Answering it turns a flag into a finding. The app already detected
+the overspend and already gathered the matching transactions; the missing piece was attribution.
+
+The half that earns the package is the negative answer. If the overspend is spread across thirty
+ordinary purchases there is no culprit to find, and a flag that implies there is sends somebody hunting
+for a mistake that does not exist. One big purchase is a one-off; thirty small ones are a habit, and
+they call for completely different responses. So when the spending is diffuse the culprit list is
+dropped rather than shown as a weak suggestion - a list labelled "these might explain it" gets read as
+"these explain it".
+
+Two rules had to be found the hard way. The first cut called something concentrated when the top
+purchases crossed a 60% share, and a test I had written to describe diffuse spending failed: six
+identical dinners "explain 67%" once you count four of them. That is arithmetic, not a cause. The
+threshold needed a companion - the culprits must also be a minority of the period's purchases, because
+naming half of what somebody bought just hands back the list they already have.
+
+The second came from the browser. The sample's Shopping category is one $420 purchase against a $270
+usual, and the first live render read "1 purchase explains 280% of it". Culprits are measured against
+the overage, and a single receipt easily exceeds it. Capped at 100 now, with a flag so the sentence can
+be "accounts for the whole of it" rather than a suspiciously round 100%.
+
+Also added the count-aware catalog lookup, TN. This was the fourth plural seam this session - "1
+payments", "1 times", "1 movement(s)" - each previously fixed with its own extra key, which works until
+the next counted string, and there is always a next counted string. Counts stay in the catalog rather
+than in a rule in Go, because the rule is not the same in every language. Both keys are named at the
+call site so the key-coverage scan can see them, and the scan was extended in the same change rather
+than left with a hole in exactly the guard the helper was added under.
+
+Verified both branches in a browser: the concentrated one on the sample, then twelve ordinary same-size
+purchases imported into the same category to flip it to diffuse. That detour cost more than it should
+have - my probe never selected an import account, so the rows landed unattached, and I spent a while
+building a reproduction for a data-integrity bug that turned out not to exist. The reproduction is what
+disproved it, which is the argument for writing one before believing yourself.
+
+Still open, and it is the ticket's second clause: letting the user classify a flag as one-time /
+expected / wrong category / new normal / investigate, and remembering that verdict so the same flag
+does not come back unchanged next month.
+
 ## 2026-08-17 - a preview that leads with the good news is an advertisement (WF6)
 
 WF6 calls itself "the connective tissue that makes recommendations feel smart". I have re-derived pieces

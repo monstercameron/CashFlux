@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spending flags now say what explains them (WF-SM1).** A flagged category names the purchases behind
+  its overspend and what share they account for — and when the spending is spread across everything you
+  bought, it says so plainly instead of naming a culprit that isn't there.
+
+### Added
 - **Loans preview what an extra payment would actually do (WF6).** Proposing one now shows each figure it
   moves, before and after — with what it costs you each month listed first, ahead of what it saves — and
   states plainly what it leaves alone.

@@ -25,6 +25,9 @@ func TestScreensKeyCoverage(t *testing.T) {
 	// sites (uistate.T("acctType."+kind)) — dynamic keys — are not misread as
 	// a literal key "acctType.".
 	tLit := regexp.MustCompile(`uistate\.T\(\s*"([^"]+)"\s*[,)]`)
+	// uistate.TN("one.key", "other.key", n) names BOTH keys as literals; without
+	// this the helper would be a hole in the very guard it was added under.
+	tnLit := regexp.MustCompile(`uistate\.TN\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,`)
 	regField := regexp.MustCompile(`(?:Label|Title|Subtitle):\s*"([a-z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.-]+)"`)
 
 	used := map[string][]string{} // key -> files
@@ -44,6 +47,10 @@ func TestScreensKeyCoverage(t *testing.T) {
 			}
 			for _, m := range tLit.FindAllStringSubmatch(string(src), -1) {
 				used[m[1]] = append(used[m[1]], path)
+			}
+			for _, m := range tnLit.FindAllStringSubmatch(string(src), -1) {
+				used[m[1]] = append(used[m[1]], path)
+				used[m[2]] = append(used[m[2]], path)
 			}
 			// The screen registry's Label/Title/Subtitle flow through uistate.T
 			// in the shell — a missing key there paints the nav rail raw.

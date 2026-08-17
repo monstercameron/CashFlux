@@ -2821,9 +2821,21 @@ var english = Catalog{
 	"insights.spendTrendHint":     "Total spending each month for the last 6 months.",
 	"insights.highlightDrillAria": "View %s transactions",
 	"insights.highlightUp":        "%s spending is up %d%% (%s more) — %s this month vs about %s a month.",
-	"insights.highlightDown":      "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
-	"insights.highlightNone":      "%s — nothing spent yet this month (about %s a month usually).",
-	"insights.uncategorized":      "Uncategorized",
+	// WF-SM1: what actually accounts for an overspend. The diffuse case is the
+	// more useful one — it stops the reader hunting for a culprit that is not there.
+	"insights.attribOne":           "%d purchase explains %d%% of it: %s.",
+	"insights.attribMany":          "%d purchases explain %d%% of it: %s.",
+	"insights.attribDiffuseOne":    "Spread across %d purchase — nothing unusual stands out.",
+	"insights.attribDiffuseMany":   "Spread across %d purchases — no single one explains it.",
+	"insights.attribAllOne":        "%d purchase accounts for the whole of it: %s.",
+	"insights.attribAllMany":       "%d purchases account for the whole of it: %s.",
+	"insights.attribLargerThatOne": "That one is bigger than usual for them.",
+	"insights.attribLargerOne":     "%d of them is bigger than usual there.",
+	"insights.attribLargerMany":    "%d of them are bigger than usual there.",
+	"insights.attribUnnamedPayee":  "Unnamed",
+	"insights.highlightDown":       "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
+	"insights.highlightNone":       "%s — nothing spent yet this month (about %s a month usually).",
+	"insights.uncategorized":       "Uncategorized",
 	// C231: label above starter chips when a conversation is already in progress.
 	"insights.suggestedQuestions": "Suggested questions",
 	// C234: compact top-of-page entry point that jumps to the Ask section when the
