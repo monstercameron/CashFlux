@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnprov"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -214,6 +215,14 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	clearedS := ui.UseState(txn.Cleared)
 	noteS := ui.UseState(txn.Note)                  // TXC-2: free-text memo
 	excludeS := ui.UseState(txn.ExcludeFromReports) // TXC-1: keep in balance, drop from budgets/reports
+	// The movement classifier: which of your OWN accounts this row moved to or
+	// from, and (for a card or loan) whether it counts as the payment. An import
+	// files every row as plain income or spending because that is all a bank line
+	// says; until this control existed a row could only be BORN a transfer, never
+	// become one, so a statement full of savings sweeps and card payments read as
+	// thousands of dollars of earning and spending that never happened.
+	transferToS := ui.UseState(txn.TransferAccountID)
+	debtPayS := ui.UseState(txn.BillAccountID != "")
 	errMsg := ui.UseState("")
 	// TX7: after a category change is saved, hold the similar-transaction candidates
 	// so the inline "N more look like this" offer can render. Empty means no offer.
@@ -249,6 +258,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	onCleared := ui.UseEvent(func(e ui.Event) { clearedS.Set(e.IsChecked()) })
 	onNote := ui.UseEvent(func(v string) { noteS.Set(v) })
 	onExclude := ui.UseEvent(func(e ui.Event) { excludeS.Set(e.IsChecked()) })
+	onDebtPay := ui.UseEvent(func(e ui.Event) { debtPayS.Set(e.IsChecked()) })
 
 	// Quick-add a category right from the picker — faster than leaving to /categories.
 	// A toggle reveals a name field; adding creates the category (matching the
@@ -387,6 +397,23 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		t = t.MarkCleared(clearedS.Get(), time.Now())
 		t.Note = strings.TrimSpace(noteS.Get())
 		t.ExcludeFromReports = excludeS.Get()
+		// The movement classification is applied AFTER the amount, deliberately.
+		// The sign of this row was decided above by the direction control (or, for
+		// a row that was already a transfer, held to the leg it is). Classifying
+		// changes what the row MEANS to income, spending and the debt pages — it
+		// never touches the money, so it must not run before the money is settled.
+		//
+		// The debt-payment claim is only sent when the chosen account is actually a
+		// debt; the checkbox is hidden otherwise, but a stale tick could survive a
+		// counterparty change within one open modal, and txnclassify rejects that
+		// combination rather than half-applying it.
+		wantDebtPay := debtPayS.Get() && isLiabilityAccount(app, transferToS.Get())
+		classified, cerr := txnclassify.Apply(t, transferToS.Get(), wantDebtPay, app.Accounts())
+		if cerr != nil {
+			errMsg.Set(cerr.Error())
+			return
+		}
+		t = classified
 		// C58: an amount edit must not silently desync an existing category breakdown —
 		// budgets attribute per split line, so a mismatched total would misreport. Block
 		// and point at the split section below instead of quietly dropping the split.
@@ -773,6 +800,19 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
 				Attr("aria-label", uistate.T("transactions.noteLabel")),
 				Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
+		// The movement classifier sits directly above "exclude from budgets and
+		// reports" because the two answer the same question — should this row count
+		// as income or spending — and a person who reaches for the blunt exclude
+		// checkbox to silence a transfer should see the precise control first.
+		classifyField(app, txn, transferToS.Get(), debtPayS.Get(),
+			func(v string) {
+				transferToS.Set(v)
+				// A counterparty that cannot be paid down cannot carry a payment
+				// claim; drop the tick with the choice so the two never disagree.
+				if !isLiabilityAccount(app, v) {
+					debtPayS.Set(false)
+				}
+			}, onDebtPay),
 		// TXC-1: exclude from budgets & reports (still counts toward account balances).
 		// The hint sits on its own line BELOW the checkbox row so it never runs into
 		// the label; a hairline separates this "reporting" control from the "Cleared
@@ -840,3 +880,72 @@ const (
 	txnDirOut = "out"
 	txnDirIn  = "in"
 )
+
+// isLiabilityAccount reports whether accountID names a card or loan, so the edit
+// modal offers the debt-payment claim only where paying something down is a
+// thing that can happen. An empty or unknown id is not a liability.
+func isLiabilityAccount(app *appstate.App, accountID string) bool {
+	if accountID == "" {
+		return false
+	}
+	acc, ok := domain.AccountByID(app.Accounts(), accountID)
+	return ok && acc.Class == domain.ClassLiability
+}
+
+// classifyField renders the movement classifier: the counterparty picker, the
+// consequence of the current choice, and — for a card or loan — the claim that
+// this row IS the payment.
+//
+// It is a plain function rather than a component because every interactive child
+// gets its handler from the caller's stable hooks; introducing a component here
+// would buy nothing and add a render boundary between the control and the form
+// state it writes.
+func classifyField(app *appstate.App, txn domain.Transaction, selected string, debtPay bool,
+	onSelect func(string), onDebtPay ui.Handler) ui.Node {
+	choices := txnclassify.Counterparties(txn, app.Accounts())
+	if len(choices) == 0 {
+		// Nothing to move money to or from. A picker whose only option is "none"
+		// is a question with one answer, so it is not asked.
+		return Fragment()
+	}
+	opts := make([]uiw.SelectOption, 0, len(choices)+1)
+	opts = append(opts, uiw.SelectOption{Value: "", Label: uistate.T("transactions.classifyNone")})
+	for _, c := range choices {
+		opts = append(opts, uiw.SelectOption{Value: c.AccountID, Label: c.Name})
+	}
+
+	// Name the consequence of the CURRENT selection, so what the save will do is
+	// readable before it happens rather than inferable afterwards.
+	effect := Fragment()
+	debtClaim := Fragment()
+	if acc, ok := domain.AccountByID(app.Accounts(), selected); ok {
+		if acc.Class == domain.ClassLiability {
+			effect = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-effect"),
+				uistate.T("transactions.classifyEffectDebt", acc.Name))
+			debtClaim = Div(css.Class(tw.FlexCol, tw.Gap1),
+				Label(css.Class("txn-check"),
+					Input(Type("checkbox"), Attr("data-testid", "txn-edit-classify-debt"),
+						Attr("aria-label", uistate.T("transactions.classifyDebtLabel", acc.Name)),
+						CheckedIf(debtPay), OnChange(onDebtPay)),
+					Span(uistate.T("transactions.classifyDebtLabel", acc.Name))),
+				Span(css.Class("muted", tw.Text12), uistate.T("transactions.classifyDebtHint")))
+		} else {
+			effect = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-effect"),
+				uistate.T("transactions.classifyEffectNeutral"))
+		}
+	}
+
+	return Div(css.Class("txn-classify-field", tw.FlexCol, tw.Gap1), Attr("data-testid", "txn-edit-classify-field"),
+		uiw.FormField(uistate.T("transactions.classifyLabel"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   opts,
+				Selected:  selected,
+				AriaLabel: uistate.T("transactions.classifyLabel"),
+				OnChange:  onSelect,
+				TestID:    "txn-edit-classify",
+			})),
+		effect,
+		Span(css.Class("muted", tw.Text12), uistate.T("transactions.classifyHint")),
+		debtClaim,
+	)
+}

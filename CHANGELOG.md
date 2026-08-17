@@ -6,6 +6,23 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **An imported row can now be told it is a transfer.** The "Edit this transaction" modal gained a movement
+  classifier: "Other account this money moved to or from". Choosing one of your own accounts drops the row
+  out of income, spending, budgets and reports without touching a single balance; choosing a card or loan
+  also offers "Count this as a payment toward …", which is what the debt pages read as the payment actually
+  made. The modal states the consequence of the current choice before you save it.
+
+  This closes a gap with a real price on it. A statement import files every row as plain income or spending,
+  because that is all a bank line says — so a credit-union export of forty transfer rows read as **$4,450.00
+  of income and $28,077.86 of spending that never happened**. Until now nothing could correct it: a transfer
+  could only be BORN a transfer (`CreateTransferPair`, the assistant), and no screen, bulk action or rule
+  could set `TransferAccountID` on a row that already existed.
+
+  New pure package `internal/txnclassify` owns the rules. It never touches the amount, the date or the
+  category, and never writes a counterpart leg — the far side of an imported transfer is usually another
+  imported row awaiting its own turn, and inventing a third transaction would invent money.
+
 ### Fixed
 - **Budget limits cannot be negative, anywhere (C665).** All three limit editors — the card's inline one, the
   full editor, the add form — now share one tested parser. A bad amount kills the commit control, says why

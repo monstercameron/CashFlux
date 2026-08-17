@@ -1,3 +1,58 @@
+## 2026-08-17 - a transfer could only be born one, never become one
+
+Cam pasted forty rows out of his credit union. Every one described a transfer, and every one was filed as
+plain income or spending: $4,450.00 of income and $28,077.86 of spending, none of which happened. His ask was
+"a way to flag transfers so they are removed from income, and I can switch credit card transfers to debt
+payments".
+
+The flag already existed. `TransferAccountID` makes `IsTransfer()` true, which short-circuits `IsIncome`,
+`IsExpense` and 125 call sites across budgets, reports, cash-flow and anomaly detection. What did not exist
+was any way to SET it. Grepping every writer found three: the assistant creating a transfer, the accounts
+screen calling `CreateTransferPair`, and the duplicate action CLEARING it. The edit modal never touched it,
+`rules.Rule` has no transfer setter, and there is no bulk field-set. A transfer could be born a transfer and
+never become one, which is precisely the wrong way round for data that arrives from a bank.
+
+So this was a write-path gap, not a model gap, and the fix is small on purpose.
+
+The debt half is mostly derived rather than declared. Point a row at a card and `transferLegs` already sees
+`ClassLiability`, `liabilityPaymentMinor` already signs the payment to reduce the debt, and the balance
+already follows. The only thing a transfer alone does NOT do is populate the Debt page's "payment actually
+made", because `ledger.BillPaymentForAccount` filters on `BillAccountID` — so that is the one extra claim the
+modal offers, and only when the counterparty can actually be paid down. Asking the user to hand-tag "neutral"
+versus "debt payment" per row would have been asking them to restate a fact the account's own class already
+carries.
+
+`internal/txnclassify` refuses to touch Amount, Date or CategoryID. The amount is already correct — an
+imported row records what the account did, and a leg's sign is which side of the move it is, not a
+classification — so re-signing it would corrupt data that arrived right. The category is inert on a transfer
+(every aggregation short-circuits before reading one), so clearing it would destroy the import's evidence to
+no effect. It also writes no counterpart leg: the far side of an imported transfer is usually another
+imported row waiting its turn.
+
+Two things surfaced while testing that are NOT fixed here, both pre-existing and both worth a ticket.
+
+The ledger's count line prints "net $X" over a sum that includes transfer legs (`transactions_tiles.go`
+`shownNet` adds every shown row with no `IsTransfer` check), so classifying a row does not move it. I had
+written the e2e assertion against that figure, which is how I found it. The test now asserts a consequence
+the app genuinely derives from `IsTransfer()` — the edit form withholds the direction control from a transfer
+leg, because a leg's sign is structural — and the reporting effect is pinned instead in
+`internal/txnclassify/scenario_test.go`, natively, against `ledger.PeriodTotals` over Cam's actual forty rows
+($4,450.00 and $28,077.86 before, zero after, with every balance unchanged).
+
+Second: `amountClass` is sign-only, so a transfer leg still renders in income green or spending red. The
+ledger has no visual affordance for transfer-ness at all.
+
+Tested at all three layers. Native: 18 cases in `internal/txnclassify` (rules, errors, idempotence, the
+reviewed transition, and the statement scenario) plus 10 in `internal/appstate` proving the write path —
+no counterpart leg invented, no balance moved, a positive-owed card row keeping its inherited sign, the debt
+page seeing the claim, un-classifying dropping it again, and classifying alongside an amount edit leaving a
+deliberately reciprocal-looking decoy untouched. Component: `txn_classify_wasm_test.go` through the testkit
+mock DOM. End-to-end: `e2e/regression/txn_classify.spec.mjs`, four scenarios.
+
+Note for whoever runs the gate next: `coverage.spec.mjs` fails with 51 drift entries across 13 routes, all
+pre-existing and none of them these controls (they live inside a modal the scan does not open). I left the
+manifest alone rather than regenerate it, since regenerating would silently bless a lot of unrelated drift.
+
 ## 2026-08-17 - the same number, computed twice, two different ways (C665-C670)
 
 Six findings off a /budgets recheck. Four were copy and validation and went the way those go. Two were the
