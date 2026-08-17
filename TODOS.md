@@ -131,7 +131,7 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   payee, description, amount, account and date. (3) SMART+ drafting a rule from a corrected transaction.
   Split and transfer actions are NOT in scope here — `internal/rules/rules.go` documents why they are
   deliberate absences rather than gaps, and that reasoning still holds.
-- [~] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
+- [x] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
   category/payee/tag/member with optional targets, near-/over-limit signals, average comparison, and
   drill to contributing txns (e.g. "Amazon excl. groceries", "all discretionary subs", "fees &
   interest", "cash withdrawals"). (Simplifi benchmark.)
@@ -158,12 +158,25 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   half-finished month compared against full ones would report every household as spending less than
   usual until the 28th; a month with no records is a gap in the history, not a month of zero spending.
 
-  CAVEAT, and the reason this is `[~]`: the engine has 10 passing unit tests, and the surface compiles
-  and is wired, but I could NOT drive it in a browser. Creating a saved view needs an active filter, the
-  views popover would not open under automation, and the dataset is not in localStorage before a flush
-  so it cannot be seeded either. Rather than claim coverage I do not have, this stays in progress until
-  somebody can confirm the two lines render. What is NOT done: the standalone watchlist surface the
-  ticket implies (these are saved-view rows, not their own page).
+  NOW VERIFIED (2026-08-17), and the earlier block was MY MISTAKE, not a tooling limit. The probe used a
+  dispatched `el.click()`, which does not reach GWC's handlers here; a real Playwright click opens the
+  popover fine. Two tickets were slowed by that assumption before I checked it.
+
+  AND THE BROWSER FOUND A REAL BUG the unit tests could not. Spending totals are NEGATIVE in this ledger,
+  and `Evaluate` compared them signed — so a $3,394 spend against a $1 alert reported "-339395% of your
+  alert, $3,394.95 TO GO". Wildly under, when it was wildly over. `savedtxnview.CrossedThreshold` has
+  always taken the absolute value; the two now agree, with a test asserting they cannot drift, because
+  one screen saying "over" while another says "plenty left" is worse than either being wrong alone.
+
+  Worth keeping: every unit test here used tidy positive fixtures, which is exactly why none of them
+  caught it. The browser printed the number out loud.
+
+  VERIFIED IN A BROWSER: 9/9 — save a filtered view, no alert claims no standing, setting a $1 alert
+  reads "339395% of your alert — $3,392.95 over", and the comparison reads "$3,329.05 less than usual,
+  against your last 6 months".
+
+  What is NOT done: the standalone watchlist surface the ticket implies (these are saved-view rows,
+  not their own page).
 - [ ] **WF9 — Projected-balance cash-flow calendar.** Day-by-day account calendar: expected income,
   bills/subs, debt payments, goal contributions, projected closing balance, earliest shortfall, min
   balance, days-at-risk, safe-to-spend by date. **Drag a planned payment to another date** and the

@@ -1,3 +1,35 @@
+## 2026-08-17 - the browser printed the number out loud (WF8, continued)
+
+Yesterday I marked WF8 in-progress because I could not drive the saved-views popover, and flagged the
+automation wall as possibly worth its own ticket. Having just found that WF17's identical wall was a real
+defect, I went back rather than leave the claim standing.
+
+The wall was my mistake. The probe used a dispatched `el.click()`, which does not reach GWC's handlers
+here. A real Playwright click opens the popover immediately. Two tickets were slowed by an assumption I
+had not checked, and my "these surfaces are undrivable" note was wrong - I should have tested the claim
+before writing it down.
+
+And the browser then found a bug the unit tests could not.
+
+Spending totals are NEGATIVE in this ledger. `Evaluate` compared them signed, so a $3,394 spend against
+a $1 alert reported "-339395% of your alert - $3,394.95 TO GO". Wildly under, when it was wildly over,
+and stated with total confidence.
+
+Every unit test I wrote for that function used tidy positive fixtures. That is exactly why none of them
+caught it: I picked the numbers, and I picked the ones that matched the model in my head. The browser
+used the app's real data and printed the nonsense on screen.
+
+`savedtxnview.CrossedThreshold` has always taken the absolute value for precisely this reason. The two
+now agree, with a test asserting they cannot drift - one screen saying "over" while another says "plenty
+left" is worse than either being wrong on its own.
+
+Two lessons, and the second is the one I want to keep. When a check cannot see something, suspect the
+product before the tooling. And when a function's tests all use fixtures I invented, they are testing my
+assumptions rather than the code - the sign convention was in the ledger the whole time, and I never
+asked it.
+
+Verified 9/9. Promoted from [~] to done.
+
 ## 2026-08-17 - when a probe cannot see it, neither can a user (WF17, continued)
 
 I marked WF17 in-progress because the browser check could not open the budget row's details disclosure,

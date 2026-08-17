@@ -18,10 +18,15 @@ and every commit updates this file under `Unreleased`.
   unbuilt on a first run.
 
 ### Added
-- **Saved views say where they stand and what normal looks like (WF8, partial).** A view with an amount
+- **Saved views say where they stand and what normal looks like (WF8).** A view with an amount
   alert now reports how far through it you are before you cross it, not only afterwards — and, when
   there are enough completed months to say so, how this period compares with your usual. It stays quiet
   when the difference is ordinary, because a monitor that flags every normal month is one nobody reads.
+
+### Fixed
+- **An amount alert on a saved view compares the right way round.** Spending totals are negative
+  internally, so a view well past its alert reported a large negative percentage and "money to go"
+  instead of saying it was over.
 
 ### Added
 - **Restoring a backup tells you what it would replace (WF-BACKUP).** The confirmation now says how many

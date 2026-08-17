@@ -138,3 +138,40 @@ func TestAveragingIsResilientToOneOutlier(t *testing.T) {
 		t.Errorf("average = %d, want it pulled up but not dominated", c.AverageMinor)
 	}
 }
+
+// Spending totals are NEGATIVE in this ledger. A signed comparison read a $3,394
+// spend against a $1 alert as 339,395% under — found by a browser check printing
+// the number out loud, which is the kind of nonsense a unit test with tidy
+// positive fixtures never produces.
+func TestSpendingIsComparedByMagnitude(t *testing.T) {
+	spent := Evaluate(-339_495, 100)
+	if spent.Signal != SignalOver {
+		t.Errorf("a $3,394 spend against a $1 alert = %q, want over", spent.Signal)
+	}
+	if spent.PctOfTarget < 0 {
+		t.Errorf("pct = %v, want a positive share of the alert", spent.PctOfTarget)
+	}
+	if spent.RemainingMinor >= 0 {
+		t.Errorf("remaining = %d, want negative — it is past the alert", spent.RemainingMinor)
+	}
+	// And it agrees with an equivalent positive total, or two screens disagree.
+	if pos := Evaluate(339_495, 100); pos.Signal != spent.Signal || pos.PctOfTarget != spent.PctOfTarget {
+		t.Errorf("signed and unsigned totals disagreed: %+v vs %+v", spent, pos)
+	}
+}
+
+func TestMagnitudeComparisonAgreesWithTheExistingThresholdRule(t *testing.T) {
+	// savedtxnview.CrossedThreshold has always taken the absolute value. If these
+	// two drift, one screen says "over" while the other says "plenty left".
+	cases := []struct{ total, target int64 }{
+		{-50_000, 100_000}, {-100_000, 100_000}, {-150_000, 100_000},
+	}
+	for _, c := range cases {
+		crossed := abs64(c.total) >= c.target
+		over := Evaluate(c.total, c.target).Signal == SignalOver
+		nearOrOver := over || Evaluate(c.total, c.target).Signal == SignalNear
+		if crossed && !nearOrOver {
+			t.Errorf("total %d vs target %d: threshold says crossed, watchlist does not", c.total, c.target)
+		}
+	}
+}

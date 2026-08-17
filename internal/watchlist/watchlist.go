@@ -57,11 +57,19 @@ type Status struct {
 }
 
 // Evaluate places a total against a target.
+//
+// It compares MAGNITUDES. Spending totals are negative in this ledger and a
+// target is a positive limit, so a signed comparison reads a $3,394 spend
+// against a $1 alert as 339,395% UNDER — which is what it did until a browser
+// check printed the number out loud. `savedtxnview.CrossedThreshold` has always
+// taken the absolute value for the same reason; this now agrees with it, and the
+// two must, or one screen says "over" while the other says "plenty left".
 func Evaluate(totalMinor, targetMinor int64) Status {
 	s := Status{TotalMinor: totalMinor, TargetMinor: targetMinor, Signal: SignalNone}
 	if targetMinor <= 0 {
 		return s
 	}
+	totalMinor = abs64(totalMinor)
 	s.PctOfTarget = float64(totalMinor) / float64(targetMinor) * 100
 	s.RemainingMinor = targetMinor - totalMinor
 	switch {
@@ -130,4 +138,12 @@ func Compare(currentMinor int64, priorMinor []int64) (Comparison, bool) {
 	}
 	c.DeltaPct = float64(c.DeltaMinor) / math.Abs(float64(avg)) * 100
 	return c, true
+}
+
+// abs64 is the magnitude of a signed minor-unit amount.
+func abs64(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
