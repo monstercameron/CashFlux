@@ -7,6 +7,20 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- **Budget rollup arithmetic moved out of the screen (R-LEAK).** The budgets page ran its own
+  aggregation loop over the evaluated statuses, including re-deriving each budget's limit as
+  spent-plus-remaining. That is correct arithmetic in the wrong place: it carried the judgement about
+  what a saving budget means — a contribution target, not a spending cap, and therefore never part of
+  the spending totals — in view code where no test could reach it. A budget status now carries its
+  limit as a field, and the aggregation lives in the budgeting package with tests for the saving split,
+  the overage magnitude, and the fact that the new field agrees with the old re-derivation exactly, so
+  no figure on screen moves.
+- **The allocation view asks the goals package how much a goal still needs (R-LEAK).** It computed
+  target-minus-current inline. The helper does more than tidy that up: it refuses to subtract across
+  currencies, where the inline version compared raw minor units of two different ones — a goal in euros
+  against an amount in dollars produced a number that meant nothing.
+
+### Changed
 - **App-lock and member PINs now use argon2id, and old credentials actually get upgraded (C284).**
   The passcode hash had already moved from SHA-256 to PBKDF2; it now uses argon2id, which is
   memory-hard — cracking it in parallel costs memory per guess, which is the resource an attacker
@@ -707,6 +721,24 @@ and every commit updates this file under `Unreleased`.
   wrong, and rewriting the same figure would log a change that did not happen.
 
 ### Fixed
+- **Every text field in the app now keeps what is typed into it (the sweep).** All 236 hand-rolled
+  controlled inputs — every form, every search box, every amount and note field across accounts,
+  budgets, goals, transactions, to-dos, plans, rules, workflows, custom fields, documents,
+  investments and settings — are moved onto the shared component, and the app has none left. The
+  shared filter toolbar's search is included, which matters most of all: that box is *debounced*, so
+  its bound value is deliberately several keystrokes behind, and every list screen in the app used
+  the same one.
+
+  The rule the component settled on is that **while the box has focus and its contents changed since
+  the last render, the box wins**. Value history cannot work here: a render arriving mid-word carries
+  a value that is simply old, and an old value and a new instruction are frequently the same string,
+  so there is nothing in the value itself to tell them apart. The "changed since last render" half
+  keeps a form that clears itself on submit from leaving the submitted text sitting in the field.
+
+  Two hazards fixed while sweeping: reading the caret position on a date, number or email input
+  *throws* in Chrome, and an exception crossing back into wasm would have taken the whole page down —
+  so caret preservation is now a whitelist of the types that support it. And a bare `css.Rule` passed
+  as an element option is not a prop; the renderer emits it as visible text beside the field.
 - **Text fields keep what you type, everywhere — the shared field component.** The composer fix was
   the same bug the whole app has: `value` is a special property the reconciler always writes, diffed
   against the *previous render's* prop rather than against the box, so any field bound to

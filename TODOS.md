@@ -3620,16 +3620,28 @@ geometry (meter/progress %), and bar-chart max-normalization are **legitimately*
       chart scaling. Added symmetric helper + `TestMajorFromMinor` (round-trip); removed both `divf` loops.
 
 **TODO — remaining screens (next):**
-- [ ] **allocate.go** — `allocate.go:303` reinvents `goalsvc.Remaining` (`max(0, target-current)`); swap
-      to `goalsvc.Remaining(g).Amount` (clean, helper already exists + tested). *Identified, not yet applied.*
+- [x] **allocate.go** — `allocate.go:303` reinvents `goalsvc.Remaining` (`max(0, target-current)`); swap
+      to `goalsvc.Remaining(g).Amount` (clean, helper already exists + tested).
+      — DONE (2026-08-16). The code had moved to `allocate_view.go:75` since the ticket was written.
+      Routed through `goalsvc.Remaining`, which adds more than tidiness: the helper REFUSES to subtract
+      across currencies, where the inline version compared raw minor units of two different ones — a
+      goal in EUR against a current amount in USD produced a number that meant nothing.
 - [ ] **insights.go** — `topCat`/`topAmt` argmax over per-category FX-converted spend (L~85-95) is an
       analytical "top spending category" computation; consider moving to `spendsummary`/`insights`.
       Confirm whether an existing helper covers it before adding one. Large file — scan for other localized calcs.
-- [ ] **budgets.go** — `totalSpent/totalLimit` summary loop over `budgeting.EvaluateRollup` statuses
-      (L~244), incl. `limit = spent + remaining` re-derivation. LOW value (core rollup already in domain);
-      optional `budgeting.SummarizeRollup` if a status `Limit` field is warranted instead of re-deriving.
-- [ ] **accounts.go** — `monthStart` reinvents `dateutil.MonthStart` (L~161); trivial swap. Net-worth delta
-      already via `ledger.NetWorthSeries`; `convBal` sort delegates to `ledger.Balance`/`Convert` (fine).
+- [x] **budgets.go** — `totalSpent/totalLimit` summary loop over `budgeting.EvaluateRollup` statuses
+      (L~244), incl. `limit = spent + remaining` re-derivation.
+      — DONE (2026-08-16), taking BOTH options the ticket offered rather than either. `budgeting.Status`
+      gained a `Limit` field (re-deriving it as Spent+Remaining is arithmetically right and wrong as a
+      practice — it would break silently the day Remaining is ever clamped, and reading a field cannot),
+      and `budgeting.SummarizeRollup` now owns the aggregation. Higher value than the ticket estimated:
+      the loop carried the C538 saving-vs-spending judgement — a claim about what the figures MEAN — in
+      view code where no test could reach it. Now three tests do, including that a saving budget never
+      leaks into the spending totals and that Limit agrees with the old re-derivation exactly, so no
+      existing figure moves.
+- [x] **accounts.go** — `monthStart` reinvents `dateutil.MonthStart` (L~161); trivial swap.
+      — VERIFIED ALREADY DONE (2026-08-16). No `monthStart` remains anywhere in `internal/screens`;
+      the local reimplementation is gone. Recording the verification so it is not re-opened.
 - [ ] Scan not-yet-deep-read screens for genuine computation (vs. display sums/sorts): **transactions.go,
       members.go, rules.go, categories.go, documents*.go, dashboard.go, smart*.go, activity.go,
       reports_screen.go**. NOTE: `reports_screen.go`, `dashboard.go`, `chartspec.go`, `health.go`/`healthscore`

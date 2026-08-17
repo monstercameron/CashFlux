@@ -72,8 +72,13 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 		}
 		var remaining int64
 		if in.Mode == "fill" {
-			if r := g.TargetAmount.Amount - g.CurrentAmount.Amount; r > 0 {
-				remaining = r
+			// R-LEAK: this re-derived max(0, target-current) inline, which is
+			// goalsvc.Remaining minus its currency check. The helper also refuses to
+			// subtract across currencies rather than silently comparing raw minor
+			// units of two different ones — a goal in EUR against a current amount
+			// in USD produced a number here that meant nothing.
+			if rem, err := goalsvc.Remaining(g); err == nil {
+				remaining = rem.Amount
 			}
 		}
 		cands = append(cands, allocate.Candidate{

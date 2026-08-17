@@ -471,3 +471,91 @@ func TestIsDuplicateBudget(t *testing.T) {
 		t.Error("empty existing slice should never be a duplicate")
 	}
 }
+
+// ─── R-LEAK: SummarizeRollup ─────────────────────────────────────────────────
+
+func rollupStatus(name string, dir domain.BudgetDirection, spent, limit int64, state State) Status {
+	return Status{
+		Budget:    domain.Budget{ID: name, Name: name, Direction: dir},
+		Spent:     money.New(spent, "USD"),
+		Limit:     money.New(limit, "USD"),
+		Remaining: money.New(limit-spent, "USD"),
+		State:     state,
+	}
+}
+
+// A saving budget is a contribution target, not a spending cap. Folding its
+// limit into "budgeted" would claim the household plans to SPEND money it plans
+// to set aside (C538).
+func TestSummarizeRollupKeepsSavingOutOfTheSpendingTotals(t *testing.T) {
+	got := SummarizeRollup([]Status{
+		rollupStatus("Dining", domain.DirectionSpend, 18000, 15000, StateOver),
+		rollupStatus("Fuel", domain.DirectionSpend, 9000, 10000, StateNear),
+		rollupStatus("Groceries", domain.DirectionSpend, 4000, 20000, StateOK),
+		rollupStatus("Emergency fund", domain.DirectionSave, 25000, 30000, StateOK),
+	})
+
+	if got.SpentMinor != 18000+9000+4000 {
+		t.Errorf("SpentMinor = %d — a saving budget leaked into spending", got.SpentMinor)
+	}
+	if got.LimitMinor != 15000+10000+20000 {
+		t.Errorf("LimitMinor = %d — a saving budget leaked into budgeted", got.LimitMinor)
+	}
+	if got.SavingsBudgetedMinor != 30000 || got.SavingsMovedMinor != 25000 {
+		t.Errorf("savings = %d budgeted / %d moved", got.SavingsBudgetedMinor, got.SavingsMovedMinor)
+	}
+	if got.OverCount != 1 || got.NearCount != 1 {
+		t.Errorf("counts = %d over / %d near", got.OverCount, got.NearCount)
+	}
+	// The overage is a positive magnitude, so a caller can render it without
+	// re-deriving a sign.
+	if got.OverMinor != 3000 {
+		t.Errorf("OverMinor = %d, want 3000", got.OverMinor)
+	}
+}
+
+// A budget that is over but whose Remaining is somehow not negative must not
+// contribute a nonsense overage.
+func TestSummarizeRollupOnlyCountsRealOverage(t *testing.T) {
+	got := SummarizeRollup([]Status{
+		rollupStatus("Exactly at cap", domain.DirectionSpend, 10000, 10000, StateOver),
+	})
+	if got.OverCount != 1 {
+		t.Errorf("OverCount = %d", got.OverCount)
+	}
+	if got.OverMinor != 0 {
+		t.Errorf("OverMinor = %d, want 0 — nothing is actually over", got.OverMinor)
+	}
+}
+
+func TestSummarizeRollupEmpty(t *testing.T) {
+	got := SummarizeRollup(nil)
+	if got != (RollupSummary{}) {
+		t.Errorf("SummarizeRollup(nil) = %+v", got)
+	}
+}
+
+// Limit is now a field rather than something callers re-derive as
+// Spent+Remaining. The two must agree, or every existing caller's figure moves.
+func TestEvaluateSetsLimitConsistentlyWithSpentPlusRemaining(t *testing.T) {
+	b := domain.Budget{ID: "b", Name: "Dining", Limit: money.New(15000, "USD"),
+		CategoryID: "c", Period: domain.PeriodMonthly}
+	txns := []domain.Transaction{
+		{ID: "t1", CategoryID: "c", Amount: money.New(-4000, "USD"),
+			Date: time.Date(2026, time.August, 5, 0, 0, 0, 0, time.UTC)},
+	}
+	st, err := Evaluate(b, txns,
+		time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		currency.Rates{Base: "USD"}, DefaultNearThreshold)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if st.Limit.Amount != 15000 {
+		t.Errorf("Limit = %d, want 15000", st.Limit.Amount)
+	}
+	if got := st.Spent.Amount + st.Remaining.Amount; got != st.Limit.Amount {
+		t.Errorf("Spent+Remaining = %d but Limit = %d — the field and the old "+
+			"re-derivation disagree, which would move every existing figure", got, st.Limit.Amount)
+	}
+}

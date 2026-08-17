@@ -34,8 +34,13 @@ type Status struct {
 	Budget    domain.Budget
 	Spent     money.Money
 	Remaining money.Money
-	Percent   int // spent as a percent of the limit (may exceed 100)
-	State     State
+	// Limit is the budget's cap in the evaluation currency (R-LEAK). Callers used
+	// to re-derive it as Spent+Remaining, which is arithmetically right and wrong
+	// as a practice: it puts domain arithmetic in view code and it would break
+	// silently the day Remaining is ever clamped. Reading a field cannot.
+	Limit   money.Money
+	Percent int // spent as a percent of the limit (may exceed 100)
+	State   State
 }
 
 // normalizedLimit returns the budget's limit, defaulting an empty currency to
@@ -181,6 +186,7 @@ func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end tim
 		Budget:    budget,
 		Spent:     spent,
 		Remaining: remaining,
+		Limit:     limit,
 		Percent:   percent(spent, limit),
 		State:     classifyDirected(budget.Direction, spent, limit, nearThreshold),
 	}, nil
@@ -392,4 +398,56 @@ func IsDuplicateBudget(existing []domain.Budget, categoryID, period, ownerID, ex
 		}
 	}
 	return false
+}
+
+// ─── R-LEAK: the rollup summary, out of view code ────────────────────────────
+
+// RollupSummary is the household-level read over a set of budget statuses: how
+// many are in trouble, and how the money splits between spending and saving.
+type RollupSummary struct {
+	// OverCount and NearCount are how many budgets are past or approaching their
+	// number. They key off State, so a SAVING budget's "over" means it exceeded
+	// its target — a success — exactly as classifyDirected intends.
+	OverCount, NearCount int
+	// SpentMinor and LimitMinor cover the SPENDING budgets only.
+	SpentMinor, LimitMinor int64
+	// OverMinor is how far past their caps the over-budget ones are, as a
+	// positive magnitude.
+	OverMinor int64
+	// SavingsBudgetedMinor and SavingsMovedMinor cover the SAVING budgets.
+	SavingsBudgetedMinor, SavingsMovedMinor int64
+}
+
+// SummarizeRollup reduces evaluated statuses to the household read (R-LEAK).
+//
+// It lives here rather than in the budgets screen because it is domain
+// aggregation, not display: the saving-vs-spending split in particular is a
+// judgement about what the figures MEAN, and it was previously made in view
+// code where no test could reach it.
+//
+// A SAVING budget is a contribution target, not a spending cap, so it is kept
+// out of the spending totals entirely (C538). Folding its limit into "budgeted"
+// would claim the household plans to spend money it plans to set aside, and
+// folding its contributions into "spent" would do the same to the other figure.
+func SummarizeRollup(statuses []Status) RollupSummary {
+	var s RollupSummary
+	for _, st := range statuses {
+		switch st.State {
+		case StateOver:
+			s.OverCount++
+			if st.Remaining.IsNegative() {
+				s.OverMinor += -st.Remaining.Amount
+			}
+		case StateNear:
+			s.NearCount++
+		}
+		if st.Budget.IsSaving() {
+			s.SavingsBudgetedMinor += st.Limit.Amount
+			s.SavingsMovedMinor += st.Spent.Amount
+			continue
+		}
+		s.SpentMinor += st.Spent.Amount
+		s.LimitMinor += st.Limit.Amount
+	}
+	return s
 }

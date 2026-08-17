@@ -1,3 +1,31 @@
+## 2026-08-16 — the arithmetic was right and the place was wrong (R-LEAK)
+
+Three items from the UI business-logic leak sweep, chosen because their files were among the few in
+`internal/screens` not being rewritten by another session today.
+
+Two turned out to be already fixed — `accounts.go`'s local `monthStart` is gone, and `allocate.go`'s
+inline remaining-calculation had moved to `allocate_view.go`. Recording the verification matters as
+much as the fix; an item that says "identified, not yet applied" invites someone to redo work that is
+done.
+
+The `allocate_view.go` swap is the one that was still real, and it is worth more than it looks.
+`goalsvc.Remaining` is not just a tidier `max(0, target-current)` — it goes through `money.Sub`, which
+REFUSES to subtract across currencies. The inline version compared raw minor units, so a goal in euros
+against a current amount in dollars produced a number with no meaning, silently, in a ranking that
+decides where money goes.
+
+`budgets.go` was the substantive one, and the ticket underestimated it as "LOW value (core rollup
+already in domain)". The core rollup is in the domain; the SUMMARY was not, and the summary is where
+the interesting judgement lives. The loop decided that a saving budget's limit does not count as money
+the household plans to spend and its contributions do not count as spending (C538) — a claim about
+what the figures mean, sitting in view code where no test could reach it. Three now do.
+
+The ticket offered `SummarizeRollup` OR a `Limit` field on Status. Both, in the end: the field because
+re-deriving `limit = spent + remaining` is arithmetically correct and structurally fragile — it holds
+exactly until the day someone clamps Remaining, and then it is wrong everywhere at once with nothing
+failing. Reading a field cannot break that way. There is a test asserting the field agrees with the
+old re-derivation, so nothing on screen moved.
+
 ## 2026-08-16 — the migration nothing was driving (C284)
 
 The ticket asked to replace SHA-256 with argon2id. Two things turned out to be true that changed the

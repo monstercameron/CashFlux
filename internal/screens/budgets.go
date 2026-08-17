@@ -575,32 +575,15 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		return statuses[i].Percent > statuses[j].Percent
 	})
 
-	overCount, nearCount := 0, 0
-	var totalSpent, totalLimit, totalOver, savingsBudgeted, savingsMoved int64
-	for _, s := range statuses {
-		switch s.State {
-		case budgeting.StateOver:
-			overCount++
-			if s.Remaining.IsNegative() {
-				totalOver += -s.Remaining.Amount
-			}
-		case budgeting.StateNear:
-			nearCount++
-		}
-		limit := s.Spent.Amount + s.Remaining.Amount // limit = spent + remaining
-		// C538: a SAVING budget is a contribution target, not a spending cap, so it
-		// must not inflate the spending figures. Folding it into "Budgeted" would
-		// make the hero claim a household plans to spend money it plans to set
-		// aside, and folding its contributions into "Spent" would do the same to
-		// the other figure. It belongs with savings, on the allocation read.
-		if s.Budget.IsSaving() {
-			savingsBudgeted += limit
-			savingsMoved += s.Spent.Amount
-			continue
-		}
-		totalSpent += s.Spent.Amount
-		totalLimit += limit
-	}
+	// R-LEAK: this was an aggregation loop in view code, including a
+	// `limit = spent + remaining` re-derivation. It is domain arithmetic — the
+	// saving-vs-spending split especially is a judgement about what the figures
+	// MEAN (C538) — so it lives in budgeting.SummarizeRollup, where a test can
+	// reach it. Status now carries Limit as a field rather than being re-derived.
+	roll := budgeting.SummarizeRollup(statuses)
+	overCount, nearCount := roll.OverCount, roll.NearCount
+	totalSpent, totalLimit, totalOver := roll.SpentMinor, roll.LimitMinor, roll.OverMinor
+	savingsBudgeted, savingsMoved := roll.SavingsBudgetedMinor, roll.SavingsMovedMinor
 
 	// The methodology shapes the view (D6). Resolve each budget's effective method and,
 	// for envelope budgets, its carried-forward balance.
