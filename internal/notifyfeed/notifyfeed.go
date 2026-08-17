@@ -51,8 +51,14 @@ func StaleBalanceCandidates(
 		days := freshness.DaysSinceUpdate(a, now)
 		title, body := text(a.Name, days)
 		out = append(out, notify.Candidate{
-			RuleID:        ruleID,
-			Event:         notify.EventStaleBalance,
+			RuleID: ruleID,
+			Event:  notify.EventStaleBalance,
+			Reason: notify.Reason{
+				Trigger:     copytext.Of("why.stale", "an account's balance has not been confirmed recently"),
+				Observed:    copytext.Of("why.staleDays", "last confirmed %d days ago", days),
+				EntityLabel: copytext.Plain(a.Name),
+				EntityHref:  "/accounts",
+			},
 			OccurrenceKey: a.ID + "@" + notify.WeekKey(now),
 			At:            now,
 			Title:         title.String(),
@@ -118,8 +124,15 @@ func BillDueCandidates(
 		}
 		title, body := text(b.Name, b.DaysUntil)
 		out = append(out, notify.Candidate{
-			RuleID:        ruleID,
-			Event:         notify.EventBillDue,
+			RuleID: ruleID,
+			Event:  notify.EventBillDue,
+			Reason: notify.Reason{
+				Trigger:     copytext.Of("why.billDue", "a bill reached its due window"),
+				Threshold:   copytext.Of("why.billLead", "alerts start %d days ahead", withinDays),
+				Observed:    copytext.Of("why.billDaysUntil", "due in %d days", b.DaysUntil),
+				EntityLabel: copytext.Plain(b.Name),
+				EntityHref:  "/bills",
+			},
 			OccurrenceKey: b.AccountID + "@" + b.DueDate.Format("2006-01-02"),
 			At:            now,
 			Title:         title.String(),
@@ -172,8 +185,15 @@ func TaskReminderCandidates(
 		}
 		title, body := text(t.Title, days)
 		out = append(out, notify.Candidate{
-			RuleID:        ruleID,
-			Event:         notify.EventTaskReminder,
+			RuleID: ruleID,
+			Event:  notify.EventTaskReminder,
+			Reason: notify.Reason{
+				Trigger:     copytext.Of("why.task", "a to-do reached its reminder time"),
+				Threshold:   copytext.Of("why.taskLead", "reminds %d days before it is due", t.ReminderLeadDays),
+				Observed:    copytext.Of("why.taskDays", "due in %d days", days),
+				EntityLabel: copytext.Plain(t.Title),
+				EntityHref:  "/todo",
+			},
 			OccurrenceKey: t.ID + "@" + t.Due.Format("2006-01-02"),
 			At:            now,
 			Title:         title.String(),
@@ -254,8 +274,15 @@ func BudgetCandidates(
 		}
 		title, body := text(s.Budget.Name, over)
 		out = append(out, notify.Candidate{
-			RuleID:        ruleID,
-			Event:         notify.EventBudgetThreshold,
+			RuleID: ruleID,
+			Event:  notify.EventBudgetThreshold,
+			Reason: notify.Reason{
+				Trigger:     copytext.Of("why.budget", "spending crossed a budget's line"),
+				Threshold:   copytext.Of("why.budgetLimit", "limit %s", s.Budget.Limit.String()),
+				Observed:    copytext.Of("why.budgetSpent", "spent %s (%d%% of the limit)", s.Spent.String(), s.Percent),
+				EntityLabel: copytext.Plain(s.Budget.Name),
+				EntityHref:  "/budgets",
+			},
 			OccurrenceKey: s.Budget.ID + ":" + string(s.State) + "@" + notify.MonthKey(now),
 			At:            now,
 			Title:         title.String(),
@@ -302,8 +329,15 @@ func LowBalanceCandidates(
 		}
 		title, body := text(a.Name, bal)
 		out = append(out, notify.Candidate{
-			RuleID:        ruleID,
-			Event:         notify.EventLowBalance,
+			RuleID: ruleID,
+			Event:  notify.EventLowBalance,
+			Reason: notify.Reason{
+				Trigger:     copytext.Of("why.lowBalance", "an account dropped below your floor"),
+				Threshold:   copytext.Of("why.lowFloor", "floor %d", floor),
+				Observed:    copytext.Of("why.lowNow", "balance %d", bal),
+				EntityLabel: copytext.Plain(a.Name),
+				EntityHref:  "/accounts",
+			},
 			OccurrenceKey: "lowbal:" + a.ID + "@" + notify.WeekKey(now),
 			At:            now,
 			Title:         title.String(),
@@ -473,8 +507,15 @@ func UnusualChargeCandidates(
 			}
 			title, body := text(label, e.mag, typical)
 			out = append(out, notify.Candidate{
-				RuleID:        ruleID,
-				Event:         notify.EventUnusualCharge,
+				RuleID: ruleID,
+				Event:  notify.EventUnusualCharge,
+				Reason: notify.Reason{
+					Trigger:     copytext.Of("why.unusual", "a charge was far above what this merchant normally bills"),
+					Threshold:   copytext.Of("why.unusualTypical", "normally %d", typical),
+					Observed:    copytext.Of("why.unusualNow", "this charge %d", e.mag),
+					EntityLabel: copytext.Plain(label),
+					EntityHref:  "/transactions",
+				},
 				OccurrenceKey: "unusual:" + e.t.ID,
 				At:            e.t.Date,
 				Title:         title.String(),

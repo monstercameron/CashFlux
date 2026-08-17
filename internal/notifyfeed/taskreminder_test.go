@@ -115,3 +115,47 @@ func TestTaskReminderCountsWholeDays(t *testing.T) {
 		t.Errorf("daysBetween = %d, want 2", got)
 	}
 }
+
+// ─── C408: the evidence behind an alert ──────────────────────────────────────
+
+// A title is a conclusion. Without the trigger, the configured level and the
+// observed value, a reader who disagrees has nowhere to look and a reader who
+// wants the alert to stop has nothing to adjust.
+func TestTaskReminderCarriesItsEvidence(t *testing.T) {
+	task := domain.Task{ID: "t-1", Title: "Renew tags", Status: domain.StatusOpen,
+		Due: day(2026, time.August, 18), ReminderLeadDays: 3}
+	got := TaskReminderCandidates("r", []domain.Task{task}, 0,
+		time.Date(2026, time.August, 16, 9, 0, 0, 0, time.UTC), taskText)
+	if len(got) != 1 {
+		t.Fatalf("got %d candidates", len(got))
+	}
+	r := got[0].Reason
+	if r.Empty() {
+		t.Fatal("no evidence on a task reminder")
+	}
+	if r.Trigger.Key == "" {
+		t.Error("the trigger is not a catalog key — a persisted alert could never be re-translated")
+	}
+	if r.Threshold.Empty() || r.Observed.Empty() {
+		t.Errorf("evidence is missing its numbers: %+v", r)
+	}
+	if r.EntityLabel.Fallback != "Renew tags" {
+		t.Errorf("EntityLabel = %q, want the task title", r.EntityLabel.Fallback)
+	}
+	if r.EntityHref == "" {
+		t.Error("no link to the thing the alert is about")
+	}
+}
+
+// A generator with nothing to add leaves the Reason zero, and the UI must then
+// show no drawer at all rather than an empty one.
+func TestEmptyReasonIsEmpty(t *testing.T) {
+	if !(notify.Reason{}).Empty() {
+		t.Error("the zero Reason claimed to carry evidence")
+	}
+	// A link alone is not evidence — the row already links.
+	linkOnly := notify.Reason{EntityHref: "/bills"}
+	if !linkOnly.Empty() {
+		t.Error("a bare link counted as evidence")
+	}
+}

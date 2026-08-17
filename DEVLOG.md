@@ -1,3 +1,37 @@
+## 2026-08-16 — a preview that can drift is worse than no preview (C408)
+
+Two halves, and the second one forced a refactor I would not otherwise have done.
+
+**The evidence.** A notification says "Dining is over budget". That is a conclusion, and the row
+offered no way to check it: not the limit, not the spend, not which rule decided it was worth
+interrupting for. So a reader who thinks it is wrong has nowhere to look, and a reader who finds it
+annoying has nothing to adjust. `notify.Reason` carries the trigger, the configured level, the
+observed value and the entity, all as copytext so a persisted alert stays re-translatable.
+
+The decision worth recording is that it is PERSISTED, not recomputed on open. Recomputing is cheaper
+and always "current" — which is exactly the problem. "Why did this fire" is a question about the
+moment it fired. A drawer that opens on a two-week-old alert and quotes a budget the user has since
+raised does not explain the alert; it contradicts it, and reads as a bug.
+
+For the same reason, old feed entries get no drawer rather than a backfilled one. There is no honest
+way to reconstruct the evidence for an alert that fired before the evidence existed.
+
+**The rule test.** "Test this rule" has one job: tell you whether the threshold you just typed
+actually catches anything. The obvious implementation is to write a preview function that runs the
+relevant generator. Do not do this. The moment a tenth generator is added to the live path and not
+the preview path, the preview starts confidently reporting "nothing would fire" for a rule that fires
+daily — and it fails silently, because a preview saying "nothing" looks identical whether it is right
+or broken. A preview you cannot trust is worse than none, because its whole purpose is to be trusted
+about a configuration decision.
+
+So `buildNotifyCandidates` came out of `runNotifyCatchUp` as the single place the generator set is
+listed. Both callers use it. They cannot drift because there is nothing to drift from.
+
+The other trap: the preview must not touch the delivered log. Occurrences are consumed on delivery,
+so a preview that ran the full path would mark today's alerts delivered and the real ones would never
+arrive. Testing a rule silencing the rule is a properly nasty failure — invisible, and it looks like
+the rule is broken rather than like the test broke it.
+
 ## 2026-08-16 — a drill-down that drills nowhere (C386)
 
 The ticket said to audit the report's charts and make every mark drill to the FILTERED transaction

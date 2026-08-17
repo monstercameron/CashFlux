@@ -53,9 +53,92 @@ func runNotifyCatchUp() {
 		return
 	}
 	now := time.Now()
-	accounts := app.Accounts()
 
 	ruleCfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+	cands := buildNotifyCandidates(app, now, ruleCfg)
+
+	log := loadDeliveredLog()
+	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
+	saveDeliveredLog(log)
+
+	// Self-heal: clear stale "balance is low" alerts for accounts that no longer
+	// qualify. Runs every boot, before the no-new-notifications early return, so a
+	// warning left over from before the user marked an account a liability (where a
+	// zero balance is good — you owe nothing) or archived it, disappears on its own.
+	reconcileLowBalanceFeed(app)
+	// Self-heal: clear bill-due alerts whose encoded due date no longer matches
+	// the account's current computed due date. Without this, an old "due in N
+	// days" card ages forever into a growing "overdue by N days" (screens/
+	// notifications.go's live re-render never removes it) while a fresh
+	// notification for the NEXT cycle can arrive alongside it — a stale,
+	// contradictory pair pointing at the same bill.
+	reconcileBillDueFeed(app, now)
+
+	if len(out) == 0 {
+		return
+	}
+
+	// Record each notification in the persisted Notification Center feed (C75).
+	// Severity is mapped from the notify.Severity int to the canonical string
+	// used by the UI (C267):
+	//   - budget-over / large-txn / bill-due-tomorrow → SeverityCritical → "critical"
+	//   - stale-balance / bill-due-soon / budget-near → SeverityWarning   → "warning"
+	//   - digest / backup / others                    → SeverityInfo       → "info"
+	// The mapping is deterministic — it lives in the notify package's Candidate
+	// producers (notifyfeed.*Candidates) and flows unchanged through CatchUp.
+	feed := make([]uistate.FeedItem, len(out))
+	for i, n := range out {
+		feed[i] = uistate.FeedItem{
+			ID:       n.ID,
+			Title:    n.Title,
+			Body:     n.Body,
+			At:       n.At.Unix(),
+			Severity: severityString(n.Severity),
+			DueAt:    dueDateFromDedupe(n),
+			// C362: carry the key+args form into the PERSISTED feed, so an
+			// archive written today can be re-rendered in a language chosen
+			// tomorrow. Storing only the finished sentence was a one-way door.
+			TitleText: n.TitleText,
+			BodyText:  n.BodyText,
+			// C408: the evidence is persisted with the alert, not recomputed on
+			// read. "Why did this fire" is a question about the moment it fired,
+			// and a drawer quoting a budget that has since been raised explains
+			// nothing and reads as a bug.
+			Reason: n.Reason,
+		}
+	}
+	uistate.PrependNotifyFeed(feed)
+	// Quiet hours suppress browser pop-ups only (C416). The in-app feed above has
+	// already recorded every alert, so nothing is lost — it just doesn't buzz the
+	// OS during the user's do-not-disturb window.
+	if !ruleCfg.InQuietHours(now) {
+		postBrowserNotifications(out)
+	}
+
+	// One unobtrusive summary toast: the single reminder's title, or a count.
+	msg := out[0].Title
+	if len(out) > 1 {
+		msg = uistate.T("notify.summary", len(out))
+	}
+	// PostNotice (not the UseNotice hook) — boot context, see CurrentPrefs note above.
+	uistate.PostNotice(msg, false)
+}
+
+// buildNotifyCandidates assembles every notification candidate the app can
+// currently produce, for the given clock.
+//
+// It is a function, and the ONLY place the generator set is listed, because the
+// rule-test preview (C408) has to run exactly what the live catch-up runs. Two
+// lists that "should" match is a preview that quietly stops telling the truth
+// the first time a generator is added to one of them — and a preview nobody can
+// trust is worse than no preview, since it is used to decide whether a rule is
+// configured correctly.
+//
+// It reads data and touches no state: no delivered log, no feed writes. Both the
+// live run and the preview call it; only the live run does anything with the
+// result that persists.
+func buildNotifyCandidates(app *appstate.App, now time.Time, ruleCfg notify.RuleConfig) []notify.Candidate {
+	accounts := app.Accounts()
 
 	// Resolve bill-due lead days: user override or rule default.
 	var billLeadDays int
@@ -110,67 +193,7 @@ func runNotifyCatchUp() {
 	cands = append(cands, backupReminderCandidates(app, now)...)
 	cands = append(cands, lowBalanceCandidates(app, now, ruleCfg)...)
 	cands = append(cands, paycheckLandedCandidates(app, now, ruleCfg)...)
-
-	log := loadDeliveredLog()
-	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
-	saveDeliveredLog(log)
-
-	// Self-heal: clear stale "balance is low" alerts for accounts that no longer
-	// qualify. Runs every boot, before the no-new-notifications early return, so a
-	// warning left over from before the user marked an account a liability (where a
-	// zero balance is good — you owe nothing) or archived it, disappears on its own.
-	reconcileLowBalanceFeed(app)
-	// Self-heal: clear bill-due alerts whose encoded due date no longer matches
-	// the account's current computed due date. Without this, an old "due in N
-	// days" card ages forever into a growing "overdue by N days" (screens/
-	// notifications.go's live re-render never removes it) while a fresh
-	// notification for the NEXT cycle can arrive alongside it — a stale,
-	// contradictory pair pointing at the same bill.
-	reconcileBillDueFeed(app, now)
-
-	if len(out) == 0 {
-		return
-	}
-
-	// Record each notification in the persisted Notification Center feed (C75).
-	// Severity is mapped from the notify.Severity int to the canonical string
-	// used by the UI (C267):
-	//   - budget-over / large-txn / bill-due-tomorrow → SeverityCritical → "critical"
-	//   - stale-balance / bill-due-soon / budget-near → SeverityWarning   → "warning"
-	//   - digest / backup / others                    → SeverityInfo       → "info"
-	// The mapping is deterministic — it lives in the notify package's Candidate
-	// producers (notifyfeed.*Candidates) and flows unchanged through CatchUp.
-	feed := make([]uistate.FeedItem, len(out))
-	for i, n := range out {
-		feed[i] = uistate.FeedItem{
-			ID:       n.ID,
-			Title:    n.Title,
-			Body:     n.Body,
-			At:       n.At.Unix(),
-			Severity: severityString(n.Severity),
-			DueAt:    dueDateFromDedupe(n),
-			// C362: carry the key+args form into the PERSISTED feed, so an
-			// archive written today can be re-rendered in a language chosen
-			// tomorrow. Storing only the finished sentence was a one-way door.
-			TitleText: n.TitleText,
-			BodyText:  n.BodyText,
-		}
-	}
-	uistate.PrependNotifyFeed(feed)
-	// Quiet hours suppress browser pop-ups only (C416). The in-app feed above has
-	// already recorded every alert, so nothing is lost — it just doesn't buzz the
-	// OS during the user's do-not-disturb window.
-	if !ruleCfg.InQuietHours(now) {
-		postBrowserNotifications(out)
-	}
-
-	// One unobtrusive summary toast: the single reminder's title, or a count.
-	msg := out[0].Title
-	if len(out) > 1 {
-		msg = uistate.T("notify.summary", len(out))
-	}
-	// PostNotice (not the UseNotice hook) — boot context, see CurrentPrefs note above.
-	uistate.PostNotice(msg, false)
+	return cands
 }
 
 // postBrowserNotifications posts OS/browser notifications for the emitted items

@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/monstercameron/CashFlux/internal/copytext"
+	"github.com/monstercameron/CashFlux/internal/notify"
 )
 
 // FeedItem is one entry in the Notification Center (C75): the title/body of an
@@ -39,6 +40,13 @@ type FeedItem struct {
 	// stuck in whatever language was active when each entry was written.
 	TitleText copytext.Text `json:"titleT,omitempty"`
 	BodyText  copytext.Text `json:"bodyT,omitempty"`
+	// Reason is the structured evidence the alert fired on (C408) — the trigger,
+	// the configured level, the observed value, and what it is about. It is
+	// PERSISTED with the alert rather than recomputed on read, because
+	// recomputing would answer with today's numbers: "why did this fire" is a
+	// question about the moment it fired, and a drawer quoting a budget that has
+	// since been raised explains nothing and looks like a bug.
+	Reason notify.Reason `json:"reason,omitempty"`
 }
 
 // OverdueDays returns how many whole calendar days past its due date a

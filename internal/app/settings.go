@@ -300,13 +300,58 @@ func alertRow(props alertRowProps) uic.Node {
 		uistate.RequestPersist() // same landmine as the toggle above
 	})
 
+	// C408: "Test this rule" answers the question a threshold input cannot —
+	// whether the number you just typed actually catches anything. Without it,
+	// configuring an alert is guesswork followed by waiting a week to find out.
+	//
+	// The preview runs the SAME generator set the live catch-up runs
+	// (buildNotifyCandidates) against today's data, with the delivered log
+	// untouched: it must not consume an occurrence, or testing a rule would
+	// silence the real alert it was about to send.
+	preview := uic.UseState("")
+	onTest := uic.UseEvent(Prevent(func() {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		var n int
+		var first string
+		for _, c := range buildNotifyCandidates(app, time.Now(), cfg) {
+			if c.RuleID != props.RuleID {
+				continue
+			}
+			n++
+			if first == "" {
+				first = c.Title
+			}
+		}
+		switch {
+		case n == 0:
+			preview.Set(uistate.T("settings.alert.testNone"))
+		case n == 1:
+			preview.Set(uistate.T("settings.alert.testOne", first))
+		default:
+			preview.Set(uistate.T("settings.alert.testMany", n, first))
+		}
+	}))
+	testRow := Div(css.Class("toggle-row alert-thresh-row"),
+		Button(css.Class("btn btn-sm"), Type("button"),
+			Attr("data-testid", "alert-test-"+props.RuleID),
+			Attr("aria-label", uistate.T("settings.alert.testAria", props.Label)),
+			OnClick(onTest), uistate.T("settings.alert.test")),
+		If(preview.Get() != "", Span(css.Class(tw.TextFaint, tw.Text12),
+			Attr("data-testid", "alert-test-result-"+props.RuleID),
+			Attr("role", "status"), Attr("aria-live", "polite"), preview.Get())),
+	)
+
 	toggle := ui.ToggleRow(ui.ToggleRowProps{
 		Label:    props.Label,
 		On:       enabled.Get(),
 		OnChange: onToggle,
 	})
 	if props.ThresholdLabel == "" {
-		return toggle
+		return Fragment(toggle, testRow)
 	}
 	ariaLabel := props.Label + " threshold (" + props.ThresholdLabel + ")"
 	// alert-thresh-row: compact, left-aligned, indented under its toggle so the
@@ -319,7 +364,7 @@ func alertRow(props alertRowProps) uic.Node {
 			Value(strconv.Itoa(thresh.Get())),
 			OnChange(onThresh)),
 	)
-	return Fragment(toggle, threshInput)
+	return Fragment(toggle, threshInput, testRow)
 }
 
 // learnThresholdRow renders a small number-input control (C35) that lets the

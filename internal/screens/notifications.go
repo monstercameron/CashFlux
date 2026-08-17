@@ -534,6 +534,13 @@ func notifyRow(props notifyRowProps) ui.Node {
 				If(route != "", Span(css.Class("notif-go"), Attr("aria-hidden", "true"), uiw.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4)))),
 			),
 			If(body != "", P(css.Class("notif-text"), body)),
+			// SM-7: what this alert means and what to do about it, for the one alert
+			// in front of you. Smart+ only — the alert's own copy IS the
+			// deterministic version, so a rule-based "explanation" would restate it.
+			ui.CreateElement(smartExplainBlock, smartExplainProps{
+				ID: "notif-" + it.ID, Code: notifyExplainCode, Kind: explainAlert,
+				Title: title, Body: body,
+			}),
 			Div(css.Class("notif-foot"),
 				Span(ClassStr("notif-sev-tag "+notifySeverityClass(sev)), notifySeverityLabel(sev)),
 				Span(css.Class("notif-sep"), "·"),
@@ -544,6 +551,9 @@ func notifyRow(props notifyRowProps) ui.Node {
 
 	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-"+it.ID),
 		Div(mainArgs...),
+		// C408: the evidence, under the claim that rests on it. Closed by default
+		// and absent entirely on alerts that carry none.
+		notifyWhyDrawer(it.ID, it.Reason),
 		// ONE primary action, then icon affordances, then a single ••• overflow.
 		//
 		// C409/C411: when an alert can be RESOLVED, that is the primary — it is

@@ -430,4 +430,41 @@ func registerVSweep() {
 		textDecoration("underline"),
 	)
 
+	// ─── C408: the evidence drawer on a notification row ─────────────────────
+	rule(".notif-why",
+		marginTop("0.4rem"),
+		fontSize("0.75rem"),
+	)
+	rule(".notif-why-sum",
+		cursor("pointer"),
+		color("var(--text-faint)"),
+		listStyle("none"),
+	)
+	rule(".notif-why-sum:hover",
+		color("var(--text-dim)"),
+	)
+	rule(".notif-why-body",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+		marginTop("0.35rem"),
+		paddingLeft("0.6rem"),
+		borderLeft("2px solid var(--border)"),
+	)
+	rule(".notif-why-row",
+		display("grid"),
+		gridTemplateColumns("6.5rem 1fr"),
+		gap("0.4rem"),
+	)
+	rule(".notif-why-label",
+		color("var(--text-faint)"),
+	)
+	rule(".notif-why-val",
+		color("var(--text-dim)"),
+	)
+	rule(".notif-why-link",
+		marginTop("0.25rem"),
+		color("var(--accent)"),
+	)
+
 }

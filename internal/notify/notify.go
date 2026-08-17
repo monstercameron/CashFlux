@@ -137,6 +137,11 @@ type Notification struct {
 	At        time.Time
 	Severity  Severity
 	DedupeKey string
+	// Reason is the evidence behind the alert (C408), carried from the candidate
+	// so the center can answer "why did this fire" without re-deriving it — a
+	// re-derivation would answer with TODAY's data, which is a different
+	// question from the one the reader is asking.
+	Reason Reason
 }
 
 // DedupeKey builds the idempotency key for one occurrence of a rule — the rule
@@ -189,4 +194,38 @@ func (l DeliveredLog) Keys() []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ─── C408: why an alert fired ────────────────────────────────────────────────
+
+// Reason is the structured evidence behind one notification: what rule fired,
+// the level it watches, the value that crossed it, and the thing it is about.
+//
+// A notification carries a Title and a Body, and both are conclusions. "Dining
+// is over budget" does not say what the limit was, what was actually spent, or
+// which rule decided that mattered — so a reader who disagrees has nowhere to
+// look, and a reader who wants to stop the alert has nothing to adjust. The
+// evidence answers both in the place the claim was made.
+//
+// Every field is a catalog key plus arguments rather than English, for the same
+// reason the copy is (C362): a persisted alert must be re-renderable in a
+// language chosen after it fired.
+type Reason struct {
+	// Trigger says what happened, in one clause ("a bill reached its due date").
+	Trigger copytext.Text
+	// Threshold is the configured level the rule watches, when it has one.
+	Threshold copytext.Text
+	// Observed is the value that crossed it.
+	Observed copytext.Text
+	// EntityLabel names the account, budget, bill, goal or task involved, and
+	// EntityHref is where to go to act on it. A Reason may have an entity with no
+	// link (a digest is about everything) or neither.
+	EntityLabel copytext.Text
+	EntityHref  string
+}
+
+// Empty reports whether there is any evidence worth showing. A Reason with only
+// a link is not evidence — the row already links — so it does not count.
+func (r Reason) Empty() bool {
+	return r.Trigger.Empty() && r.Threshold.Empty() && r.Observed.Empty() && r.EntityLabel.Empty()
 }

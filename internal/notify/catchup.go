@@ -27,6 +27,10 @@ type Candidate struct {
 	TitleText copytext.Text
 	BodyText  copytext.Text
 	Severity  Severity
+	// Reason is the structured evidence behind this occurrence (C408). Optional:
+	// a generator with nothing to show beyond its title leaves it zero, and the
+	// UI shows no drawer rather than an empty one.
+	Reason Reason
 }
 
 // CatchUp turns the candidate occurrences discovered for the gap since the app
@@ -100,6 +104,7 @@ func CatchUp(rules []Rule, candidates []Candidate, now time.Time, log DeliveredL
 				At:        f.c.At,
 				Severity:  f.c.Severity,
 				DedupeKey: f.key,
+				Reason:    f.c.Reason,
 			})
 		}
 	}

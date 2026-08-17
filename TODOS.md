@@ -5801,9 +5801,23 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 - [ ] **C407 [MAJOR][NOTIF] Per-member routing.** No MemberID exists on `notify.Rule`/`Target` —
   notifications are household-wide. Add optional member ownership on rules + a member filter in
   the center + member chip on rows; digests can be per-member.
-- [ ] **C408 [MAJOR][NOTIF] Alert evidence + rule test/preview.** Feed candidates carry only
+- [x] **C408 [MAJOR][NOTIF] Alert evidence + rule test/preview.** Feed candidates carry only
   Title/Body. Add a structured Reason (rule fired, threshold, observed value, entity link) rendered
   as "Why this fired"; alert settings gain a "Test this rule" preview showing what would fire today.
+  — DONE (2026-08-16). `notify.Reason` (trigger / threshold / observed / entity + link, all copytext
+  so a persisted alert stays re-translatable) rides Candidate to Notification to FeedItem and is
+  PERSISTED rather than recomputed on read — recomputing would answer with today's numbers, and "why
+  did this fire" is a question about the moment it fired. Populated by the bill-due, budget,
+  stale-balance, low-balance, task-reminder and unusual-charge generators; rendered as a closed
+  native `<details>` under the row, absent entirely on alerts that carry none (older feed entries
+  included — backfilling would mean recomputing).
+
+  The rule test required an architectural change: `buildNotifyCandidates` is extracted so the preview
+  runs the SAME generator set the live catch-up runs. Two lists that "should" match is a preview that
+  stops telling the truth the first time a generator is added to one of them, and a preview nobody
+  can trust is worse than none, since it is what you use to decide whether a rule is configured
+  right. The preview never touches the delivered log — consuming an occurrence would silence the real
+  alert it was about to send.
 - [x] **C409 DONE (2026-08-16) - Direct Resolve actions on actionable alerts.** Every notification
   already links somewhere, which answers "where do I go". The commoner need is "make this go away,
   correctly", and sending the reader to a page to hunt for the row the alert was already about is a
@@ -8307,7 +8321,35 @@ development-environment recovery issues, not product tickets; refresh is the doc
   discarded; and both write helpers must call `RequestPersist`. The bare-call guard was verified to
   FAIL against a reintroduced `applyReviewChoice(...)` statement.
 
-- [ ] **C554 [MAJOR][REVIEW][TXN] Review scope is disconnected from the ledger scope.**
+- [x] **C554 [DONE 2026-08-16 — Review asks the ledger what it is showing instead of guessing] [MAJOR][REVIEW][TXN] Review scope is disconnected from the ledger scope.**
+
+  `buildReviewIndex` read `app.Transactions()` and nothing else, so a ledger narrowed to
+  `CF26-PIPE` and one month opened a Review of the whole world.
+  Rather than teach Review about search, tags, categories, members, periods and money-in/out,
+  it now asks **txnfilter — the same code the ledger itself uses** — and intersects by id
+  (`ledgerVisibleIDs` + `reviewscope.Restrict`). One implementation of "what am I looking
+  at", so the two surfaces cannot disagree, and a filter dimension added later is inherited
+  for free.
+  A scope strip sits above everything in the modal: `This view (12)` / `Everything (251)`,
+  with a sentence under it naming what the selected scope covers in the user's own filter
+  terms. **Both counts are computed on every build**, so the option you are not in still has
+  a number attached — a choice where only one side has a denominator is not really a choice.
+  An unfiltered ledger gets a plain sentence instead of a control, because there the two
+  scopes are the same set.
+  The default follows the ledger (filtered → this view) and is DERIVED per render rather than
+  written on open, so a filter the user changes between visits stays honest and nothing is
+  persisted until they actually decide (`ReviewSession.ScopeChosen`).
+  Two details that would otherwise bite: pagination is stripped before the intersection —
+  paging is a property of the ledger's SCREEN, not of the working set, so filtering to 300
+  and pressing Review means all 300, not the 25 on page one. And an empty scope is not an
+  empty queue: the "all caught up" state now says `Nothing to review in this view` and names
+  how many are waiting outside it, instead of congratulating the user for a filter they may
+  not remember setting.
+  Bulk mode's writes were narrowed to match — they now pass the group's own charge ids
+  instead of a merchant key, so a confirm under "This view" cannot reach past the scope.
+  Tests: `TestReviewScopeFollowsTheLedgerFilter`, `TestReviewScopeIgnoresLedgerPagination`,
+  `TestAFilterThatMatchesNothingReviewsNothing` (a filter matching nothing must review
+  nothing, not fall back to everything), plus the pure `reviewscope` suite.
   The ledger can be filtered to `CF26-PIPE` and a period, but opening Review still shows the global
   queue, including unrelated merchants and dates. Provide an explicit Review scope (Current filter /
   Current period / Entire queue), or make the global behavior unmistakable and add search/filter
@@ -8325,7 +8367,21 @@ development-environment recovery issues, not product tickets; refresh is the doc
   explain the reset. AC: the selected period and the displayed totals agree after reload and after
   returning from Review, Categories, or Rules.
 
-- [ ] **C556 [MAJOR][REVIEW][CAT] Single review has no reliable in-context category-creation path.**
+- [x] **C556 [DONE 2026-08-16 — the button existed, was wired, and was never rendered] [MAJOR][REVIEW][CAT] Single review has no reliable in-context category-creation path.**
+
+  Worth recording plainly because the diagnosis is the whole story: `reviewSingleView` already
+  took a `newCatBtn` handler, `ReviewSurfaceBody` already built it (`newCatSingle`, targeting
+  the on-screen merchant), and the shared C499 `CategoryPicker` — which can create a CHILD
+  category, the exact `Housing › Home maintenance` case in the report — was already mounted
+  by the surface. The parameter was simply never used in the body. An unused function
+  parameter is not a compile error in Go, so the feature was fully built and invisible.
+  It renders now, beside the category select (a button, not a `<select>` sentinel, for the
+  reason `catSelectNew` documents). The card, its cursor and any pending choice all survive
+  the picker being open because the picker is separate state — cancel returns to the same
+  card with the same selection, and saving returns with the new category selected and
+  available in both Review and the ledger with no route reload.
+  The C559 link to Manage categories is the secondary path for the cases the inline picker is
+  the wrong shape for.
   The bulk surface and Categories page expose category creation, but the single card did not expose
   `+ New category or sub-category`. Creating `Housing > Home maintenance` required leaving Review,
   opening Categories, returning to Transactions, and reopening the queue. Reuse C499's picker in
@@ -8354,7 +8410,24 @@ development-environment recovery issues, not product tickets; refresh is the doc
   that category changes persist. Do not duplicate C60; close this ticket when the live-build check
   passes.
 
-- [ ] **C559 [MINOR][NAV][TXN] Review, Categories, and Rules are too disconnected for correction work.**
+- [x] **C559 [DONE 2026-08-16 — the trip out of Review ends back inside Review] [MINOR][NAV][TXN] Review, Categories, and Rules are too disconnected for correction work.**
+
+  C581 gave the LEDGER a named way back from a side trip. Review is one level further in, and
+  a trip that started inside it ended on the ledger with the queue closed — the same
+  stranding, one level down.
+  The single card now carries a `Need something that isn’t here?` row with two links that name
+  their destinations: **Manage categories** and **Make this a rule**. Each records a
+  `ReturnTo` crumb (route, working-set label, the originating row, and a new `ReopenReview`
+  flag) and the crumb's Back control reopens the surface.
+  Nothing is replayed. The ledger filter was already persisted, and the review position now
+  lives in a `ReviewSession` atom (scope, mode, cursor) rather than in component state — so
+  the surface can close and reopen and land on the same card in the same scope. The session
+  is reset when Review is FINISHED (the Done button), not when it is merely closed, because
+  closing it to go and create a category is precisely the case it exists to survive.
+  The Rules link seeds `uistate.SetRuleDraft` with the card's merchant and its current
+  category, so the trip starts from the decision rather than an empty form — C622's contract,
+  reached from the other surface.
+  The crumb's label names the job, not just the direction: `Review, this view (12 left)`.
   Review is entered from Transactions, while Categories and Rules are nested under Data & people;
   correcting a missing category or turning a repeated correction into a rule requires context-losing
   navigation. Add contextual links/actions from Review and make the destination and return path
@@ -9336,7 +9409,26 @@ was recreated before ending the pass.
   If signed entry is intentionally supported, changing the sign must visibly change Direction and
   explain the normalization before saving; Add, Edit, Import, Review, and Split must use one rule.
 
-- [ ] **C625 [MINOR][TXN][SORT][FEEDBACK] Sort direction can change before the visible ledger catches up.**
+- [x] **C625 [DONE 2026-08-16 — dimmed rows you could still click are not a busy state] [MINOR][TXN][SORT][FEEDBACK] Sort direction can change before the visible ledger catches up.**
+
+  C569 had already built most of this: the click is deferred a macrotask so the indicator
+  paints first, `aria-busy` goes on the table, the rows dim, and re-entrant sort clicks are
+  swallowed. What it did NOT do is make the stale rows inert. The dim said "these are out of
+  date" and then let you click one anyway — and the window is sub-second, which is exactly
+  long enough for the fast click the report describes: read the old order, click the row you
+  saw, land on whichever row the new order put there.
+  `.data-table[aria-busy="true"] tbody` now drops `pointer-events`. The header keeps its
+  own, so a second sort click is rejected by the table's re-entrancy guard rather than by
+  being unreachable.
+  The table also says the state in words, for the reader who cannot see the dim: an sr-only
+  `<caption>` live region carrying `Re-sorting the table…` while busy and
+  `Sorted by Amount, ascending.` once settled. It announces BOTH transitions — a busy state
+  that goes quiet without naming what settled leaves the reader knowing only that something
+  changed.
+  Guard: `ui/datatable_aria_wasm_test.go` mounts the real table, clicks a sort header, and
+  asserts `aria-busy` is true BEFORE `OnSort` has run, that the re-sort was deferred rather
+  than run synchronously, and that a second click inside the window does not queue a second
+  re-sort.
   Clicking Date changed the sort state while the old row order remained visible for roughly a second;
   a fast user can click or edit a row while reading stale order. `aria-sort` is present, so this is
   specifically a rendered-order feedback regression against C569, not an accessibility-label gap.
@@ -9417,7 +9509,26 @@ merchant charges, which is itself tracked below.
 - [x] **C611 home quick-add live behavior now passes:** the dashboard quick-add panel rendered,
   accepted focus, and exposed its fields and Save/Cancel controls on the first activation.
 
-- [ ] **C651 [MINOR][TXN][TAGS][UX] “Filter to #coffee” is a no-op from a filtered row.**
+- [x] **C651 [DONE 2026-08-16 — it was applying the filter and saying nothing, which is indistinguishable from a dead button] [MINOR][TXN][TAGS][UX] “Filter to #coffee” is a no-op from a filtered row.**
+
+  **Honest diagnosis first, because it changes what the fix had to be.** The click path was
+  never broken. A wasm test that mounts the real chip and clicks it
+  (`TestTagChipReportsTheTagItShows`) shows it hands the ledger `coffee`, unprefixed, which is
+  what `Criteria.Tag` matches on; the filter was applied and a chip was produced.
+  What made it read as a no-op is that on the reported view NOTHING it could change was
+  visible: with `UXJ-S01` narrowing the ledger to one row, and that row being the one carrying
+  the tag, the count cannot move and the rows cannot change. A control that alters state
+  invisibly and says nothing is a dead button as far as the user is concerned, and treating
+  the report as "the code is fine" would have been the wrong call.
+  So: the drill is now a tested property of the filter model rather than two lines in a click
+  handler (`txnfilter.Criteria.DrillToTag` — adds a tag criterion, keeps search/period/member,
+  replaces any earlier tag selection, drops `ScopeAny`, ignores a blank tag, and is removable
+  on its own through `RemoveValue`), and the ledger SAYS it happened:
+  `Filtered to #coffee. Remove the tag chip to go back.` — or `Already filtered to #coffee.`
+  when the criteria did not move, rather than sitting silent.
+  Tests: `internal/txnfilter/drilltag_test.go` (five properties incl. "re-drilling to the same
+  tag is not a scope change", so the ledger cannot claim it narrowed something twice) plus the
+  wasm click test.
   With `UXJ-S01` filtered to one row, activating the row's `Filter to #coffee` control left the
   search text, active filter chip, result count, and ledger unchanged. The control promises a tag
   drill-down but does not add a Tag filter or replace the query. AC: the action visibly applies the
@@ -9427,7 +9538,29 @@ merchant charges, which is itself tracked below.
   user able to remove only that tag. If the current query already narrows to one matching row, the
   UI should still show that the tag was applied rather than silently doing nothing.
 
-- [ ] **C652 [MAJOR][TXN][DUPES][SAFETY] Duplicate review still exposes direct destructive deletion.**
+- [x] **C652 [DONE 2026-08-16 — the confirmation exists; what it was missing was the OTHER entry, and a real undo point] [MAJOR][TXN][DUPES][SAFETY] Duplicate review still exposes direct destructive deletion.**
+
+  **Honest correction to the report:** a confirmation was already there. C571 added it, and
+  the z-index that lets a confirm dialog answer from inside a flip modal was already fixed
+  (`--z-dialog` 3500 above `--z-modal` 3000). The reproduction was against a served bundle
+  older than both — the same staleness C558 and C628 describe. Recorded rather than glossed,
+  because "add a confirmation" would have been the wrong fix.
+  What was genuinely missing, and is fixed:
+  1. **It named only the entry being removed.** In a group of three near-identical rows the
+     reader's actual question is which copy SURVIVES, and "the entry kept at the top of the
+     group is untouched" does not answer it. Both entries now print with the four facts that
+     separate them — description · date · amount · account (`dupEntryIdentity`).
+  2. **The undo point was captured AFTER the delete.** `postUndoStory` sealed a checkpoint
+     once the row was already gone, so the toast offered an Undo whose nearest restore point
+     was whatever the 4-second autosave ticker happened to have taken. Both the delete and
+     the merge now capture BEFORE the write — the rule the ledger's own row delete follows
+     ("capture BEFORE the write, so Undo has a point to return to"). The confirmation
+     promises recovery; this is what makes the promise true.
+  3. **The merge preview did not disclose tags or cleared status.** `dedupe.Merge` UNIONS
+     both, so the kept entry comes out carrying tags it did not have, and cleared if any copy
+     was — facts that change how the row reads and how it counts in reconciliation. Both are
+     in the preview now (`dupMergeNewTags`), beside the receipts/category/note/payee/link
+     carry-over TXC-4 already listed.
   Review duplicates currently shows `Delete duplicate` as an immediately actionable button while
   explaining only that one entry will be kept. No confirmation or undo is presented before the
   destructive operation. Re-open the C571 acceptance criteria: name the retained/removed entries,
@@ -9438,7 +9571,37 @@ merchant charges, which is itself tracked below.
   first click; success must update counts and show Undo that restores the removed identity and its
   metadata.
 
-- [ ] **C653 [MAJOR][TXN][REVIEW][SCOPE][SAFETY] One-at-a-time review can confirm an entire merchant group under a singular CTA.**
+- [x] **C653 [DONE 2026-08-16 — the card names its scope, and the write takes the card's own list] [MAJOR][TXN][REVIEW][SCOPE][SAFETY] One-at-a-time review can confirm an entire merchant group under a singular CTA.**
+
+  **Root cause: the write path chose its own population.** `applyReviewChoice` took a
+  `batch bool`, and on `true` it re-derived a merchant key from the current charge and swept
+  the whole ledger for matches. So the card could depict one charge while the store took 122
+  — and the same re-derivation is what C616 broke in the other direction, matching zero. A
+  boolean cannot express "the three charges this card is standing in for", which is why both
+  failure modes lived in the same line.
+  The boolean is gone. `applyReviewChoice(app, ids []string, categoryID)` writes exactly the
+  ids it is handed, and the surface hands it the list it used to DRAW and COUNT the card
+  (`groupChargeIDs`). The number on the button and the number written now come from one
+  slice; they cannot drift.
+  On top of that: `internal/reviewscope` (new, pure) owns the scope decision —
+  `CommitCharge` (default) vs `CommitMerchant`, and `Targets()` turning the choice into the
+  exact id list. The card shows a segmented control reading `1 selected charge` /
+  `N charges from <merchant>`; the primary button carries its own count
+  (`Categorize all 122`); snooze and dismiss follow the SAME scope, so one control describes
+  every action on the card; and the merchant-wide write needs a second click through an
+  in-footer confirmation that states the count, the merchant, the category, the total and the
+  date range. Inline rather than a modal — this surface is already a modal, and one stacked
+  on another is where "no confirmation appeared" reports come from (see C652).
+  The scope choice is pinned to the merchant it was made on (`ReviewSession.CommitKey`), so
+  it expires with the card and can never be inherited by a merchant the user has not seen.
+  **Also fixed while here, unreported:** the post-commit `advance()` skipped a merchant every
+  time. The confirmed group leaves the queue, so the rows shift down by one and the cursor
+  stepped over the shift. Nothing advances the cursor now — the queue advances itself.
+  Tests (`screens/review_commit_wasm_test.go`, native `reviewscope`): confirming one charge
+  leaves its siblings uncategorized AND still queued; the merchant scope writes exactly the
+  group and nothing from another merchant; a charge that left the queue since the card was
+  drawn is skipped rather than re-categorized; `Targets` de-duplicates and always includes
+  the current charge.
   The first card showed one Blue Bottle charge plus “121 more charges from this merchant are waiting.”
   Clicking `Categorize & next` moved the queue from 251 to 129, and the ledger showed 122 Blue Bottle
   entries categorized/reviewed. If merchant-wide confirmation is intended, say so on the CTA and
