@@ -80,12 +80,57 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   Adjust · Save as scenario**. The connective tissue that makes recommendations feel smart.
 
 **Workflow accelerators**
-- [ ] **WF7 — Rules Workbench.** ★ Before saving a categorization rule: preview every historical txn it
+- [x] **WF7 — Rules Workbench.** ★ Before saving a categorization rule: preview every historical txn it
   would match, flag false-positive risk, detect overlap/contradiction with existing rules, reorder
   priority, apply retrospectively within a chosen period or future-only, explain which rule changed
   each field, and **undo** a bulk application. Match on amount ranges, account, member, tags, notes,
   recurring status; support split & transfer actions (Lunch Money is the benchmark). SMART+ can draft
   rules from corrected txns; matching stays deterministic + local.
+  — DONE (2026-08-17) for the parts that were missing, and MOST OF THIS ALREADY EXISTED. Audited first:
+  the per-rule affected-transactions preview (`previewFor`/`PreviewMatches`), shadowed-rule and
+  no-match warnings (`rules.Conflicts`), drag-and-keyboard precedence reorder (C64), and a dry-run
+  blast-radius preview before the bulk apply were all built. Amount/account/date conditions exist
+  (C105); split and goal-link actions are documented in `rules.go` as deliberate absences with reasons,
+  not gaps.
+
+  I nearly shipped a parallel engine before checking. Caught it, deleted it, and kept only what was
+  genuinely new.
+
+  WHAT WAS ACTUALLY MISSING, in `internal/ruleapply`:
+
+  (1) A SCOPE. Applying to history and applying from here on were the same action — the bulk apply
+  swept everything ever recorded. They are now two separate menu items ("Apply to all past
+  transactions…" / "Apply to this year…") rather than one action with a setting, because a setting is
+  something you can be wrong about without noticing. An unknown scope normalizes to FUTURE: if a stored
+  preference is ever unreadable the failure must be "did less than expected", never "rewrote your
+  history".
+
+  (2) A PER-RULE UNDO. appstate's own comment called the bulk apply "an overwrite that has no per-rule
+  undo" — the existing safety net is a dataset-wide checkpoint, which rolls back everything else that
+  happened alongside it. Each change now records the category it replaced, so an undo restores what was
+  there rather than clearing the field; the two are indistinguishable without the old value. Undo works
+  from the RECORD, not by re-running the rule, because by then the rule may have been edited or deleted.
+
+  (3) THE CONFIRMATION SEPARATES FILLING FROM OVERWRITING. Filing uncategorized transactions is the rule
+  doing its job; replacing categories a person chose by hand is a different act, and one figure covering
+  both hides it. On the sample: "This will recategorize 318 transactions. Of those, 197 already have a
+  category you chose, which this would replace." It also warns when the matches span three or more
+  existing categories — a pattern catching groceries, fuel and a mortgage is not describing one thing.
+
+  The undo offer sits ON the rule that ran, not in a settings screen, and only on that rule: an undo
+  offer on a rule that did not run is an invitation to reverse somebody else's work.
+
+  VERIFIED IN A BROWSER: 10/10 end to end — apply 318 transactions, see the offer appear, undo it, watch
+  the offer disappear.
+
+  REMAINING, filed rather than half-built: WF7-b.
+- [ ] **WF7-b — Rules: per-field change explanation and richer match fields.** The parts of WF7 not yet
+  built. (1) Explain which rule changed each FIELD on a transaction — the audit trail records that a
+  rule did it, but not which rule or which field, and with precedence ordering that is the question
+  people actually ask. (2) Match on member, tags, notes and recurring status; conditions today cover
+  payee, description, amount, account and date. (3) SMART+ drafting a rule from a corrected transaction.
+  Split and transfer actions are NOT in scope here — `internal/rules/rules.go` documents why they are
+  deliberate absences rather than gaps, and that reasoning still holds.
 - [ ] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
   category/payee/tag/member with optional targets, near-/over-limit signals, average comparison, and
   drill to contributing txns (e.g. "Amazon excl. groceries", "all discretionary subs", "fees &

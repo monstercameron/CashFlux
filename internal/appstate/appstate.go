@@ -40,6 +40,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payeebase"
 	"github.com/monstercameron/CashFlux/internal/revalue"
+	"github.com/monstercameron/CashFlux/internal/ruleapply"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
@@ -2436,6 +2437,70 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 	}
 	a.log.Info("applied one rule to existing transactions", "rule", ruleID, "updated", total)
 	return total, nil
+}
+
+// ApplyRuleScoped applies ONE rule to existing transactions within a scope, and
+// returns exactly what it changed so the caller can offer a targeted undo (WF7).
+//
+// Distinct from ApplyRulesWithCounts in two ways that matter. It is scoped —
+// history and the future are separate decisions, and "apply to everything ever
+// recorded" should be chosen rather than implied. And it RETURNS its changes:
+// the existing bulk apply leaves only a dataset-wide checkpoint behind, which
+// rolls back everything else that happened alongside it.
+func (a *App) ApplyRuleScoped(r rules.Rule, scope ruleapply.Scope, since time.Time) ([]ruleapply.Change, error) {
+	if err := a.roleGuard(); err != nil {
+		return nil, err
+	}
+	changes := ruleapply.Plan(r, a.Transactions(), scope, since)
+	if err := a.applyRuleChanges(changes); err != nil {
+		return nil, err
+	}
+	a.log.Info("rule applied", "rule", r.ID, "scope", string(scope), "changed", len(changes))
+	return changes, nil
+}
+
+// UndoRuleChanges puts back what a scoped apply changed.
+//
+// It works from the RECORD rather than from the rule, because by the time
+// somebody undoes, the rule may have been edited or deleted — and re-running it
+// would restore something else entirely.
+func (a *App) UndoRuleChanges(changes []ruleapply.Change) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.applyRuleChanges(ruleapply.Undo(changes))
+}
+
+// applyRuleChanges writes a set of category changes.
+//
+// Audit-stamped as a rule action, the same as the bulk backfill: the trail has
+// to distinguish a rule's sweep from a person's edit, or a later reader cannot
+// tell which of their categories they actually chose.
+func (a *App) applyRuleChanges(changes []ruleapply.Change) error {
+	if len(changes) == 0 {
+		return nil
+	}
+	auditview.SetSessionActor(auditview.ActorRule)
+	defer auditview.CaptureNow()
+
+	byID := make(map[string]domain.Transaction, len(changes))
+	for _, t := range a.Transactions() {
+		byID[t.ID] = t
+	}
+	for _, c := range changes {
+		t, ok := byID[c.TxnID]
+		if !ok {
+			// The transaction was deleted since the plan was made. Skipped rather
+			// than failing the whole undo: the rest of the restore is still correct,
+			// and a row that no longer exists cannot be put back.
+			continue
+		}
+		t.CategoryID = c.ToCategoryID
+		if err := a.store.PutTransaction(t); err != nil {
+			return fmt.Errorf("appstate: apply rule change: %w", err)
+		}
+	}
+	return nil
 }
 
 // PreviewApplyRules is the dry-run twin of ApplyRulesWithCounts: it reports how

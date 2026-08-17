@@ -712,6 +712,16 @@ var vSweepKeys = Catalog{
 	"retire.mcFail":   "In the runs that ran out, the earliest was year %d.",
 	"retire.mcMethod": "Method: %d runs, returns drawn from a normal distribution around your expected return, fixed seed %d so this number is the same every time and can be checked. Real markets have more extreme years than a normal distribution does.",
 
+	// WF7 — applying a rule to history, scoped and reversible.
+	"rules.applyAllHistory": "Apply to all past transactions…",
+	"rules.applyThisYear":   "Apply to this year…",
+	"rules.scopedConfirm":   "This will recategorize %s.",
+	"rules.scopedOverwrite": "Of those, %s already have a category you chose, which this would replace.",
+	"rules.scopedBroad":     "They currently span %d different categories, which usually means the rule is catching more than you meant.",
+	"rules.undoOffer":       "Just recategorized %s.",
+	"rules.undoApply":       "Undo that",
+	"rules.undone":          "Put %s back.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

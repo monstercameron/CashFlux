@@ -1,3 +1,42 @@
+## 2026-08-17 - I nearly shipped a parallel engine (WF7)
+
+WF7 is a long ticket, and I started writing a rules-workbench package for it. Partway through, a doc
+comment in `rules.go` mentioned "the workbench already shows a live match count" - and the workbench
+turned out to exist: per-rule affected-transaction previews, shadowed-rule warnings, conflict detection,
+drag-and-keyboard precedence reorder, and a dry-run blast radius before the bulk apply. All built.
+
+I deleted what I had written and kept only the parts that were genuinely new. That is the third stale
+ticket this week (FP-T2b and FP-T3d were the others), and the second time the fix was to grep before
+building rather than after.
+
+What was actually missing was the safety around applying a rule to HISTORY, and the codebase had already
+said so: appstate's own comment calls the bulk apply "an overwrite that has no per-rule undo".
+
+**A scope.** Applying to history and applying from here on were the same action. They are two menu items
+now rather than one action with a setting, because a setting is something you can be wrong about without
+noticing. An unknown scope normalizes to FUTURE - if a stored preference is ever unreadable, the failure
+should be "did less than expected", never "rewrote your history".
+
+**A per-rule undo.** The existing safety net is a dataset-wide checkpoint, which rolls back everything
+else that happened alongside it too. Each change now records the category it REPLACED, because a
+transaction that was already categorized has to go back to that category and not to blank - and without
+the old value the two are indistinguishable. The undo works from that record rather than by re-running
+the rule, since by the time somebody undoes, the rule may have been edited or deleted.
+
+**A confirmation that separates filling from overwriting.** Filing uncategorized transactions is the
+rule doing its job. Replacing categories a person chose by hand is a different act, and one figure
+covering both hides it. On the sample it reads: "This will recategorize 318 transactions. Of those, 197
+already have a category you chose, which this would replace."
+
+The undo offer sits on the rule that ran, not in a settings screen - a bulk edit whose undo lives
+somewhere else is an undo nobody finds - and only on that rule, because an offer on a rule that did not
+run is an invitation to reverse somebody else's work.
+
+One thing the probe taught me about the sample: most seeded rules have nothing left to apply, because
+the seed already applied them. That is correct behaviour and completely useless for exercising the flow,
+so the check walks the rules until it finds one with work to do. A probe that only ever hits the
+no-op path passes without testing anything.
+
 ## 2026-08-17 - auditing before building (FP-T3d)
 
 FP-T3d listed six things. I audited before building, and four of them already existed: rebalancing

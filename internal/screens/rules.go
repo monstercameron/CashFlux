@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"time"
+
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/ruleapply"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/smartai"
@@ -192,6 +195,74 @@ func Rules() ui.Node {
 
 	// Apply-to-existing is an irreversible bulk overwrite — preview the blast
 	// radius first (dry-run, conditions-aware) and confirm before writing.
+	// WF7: a per-rule, SCOPED apply that records what it changed, so the change
+	// can be reversed without rolling back everything else that happened
+	// alongside it. lastApply holds the record until the page moves on — it is
+	// deliberately not persisted, because an undo offer that outlives the session
+	// is an offer to reverse something the user has stopped thinking about.
+	lastApply := ui.UseState([]ruleapply.Change(nil))
+	lastApplyRule := ui.UseState("")
+	applyScoped := func(id string, scope ruleapply.Scope) {
+		var target rules.Rule
+		for _, r := range app.Rules() {
+			if r.ID == id {
+				target = r
+			}
+		}
+		if target.ID == "" {
+			return
+		}
+		since := time.Time{}
+		if scope == ruleapply.ScopeSince {
+			// "This year" is the common retrospective case and needs no date picker.
+			now := time.Now()
+			since = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
+		}
+		planned := ruleapply.Plan(target, app.Transactions(), scope, since)
+		if len(planned) == 0 {
+			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
+			return
+		}
+		// The confirmation separates FILLING a blank from OVERWRITING a category
+		// somebody chose. One figure covering both hides the act that deserves a
+		// second thought.
+		msg := uistate.T("rules.scopedConfirm", plural(len(planned), "transaction"))
+		if over := ruleapply.Reclassified(planned); over > 0 {
+			msg += " " + uistate.T("rules.scopedOverwrite", plural(over, "transaction"))
+		}
+		if n, broad := ruleapply.OverBroad(planned); broad {
+			msg += " " + uistate.T("rules.scopedBroad", n)
+		}
+		uistate.ConfirmModal(msg, false, func(ok bool) {
+			if !ok {
+				return
+			}
+			changed, err := app.ApplyRuleScoped(target, scope, since)
+			if err != nil {
+				notice.Set(notice.Get().With(err.Error(), true))
+				return
+			}
+			lastApply.Set(changed)
+			lastApplyRule.Set(id)
+			notice.Set(notice.Get().With(uistate.T("rules.applied", plural(len(changed), "transaction")), false))
+			bump()
+		})
+	}
+	undoApply := func() {
+		changes := lastApply.Get()
+		if len(changes) == 0 {
+			return
+		}
+		if err := app.UndoRuleChanges(changes); err != nil {
+			notice.Set(notice.Get().With(err.Error(), true))
+			return
+		}
+		lastApply.Set(nil)
+		lastApplyRule.Set("")
+		notice.Set(notice.Get().With(uistate.T("rules.undone", plural(len(changes), "transaction")), false))
+		bump()
+	}
+
 	applyExisting := ui.UseEvent(Prevent(func() {
 		currentRules := app.Rules()
 		total, perRule := app.PreviewApplyRules()
@@ -341,6 +412,8 @@ func Rules() ui.Node {
 					MemberName: memberName[r.SetMemberID],
 					Precedence: i + 1,
 					Warning:    warnByID[r.ID], MatchCount: matchCounts[r.ID], MaxMatchCount: maxMatch, ShowMatchCount: hasTxns,
+					OnApplyScoped: applyScoped, OnUndoApply: undoApply,
+					UndoableCount:  undoableFor(r.ID, lastApplyRule.Get(), lastApply.Get()),
 					OnDelete:       deleteRule,
 					OnMove:         moveRule,
 					OnDragStart:    func() { dragSrc.Set(rid) },
@@ -593,6 +666,13 @@ type ruleRowProps struct {
 	OnMove         func(id string, delta int) // keyboard-reachable precedence nudge (in the row menu)
 	OnDragStart    func()
 	OnDrop         func()
+	// OnApplyScoped applies this rule to existing transactions within a chosen
+	// scope, and OnUndoApply puts back exactly what the last one changed (WF7).
+	OnApplyScoped func(id string, scope ruleapply.Scope)
+	OnUndoApply   func()
+	// UndoableCount is how many transactions the last scoped apply changed, so
+	// the row can offer to reverse it. Zero hides the offer.
+	UndoableCount int
 	// PreviewMatches builds the affected-transactions sample on demand (limit,
 	// then the full match total) — the list behind the row's count.
 	PreviewMatches func(limit int) ([]ruleMatchLine, int)
@@ -614,6 +694,35 @@ func RuleRow(props ruleRowProps) ui.Node {
 	matchesOpen := ui.UseState(false)
 	toggleMatches := ui.UseEvent(Prevent(func() { matchesOpen.Set(!matchesOpen.Get()) }))
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(r.ID) }))
+	applyAll := ui.UseEvent(Prevent(func() {
+		if props.OnApplyScoped != nil {
+			props.OnApplyScoped(r.ID, ruleapply.ScopeAll)
+		}
+	}))
+	applyYear := ui.UseEvent(Prevent(func() {
+		if props.OnApplyScoped != nil {
+			props.OnApplyScoped(r.ID, ruleapply.ScopeSince)
+		}
+	}))
+	undoApply := ui.UseEvent(Prevent(func() {
+		if props.OnUndoApply != nil {
+			props.OnUndoApply()
+		}
+	}))
+
+	// WF7: the offer to reverse the last apply sits on the rule that did it,
+	// while the reader is still looking at the thing they just changed. A bulk
+	// edit whose undo lives in a settings screen is an undo nobody finds.
+	var undoNode ui.Node = Fragment()
+	if props.UndoableCount > 0 {
+		undoNode = P(css.Class("t-caption"), Attr("data-testid", "rule-undo-"+r.ID),
+			uistate.T("rules.undoOffer", plural(props.UndoableCount, "transaction")),
+			Text(" "),
+			Button(css.Class("btn", "btn-quiet"), Type("button"),
+				Attr("data-testid", "rule-undo-btn-"+r.ID), OnClick(undoApply),
+				uistate.T("rules.undoApply")))
+	}
+
 	startEdit := ui.UseEvent(Prevent(func() { uistate.SetRuleEdit(r.ID) }))
 	moveUp := ui.UseEvent(Prevent(func() {
 		if props.OnMove != nil {
@@ -747,12 +856,22 @@ func RuleRow(props ruleRowProps) ui.Node {
 					Attr("data-testid", "rule-moveup-"+r.ID), OnClick(moveUp), uistate.T("rules.moveUp")),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "rule-movedown-"+r.ID), OnClick(moveDown), uistate.T("rules.moveDown")),
+				// WF7: applying to history is a separate decision from applying from
+				// here on. The two are listed as two actions rather than one action
+				// with a setting, because a setting is something you can be wrong
+				// about without noticing.
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "rule-apply-all-"+r.ID), OnClick(applyAll),
+					uistate.T("rules.applyAllHistory")),
+				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+					Attr("data-testid", "rule-apply-year-"+r.ID), OnClick(applyYear),
+					uistate.T("rules.applyThisYear")),
 				Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 					Attr("data-testid", "rule-delete-"+r.ID), Attr("aria-label", uistate.T("rules.deleteTitle")),
 					Title(uistate.T("rules.deleteTitle")), OnClick(del), uistate.T("rules.deleteTitle")),
 			},
 		}),
-	), matchesNode)
+	), matchesNode, undoNode)
 }
 
 // ruleCondsEnglish renders structured rule conditions as one plain-English
@@ -918,4 +1037,16 @@ func ruleMemberOptions(app *appstate.App) []uiw.SelectOption {
 		out = append(out, uiw.SelectOption{Value: m.ID, Label: m.Name})
 	}
 	return out
+}
+
+// undoableFor is how many changes the last scoped apply left reversible on this
+// rule, and zero for every other row.
+//
+// Keyed to the rule that did it rather than shown on all of them: an undo offer
+// on a rule that did not run is an invitation to reverse somebody else's work.
+func undoableFor(ruleID, lastRuleID string, changes []ruleapply.Change) int {
+	if ruleID == "" || ruleID != lastRuleID {
+		return 0
+	}
+	return len(changes)
 }

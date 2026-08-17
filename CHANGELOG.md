@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Applying a rule to old transactions is now scoped and reversible (WF7).** A rule's menu offers
+  "Apply to all past transactions" and "Apply to this year" as separate choices, the confirmation says
+  how many it would change AND how many of those already have a category you picked, and afterwards the
+  rule itself offers to undo exactly what it did — restoring the categories that were there, not
+  clearing them.
+
+### Added
 - **"Will the money last" as a probability (FP-T3d).** The retirement card now also reports how often the
   money lasted across two thousand simulated futures, because a projection at a fixed rate is a story
   about one future that will not happen — and during drawdown the ORDER returns arrive in matters as much
