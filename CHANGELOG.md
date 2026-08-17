@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Removed
+- **Deleted the unrouted bills panel (WF9-b).** 848 lines of a screen nothing had mounted since /bills
+  became a shell, whose doc comment still claimed it was live — which is how a feature came to be built
+  into it. No user-visible change.
+
 ### Added
 - **Spending flags now say what explains them (WF-SM1).** A flagged category names the purchases behind
   its overspend and what share they account for — and when the spending is spread across everything you

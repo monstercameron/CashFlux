@@ -286,12 +286,27 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   STILL OPEN in this bundle: safe-to-spend by date, dragging a planned payment to another date with the
   forecast updating, tracing each movement to its source, and wiring a date change through to debt
   payoff / budget health / goals / Health.
-- [ ] **WF9-b — Bills screen: stale doc comment on unrouted code.** `screens.BillsPanel`'s doc comment
+- [x] **WF9-b — Bills screen: stale doc comment on unrouted code.** `screens.BillsPanel`'s doc comment
   says "It is mounted on the /bills route (via the Bills() thin shell)". It is not — `Bills()` delegates
   to `rhythmSurfaceFocused`, and the comment 460 lines below correctly says the panel is "no longer
   routed". I read the wrong one and built a feature into dead code. Either delete `BillsPanel` and
   `billsCalendar` if nothing else uses them, or fix the comment; a comment that says code is live when
   it is not costs more than the code does.
+  — DELETED (2026-08-17), which was the first option and the right one: nothing outside the file
+  referenced any of it. `BillsPanel`, `billsCalendar`, `BillRow`, `billRowProps`, `billRowData`,
+  `billOccurrencePaid`, `billUrgencyTone`, `daysUntilLabel`, `billsProjectedClosing` and
+  `billsHorizonDays` all had their only callers inside `BillsPanel` itself — a closed loop of dead code
+  848 lines long, in a 1,007-line file.
+
+  Two orphaned doc comments were sitting in there (`billRowData`'s above `billFitChip`, `billUrgencyTone`'s
+  above `billOccurrencePaid`), which says a previous deletion had already gone through this file without
+  fixing what it left behind. That is the same failure as the stale comment, one size down.
+
+  What survives is the budget-fit chip (`billFitChip` / `billFitFor` / `billBudgetFit` / `billCategoryID`),
+  which `recurring_agenda.go` genuinely uses, and `monthLabel` / `sameDay`, which several screens use. The
+  calendar ENGINE (`bills.MonthCalendar`) was never dead — the rhythm surface draws it via `rhyCalendarGrid`.
+  `Bills()`'s own doc comment now says what is left and why, instead of describing a panel that no longer
+  exists. /bills and /recurring verified rendering afterwards.
 - [~] **WF10 — Explainable allocation optimizer.** One place to compare spare-cash destinations
   (emergency reserve, high-interest debt, upcoming annual bill, goals, underfunded budgets,
   investments) under constraints (keep N months cash, never miss minimums, hit a goal by date, keep

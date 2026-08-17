@@ -1,3 +1,27 @@
+## 2026-08-17 - a comment that says code is live when it is not (WF9-b)
+
+I filed this one against myself earlier in the session: I built a feature into `billsCalendar` because
+`BillsPanel`'s doc comment said it was mounted on /bills, and only found out it was not when the feature
+failed to appear. The comment 460 lines below said the opposite, correctly.
+
+The ticket offered two fixes - delete it, or correct the comment - and the check settled it. Nothing
+outside the file referenced any of it, and inside the file every caller of every helper was BillsPanel
+itself: a closed loop 848 lines long in a 1,007-line file. `BillsPanel`, `billsCalendar`, `BillRow` and
+its props and row-data types, `billOccurrencePaid`, `billUrgencyTone`, `daysUntilLabel`,
+`billsProjectedClosing`, `billsHorizonDays` - all of it only reachable from something unreachable.
+
+Two orphaned doc comments turned up while mapping the boundaries: `billRowData`'s doc sitting above
+`billFitChip`, and `billUrgencyTone`'s sitting above `billOccurrencePaid`. So a previous deletion had
+already been through this file and left its debris. That is the same failure as the stale comment in
+miniature - the code moved and the prose describing it did not - and it is worth naming, because the
+first one cost a ticket.
+
+What survives is what something actually calls: the budget-fit chip the recurring agenda draws, and
+`monthLabel` / `sameDay`, which several screens use. The calendar engine itself was never dead -
+`bills.MonthCalendar` is drawn by the rhythm surface through `rhyCalendarGrid`, which is where the WF9
+feature ended up. `Bills()`'s doc comment now describes what is left rather than a panel that no longer
+exists, and /bills and /recurring were checked in a browser afterwards.
+
 ## 2026-08-17 - the useful answer is often "nothing explains it" (WF-SM1)
 
 "Dining is $135 above normal" prompts exactly one question - what did I buy - and leaves the reader to
