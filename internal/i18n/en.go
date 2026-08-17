@@ -2844,6 +2844,13 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-20: how much of this page rests on confirmed data. Counts are IN the
+	// sentence — "mostly current" alone invites the reader to decide what "mostly"
+	// means, and they will decide generously.
+	"dashboard.standingCurrent":    "All %d accounts were confirmed recently, so the figures below are current.",
+	"dashboard.standingMostly":     "%d of %d accounts were confirmed recently; %d were not, so parts of this are older than they look.",
+	"dashboard.standingIncomplete": "Only %d of %d accounts were confirmed recently — %d are stale or never confirmed, so treat these figures as partial.",
+	"dashboard.standingStale":      "Just %d of %d accounts were confirmed recently. These figures still add up, but they are not evidence of where you stand today.",
 	// EC-13: what the round-ups are worth to the goal they feed, at the rate this
 	// household has actually sustained.
 	"roundups.accelerator":           "At the %s a month you've been rounding up, this goal lands about %s sooner.",

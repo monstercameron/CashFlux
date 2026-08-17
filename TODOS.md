@@ -1646,9 +1646,38 @@ survived the duplicate/scope filters but didn't make the engine cut):
   concrete tasks via changeset review.
 - [ ] **EC-19 Severity rewriting** (SMART+, Notifications) — one-shot calm-human-language rewrite of
   raw detector copy (RuleCore; batchable at digest time).
-- [ ] **EC-20 Trust/freshness status** (SMART, Dashboard + Reports) — how much of this page is fresh,
+- [~] **EC-20 Trust/freshness status** (SMART, Dashboard + Reports) — how much of this page is fresh,
   reconciled, stale, or estimated; rides `freshness` + reconcile state. (Correctness-adjacent: if it
   ever gates a number, it graduates out of opt-in into core.)
+  — DASHBOARD DONE (2026-08-17). `freshness.Measure` → `Coverage` → the four-state `Standing`, surfaced
+  as visible text on the freshness widget.
+
+  A PAGE DRAWN FROM BALANCES NOBODY HAS CONFIRMED IN TWO MONTHS LOOKS EXACTLY LIKE ONE CONFIRMED THIS
+  MORNING. The numbers are equally crisp and one of them is fiction, and the app is the only party in a
+  position to say which. On the sample it reads: "Only 6 of 15 accounts were confirmed recently — 9 are
+  stale or never confirmed, so treat these figures as partial."
+
+  FOUR STATES, matching the WF4 refinement's spec exactly (Current / Mostly current / Incomplete /
+  Stale), divided at two thirds and one third. A single stale account in ten should not turn a page into
+  an alarm — it should say "mostly, and here is which" — while two in three has to stop implying the
+  totals are facts.
+
+  THE COUNTS ARE IN THE SENTENCE, not behind it. "Mostly current" alone invites the reader to decide what
+  "mostly" means, and they will decide generously. And it is visible TEXT rather than a tooltip, which is
+  what the WF4 refinement explicitly asked for (FB5).
+
+  "NEVER CONFIRMED" IS COUNTED APART FROM "STALE": we-have-not-checked-since-March and we-have-never-
+  checked call for different actions. `StandingUnknown` exists for no accounts at all, because "nothing
+  is stale" and "there is nothing" are different statements and only the first is reassuring. Archived
+  accounts are excluded — counting them would drag every household's standing down for accounts they
+  deliberately closed.
+
+  It does NOT gate any number, so it stays opt-in-adjacent per the ticket's own note.
+
+  VERIFIED IN A BROWSER: 4/4 (`e2e/_standing_page_check.mjs`), plus five engine tests.
+
+  STILL OPEN: the same line on REPORTS, which the ticket also names. The engine is page-agnostic —
+  `Measure` takes whatever accounts a page rests on — so it is a placement, not a build.
 - [ ] **EC-21 Report comparison builder + saved templates** (plain backlog, Reports) — period-vs-period /
   member-vs-household composer; monthly-review / tax / debt-progress templates. Not intelligence —
   ordinary feature work, listed here so it isn't lost.

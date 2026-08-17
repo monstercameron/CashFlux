@@ -1176,6 +1176,12 @@ func freshUpdateButton(struct{}) ui.Node {
 func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismissals freshness.Dismissals, onRemind, onDismiss ui.Handler) ui.Node {
 	now := time.Now()
 	stale := freshness.VisibleStaleAccounts(accounts, windows, dismissals, now)
+	// EC-20: the page's own standing, in VISIBLE TEXT rather than a tooltip. A
+	// page of figures drawn from balances nobody has confirmed in two months looks
+	// exactly like one confirmed this morning; the app is the only party in a
+	// position to say which this is.
+	cover := freshness.Measure(accounts, windows, now)
+	standing := freshnessStandingLine(cover)
 	var body ui.Node
 	if len(stale) == 0 {
 		body = P(css.Class("t-body", tw.TextUp), uistate.T("dashboard.allFresh"))
@@ -1211,8 +1217,33 @@ func freshnessWidget(accounts []domain.Account, windows freshness.Windows, dismi
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "freshness", Title: uistate.T("dashboard.freshness"), Draggable: true, Resizable: true,
-		GridColumn: "1 / span 4", GridRow: "8", Body: body,
+		GridColumn: "1 / span 4", GridRow: "8",
+		Body: Fragment(
+			If(standing != "", P(css.Class("t-body", tw.TextDim, tw.Mb2),
+				Attr("data-testid", "freshness-standing"), standing)),
+			body,
+		),
 	})
+}
+
+// freshnessStandingLine states how much of the page's data is confirmed, and how
+// much is not, in one sentence.
+//
+// The counts are in the sentence rather than behind it: "mostly current" alone
+// invites the reader to decide for themselves what "mostly" means, and they will
+// decide generously.
+func freshnessStandingLine(c freshness.Coverage) string {
+	switch c.Standing() {
+	case freshness.StandingUnknown:
+		return ""
+	case freshness.StandingCurrent:
+		return uistate.T("dashboard.standingCurrent", c.Total)
+	case freshness.StandingMostly:
+		return uistate.T("dashboard.standingMostly", c.Fresh, c.Total, c.Stale+c.Unconfirmed)
+	case freshness.StandingIncomplete:
+		return uistate.T("dashboard.standingIncomplete", c.Fresh, c.Total, c.Stale+c.Unconfirmed)
+	}
+	return uistate.T("dashboard.standingStale", c.Fresh, c.Total)
 }
 
 // upcomingBillsWidget is the 2×1 Upcoming bills widget: the next due date and

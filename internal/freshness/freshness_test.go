@@ -165,3 +165,90 @@ func TestMergeDoesNotMutate(t *testing.T) {
 		t.Errorf("base mutated: checking = %d, want 30", d)
 	}
 }
+
+// EC-20: a page derived from balances nobody has confirmed in two months looks
+// exactly like one confirmed this morning. The numbers are equally crisp and one
+// of them is fiction.
+func TestCoverageStandingHasFourStates(t *testing.T) {
+	now := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
+	w := DefaultWindows()
+	fresh := func(id string) domain.Account {
+		return domain.Account{ID: id, Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -1)}
+	}
+	stale := func(id string) domain.Account {
+		return domain.Account{ID: id, Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -120)}
+	}
+	all := Measure([]domain.Account{fresh("a"), fresh("b"), fresh("c")}, w, now)
+	if got := all.Standing(); got != StandingCurrent {
+		t.Errorf("all fresh = %q, want %q", got, StandingCurrent)
+	}
+	// One stale in three must not turn a page into an alarm.
+	mostly := Measure([]domain.Account{fresh("a"), fresh("b"), fresh("c"), stale("d")}, w, now)
+	if got := mostly.Standing(); got != StandingMostly {
+		t.Errorf("3 of 4 fresh = %q, want %q", got, StandingMostly)
+	}
+	if !mostly.Trustworthy() {
+		t.Error("a mostly-current page was called untrustworthy")
+	}
+	half := Measure([]domain.Account{fresh("a"), stale("b"), stale("c")}, w, now)
+	if got := half.Standing(); got != StandingIncomplete {
+		t.Errorf("1 of 3 fresh = %q, want %q", got, StandingIncomplete)
+	}
+	worst := Measure([]domain.Account{fresh("a"), stale("b"), stale("c"), stale("d")}, w, now)
+	if got := worst.Standing(); got != StandingStale {
+		t.Errorf("1 of 4 fresh = %q, want %q", got, StandingStale)
+	}
+	if worst.Trustworthy() {
+		t.Error("a mostly-stale page was called trustworthy")
+	}
+}
+
+// "Nothing is stale" and "there is nothing" are different statements, and only
+// the first is reassuring.
+func TestNoAccountsIsUnknownNotCurrent(t *testing.T) {
+	c := Measure(nil, DefaultWindows(), time.Now())
+	if got := c.Standing(); got != StandingUnknown {
+		t.Errorf("no accounts = %q, want %q", got, StandingUnknown)
+	}
+	if c.Trustworthy() {
+		t.Error("an empty page was reported as trustworthy")
+	}
+}
+
+// "We have not checked since March" and "we have never checked" call for
+// different actions.
+func TestNeverConfirmedIsCountedApartFromStale(t *testing.T) {
+	now := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
+	c := Measure([]domain.Account{
+		{ID: "never", Type: domain.TypeChecking},
+		{ID: "old", Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -200)},
+	}, DefaultWindows(), now)
+	if c.Unconfirmed != 1 || c.Stale != 1 {
+		t.Errorf("coverage = %+v, want one of each", c)
+	}
+}
+
+// Archived accounts are not part of any page's figures, and counting them would
+// drag every household's standing down for accounts they deliberately closed.
+func TestArchivedAccountsAreNotCounted(t *testing.T) {
+	now := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
+	c := Measure([]domain.Account{
+		{ID: "live", Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -1)},
+		{ID: "gone", Type: domain.TypeChecking, Archived: true},
+	}, DefaultWindows(), now)
+	if c.Total != 1 || c.Standing() != StandingCurrent {
+		t.Errorf("coverage = %+v standing = %q", c, c.Standing())
+	}
+}
+
+func TestReconciledIsCounted(t *testing.T) {
+	now := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
+	c := Measure([]domain.Account{
+		{ID: "a", Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -1),
+			Reconciliations: []domain.Reconciliation{{At: now.AddDate(0, 0, -3)}}},
+		{ID: "b", Type: domain.TypeChecking, BalanceAsOf: now.AddDate(0, 0, -1)},
+	}, DefaultWindows(), now)
+	if c.Reconciled != 1 {
+		t.Errorf("reconciled = %d, want 1", c.Reconciled)
+	}
+}

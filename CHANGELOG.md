@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The dashboard says how much of itself you can trust (EC-20).** "Only 6 of 15 accounts were confirmed
+  recently — 9 are stale or never confirmed, so treat these figures as partial." In plain text on the
+  page, not hidden in a tooltip.
+
+### Added
 - **Round-ups say what they are worth (EC-13).** When the spare change you have actually been accruing
   would bring a goal's date forward, the jar says by how much — and stays quiet when it would not.
 

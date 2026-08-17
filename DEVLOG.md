@@ -1,3 +1,27 @@
+## 2026-08-17 - a page of stale figures looks exactly like a page of fresh ones (EC-20)
+
+That is the whole argument for this one. Balances nobody has confirmed in two months produce numbers just
+as crisp as balances confirmed this morning, one of them is fiction, and the app is the only party in a
+position to say which. On the sample the answer turns out to be unflattering: only 6 of 15 accounts were
+confirmed recently.
+
+Four states, at two thirds and one third, matching the spec the WF4 refinement already wrote down.
+A single stale account in ten should not turn a page into an alarm - it should say "mostly, and here is
+which" - while two in three has to stop implying the totals are facts.
+
+Two details decide whether the line is useful or decorative. The counts go IN the sentence rather than
+behind it: "mostly current" alone invites the reader to decide what "mostly" means, and they will decide
+generously. And it is visible text rather than a tooltip, which is what the refinement asked for and what
+makes it a caveat rather than a secret.
+
+"Never confirmed" is counted apart from "stale", because we-have-not-checked-since-March and
+we-have-never-checked call for different actions. There is an Unknown state for having no accounts at
+all, since "nothing is stale" and "there is nothing" are different statements. And archived accounts are
+excluded, or every household would be marked down for the accounts they deliberately closed.
+
+It gates nothing, which keeps it on the right side of the ticket's own note about graduating out of
+opt-in the moment it does.
+
 ## 2026-08-17 - a promise extrapolated from a fortnight (EC-13)
 
 "At your current round-up rate this goal finishes seven weeks sooner" is a promise, and the interesting
