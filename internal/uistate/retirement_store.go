@@ -7,7 +7,6 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/CashFlux/internal/inflation"
 	"github.com/monstercameron/CashFlux/internal/retirement"
 )
 
@@ -32,9 +31,13 @@ type RetirementPlan struct {
 	// number are both computed from — one number, so the two cannot disagree
 	// about what the life costs.
 	AnnualSpendMinor int64 `json:"spend,omitempty"`
-	// ReturnPct and InflationPct are the assumptions, as percents.
-	ReturnPct    float64 `json:"returnPct,omitempty"`
-	InflationPct float64 `json:"inflationPct,omitempty"`
+	// ReturnPct is the assumed nominal annual return, as a percent.
+	ReturnPct float64 `json:"returnPct,omitempty"`
+	// InflationPct is the household's inflation assumption, as a percent. It is
+	// NOT stored here (FP-T2d): Load reads it from the one household setting and
+	// Save writes it back there, so the retirement card and the forecast can never
+	// hold different beliefs about the same future.
+	InflationPct float64 `json:"-"`
 }
 
 // DefaultReturnPct is the assumed nominal annual return when none is set.
@@ -44,8 +47,8 @@ type RetirementPlan struct {
 // than applying it invisibly.
 const DefaultReturnPct = 7.0
 
-// LoadRetirementPlan reads the household's assumptions, filling unset return and
-// inflation rates with the stated defaults.
+// LoadRetirementPlan reads the household's assumptions, filling an unset return
+// rate with the stated default and taking inflation from the household setting.
 //
 // Defaults are applied for the RATES only. The horizon and the amounts are left
 // at zero deliberately: a default retirement age or contribution would be the
@@ -61,9 +64,9 @@ func LoadRetirementPlan() RetirementPlan {
 	if p.ReturnPct == 0 {
 		p.ReturnPct = DefaultReturnPct
 	}
-	if p.InflationPct == 0 {
-		p.InflationPct = inflation.DefaultRatePct
-	}
+	// Inflation comes from the household setting, never from this record — one
+	// belief about the future, shared by every surface that discounts to today.
+	p.InflationPct = LoadInflationPct()
 	return p
 }
 
@@ -82,9 +85,9 @@ func SaveRetirementPlan(p RetirementPlan) {
 	if p.AnnualSpendMinor < 0 {
 		p.AnnualSpendMinor = 0
 	}
-	if !inflation.Valid(p.InflationPct) {
-		p.InflationPct = inflation.DefaultRatePct
-	}
+	// Inflation is household-level: route it to the shared setting rather than
+	// storing a second copy that can drift from the forecast's.
+	SaveInflationPct(p.InflationPct)
 	if p.ReturnPct <= -100 {
 		p.ReturnPct = DefaultReturnPct
 	}

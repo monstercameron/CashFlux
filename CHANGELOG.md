@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Planning says what a projection is worth in today's money (FP-T2d).** The twelve-month forecast is
+  stated in the dollars of twelve months from now; it now also says what that is worth in money you
+  spend today, and names the inflation rate it used. Inflation is a single household assumption shared
+  by the forecast, the retirement card and goal targets, so the app cannot hold two beliefs about the
+  same future — changing it in one place changes it everywhere, and the retirement card says so.
+
+### Changed
+- **The retirement card's inflation field now edits the household setting** rather than a copy of its
+  own. Any rate you had set there carries over as the household rate.
+
+### Added
 - **Investments now says what it actually returned (FP-T1c).** Under the growth chart, over exactly the
   window the chart plots: what the investments returned, what you returned once the timing of your
   contributions is counted, and the gap between the two named as a cost or a gain. The chart plots a

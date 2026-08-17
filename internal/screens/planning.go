@@ -283,6 +283,10 @@ func Planning() ui.Node {
 					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
 				),
 				dipWarning,
+				// FP-T2d: a twelve-month projection is stated in the dollars of twelve
+				// months from now, and reading it as today's money overstates it by a
+				// year of inflation. Say what it is worth in money the reader can price.
+				forecastRealLine(series[len(series)-1], base),
 				P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
 				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),

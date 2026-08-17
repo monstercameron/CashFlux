@@ -1,3 +1,36 @@
+## 2026-08-17 - one inflation assumption, not two (FP-T2d)
+
+The remaining half of FP-T2d was "a household-level inflation setting", and the reason it mattered had
+only existed for a few hours: the retirement card I shipped yesterday stored its own inflation rate.
+
+That is two beliefs about the same future living in one app. Set 3% on the retirement card and 2%
+wherever the forecast eventually read from, and the app shows two answers to one question with nothing
+on screen to say which it meant. Nobody would have typed two different numbers on purpose; they would
+have typed one, later, in the other place.
+
+So the field moved to a household setting and `RetirementPlan.InflationPct` became `json:"-"` - read
+from the shared setting on load, routed back to it on save. The point of `json:"-"` is that a future
+caller cannot reintroduce the second copy by forgetting; the same argument as `SetPeriod` persisting
+rather than trusting callers to. A rule a caller can forget is not a rule.
+
+The forecast side is smaller but the same idea. A twelve-month projection is denominated in the
+dollars of twelve months from now, and every reader prices a dollar sign in money they spend today.
+Over one year the error is a few percent. Over the horizons the rest of planning deals in it is not,
+and the fix is identical, so it belongs in a helper both can call.
+
+One deliberate absence: the line renders NOTHING when the discount is the identity - a zero rate, or a
+figure that rounds to itself. "In today's money, $12,400" printed beside "$12,400" adds a row and no
+information, and a row that says nothing teaches the reader to skip the rows that do.
+
+And one decision I expect to be asked about: the control lives on the retirement card, beside the
+figures it changes, not in Settings. A copy in Settings would be a second control over one value,
+which is the thing this ticket just finished removing one level down. It carries a caption saying it
+also moves the forecast, so nobody changes it and reads the knock-on effect as a bug.
+
+Verified in a browser, 9/9. Typing 9% on the retirement card moves the forecast's real figure to
+$175,493.01 and flips the retirement card's own real return to -1.83% - one setting, two surfaces,
+visibly agreeing.
+
 ## 2026-08-16 - the return reading under the balance chart (FP-T1c surface)
 
 The engine landed this morning; this is where you can see it, and the interesting decision was not

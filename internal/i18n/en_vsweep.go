@@ -528,6 +528,11 @@ var vSweepKeys = Catalog{
 	"invret.basis":    "Over %d days, from %d valuations and %d transfers in or out.",
 	"invret.tooShort": "There is not enough history yet — a return needs at least %d days to mean anything.",
 
+	// FP-T2d — long-horizon figures restated in money the reader can price. One
+	// household inflation assumption feeds every surface that discounts.
+	"planning.forecastReal":  "About %s in today's money, after a year of %.1f%% inflation.",
+	"retire.inflationShared": "Inflation is one household setting — changing it here also changes the forecast.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

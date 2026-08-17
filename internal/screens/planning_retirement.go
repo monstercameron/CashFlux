@@ -84,6 +84,11 @@ func retirementTile(base string) ui.Node {
 			P(css.Class("muted"), Attr("data-testid", "plan-retire-basis"),
 				uistate.T("retire.basis", accounts, fmtMoney(money.New(startMinor, base)))),
 			retirementInputs(cfg, base, onYears, onReturn, onInflation, onContribution, onSpend),
+			// FP-T2d: the inflation field is the household's one assumption, not this
+			// card's. Saying so keeps a reader from setting it here, seeing the
+			// forecast move, and taking that for a bug.
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "plan-retire-shared"),
+				uistate.T("retire.inflationShared")),
 			body,
 		)))
 }

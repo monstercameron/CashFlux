@@ -1243,7 +1243,7 @@ bottom-up per SDLC.
 - [ ] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
   delete + re-add, so current value is stale-by-design. Add an Edit form reusing `PutHolding`'s replace-by-ID
   + a `PriceAsOf` field.
-- [~] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(...)` threaded
+- [x] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(...)` threaded
   through forecast/goal/retirement projections so every long-horizon figure stops being misleadingly
   nominal.
   — PRIMITIVE + GOAL SEAM DONE (2026-08-16). New pure `internal/inflation` (`Factor`, `RealMinor`,
@@ -1264,9 +1264,31 @@ bottom-up per SDLC.
   nothing in the app closed that gap. An UNREACHABLE goal refuses (no date to discount to) instead of
   falling back to the nominal figure.
 
-  REMAINING: the forecast and planning surfaces, and a household-level inflation SETTING (the package
-  ships `DefaultRatePct` as a stated assumption). Left in progress rather than closed because "threaded
-  through forecast/.../retirement" is most of the ticket's value and only the goal seam is wired.
+  DONE (2026-08-17): the household setting and the forecast surface, which were the rest of it.
+
+  The SETTING is one value for the whole app (`uistate.LoadInflationPct` / `SaveInflationPct`), and
+  that is the load-bearing decision. The retirement card had shipped hours earlier with its own stored
+  rate; leaving it there would have given the app two beliefs about the same future and no way for a
+  reader to tell which one a figure came from. `RetirementPlan.InflationPct` is now `json:"-"` — read
+  from the household setting on load, routed back to it on save — so the second copy cannot be
+  reintroduced by a caller who forgets, which is the same seam argument as `SetPeriod`.
+
+  The FORECAST states its twelve-month projection in today's money beneath the nominal one. A
+  projection is denominated in the dollars of the year it lands in, and every reader prices a dollar
+  sign in the money they spend today; over one year the gap is small, and over the horizons the rest of
+  planning deals in it is not.
+
+  The line RENDERS NOTHING when the discount is the identity — a zero rate, or a figure that rounds to
+  itself. "In today's money, $12,400" beside "$12,400" adds a line and no information, and a line that
+  says nothing trains the reader to skip the ones that do.
+
+  WHERE THE CONTROL LIVES, and why not Settings: the inflation field sits on the retirement card, next
+  to the figures it changes, with a caption saying it also moves the forecast. A copy in Settings would
+  be a second control over one value, which is the problem this ticket just removed one level down.
+
+  VERIFIED IN A BROWSER: 9/9. Typing 9% on the retirement card moves the forecast's real figure to
+  $175,493.01 and flips the retirement card's own real return to -1.83% — one setting, two surfaces,
+  visibly agreeing. Setting it to zero removes the line rather than repeating the nominal figure.
 
 **Tier 3 — differentiators (more effort, valued by power users):**
 - [ ] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,
