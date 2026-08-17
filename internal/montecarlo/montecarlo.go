@@ -240,6 +240,11 @@ func newPCG(seed uint64) *pcg {
 func (p *pcg) next() uint32 {
 	old := p.state
 	p.state = old*6364136223846793005 + p.inc
+	// #nosec G115 -- the narrowing IS the algorithm. PCG XSH-RR produces a 32-bit
+	// output from 64-bit state by permuting the high bits and discarding the rest;
+	// taking the low 32 of the xorshifted value is the "XSH" step, not an accident
+	// of type width, and widening it would produce a different (and wrong) stream.
+	// `rot` cannot overflow at all: shifting a uint64 right by 59 leaves 5 bits.
 	xorshifted := uint32(((old >> 18) ^ old) >> 27)
 	rot := uint32(old >> 59)
 	return (xorshifted >> rot) | (xorshifted << ((-rot) & 31))
