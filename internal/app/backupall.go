@@ -60,12 +60,15 @@ func activeDataset() string {
 	return string(data)
 }
 
-// backupEverything gathers the whole install — every workspace's dataset, the
+// marshalFullBackup gathers the whole install — every workspace's dataset, the
 // workspace registry, and the device-local appearance side-state — into one
-// versioned backup envelope and downloads it as a single JSON file (L9). Unlike a
-// single-workspace export, this is a lossless snapshot of the entire app, for
-// moving to a new device or keeping a safety copy.
-func backupEverything() {
+// versioned backup envelope and serialises it.
+//
+// Extracted so the plain and the passphrase-encrypted backups (LF-2) build the
+// SAME bytes. Two builders would eventually diverge, and the divergence would
+// only be discovered by someone restoring a backup and finding a piece of their
+// install missing — the worst possible time and the worst possible way.
+func marshalFullBackup() ([]byte, error) {
 	r := loadRegistry()
 	env := backup.Envelope{
 		Datasets:          gatherBackupDatasets(r, activeDataset()),
@@ -77,7 +80,16 @@ func backupEverything() {
 			Prefs:  lsGet(prefsKey),
 		},
 	}
-	data, err := backup.MarshalEnvelope(env)
+	return backup.MarshalEnvelope(env)
+}
+
+// backupEverything gathers the whole install — every workspace's dataset, the
+// workspace registry, and the device-local appearance side-state — into one
+// versioned backup envelope and downloads it as a single JSON file (L9). Unlike a
+// single-workspace export, this is a lossless snapshot of the entire app, for
+// moving to a new device or keeping a safety copy.
+func backupEverything() {
+	data, err := marshalFullBackup()
 	if err != nil {
 		paletteNotify(uistate.T("backup.everythingErr"), true)
 		return

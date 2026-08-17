@@ -1,3 +1,38 @@
+## 2026-08-16 — whose secret encrypts a backup (LF-2)
+
+The crypto was already there: `encryptDataset`/`decryptDataset` do PBKDF2-600k → AES-GCM through
+crypto.subtle, built for the at-rest dataset encryption. The work was almost entirely in one decision.
+
+The obvious move is to encrypt the backup under the app-lock passcode. It is already in hand, the user
+already knows it, and the key-derivation path is identical. It is also wrong, and the reason is not the
+one I expected going in.
+
+The two easy objections are real but soft: a four-digit device gate is not a file passphrase, and half
+of installs have no passcode configured at all. The decisive one is structural. A backup exists to be
+restored on a DIFFERENT device — very often one where the app is not installed yet, and therefore has
+no lock set. Keying the file to a credential the destination cannot possibly have produces a backup
+that cannot be restored, which is the only truly unforgivable bug this feature can have. Everything
+else about a backup can be mediocre; it just has to open.
+
+Two smaller calls:
+
+**Restore sniffs the file.** The user knows they have "a backup", not which of two formats it happens
+to be in. A picker asking them to choose produces, on a wrong answer, an error indistinguishable from
+a corrupt file. `cryptobox.IsEnvelope` is a four-byte prefix check; there is no reason to make a person
+do it.
+
+**Ask the passphrase twice.** I am generally against confirmation prompts — they train people to click
+through. This one earns it: a mistyped backup passphrase is unrecoverable and is discovered at the
+single worst moment, restoring after losing the device.
+
+And the failure message says "wrong passphrase, or the file is damaged" rather than picking one.
+AES-GCM cannot distinguish them — both fail the same auth tag — so naming one would be a guess
+presented as a diagnosis, sending the user down the wrong path half the time.
+
+`marshalFullBackup` came out of `backupEverything` so both paths build the same bytes. Two builders
+would drift, and the drift would be found by someone restoring and discovering a piece of their
+install missing.
+
 ## 2026-08-16 — the crash was fixed and the duplicate was mine (LF-1)
 
 Two findings, one of them embarrassing.

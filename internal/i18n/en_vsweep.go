@@ -483,6 +483,17 @@ var vSweepKeys = Catalog{
 	"cmd.addGoal":        "Add a goal",
 	"palette.groupViews": "Saved views",
 
+	// LF-2 — a backup you can safely put somewhere else.
+	"cmd.backupEncrypted":       "Back up everything, encrypted",
+	"backup.passphrasePrompt":   "Choose a passphrase for this backup. Write it down — without it the file cannot be opened, by you or anyone else.",
+	"backup.passphraseConfirm":  "Type the passphrase again",
+	"backup.passphraseShort":    "Use at least %d characters. This file holds everything, and it will outlive the device.",
+	"backup.passphraseMismatch": "Those did not match. Nothing was saved.",
+	"backup.encryptErr":         "The backup could not be encrypted, so nothing was saved.",
+	"backup.encryptedDone":      "Encrypted backup saved. Keep the passphrase somewhere separate from the file.",
+	"backup.unlockPrompt":       "Passphrase for this backup",
+	"backup.unlockFailed":       "That did not open the file — wrong passphrase, or the file is damaged. Nothing was changed.",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

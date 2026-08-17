@@ -829,8 +829,29 @@ survived the duplicate/scope filters but didn't make the engine cut):
   soon as there is a query, since entitysearch is strictly better there — more kinds, ordered, and it
   filters the ledger for a transaction hit. Verified before and after: the duplicate is gone.
   (Probe at `e2e/_palette_check.mjs`, gitignored like every `_*.mjs` there. 6/6.)
-- [ ] **LF-2 Encrypted local backup/restore** — passphrase-encrypted backup file (today's export is plain
-  JSON/CSV). Dovetails with the encrypted-sync vision; crypto primitives already exist (vault/artifactcrypto).
+- [x] **LF-2 Encrypted local backup/restore** — passphrase-encrypted backup file (today's export is plain
+  JSON/CSV). Dovetails with the encrypted-sync vision; crypto primitives already exist.
+  — DONE (2026-08-16). "Back up everything, encrypted" in the palette seals the same full-install
+  envelope under a passphrase, via the existing `encryptDataset`/`decryptDataset` (PBKDF2-600k →
+  AES-GCM). Restore SNIFFS the file rather than asking which kind it is — the user knows they have "a
+  backup", not which format, and a picker they answer wrongly produces an error that looks like
+  corruption.
+
+  The passphrase is deliberately NOT the app-lock passcode, and the third reason decided it: a backup
+  exists to be restored on a DIFFERENT device, often one where the app is not installed and therefore
+  has no lock configured. Keying the file to a credential the destination cannot have is a backup that
+  cannot be restored — the only unforgivable bug in a backup. (Also: a four-digit device gate is not a
+  file passphrase, and half of installs have no passcode at all.)
+
+  Twelve-character minimum, and the passphrase is asked TWICE. A mistyped backup passphrase is
+  unrecoverable and is discovered at the worst possible moment — restoring after losing the device —
+  which makes this the one confirmation prompt that genuinely earns itself. A failed unlock says
+  "wrong passphrase, or the file is damaged", because AES-GCM cannot distinguish them and claiming
+  either alone would send the user down the wrong path half the time.
+
+  `marshalFullBackup` was extracted so the plain and encrypted paths build the SAME bytes; two
+  builders would diverge, and the divergence would be found by someone restoring and discovering a
+  piece of their install missing.
 - [ ] **LF-3 Universal Undo** — a consistent "Deleted — Undo" toast on destructive actions everywhere,
   backed by the existing `mutationrev` + `auditlog`.
 - [x] **LF-4 Global spotlight search** — one instant local substring search across accounts / txns /
