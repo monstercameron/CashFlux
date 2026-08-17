@@ -5607,9 +5607,18 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 - [ ] **C380 [MINOR][INVEST] User-imported benchmark + balance-history series.** CSV import of a
   benchmark series and of investment-account balance history; growth chart gains a comparison
   overlay. Keeps the no-live-market-data constraint.
-- [ ] **C381 [MINOR][ACCT] Projected account cash flow on account detail.** From local recurring
+- [x] **C381 [MINOR][ACCT] Projected account cash flow on account detail.** From local recurring
   data (`internal/forecast` exists): next-90-day inflow/outflow projection line under the balance
-  chart, per account.
+  chart, per account. — DONE (2026-08-16). Note for future tickets: `internal/acctproject` ALREADY
+  did per-account projection (AC13's 30-day low-dip warning); I started a duplicate package before
+  checking and deleted it. The genuine gap was that acctproject reported only Low/End with no SERIES,
+  so nothing could be drawn. Added `Series` (daily — an account that ends every month positive and
+  dips below zero on the 23rd is invisible at month granularity, and the dip is the finding),
+  `FirstNegative` (the FIRST crossing, not the deepest: knowing when trouble starts is what leaves
+  time to act; an already-overdrawn start counts as today) and `Known` (no drivers is the absence of
+  information, not a forecast of a flat balance). Rendered under the history chart as a dashed faint
+  line plus the reading in words, with the assumption stated. Skipped for liabilities and
+  valuation-type assets — a mortgage does not run out.
 
 ### W4 — Reports: builder, ranges, export (reviewer priority 3)
 
@@ -9578,6 +9587,66 @@ was recreated before ending the pass.
 
 ---
 
+## What the adversarial pass on C553-C653 caught (2026-08-16)
+
+Two adversarial reviewers were run against the finished change — one on correctness,
+one as the person using it — with a standing instruction to default to "this is wrong".
+Recording what they found, because in every case the first version was defensible and
+wrong, and the pattern is worth keeping.
+
+**Correctness, 3 findings, all fixed:**
+1. **A conditional hook, in the change that fixed a conditional hook.** `reviewSingleView`
+   is a plain function, not a component, so the `ui.UseEvent` on the category select's
+   `OnChange` belonged to the SURFACE's fiber and ran only in single mode. Hooks are
+   matched by call order per fiber, so a hook that exists in one mode and not the other is
+   the framework's cardinal sin. It was inert only because it happened to be the last hook
+   in the render — the next hook added after it would have misaligned every hook between
+   modes. Galling detail: `reviewConfirmAll` was extracted into its own component in the
+   same change *specifically* to avoid this, three functions further down. Knowing the rule
+   is not the same as applying it everywhere the rule applies. The handler is now built by
+   the surface and threaded in like every other one.
+2. **Removing `advance()` assumed a stable row order that does not exist.** `GroupByMerchant`
+   ranks by (confidence, group SIZE, key) — so a per-charge commit shrinks its group and can
+   drop it behind a same-confidence neighbour. Holding position by index then showed a
+   merchant the user had never seen: one click, an unpredictable card, which is the exact
+   contract C653 exists to establish. The card position is now held by MERCHANT KEY first
+   (`reviewscope.CardIndex`), index second. The index fallback is correct rather than a
+   compromise: it only applies once the merchant has left the queue, at which point whatever
+   sits in that slot IS the next piece of work.
+3. **The promised count could exceed the written count silently.** "Categorize all 122" is
+   drawn from a memoized snapshot; the write skips charges that left the queue in between.
+   The queue would drop by 119 and only the undo toast carried the real number. It now says
+   so.
+
+**Human UX, 13 findings, 12 fixed and 1 deliberately not:**
+- **The one that mattered most:** the delete confirmation's `Removing: …\nKeeping: …` was
+  rendered into a single `<p>` with no `white-space: pre-line`, so the browser collapsed the
+  line break and produced one run-on wall of text — destroying exactly the distinction C652
+  exists to draw. Rewritten as one sentence, which is what the component can actually render.
+- The merchant-wide confirmation replaced the primary button in place, so a screen-reader
+  user heard nothing change: `role=alertdialog` without a focus move is not announced. It
+  takes focus now, and the confirm button is described by the question.
+- Category names in the confirmation and undo toast dropped the parent path while the picker
+  the user chose from shows it — worst at the moment (a 122-charge batch) it matters most.
+  Now through `catname.Label`, per C619's one-naming-rule.
+- The C651 notice fired on EVERY tag drill. It now speaks only when the visible result set
+  did not move — noise for the common case to fix the uncommon one was the wrong trade.
+- Plural/singular: none of the new scope strings used `plural()`, so a queue of one read
+  "1 charges are waiting". Every count fragment now agrees with its verb.
+- The cross-page links looked identical to "New category" (which does not leave) and gave no
+  warning before the click; they carry a ↗ and an accessible name saying so.
+- Also: a raw ISO date in the duplicate confirmation, implementation vocabulary
+  ("viewport"/"rendered") in a string read aloud to a person, an unquoted bank descriptor
+  running into the next word, a reassurance naming three of ten filter dimensions, and
+  "1 selected charge" describing a selection nobody made.
+- **Not taken:** the reviewer suggested a fixed-height placeholder so the commit-scope
+  control does not shift the card when a merchant has one queued charge. Instead the row now
+  always renders — control on multi-charge cards, the answer in words on single-charge ones.
+  Reserving blank space would have left the one card whose scope is unambiguous as the one
+  card that never states it.
+
+---
+
 ## TR post-change replay deltas (2026-08-16)
 
 This section records what changed since the prior bug bash. Completed items below were verified in the
@@ -9904,3 +9973,104 @@ C621.
   contributor to the C627 jump-to-page report.
   AC: the two pagers carry distinguishable testids (e.g. a `top`/`bottom` suffix) and a locator without a
   position qualifier resolves to one element.
+
+---
+
+## TXN bug bash stage 2 — live sweep + the real render path (2026-08-16), ALL FIXED
+
+Stage 2 drove the served build on `:8080` (bulk actions, add/edit/delete, splits, scope/calendar,
+filters, a11y/responsive) and statically reviewed the files that actually paint the page —
+`transactions_widget.go` and `transactions_tiles.go` — which Stage 1's partition had missed while it
+audited the dead `transactions.go`/`transactions_row.go` pair (C646). Every candidate was
+re-driven or re-read by an adversarial verifier: 16 of 20 survived, and all 16 are fixed below.
+
+Verification status: `internal/{ui,screens,styles,i18n,appstate}` compile for `js/wasm`;
+`appstate` carries 5 new table-driven tests for the transfer-pair write, all passing; C661 and C663
+were confirmed fixed against the deployed build in a browser. C658 and C659 are fixed in source but
+were not yet redeployed — a concurrent session left `internal/app/settings_section.go` mid-edit
+(`internal/ui` imported as `ui` while the new code calls `uiw.`, and `Class: "set-input " +
+tw.Mt045` concatenating a `css.Rule` to a string), which blocks any full app build. Not touched here
+because the intended shape of that change is the other session's to make; rebuild and re-verify once
+it lands.
+
+- [x] **C648 [BLOCKER][TXN][LINKS][MONEY] An order group's badge totalled only the rows the filter left visible.**
+  `GroupSize` came from the link (filter-independent) while `GroupTotal` summed a map built from
+  `props.Shown`, and `txnlinks.GroupMembers` silently skips ids missing from the map it is given. Filtering
+  to a category matching 2 of a 3-transaction group printed `◱ 3 items · $47.00` over a real total of
+  $65.00 — a count and a money figure side by side, measured against different populations.
+  Fixed: the total resolves against the whole ledger (`transactions_widget.go`, `groupTxByID`).
+
+- [x] **C649 [BLOCKER][TXN][SELECTION][EXPORT][DATA] Select-all and Export CSV acted on rows the ledger was not showing.**
+  Both re-derived their population with `txnfilter.Apply(app.Transactions(), filterAtom.Get())`, which
+  differs from the rendered set twice over: it drops the top bar's member lens (layered on afterwards) and
+  passes no `Labels`, so the payee-alias resolver was nil and rows matching the search only through a
+  learned merchant alias fell out. Exporting invisible rows is bad alone; Bulk Delete on the other end of
+  that selection is data loss. Fixed: both use `props.Shown`, the slice the table and count line are built
+  from, so they agree with the screen by construction.
+
+- [x] **C654 [MAJOR][TXN][SORT] Register mode's forced chronological order was invisible to the sort header.**
+  The host forces `date`/`Asc` when the ledger is scoped to one account and register mode is on, but the
+  table tile derived `dtp.Sort`/`Dir` from the unforced filter — so the caret and `aria-sort` advertised the
+  user's stored sort over rows arranged differently. Fixed: the tile applies the same force before
+  `EffectiveSort`.
+
+- [x] **C655 [MAJOR][TXN][DEDUPE] The duplicates button's count disagreed with the panel it opens.**
+  The badge counted duplicates within the filtered/lensed view; `DuplicatesPanel` scans the whole ledger.
+  Fixed by changing the count, not the panel: a duplicate is only detectable when BOTH rows are in the
+  population, so scoping the panel to the filter would hide pairs outright rather than merely miscount them.
+
+- [x] **C656 [MAJOR][TXN][UNDO][DATA] Bulk-delete's Undo silently orphaned half of every transfer it removed.**
+  `DeleteTransactionsBulk` expands the delete set to include the reciprocal leg of any selected transfer,
+  but the undo snapshot was built from the ticked ids only — so Undo restored one leg and dropped the other,
+  leaving that account permanently short by the transfer amount. Fixed: `appstate.ExpandTransferPairs`
+  reports exactly what the delete will remove, and the snapshot is taken from that set.
+
+- [x] **C657 [MAJOR][TXN][MONEY][FX] The count line's net dropped rows that failed FX conversion.**
+  The fold skipped unconvertible rows with `if err == nil`, so the net covered fewer rows than the count
+  printed beside it and understated the total by exactly the rows nobody was told about. Fixed: the skipped
+  rows are counted and the line states them ("N not counted — no exchange rate"). Same defect class as C630
+  in the upcoming strip, which is still open.
+
+- [x] **C658 [MAJOR][TXN][A11Y][THEME] Light theme rendered money-in and money-out in the same ink.**
+  `[data-theme="light"] .txn-table tbody td { color: #1c1c1e !important }` overrode the `text-up`/`text-down`
+  tone classes on the amount cells. Measured on the served build: dark showed 2 distinct amount colours,
+  light showed 1 — the ledger's only at-a-glance signal gone, leaving the parentheses as the sole cue for an
+  expense. The light palette already defines accessible tones (`--up #157a43`, `--down #b3322f`); nothing
+  reached them. Fixed: the blanket rule excludes `.text-up`/`.text-down`/`.text-warn`.
+
+- [x] **C659 [MAJOR][TXN][A11Y] The Filters panel promised dialog behaviour it did not have.**
+  The trigger carried `aria-haspopup="dialog"`, but the panel is an inline `role="region"` with no backdrop
+  (deliberately, per C52). Measured: focus stayed on the trigger, nothing was trapped, and Escape did not
+  close it — so a keyboard user who opened it had no way out but to hunt for the ✕. Fixed: the trigger is
+  described as the disclosure it is (`aria-expanded` + `aria-controls`, no `haspopup`), and Escape closes
+  the panel from the trigger or from anywhere inside it.
+
+- [x] **C660 [MINOR][TXN][STATUS] The row glyph reversed the priority the Status column was fixed to use.**
+  `rowStatusWord` ranks needs-review above settlement (C601); the glyph's switch checked Reconciled/Cleared
+  FIRST, behind a C618 comment claiming it "mirrors rowStatusWord exactly". With the Status column switched
+  off, a row that was both cleared and flagged wore "✓" and said nothing about the review queue — the exact
+  defect C601 fixed, re-introduced one component over. Fixed: the orders match, and the glyph's accessible
+  name carries the settlement half via the shared `badgeStateLabel` helper (see C640).
+
+- [x] **C661 [MINOR][TXN][A11Y] Every row's ⋯ trigger had the same accessible name.**
+  `TriggerLabel: T("transactions.rowActions")` = "Transaction actions" on all 3,229 rows, while the checkbox
+  ("Select transaction: %s") and the pencil ("Edit %s") beside it were already parameterised. Fixed:
+  `transactions.rowActionsFor` = "Actions for %s". Verified live — six consecutive rows, six distinct names.
+
+- [x] **C662 [MINOR][TXN][COPY][SAFETY] Bulk delete called itself permanent when it is not.**
+  "Delete %d transactions? This can't be undone." sits over an action that saves a checkpoint and then shows
+  a working Undo banner. Telling people a reversible action is permanent makes them abandon work they could
+  have taken back, and teaches them not to believe the next warning that is real. Fixed to "You can undo
+  this.", matching the to-do page's wording for the same action.
+
+- [x] **C663 [MINOR][TXN][A11Y] Truncated descriptions had no title at any viewport width.**
+  `.row-desc-text` ellipsises at 1920 through 390 and nothing else on the row repeats the text, so
+  "CKE*DD DOORDASH WINGSTOP 855-431-0459" clipped to "CKE*DD DOORDASH WINGSTOP 855-4" — hiding exactly the
+  identifying tail someone is scanning the ledger to find. Fixed: the cell carries its full text as `title`.
+  Verified live.
+
+Also fixed in this pass, already filed from stage 1: **C629** (transfer legs desync on edit — stage 2
+reproduced it live, a $77 transfer edited to $120 drifted the ledger net by $43; fixed via
+`appstate.PutTransactionWithTransferPair` with 5 new tests), **C632** (Amounts↔Percent round trip),
+**C634** (negative/zero split line reported as balanced), and **C640** (a re-flagged reviewed row lost
+its settlement detail).

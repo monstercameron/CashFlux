@@ -386,6 +386,13 @@ var vSweepKeys = Catalog{
 	"notifications.memberChipTitle": "This alert belongs to %s",
 	"notifications.memberGone":      "Unassigned",
 
+	// C381 — where the account goes next.
+	"accountsFwd.title":    "Next 90 days",
+	"accountsFwd.negative": "Runs out on %s — as low as %s",
+	"accountsFwd.low":      "Dips to %s on %s, ending around %s",
+	"accountsFwd.rising":   "Stays above today's balance, ending around %s",
+	"accountsFwd.assumes":  "Assumes your %d scheduled flows keep running as they are.",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

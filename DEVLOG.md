@@ -1,3 +1,33 @@
+## 2026-08-16 — I built a package that already existed (C381)
+
+Worth writing down because the mistake was entirely avoidable. The ticket says "from local recurring
+data (`internal/forecast` exists)", so I read `forecast`, found it projects month-END balances, and
+concluded a new daily per-account package was needed. Built it, tested it, wired it — and only then
+noticed a `TODO(C381)` comment in the chart code referring to `acctproject.Projection`, a package
+that already does per-account projection with drivers and a low point.
+
+`forecast` being named in the ticket is what did it: it read as the survey of what exists, and I did
+not run my own. Deleted `internal/acctflow` and used the real one.
+
+Which turned out to make the ticket smaller and the diagnosis sharper. `acctproject` reports Low,
+LowDate and End — enough for AC13's one-line "dips to $X on the 28th" warning, and not enough to draw
+anything, because there is no series. That was the actual gap, and it takes three methods rather than
+a package:
+
+- **`Series`, daily.** An account that ends every month comfortably positive and dips below zero on
+  the 23rd looks perfectly healthy at month granularity, and the dip is the finding. The first point
+  is today's untouched balance, so the drawn line cannot contradict the number printed beside it.
+- **`FirstNegative`, the FIRST crossing, not the deepest.** Knowing when trouble starts is what leaves
+  time to act; the deepest point is usually later than the moment the decision had to be made. An
+  already-overdrawn start counts as today, because "never goes negative" on an overdrawn account is
+  the most misleading answer available.
+- **`Known`.** No drivers is the absence of information, not a forecast of a flat balance. Drawing a
+  confident flat line there claims knowledge the app does not have.
+
+Visually the projection is dashed and faint next to the solid history line. Two lines of equal weight
+would put a guess and a record on the same footing, which is exactly the thing that makes people stop
+trusting a forecast the first time it is wrong.
+
 ## 2026-08-16 — the SM series is closed (SM-2…SM-16)
 
 All fifteen shipped. The survey at the start was the decision that shaped the rest: most of

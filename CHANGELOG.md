@@ -7,6 +7,80 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Editing a transfer moves both legs (C629).** A transfer is two independent rows, and the edit
+  form only ever wrote the one the user opened. Correcting a transfer's amount from the ledger
+  updated one account and not the other: the legs stopped summing to zero, so the ledger's net moved
+  by the edit even though no money entered or left the household — reproduced live, a $77 transfer
+  edited to $120 drifted the net by exactly $43 — and every downstream figure that sums transactions
+  inherited the error. It also broke delete-both, because a pair is matched on equal dates and
+  exactly opposite amounts, so an edited leg no longer looked reciprocal and deleting it silently
+  orphaned its counterpart. `appstate.PutTransactionWithTransferPair` now takes the pre-edit copy
+  too (the pair can only be located while the old values still match), mirrors amount and date onto
+  the counterpart through the same FX and liability-signing path `CreateTransferPair` uses, and
+  fires observers once. Per-leg fields are deliberately not copied — Payee is the *other* account's
+  name on each leg. Five table-driven tests cover both edit directions, the date half, the
+  delete-both path afterwards, and the plain non-transfer case.
+- **"Select all" and "Export CSV" act on what the ledger is showing (C649).** Both re-derived their
+  own population from the raw filter atom, which differed from the rendered set in two ways: it
+  dropped the top bar's member lens, and it passed no payee-alias resolver, so rows matched only
+  through a learned merchant alias fell out. Exporting rows the user cannot see is bad on its own;
+  with Bulk Delete on the other end of a selection it is data loss. Both now use the very slice the
+  table and the count line are built from, so they agree with the screen by construction.
+- **Bulk-delete's Undo restores every row the delete removed (C656).** The delete quietly expands to
+  take the reciprocal leg of any selected transfer with it, but the undo snapshot was built from the
+  ticked rows only — so Undo restored one leg of a transfer and dropped the other, leaving that
+  account permanently short. The snapshot is now taken from the same expanded set the delete uses
+  (`appstate.ExpandTransferPairs`).
+- **An order group's badge totals the group, not the filter (C648).** The item count came from the
+  link (filter-independent) while the money came from a map built only from the visible rows, and
+  the group-members helper silently skips ids it cannot find — so filtering to a category that
+  matched some of a group printed "3 items · $47.00" over a real total of $65.00. The total is now
+  resolved against the whole ledger, like the count beside it.
+- **The ledger's net says when it could not count a row (C657).** Rows that fail FX conversion were
+  skipped in silence, so the net covered fewer rows than the count printed next to it and understated
+  the total by exactly the rows nobody was told about. The line now states them.
+- **Switching a split between Amounts and Percent keeps it balanced (C632).** Each row was converted
+  on its own with plain integer division, truncating per row, so a draft that summed exactly to the
+  parent was short a cent or more afterwards and the editor reported it unbalanced when the only
+  thing that changed was the display mode. A balanced draft now converts through the same
+  largest-remainder apportionment the rest of the split code uses.
+- **A negative or zero split line is no longer reported as balanced (C634).** The live remainder took
+  each line's magnitude, so "-5" *added* to the running total, the footer said "Balanced" and Save
+  stayed enabled — then the click failed. A disabled state that lies in the user's favour is the
+  worst direction for a money form; the footer, the button and the save now read one verdict.
+- **Register mode's forced order is the order the headers claim (C654).** Register mode sorts the
+  rows chronologically, but the table tile derived its sort indicator from the unforced filter, so
+  the caret and `aria-sort` advertised the user's stored sort over rows arranged differently.
+- **A row that is both cleared and flagged says so (C640, C660).** The Status column's word order was
+  rewritten so "needs review" outranks settlement (C601), and the row glyph kept the opposite order
+  behind a comment claiming it matched — so with the Status column switched off, a cleared, flagged
+  row wore "✓" and said nothing about the review queue. The tooltip had the mirror-image bug: its
+  early return keyed off `Reviewed`, which is not exclusive of `Queued`, so re-flagging an already
+  reviewed charge dropped the settlement half. Both now ask whether the *word* left an axis unsaid.
+- **The duplicates button's count matches the panel it opens (C655).** The badge counted duplicates
+  in the filtered view while the panel scans the whole ledger. Counting over the ledger is the right
+  half to change: a duplicate is only visible when both rows are in the population, so scoping the
+  panel to the filter would hide pairs outright.
+- **Light theme colours money in and money out again (C658).** A blanket `color: … !important` on
+  every light-theme table cell overrode the tone classes, so amounts rendered in the same near-black
+  ink and the ledger's one at-a-glance signal was gone — the only remaining cue for an expense was
+  the parentheses. The light palette already defined accessible tones; nothing reached them.
+- **The Filters panel closes on Escape, and stops claiming to be a dialog (C659).** The trigger
+  advertised `aria-haspopup="dialog"`, promising modal behaviour the inline panel never had: focus
+  did not move in, nothing was trapped, and Escape did nothing, so a keyboard user who opened it had
+  no way out but to hunt for the ✕. It is described as the disclosure it is (`aria-expanded` +
+  `aria-controls`) and Escape dismisses it like every other popover on the page.
+- **Each row's ⋯ button is named after its row (C661).** Every kebab in the ledger carried the same
+  "Transaction actions", so tabbing the actions column announced one identical name 3,229 times —
+  while the checkbox and pencil beside it were already parameterised.
+- **Truncated descriptions carry their full text (C663).** The description cell ellipsises at every
+  viewport width and nothing else on the row repeats it, so "CKE\*DD DOORDASH WINGSTOP 855-431-0459"
+  clipped to "CKE\*DD DOORDASH WINGSTOP 855-4" — hiding exactly the identifying tail someone is
+  scanning the ledger to find.
+- **Bulk delete stops calling itself permanent (C662).** The confirm read "This can't be undone" over
+  an action that saves a checkpoint and then offers a working Undo banner. Telling people a
+  reversible action is permanent makes them abandon work they could have taken back, and teaches
+  them not to believe the next warning that is real.
 - **One-at-a-time Review now says how many charges a click will change — and changes only those
   (C653).** The card showed a single Blue Bottle charge and a button reading "Categorize & next";
   one click categorized 122. The cause was that the write path chose its own population: a

@@ -90,3 +90,83 @@ func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) Pro
 func day(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
+
+// ─── C381: the curve, not just its low point ─────────────────────────────────
+
+// Point is one day of the projected curve: the closing balance and what moved
+// that day (Out as a positive magnitude, so a caller need not re-derive signs).
+type Point struct {
+	Date    time.Time
+	Balance int64
+	In, Out int64
+}
+
+// Series expands the projection into one point per day over the horizon,
+// starting with the untouched balance today.
+//
+// Project alone answers "how low does it get", which is the right answer for a
+// one-line warning on a row. Drawing the forward line under the balance chart
+// needs the shape, and the shape has to be DAILY: an account that ends every
+// month comfortably positive and dips below zero on the 23rd looks perfectly
+// healthy at month granularity, and the dip is the entire point of showing it.
+//
+// The first point is today's balance with nothing applied, so the drawn line
+// starts where the account actually is and cannot contradict the figure printed
+// beside it. A non-positive horizon yields nothing.
+func (p Projection) Series(asOf time.Time, horizonDays int) []Point {
+	if horizonDays <= 0 {
+		return nil
+	}
+	start := day(asOf)
+	byDay := map[string][]Driver{}
+	for _, d := range p.Drivers {
+		k := day(d.Date).Format("2006-01-02")
+		byDay[k] = append(byDay[k], d)
+	}
+	out := make([]Point, 0, horizonDays+1)
+	out = append(out, Point{Date: start, Balance: p.Start})
+	bal := p.Start
+	for i := 1; i <= horizonDays; i++ {
+		dt := start.AddDate(0, 0, i)
+		var in, outAmt int64
+		for _, d := range byDay[dt.Format("2006-01-02")] {
+			bal += d.Amount
+			if d.Amount > 0 {
+				in += d.Amount
+			} else {
+				outAmt += -d.Amount
+			}
+		}
+		out = append(out, Point{Date: dt, Balance: bal, In: in, Out: outAmt})
+	}
+	return out
+}
+
+// FirstNegative reports the first day the projected balance closes below zero,
+// and whether it happens at all.
+//
+// FIRST, not lowest. Knowing when trouble starts is what leaves time to act; the
+// deepest point is usually later than the point where the decision had to be
+// made. A start balance already below zero counts as today — otherwise an
+// overdrawn account projects as "never goes negative", which is the most
+// misleading answer available.
+func (p Projection) FirstNegative(asOf time.Time) (time.Time, bool) {
+	start := day(asOf)
+	if p.Start < 0 {
+		return start, true
+	}
+	bal := p.Start
+	for _, d := range p.Drivers {
+		bal += d.Amount
+		if bal < 0 {
+			return day(d.Date), true
+		}
+	}
+	return time.Time{}, false
+}
+
+// Known reports whether the projection rests on anything. A horizon with no
+// drivers is not a forecast of a flat balance — it is the absence of
+// information, and drawing a confident flat line would claim knowledge the app
+// does not have.
+func (p Projection) Known() bool { return len(p.Drivers) > 0 }

@@ -483,4 +483,35 @@ func registerVSweep() {
 		maxWidth("11rem"),
 	)
 
+	// ─── C381: the forward projection under the balance chart ────────────────
+	// A projection sits beside a record of what actually happened, so it must not
+	// look equally certain: faint stroke, dashed line, muted label.
+	rule(".acct-fwd",
+		marginTop("0.4rem"),
+		paddingTop("0.4rem"),
+		borderTop("1px dashed var(--border)"),
+	)
+	rule(".acct-fwd-head",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.4rem"),
+	)
+	rule(".acct-fwd-label",
+		color("var(--text-faint)"),
+		textTransform("uppercase"),
+		letterSpacing("0.04em"),
+		fontSize("0.65rem"),
+	)
+	// Running out of money is the one reading here that should raise its voice.
+	rule(".acct-fwd-warn",
+		color("var(--warn, var(--text))"),
+	)
+	rule(".acct-fwd-note",
+		display("block"),
+		marginTop("0.15rem"),
+		fontSize("0.68rem"),
+		color("var(--text-faint)"),
+	)
+
 }
