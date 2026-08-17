@@ -909,7 +909,15 @@ survived the duplicate/scope filters but didn't make the engine cut):
   property valuation has no statement to match. And the staleness window comes from the app's own
   freshness config rather than a default, so this count and the accounts page cannot disagree about the
   same account. Zero counts render nothing at all — "0 uncategorized" is a panel talking about itself.
-- [ ] **LF-9 Print / PDF-friendly report view** — a browser-native print stylesheet; fully local.
+- [x] **LF-9 Print / PDF-friendly report view** — a browser-native print stylesheet; fully local.
+  — DONE (2026-08-16), completed by C384 earlier in the same session. There were already nine
+  app-wide print rules (light palette forced, shell/rail/toolbars hidden, cards kept whole, table
+  headers repeated, 1.5cm page margins); C384 added the report-specific pass the ticket is really
+  about — each numbered chapter starts a fresh page, the masthead gets its own, section headings never
+  end a page, rows and methodology drawers never split, and the report's own navigation (jump index,
+  window picker, ask buttons, drill links, toolbar) is hidden since none of it can be operated on
+  paper. "Save as PDF / Print" on the report drives the browser's own dialog, so it is fully local
+  with no renderer and no service.
 - [x] **LF-10 Recurring-transaction detection → create rule** (deterministic sibling of SM-6, surfaced on
   /transactions or /recurring).
   — DONE (2026-08-16). The recurring-review candidate row (`/recurring`) gained a third action beside
