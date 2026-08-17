@@ -627,4 +627,61 @@ func registerVSweep() {
 		fontSize("0.78rem"),
 	)
 
+	// ─── E3: the contradiction strip ─────────────────────────────────────────
+	// It appears only when something is actually wrong, so it is allowed to be
+	// visible — but it is a report, not an alarm: the severity dot carries the
+	// tone and the text stays readable.
+	rule(".contra-strip",
+		marginTop("0.6rem"),
+		padding("0.7rem 0.85rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid var(--border)"),
+		background("var(--surface)"),
+	)
+	rule(".contra-head",
+		display("flex"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+		marginBottom("0.4rem"),
+	)
+	rule(".contra-title",
+		fontSize("0.72rem"),
+		textTransform("uppercase"),
+		letterSpacing("0.04em"),
+		color("var(--text-dim)"),
+	)
+	rule(".contra-rows",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.3rem"),
+	)
+	rule(".contra-row",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.4rem"),
+		paddingLeft("0.6rem"),
+		borderLeft("3px solid var(--border)"),
+		fontSize("0.8rem"),
+	)
+	rule(".contra-critical",
+		borderLeftColor("var(--danger, var(--warn, var(--text)))"),
+	)
+	rule(".contra-warning",
+		borderLeftColor("var(--warn, var(--text-dim))"),
+	)
+	rule(".contra-notice",
+		borderLeftColor("var(--border)"),
+	)
+	rule(".contra-text",
+		color("var(--text)"),
+	)
+	// "How wrong is it" is the reader's first question, so the delta reads as a
+	// figure rather than as part of the sentence.
+	rule(".contra-delta",
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text-dim)"),
+	)
+
 }

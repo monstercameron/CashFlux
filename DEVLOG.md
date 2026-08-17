@@ -1,3 +1,39 @@
+## 2026-08-16 — the bug neither screen can see (E3)
+
+The defect class this engine exists for: one page said 47% and another said 38% about the same thing.
+Neither page has a bug you could write a test for — each is internally consistent and each computes
+its number correctly from its own inputs. And no user catches it, because nobody holds two screens in
+their head simultaneously. The only way to find it is to state the INVARIANT that should hold between
+them and check it.
+
+That framing decided the shape of a Finding: it carries BOTH sides. "Something is wrong with this
+transfer" is a complaint. "Money left this account, but nothing arrived in the other one" is a
+contradiction, and the difference is that a user can act on the second — they can see which half is
+wrong. A complaint gives them nothing to do.
+
+For the same reason the engine never repairs. Which side is right depends on what actually happened,
+which the app does not know: the missing leg might need creating, or the existing one might need
+deleting. Auto-fixing would be picking one at random and calling it a correction.
+
+Three implementation choices worth recording:
+
+**Keys are built from kind + entity, never from values.** A dismissal has to survive a recompute, and
+values change as the user works. There is a test for it, because this is the kind of thing that gets
+"improved" into including the amount for uniqueness and quietly breaks dismissal.
+
+**Holdings get a tolerance.** Prices are entered by hand and go stale between updates, so an account a
+few dollars off its balance is a stale price, not a disagreement. Without the tolerance, every
+investment account would report a contradiction forever and bury the real ones.
+
+**Clean data renders nothing.** Not "no problems found" — nothing. A strip that is always present is
+a strip people stop reading, and then it fails to be noticed on the one day it matters.
+
+Two checks from the ticket did not ship and are filed as E3b rather than approximated. "Bill unpaid
+despite a matching payment" needs the payment-matching heuristic (which payment settles which
+occurrence, given amount and date drift). "Report total ≠ dashboard total" needs both totals to come
+through one shared path before comparing them means anything — comparing two independent computations
+would report a contradiction every time rounding differed, which is a worse outcome than not checking.
+
 ## 2026-08-16 — an action is not a decision (E5)
 
 E5 is the foundation the rest of the E-series emits through, so the schema is the deliverable and

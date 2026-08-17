@@ -538,6 +538,12 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		acctIdleCashLine(app, props.Base, goToAllocate),
 		// Liquidity breakdown: the asset side grouped by how usable the money is.
 		acctLiquidityLine(app, props.Base, props.Rates),
+		// E3: where the app's own numbers disagree with each other — a transfer
+		// with one leg, holdings that do not add up to their account's balance.
+		// Always on, and absent entirely when the data agrees.
+		ui.CreateElement(contradictionStrip, contradictionStripProps{
+			Kinds: []string{"account", "transaction"},
+		}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "acct-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -971,8 +977,8 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})),
 			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
 			labeledField(uistate.T("accounts.transferAmount"),
-				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
-					Type("number"), Placeholder(uistate.T("accounts.transferAmount")), Value(amtS.Get()),
+				uiw.NumField(amtS.Get(), css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
+					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
 					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt))),
 			// G7: cross-currency semantics said out loud — denomination + live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
@@ -981,15 +987,15 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// rate; hidden for same-currency pairs where it can't apply.
 			If(crossCcy, Fragment(
 				labeledField(uistate.T("accounts.transferReceivedLabel", toCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-received"),
-						Type("number"), Value(recvS.Get()), Step("0.01"), Attr("min", "0.01"),
+					uiw.NumField(recvS.Get(), css.Class("field"), Attr("data-testid", "page-xfer-received"),
+						Type("number"), Step("0.01"), Attr("min", "0.01"),
 						Attr("title", uistate.T("accounts.transferReceivedHint")), OnInput(onRecv))),
 				If(!recvOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
 			)),
 			If(fromCcy != "", Fragment(
 				labeledField(uistate.T("accounts.transferFeeLabel", fromCcy),
-					Input(css.Class("field"), Attr("data-testid", "page-xfer-fee"),
-						Type("number"), Value(feeS.Get()), Step("0.01"), Attr("min", "0.01"),
+					uiw.NumField(feeS.Get(), css.Class("field"), Attr("data-testid", "page-xfer-fee"),
+						Type("number"), Step("0.01"), Attr("min", "0.01"),
 						Attr("title", uistate.T("accounts.transferFeeHint")), OnInput(onFee))),
 				If(!feeOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
 			)),
@@ -998,11 +1004,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// received override and fee.
 			acctTransferBalancePreview(app, pfrom, pto, amtS.Get(), recvS.Get(), feeS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
-				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")),
-					Value(dateS.Get()), OnInput(onDate))),
+				uiw.Field(dateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onDate))),
 			labeledField(uistate.T("accounts.transferDescLabel"),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")),
-					Value(descS.Get()), OnInput(onDesc))),
+				uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onDesc))),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The app now notices when its own numbers disagree with each other (E3).** A transfer with only one
+  leg, holdings that do not add up to the account balance beside them, a to-do still open after the
+  goal it was about was reached, a category budgeted twice so its spending counts against two limits.
+  These are the bugs that no test of either screen catches — each screen is internally consistent —
+  and that no user catches either, because nobody holds two pages in their head at once.
+
+  Every finding states both sides: "money left this account, but nothing arrived in the other one",
+  with the size of the gap beside it. One side alone is a complaint, and a complaint cannot be acted
+  on because it does not say which half to fix. The check runs inline on the page it concerns rather
+  than behind a "run a consistency check" button — an invariant you have to remember to verify is one
+  that is broken most of the time — and it renders nothing at all when the data agrees, because a
+  detector that always shows something is one people learn to scroll past.
 - **The prepared-decision schema every intelligence engine will emit through (E5).** A finding can now
   carry the things that make it checkable and actionable where it appears: the evidence it rests on as
   entity references rather than a rendered sentence, the assumptions it takes as given, its dollar

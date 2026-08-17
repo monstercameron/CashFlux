@@ -638,10 +638,36 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   into ONE case with root cause, actionability rank, prepared actions; dedupe across all surfaces; a case
   whose trigger clears closes itself (extends `taskresolve`). Subsumes: notification root-cause grouping,
   actionability score, next-actions ranking, self-resolving task closure.
-- [ ] **E3 Contradiction detector.** Cross-page invariant checks, always-on (NOT an opt-in toggle):
+- [x] **E3 Contradiction detector.** Cross-page invariant checks, always-on (NOT an opt-in toggle):
   bill unpaid despite a matching payment; securities ≠ investment balance; report total ≠ dashboard
   total; spending with no budget category; task open after its linked action occurred; one-sided
-  transfer. Turns the 47%-vs-38% defect class into an enforced invariant.
+  transfer. Turns the 47%-vs-38% defect class into an enforced invariant. — ENGINE DONE (2026-08-16),
+  `internal/contradict` + an always-on inline strip on /accounts.
+
+  The framing that shaped it: these bugs are not caught by tests of either screen (each is internally
+  consistent) and not caught by users (nobody holds two pages in their head). They are caught by
+  stating the INVARIANT between them. So a Finding carries BOTH sides — "money left this account, but
+  nothing arrived in the other one" — because a finding showing one side is a complaint, and a user
+  cannot act on a complaint: they do not know which half to fix. It never repairs, either; which side
+  is right is the user's call.
+
+  Checks shipped: one-sided transfer, transfer legs that do not sum to zero, holdings vs account
+  balance (with a $10 tolerance — hand-entered prices go stale, and reporting that would bury the real
+  ones), a to-do still open after its goal was reached, orphaned category/account links, and one
+  category budgeted twice (covering BOTH the single- and multi-category fields, since a check reading
+  one of them misses half the data). Keys are built from kind+entity, never values, so a dismissal
+  sticks across recomputes — tested. Clean data produces NOTHING: a detector that always finds
+  something is one people learn to scroll past.
+
+  NOT DONE: "bill unpaid despite a matching payment" and "report total ≠ dashboard total". The first
+  needs the bill-payment matching heuristic (which payment settles which occurrence) and the second
+  needs both totals computed the same way to compare at all — each is its own ticket, filed as E3b.
+- [ ] **E3b Two more invariants: bill-vs-payment and report-vs-dashboard.** E3 shipped the engine and
+  six checks. Two from its list did not: "bill unpaid despite a matching payment" needs the
+  bill-payment matching heuristic (which payment settles which occurrence, given amount and date
+  drift), and "report total ≠ dashboard total" needs both totals computed through one shared path
+  before they can be compared at all — comparing two independent computations would report a
+  contradiction every time rounding differed.
 - [ ] **E4 Batch resolution.** Compress repeated work into one reviewed changeset: "186 review items
   resolve under 6 proposed rules — 172 high-confidence, 14 need you. Preview." Subsumes confidence-tiered
   inbox, bulk transfer/payment matching, rule impact preview, import reconciliation. Target: inbox −70–90%.

@@ -447,6 +447,13 @@ var vSweepKeys = Catalog{
 	"bench.skipped":         "%d points of this window fall outside the series you imported, so they are not compared.",
 	"bench.noOverlap":       "%s does not cover this window, so there is nothing to compare yet.",
 
+	// E3 — where the app's own numbers disagree with each other.
+	"contra.title": "These figures disagree",
+	"contra.count": "%d found",
+	"contra.look":  "Go look",
+	"contra.more":  "Show %d more",
+	"contra.less":  "Show fewer",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",
