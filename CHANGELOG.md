@@ -69,6 +69,14 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **One budget can be set to what you actually spend, in one click (SM-12).** Auto-budget proposes
+  limits for every category at once, behind a slider and a review step — the right shape for setting
+  a budget set up, and the wrong shape for the commoner moment: one budget that is obviously
+  mis-sized. That budget now offers its own three-month average with a "Use $X" button. It stays
+  quiet when the limit is already within 10% of the average (correct advice nobody needs is how
+  advice stops being read), when there is no history to average, and on a savings target — where
+  "your recent average" is an argument for aiming lower, which is the opposite of the point. It uses
+  the same trailing average auto-budget does, so the two can never propose different numbers.
 - **A duplicate or an unusual charge says so on its own row (SM-8, SM-10).** Both detectors already
   ran, and both already reported to the /smart hub — where a finding costs you a hunt back through
   the ledger to act on it. The charge itself now carries a small chip: "Duplicate?" opens the review

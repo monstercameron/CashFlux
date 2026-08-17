@@ -816,6 +816,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				// already collapsed and lazy.
 				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
 					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Anchor: props.Anchor})),
+				// SM-12: this budget's own trailing average, when the limit has drifted
+				// far enough from it to be worth saying. Not shown in last-month mode:
+				// the figures there describe a closed period, and offering to rewrite a
+				// limit from a historical view is a change you cannot see the effect of.
+				If(!lastMonthMode,
+					ui.CreateElement(budgetSuggestHint, budgetSuggestProps{Budget: s.Budget})),
 				actionsRow,
 			),
 			If(hasSide, Div(css.Class("budget-side-col"),
