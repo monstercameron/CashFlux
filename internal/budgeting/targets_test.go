@@ -101,3 +101,76 @@ func TestNeeded(t *testing.T) {
 		})
 	}
 }
+
+// ─── WF17: snoozing a target ────────────────────────────────────────────────
+
+func snoozeBudget(until time.Time) domain.Budget {
+	return domain.Budget{
+		ID: "b1", Period: domain.PeriodMonthly,
+		Limit:              money.New(50_000, "USD"),
+		TargetKind:         domain.TargetSetAside,
+		TargetAmount:       money.New(30_000, "USD"),
+		TargetSnoozedUntil: until,
+	}
+}
+
+func TestASnoozedTargetDemandsNothingButIsStillThere(t *testing.T) {
+	now := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	b := snoozeBudget(now.AddDate(0, 2, 0))
+	st := Status{Remaining: money.New(0, "USD")}
+	need := Needed(b, st, now, money.Zero("USD"), false)
+	if !need.Snoozed {
+		t.Fatal("a snoozed target must report itself as snoozed")
+	}
+	if need.Needed.Amount != 0 {
+		t.Errorf("needed = %d, want 0 while paused", need.Needed.Amount)
+	}
+	// The LEVEL survives, or a snooze is indistinguishable from a deletion.
+	if need.Target.Amount != 30_000 {
+		t.Errorf("target = %d, want the level kept at 30000", need.Target.Amount)
+	}
+	if need.Kind != domain.TargetSetAside {
+		t.Errorf("kind = %q, want the target kind preserved", need.Kind)
+	}
+}
+
+func TestAnExpiredSnoozeResumesOnItsOwn(t *testing.T) {
+	// Nothing has to be remembered: the target starts demanding funding again the
+	// moment the date passes.
+	now := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	b := snoozeBudget(now.AddDate(0, -1, 0))
+	need := Needed(b, Status{Remaining: money.New(0, "USD")}, now, money.Zero("USD"), false)
+	if need.Snoozed {
+		t.Error("a snooze in the past must not still be pausing the target")
+	}
+	if need.Needed.Amount != 30_000 {
+		t.Errorf("needed = %d, want the full 30000 once the snooze expires", need.Needed.Amount)
+	}
+}
+
+func TestSnoozeDoesNotHideThatATargetExists(t *testing.T) {
+	// HasTarget stays true while paused — folding the snooze into it would make a
+	// paused target vanish from every surface at once.
+	now := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	b := snoozeBudget(now.AddDate(0, 1, 0))
+	if !b.HasTarget() {
+		t.Error("a snoozed budget still HAS a target")
+	}
+	if b.TargetActive(now) {
+		t.Error("a snoozed target is not active")
+	}
+	if !b.TargetSnoozed(now) {
+		t.Error("TargetSnoozed must report the pause")
+	}
+}
+
+func TestNoSnoozeSetIsNotSnoozed(t *testing.T) {
+	now := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	b := snoozeBudget(time.Time{})
+	if b.TargetSnoozed(now) {
+		t.Error("a zero snooze date must not pause anything")
+	}
+	if !b.TargetActive(now) {
+		t.Error("an un-snoozed target with a kind is active")
+	}
+}

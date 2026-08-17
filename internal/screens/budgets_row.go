@@ -140,6 +140,44 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// boost lowering THIS period's cap to what's spent, so the leftover returns
 	// to the plan (To Assign under zero-based budgeting) instead of implying it
 	// may still be spent. Future periods are untouched (boosts are per-period).
+	// WF17: pause or resume the funding target. One action that reads what it
+	// does rather than a toggle labelled the same in both states — a control whose
+	// label does not change is one nobody trusts they have pressed.
+	snoozeLabel := uistate.T("budgets.snoozeTarget")
+	if s.Budget.TargetSnoozed(time.Now()) {
+		snoozeLabel = uistate.T("budgets.resumeTarget")
+	}
+	toggleSnooze := ui.UseEvent(Prevent(func() {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		b := s.Budget
+		now := time.Now()
+		if b.TargetSnoozed(now) {
+			b.TargetSnoozedUntil = time.Time{}
+			if err := app.PutBudget(b); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("budgets.resumedNotice", budgetTitle(s.Budget.Name, props.Category)), false)
+		} else {
+			// A month, not a date picker. The common case is "not this month", and
+			// asking somebody to choose a date for something they want to stop
+			// thinking about is the friction that sends them back to deleting it.
+			until := now.AddDate(0, 1, 0)
+			b.TargetSnoozedUntil = until
+			if err := app.PutBudget(b); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.PostNotice(uistate.T("budgets.snoozedNotice",
+				budgetTitle(s.Budget.Name, props.Category),
+				uistate.LoadPrefs().FormatDate(until)), false)
+		}
+		uistate.BumpDataRevision()
+	}))
+
 	releaseUnused := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		app := appstate.Default
@@ -457,6 +495,12 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			If(s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "budget-release-btn-"+s.Budget.ID), Title(uistate.T("budgets.releaseTitle")),
 				OnClick(releaseUnused), uistate.T("budgets.releaseAction"))),
+			// WF17: pause a funding target instead of deleting it to stop the
+			// nagging. Deleting to silence something is how settings get lost, and
+			// until now it was the only option.
+			If(s.Budget.HasTarget(), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "budget-snooze-btn-"+s.Budget.ID),
+				OnClick(toggleSnooze), snoozeLabel)),
 			If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
 			Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
 		),

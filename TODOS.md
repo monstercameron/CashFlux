@@ -187,11 +187,43 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   per-member/household dashboard emphasis.
 
 **Budgets & goals connective tissue**
-- [ ] **WF17 — Flexible budget targets.** Weekly/biweekly/semimonthly/monthly/custom periods; "set
+- [~] **WF17 — Flexible budget targets.** Weekly/biweekly/semimonthly/monthly/custom periods; "set
   aside another" vs "refill up to"; target dates & funding deadlines; per-category rollover (±);
   starting balances; last-month / 3-mo-avg presets; fixed/flexible/non-monthly types; **snooze a
   target** without deleting; priority-+due-date auto-assign; clear available-cash vs planned-income
   split. (YNAB + Lunch Money + Monarch benchmarks.)
+  — SNOOZE DONE (2026-08-17); the rest audited. Most of this bundle already exists: weekly / biweekly /
+  semimonthly / monthly / quarterly periods (`domain.Period`), set-aside vs refill-up-to vs by-date
+  target kinds with target dates (BG1), per-category rollover with a cap (BG5), and fixed / non-monthly /
+  flex types (`domain.CategoryClass`, now also read by FP-T3b).
+
+  WHAT THIS ADDS: snoozing a target without deleting it. A household skipping a sinking-fund
+  contribution for two months had exactly one way to stop the nagging — delete the target — and then had
+  to remember the amount, the kind and the date to put it back. Deleting to silence something is how
+  settings get lost, and the app made that the only option.
+
+  DESIGN. `HasTarget()` stays TRUE while snoozed: the target exists, it is paused. Folding the snooze
+  into it would make a paused target vanish from every surface at once, which is the failure the feature
+  exists to prevent. Callers that must not demand funding ask `TargetActive(now)` instead. `TargetNeed`
+  gains a `Snoozed` flag, because zero-needed and zero-because-paused are different facts and only the
+  flag tells them apart — showing "nothing needed" would read as "already met", the opposite conclusion.
+  The paused line still states the LEVEL and the resume date, so a snooze is never mistaken for a
+  deletion. It resumes on its own; nothing has to be remembered. And it snoozes for a MONTH rather than
+  opening a date picker: asking somebody to choose a date for a thing they want to stop thinking about
+  is the friction that sends them back to deleting it.
+
+  FOUND WHILE BUILDING: no sample budget had a funding target at all, so BG1's entire feature read as
+  unbuilt on a first run — the same shape of gap as the retirement accounts (FP-T1a) and the unclassified
+  categories (FP-T3b). Two sample budgets now carry targets, one of each kind, with a store test
+  asserting it stays that way.
+
+  CAVEAT, and why this is `[~]`: the engine changes have unit tests (snooze, resume, expiry, unset) and
+  the sample data has one, but I could NOT drive the surface in a browser — the target line lives behind
+  each row's details disclosure (C595) and the toggle would not open under automation. Not claiming
+  coverage I do not have.
+
+  STILL OPEN in this bundle: starting balances, last-month / 3-month-average presets, priority-plus-due-
+  date auto-assign, and the available-cash vs planned-income split.
 - [ ] **WF18 — Goal-funded spending bridge.** When money saved for a goal is spent, the budget treats
   it as *funded* spending, not overspend: link goal→account/virtual allocation, link a purchase to the
   goal, reduce the goal balance, raise that purchase's funded budget availability, preserve the

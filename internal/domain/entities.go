@@ -848,6 +848,19 @@ type Budget struct {
 	// ceiling. A carried-forward DEFICIT (envelope debt) is never clamped — the cap
 	// limits surplus, not debt. Additive.
 	RolloverCapPeriods int `json:"rolloverCapPeriods,omitempty"`
+	// TargetSnoozedUntil pauses a funding target without deleting it (WF17).
+	//
+	// The point is that the CONFIGURATION survives. A household skipping a
+	// sinking-fund contribution for two months had only one way to stop the
+	// nagging — delete the target — and then had to remember the amount, the kind
+	// and the date to put it back. Deleting to silence something is how settings
+	// get lost, and the app was making that the only option.
+	//
+	// While it is in the future the target demands no funding, but it is still
+	// THERE and still says so on screen: a snoozed target that looked absent would
+	// be indistinguishable from one somebody deleted by accident. It resumes on
+	// its own; nothing has to be remembered.
+	TargetSnoozedUntil time.Time `json:"targetSnoozedUntil,omitempty"`
 }
 
 // IsSaving reports whether this budget measures money set aside rather than
@@ -856,7 +869,24 @@ type Budget struct {
 func (b Budget) IsSaving() bool { return b.Direction.IsSaving() }
 
 // HasTarget reports whether the budget has a funding target beyond its limit (BG1).
+//
+// A SNOOZED target still counts as having one — the target exists, it is simply
+// paused. Callers that must not demand funding right now ask TargetActive
+// instead. Folding the snooze in here would make a paused target vanish from
+// every surface at once, which is the failure this whole feature exists to
+// avoid.
 func (b Budget) HasTarget() bool { return b.TargetKind != TargetNone && b.TargetKind != "" }
+
+// TargetSnoozed reports whether the target is paused as of now.
+func (b Budget) TargetSnoozed(now time.Time) bool {
+	return !b.TargetSnoozedUntil.IsZero() && now.Before(b.TargetSnoozedUntil)
+}
+
+// TargetActive reports whether the budget is demanding funding right now — it
+// has a target and that target is not currently snoozed (WF17).
+func (b Budget) TargetActive(now time.Time) bool {
+	return b.HasTarget() && !b.TargetSnoozed(now)
+}
 
 // PeriodNote returns the journal note recorded for the period starting on the given date
 // (empty if none) — the per-period annotation shown in that period's row expand (BG16).

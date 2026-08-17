@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A funding target can be paused instead of deleted (WF17).** Skipping a contribution for a month or
+  two used to mean deleting the target and remembering the amount, the kind and the date to put it back.
+  A paused target still shows what it is paused at and when it resumes — it comes back on its own.
+
+### Fixed
+- **The sample data now demonstrates funding targets.** No sample budget had one, so the feature read as
+  unbuilt on a first run.
+
+### Added
 - **Saved views say where they stand and what normal looks like (WF8, partial).** A view with an amount
   alert now reports how far through it you are before you cross it, not only afterwards — and, when
   there are enough completed months to say so, how this period compares with your usual. It stays quiet

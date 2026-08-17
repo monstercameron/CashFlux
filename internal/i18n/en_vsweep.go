@@ -736,6 +736,13 @@ var vSweepKeys = Catalog{
 	"savedViews.usualAbove":    "%s more than usual, against your last %d months",
 	"savedViews.usualBelow":    "%s less than usual, against your last %d months",
 
+	// WF17 — pausing a funding target without losing it.
+	"budgets.targetSnoozed":   "Target of %s paused until %s",
+	"budgets.snoozeTarget":    "Pause this target for a month",
+	"budgets.resumeTarget":    "Resume this target now",
+	"budgets.snoozedNotice":   "Paused %s's target until %s. It comes back on its own — nothing to remember.",
+	"budgets.resumedNotice":   "%s's target is active again.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

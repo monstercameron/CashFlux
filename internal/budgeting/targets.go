@@ -22,6 +22,14 @@ type TargetNeed struct {
 	// Needed is the amount still needed to fund the target this period, never
 	// negative. Zero when the target is already met (or there is no target).
 	Needed money.Money
+	// Snoozed says the target exists but is paused right now (WF17), so a caller
+	// can say "paused until March" rather than showing nothing needed and letting
+	// the reader conclude the target is met.
+	//
+	// Needed is zero while snoozed, which is the correct arithmetic — nothing is
+	// being demanded — but zero-needed and zero-because-paused are different
+	// facts, and only this flag tells them apart.
+	Snoozed bool
 }
 
 // clampNonNeg returns m when it is positive, otherwise a zero of the same currency.
@@ -59,6 +67,14 @@ func Needed(budget domain.Budget, status Status, from time.Time, linkedMonthly m
 	if !budget.HasTarget() {
 		need.Target = money.Zero(cur)
 		need.Funded = money.Zero(cur)
+		return need
+	}
+	if budget.TargetSnoozed(from) {
+		// A paused target demands nothing this period, but its LEVEL is kept so the
+		// surface can still say what it is paused at. Zeroing the target too would
+		// make a snooze indistinguishable from a deletion, which is the exact
+		// confusion the feature exists to prevent.
+		need.Snoozed = true
 		return need
 	}
 

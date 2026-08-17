@@ -895,11 +895,17 @@ func SampleDatasetAt(now time.Time) Dataset {
 		BalanceSnapshots: snapshots,
 		Budgets: []domain.Budget{
 			{ID: "bud-dining", Name: "Dining", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catDining, Period: domain.PeriodMonthly, Limit: usd(30000)},
-			{ID: "bud-groceries", Name: "Groceries", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catGroceries, Period: domain.PeriodMonthly, Limit: usd(45000), Rollover: true},
+			// A refill-up-to target: the envelope is topped back to $450 each month,
+			// which is what a rollover budget with a ceiling actually means.
+			{ID: "bud-groceries", Name: "Groceries", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catGroceries, Period: domain.PeriodMonthly, Limit: usd(45000), Rollover: true,
+				TargetKind: domain.TargetRefillUpTo, TargetAmount: usd(45000)},
 			{ID: "bud-transport", Name: "Transportation", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTransport, Period: domain.PeriodMonthly, Limit: usd(130000)},
 			{ID: "bud-baby", Name: "Baby & Childcare", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catBaby, Period: domain.PeriodMonthly, Limit: usd(40000)},
 			{ID: "bud-shopping", Name: "Shopping", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catShopping, Period: domain.PeriodMonthly, Limit: usd(20000)},
-			{ID: "bud-subs", Name: "Subscriptions", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catSubs, Period: domain.PeriodMonthly, Limit: usd(4000)},
+			// A set-aside target: a fixed amount put by every month regardless of what
+			// is left, which is the other shape a target comes in.
+			{ID: "bud-subs", Name: "Subscriptions", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catSubs, Period: domain.PeriodMonthly, Limit: usd(4000),
+				TargetKind: domain.TargetSetAside, TargetAmount: usd(4000)},
 			{ID: "bud-vices", Name: "Everyday extras", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catVices, Period: domain.PeriodMonthly, Limit: usd(6000)},
 			{ID: "bud-fun", Name: "Entertainment", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catEntertain, Period: domain.PeriodWeekly, Limit: usd(2500)},
 			{ID: "bud-travel", Name: "Travel", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTravel, Period: domain.PeriodQuarterly, Limit: usd(60000)},

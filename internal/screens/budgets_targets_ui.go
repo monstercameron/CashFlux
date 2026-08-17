@@ -147,6 +147,15 @@ func budgetTargetLine(s budgeting.Status) ui.Node {
 	remaining := fmtMoney(need.Needed)
 	pr := uistate.LoadPrefs()
 
+	// WF17: a paused target says it is paused, at what level, and until when. The
+	// alternative — showing "nothing needed" — is indistinguishable from a target
+	// that is already met, which is the opposite reading.
+	if need.Snoozed {
+		return Span(ClassStr("budget-sub "+tw.ColorClass("text-dim")),
+			Attr("data-testid", "budget-target-snoozed-"+b.ID),
+			uistate.T("budgets.targetSnoozed", target, pr.FormatDate(b.TargetSnoozedUntil)))
+	}
+
 	var text string
 	switch b.TargetKind {
 	case domain.TargetRefillUpTo:

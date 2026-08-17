@@ -157,3 +157,25 @@ func TestSampleDatasetIntegrity(t *testing.T) {
 }
 
 func idSet(capacity int) map[string]bool { return make(map[string]bool, capacity) }
+
+// A feature with no sample data to show it reads as unbuilt on a first run.
+// Funding targets (BG1) shipped with nothing demonstrating them, and the snooze
+// work in WF17 surfaced that: there was no budget whose target could be paused.
+func TestSampleBudgetsDemonstrateFundingTargets(t *testing.T) {
+	ds := SampleDataset()
+	kinds := map[domain.TargetKind]int{}
+	for _, b := range ds.Budgets {
+		if b.HasTarget() {
+			kinds[b.TargetKind]++
+			if b.TargetAmount.Amount <= 0 {
+				t.Errorf("budget %q has a target kind but no amount — it would render as a target of nothing", b.ID)
+			}
+		}
+	}
+	if kinds[domain.TargetRefillUpTo] == 0 {
+		t.Error("no sample budget shows a refill-up-to target")
+	}
+	if kinds[domain.TargetSetAside] == 0 {
+		t.Error("no sample budget shows a set-aside target")
+	}
+}

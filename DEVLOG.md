@@ -1,3 +1,36 @@
+## 2026-08-17 - deleting to silence something is how settings get lost (WF17)
+
+Most of WF17 exists: weekly through quarterly periods, three target kinds with target dates, rollover
+with a cap, fixed/non-monthly/flex types. Fifth audit-first ticket this week.
+
+What was missing is small and, I think, the most human item in the bundle: pausing a target without
+deleting it. A household skipping a sinking-fund contribution for two months had exactly one way to stop
+the nagging - delete the target - and then had to remember the amount, the kind and the date to put it
+back. Deleting to silence something is how settings get lost, and the app made that the only option.
+
+The design decision that matters is what `HasTarget()` does. It stays TRUE while snoozed. The target
+exists; it is paused. Folding the snooze into it would make a paused target vanish from every surface at
+once - which is precisely the failure this feature exists to prevent, arrived at from the other
+direction.
+
+`TargetNeed` gains a `Snoozed` flag for the same reason. Needed is zero while paused, and that is the
+correct arithmetic, but zero-needed and zero-because-paused are different facts. Without the flag the
+row would read "nothing needed", which a person reads as "already met" - the opposite conclusion.
+
+The paused line keeps the target LEVEL and names the resume date, so a snooze can never be mistaken for
+a deletion. And it pauses for a month rather than opening a date picker: asking somebody to choose a
+date for a thing they want to stop thinking about is exactly the friction that sends them back to
+deleting it.
+
+Found while building: no sample budget had a funding target at all, so BG1's entire feature read as
+unbuilt on a first run. Third time this week - retirement accounts, unclassified categories, now
+targets. A store test now asserts the sample keeps one of each kind, because the finding keeps
+recurring and a test is cheaper than finding it a fourth time.
+
+Left in progress, same as WF8 yesterday and for the same reason: the engine changes have tests and the
+sample has one, but the target line lives behind each row's details disclosure and the toggle would not
+open under automation. I am not going to write "verified in a browser" for something I could not open.
+
 ## 2026-08-17 - a monitor needs a baseline, not just a limit (WF8, partial)
 
 Saved views already had a scope, a drill to the contributing transactions, and an optional amount
