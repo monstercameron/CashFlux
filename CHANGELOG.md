@@ -69,6 +69,11 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **A goal's trajectory can tell you the number that would fix it (SM-13).** The pace rail already
+  projects where a goal lands; with Smart+ on, one line under it says what monthly amount would land
+  it on the date you actually wanted. The model is handed the finished projection — saved, planned
+  monthly, projected landing, target date — and asked for the sentence, never for the arithmetic, so
+  every figure in the answer is one already on the card.
 - **One budget can be set to what you actually spend, in one click (SM-12).** Auto-budget proposes
   limits for every category at once, behind a slider and a review step — the right shape for setting
   a budget set up, and the wrong shape for the commoner moment: one budget that is obviously

@@ -251,7 +251,42 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 		),
 		etaNode,
 		scLine,
+		// SM-13: one Smart+ line on top of the deterministic ETA — what monthly
+		// amount would actually land this on its target date. The app has already
+		// done the projection; the model is handed the finished figures and asked
+		// for the sentence, never for the arithmetic.
+		ui.CreateElement(smartExplainBlock, smartExplainProps{
+			ID:    "goalpace-" + g.ID,
+			Code:  goalPaceCode,
+			Kind:  explainGoalPace,
+			Label: uistate.T("sm13.action"),
+			Title: g.Name,
+			Body:  goalPaceContext(g, covered, monthly.Amount, res),
+		}),
 	)
+}
+
+// goalPaceCode gates SM-13.
+const goalPaceCode = "SMART-G22"
+
+// goalPaceContext formats the projection the model is asked to phrase: what is
+// saved, what is planned monthly, where that lands, and what date was wanted.
+// Every figure is one the card already displays, so the sentence cannot introduce
+// a number the user has no way to check.
+func goalPaceContext(g domain.Goal, coveredMinor, monthlyMinor int64, res goaltrajectory.Result) string {
+	cur := g.TargetAmount.Currency
+	s := "Saved so far: " + fmtMoney(money.New(coveredMinor, cur)) + "\n"
+	s += "Target: " + fmtMoney(g.TargetAmount) + "\n"
+	s += "Planned monthly contribution: " + fmtMoney(money.New(monthlyMinor, cur)) + "\n"
+	if res.Reachable {
+		s += "Projected to land: " + res.ProjectedDate.Format("January 2006") + "\n"
+	} else {
+		s += "Not reachable at the current contribution.\n"
+	}
+	if !g.TargetDate.IsZero() {
+		s += "Target date: " + g.TargetDate.Format("January 2006") + "\n"
+	}
+	return s
 }
 
 // monthsBetween returns the whole-month difference from `from` to `to` (positive

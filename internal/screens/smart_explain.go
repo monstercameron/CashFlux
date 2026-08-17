@@ -17,7 +17,8 @@ import (
 )
 
 // smart_explain.go is the shared "explain this one thing" affordance behind SM-5
-// (why did this balance move?) and SM-7 (what does this alert mean?).
+// (why did this balance move?), SM-7 (what does this alert mean?) and SM-13 (what
+// would land this goal on its date?).
 //
 // Both are the same shape: the app has already detected something and stated it
 // deterministically, and the paid tier adds context and a next step for THAT one
@@ -40,6 +41,8 @@ const (
 	explainAlert explainKind = "alert"
 	// explainBalance explains an unusual balance move (SM-5).
 	explainBalance explainKind = "balance"
+	// explainGoalPace adds one line to a goal's trajectory (SM-13).
+	explainGoalPace explainKind = "goalpace"
 )
 
 // smartExplainProps configures one explain affordance.
@@ -92,6 +95,8 @@ func smartExplainBlock(props smartExplainProps) ui.Node {
 		switch props.Kind {
 		case explainBalance:
 			req = smartai.BalanceAnomaly(strings.TrimSpace(props.Title + "\n" + props.Body + "\n" + props.Context))
+		case explainGoalPace:
+			req = smartai.GoalPace(strings.TrimSpace(props.Title + "\n" + props.Body + "\n" + props.Context))
 		default:
 			req = smartai.ExplainAlert(props.Title, props.Body, props.Context)
 		}
