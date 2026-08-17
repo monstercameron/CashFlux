@@ -771,6 +771,10 @@ var vSweepKeys = Catalog{
 	"allocMarginal.needAmount":  "Enter an amount above and this will price each destination.",
 	"allocMarginal.note":        "Interest avoided on debt, interest earned on savings. A goal or an emergency fund has real value that is not interest, so no figure is invented for it.",
 
+	// WF11 — money counted twice: a transfer entered as two transactions.
+	"rpta.doubleCounted":    "%d movements totalling %s look like transfers recorded as two separate transactions — counted once as spending and once as income, so both figures above are overstated. Marking them as transfers fixes it.",
+	"rpta.doubleCountedOne": "A movement of %s looks like a transfer recorded as two separate transactions — counted once as spending and once as income, so both figures above are overstated. Marking it as a transfer fixes it.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

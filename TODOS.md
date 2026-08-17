@@ -258,9 +258,44 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   STILL OPEN in this bundle: the wider constraint set (keep N months of cash, never miss minimums, hit a
   goal by date, keep utilization under 30%), an upcoming-annual-bill destination, and the lock-and-rerun
   loop wired into the allocate surface — `marginal.Lock` exists but nothing calls it yet.
-- [ ] **WF11 — Transaction relationship graph.** Auto-connect transfers, card payments, refunds↔
+- [~] **WF11 — Transaction relationship graph.** Auto-connect transfers, card payments, refunds↔
   purchases, reimbursements, split purchases, duplicate imports, receipt↔payment, recurring series —
   to prevent double-counting and make unusual activity legible.
+  — DOUBLE-COUNT DETECTION DONE (2026-08-17), which is the ticket's stated PURPOSE. Audited first, and
+  most of the relationships already exist: `domain.TxnLink` records refund-pairs, order-groups (split
+  purchases), bill-matches (recurring series) and event links, transfers are modelled natively, and
+  `internal/dedupe` finds duplicate imports. Eighth audit-first ticket.
+
+  WHAT NOTHING DID was look for the same money counted twice. New pure `internal/doublecount` finds a
+  TRANSFER ENTERED AS TWO TRANSACTIONS: $400 leaves checking and arrives in savings, recorded as an
+  expense and an income rather than one transfer. Nothing left the household, but the ledger now shows
+  $400 of spending AND $400 of income — and every report built on either is wrong, which is why the
+  finding is surfaced in the annual report's problems section rather than somewhere quieter.
+
+  IT FOUND A REAL ONE ON THE SAMPLE: a $210 movement, which the report now names.
+
+  DELIBERATELY NOT REPEATED CHARGES, and that was the interesting decision. I built that half first, then
+  found `internal/dedupe` already owns the question — and the codebase calls its rule "the app's
+  CANONICAL duplicate definition", shared by the duplicate flags, the Duplicates page and the
+  assistant's tool. A second, slightly different rule here (±3 days rather than same-date) would
+  eventually disagree with it about the same two rows, and two screens contradicting each other about
+  whether something is a duplicate is worse than either rule alone. Deleted it. A mirror pair is
+  genuinely invisible to dedupe: different accounts, opposite signs, usually different descriptions.
+
+  IT REPORTS AND NEVER MERGES. Two identical coffees are indistinguishable from one coffee entered
+  twice; merging on a guess deletes a real transaction some of the time, and a tool that occasionally
+  eats data is worse than one that occasionally asks a question.
+
+  Currencies are never converted to compare — a match invented out of an exchange rate is not a match —
+  and each transaction is claimed by at most one finding, or three mirrored movements would produce
+  overlapping pairs and read as a catastrophe.
+
+  Third plural seam of the week fixed on the way ("1 movement(s)"), same treatment as FP-T1f and WF12.
+
+  VERIFIED IN A BROWSER: 5/5.
+
+  STILL OPEN in this bundle: reimbursement links, receipt↔payment links, and a graph VIEW that shows the
+  relationships together rather than one finding at a time.
 - [~] **WF12 — Recurring-charge lifecycle.** Turn recurring into a full workflow: suggested-awaiting-
   review, missing expected payment, amount/date changed, duplicate/overlapping subs, annualized cost,
   renewal/trial-ending notice, cancellation intent + checklist + reference number, "expect one final

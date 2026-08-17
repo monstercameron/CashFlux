@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The report flags money counted twice (WF11).** A transfer entered as two separate transactions shows
+  up as both spending and income, quietly overstating every figure built on either. The annual report now
+  names those movements, says which totals are affected, and says what fixes it. It reports rather than
+  merges — two identical charges are indistinguishable from one charge entered twice, and a tool that
+  guesses would sometimes delete real data.
+
+### Added
 - **Allocate prices each destination in money per year (WF10).** Beneath the ranking, every place your
   spare cash could go now shows what another dollar there actually earns or avoids — and says how far
   ahead the best option is, including when the gap is small enough that the choice barely matters.

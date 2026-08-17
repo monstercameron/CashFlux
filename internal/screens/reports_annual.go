@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/doublecount"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -1611,6 +1612,20 @@ func Reports() ui.Node {
 	}
 	if health.NegativeCashFlow {
 		problemBits = append(problemBits, P(css.Class("rpta-prob-line", "rpta-tone-down"), uistate.T("rpta.negCashFlow")))
+	}
+	// WF11: money counted twice. A transfer entered as two separate transactions
+	// shows up as both spending and income, so every figure in this report built
+	// on either side is wrong — which makes the report itself the right place to
+	// say so.
+	if dc := doublecount.Find(scopedTxns); dc.Any() {
+		// One gets its own wording. "1 movement(s)" is the third plural seam this
+		// week, and it makes a reader trust a finding less than it deserves.
+		line := uistate.T("rpta.doubleCounted", len(dc.Findings), fmtMinor(dc.MirrorMinor))
+		if len(dc.Findings) == 1 {
+			line = uistate.T("rpta.doubleCountedOne", fmtMinor(dc.MirrorMinor))
+		}
+		problemBits = append(problemBits, P(css.Class("rpta-prob-line", "rpta-tone-down"),
+			Attr("data-testid", "rpta-doublecount"), line))
 	}
 	// Money that bought nothing: the year's fee + interest charges, itemized.
 	if costs.FeeCount+costs.InterestCount > 0 {

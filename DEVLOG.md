@@ -1,3 +1,38 @@
+## 2026-08-17 - deleting the half I had already written (WF11)
+
+WF11 lists eight kinds of relationship to auto-connect. Most already exist: refund pairs, order groups,
+bill matches, event links, native transfers, duplicate imports. Eighth audit-first ticket this week.
+
+What nothing did was the thing the ticket says it is FOR - "to prevent double-counting". So that is what
+I built: detection of a transfer entered as two separate transactions. $400 leaves checking and arrives
+in savings, recorded as an expense and an income rather than one transfer. Nothing left the household,
+but the ledger now shows $400 of spending and $400 of income, and every report built on either is wrong.
+It found a real one on the sample - $210.
+
+The decision worth recording is what I deleted.
+
+I originally built two detectors: mirrored pairs AND repeated charges in one account. Then I found
+`internal/dedupe`, whose rule the codebase explicitly calls "the app's CANONICAL duplicate definition",
+shared by the duplicate flags, the Duplicates page and the assistant's tool.
+
+My rule was slightly different - a three-day window rather than same-date - which means it would
+eventually disagree with the canonical one about the same two rows. Two screens contradicting each other
+about whether something is a duplicate is worse than either rule alone, and the disagreement would show
+up long after anybody remembered there were two rules.
+
+So I deleted the half I had already written and tested. The mirror half is genuinely invisible to
+dedupe - different accounts, opposite signs, usually different descriptions - and that is the whole of
+what this package now does.
+
+It reports and never merges. Two identical coffees on the same day are indistinguishable from one coffee
+entered twice; the ledger cannot tell and neither can I. Merging on a guess deletes a real transaction
+some of the time, and a tool that occasionally eats data is worse than one that occasionally asks a
+question.
+
+Third plural seam of the week on the way out ("1 movement(s)"), same fix as FP-T1f and WF12. Three in one
+week suggests the catalog wants a plural helper rather than three one-off keys, which I have not built
+because I would be guessing at the shape - but it is worth someone deciding rather than a fourth key.
+
 ## 2026-08-17 - a rank is not a comparison (WF10)
 
 The allocation engine already ranked destinations, applied constraints, split a pot and explained its
