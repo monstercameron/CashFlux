@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -667,6 +668,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			reconThrough[ac.ID] = th
 		}
 	}
+	// Account id → name, so a transfer row can name its counterparty rather than
+	// just claim to be a transfer (C675).
+	accName := make(map[string]string)
+	for _, a := range props.App.Accounts() {
+		accName[a.ID] = a.Name
+	}
 	// Member id → name, for the optional "User" column (the frame carries no member).
 	memberName := make(map[string]string)
 	for _, m := range props.App.Members() {
@@ -676,6 +683,18 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	catName := make(map[string]string)
 	for _, c := range props.App.Categories() {
 		catName[c.ID] = c.Name
+	}
+	// C672: rows that look like transfers but were never linked. They are counting
+	// as income or spending right now, so the ledger marks them instead of leaving
+	// the reader to notice that "Transfer to Savings" is sitting in their spending.
+	// Computed over the RENDERED rows only — this is a display mark, and scanning
+	// the whole ledger on every render to decorate 25 rows would cost more than it
+	// says. The mark never removes the row from a total; only a person can do that.
+	suspectTransfer := make(map[string]bool)
+	for _, t := range props.Shown {
+		if _, ok := txnclassify.Suspected(t, catName[t.CategoryID]); ok {
+			suspectTransfer[t.ID] = true
+		}
 	}
 	// openLink opens the payment-link flip modal (shell-root host) for a transaction,
 	// pre-set to Bill or Subscription mode. The modal owns the actual write, so the row
@@ -916,6 +935,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			HasNote:             txByID[rid].Note != "",
 			HasSplits:           txByID[rid].HasSplits(),
 			IsTransfer:          txByID[rid].IsTransfer(),
+			TransferWith:        accName[txByID[rid].TransferAccountID],
+			IsDebtPayment:       txByID[rid].BillAccountID != "",
+			SuspectTransfer:     suspectTransfer[rid],
 			IsIncome:            txByID[rid].IsIncome(),
 			IsRefund:            refundSide[rid],
 			IsRefunded:          refundedSide[rid],
@@ -1188,6 +1210,22 @@ type txnFrameRowProps struct {
 	HasSplits   bool
 	IsTransfer  bool
 	OnOpenSplit func(txnID string)
+	// C675: what KIND of movement this row is, and who the far side is, so the
+	// ledger can say it rather than leave the reader to infer it from a colour.
+	// A transfer's amount is signed account-relative — the same move is negative
+	// on one leg and positive on the other — so income-green and spending-red are
+	// actively misleading on these rows, and the badge is what replaces them.
+	//
+	// TransferWith is the counterparty's display name ("" when it no longer
+	// resolves); IsDebtPayment is true when BillAccountID is set, which is a
+	// different claim from "the counterparty is a debt" — see C677.
+	TransferWith  string
+	IsDebtPayment bool
+	// C672: this row is NOT structurally a transfer but looks like one — filed
+	// under a transfer category, or described as a move. It is counting as income
+	// or spending right now. Flagged rather than hidden: the category alone is not
+	// evidence enough to remove someone's money from their totals.
+	SuspectTransfer bool
 	// OnReceiptSplit (XC11) opens the "Split from receipt…" flow: pick a receipt
 	// image, vision reads its line items, and a proposed breakdown pre-fills the
 	// split editor for review. Gated like OnOpenSplit (hidden on transfer legs).
@@ -1351,6 +1389,41 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 			Attr("aria-label", uistate.T("acctxn.legendCleared")), "✓")
 	}
 
+	// C675: what this row IS, said in words beside the description.
+	//
+	// A transfer's amount is signed account-relative — the very same move reads
+	// negative on the leg it left and positive on the leg it reached — so the
+	// ledger's income-green / spending-red is not merely unhelpful here, it argues
+	// the opposite of the truth on one of the two rows. The badge is what carries
+	// the meaning instead of the colour, and it names the far side, because "this
+	// is a transfer" leaves the obvious next question unanswered.
+	//
+	// Debt payment is a SEPARATE badge from Transfer, not a stronger flavour of it
+	// (C677): pointing at a card says the money did not leave the household, while
+	// counting it as a payment is a claim about which debt it settles, and a row
+	// can be the first without being the second.
+	var classifyBadge ui.Node = Fragment()
+	switch {
+	case props.IsDebtPayment:
+		label := uistate.T("transactions.badgeDebtPayment")
+		classifyBadge = Span(css.Class("badge txn-badge-debt"), Attr("data-testid", "txn-debtpay-badge"),
+			Attr("title", uistate.T("transactions.badgeDebtPaymentTitle", firstNonEmpty(props.TransferWith, label))),
+			"⇄ "+label)
+	case props.IsTransfer:
+		title := uistate.T("transactions.badgeTransferTitle")
+		if props.TransferWith != "" {
+			title = uistate.T("transactions.badgeTransferWithTitle", props.TransferWith)
+		}
+		classifyBadge = Span(css.Class("badge txn-badge-transfer"), Attr("data-testid", "txn-transfer-badge"),
+			Attr("title", title), "⇄ "+uistate.T("transactions.badgeTransfer"))
+	case props.SuspectTransfer:
+		// C672: counting right now, and probably should not be. Phrased as a
+		// question because the app does not know — only the person does.
+		classifyBadge = Span(css.Class("badge txn-badge-suspect"), Attr("data-testid", "txn-suspect-transfer-badge"),
+			Attr("title", uistate.T("transactions.badgeSuspectTransferTitle")),
+			"? "+uistate.T("transactions.badgeSuspectTransfer"))
+	}
+
 	// XC1/XC2: link badges beside the description, mirroring the classic view.
 	var linkBadge ui.Node = Fragment()
 	switch {
@@ -1459,6 +1532,7 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 					Attr("aria-label", receiptCountLabel(props.Receipts)), Title(receiptCountLabel(props.Receipts)),
 					Attr("data-testid", "txn-row-receipt"), OnClick(view),
 					uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
+				classifyBadge,
 				linkBadge,
 				// SM-8 / SM-10: the row's own flag (a likely duplicate, or a charge
 				// unusually large for its category). Own component — it owns a click hook.

@@ -935,7 +935,18 @@ func classifyField(app *appstate.App, txn domain.Transaction, selected string, d
 		}
 	}
 
+	// C673: a titled GROUP, not a lone field. "Other account this money moved to or
+	// from" named a field and left the reader to work out what filling it in would
+	// do — so it read as optional metadata sitting beside the category, which is
+	// precisely how a row ends up filed under a category called "Transfer" while
+	// still counting as spending. The heading names the action; the picker is the
+	// question that action needs answered; the sign note is here because the minus
+	// on this leg is not evidence of spending.
 	return Div(css.Class("txn-classify-field", tw.FlexCol, tw.Gap1), Attr("data-testid", "txn-edit-classify-field"),
+		Attr("role", "group"), Attr("aria-label", uistate.T("transactions.classifyGroup")),
+		H4(css.Class("set-label"), Attr("data-testid", "txn-edit-classify-heading"),
+			uistate.T("transactions.classifyGroup")),
+		Span(css.Class("muted", tw.Text12), uistate.T("transactions.classifyGroupHint")),
 		uiw.FormField(uistate.T("transactions.classifyLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   opts,
@@ -946,6 +957,11 @@ func classifyField(app *appstate.App, txn domain.Transaction, selected string, d
 			})),
 		effect,
 		Span(css.Class("muted", tw.Text12), uistate.T("transactions.classifyHint")),
+		// Shown only once the row IS a transfer: before that there is no leg to
+		// explain, and the note would be answering a question nobody asked.
+		If(selected != "", Span(css.Class("muted", tw.Text12),
+			Attr("data-testid", "txn-edit-classify-sign"),
+			uistate.T("transactions.classifySignHint"))),
 		debtClaim,
 	)
 }
