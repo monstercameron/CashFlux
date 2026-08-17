@@ -821,7 +821,7 @@ func globalSettingsForm() uic.Node {
 		// Keep the dashboard window's week boundaries in lockstep with the
 		// week-start preference (no-op for any non-week-start change).
 		if w := periodAtom.Get(); w.WeekStart != p.WeekStartWeekday() {
-			periodAtom.Set(w.WithWeekStart(p.WeekStartWeekday()))
+			uistate.SetPeriod(periodAtom, w.WithWeekStart(p.WeekStartWeekday()))
 		}
 	}
 	onDateStyle := uic.UseEvent(func(e uic.Event) {
@@ -851,7 +851,7 @@ func globalSettingsForm() uic.Node {
 		curKey, curModel = s.OpenAIKey, s.OpenAIModel
 	}
 	aiKey := uic.UseState(curKey)
-	onKey := uic.UseEvent(func(v string) {
+	onKey := func(v string) {
 		aiKey.Set(v)
 		if a := appstate.Default; a != nil {
 			s := a.Settings()
@@ -874,7 +874,7 @@ func globalSettingsForm() uic.Node {
 		// A newly configured key can now drive the lock-screen quote-of-the-day —
 		// generate + cache it right away so the user doesn't have to wait for a reload.
 		refreshDailyLockQuote()
-	})
+	}
 	onModel := uic.UseEvent(func(e uic.Event) {
 		if a := appstate.Default; a != nil {
 			s := a.Settings()
@@ -890,14 +890,14 @@ func globalSettingsForm() uic.Node {
 		curBaseURL = a.Settings().OpenAIBaseURL
 	}
 	baseURLState := uic.UseState(curBaseURL)
-	onBaseURL := uic.UseEvent(func(v string) {
+	onBaseURL := func(v string) {
 		baseURLState.Set(v)
 		if a := appstate.Default; a != nil {
 			s := a.Settings()
 			s.OpenAIBaseURL = strings.TrimSpace(v)
 			_ = a.PutSettings(s)
 		}
-	})
+	}
 	// The model picker is populated live from OpenAI's /v1/models endpoint (no
 	// hardcoded list): fetch the chat-capable ids with the user's key, fall back to
 	// the built-in defaults offline or before it loads. Loaded once on open and via
@@ -929,10 +929,10 @@ func globalSettingsForm() uic.Node {
 	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
 	// access); kept on-device in its own localStorage entry.
 	wsKey := uic.UseState(uistate.LoadWebSearchKey())
-	onWsKey := uic.UseEvent(func(v string) {
+	onWsKey := func(v string) {
 		wsKey.Set(v)
 		uistate.PersistWebSearchKey(v)
-	})
+	}
 	curMethod := budgeting.MethodSimple
 	if a := appstate.Default; a != nil {
 		curMethod = budgeting.ParseMethodology(a.Settings().BudgetMethodology)

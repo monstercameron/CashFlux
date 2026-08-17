@@ -599,6 +599,22 @@ and every commit updates this file under `Unreleased`.
   wrong, and rewriting the same figure would log a change that did not happen.
 
 ### Fixed
+- **Text fields keep what you type, everywhere — the shared field component.** The composer fix was
+  the same bug the whole app has: `value` is a special property the reconciler always writes, diffed
+  against the *previous render's* prop rather than against the box, so any field bound to
+  per-keystroke state gets an older string written back whenever a render resolves after the next
+  key. Confirmed on Settings before the fix: the OpenAI API key kept 53 of 59 characters, the API
+  endpoint 44, the web-search key 35 — and a mangled credential reads as an auth failure rather than
+  as a typing bug.
+
+  `uiw.TextInput` / `NumberInput` / `TextAreaInput` / `MoneyInput` / `Combobox` now all render through
+  one component that takes `value` away from the reconciler entirely and pushes it in from a layout
+  effect instead. The rule that makes it correct: a value the user typed at *any* point since the
+  last programmatic write is an echo, however stale, and is never written back. Comparing against
+  only the most recent keystroke is not enough — state lands a render behind the keyboard, so the
+  render carrying "Th" arrives when the box already says "The", and writing there rebuilds the
+  original bug inside its own fix (measured: still 55 of 59). The Settings AI credential fields are
+  migrated; the rest of the app's fields follow.
 - **The assistant's composer ate most of what you typed.** Typing a 76-character question into the
   Ask box landed 13 characters, scrambled — "How much did we spend on groceries…" arrived as
   "Hweedih ofore" — and typing into the middle of a draft jumped the caret to the end and inserted

@@ -127,7 +127,7 @@ func credentialForm(props credentialFormProps) uic.Node {
 	onUser := uic.UseEvent(func(v string) { userS.Set(v) })
 	onPass := uic.UseEvent(func(v string) { newPassS.Set(v) })
 	onURL := uic.UseEvent(func(v string) { urlS.Set(v) })
-	onNotes := uic.UseEvent(func(v string) { notesS.Set(v) })
+	onNotes := func(v string) { notesS.Set(v) }
 	cancel := uic.UseEvent(Prevent(func() { props.OnDone() }))
 
 	save := uic.UseEvent(Prevent(func() {

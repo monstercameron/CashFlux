@@ -111,7 +111,7 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	ledgerAcctS := ui.UseState(g.AccountID)
 	notesS := ui.UseState(g.Notes)
 	priorityS := ui.UseState(strconv.Itoa(g.Priority))
-	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
+	onNotes := func(v string) { notesS.Set(v) }
 	errS := ui.UseState("")
 	kindS := ui.UseState(kindInit)
 	cadenceS := ui.UseState(cadenceInit)

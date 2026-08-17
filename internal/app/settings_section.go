@@ -102,9 +102,9 @@ type settingsRightProps struct {
 	AiOn           bool
 	OnAiToggle     func(bool)
 	AiKey          string
-	OnKey          uic.Handler // UseEvent
-	KeySet         bool        // a cloud AI key is stored server-side (§7.11)
-	OnRemoveKey    uic.Handler // UseEvent — clears the server-side key
+	OnKey          func(string) // the field owns the hook (see uiw.fieldCore)
+	KeySet         bool         // a cloud AI key is stored server-side (§7.11)
+	OnRemoveKey    uic.Handler  // UseEvent — clears the server-side key
 	OnRememberKey  func(bool)
 	OnModel        uic.Handler // UseEvent
 	CurModel       string
@@ -113,10 +113,10 @@ type settingsRightProps struct {
 	ModelsLoading  bool
 	ModelsErr      string
 	WsKey          string
-	OnWsKey        uic.Handler // UseEvent
+	OnWsKey        func(string)
 	// AG18 — OpenAI-compatible base-URL override (Ollama/LM Studio/proxy).
 	BaseURL   string
-	OnBaseURL uic.Handler // UseEvent
+	OnBaseURL func(string)
 	// Cloud & server: owned entirely by CloudConnectionPane (cloudtab.go) now —
 	// see settingsCloudPane's doc comment.
 	// Data
@@ -272,7 +272,9 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		// AI is enabled by the presence of an API key (the no-key hint below is the
 		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
 		// to off on every open, so it was removed to avoid a misleading dead control (§6.12).
-		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.aiKeyPlaceholder")), Placeholder(uistate.T("settings.aiKeyPlaceholder")), Value(p.AiKey), OnInput(p.OnKey)),
+		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.AiKey, OnInput: p.OnKey,
+			AriaLabel: uistate.T("settings.aiKeyPlaceholder"), Placeholder: uistate.T("settings.aiKeyPlaceholder"),
+			Rules: []any{tw.Mt045}, Extra: []any{Type("password")}}),
 		// C292: always disclose where the key goes (BYOK, device-local, direct to OpenAI),
 		// not only the conditional no-key hint below — the trust statement shouldn't hide
 		// the moment a key is entered.
@@ -307,15 +309,17 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		// AG18: point the app at any OpenAI-compatible endpoint (a local model or a
 		// proxy) — the honest "no key leaves the house" path. Blank = OpenAI direct.
 		H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
-		Input(css.Class("set-input", tw.Mt045), Type("text"), Attr("spellcheck", "false"),
-			Attr("aria-label", uistate.T("settings.aiBaseUrlTitle")), Attr("data-testid", "settings-ai-base-url"),
-			Placeholder(uistate.T("settings.aiBaseUrlPlaceholder")), Value(p.BaseURL), OnInput(p.OnBaseURL)),
+		ui.TextInput(ui.TextFieldProps{Class: "set-input", Rules: []any{tw.Mt045}, Value: p.BaseURL, OnInput: p.OnBaseURL,
+			AriaLabel: uistate.T("settings.aiBaseUrlTitle"), Placeholder: uistate.T("settings.aiBaseUrlPlaceholder"),
+			Extra: []any{Attr("spellcheck", "false"), Attr("data-testid", "settings-ai-base-url")}}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
 		If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
 		// AG19: the assistant's transparent, editable memory.
 		uic.CreateElement(agentMemoryForm),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
-		Input(css.Class("set-input", tw.Mt045), Type("password"), Attr("aria-label", uistate.T("settings.webSearchKeyPlaceholder")), Placeholder(uistate.T("settings.webSearchKeyPlaceholder")), Value(p.WsKey), OnInput(p.OnWsKey)),
+		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.WsKey, OnInput: p.OnWsKey,
+			AriaLabel: uistate.T("settings.webSearchKeyPlaceholder"), Placeholder: uistate.T("settings.webSearchKeyPlaceholder"),
+			Rules: []any{tw.Mt045}, Extra: []any{Type("password")}}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
 	)
 }

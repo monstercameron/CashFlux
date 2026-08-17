@@ -128,7 +128,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 	onMinPayment := ui.UseEvent(func(v string) { minPayment.Set(v) })
 	onDueDay := ui.UseEvent(func(v string) { dueDay.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lender.Set(v) })
-	onInstitution := ui.UseEvent(func(v string) { institution.Set(v) })
+	onInstitution := func(v string) { institution.Set(v) }
 	onExpReturn := ui.UseEvent(func(v string) { expReturn.Set(v) })
 	onLiquidity := ui.UseEvent(func(v string) { liquidity.Set(v) })
 	onStability := ui.UseEvent(func(v string) { stability.Set(v) })

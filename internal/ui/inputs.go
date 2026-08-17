@@ -17,11 +17,19 @@ import (
 type TextFieldProps struct {
 	Value       string
 	Placeholder string
-	AriaLabel   string      // accessible name when there's no visible <label>
-	OnInput     uic.Handler // required — the input's change handler (from UseEvent)
+	AriaLabel   string       // accessible name when there's no visible <label>
+	OnInput     func(string) // the caller's handler; the field owns the hook
 	Required    bool
 	Disabled    bool
 	Class       string // extra classes appended to the base ".field"
+	// Rules are css.Rule values folded into the class list. They cannot travel in
+	// Extra: a bare css.Rule is not a prop option, and the renderer emits it as a
+	// stray text node beside the field rather than applying it.
+	Rules []any
+	// Extra carries any additional element options the call site needs — an id, a
+	// data-testid, autocomplete, a keydown handler. It exists so migrating a
+	// hand-rolled Input() to this component is a move rather than a rewrite.
+	Extra []any
 }
 
 func fieldArgs(p TextFieldProps) []any {
@@ -29,7 +37,9 @@ func fieldArgs(p TextFieldProps) []any {
 	if p.Class != "" {
 		cls += " " + p.Class
 	}
-	args := []any{css.Class(cls), Value(p.Value)}
+	// Deliberately NO Value() option — see fieldCore. The value reaches the element
+	// through the layout effect instead, so the reconciler can never write it.
+	args := []any{css.Class(append([]any{cls}, p.Rules...)...)}
 	if p.Placeholder != "" {
 		args = append(args, Placeholder(p.Placeholder))
 	}
@@ -42,41 +52,39 @@ func fieldArgs(p TextFieldProps) []any {
 	if p.Disabled {
 		args = append(args, Attr("disabled", "true"))
 	}
-	return args
+	return append(args, p.Extra...)
 }
 
 // TextInput renders a single-line text input using the shared .field styling.
+//
+// It keeps what the user types. See fieldCore for why that needs saying.
 func TextInput(p TextFieldProps) uic.Node {
-	return Input(append(fieldArgs(p), Type("text"), OnInput(p.OnInput))...)
+	return uic.CreateElement(fieldCore, fieldCoreProps{
+		Value: p.Value, OnInput: p.OnInput,
+		Args: append([]any{Type("text")}, fieldArgs(p)...),
+	})
 }
 
 // NumberInput renders a numeric input (Step defaults to "1" via the browser).
 func NumberInput(p TextFieldProps) uic.Node {
-	return Input(append(fieldArgs(p), Type("number"), OnInput(p.OnInput))...)
+	return uic.CreateElement(fieldCore, fieldCoreProps{
+		Value: p.Value, OnInput: p.OnInput, Numeric: true,
+		Args: append([]any{Type("number")}, fieldArgs(p)...),
+	})
 }
 
 // TextAreaInput renders a multi-line text input using the .field styling.
 //
-// It binds the caller's handler to CHANGE, not input — deliberately, and this is
-// the whole reason multi-line fields did not work.
-//
-// Two things went wrong with per-keystroke binding. The value is carried by
-// fieldArgs' Value option, which the renderer writes as the textarea's content;
-// so every keystroke set state, state re-rendered the node, and the re-render
-// rewrote the content under the cursor. That dropped characters mid-word —
-// "PROBE NOTE alpha" arriving as "PROBE NOTE alpa" — and left the value the
-// submit handler read out of step with the text visibly in the box, so a budget
-// note saved as empty while the field plainly showed it.
-//
-// A multi-line field does not need its state updated per character. Committing
-// on blur is both correct and cheaper: no re-render while typing, and the value
-// is captured before any Save button can be clicked, because clicking it blurs
-// the field first.
-//
-// Callers still pass OnInput; the component picks the event a textarea actually
-// wants, so no call site has to know this.
+// Multi-line fields hit the value-clobbering bug first and hardest — a budget note
+// typed as "PROBE NOTE alpha" arriving as "PROBE NOTE alpa", and saving empty
+// while the box plainly showed the text — because the content of a textarea is
+// rewritten wholesale under the cursor. It is fixed at the root now: fieldCore
+// keeps the value out of the reconciler's hands entirely, for every field shape.
 func TextAreaInput(p TextFieldProps) uic.Node {
-	return Textarea(append(fieldArgs(p), OnInput(p.OnInput))...)
+	return uic.CreateElement(fieldCore, fieldCoreProps{
+		Multiline: true, Value: p.Value, OnInput: p.OnInput,
+		Args: fieldArgs(p),
+	})
 }
 
 // MoneyInputProps configures a currency-aware MoneyInput.
@@ -84,7 +92,7 @@ type MoneyInputProps struct {
 	Value     string
 	Currency  string // ISO code; drives the step (decimal places) and symbol affix
 	AriaLabel string
-	OnInput   uic.Handler
+	OnInput   func(string)
 	Disabled  bool
 }
 
@@ -99,21 +107,24 @@ func MoneyInput(p MoneyInputProps) uic.Node {
 	if dec > 0 {
 		step = "0." + strings.Repeat("0", dec-1) + "1"
 	}
-	inArgs := []any{css.Class("field"), Type("number"), Step(step), Value(p.Value)}
+	inArgs := []any{css.Class("field"), Type("number"), Step(step)}
 	if p.AriaLabel != "" {
 		inArgs = append(inArgs, Attr("aria-label", p.AriaLabel))
 	}
 	if p.Disabled {
 		inArgs = append(inArgs, Attr("disabled", "true"))
 	}
-	inArgs = append(inArgs, OnInput(p.OnInput))
 	sym := currency.Symbol(p.Currency)
 	if sym == "" {
 		sym = p.Currency
 	}
 	return Label(css.Class("money-input"),
 		Span(css.Class("money-input-affix"), Attr("aria-hidden", "true"), sym),
-		Input(inArgs...),
+		// An amount is the field where a dropped digit is most expensive: 1250
+		// silently becoming 120 is a wrong number that still looks like a number.
+		uic.CreateElement(fieldCore, fieldCoreProps{
+			Value: p.Value, OnInput: p.OnInput, Numeric: true, Args: inArgs,
+		}),
 	)
 }
 
@@ -122,7 +133,7 @@ type SuggestProps struct {
 	Value       string
 	Placeholder string
 	AriaLabel   string
-	OnInput     uic.Handler
+	OnInput     func(string)
 	Options     []string // suggestion values offered via a native <datalist>
 	ListID      string   // unique id tying the input to its datalist
 }
@@ -137,18 +148,20 @@ func Combobox(p SuggestProps) uic.Node {
 	if listID == "" {
 		listID = "cf-combobox-list"
 	}
-	inArgs := []any{css.Class("field"), Type("text"), Value(p.Value), Attr("list", listID), Attr("autocomplete", "off")}
+	inArgs := []any{css.Class("field"), Type("text"), Attr("list", listID), Attr("autocomplete", "off")}
 	if p.Placeholder != "" {
 		inArgs = append(inArgs, Placeholder(p.Placeholder))
 	}
 	if p.AriaLabel != "" {
 		inArgs = append(inArgs, Attr("aria-label", p.AriaLabel))
 	}
-	inArgs = append(inArgs, OnInput(p.OnInput))
 	opts := make([]any, 0, len(p.Options)+1)
 	opts = append(opts, ID(listID))
 	for _, o := range p.Options {
 		opts = append(opts, Option(Attr("value", o)))
 	}
-	return Fragment(Input(inArgs...), Datalist(opts...))
+	return Fragment(
+		uic.CreateElement(fieldCore, fieldCoreProps{Value: p.Value, OnInput: p.OnInput, Args: inArgs}),
+		Datalist(opts...),
+	)
 }

@@ -1,3 +1,51 @@
+## 2026-08-16 — one component that owns the value
+
+Cam picked the full sweep, so the composer fix had to stop being a composer fix. The per-screen
+version of it — a seed state the screen moves by hand — is right but does not scale to 257 call
+sites, and every site that implemented it slightly differently would be a site that broke again.
+
+The shape of the general fix is: take `value` away from the reconciler entirely. `fieldCore` renders
+no Value option at all, so the diff has nothing to write, and pushes the value in from a layout
+effect. `TextInput`, `NumberInput`, `TextAreaInput`, `MoneyInput` and `Combobox` are all thin wrappers
+over it now, so a migrated call site inherits the fix rather than reimplementing it. `Extra []any`
+exists purely so migrating a hand-rolled `Input(...)` is a move rather than a rewrite.
+
+The interesting part was getting the discriminator wrong twice, in ways that both looked right.
+
+First attempt: skip the write when the app's value equals what the user last typed. Measured: still
+55 of 59 characters. The reason is the thing worth writing down — state lands a render behind the
+keyboard, so the render carrying "Th" arrives when the box already says "The". Comparing against the
+LATEST echo says "the app disagrees with the box, write it" and deletes the "e". That is the original
+bug, rebuilt inside its own fix. The fix is to remember every value the user has produced since the
+last programmatic write: any of them arriving late is an echo, however stale, and must never be
+written back.
+
+Second attempt still dropped, and this is where I stopped reasoning and hooked the `value` setter,
+which named the culprit in one line: `"The qu" -> "The"`. My own layout effect. I had a `seeded` flag
+gating the echo check, and the equality early-return above it fired first and returned before ever
+setting `seeded` — so `seeded` stayed false forever and the echo guard was permanently switched off.
+The flag was not merely broken, it was unnecessary: at mount the echo log is empty, so it cannot
+block the initial seed. Deleting it fixed it. Twenty minutes of theorising, one setter hook.
+
+Two smaller things the migration surfaced, both silent:
+
+`Type("text")` was being appended AFTER the call site's options, so `Extra: []any{Type("password")}`
+lost and the API key field became shoulder-readable plain text. Ordering now puts the default first
+so a call site can override it, and there is a test asserting the key field is still `type=password`,
+because that is exactly the kind of regression nobody notices until it matters.
+
+A bare `css.Rule` cannot travel in `Extra`. It is not a prop option, and the renderer emits it as a
+text node beside the field — a stray `c-1if38e3...` printed on screen. A linter had already
+"helpfully" moved `tw.Mt045` there when it could not compile my string concatenation. There is now a
+`Rules []any` field that folds into the class list, and a test asserting no style rule appears as
+visible text anywhere on the page.
+
+Verification is 12 typed sentences across the three credential fields, four runs each, all clean, plus
+the existing assistant suite proving the key field still actually persists a key. The new
+`input_integrity.spec.mjs` types one character at a time on purpose: a test that calls `fill()`
+cannot see this bug at all, because `fill` sets the value once and never races a render. That is why
+a suite this large had nothing to say about a field that was eating four characters in five.
+
 ## 2026-08-16 — the feature was there, it just ran too early (C615)
 
 The ticket's read was that autofocus is inert markup and the fix "likely belongs in the FlipPanel

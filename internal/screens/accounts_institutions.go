@@ -189,7 +189,7 @@ func institutionEditForm(props institutionEditFormProps) ui.Node {
 	onColor := ui.UseEvent(func(v string) { colorS.Set(v) })
 	onPhone := ui.UseEvent(func(v string) { phoneS.Set(v) })
 	onURL := ui.UseEvent(func(v string) { urlS.Set(v) })
-	onNote := ui.UseEvent(func(v string) { noteS.Set(v) })
+	onNote := func(v string) { noteS.Set(v) }
 
 	done := props.OnDone
 	if done == nil {

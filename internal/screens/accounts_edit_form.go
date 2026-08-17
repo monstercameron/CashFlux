@@ -339,7 +339,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	customEditVals := ui.UseState(customMapToStrings(a.Custom))
 	notesS := ui.UseState(a.Notes)
-	onNotes := ui.UseEvent(func(v string) { notesS.Set(v) })
+	onNotes := func(v string) { notesS.Set(v) }
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
 	onClim := ui.UseEvent(func(v string) { climS.Set(v) })
 	onApr := ui.UseEvent(func(v string) { aprS.Set(v) })
@@ -350,7 +350,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onToggleFreshExempt := ui.UseEvent(func() { freshExemptS.Set(!freshExemptS.Get()) })
 	onFreshSnooze := ui.UseEvent(func(v string) { freshSnoozeS.Set(v) })
 	onLender := ui.UseEvent(func(v string) { lenderS.Set(v) })
-	onInstitution := ui.UseEvent(func(v string) { institutionS.Set(v) })
+	onInstitution := func(v string) { institutionS.Set(v) }
 	// C6: ONE institution concept. Picking a directory entry also fills the free-text
 	// label from it (so the two storage fields agree and only one control shows);
 	// clearing the pick re-reveals the free-text fallback.
@@ -365,7 +365,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			}
 		}
 	}
-	onBeneficiaryNote := ui.UseEvent(func(v string) { beneficiaryNoteS.Set(v) })
+	onBeneficiaryNote := func(v string) { beneficiaryNoteS.Set(v) }
 	onRevalueDays := ui.UseEvent(func(v string) { revalueDaysS.Set(v) })
 	onRet := ui.UseEvent(func(v string) { retS.Set(v) })
 	onApy := ui.UseEvent(func(v string) { apyS.Set(v) })
@@ -850,7 +850,7 @@ type acctEditExtra struct {
 	openInstitutions ui.Handler
 	// beneficiaryNoteS/onBeneficiaryNote: AC16's beneficiary / TOD note.
 	beneficiaryNoteS  ui.State[string]
-	onBeneficiaryNote ui.Handler
+	onBeneficiaryNote func(string)
 	// revalueDaysS/onRevalueDays: AC5's per-account revaluation-cadence override.
 	revalueDaysS  ui.State[string]
 	onRevalueDays ui.Handler
@@ -868,7 +868,13 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS ui.State[string],
 	setBalAmtS, setBalCatS ui.State[string],
 	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
-	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt ui.Handler,
+	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender ui.Handler,
+	// The free-text fields go through uiw's self-owning field components, which
+	// own the event hook themselves and so take a plain func.
+	onInstitution func(string),
+	onRet, onApy, onLiq, onStab, onLock, onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn ui.Handler,
+	onNotes func(string),
+	onSetBalAmt ui.Handler,
 	onCustomEdit func(key, value string), saveEdit, cancel ui.Handler, focusValue bool, x acctEditExtra) ui.Node {
 	// The type is editable; the shown attribute fields follow the SELECTED type's
 	// class (not the account's stored class), so switching e.g. a line of credit to a

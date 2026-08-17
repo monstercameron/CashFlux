@@ -172,7 +172,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	topupCoverOpenS := ui.UseState(false)
 	// Notes mode: the budget's free-text note.
 	notesS := ui.UseState(b.Notes)
-	onNotes := ui.UseEvent(func(e ui.Event) { notesS.Set(e.GetValue()) })
+	onNotes := func(v string) { notesS.Set(v) }
 	coverAmtS := ui.UseState(coverDefaultStr)
 	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
 	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
