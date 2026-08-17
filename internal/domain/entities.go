@@ -373,7 +373,22 @@ type Transaction struct {
 	Amount            money.Money     `json:"amount"`
 	Splits            []CategorySplit `json:"splits,omitempty"`
 	TransferAccountID string          `json:"transferAccountId,omitempty"`
-	Cleared           bool            `json:"cleared,omitempty"`
+	// TransferGroupID names the RELATIONSHIP between the two legs of one move,
+	// durably (C680). TransferAccountID says which account is on the other side;
+	// it does not say WHICH row over there, so every pair operation had to
+	// re-derive the partner by matching date, amount, sign and account — and that
+	// derivation breaks on exactly the cases it is needed for. Editing a leg's
+	// amount stopped the two looking reciprocal (C629); an FX pair never matched
+	// at all, because the legs carry different magnitudes by design; two
+	// same-amount moves on one day are ambiguous to it.
+	//
+	// Both legs written by CreateTransferPair share one id, and it survives amount
+	// and date edits, so the partner stays findable by identity rather than by
+	// resemblance. Empty on legacy rows and on a leg classified by hand from an
+	// import, which is why the matcher still falls back to the old heuristic —
+	// this narrows the ambiguity, it does not pretend to have removed it.
+	TransferGroupID string `json:"transferGroupId,omitempty"`
+	Cleared         bool   `json:"cleared,omitempty"`
 	// ClearedAt is WHEN this transaction was marked cleared. Zero means it has
 	// not cleared, or that it cleared before the app began recording the moment
 	// (EC-4) — the two are indistinguishable in old data, and neither is evidence.

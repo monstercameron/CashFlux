@@ -201,6 +201,12 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 
 	outID = id.New()
 	inID = id.New()
+	// C680: one id naming the RELATIONSHIP, carried by both legs. Without it every
+	// pair operation has to re-derive the partner from date, amount, sign and
+	// account — a derivation that fails on the cases it is most needed for: an
+	// edited amount stops the legs looking reciprocal, and an FX pair never matches
+	// at all because its two legs carry different magnitudes by design.
+	groupID := id.New()
 
 	// C68: a transfer is an explicit, unambiguous action the user just performed,
 	// so both legs are inherently "reviewed" — Reviewed:true keeps the ActionFlagReview
@@ -208,6 +214,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	out := domain.Transaction{
 		ID: outID, AccountID: fromAcc.ID,
 		TransferAccountID: toAcc.ID,
+		TransferGroupID:   groupID,
 		Amount:            fromMoney,
 		Date:              when,
 		Desc:              desc,
@@ -218,6 +225,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	in := domain.Transaction{
 		ID: inID, AccountID: toAcc.ID,
 		TransferAccountID: fromAcc.ID,
+		TransferGroupID:   groupID,
 		Amount:            toMoney,
 		Date:              when,
 		Desc:              desc,

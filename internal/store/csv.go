@@ -21,6 +21,10 @@ import (
 var csvHeader = []string{
 	"id", "date", "account_id", "payee", "desc", "category_id",
 	"amount", "currency", "transfer_account_id", "cleared", "tags", "member_id", "source",
+	// C680 appended LAST on purpose: the columns above are a published order that
+	// other tools read positionally, and inserting beside transfer_account_id would
+	// silently shift every field after it in somebody's importer.
+	"transfer_group_id",
 }
 
 // TransactionsToCSV serializes transactions to CSV with a header row. Amounts
@@ -46,6 +50,7 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			strings.Join(t.Tags, ";"),
 			t.MemberID,
 			string(t.Source),
+			t.TransferGroupID,
 		}
 		if err := w.Write(row); err != nil {
 			return nil, err
@@ -173,6 +178,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),
 			TransferAccountID: colID(row, "transfer_account"),
+			TransferGroupID:   colID(row, "transfer_group"),
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberID:          colID(row, "member"),
@@ -303,6 +309,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),
 			TransferAccountID: colID(row, "transfer_account"),
+			TransferGroupID:   colID(row, "transfer_group"),
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberID:          colID(row, "member"),

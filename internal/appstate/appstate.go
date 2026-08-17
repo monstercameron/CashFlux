@@ -2883,10 +2883,29 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 	return nil
 }
 
+// isReciprocalTransferLeg reports whether candidate is the far side of target.
+//
+// C680: when both legs carry a TransferGroupID, identity settles it and nothing
+// else is consulted. That is the whole point of the id — the resemblance test
+// below fails on exactly the cases that matter most. An edited amount stops two
+// real legs looking reciprocal (that was C629, where a one-sided edit silently
+// orphaned its partner), and a cross-currency pair NEVER matches it, because the
+// two legs carry different magnitudes by design.
+//
+// The resemblance test remains for rows written before the id existed and for a
+// leg someone classified by hand from an import. It is a fallback, not a peer:
+// a group id that disagrees with it wins.
 func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
-	return candidate.ID != target.ID &&
-		candidate.IsTransfer() &&
-		candidate.AccountID == target.TransferAccountID &&
+	if candidate.ID == target.ID || !candidate.IsTransfer() {
+		return false
+	}
+	if target.TransferGroupID != "" || candidate.TransferGroupID != "" {
+		// One of them is grouped. Only an exact group match counts: a grouped leg
+		// whose partner is elsewhere must NOT fall through to the heuristic and
+		// adopt a look-alike, which is how an unrelated row gets mutated.
+		return target.TransferGroupID != "" && target.TransferGroupID == candidate.TransferGroupID
+	}
+	return candidate.AccountID == target.TransferAccountID &&
 		candidate.TransferAccountID == target.AccountID &&
 		candidate.Amount.Amount == -target.Amount.Amount &&
 		candidate.Date.Equal(target.Date)
