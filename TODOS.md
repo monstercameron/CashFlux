@@ -5729,10 +5729,18 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 - [ ] **C404 [MINOR][TODO] Saved views + single adaptive toolbar.** Reviewer: "Three control rows
   create toolbar density." Persist named filter/sort/view combos; collapse the three rows into one
   toolbar + a filters popover (FilterToolbar pattern).
-- [ ] **C405 [MINOR][TODO] Automation-rule presets + template gallery.** Only 2 templates exposed.
+- [x] **C405 [MINOR][TODO] Automation-rule presets + template gallery.** Only 2 templates exposed.
   Ship the reviewer's four as workflow-engine presets surfaced from More tools (subscription price
   change → task; overdue bill → task; monthly reconciliation; quarterly account update) + grow the
-  financial template list (checklists via `taskchecklist`).
+  financial template list (checklists via `taskchecklist`). — DONE (2026-08-16). New pure
+  `internal/wfpreset` catalog of six complete automations (all four of the reviewer's, plus flag-big-
+  charges and budget-over→task), rendered as a gallery on /workflows; the to-do "Templates & tools"
+  menu signposts it rather than duplicating it. Subscription-price-change needed a condition variable
+  that did not exist: `txn_vs_typical` / `txn_payee_typical` now ride the txn-added context, backed by
+  a new pure `internal/payeebase` (median baseline, excludes the charge being judged, declines below
+  3 prior charges) that `notifyfeed`'s unusual-charge generator now shares so the two cannot disagree
+  about what counts as the same merchant. Checklist gallery grew from 3 to 5 (subscription & insurance
+  audit, debt check-in).
 - [x] **C406 [MINOR][TODO] Note truncation.** List view clamps notes to 2 lines with expand-on-click
   instead of heavy truncation. — VERIFIED ALREADY DONE (2026-08-16). `todo.go` renders a note over 46
   runes as a `.todo-note-row.is-clamp2` button (`-webkit-line-clamp: 2`, `aria-expanded`, keyboard

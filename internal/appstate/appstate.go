@@ -38,6 +38,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/logging"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/payeebase"
 	"github.com/monstercameron/CashFlux/internal/revalue"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -1794,6 +1795,11 @@ func (a *App) WorkflowVariableNames() []string {
 	for n := range vars {
 		names[n] = true
 	}
+	// The per-transaction merchant-baseline variables only exist on txn-added runs
+	// but must still be offerable in the composer — a variable you cannot discover
+	// is a variable nobody uses.
+	names["txn_payee_typical"] = true
+	names["txn_vs_typical"] = true
 	// Every transaction custom field is referenceable on txn-added runs —
 	// number and yes/no fields as cf_txn_<key> values, text/choice fields via
 	// contains(cf_txn_<key>, "…") — so offer them even though the base surface
@@ -1823,6 +1829,23 @@ func (a *App) txnContext(t domain.Transaction) workflow.Context {
 	amt := float64(t.Amount.Amount) / div
 	ctx.Vars["txn_amount"] = amt
 	ctx.Vars["txn_abs"] = math.Abs(amt)
+	// What this merchant normally charges, and how this charge compares (C405).
+	// Without these, a condition can only ever test a fixed dollar threshold,
+	// which cannot express "my subscription went up" — the number that matters is
+	// different for every merchant. txn_vs_typical is a multiple: 1.0 is business
+	// as usual, 1.2 is twenty percent more than normal.
+	//
+	// Both read 0 when the merchant has too little history to have a normal. That
+	// is deliberate and it is why the composer's help says to pair the ratio with
+	// a floor: `txn_vs_typical > 1.15` is false at 0, so a first-ever charge never
+	// fires a price-hike workflow.
+	if typical, ok := payeebase.Typical(a.Transactions(), t); ok {
+		ctx.Vars["txn_payee_typical"] = float64(typical) / div
+		ctx.Vars["txn_vs_typical"] = math.Abs(float64(t.Amount.Amount)) / float64(typical)
+	} else {
+		ctx.Vars["txn_payee_typical"] = 0
+		ctx.Vars["txn_vs_typical"] = 0
+	}
 	ctx.Strs["txn_payee"] = t.Payee
 	ctx.Strs["txn_desc"] = t.Desc
 	ctx.Strs["txn_tags"] = strings.Join(t.Tags, ",")

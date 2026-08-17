@@ -7,6 +7,27 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A gallery of ready-made automations, and the variable one of them needed (C405).** The workflow
+  composer could already express a great deal, which was the problem: a blank form asking for a
+  trigger, a condition in a formula language, and a list of actions is a wall, and two templates was
+  not enough runway over it. `/workflows` now leads with six complete automations — flag a
+  subscription price change, turn a due bill into a to-do, flag big charges for review, reconcile
+  monthly, refresh the accounts that do not sync quarterly, make a to-do for every budget that goes
+  over — each stating in plain English when it fires before it is added, and each editable
+  afterwards like any hand-built workflow. The to-do screen's "Templates & tools" menu signposts the
+  gallery rather than duplicating it, and grew two more checklists of its own: a subscription and
+  insurance audit, and a debt check-in.
+
+  The price-change preset could not be written at all before this: a condition can only compare
+  against a fixed dollar threshold, and "my subscription went up" has no fixed threshold — the number
+  that matters is different for every merchant. Transaction-triggered conditions can now reference
+  `txn_payee_typical` (what this merchant normally bills) and `txn_vs_typical` (this charge as a
+  multiple of that), backed by a new pure `internal/payeebase`. The baseline is a median, because a
+  merchant with one annual renewal among eleven monthly charges has a mean nobody would recognize; it
+  excludes the charge being judged, because a charge that is its own baseline can never look unusual;
+  and it declines to have an opinion below three prior charges, so a first-ever subscription is not a
+  price hike. The notification feed's unusual-charge alert now shares the same package, so the two
+  can never drift into disagreeing about which charges belong to the same merchant.
 - **Bulk select, assign, reschedule, complete and delete on the to-do list (C402).** The list had no
   selection mechanism at all, so reassigning six tasks to one person meant opening six edit modals.
   A "Select several" button turns on a checkbox column and a sticky action bar; shift-click takes the

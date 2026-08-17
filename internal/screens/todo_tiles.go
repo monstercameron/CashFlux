@@ -25,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -112,6 +113,7 @@ func todoSummaryWidget(props todoSummaryProps) ui.Node {
 // atoms (read by the list tile too), mirroring the budgets/goals toolbars.
 func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
+	navTo := router.UseNavigate()
 	hideDone := uistate.UseTodoHideDone()
 	filterPrio := uistate.UseTodoFilterPrio()
 	sortMode := uistate.UseTodoSortMode()
@@ -175,6 +177,33 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			{Title: uistate.T("todo.tmplTaxExport")},
 		}, due)
 	}
+	// Two more financial rituals the reviewer asked for (C405). Insurance and
+	// subscriptions drift upward quietly, and debt only gets paid off by someone
+	// looking at it on a schedule — both are exactly the kind of work that never
+	// happens without a dated list.
+	addSubscriptionAudit := func() {
+		due := time.Now().AddDate(0, 0, 10)
+		runChecklist("todo.tmplSubAudit", []taskchecklist.Item{
+			{Title: uistate.T("todo.tmplSubList"), DueOffsetDays: -7},
+			{Title: uistate.T("todo.tmplSubUnused"), DueOffsetDays: -5},
+			{Title: uistate.T("todo.tmplSubPrices"), DueOffsetDays: -3},
+			{Title: uistate.T("todo.tmplSubInsurance"), DueOffsetDays: -2},
+			{Title: uistate.T("todo.tmplSubCancel")},
+		}, due)
+	}
+	addDebtCheckin := func() {
+		due := time.Now().AddDate(0, 0, 7)
+		runChecklist("todo.tmplDebt", []taskchecklist.Item{
+			{Title: uistate.T("todo.tmplDebtBalances"), DueOffsetDays: -5},
+			{Title: uistate.T("todo.tmplDebtRates"), DueOffsetDays: -3},
+			{Title: uistate.T("todo.tmplDebtExtra"), DueOffsetDays: -1},
+			{Title: uistate.T("todo.tmplDebtPlan")},
+		}, due)
+	}
+	// The automation catalog lives on the Workflows screen; the to-do tools menu is
+	// where someone already thinking about recurring work will look for it, so it
+	// gets a signpost rather than a duplicate gallery (C405).
+	openAutomations := func() { navTo.Navigate(uistate.RoutePath("/workflows")) }
 	// A quarterly account review — reconcile balances, prune subscriptions, sanity-check
 	// budgets, and rebalance goal funding. Due in two weeks so there's runway to work the
 	// steps, wired exactly like the month-end / tax templates above.
@@ -322,6 +351,9 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			{Label: uistate.T("todo.checklistMonthEnd"), Icon: icon.Calendar, TestID: "todo-checklist-monthend", OnSelect: addMonthEndClose},
 			{Label: uistate.T("todo.checklistTaxPrep"), Icon: icon.FileText, TestID: "todo-checklist-taxprep", OnSelect: addTaxPrep},
 			{Label: uistate.T("todo.checklistQuarterly"), Icon: icon.Refresh, TestID: "todo-checklist-quarterly", OnSelect: addQuarterlyReview},
+			{Label: uistate.T("todo.checklistSubAudit"), Icon: icon.Repeat, TestID: "todo-checklist-subaudit", OnSelect: addSubscriptionAudit},
+			{Label: uistate.T("todo.checklistDebt"), Icon: icon.TrendingDown, TestID: "todo-checklist-debt", OnSelect: addDebtCheckin},
+			{Label: uistate.T("todo.automations"), Icon: icon.Workflow, TestID: "todo-automations", OnSelect: openAutomations},
 		},
 	})
 	addBtn := Button(css.Class("btn btn-primary btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),

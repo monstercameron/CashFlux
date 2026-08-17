@@ -1,3 +1,40 @@
+## 2026-08-16 — the preset that needed a new variable (C405)
+
+Four presets were requested. Three were a morning's work: they are complete workflows made of
+triggers and actions that already exist, and the value is entirely in someone having decided which
+ones are worth having. The fourth — "tell me when a subscription's price changes" — could not be
+written at all, and finding out why was the useful part of the ticket.
+
+A workflow condition compares numbers. The available numbers were the engine surface plus the
+triggering transaction's own amount. So the only expressible version of "my subscription went up" is
+`txn_abs > 20`, which is not that statement: it fires on a first-ever charge, it fires on the
+merchant that has always billed 25, and it stays silent when a 9 subscription doubles. The number
+that matters is different for every merchant, which means the condition surface was missing a
+variable, not a preset.
+
+It turned out the app already knew how to compute one. The unusual-charge notification compares a
+charge against the median of the same payee's other charges. That logic was sitting inside a feed
+generator, so I lifted it into `internal/payeebase` and gave the transaction context two new
+variables: `txn_payee_typical` and `txn_vs_typical`. Three properties are load-bearing and each is a
+test:
+
+- **Median, not mean.** One annual renewal among eleven monthly charges gives a mean nobody would
+  recognize as the price of anything.
+- **Exclude the charge being judged.** Otherwise a charge is part of its own baseline and can never
+  deviate from it — an off-by-one that silently weakens the whole comparison.
+- **Decline below three prior charges.** And "no opinion" reads as 0, so `txn_vs_typical > 1.15` is
+  false for a brand-new merchant. A new subscription is not a price hike.
+
+Extracting rather than duplicating also closed a real risk: the feed and the condition surface now
+agree by construction about which charges belong to the same merchant. Two independent copies of
+`strings.ToLower(payee, falling back to desc)` would have drifted the first time either side got a
+normalization fix.
+
+The presets themselves are data — a plain slice, no clock, no ID generator, no store — which let the
+test suite validate all six through the same `workflow.Validate` a hand-built workflow goes through,
+and parse every condition. A gallery entry that cannot be saved is worse than no gallery: the user
+picks it, it fails, and the whole feature reads as broken.
+
 ## 2026-08-16 — bulk edit is a semantics problem, not a checkbox problem (C402)
 
 The ticket reads like UI work: add checkboxes and an action bar. The checkboxes took twenty minutes.

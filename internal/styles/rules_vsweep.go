@@ -152,4 +152,38 @@ func registerVSweep() {
 		cursor("pointer"),
 	)
 
+	// ─── C405: the ready-made automation gallery ─────────────────────────────
+	rule(".wf-preset-grid",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fill, minmax(15rem, 1fr))"),
+		gap("0.75rem"),
+	)
+	rule(".wf-preset-card",
+		display("flex"),
+		flexDirection("column"),
+		alignItems("flex-start"),
+		gap("0.4rem"),
+		padding("0.85rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid var(--border)"),
+		background("var(--surface)"),
+	)
+	rule(".wf-preset-name",
+		margin("0"),
+		fontSize("0.95rem"),
+		lineHeight("1.3"),
+	)
+	rule(".wf-preset-desc",
+		margin("0"),
+		flex("1 1 auto"),
+		fontSize("0.82rem"),
+		lineHeight("1.45"),
+		color("var(--text-dim)"),
+	)
+	rule(".wf-preset-meta",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.35rem"),
+	)
+
 }

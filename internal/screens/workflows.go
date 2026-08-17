@@ -72,6 +72,11 @@ func Workflows() ui.Node {
 		),
 	)
 
+	// The ready-made catalog sits between the savings quick-starts and the user's
+	// own registry: after the three headline savings automations, before the list
+	// of what they have already built (C405).
+	presets := ui.CreateElement(wfPresetGallery, wfPresetGalleryProps{Refresh: refresh})
+
 	registryHead := Div(css.Class("wf-sec-head"),
 		H3(css.Class("wf-sec-title"), uistate.T("workflows.yours")),
 		If(len(wfs) > 0, Span(css.Class("wf-count"), strconv.Itoa(len(wfs)))),
@@ -80,6 +85,7 @@ func Workflows() ui.Node {
 	return Div(css.Class("wf-deck"),
 		masthead,
 		quick,
+		presets,
 		Div(css.Class("wf-grid"),
 			Div(css.Class("wf-main"),
 				registryHead,

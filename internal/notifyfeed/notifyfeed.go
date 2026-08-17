@@ -10,7 +10,6 @@ package notifyfeed
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/notify"
+	"github.com/monstercameron/CashFlux/internal/payeebase"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
 )
 
@@ -390,33 +390,16 @@ const unusualChargeFactor = 3.0
 // unusualMinHistory is how many OTHER expenses at the same payee are needed before
 // its baseline is trustworthy — below this there's no established "normal" to
 // deviate from, so nothing is flagged.
-const unusualMinHistory = 3
+const unusualMinHistory = payeebase.MinHistory
 
-// payeeKey normalizes a transaction to the merchant it belongs to for baseline
-// grouping: its Payee if set, else its Desc, lower-cased and trimmed. Empty when
-// neither is set (ungroupable — skipped).
-func payeeKey(t domain.Transaction) string {
-	s := strings.TrimSpace(t.Payee)
-	if s == "" {
-		s = strings.TrimSpace(t.Desc)
-	}
-	return strings.ToLower(s)
-}
+// payeeKey groups a transaction by merchant. The rule lives in payeebase, which
+// the workflow condition surface also uses, so the two can never drift into
+// disagreeing about which charges belong to the same merchant.
+func payeeKey(t domain.Transaction) string { return payeebase.Key(t) }
 
-// medianMinor returns the median of a slice of minor-unit magnitudes. The input
-// is copied before sorting so the caller's slice is untouched. Empty → 0.
-func medianMinor(v []int64) int64 {
-	if len(v) == 0 {
-		return 0
-	}
-	c := append([]int64(nil), v...)
-	slices.Sort(c)
-	n := len(c)
-	if n%2 == 1 {
-		return c[n/2]
-	}
-	return (c[n/2-1] + c[n/2]) / 2
-}
+// medianMinor is the shared baseline statistic — see payeebase.Median for why it
+// is a median rather than a mean.
+func medianMinor(v []int64) int64 { return payeebase.Median(v) }
 
 // UnusualChargeCandidates flags expenses that are unusually large versus the SAME
 // payee's own history — the local "did this merchant just bill me way more than
