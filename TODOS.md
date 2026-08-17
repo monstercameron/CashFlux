@@ -556,7 +556,7 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   cancelling rather than actually wiping the dataset.
 
 **SMART (deterministic / local statistics)**
-- [~] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three
+- [x] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three
   purchases explain 82% of it, two materially larger than your usual." Let the user classify:
   one-time / expected / wrong category / new normal / investigate.
   — THE EXPLANATION DONE (2026-08-17). New pure `internal/anomalyattrib`; surfaced under every
@@ -588,10 +588,39 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   same-size purchases imported into the same category to flip it ("Spread across 13 purchases — no single
   one explains it"). `e2e/_attrib_diffuse.mjs`.
 
-  STILL OPEN: the ticket's SECOND clause — letting the user classify a flag as one-time / expected /
-  wrong category / new normal / investigate, and remembering that verdict so the same flag does not
-  return unchanged next month. Also unwired: the dashboard's attention widget, which renders the same
-  anomaly as a single line and does not carry the explanation.
+  SECOND CLAUSE DONE (2026-08-17) — classifying a flag, in new pure `internal/flagverdict` +
+  `uistate.LoadFlagVerdicts`.
+
+  A VERDICT IS NOT A SYNONYM FOR "HIDE". The obvious build is five buttons that all dismiss and differ
+  only in the label stored alongside, which would be worse than one Dismiss button because it would LOOK
+  like the app understood the answer. Two of the five keep the flag on screen: "wrong category" says the
+  spending is real and the DATA is wrong, so hiding it would leave the miscategorised money exactly where
+  it was while the reader believed they had dealt with it; "investigate" is the opposite of hiding.
+  Each says on the row why it is still there, or the reader answers and sees nothing happen.
+
+  THE THREE THAT HIDE HIDE DIFFERENT THINGS. A one-off is a statement about ONE month, so it suppresses
+  an occurrence key that carries the month — next month's flag is new information. "Expected" suppresses
+  the recurring subject for 400 days, just past a year, so an annual charge is still expected next March
+  and one that was true because of a lease gets re-asked. "New normal" suppresses for 90 days, which is
+  the detector's own trailing window: after it, a baseline that absorbed the new level stops flagging by
+  itself, and one still flagging is telling you something new. No suppression is permanent — a silence
+  with no end is how a real change goes unnoticed.
+
+  EVERY SUPPRESSION IS VISIBLE AND REVERSIBLE. A hidden flag is counted on the tile ("1 flag you judged is
+  hidden — Show them"), because a suppression the user cannot see is indistinguishable from a detector
+  that stopped working. Re-selecting "Not judged" clears the verdict outright.
+
+  Verdicts live in the dataset settings KV, not browser storage: a judgement is a statement about the
+  household's money, so somebody who says an annual charge is expected should not be asked again on their
+  laptop.
+
+  VERIFIED IN A BROWSER: 13/13 (`e2e/_verdict_check.mjs`) — including that investigate and wrong-category
+  do NOT hide, that expected does, that the hidden flag is counted with a way back, that the judgement
+  outlives a reload, and that clearing it restores the flag.
+
+  STILL OPEN: the dashboard's attention widget renders the same anomaly as a single line and carries
+  neither the explanation nor the verdict control; and `spendingHighlights` (the older /insights card,
+  which the agent-first surface no longer routes to) passes no OnJudge, so its rows show no control.
 - [ ] **WF-SM2 — Behavioral pattern detection.** Surface patterns users miss: spend rises after
   payday; weekend delivery accelerating; savings dips in irregular-income months; a card paid just
   after interest posts; a category blows its budget in the final week; sub increases offsetting debt

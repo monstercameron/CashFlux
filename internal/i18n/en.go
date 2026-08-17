@@ -2833,9 +2833,24 @@ var english = Catalog{
 	"insights.attribLargerOne":     "%d of them is bigger than usual there.",
 	"insights.attribLargerMany":    "%d of them are bigger than usual there.",
 	"insights.attribUnnamedPayee":  "Unnamed",
-	"insights.highlightDown":       "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
-	"insights.highlightNone":       "%s — nothing spent yet this month (about %s a month usually).",
-	"insights.uncategorized":       "Uncategorized",
+	// WF-SM1 second clause: judging a flag. Two of the five deliberately do NOT
+	// hide it, so each says plainly what it leaves behind.
+	"insights.verdictAria":               "What do you make of the %s flag?",
+	"insights.verdictNone":               "Not judged",
+	"insights.verdictOneTime":            "One-time",
+	"insights.verdictExpected":           "Expected",
+	"insights.verdictWrongCategory":      "Wrong category",
+	"insights.verdictNewNormal":          "New normal",
+	"insights.verdictInvestigate":        "Investigate",
+	"insights.verdictFollowRecategorize": "Kept on view — the spending is real, so it needs refiling before it stops mattering.",
+	"insights.verdictFollowTrack":        "Kept on view while you look into it.",
+	"insights.verdictHiddenOne":          "%d flag you judged is hidden.",
+	"insights.verdictHiddenMany":         "%d flags you judged are hidden.",
+	"insights.verdictHiddenShow":         "Show them",
+	"insights.verdictHiddenHide":         "Hide them again",
+	"insights.highlightDown":             "%s spending is down %d%% (%s less) — %s this month vs about %s a month.",
+	"insights.highlightNone":             "%s — nothing spent yet this month (about %s a month usually).",
+	"insights.uncategorized":             "Uncategorized",
 	// C231: label above starter chips when a conversation is already in progress.
 	"insights.suggestedQuestions": "Suggested questions",
 	// C234: compact top-of-page entry point that jumps to the Ask section when the

@@ -1,3 +1,38 @@
+## 2026-08-17 - five buttons that all dismiss would be worse than one (WF-SM1, second clause)
+
+The ticket asks to let the user classify a flag: one-time, expected, wrong category, new normal,
+investigate. The obvious build is five buttons that all dismiss it and differ only in the label stored
+alongside - and that would be worse than a single Dismiss button, because it would look like the app
+understood the answer while doing the same thing with all five.
+
+Two of the five have to keep the flag on screen. "Wrong category" says the spending is real and the DATA
+is wrong; hiding it leaves the miscategorised money exactly where it was while the reader believes they
+dealt with it. "Investigate" is the opposite of hiding - it is somebody saying they are not finished
+looking. Both now leave a line on the row saying why it is still there, because otherwise you answer the
+question and watch nothing happen, which reads as being ignored.
+
+The three that do hide, hide different things for different lengths of time, because they are different
+claims. A one-off is a statement about ONE month, so its key carries the month and next month's flag is
+new information. "Expected" suppresses the recurring subject for 400 days - just past a year, so an
+annual charge is still expected next March, and one that was true because of a lease gets asked again
+once that year is out. "New normal" suppresses for 90 days, which is exactly the window the detector
+averages over: after it, a baseline that absorbed the new level stops flagging on its own, and one that
+is STILL flagging is telling you the level moved again. No suppression is permanent, because a silence
+with no end is how a real change goes unnoticed.
+
+Everything hidden is counted on the tile with a way back, on the same reasoning: a suppression the user
+cannot see is indistinguishable from a detector that broke. The verdicts live in the dataset's settings
+KV rather than browser storage - a judgement is a statement about the household's money, so somebody who
+says an annual charge is expected should not be asked again on their laptop.
+
+Two hours of the build went on a probe failure that was the probe's fault twice over. The first was
+mine from the previous ticket - a CSV import that never selected an account, which I nearly filed as a
+data-integrity bug before the reproduction I wrote disproved it. The second: the reload assertion failed
+because reloading directly onto /insights opens the agent chat, not the tile grid, so the flag I was
+looking for was never on the page. Coming in the way a person does - boot to the dashboard, then
+navigate - and it passes. Both were cases of the harness lying rather than the app, and in both the
+thing that settled it was making the claim concrete enough to be wrong.
+
 ## 2026-08-17 - a comment that says code is live when it is not (WF9-b)
 
 I filed this one against myself earlier in the session: I built a feature into `billsCalendar` because

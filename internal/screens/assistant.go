@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	"github.com/monstercameron/CashFlux/internal/flagverdict"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/insightsperiod"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -247,6 +248,10 @@ func assistantInsightsDataPanel() ui.Node {
 	pr := uistate.UsePrefs().Get()
 	rev := ui.UseState(0)
 	showFormulas := ui.UseState(false)
+	// WF-SM1: flags the household has already judged are hidden, but never
+	// silently — showJudged is the way back to them, and every suppression this
+	// app grants has to have one.
+	showJudged := ui.UseState(false)
 	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
 	// G2-C8: the briefing was fixed to month-to-date, so the tab called Insights
 	// could only ever show one insight. The selection is an atom rather than local
@@ -440,24 +445,57 @@ func assistantInsightsDataPanel() ui.Node {
 	}
 	flaggedTile := astTile("ast-flagged", "span 2", astSection("sec-ast-flagged", uistate.T("insights.flaggedTitle"), nil, flaggedBody))
 
-	var highlightsBody ui.Node
-	if len(anomalies) == 0 {
-		highlightsBody = P(css.Class("empty"), Attr("data-testid", "ast-highlights-empty"), uistate.T("assistant.highlightsEmpty"))
-	} else {
-		rows := MapKeyed(anomalies,
-			func(a insights.Anomaly) any { return a.Category },
-			func(a insights.Anomaly) ui.Node {
-				return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
-					Anomaly:     a,
-					Base:        base,
-					Attribution: anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, now),
-					OnDrill:     viewCategoryTransactions,
-				})
+	// WF-SM1 second clause: a flag the household has judged one-time, expected or
+	// a new normal stops being news. "Wrong category" and "Investigate" are NOT
+	// suppressed — the first means the money still needs refiling and the second
+	// means somebody is still looking, and hiding either would answer a question
+	// the reader had not finished asking.
+	verdicts := uistate.LoadFlagVerdicts()
+	shown := make([]insights.Anomaly, 0, len(anomalies))
+	judged := make([]insights.Anomaly, 0, len(anomalies))
+	for _, a := range anomalies {
+		if verdicts.Suppressed(flagKey(a.Category, now), a.Category, now) {
+			judged = append(judged, a)
+			continue
+		}
+		shown = append(shown, a)
+	}
+	if showJudged.Get() {
+		shown = append(shown, judged...)
+	}
+	highlightRow := func(a insights.Anomaly) ui.Node {
+		key := flagKey(a.Category, now)
+		cur, _ := verdicts.For(key)
+		return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
+			Anomaly:     a,
+			Base:        base,
+			Attribution: anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, now),
+			Verdict:     cur.Verdict,
+			OnJudge: func(v flagverdict.Verdict) {
+				if v == "" {
+					uistate.ForgetFlagVerdict(key)
+				} else {
+					uistate.RecordFlagVerdict(key, a.Category, v, now)
+				}
+				rev.Set(rev.Get() + 1)
 			},
-		)
+			OnDrill: viewCategoryTransactions,
+		})
+	}
+
+	var highlightsBody ui.Node
+	switch {
+	case len(shown) == 0 && len(judged) == 0:
+		highlightsBody = P(css.Class("empty"), Attr("data-testid", "ast-highlights-empty"), uistate.T("assistant.highlightsEmpty"))
+	default:
+		rows := MapKeyed(shown, func(a insights.Anomaly) any { return a.Category }, highlightRow)
 		highlightsBody = Fragment(
 			P(css.Class("muted"), uistate.T("insights.highlightsHint")),
 			Div(css.Class("insight-list"), rows),
+			If(len(judged) > 0, ui.CreateElement(judgedFlagsNote, judgedFlagsNoteProps{
+				Count: len(judged), Shown: showJudged.Get(),
+				OnToggle: func() { showJudged.Set(!showJudged.Get()) },
+			})),
 		)
 	}
 	highlightsTile := astTile("ast-highlights", "span 2", astSection("sec-ast-highlights", uistate.T("insights.highlightsTitle"), nil, highlightsBody))

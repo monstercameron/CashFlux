@@ -6,6 +6,13 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Say what you make of a spending flag (WF-SM1).** Mark it one-time, expected, wrong category, a new
+  normal, or something to investigate. The first three stop it coming back — for one month, a year, or
+  until the average catches up — and the last two deliberately keep it on view, because misfiled money
+  still needs refiling and "I'm looking into it" is not the same as "hide this". Anything hidden is
+  counted with a way back to it.
+
 ### Removed
 - **Deleted the unrouted bills panel (WF9-b).** 848 lines of a screen nothing had mounted since /bills
   became a shell, whose doc comment still claimed it was live — which is how a feature came to be built

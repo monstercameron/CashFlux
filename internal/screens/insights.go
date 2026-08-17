@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/flagverdict"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/insights"
@@ -3587,7 +3588,13 @@ type insightsHighlightRowProps struct {
 	// Attribution is what explains the overspend, or the finding that nothing
 	// single-handedly does. Empty when there is nothing honest to say.
 	Attribution string
-	OnDrill     func(catName string)
+	// Verdict is the judgement already recorded against this flag, if any.
+	Verdict flagverdict.Verdict
+	// OnJudge records a verdict (empty clears it). Nil hides the control, which
+	// is what surfaces that cannot persist a judgement should do rather than
+	// offering one that goes nowhere.
+	OnJudge func(v flagverdict.Verdict)
+	OnDrill func(catName string)
 }
 
 // insightsHighlightRow renders a single clickable spending-highlight row. It is
@@ -3597,7 +3604,16 @@ type insightsHighlightRowProps struct {
 func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 	a := props.Anomaly
 	drill := ui.UseEvent(func() { props.OnDrill(a.Category) })
-	return Button(
+	// The judgement control is a SIBLING of the drill button, never inside it: a
+	// button nested in a button is invalid, and a click on the inner one would
+	// also drill through to the ledger — the reader would answer a question and
+	// be thrown onto another page for their trouble.
+	judge := ui.UseEvent(func(v string) {
+		if props.OnJudge != nil {
+			props.OnJudge(flagverdict.Verdict(v))
+		}
+	})
+	row := Button(
 		css.Class("insight-row insight-row--clickable"),
 		Type("button"),
 		Attr("aria-label", uistate.T("insights.highlightDrillAria", a.Category)),
@@ -3608,9 +3624,103 @@ func insightsHighlightRow(props insightsHighlightRowProps) ui.Node {
 			If(props.Attribution != "",
 				Span(css.Class("muted"), css.Class(tw.Block), css.Class(tw.TextXs),
 					Attr("data-testid", "insight-attribution"), props.Attribution)),
+			If(verdictFollowUp(props.Verdict) != "",
+				Span(css.Class(tw.Block), css.Class(tw.TextXs),
+					Attr("data-testid", "insight-verdict-follow"), verdictFollowUp(props.Verdict))),
 		),
 		insightSourceCue(),
 	)
+	if props.OnJudge == nil {
+		return row
+	}
+	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
+		row,
+		verdictSelect(a.Category, props.Verdict, judge),
+	)
+}
+
+// verdictSelect offers the five judgements for a flag. The blank first option is
+// the honest default: no verdict has been recorded, which is different from any
+// of the five, and it doubles as the way back — re-selecting it clears a
+// judgement, so a flag silenced by mistake returns.
+func verdictSelect(category string, current flagverdict.Verdict, onChange ui.Handler) ui.Node {
+	args := []any{
+		css.Class("field", tw.TextXs),
+		Attr("data-testid", "insight-verdict"),
+		Attr("aria-label", uistate.T("insights.verdictAria", category)),
+		OnChange(onChange),
+		Option(Value(""), SelectedIf(current == ""), uistate.T("insights.verdictNone")),
+	}
+	for _, v := range flagverdict.Verdicts() {
+		args = append(args, Option(Value(string(v)), SelectedIf(current == v), verdictLabel(v)))
+	}
+	return Select(args...)
+}
+
+// verdictLabel is the plain-English name of a verdict.
+func verdictLabel(v flagverdict.Verdict) string {
+	switch v {
+	case flagverdict.OneTime:
+		return uistate.T("insights.verdictOneTime")
+	case flagverdict.Expected:
+		return uistate.T("insights.verdictExpected")
+	case flagverdict.WrongCategory:
+		return uistate.T("insights.verdictWrongCategory")
+	case flagverdict.NewNormal:
+		return uistate.T("insights.verdictNewNormal")
+	case flagverdict.Investigate:
+		return uistate.T("insights.verdictInvestigate")
+	}
+	return string(v)
+}
+
+// judgedFlagsNoteProps carries the hidden-flag count and the way back.
+type judgedFlagsNoteProps struct {
+	Count    int
+	Shown    bool
+	OnToggle func()
+}
+
+// judgedFlagsNote says how many flags a recorded judgement is hiding, and offers
+// them back. It is its own component so its click hook sits at a stable render
+// position.
+//
+// It exists because a suppression the user cannot see is indistinguishable from
+// a detector that stopped working. Saying "2 flags you judged are hidden" costs
+// one muted line and keeps the silence accountable.
+func judgedFlagsNote(props judgedFlagsNoteProps) ui.Node {
+	toggle := ui.UseEvent(Prevent(func() { props.OnToggle() }))
+	label := "insights.verdictHiddenShow"
+	if props.Shown {
+		label = "insights.verdictHiddenHide"
+	}
+	return P(css.Class("muted"), css.Class(tw.TextXs), Attr("data-testid", "insight-judged-note"),
+		uistate.TN("insights.verdictHiddenOne", "insights.verdictHiddenMany", props.Count),
+		" ",
+		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "insight-judged-toggle"),
+			OnClick(toggle), uistate.T(label)),
+	)
+}
+
+// flagKey identifies one category's flag in one month. The month is part of it
+// because a one-off is a statement about THAT month: next month's flag on the
+// same category is new information, and must not inherit last month's answer.
+func flagKey(category string, now time.Time) string {
+	return category + "|" + now.Format("2006-01")
+}
+
+// verdictFollowUp is the line a non-hiding verdict leaves on the row. "Wrong
+// category" and "Investigate" deliberately do not silence the flag, so without
+// this the reader answers the question and sees nothing happen — which reads as
+// the app ignoring them.
+func verdictFollowUp(v flagverdict.Verdict) string {
+	switch flagverdict.Effect(v).Follow {
+	case flagverdict.FollowRecategorize:
+		return uistate.T("insights.verdictFollowRecategorize")
+	case flagverdict.FollowTrack:
+		return uistate.T("insights.verdictFollowTrack")
+	}
+	return ""
 }
 
 // spendingHighlights renders an offline "what changed" card: it detects
