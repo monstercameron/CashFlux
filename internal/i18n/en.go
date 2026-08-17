@@ -2844,6 +2844,13 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-8 (SMART-A14): a utilization band CROSSING, which is an event — the
+	// current band is already on the credit page, and repeating it is not news.
+	"smart.a14.titleUp":   "%s has moved up into %s use",
+	"smart.a14.titleDown": "%s has come back down to %s use",
+	"smart.a14.detail":    "%s was at %d%% of its limit a month ago and is at %d%% now.",
+	"smart.a14.detailPay": "%s was at %d%% of its limit a month ago and is at %d%% now. Paying %s would put it back.",
+	"smart.a14.action":    "Open accounts",
 	// EC-10 (SMART-B16): a monthly budget for spending that does not happen
 	// monthly. One key per rhythm, because the detectors carry copy as keys.
 	"smart.b16.title":           "%s is budgeted monthly but doesn't spend monthly",

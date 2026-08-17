@@ -537,3 +537,61 @@ func TestCreditBandsTrackTheHealthScoreBands(t *testing.T) {
 		}
 	}
 }
+
+// EC-8: a band is a state and a crossing is an event. The watch is about the
+// event, and it must reuse THESE thresholds — a second set somewhere else would
+// have the app answer "is my utilization bad?" two different ways.
+func TestCrossReportsTheBandMoveAndItsDirection(t *testing.T) {
+	c, moved := credithealth.Cross(25, 45)
+	if !moved {
+		t.Fatal("25% → 45% did not register as a crossing")
+	}
+	if c.From != credithealth.BandUtilGood || c.To != credithealth.BandUtilFair {
+		t.Errorf("crossing = %q → %q, want Good → Fair", c.From, c.To)
+	}
+	if !c.Worsened() || c.Improved() {
+		t.Error("a move up the bands did not read as worse")
+	}
+	back, moved := credithealth.Cross(45, 25)
+	if !moved || !back.Improved() || back.Worsened() {
+		t.Errorf("the reverse move did not read as an improvement: %+v", back)
+	}
+}
+
+// A watch that only ever reports bad news is one people learn to dread and then
+// ignore, so improvement is a first-class result rather than silence.
+func TestMovementWithinABandIsNotACrossing(t *testing.T) {
+	if _, moved := credithealth.Cross(12, 29); moved {
+		t.Error("12% → 29% crossed nothing but reported a crossing")
+	}
+	if _, moved := credithealth.Cross(31, 31); moved {
+		t.Error("no movement reported a crossing")
+	}
+}
+
+// A card with no limit recorded is not a card at 100%, and treating it as one
+// would fire a warning about a missing field.
+func TestNoLimitMeansNoCrossing(t *testing.T) {
+	if _, moved := credithealth.Cross(-1, 40); moved {
+		t.Error("a card with no limit before produced a crossing")
+	}
+	if _, moved := credithealth.Cross(40, -1); moved {
+		t.Error("a card whose limit was removed produced a crossing")
+	}
+	if got := credithealth.UtilBandFor(-1); got != credithealth.BandUtilNoData {
+		t.Errorf("band = %q, want %q", got, credithealth.BandUtilNoData)
+	}
+}
+
+func TestUtilBandForMatchesTheDocumentedThresholds(t *testing.T) {
+	for _, tc := range []struct {
+		pct  int
+		want credithealth.UtilBand
+	}{{0, credithealth.BandUtilBest}, {10, credithealth.BandUtilBest}, {11, credithealth.BandUtilGood}, {30, credithealth.BandUtilGood},
+		{31, credithealth.BandUtilFair}, {50, credithealth.BandUtilFair}, {51, credithealth.BandUtilPoor}, {80, credithealth.BandUtilPoor},
+		{81, credithealth.BandUtilWorst}, {140, credithealth.BandUtilWorst}} {
+		if got := credithealth.UtilBandFor(tc.pct); got != tc.want {
+			t.Errorf("credithealth.UtilBandFor(%d) = %q, want %q", tc.pct, got, tc.want)
+		}
+	}
+}

@@ -795,6 +795,15 @@ func SampleDatasetAt(now time.Time) Dataset {
 	// a shopping blowout; with it, the budget can say the money was set aside on
 	// purpose. The feature is invisible without an example — the same gap that hid
 	// funding targets and retirement accounts.
+	// EC-8: a card that CROSSED a utilization band this month. The credit page
+	// already shows every card's current band; the finding is the movement, and
+	// without a card that actually moved there is nothing to see. A hospital bag
+	// and a nursery run on the card is the most ordinary way a balance jumps.
+	add(domain.Transaction{ID: "tx-card-nursery", AccountID: card,
+		Date:  time.Date(now.Year(), now.Month(), 4, 0, 0, 0, 0, time.UTC),
+		Payee: "Babylist", Desc: "Nursery furniture and hospital bag",
+		CategoryID: catShopping, Amount: usd(-185000), MemberID: priya, Cleared: true})
+
 	add(domain.Transaction{ID: "tx-goalfunded-crib", AccountID: checking,
 		Date:  time.Date(now.Year(), now.Month(), 6, 0, 0, 0, 0, time.UTC),
 		Payee: "Northside Goods", Desc: "Crib and nursery setup — from the baby fund",

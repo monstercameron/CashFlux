@@ -52,6 +52,63 @@ const (
 	BandUtilNoData UtilBand = "No data" // no credit limit set
 )
 
+// UtilBandFor exposes the utilization tier for a percentage, so callers that
+// need to talk about a card's band do not re-derive the thresholds and quietly
+// disagree with this package (EC-8). -1 means no limit is recorded.
+//
+// Named for the band it returns rather than plain "Band", which is already the
+// overall-score tier in this package — two different scales, and a reader who
+// confused them would compare a utilization band against a health band.
+func UtilBandFor(pct int) UtilBand { return utilBandFor(pct) }
+
+// Crossing describes a card's utilization moving from one band to another.
+type Crossing struct {
+	From, To UtilBand
+	FromPct  int
+	ToPct    int
+}
+
+// Worsened reports whether the move was in the wrong direction.
+func (c Crossing) Worsened() bool { return bandRank(c.To) > bandRank(c.From) }
+
+// Improved is the mirror, so a caller can congratulate as well as warn — a watch
+// that only ever reports bad news is one people learn to dread and then ignore.
+func (c Crossing) Improved() bool { return bandRank(c.To) < bandRank(c.From) }
+
+// bandRank orders the bands from best to worst so a crossing has a direction.
+// BandUtilNoData ranks with Best rather than Worst: a card with no limit
+// recorded is not a card at 100%, and treating it as one would fire a warning
+// about a missing field.
+func bandRank(b UtilBand) int {
+	switch b {
+	case BandUtilGood:
+		return 1
+	case BandUtilFair:
+		return 2
+	case BandUtilPoor:
+		return 3
+	case BandUtilWorst:
+		return 4
+	}
+	return 0 // Best, and No data
+}
+
+// Cross reports the band a card moved between, and whether it moved at all.
+//
+// Both percentages must be real: a card with no limit recorded (-1) has no
+// utilization to have crossed, and reporting one would be inventing a number for
+// a field nobody filled in.
+func Cross(fromPct, toPct int) (Crossing, bool) {
+	if fromPct < 0 || toPct < 0 {
+		return Crossing{}, false
+	}
+	from, to := utilBandFor(fromPct), utilBandFor(toPct)
+	if from == to {
+		return Crossing{}, false
+	}
+	return Crossing{From: from, To: to, FromPct: fromPct, ToPct: toPct}, true
+}
+
 // utilBandFor maps a utilization percentage to its UtilBand.
 // pct == -1 (no limit) → BandUtilNoData.
 func utilBandFor(pct int) UtilBand {

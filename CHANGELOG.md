@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Says when a card's utilization crosses a band (EC-8).** Not what band it is in — the credit page
+  already shows that — but when it moves, in either direction, with what a payment would take to put it
+  back.
+
+### Added
 - **Spots a budget with the wrong rhythm (EC-10).** A category budgeted monthly but actually spent on
   once or twice a year now says so, and offers the monthly set-aside that covers it — instead of reading
   as blown once and unused the rest of the time.

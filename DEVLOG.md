@@ -1,3 +1,32 @@
+## 2026-08-17 - a band is a state, a crossing is an event (EC-8)
+
+The ticket asked for per-liability 30/50/90% bands and, to its credit, told me to check the overlap with
+credithealth first. The overlap was the answer: that package has had per-card utilization bands since
+R22, at 10/30/50/80. Building the ticket's set alongside them would have given the app two answers to "is
+my utilization bad?" depending on which screen asked - which is the same failure I deleted a parallel
+rules engine over earlier today. So the watch uses credithealth's own thresholds, and the band lookup is
+exported so nothing re-derives them.
+
+What was actually missing is the event. The credit page already shows every card's current band, so an
+alert repeating it tells somebody what they can see, every time they look. The finding is the movement:
+utilization now against thirty days ago, which is roughly a statement cycle and therefore a comparison
+the reader can check against the paper that arrives.
+
+Two rules made it worth shipping rather than just correct. It reports good news too - a card coming back
+down gets the same line at a lower severity, because a watch that only ever reports bad news is one
+people learn to dread and then stop reading. And only a worsening carries a figure, which is what it
+would take to get BACK rather than the balance the card already shows; an improvement needs no action,
+and offering one would invent work.
+
+The no-limit case is the morning's lesson again in a different costume: a card with no credit limit
+recorded is not a card at 100%, and a watch that treated it as one would fire a warning about a missing
+field.
+
+The sample needed a card that actually moved, so the rewards card now carries a nursery run this month.
+On the ranked list it reads "Rewards Credit Card has moved up into very high use - $233.38 once", sitting
+above the next item "because it is worth more up front" - three features from three different hours of
+today meeting on one line without any of them being touched for it.
+
 ## 2026-08-17 - the budget is not wrong about the money, it is wrong about the rhythm (EC-10)
 
 A monthly budget for a bill that arrives once a year produces eleven months of a green bar that means

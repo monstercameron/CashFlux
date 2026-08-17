@@ -1509,8 +1509,39 @@ survived the duplicate/scope filters but didn't make the engine cut):
   stated rate above zero, but the model is still ambiguous.
 - [ ] **EC-7 Transfer memory prefill** (SMART, Accounts) — repeated cross-currency corridor →
   prefill FX rate + fee from last time (rides ReceivedMinor/FeeMinor).
-- [ ] **EC-8 Credit-utilization threshold watch** (SMART, Accounts) — per-liability 30/50/90% bands;
+- [x] **EC-8 Credit-utilization threshold watch** (SMART, Accounts) — per-liability 30/50/90% bands;
   check overlap with credithealth's internals first.
+  — DONE (2026-08-17), and the overlap check the ticket asked for changed what got built.
+
+  THE BANDS ALREADY EXIST. `internal/credithealth` has had per-card utilization bands since R22, at
+  10/30/50/80. Adding the ticket's 30/50/90 set would have given the app two answers to "is my
+  utilization bad?" depending on which screen asked — the same failure I deleted a parallel rules engine
+  over earlier this session. So the watch uses credithealth's own thresholds, and `UtilBandFor` is now
+  exported so no caller re-derives them. (Named for the band it returns rather than plain `Band`, which
+  is already this package's overall-score tier — two different scales one letter apart.)
+
+  A BAND IS A STATE; A CROSSING IS AN EVENT, and only the event is news. The credit page already shows
+  every card's current band, so repeating it as an alert would tell somebody what they can see, every
+  time they look. `credithealth.Cross` reports the move and its direction; the detector compares
+  utilization now against thirty days ago — roughly a statement cycle, so it is a comparison the reader
+  can check against the paper that arrives.
+
+  IT REPORTS GOOD NEWS TOO. A card coming back down gets the same line at Info severity: a watch that
+  only ever reports bad news is one people learn to dread and then stop reading. Only a WORSENING carries
+  a figure, and the figure is what it would take to get BACK (paying $X returns it to the previous band)
+  — not the balance, which the card already shows. An improvement needs no action, and offering one would
+  invent work.
+
+  NO LIMIT MEANS NO CROSSING. A card with no credit limit recorded is not a card at 100%, and treating it
+  as one would fire a warning about a missing field — the same conflation WF4-b removed from interest
+  rates this morning.
+
+  SAMPLE DATA: the rewards card now carries a nursery run this month that pushes it across a band,
+  because the finding IS the movement and a card that never moves shows nothing.
+
+  VERIFIED IN A BROWSER on the ranked list: "Rewards Credit Card has moved up into very high use ·
+  $233.38 once", ranked above the next item "because it is worth more up front". Five detector tests plus
+  four on the crossing helpers.
 - [ ] **EC-9 Close-out preview** (SMART, Budgets) — before committing period close-out: rolls over
   $X, carried debt $Y, next month's caps become Z.
 - [x] **EC-10 Cadence mismatch detector** (SMART, Budgets) — monthly budget whose spend posts
