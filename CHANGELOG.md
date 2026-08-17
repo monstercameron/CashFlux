@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The recurring calendar shows what your balance will be, not only what is due (WF9).** Each day of the
+  displayed month carries its projected closing balance, days that end short are marked, and a note names
+  the first day the balance goes negative — the day you can still do something about — alongside the
+  worst point and how many days are affected.
+
+### Added
 - **Spending a goal paid for is no longer treated as overspending (WF18).** A purchase can be linked to
   the goal that funded it, and the budget says so — including when the goal is the only reason the budget
   would otherwise read as over. The spending is separated, never hidden: the money still left the account

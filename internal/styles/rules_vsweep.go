@@ -978,4 +978,25 @@ func registerVSweep() {
   .tax-table tr, .loan-sched tr, .lot-row{break-inside:avoid; page-break-inside:avoid;}
 }`)
 
+	// ─── WF9: projected closing balance on the bills calendar ────────────────
+	rule(".cal-bal",
+		display("block"),
+		marginTop("auto"),
+		fontSize("var(--type-11, 0.7rem)"),
+		fontVariantNumeric("tabular-nums"),
+		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+	)
+	// A day that ends in the red is the one thing on this grid somebody has to
+	// act on, so it is the only thing that raises its voice.
+	rule(".cal-bal.is-short",
+		color("var(--text-down, #dc2626)"),
+		fontWeight("600"),
+	)
+	rule(".cal-cell.short",
+		background("color-mix(in srgb, var(--text-down, #dc2626) 8%, transparent)"),
+	)
+
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -21,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
@@ -485,9 +487,11 @@ func BillsPanel(p BillsPanelProps) ui.Node {
 			}
 			legend = P(css.Class("muted bills-cal-legend"), Attr("data-testid", "bills-cal-legend"), uistate.T(key))
 		}
+		closing, shortNote := billsProjectedClosing(app, calBills, dispMonth, base)
 		calendarSection = recurSection("sec-bills-calendar", uistate.T("bills.calendar", monthLabel(dispMonth)), nav,
 			Fragment(
-				billsCalendar(bills.MonthCalendar(calBills, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, ghost, ahead),
+				billsCalendar(bills.MonthCalendar(calBills, dispMonth.Year(), dispMonth.Month(), pr.WeekStartWeekday()), pr.WeekStartWeekday(), now, ghost, ahead, closing, base),
+				shortNote,
 				legend,
 			))
 	}
@@ -517,7 +521,13 @@ func monthLabel(t time.Time) string { return t.Format("January 2006") }
 // ghost marks the inactive schedule's dates (hollow markers); ahead marks pay-on
 // dates carrying payments the smart plan MOVED there (accent treatment) so a
 // pulled-forward payment is distinguishable from an ordinary due date.
-func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, ghost, ahead map[string]int) ui.Node {
+// billsCalendar renders the month grid.
+//
+// closing carries the projected end-of-day balance per date (WF9), so a calendar
+// of due dates becomes a calendar of what the account will actually hold. A grid
+// that shows only what is due answers "what is coming" and not "can I cover it",
+// and the second is the question somebody opens this page with.
+func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, ghost, ahead map[string]int, closing map[string]int64, base string) ui.Node {
 	todayKey := now.Format("2006-01-02")
 	args := []any{css.Class("cal-grid")}
 	for i := 0; i < 7; i++ {
@@ -576,10 +586,25 @@ func billsCalendar(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.
 			if n := ghost[day.Date.Format("2006-01-02")]; n > 0 {
 				ghostDot = Span(css.Class("cal-dot cal-dot--ghost"), Attr("title", uistate.T("bills.ghostTitle", n)), Attr("aria-label", uistate.T("bills.ghostTitle", n)))
 			}
-			args = append(args, Div(ClassStr(cls), Attr("data-date", day.Date.Format("2006-01-02")),
+			// The projected closing balance, and a marker when the day ends in the
+			// red. Shown only for days inside the month: the padding days belong to
+			// a neighbouring month and a balance on them would read as this one's.
+			var balNode ui.Node = Fragment()
+			key := day.Date.Format("2006-01-02")
+			if v, ok := closing[key]; ok && day.InMonth {
+				balCls := "cal-bal"
+				if v < 0 {
+					balCls = "cal-bal is-short"
+					cls += " short"
+				}
+				balNode = Span(css.Class(balCls), Attr("data-testid", "cal-bal-"+key),
+					fmtMoney(money.New(v, base)))
+			}
+			args = append(args, Div(ClassStr(cls), Attr("data-date", key),
 				Span(css.Class("cal-day"), strconv.Itoa(day.Date.Day())),
 				dot,
 				ghostDot,
+				balNode,
 			))
 		}
 	}
@@ -919,4 +944,63 @@ func daysUntilLabel(n int) string {
 	default:
 		return uistate.T("bills.dueInDays", n)
 	}
+}
+
+// billsProjectedClosing projects the liquid balance across the displayed month
+// (WF9), returning the end-of-day balance per date and a note naming the first
+// day it goes short.
+//
+// It projects from TODAY's liquid balance forward, which means a month already
+// past shows no projection — a "projected" balance for days that have happened
+// would be a forecast of the past, and the ledger already knows what actually
+// occurred.
+func billsProjectedClosing(app *appstate.App, bs []bills.Bill, month time.Time, base string) (map[string]int64, ui.Node) {
+	if app == nil {
+		return nil, Fragment()
+	}
+	now := time.Now()
+	monthEnd := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0)
+	if monthEnd.Before(now) {
+		return nil, Fragment()
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	liq, err := ledger.LiquidBalance(app.Accounts(), app.Transactions(), rates)
+	if err != nil {
+		return nil, Fragment()
+	}
+	items := make([]billsched.Item, 0, len(bs))
+	assign := make(map[string]time.Time, len(bs))
+	for i, b := range bs {
+		if b.DueDate.Before(now) {
+			// A bill already due is either paid or overdue; either way the ledger
+			// has the truth and projecting it again would double-count it.
+			continue
+		}
+		id := b.Name + strconv.Itoa(i)
+		amt := b.Amount.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		items = append(items, billsched.Item{ID: id, Amount: amt, Due: b.DueDate})
+		assign[id] = b.DueDate
+	}
+	horizon := int(monthEnd.Sub(now).Hours() / 24)
+	pr, ok := billsched.Project(liq.Amount, items, assign, nil, 0, now, horizon)
+	if !ok {
+		return nil, Fragment()
+	}
+	closing := make(map[string]int64, len(pr.Days))
+	for _, d := range pr.Days {
+		closing[d.Date.Format("2006-01-02")] = d.ClosingMinor
+	}
+	var note ui.Node = Fragment()
+	if pr.AnyShortfall() {
+		// The FIRST short day leads, not the deepest: "when does this break" is
+		// actionable in a way "how bad does it get" is not.
+		note = P(ClassStr("muted "+tw.ColorClass("text-down")), Attr("data-testid", "bills-cal-short"),
+			uistate.T("bills.calShortfall",
+				uistate.LoadPrefs().FormatDate(pr.FirstShortDate),
+				fmtMoney(money.New(pr.LowMinor, base)), pr.DaysShort))
+	}
+	return closing, note
 }

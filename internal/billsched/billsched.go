@@ -469,15 +469,11 @@ func simulate(start int64, items []Item, assign map[string]time.Time, paydays []
 		debits[dayKey(clampToWindow(assign[it.ID], from, horizonDays))] += it.Amount
 	}
 
+	curve := walk(start, income, debits, from, horizonDays)
 	m := Metrics{Low: start, LowDate: from}
-	bal := start
-	for d := 0; d <= horizonDays; d++ {
-		day := from.AddDate(0, 0, d)
-		k := dayKey(day)
-		bal += income[k]
-		bal -= debits[k]
-		if bal < m.Low {
-			m.Low, m.LowDate = bal, day
+	for _, d := range curve {
+		if d.ClosingMinor < m.Low {
+			m.Low, m.LowDate = d.ClosingMinor, d.Date
 		}
 	}
 
@@ -511,4 +507,98 @@ func simulate(start int64, items []Item, assign map[string]time.Time, paydays []
 	sort.Slice(loads, func(i, j int) bool { return loads[i].Payday.Before(loads[j].Payday) })
 	m.Loads = loads
 	return m
+}
+
+// ─── WF9: the day-by-day curve, exposed ─────────────────────────────────────
+//
+// The simulation has always walked a daily balance; it only ever reported the
+// low point. A calendar needs the whole line, and building a second simulator to
+// get it would guarantee the two eventually disagreed about the same month —
+// so the walk is extracted and both callers share it.
+
+// Day is one day of a projected balance curve.
+type Day struct {
+	Date time.Time
+	// InMinor and OutMinor are what lands and what leaves that day, so a surface
+	// can explain a drop rather than only draw one.
+	InMinor, OutMinor int64
+	// ClosingMinor is the balance at the end of the day.
+	ClosingMinor int64
+}
+
+// Short reports whether the day ends in the red.
+func (d Day) Short() bool { return d.ClosingMinor < 0 }
+
+// Projection is a whole horizon's curve with the readings that matter.
+type Projection struct {
+	Days []Day
+	// LowMinor and LowDate are the worst point, and FirstShortDate the FIRST day
+	// the balance goes negative.
+	//
+	// The two are different questions and people ask the second one: "when does
+	// this break" is actionable in a way that "how bad does it get" is not, and
+	// the deepest point is often weeks after the first trouble.
+	LowMinor       int64
+	LowDate        time.Time
+	FirstShortDate time.Time
+	// DaysShort is how many days end negative.
+	DaysShort int
+}
+
+// AnyShortfall reports whether the horizon dips below zero at all.
+func (p Projection) AnyShortfall() bool { return !p.FirstShortDate.IsZero() }
+
+// Project walks a starting balance forward day by day.
+//
+// Reports ok=false for a non-positive horizon rather than an empty curve, so a
+// caller can tell "nothing projected" from "projected, and it is flat".
+func Project(startMinor int64, items []Item, assign map[string]time.Time,
+	paydays []time.Time, incomePerPayday int64, from time.Time, horizonDays int) (Projection, bool) {
+
+	if horizonDays <= 0 || from.IsZero() {
+		return Projection{}, false
+	}
+	dayKey := func(t time.Time) string { return t.Format("2006-01-02") }
+	end := from.AddDate(0, 0, horizonDays)
+
+	income := map[string]int64{}
+	for _, p := range paydays {
+		if !p.Before(from) && !p.After(end) {
+			income[dayKey(p)] += incomePerPayday
+		}
+	}
+	debits := map[string]int64{}
+	for _, it := range items {
+		debits[dayKey(clampToWindow(assign[it.ID], from, horizonDays))] += it.Amount
+	}
+
+	pr := Projection{Days: walk(startMinor, income, debits, from, horizonDays)}
+	pr.LowMinor, pr.LowDate = startMinor, from
+	for _, d := range pr.Days {
+		if d.ClosingMinor < pr.LowMinor {
+			pr.LowMinor, pr.LowDate = d.ClosingMinor, d.Date
+		}
+		if d.Short() {
+			pr.DaysShort++
+			if pr.FirstShortDate.IsZero() {
+				pr.FirstShortDate = d.Date
+			}
+		}
+	}
+	return pr, true
+}
+
+// walk is the shared day-by-day fold.
+func walk(start int64, income, debits map[string]int64, from time.Time, horizonDays int) []Day {
+	out := make([]Day, 0, horizonDays+1)
+	bal := start
+	for d := 0; d <= horizonDays; d++ {
+		day := from.AddDate(0, 0, d)
+		k := day.Format("2006-01-02")
+		in, outAmt := income[k], debits[k]
+		bal += in
+		bal -= outAmt
+		out = append(out, Day{Date: day, InMinor: in, OutMinor: outAmt, ClosingMinor: bal})
+	}
+	return out
 }

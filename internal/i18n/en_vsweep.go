@@ -757,6 +757,9 @@ var vSweepKeys = Catalog{
 	"budgets.goalFunded":         "%s of this came from money you had saved for it.",
 	"budgets.goalFundedRescued":  "%s of this came from money you had saved for it — without that, this would read as over budget.",
 
+	// WF9 — a calendar of what the balance will be, not only what is due.
+	"bills.calShortfall": "On this projection the balance first goes short on %s, bottoming at %s across %d days.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

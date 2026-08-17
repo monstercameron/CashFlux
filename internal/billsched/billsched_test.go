@@ -305,3 +305,127 @@ func TestOptimizeSameCalendarDayAcrossLocationsIsNotAMove(t *testing.T) {
 		t.Errorf("pay-on must stay the due day, got %s", got)
 	}
 }
+
+// ─── WF9: the exposed day-by-day curve ──────────────────────────────────────
+
+func projDay(y int, m time.Month, d int) time.Time {
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+func TestProjectWalksEveryDayOfTheHorizon(t *testing.T) {
+	from := projDay(2026, time.August, 1)
+	pr, ok := Project(100_000, nil, nil, nil, 0, from, 30)
+	if !ok {
+		t.Fatal("expected a projection")
+	}
+	if len(pr.Days) != 31 {
+		t.Errorf("days = %d, want 31 (inclusive of both ends)", len(pr.Days))
+	}
+	if pr.Days[0].ClosingMinor != 100_000 || pr.Days[30].ClosingMinor != 100_000 {
+		t.Error("a horizon with no movements must stay flat")
+	}
+}
+
+// "Nothing projected" and "projected, and flat" are different answers.
+func TestProjectRefusesANonHorizon(t *testing.T) {
+	if _, ok := Project(100_000, nil, nil, nil, 0, projDay(2026, time.August, 1), 0); ok {
+		t.Error("a zero horizon must refuse rather than return an empty curve")
+	}
+	if _, ok := Project(100_000, nil, nil, nil, 0, time.Time{}, 30); ok {
+		t.Error("no start date must refuse")
+	}
+}
+
+func TestIncomeAndDebitsLandOnTheirOwnDays(t *testing.T) {
+	from := projDay(2026, time.August, 1)
+	items := []Item{{ID: "rent", Amount: 120_000, Due: projDay(2026, time.August, 5)}}
+	assign := map[string]time.Time{"rent": projDay(2026, time.August, 5)}
+	paydays := []time.Time{projDay(2026, time.August, 10)}
+	pr, ok := Project(100_000, items, assign, paydays, 200_000, from, 20)
+	if !ok {
+		t.Fatal("expected a projection")
+	}
+	byDate := map[string]Day{}
+	for _, d := range pr.Days {
+		byDate[d.Date.Format("2006-01-02")] = d
+	}
+	if got := byDate["2026-08-05"]; got.OutMinor != 120_000 {
+		t.Errorf("the 5th shows %d out, want 120000", got.OutMinor)
+	}
+	if got := byDate["2026-08-10"]; got.InMinor != 200_000 {
+		t.Errorf("the 10th shows %d in, want 200000", got.InMinor)
+	}
+}
+
+// "When does this break" is actionable in a way "how bad does it get" is not,
+// and the deepest point is often weeks after the first trouble.
+func TestFirstShortfallIsSeparateFromTheLowPoint(t *testing.T) {
+	from := projDay(2026, time.August, 1)
+	items := []Item{
+		{ID: "a", Amount: 150_000, Due: projDay(2026, time.August, 3)},
+		{ID: "b", Amount: 100_000, Due: projDay(2026, time.August, 20)},
+	}
+	assign := map[string]time.Time{
+		"a": projDay(2026, time.August, 3),
+		"b": projDay(2026, time.August, 20),
+	}
+	pr, ok := Project(100_000, items, assign, nil, 0, from, 30)
+	if !ok {
+		t.Fatal("expected a projection")
+	}
+	if !pr.AnyShortfall() {
+		t.Fatal("this horizon goes negative and must say so")
+	}
+	if !pr.FirstShortDate.Equal(projDay(2026, time.August, 3)) {
+		t.Errorf("first shortfall = %v, want the 3rd", pr.FirstShortDate)
+	}
+	if !pr.LowDate.Equal(projDay(2026, time.August, 20)) {
+		t.Errorf("low point = %v, want the 20th — later than the first trouble", pr.LowDate)
+	}
+	if pr.LowMinor != -150_000 {
+		t.Errorf("low = %d, want -150000", pr.LowMinor)
+	}
+}
+
+func TestDaysShortCountsEveryNegativeDay(t *testing.T) {
+	from := projDay(2026, time.August, 1)
+	items := []Item{{ID: "a", Amount: 150_000, Due: projDay(2026, time.August, 2)}}
+	assign := map[string]time.Time{"a": projDay(2026, time.August, 2)}
+	paydays := []time.Time{projDay(2026, time.August, 6)}
+	pr, _ := Project(100_000, items, assign, paydays, 200_000, from, 10)
+	// Negative from the 2nd through the 5th: four days.
+	if pr.DaysShort != 4 {
+		t.Errorf("days short = %d, want 4", pr.DaysShort)
+	}
+}
+
+func TestAHealthyHorizonReportsNoShortfall(t *testing.T) {
+	pr, _ := Project(500_000, nil, nil, nil, 0, projDay(2026, time.August, 1), 30)
+	if pr.AnyShortfall() || pr.DaysShort != 0 {
+		t.Errorf("a flat positive horizon reported a shortfall: %+v", pr)
+	}
+	if !pr.FirstShortDate.IsZero() {
+		t.Error("no shortfall means no first-shortfall date, not a zero-time one to render")
+	}
+}
+
+// The curve and the low-point metric must agree — two simulators that can
+// disagree about the same month is exactly what exposing this avoided.
+func TestTheCurveAgreesWithTheMetricsLowPoint(t *testing.T) {
+	from := projDay(2026, time.August, 1)
+	items := []Item{
+		{ID: "a", Amount: 90_000, Due: projDay(2026, time.August, 4)},
+		{ID: "b", Amount: 60_000, Due: projDay(2026, time.August, 18)},
+	}
+	assign := map[string]time.Time{
+		"a": projDay(2026, time.August, 4),
+		"b": projDay(2026, time.August, 18),
+	}
+	paydays := []time.Time{projDay(2026, time.August, 15)}
+	m := simulate(200_000, items, assign, paydays, 180_000, from, 30)
+	pr, _ := Project(200_000, items, assign, paydays, 180_000, from, 30)
+	if m.Low != pr.LowMinor || !m.LowDate.Equal(pr.LowDate) {
+		t.Errorf("metrics say low %d on %v; curve says %d on %v",
+			m.Low, m.LowDate, pr.LowMinor, pr.LowDate)
+	}
+}

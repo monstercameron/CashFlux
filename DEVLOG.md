@@ -1,3 +1,36 @@
+## 2026-08-17 - the curve was being computed and thrown away (WF9)
+
+The recurring calendar already placed bills and income on their days. What it could not say was what the
+account would actually hold. A grid of due dates answers "what is coming"; it does not answer "can I
+cover it", and the second is the question somebody opens that page with.
+
+The interesting part is that the answer already existed. `billsched.simulate` has always walked a daily
+balance forward - and reported only the low point, discarding the curve. Writing a second simulator to
+get the line back would have guaranteed that two pieces of code eventually disagreed about the same
+month, so the walk is extracted and exported instead, with a test asserting the curve and the
+low-point metric cannot diverge.
+
+First shortfall is reported separately from the low point, and leads. "When does this break" is
+actionable in a way "how bad does it get" is not, and the deepest day is often weeks after the first
+trouble.
+
+Then the part worth actually recording. I built all of this into `billsCalendar` in `bills_screen.go`,
+and nothing rendered. `BillsPanel` is not routed - /bills, /subscriptions and /recurring all render
+`RhythmSurface`. Line 512 of that same file says so: "The old BillsPanel is retained as a helper source,
+no longer routed."
+
+But `BillsPanel`'s own doc comment, 460 lines above, still says "It is mounted on the /bills route (via
+the Bills() thin shell)". I read that one, believed it, and built a feature into dead code.
+
+Two comments in one file disagreeing about whether the code below is alive, and I trusted the one
+attached to the thing I was editing - which is the one anybody would read. The lesson is not "read more
+comments"; it is that a stale comment claiming code is live costs more than the dead code does, because
+the dead code is merely inert while the comment actively misdirects. Filed WF9-b to fix or delete it.
+
+Left in progress: the ticket also wants safe-to-spend by date, dragging a planned payment to a new date
+with the forecast following, and wiring a date change through to debt payoff, budgets, goals and Health.
+This clause is done and verified 6/6; the rest is not.
+
 ## 2026-08-17 - the budget could not tell two identical spends apart (WF18)
 
 Two transactions can look the same in a ledger - same amount, same category, same day - and mean

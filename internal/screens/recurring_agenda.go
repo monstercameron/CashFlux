@@ -5,14 +5,18 @@
 package screens
 
 import (
+	"strconv"
+
 	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -421,16 +425,28 @@ func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string
 	// MonthCalendar supplies the tested date scaffolding (weeks, in/out-of-month);
 	// the cells are ours so they can carry amounts.
 	grid := bills.MonthCalendar(nil, disp.Year(), disp.Month(), pr.WeekStartWeekday())
+	// WF9: project the account forward across the displayed month, from the same
+	// agenda items the grid is drawing — so the balances and the chips can never
+	// describe different obligations.
+	closing, shortNote := rhyProjectedClosing(app,
+		buildAgendaSpan(app, now, disp.AddDate(0, 0, -7), monthEnd.AddDate(0, 0, 7), base),
+		disp, base, now)
 	return Fragment(
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
 			Span(css.Class("rhy-sec-note"), Style(map[string]string{"margin": "0"}), monthLabel(disp)), nav),
-		rhyCalendarGrid(grid, pr.WeekStartWeekday(), now, byDay),
+		rhyCalendarGrid(grid, pr.WeekStartWeekday(), now, byDay, closing, base),
+		shortNote,
 	)
 }
 
 // rhyCalendarGrid draws the month grid with the day's real amounts in-cell.
 // Display-only (no hooks), so it is safe inside the day loop.
-func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, byDay map[string][]agendaItem) ui.Node {
+// rhyCalendarGrid renders the live agenda calendar.
+//
+// closing carries the projected end-of-day balance per date (WF9). A calendar of
+// due dates answers "what is coming"; it does not answer "can I cover it", which
+// is the question somebody opens this page with.
+func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now time.Time, byDay map[string][]agendaItem, closing map[string]int64, base string) ui.Node {
 	todayKey := now.Format("2006-01-02")
 	args := []any{css.Class("cal-grid rhy-cal")}
 	for i := 0; i < 7; i++ {
@@ -447,8 +463,20 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 			if key == todayKey {
 				cls += " today"
 			}
+			// The projected closing balance, and a marker when the day ends short.
+			// Only for days inside the month: a padding day belongs to a neighbouring
+			// month and a balance there would read as this one's.
+			var balNode ui.Node = Fragment()
+			if v, ok := closing[key]; ok && day.InMonth {
+				balCls := "cal-bal"
+				if v < 0 {
+					balCls, cls = "cal-bal is-short", cls+" short"
+				}
+				balNode = Span(css.Class(balCls), Attr("data-testid", "cal-bal-"+key),
+					fmtMoney(money.New(v, base)))
+			}
 			cell := []any{ClassStr(cls), Attr("data-testid", "rhy-cal-"+key),
-				Span(css.Class("rhy-cal-day"), day.Date.Format("2"))}
+				Span(css.Class("rhy-cal-day"), day.Date.Format("2")), balNode}
 			items := byDay[key]
 			const maxChips = 3
 			for i, it := range items {
@@ -599,4 +627,75 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		Span(ClassStr("rhy-ag-amt "+recurAmountTone(it.Amount)), fmtMoney(it.Amount)),
 		Div(css.Class("rhy-ag-verb"), verb, kebab),
 	)
+}
+
+// rhyProjectedClosing projects the liquid balance across the displayed month
+// (WF9), returning the end-of-day balance per date and a note naming the first
+// day it goes short.
+//
+// Projects from TODAY forward, so a month already past shows nothing: a
+// "projected" balance for days that have happened would be a forecast of the
+// past, and the ledger already knows what occurred.
+func rhyProjectedClosing(app *appstate.App, items []agendaItem, month time.Time,
+	base string, now time.Time) (map[string]int64, ui.Node) {
+
+	if app == nil {
+		return nil, Fragment()
+	}
+	monthEnd := time.Date(month.Year(), month.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0)
+	if monthEnd.Before(now) {
+		return nil, Fragment()
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	liq, err := ledger.LiquidBalance(app.Accounts(), app.Transactions(), rates)
+	if err != nil {
+		return nil, Fragment()
+	}
+	sched := make([]billsched.Item, 0, len(items))
+	assign := make(map[string]time.Time, len(items))
+	var paydays []time.Time
+	var incomePer int64
+	for i, it := range items {
+		if it.Date.Before(now) {
+			// Already due: the ledger has the truth, and projecting it again would
+			// count the same money twice.
+			continue
+		}
+		if it.Income {
+			// Income is projected as its own dated credit rather than folded into a
+			// per-payday average — an average would smooth away the very gap between
+			// a bill and the paycheque that covers it.
+			paydays = append(paydays, it.Date)
+			if amt := it.Amount.Amount; amt > incomePer {
+				incomePer = amt
+			}
+			continue
+		}
+		id := it.Name + strconv.Itoa(i)
+		amt := it.Amount.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		sched = append(sched, billsched.Item{ID: id, Amount: amt, Due: it.Date})
+		assign[id] = it.Date
+	}
+	horizon := int(monthEnd.Sub(now).Hours() / 24)
+	pr, ok := billsched.Project(liq.Amount, sched, assign, paydays, incomePer, now, horizon)
+	if !ok {
+		return nil, Fragment()
+	}
+	closing := make(map[string]int64, len(pr.Days))
+	for _, d := range pr.Days {
+		closing[d.Date.Format("2006-01-02")] = d.ClosingMinor
+	}
+	var note ui.Node = Fragment()
+	if pr.AnyShortfall() {
+		// The FIRST short day leads, not the deepest: "when does this break" is
+		// actionable in a way "how bad does it get" is not.
+		note = P(ClassStr("muted "+tw.ColorClass("text-down")), Attr("data-testid", "rhy-cal-short"),
+			uistate.T("bills.calShortfall",
+				uistate.LoadPrefs().FormatDate(pr.FirstShortDate),
+				fmtMoney(money.New(pr.LowMinor, base)), pr.DaysShort))
+	}
+	return closing, note
 }

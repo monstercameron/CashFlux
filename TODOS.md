@@ -177,11 +177,48 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
 
   What is NOT done: the standalone watchlist surface the ticket implies (these are saved-view rows,
   not their own page).
-- [ ] **WF9 — Projected-balance cash-flow calendar.** Day-by-day account calendar: expected income,
+- [~] **WF9 — Projected-balance cash-flow calendar.** Day-by-day account calendar: expected income,
   bills/subs, debt payments, goal contributions, projected closing balance, earliest shortfall, min
   balance, days-at-risk, safe-to-spend by date. **Drag a planned payment to another date** and the
   forecast updates locally; trace every movement to its source. Beat Simplifi by wiring each date
   change to debt payoff, budget health, goals, and Health.
+  — PROJECTED CLOSING BALANCE, EARLIEST SHORTFALL, MIN BALANCE AND DAYS-AT-RISK DONE (2026-08-17). The
+  calendar already placed bills and income per day; what it could not say was what the account would
+  actually HOLD. A grid of due dates answers "what is coming" and not "can I cover it", and the second is
+  the question somebody opens the page with.
+
+  THE CURVE WAS ALREADY BEING COMPUTED AND THROWN AWAY. `billsched.simulate` has always walked a daily
+  balance and reported only the low point. Rather than write a second simulator — which would have
+  guaranteed the two eventually disagreed about the same month — the walk is extracted and exported as
+  `billsched.Project`, with a test asserting the curve and the existing low-point metric cannot diverge.
+
+  FIRST SHORTFALL IS REPORTED SEPARATELY FROM THE LOW POINT, and leads. "When does this break" is
+  actionable in a way "how bad does it get" is not, and the deepest day is often weeks after the first
+  trouble. `Project` refuses a non-horizon rather than returning an empty curve, so "nothing projected"
+  and "projected, and flat" stay distinguishable.
+
+  Padding days from neighbouring months carry no balance — one there would read as this month's — and a
+  month already past shows nothing, because a "projected" balance for days that have happened is a
+  forecast of the past.
+
+  DEAD CODE FOUND: I built this into `billsCalendar` in `bills_screen.go` first, and nothing rendered.
+  `BillsPanel` is not routed — `/bills`, `/subscriptions` and `/recurring` all render `RhythmSurface`
+  — and while line 512 says so plainly, `BillsPanel`'s OWN doc comment still claims "It is mounted on
+  the /bills route", which is what I read and believed. Moved to the live grid (`rhyCalendarGrid`). The
+  stale comment is worth fixing on its own; filed as WF9-b along with the rest of the ticket.
+
+  VERIFIED IN A BROWSER: 6/6 — 15 days carry a balance, it moves across the month rather than repeating,
+  and padding days carry none.
+
+  STILL OPEN in this bundle: safe-to-spend by date, dragging a planned payment to another date with the
+  forecast updating, tracing each movement to its source, and wiring a date change through to debt
+  payoff / budget health / goals / Health.
+- [ ] **WF9-b — Bills screen: stale doc comment on unrouted code.** `screens.BillsPanel`'s doc comment
+  says "It is mounted on the /bills route (via the Bills() thin shell)". It is not — `Bills()` delegates
+  to `rhythmSurfaceFocused`, and the comment 460 lines below correctly says the panel is "no longer
+  routed". I read the wrong one and built a feature into dead code. Either delete `BillsPanel` and
+  `billsCalendar` if nothing else uses them, or fix the comment; a comment that says code is live when
+  it is not costs more than the code does.
 - [ ] **WF10 — Explainable allocation optimizer.** One place to compare spare-cash destinations
   (emergency reserve, high-interest debt, upcoming annual bill, goals, underfunded budgets,
   investments) under constraints (keep N months cash, never miss minimums, hit a goal by date, keep
