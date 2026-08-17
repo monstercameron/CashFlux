@@ -4,6 +4,7 @@ package server
 
 import (
 	"bytes"
+	"io"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -52,6 +53,9 @@ func appHandler(cfg Config) http.Handler {
 			setAppAssetHeaders(w, headerName)
 			if path.Base(headerName) == "index.html" {
 				serveHostedAppIndex(w, r, root, headerName)
+				return
+			}
+			if servePrecompressed(w, r, root, rel) {
 				return
 			}
 			files.ServeHTTP(w, r)
@@ -154,6 +158,87 @@ func appReservedPath(requestPath string) bool {
 		if requestPath == prefix || strings.HasPrefix(requestPath, prefix+"/") {
 			return true
 		}
+	}
+	return false
+}
+
+// servePrecompressed serves a .br or .gz sibling of rel when the client accepts
+// that encoding, and reports whether it handled the request.
+//
+// # Why this exists
+//
+// The app cannot paint until its WebAssembly has arrived, and that binary is the
+// single largest thing this server ships. Measured against the droplet: 17.4 MB
+// gzipped takes between 12 seconds and two minutes depending on how much outbound
+// bandwidth is available at that moment, and the whole time the user is looking at
+// a splash screen. Brotli is 11.4 MB of the same binary — a third less — and the
+// browser decompresses Content-Encoding: br natively, so nothing has to be
+// unpacked in JavaScript.
+//
+// Only .wasm is negotiated. Everything else the app serves is small enough that
+// the extra stat calls per request would cost more than the bytes they save.
+//
+// The Content-Type stays the UNCOMPRESSED type, because that is what it is once
+// the encoding is undone — and WebAssembly.instantiateStreaming refuses anything
+// that is not application/wasm, so getting this wrong breaks the boot rather than
+// merely slowing it.
+func servePrecompressed(w http.ResponseWriter, r *http.Request, root fs.FS, rel string) bool {
+	if path.Ext(rel) != ".wasm" {
+		return false
+	}
+	accept := r.Header.Get("Accept-Encoding")
+	// Brotli first: it is the smaller of the two, and a client that accepts br
+	// accepts gzip as well, so asking in the other order would never choose it.
+	for _, c := range []struct{ enc, ext string }{{"br", ".br"}, {"gzip", ".gz"}} {
+		if !acceptsEncoding(accept, c.enc) {
+			continue
+		}
+		name := rel + c.ext
+		f, err := root.Open(name)
+		if err != nil {
+			continue
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil || info.IsDir() {
+			continue
+		}
+		rs, ok := f.(io.ReadSeeker)
+		if !ok {
+			// http.ServeContent needs to seek for range requests. Without it, fall
+			// through to the plain file server rather than serving something a range
+			// request would mangle.
+			continue
+		}
+		w.Header().Set("Content-Encoding", c.enc)
+		// The cached copy depends on which encoding was negotiated, so a shared
+		// cache must not hand a br body to a client that cannot read it.
+		w.Header().Add("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Type", "application/wasm")
+		http.ServeContent(w, r, path.Base(rel), info.ModTime(), rs)
+		return true
+	}
+	return false
+}
+
+// acceptsEncoding reports whether an Accept-Encoding header offers enc. It is a
+// deliberately small test: it looks for the token and rejects an explicit q=0,
+// which is the only way a client says "not this one" in practice.
+func acceptsEncoding(header, enc string) bool {
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name, params, _ := strings.Cut(part, ";")
+		if !strings.EqualFold(strings.TrimSpace(name), enc) {
+			continue
+		}
+		if strings.Contains(strings.ReplaceAll(params, " ", ""), "q=0") &&
+			!strings.Contains(strings.ReplaceAll(params, " ", ""), "q=0.") {
+			return false
+		}
+		return true
 	}
 	return false
 }

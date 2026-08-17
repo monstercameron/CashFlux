@@ -352,12 +352,27 @@
 
         const go = new Go();
 
-        // Prefer the gzip-compressed binary: the wasm is ~4× smaller over the wire
-        // (the deploy ships main.wasm.gz alongside main.wasm). We decompress it in a
-        // stream so instantiate still overlaps the network, then fall back to the raw
-        // binary if the browser lacks DecompressionStream or the .gz isn't present —
-        // so this can never make boot worse, only lighter.
-        function loadCompressed() {
+        // Ask for the binary by its real name and let HTTP content negotiation pick
+        // the encoding. The server ships .br and .gz siblings and serves whichever
+        // this browser accepts, as Content-Encoding, so the decompression happens in
+        // the browser rather than here.
+        //
+        // This used to fetch ./bin/main.wasm.gz by name and unpack it with
+        // DecompressionStream, which pinned the deploy to gzip — DecompressionStream
+        // has no brotli. Brotli is a THIRD smaller on this binary (17.4 MB → 11.4 MB
+        // measured), and the app cannot paint until the whole thing has landed: on
+        // the droplet that download has been observed anywhere from 12 seconds to two
+        // minutes, and two minutes of splash screen is indistinguishable from broken.
+        //
+        // Negotiating also means the deploy can change its mind later — add zstd,
+        // drop gzip — without another change here.
+        function loadNegotiated() {
+          return WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject);
+        }
+        // Kept for a server that has the .gz but does not negotiate (an older deploy,
+        // or a static host serving files verbatim). Without this, such a server would
+        // hand over the raw uncompressed binary instead.
+        function loadGzipByName() {
           if (typeof DecompressionStream !== "function") {
             return Promise.reject(new Error("DecompressionStream unavailable"));
           }
@@ -368,13 +383,10 @@
             return WebAssembly.instantiateStreaming(wasmResp, go.importObject);
           });
         }
-        function loadRaw() {
-          return WebAssembly.instantiateStreaming(fetch("./bin/main.wasm"), go.importObject);
-        }
-        loadCompressed()
+        loadNegotiated()
           .catch(function (e) {
-            console.warn("[wasm] compressed load unavailable, using raw binary:", e && e.message ? e.message : e);
-            return loadRaw();
+            console.warn("[wasm] negotiated load failed, trying main.wasm.gz:", e && e.message ? e.message : e);
+            return loadGzipByName();
           })
           .then(function (result) { go.run(result.instance); })
           .catch(function (err) {

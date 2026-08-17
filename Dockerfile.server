@@ -25,6 +25,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
+RUN apk add --no-cache brotli
+
 COPY . .
 
 # Stamped into the binary so a running container can say exactly what it is —
@@ -36,18 +38,22 @@ ARG BUILD_DATE=unknown
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
-# The final `gzip` line is not an optimization, it is what makes the app load.
-# web/index.html asks for ./bin/main.wasm.gz FIRST — its own comment says "the
-# deploy ships main.wasm.gz alongside main.wasm" — and this image never built it.
-# So every visitor 404'd on the gz and fell back to the raw binary: 93 MB
-# uncompressed over a link measured at 428 KB/s. That transfer did not finish; it
-# was cut off partway, so instantiateStreaming never received a whole module and
-# the app sat on its splash screen forever with no error in the console.
+# The two compression lines at the end are not an optimization, they are what makes
+# the app load. Nothing paints until the whole binary has arrived, and on the
+# droplet that download has been measured anywhere from 12 seconds to two minutes
+# depending on the bandwidth available at that moment - two minutes of splash
+# screen is indistinguishable from broken, which is how it got reported.
 #
-# gzip -9 brings it to ~17.6 MB — the ~4x the loader already promised. The client
-# decompresses it itself through DecompressionStream, so this is a plain file with
-# no Content-Encoding negotiation to get wrong, and the raw binary stays beside it
-# for browsers that lack DecompressionStream.
+# Both siblings ship. The server negotiates on Accept-Encoding and serves whichever
+# the browser accepts, as Content-Encoding, so the browser does the decompression:
+#
+#   brotli -q 11 : 11.4 MB   (what a current browser gets)
+#   gzip -9      : 17.4 MB   (fallback, and for a server that does not negotiate)
+#   raw          : 93.7 MB   (what a visitor got when neither existed - it did not
+#                             finish downloading, so the app never started at all)
+#
+# brotli comes from the alpine package installed in the builder above; the runtime
+# stage is distroless and carries none of it.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     mkdir -p /src/web/bin /src/web/admin /src/web/portal \
@@ -61,7 +67,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /src/web/wasm_exec.js \
     && cp /src/web/wasm_exec.js /src/web/admin/wasm_exec.js \
     && cp /src/web/wasm_exec.js /src/web/portal/wasm_exec.js \
-    && gzip -9 -c /src/web/bin/main.wasm > /src/web/bin/main.wasm.gz
+    && gzip -9 -c /src/web/bin/main.wasm > /src/web/bin/main.wasm.gz \
+    && brotli -q 11 -c /src/web/bin/main.wasm > /src/web/bin/main.wasm.br
 
 # An empty, pre-owned data directory staged here because the runtime stage has no
 # shell to mkdir with. It also gives a NAMED volume correct ownership on first
