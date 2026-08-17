@@ -354,6 +354,24 @@ and every commit updates this file under `Unreleased`.
   wrong, and rewriting the same figure would log a change that did not happen.
 
 ### Fixed
+- **The assistant's composer ate most of what you typed.** Typing a 76-character question into the
+  Ask box landed 13 characters, scrambled — "How much did we spend on groceries…" arrived as
+  "Hweedih ofore" — and typing into the middle of a draft jumped the caret to the end and inserted
+  the text in the wrong place. `value` is a special property the reconciler always writes, and it
+  diffs the new prop against the *previous render's* prop rather than against what the box actually
+  holds, so binding it to state that changes per keystroke meant every render wrote a possibly-stale
+  string back over the box, deleting whatever had been typed in between. The same binding re-rendered
+  the whole ~3,300-line screen — thread, rail, hero, spend meters — once per character, with a
+  worst-case frame of 968ms; a second per-keystroke state write (leaving question-history mode) did
+  it again.
+
+  The box now owns its own text. The bound value moves only when the app has something to say — a
+  send clearing it, an Explain chip prefilling it, starting a new chat — so while somebody is typing
+  the prop is unchanged, the write is skipped, and the box keeps exactly what they typed. The render
+  depends only on whether the box is empty, which flips at most twice per message instead of once per
+  character. All 76 characters now land in order, the caret stays where it was, and 40 keystrokes
+  produce zero DOM mutations anywhere in the app. Sending still clears the box, Enter still sends,
+  and Up still cycles past questions.
 - **The assistant's answer appeared for a moment and then vanished.** Every answer is Markdown
   written imperatively into a node the virtual DOM owns, so the virtual DOM — which believes that
   node is empty — strips the text on any re-render of the bubble. The re-fill was gated on the

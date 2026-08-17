@@ -248,7 +248,43 @@ func Insights() ui.Node {
 	// The Insights screen is a chat with the CashFlux assistant (C82 wiring): a
 	// conversation thread the user types into, answered from their own figures.
 	turns := ui.UseState([]chatTurn{})
-	input := ui.UseState("")
+	// The composer is deliberately NOT bound to a state that changes per keystroke.
+	//
+	// `value` is a special property the reconciler always writes, and it diffs the
+	// new prop against the PREVIOUS RENDER'S prop rather than against what the box
+	// actually holds. Binding it to per-keystroke state therefore meant every render
+	// wrote a possibly-stale string back over the box: typing 76 characters landed 13
+	// of them, scrambled, with the caret jumping to the end. It also re-rendered this
+	// whole screen — thread, rail, hero, meters — once per character, at ~33ms a key.
+	//
+	// So the box owns its own text, and `composerSeed` moves ONLY when the app has
+	// something to say (a send clearing it, an Explain chip prefilling it, a new
+	// chat). While somebody types, the prop is unchanged, the diff skips the write
+	// entirely, and the DOM keeps exactly what they typed. Anything that needs the
+	// current text reads the element, which is always right.
+	composerSeed := ui.UseState("")
+	// composerFilled tracks only whether the box is empty, because that is all the
+	// render depends on (the starter chips hide once there is a question in
+	// progress). It flips at most twice per message instead of once per character.
+	composerFilled := ui.UseState(false)
+	// composerText reads what the composer currently holds.
+	composerText := func() string {
+		el := js.Global().Get("document").Call("getElementById", "cf-chat-input")
+		if !el.Truthy() {
+			return ""
+		}
+		return el.Get("value").String()
+	}
+	// setComposer puts text in the box programmatically. It writes the DOM as well as
+	// the seed because the two most common values — "" on send and "" already — are
+	// equal, and an unchanged prop is skipped by the very diff that makes typing work.
+	setComposer := func(v string) {
+		composerSeed.Set(v)
+		composerFilled.Set(v != "")
+		if el := js.Global().Get("document").Call("getElementById", "cf-chat-input"); el.Truthy() {
+			el.Set("value", v)
+		}
+	}
 	// Shell-style input history: histIdx is the cycle position over prior user messages
 	// with Up/Down (-1 = not cycling); histDraft preserves the in-progress draft.
 	histIdx := ui.UseState(-1)
@@ -271,7 +307,14 @@ func Insights() ui.Node {
 	}
 	// Conversation id whose AI title generation has been attempted (once per chat).
 	namingDone := ui.UseState("")
-	onInput := ui.UseEvent(func(v string) { input.Set(v) })
+	// Typing must not re-render the screen. The only thing a render depends on is
+	// whether the box is empty, so this flips a boolean at that boundary and is inert
+	// for every keystroke in between.
+	onInput := ui.UseEvent(func(v string) {
+		if filled := v != ""; filled != composerFilled.Get() {
+			composerFilled.Set(filled)
+		}
+	})
 	loading := ui.UseState(false)
 	errMsg := ui.UseState("")
 	rev := ui.UseState(0)
@@ -617,7 +660,7 @@ func Insights() ui.Node {
 				chatTurn{ID: id.New(), Role: "afford", Text: affordCardText(ar, q, base)},
 			)
 			turns.Set(hist)
-			input.Set("")
+			setComposer("")
 			ctxAttach.Set(nil)
 			histIdx.Set(-1)
 			return
@@ -638,7 +681,7 @@ func Insights() ui.Node {
 					chatTurn{ID: id.New(), Role: "assistant", Text: answer},
 				)
 				turns.Set(hist)
-				input.Set("")
+				setComposer("")
 				ctxAttach.Set(nil)
 				histIdx.Set(-1)
 				return
@@ -650,7 +693,7 @@ func Insights() ui.Node {
 		}
 		hist := append(append([]chatTurn{}, turns.Get()...), chatTurn{ID: id.New(), Role: "user", Text: text})
 		turns.Set(hist)
-		input.Set("")
+		setComposer("")
 		ctxAttach.Set(nil)
 		histIdx.Set(-1)
 		run(hist)
@@ -689,7 +732,7 @@ func Insights() ui.Node {
 	}
 	// submitChat sends the composer as one user turn, folding in any attached context.
 	submitChat := func() {
-		typed := strings.TrimSpace(input.Get())
+		typed := strings.TrimSpace(composerText())
 		if typed == "" && len(ctxAttach.Get()) == 0 {
 			return
 		}
@@ -878,7 +921,7 @@ func Insights() ui.Node {
 				modelSel.Set(m)
 			}
 			convCreated.Set(c.CreatedAt)
-			input.Set("")
+			setComposer("")
 			errMsg.Set("")
 			return
 		}
@@ -889,7 +932,7 @@ func Insights() ui.Node {
 		turns.Set(nil)
 		convID.Set("")
 		convCreated.Set(time.Time{})
-		input.Set("")
+		setComposer("")
 		errMsg.Set("")
 	}
 
@@ -974,7 +1017,7 @@ func Insights() ui.Node {
 		// navigates here; consume it once and prefill the composer so the user lands
 		// with the derivation ready to send.
 		if seed, ok := uistate.ConsumeExplainSeed(); ok {
-			input.Set(seed)
+			setComposer(seed)
 		}
 		return nil
 	}, "cf-insights-init")
@@ -1022,8 +1065,12 @@ func Insights() ui.Node {
 				return nil
 			}
 			if k != "ArrowUp" && k != "ArrowDown" {
-				if len(k) == 1 || k == "Backspace" || k == "Delete" {
-					histIdx.Set(-1) // editing leaves history mode
+				// Editing leaves history mode — but only write the state when it is
+				// actually changing. Setting it unconditionally re-rendered the whole
+				// screen on every printable character, which was the second half of
+				// what made typing here expensive.
+				if (len(k) == 1 || k == "Backspace" || k == "Delete") && histIdx.Get() != -1 {
+					histIdx.Set(-1)
 				}
 				return nil
 			}
@@ -1040,7 +1087,7 @@ func Insights() ui.Node {
 			idx := histIdx.Get()
 			if k == "ArrowUp" {
 				if idx == -1 {
-					histDraft.Set(input.Get())
+					histDraft.Set(composerText())
 					idx = len(msgs) - 1
 				} else if idx > 0 {
 					idx--
@@ -1366,7 +1413,7 @@ func Insights() ui.Node {
 				}
 				return uistate.T("insights.askPlaceholder")
 			}()),
-			Value(input.Get()), OnInput(onInput)),
+			Value(composerSeed.Get()), OnInput(onInput)),
 		// Voice input: dictate a question via the browser's built-in speech engine
 		// (no service, no key). Renders nothing where the API is unavailable. The
 		// transcript arrives on a raw speech callback (outside the framework's event
@@ -1473,7 +1520,7 @@ func Insights() ui.Node {
 		}
 	}
 	chips := Fragment()
-	if len(shownStarters) > 0 && input.Get() == "" && empty {
+	if len(shownStarters) > 0 && !composerFilled.Get() && empty {
 		chips = Div(css.Class(tw.Mb2),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
 				MapKeyed(shownStarters,

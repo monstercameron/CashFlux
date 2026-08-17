@@ -345,3 +345,93 @@ test.describe("assistant: the answer stays on screen", () => {
     await expect(bodies.first()).not.toBeEmpty();
   });
 });
+
+test.describe("assistant: the composer keeps what you type", () => {
+  // `value` is a special property the reconciler always writes, diffed against the
+  // PREVIOUS RENDER'S prop rather than against the box. Binding it to per-keystroke
+  // state meant a render landing after the next key wrote its own older string back:
+  // 76 characters typed landed 13 of them, scrambled, with the caret jumping to the
+  // end. These cases type like a person and then check the box.
+  const SENTENCE = "How much did we spend on groceries last month compared with the month before";
+
+  test("every character typed lands, in order", async ({ app }) => {
+    await nav(app, "/assistant");
+    const box = app.locator("#cf-chat-input");
+    await expect(box).toBeVisible();
+    await box.click();
+    for (const ch of SENTENCE) {
+      await app.keyboard.type(ch);
+    }
+    await expect(box).toHaveValue(SENTENCE);
+  });
+
+  test("typing into the middle does not move the caret to the end", async ({ app }) => {
+    await nav(app, "/assistant");
+    const box = app.locator("#cf-chat-input");
+    await box.click();
+    await app.keyboard.type("How much");
+    await app.keyboard.press("Home");
+    for (let i = 0; i < 3; i++) await app.keyboard.press("ArrowRight");
+    await app.keyboard.type("XY");
+    await expect(box).toHaveValue("HowXY much");
+    expect(await box.evaluate((el) => el.selectionStart)).toBe(5);
+  });
+
+  test("typing does not rebuild the screen", async ({ app }) => {
+    // The composer sits at the top of a ~3,300-line screen. Binding it to state that
+    // changes per keystroke re-rendered the thread, the rail, the hero and the meters
+    // once per character. Only the empty/non-empty boundary may cost a render.
+    await nav(app, "/assistant");
+    const box = app.locator("#cf-chat-input");
+    await box.click();
+    await app.keyboard.type("seed");
+    const mutations = await app.evaluate(async () => {
+      const el = document.getElementById("cf-chat-input");
+      const root = document.getElementById("app") || document.body;
+      el.focus();
+      let count = 0;
+      const obs = new MutationObserver((rs) => {
+        count += rs.length;
+      });
+      obs.observe(root, { childList: true, subtree: true, attributes: true, characterData: true });
+      for (let i = 0; i < 20; i++) {
+        el.value += "a";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      await new Promise((r) => setTimeout(r, 250));
+      obs.disconnect();
+      return count;
+    });
+    expect(mutations).toBe(0);
+  });
+
+  test("sending clears the box, and the starter chips come back", async ({ app }) => {
+    // The seed the box is bound to is "" both before and after a send, and an
+    // unchanged prop is skipped by the very diff that makes typing work — so the
+    // clear has to reach the element itself or the sent text stays on screen.
+    await configureKey(app);
+    await mockResponses(app, [{ text: "You spent $312.40 on groceries in August." }]);
+    await nav(app, "/assistant");
+    const box = app.locator("#cf-chat-input");
+    await box.click();
+    await app.keyboard.type("How much did we spend on groceries");
+    await app.getByTestId("assistant-send").click();
+    await expect(box).toHaveValue("");
+  });
+
+  test("Enter sends and the past-question history still cycles", async ({ app }) => {
+    await configureKey(app);
+    await mockResponses(app, [{ text: "You spent $312.40 on groceries in August." }]);
+    await nav(app, "/assistant");
+    const box = app.locator("#cf-chat-input");
+    await box.click();
+    await app.keyboard.type("What did groceries cost");
+    await app.keyboard.press("Enter");
+    await expect(box).toHaveValue("");
+    // Up recalls the question just asked, so it can be edited and re-sent.
+    await box.click();
+    await app.keyboard.press("ArrowUp");
+    await expect(box).toHaveValue("What did groceries cost");
+  });
+});

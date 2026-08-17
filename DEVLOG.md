@@ -1,3 +1,52 @@
+## 2026-08-16 — the composer was eating four characters in five
+
+Cam: "the assistant input field is buggy, it might be re-rendering too much when the user is typing."
+Both halves of that were right, and the second half was the cause of the first.
+
+Having just been caught asserting instead of looking, I measured before reading anything. Type a
+76-character question one key at a time, then ask the box what it holds: **13 characters**, scrambled
+into "Hweedih ofore". Type into the middle of a draft: the caret jumps to the end and the text lands
+in the wrong place. Per-key frame cost p50 33ms, p90 57ms, worst case 968ms. So not "a bit janky" —
+the field was unusable for anything longer than a few words, and I had shipped a whole assistant
+backlog through it without once typing a full sentence by hand.
+
+The mechanism was already in my notes from ArticleFlux, filed under four separate bug reports there,
+with a line at the bottom saying to check CashFlux's surfaces too. I hadn't. `value` is a
+`propKindSpecialProperty` — always written as a property — and `reconciler_commit.go` skips the write
+only when `fastEqual(previousRenderProp, newProp)`. The comparison is against the PREVIOUS RENDER'S
+PROP, never against what the input actually contains. So a render that resolves after the next
+keystroke writes its own older string back, and the character typed in between is gone from the DOM,
+not merely from state. It clusters on the early characters because the first keystroke does the most
+extra work.
+
+The fix is not to make the state faster, it is to stop binding the box to per-keystroke state at all.
+The field owns its text; `composerSeed` moves only when the app has something to say — a send
+clearing it, an Explain chip prefilling it, a new chat. While somebody types, the prop is unchanged,
+so the same diff that caused the bug now skips the write entirely and the DOM keeps what they typed.
+Anything that needs the current text reads the element, which is the one thing always right.
+
+The trap in the fix: seed "" → send → seed "" is UNCHANGED, so the diff skips it and the sent text
+stays sitting in the box. Clearing has to reach the element itself. `setComposer` therefore writes
+the seed AND the DOM, which is also how the voice transcript and the Up-arrow history path already
+worked, so the composer now has one way of being written instead of three.
+
+Second re-render source, same keystroke: the keydown handler called `histIdx.Set(-1)` on every
+printable character to leave history mode, whether or not it was in history mode. Guarded.
+
+What the render actually needed from the text was one bit — is the box empty, so should the starter
+chips show. That is now its own boolean, flipping at most twice per message.
+
+After: 76 of 76 characters land in order, caret stays put, and 40 keystrokes produce **zero DOM
+mutations anywhere in `#app`**. Five regression cases cover it, including the two that would have
+caught this on day one — type a sentence and compare it, type into the middle and check
+`selectionStart` — plus one asserting the mutation count is zero, which is the property that actually
+matters and the one no assertion on values can express.
+
+The pattern across today's two bugs is the same and worth naming: both were the framework's DOM
+ownership fighting code that assumed it owned the DOM, and both were invisible to a green suite
+because every assertion looked at one moment rather than at a sequence. Tests that type one character
+and tests that read an answer the instant it lands are the same mistake.
+
 ## 2026-08-16 — an unsourced benchmark is a claim (C385)
 
 The reviewer wrote "broad benchmark language without exposing the benchmark source inline". It is
