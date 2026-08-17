@@ -5,8 +5,14 @@
 package app
 
 import (
+	"encoding/json"
+	"strings"
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backup"
+	"github.com/monstercameron/CashFlux/internal/restorepreview"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 )
@@ -109,7 +115,11 @@ func restoreFromBackup() {
 			paletteNotify(uistate.T("backup.restoreErr"), true)
 			return
 		}
-		confirmModal(uistate.T("backup.restoreConfirm"), true, func(ok bool) {
+		// WF-BACKUP: say what the restore would REPLACE before doing it.
+		// Restoring is the most destructive thing this app can do, and "are you
+		// sure" is a question nobody can answer without being told what they are
+		// about to lose.
+		confirmModal(restoreConfirmMessage(env), true, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -168,4 +178,103 @@ func setOrClear(key, val string) {
 		return
 	}
 	lsRemove(key)
+}
+
+// restoreConfirmMessage builds the confirmation, with a before-and-after when
+// the two datasets can be compared.
+//
+// Falls back to the plain warning when the backup's dataset cannot be read. A
+// comparison the app is not sure of would be worse than none: this is the
+// message somebody decides on, and a wrong count here is a wrong decision.
+func restoreConfirmMessage(env backup.Envelope) string {
+	base := uistate.T("backup.restoreConfirm")
+	nowSide, ok1 := currentSide()
+	backupSide, ok2 := envelopeSide(env)
+	if !ok1 || !ok2 {
+		return base
+	}
+	p := restorepreview.Build(nowSide, backupSide)
+	if len(p.Lines) == 0 {
+		return base
+	}
+	parts := make([]string, 0, len(p.Lines))
+	for _, l := range p.Lines {
+		parts = append(parts, uistate.T("restore.line", l.Now, l.After, l.Entity))
+	}
+	msg := base + " " + uistate.T("restore.compare", strings.Join(parts, ", ")) + "."
+	if p.AnyLoss() {
+		// The loss figure leads the warning, because it is the only number here
+		// that describes something that cannot be got back.
+		msg = base + " " + uistate.T("restore.loses", p.LostRecords) + " " +
+			uistate.T("restore.compare", strings.Join(parts, ", ")) + "."
+	}
+	switch {
+	case p.Stale:
+		msg += " " + uistate.T("restore.stale", p.GapDays)
+	case p.Newer:
+		msg += " " + uistate.T("restore.newer", p.GapDays)
+	}
+	return msg
+}
+
+// currentSide counts the live dataset.
+func currentSide() (restorepreview.Side, bool) {
+	app := appstate.Default
+	if app == nil {
+		return restorepreview.Side{}, false
+	}
+	txns := app.Transactions()
+	var newest time.Time
+	for _, t := range txns {
+		if t.Date.After(newest) {
+			newest = t.Date
+		}
+	}
+	return restorepreview.Side{
+		Counts: restorepreview.Counts{
+			Accounts: len(app.Accounts()), Transactions: len(txns),
+			Budgets: len(app.Budgets()), Goals: len(app.Goals()),
+			Categories: len(app.Categories()), Tasks: len(app.Tasks()),
+			Holdings: len(app.Holdings()), Rules: len(app.Rules()),
+		},
+		Newest: newest,
+	}, true
+}
+
+// envelopeSide counts the ACTIVE workspace's dataset inside a backup.
+//
+// The active one only: a restore replaces every workspace, but the comparison a
+// person can actually check is against the data they are looking at. Counting
+// all of them together would produce a total that matches nothing on screen.
+func envelopeSide(env backup.Envelope) (restorepreview.Side, bool) {
+	if len(env.Datasets) == 0 {
+		return restorepreview.Side{}, false
+	}
+	idx := 0
+	r := loadRegistry()
+	for i, w := range r.Workspaces {
+		if w.ID == r.ActiveID && i < len(env.Datasets) {
+			idx = i
+			break
+		}
+	}
+	var ds store.Dataset
+	if err := json.Unmarshal([]byte(env.Datasets[idx]), &ds); err != nil {
+		return restorepreview.Side{}, false
+	}
+	var newest time.Time
+	for _, t := range ds.Transactions {
+		if t.Date.After(newest) {
+			newest = t.Date
+		}
+	}
+	return restorepreview.Side{
+		Counts: restorepreview.Counts{
+			Accounts: len(ds.Accounts), Transactions: len(ds.Transactions),
+			Budgets: len(ds.Budgets), Goals: len(ds.Goals),
+			Categories: len(ds.Categories), Tasks: len(ds.Tasks),
+			Holdings: len(ds.Holdings), Rules: len(ds.Rules),
+		},
+		Newest: newest,
+	}, true
 }

@@ -1,3 +1,42 @@
+## 2026-08-17 - "are you sure?" is not a question anyone can answer (WF-BACKUP)
+
+Most of WF-BACKUP existed: encrypted backup and restore with format sniffing, versioned checkpoints,
+CSV/JSON import and export, a last-backup timestamp feeding a nudge, undo of recent bulk operations.
+Fourth audit-first ticket this week, and the habit keeps paying.
+
+The gap was the restore preview, and it sat in front of the most destructive thing this app does.
+Restoring discards the entire current dataset. The only thing guarding it was a confirmation reading
+"Restore from this backup? It replaces all current data on this device." True, and useless - it does not
+say what the current data IS.
+
+It now reads: "You would lose 3348 records that are not in this backup. It would change 14 to 1 accounts,
+3230 to 1 transactions... The backup's most recent transaction is 2420 days older than your current
+data."
+
+Four decisions in the comparison:
+
+**Loss counts shrinking entities only, never netted against growth.** A restore that adds 50 budgets and
+drops 400 transactions has not gained 350 things.
+
+**Staleness comes from the DATA, not the file.** A file's timestamp says when it was written, which is
+not how current its contents are, and is trivially wrong the moment somebody copies it.
+
+**An unknown date makes no claim.** An empty dataset has no newest transaction, and comparing against a
+zero time would report a two-thousand-year gap.
+
+**Counts is a flat struct, not a map.** A forgotten entity is then a compile error rather than a silently
+absent row - and an entity nobody remembered to count is exactly the one somebody loses.
+
+The browser check found a real miss. There are TWO restore confirmations, and I had wired the preview
+into the one the UI does not reach. The live path, `applyPlainBackup`, duplicated the confirm literal -
+and its own doc comment claimed it sat "behind the same destructive confirm the plain path uses". That
+was true of the wording and nothing else; the two would have diverged the moment either changed. Both
+now call the same builder, which makes the comment true rather than aspirational.
+
+Worth noting how the probe was written: it drives the real flow - command palette, file chooser, a
+deliberately small and old synthetic backup - and then CANCELS. A verification that proves the warning
+works by destroying the dataset it was warning about is not a verification anyone can run twice.
+
 ## 2026-08-17 - I nearly shipped a parallel engine (WF7)
 
 WF7 is a long ticket, and I started writing a rules-workbench package for it. Partway through, a doc

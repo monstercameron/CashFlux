@@ -722,6 +722,13 @@ var vSweepKeys = Catalog{
 	"rules.undoApply":       "Undo that",
 	"rules.undone":          "Put %s back.",
 
+	// WF-BACKUP — saying what a restore would replace, before it does.
+	"restore.compare": "It would change %s.",
+	"restore.line":    "%d to %d %s",
+	"restore.loses":   "You would lose %d records that are not in this backup.",
+	"restore.stale":   "The backup's most recent transaction is %d days older than your current data.",
+	"restore.newer":   "The backup's data is %d days more recent than what is here now.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

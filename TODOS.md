@@ -172,9 +172,38 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
 - [ ] **WF-AUDIT — Full history & audit trail.** ★ For important values (balances, ownership, rules,
   budgets, plan membership, APRs, recurring charges): previous→new value, date, who, source
   (imported/manual/calculated), related txn/adjustment, and **undo where safe**.
-- [ ] **WF-BACKUP — Backup, restore & snapshots.** Local-first makes this core, not a checkbox:
+- [x] **WF-BACKUP — Backup, restore & snapshots.** Local-first makes this core, not a checkbox:
   complete encrypted backup, versioned snapshots, restore preview, CSV/JSON selective import/export,
   conflict handling, backup-health indicator, undo recent bulk ops.
+  — DONE (2026-08-17) for the piece that was missing. Audited first, and most of this existed: encrypted
+  backup + restore with format sniffing, versioned checkpoints (`uistate.SaveCheckpoint`/`RestoreCheckpoint`),
+  CSV and JSON import/export, a last-backup timestamp feeding a nudge, and undo of recent bulk operations
+  (checkpoints, plus the per-rule undo added under WF7).
+
+  THE RESTORE PREVIEW was the gap, and it guarded the most destructive action in the app. Restoring
+  discards the current dataset entirely, and the only thing in front of it was a confirmation that said
+  "are you sure" — a question nobody can answer, because it does not say what they are about to lose.
+
+  New pure `internal/restorepreview` compares the live dataset against the backup's and the confirmation
+  now reads, on the sample against a small old backup: "You would lose 3348 records that are not in this
+  backup. It would change 14 to 1 accounts, 3230 to 1 transactions… The backup's most recent transaction
+  is 2420 days older than your current data."
+
+  DESIGN NOTES. Loss is counted from SHRINKING entities only, never netted against growth — a restore
+  that adds 50 budgets and drops 400 transactions has not gained 350 things. Staleness comes from the
+  DATA's newest transaction, not the file's timestamp, which says when it was written and is trivially
+  wrong after a copy. An unknown date makes no staleness claim at all rather than measuring against a
+  zero time. Entities that are empty on both sides are omitted: "0 → 0" rows are noise in a list somebody
+  is reading under pressure. And `Counts` is a flat struct rather than a map so a forgotten entity is a
+  compile error — an entity nobody remembered to count is exactly the one somebody loses.
+
+  BUG FOUND WHILE VERIFYING: there are TWO restore confirmations, and I had wired the preview into the
+  one the UI does not reach. `applyPlainBackup` — the live path — duplicated the confirm literal, and its
+  own doc comment claimed it was "behind the same destructive confirm the plain path uses". True of the
+  wording only. Both now call the same builder, which makes the comment true.
+
+  VERIFIED IN A BROWSER: 6/6, driving the real flow through the command palette and the file chooser, and
+  cancelling rather than actually wiping the dataset.
 
 **SMART (deterministic / local statistics)**
 - [ ] **WF-SM1 — Anomaly *explanations*, not just flags.** "Dining is $135 above normal; three

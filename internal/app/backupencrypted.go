@@ -126,7 +126,11 @@ func applyPlainBackup(data []byte) {
 		paletteNotify(uistate.T("backup.restoreErr"), true)
 		return
 	}
-	confirmModal(uistate.T("backup.restoreConfirm"), true, func(ok bool) {
+	// The same before-and-after the plain path shows. Sharing the BUILDER rather
+	// than the literal string is the point: this function's own doc comment says
+	// it is behind "the same destructive confirm", and until now that was true of
+	// the wording only — the two would have drifted the moment either changed.
+	confirmModal(restoreConfirmMessage(env), true, func(ok bool) {
 		if !ok {
 			return
 		}

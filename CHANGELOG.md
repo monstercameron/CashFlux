@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Restoring a backup tells you what it would replace (WF-BACKUP).** The confirmation now says how many
+  records you would lose, what each entity goes from and to, and how far behind the backup's data is —
+  measured from its newest transaction rather than the file's timestamp. Restoring discards everything
+  currently on the device, and "are you sure?" is not a question anyone can answer.
+
+### Added
 - **Applying a rule to old transactions is now scoped and reversible (WF7).** A rule's menu offers
   "Apply to all past transactions" and "Apply to this year" as separate choices, the confirmation says
   how many it would change AND how many of those already have a category you picked, and afterwards the
