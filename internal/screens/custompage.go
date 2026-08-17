@@ -391,7 +391,7 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	switch w.Type {
 	case widgetspec.TypeKPI:
 		bindCtl = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),
-			uiw.Field(expr.Get(), css.Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")), OnInput(onExpr)),
+			Input(css.Class("field"), Attr("placeholder", uistate.T("pages.kpiFormula")), OnInput(onExpr), uiw.FieldValue(expr.Get())),
 			Select(css.Class("field"), OnChange(onFormat),
 				Option(Value("number"), SelectedIf(format.Get() == "number"), "number"),
 				Option(Value("percent"), SelectedIf(format.Get() == "percent"), "percent"),
@@ -405,7 +405,7 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 		}
 		bindCtl = Select(css.Class("field"), OnChange(onSource), opts)
 	case widgetspec.TypeText:
-		bindCtl = uiw.Field(text.Get(), css.Class("field"), Attr("placeholder", uistate.T("pages.textContent")), OnInput(onText))
+		bindCtl = Input(css.Class("field"), Attr("placeholder", uistate.T("pages.textContent")), OnInput(onText), uiw.FieldValue(text.Get()))
 	case widgetspec.TypeImage, widgetspec.TypeTable:
 		opts := []ui.Node{Option(Value(""), uistate.T("pages.chooseArtifact"))}
 		if appstate.Default != nil {
@@ -425,7 +425,7 @@ func editWidgetForm(props editWidgetFormProps) ui.Node {
 	}
 
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-		uiw.Field(title.Get(), css.Class("field"), Attr("id", "widget-edit-"+w.ID), Attr("placeholder", uistate.T("pages.widgetTitle")), OnInput(onTitle)),
+		Input(css.Class("field"), Attr("id", "widget-edit-"+w.ID), Attr("placeholder", uistate.T("pages.widgetTitle")), OnInput(onTitle), uiw.FieldValue(title.Get())),
 		bindCtl,
 		Div(css.Class(tw.Flex, tw.Gap2),
 			Button(css.Class("btn btn-primary"), Type("button"), OnClick(save), uistate.T("action.save")),
@@ -810,8 +810,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	var bindControl ui.Node
 	switch wtype.Get() {
 	case widgetspec.TypeKPI:
-		bindControl = uiw.Field(bind.Get(), css.Class("field"), Attr("aria-label", uistate.T("pages.kpiFormula")),
-			Attr("placeholder", uistate.T("pages.kpiFormula")), OnInput(onBind))
+		bindControl = Input(css.Class("field"), Attr("aria-label", uistate.T("pages.kpiFormula")),
+			Attr("placeholder", uistate.T("pages.kpiFormula")), OnInput(onBind), uiw.FieldValue(bind.Get()))
 	case widgetspec.TypeList:
 		srcOpts := make([]ui.Node, 0)
 		for _, d := range widgetspec.ListSources() {
@@ -820,8 +820,8 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 		bindControl = Select(css.Class("field"), Attr("aria-label", uistate.T("pages.pickSource")),
 			OnChange(onBind), srcOpts)
 	case widgetspec.TypeText:
-		bindControl = uiw.Field(bind.Get(), css.Class("field"), Attr("aria-label", uistate.T("pages.textContent")),
-			Attr("placeholder", uistate.T("pages.textContent")), OnInput(onBind))
+		bindControl = Input(css.Class("field"), Attr("aria-label", uistate.T("pages.textContent")),
+			Attr("placeholder", uistate.T("pages.textContent")), OnInput(onBind), uiw.FieldValue(bind.Get()))
 	case widgetspec.TypeImage, widgetspec.TypeTable:
 		arts := appstate.Default.Artifacts()
 		artOpts := []ui.Node{Option(Value(""), uistate.T("pages.chooseArtifact"))}
@@ -846,7 +846,7 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 		Body: Fragment(
 			Div(css.Class("form-grid"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("pages.labelType")), OnChange(onType), typeOpts),
-				uiw.Field(title.Get(), css.Class("field"), Attr("aria-label", uistate.T("pages.widgetTitle")), Attr("placeholder", uistate.T("pages.widgetTitle")), OnInput(onTitle)),
+				Input(css.Class("field"), Attr("aria-label", uistate.T("pages.widgetTitle")), Attr("placeholder", uistate.T("pages.widgetTitle")), OnInput(onTitle), uiw.FieldValue(title.Get())),
 				bindControl,
 			),
 			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt2),

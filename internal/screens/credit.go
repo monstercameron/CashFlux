@@ -353,10 +353,10 @@ func creditLimitEditor(props creditLimitEditorProps) ui.Node {
 	}
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 		Span(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"min-width": "5rem"}), uistate.T("credit.limitLabel")),
-		uiw.NumField(val.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
+		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
 			Attr("data-testid", "credit-limit-edit-"+props.AccountID),
 			Attr("aria-label", uistate.T("credit.limitEditAria", props.AccountID)),
-			Placeholder(uistate.T("credit.limitPlaceholder")), OnInput(onInput), OnBlur(func() { commit() })),
+			Placeholder(uistate.T("credit.limitPlaceholder")), OnInput(onInput), OnBlur(func() { commit() }), uiw.FieldValue(val.Get())),
 		If(saved.Get(), Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), uistate.T("credit.limitSaved"))),
 	)
 }

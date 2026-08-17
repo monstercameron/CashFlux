@@ -59,18 +59,12 @@ func fieldArgs(p TextFieldProps) []any {
 //
 // It keeps what the user types. See fieldCore for why that needs saying.
 func TextInput(p TextFieldProps) uic.Node {
-	return uic.CreateElement(fieldCore, fieldCoreProps{
-		Value: p.Value, OnInput: p.OnInput,
-		Args: append([]any{Type("text")}, fieldArgs(p)...),
-	})
+	return Input(append([]any{Type("text")}, append(fieldArgs(p), FieldValue(p.Value), OnInput(p.OnInput))...)...)
 }
 
 // NumberInput renders a numeric input (Step defaults to "1" via the browser).
 func NumberInput(p TextFieldProps) uic.Node {
-	return uic.CreateElement(fieldCore, fieldCoreProps{
-		Value: p.Value, OnInput: p.OnInput, Numeric: true,
-		Args: append([]any{Type("number")}, fieldArgs(p)...),
-	})
+	return Input(append([]any{Type("number")}, append(fieldArgs(p), FieldValue(p.Value), OnInput(p.OnInput))...)...)
 }
 
 // TextAreaInput renders a multi-line text input using the .field styling.
@@ -81,10 +75,7 @@ func NumberInput(p TextFieldProps) uic.Node {
 // rewritten wholesale under the cursor. It is fixed at the root now: fieldCore
 // keeps the value out of the reconciler's hands entirely, for every field shape.
 func TextAreaInput(p TextFieldProps) uic.Node {
-	return uic.CreateElement(fieldCore, fieldCoreProps{
-		Multiline: true, Value: p.Value, OnInput: p.OnInput,
-		Args: fieldArgs(p),
-	})
+	return Textarea(append(fieldArgs(p), FieldValue(p.Value), OnInput(p.OnInput))...)
 }
 
 // MoneyInputProps configures a currency-aware MoneyInput.
@@ -122,9 +113,7 @@ func MoneyInput(p MoneyInputProps) uic.Node {
 		Span(css.Class("money-input-affix"), Attr("aria-hidden", "true"), sym),
 		// An amount is the field where a dropped digit is most expensive: 1250
 		// silently becoming 120 is a wrong number that still looks like a number.
-		uic.CreateElement(fieldCore, fieldCoreProps{
-			Value: p.Value, OnInput: p.OnInput, Numeric: true, Args: inArgs,
-		}),
+		Input(append(inArgs, FieldValue(p.Value), OnInput(p.OnInput))...),
 	)
 }
 
@@ -161,7 +150,7 @@ func Combobox(p SuggestProps) uic.Node {
 		opts = append(opts, Option(Attr("value", o)))
 	}
 	return Fragment(
-		uic.CreateElement(fieldCore, fieldCoreProps{Value: p.Value, OnInput: p.OnInput, Args: inArgs}),
+		Input(append(inArgs, FieldValue(p.Value), OnInput(p.OnInput))...),
 		Datalist(opts...),
 	)
 }

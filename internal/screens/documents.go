@@ -1590,9 +1590,9 @@ func DraftRow(props draftRowProps) ui.Node {
 		// form-grid, which wrapped its six controls unpredictably in the modal width.
 		return Div(css.Class("row-edit"),
 			Form(css.Class("draft-edit-grid"), OnSubmit(saveEdit),
-				uiw.Field(dateS.Get(), css.Class("field"), Attr("id", draftFieldID), Type("date"), OnInput(onDate)),
-				uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc)),
-				uiw.Field(amtS.Get(), css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), OnInput(onAmt)),
+				Input(css.Class("field"), Attr("id", draftFieldID), Type("date"), OnInput(onDate), uiw.FieldValue(dateS.Get())),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get())),
+				Input(css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), OnInput(onAmt), uiw.FieldValue(amtS.Get())),
 				// Category is a select of existing categories (plus the AI's extracted
 				// value when it doesn't match one) so editing can't introduce an
 				// orphan/typo category on import (C60).
@@ -2005,10 +2005,10 @@ func wizardCard(
 			Div(css.Class(tw.Mt2),
 				H3(css.Class("card-title"), uistate.T("documents.profileSaveTitle")),
 				Form(css.Class("form-grid"), OnSubmit(onSaveProfile),
-					uiw.Field(profileNameVal, css.Class("field"), Type("text"),
+					Input(css.Class("field"), Type("text"),
 						Attr("aria-label", uistate.T("documents.profileSaveTitle")),
 						Placeholder(uistate.T("documents.profileNamePlaceholder")),
-						OnInput(onProfileName)),
+						OnInput(onProfileName), uiw.FieldValue(profileNameVal)),
 					Button(css.Class("btn"), Type("submit"), uistate.T("documents.profileSave")),
 				),
 			),

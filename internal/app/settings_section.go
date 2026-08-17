@@ -243,8 +243,8 @@ func settingsPreferencesPane(p settingsRightProps) uic.Node {
 		// that the /accounts idle-cash line and the idle_cash_forgone_annual formula
 		// variable compare against. Blank/zero hides the figure entirely.
 		H4(css.Class("set-label"), uistate.T("settings.idleCashBenchmarkLabel")),
-		ui.NumField(idleCashBenchmarkDisplay(p.Pr.IdleCashBenchmarkAPR), css.Class("set-input", tw.Mt045), Type("number"), Attr("min", "0"), Attr("step", "0.1"),
-			Attr("data-testid", "idle-cash-benchmark"), Attr("aria-label", uistate.T("settings.idleCashBenchmarkLabel")), OnInput(p.OnIdleCashBenchmarkAPR)),
+		Input(css.Class("set-input", tw.Mt045), Type("number"), Attr("min", "0"), Attr("step", "0.1"),
+			Attr("data-testid", "idle-cash-benchmark"), Attr("aria-label", uistate.T("settings.idleCashBenchmarkLabel")), OnInput(p.OnIdleCashBenchmarkAPR), ui.FieldValue(idleCashBenchmarkDisplay(p.Pr.IdleCashBenchmarkAPR))),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.idleCashBenchmarkHint")),
 		// Transactions behavior: how many payee→category corrections must accumulate
 		// before Quick-Add offers a suggestion. Moved here from Alerts (#3) — it's a
@@ -435,11 +435,11 @@ func monthlyIncomeInput(props monthlyIncomeInputProps) uic.Node {
 			props.OnChange(v)
 		}
 	})
-	return ui.Field(displayVal,
+	return Input(
 		css.Class("set-input", tw.Mt045),
 		Type("text"),
 		Attr("inputmode", "decimal"),
 		Attr("aria-label", uistate.T("settings.monthlyIncome")),
 		Attr("placeholder", uistate.T("settings.monthlyIncomePlaceholder")),
-		OnInput(on))
+		OnInput(on), ui.FieldValue(displayVal))
 }

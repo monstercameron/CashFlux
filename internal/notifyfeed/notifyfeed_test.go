@@ -4,9 +4,10 @@ package notifyfeed
 
 import (
 	"fmt"
-	"github.com/monstercameron/CashFlux/internal/copytext"
 	"testing"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
 
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/bills"

@@ -99,7 +99,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 	}
 
 	return Form(css.Class("form-grid"), Attr("id", "category-add-form"), Attr("data-testid", "category-add-form"), OnSubmit(add),
-		uiw.Field(name.Get(), append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...)...),
+		Input(append(append([]any{css.Class("field"), Attr("id", "cat-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(onName)}, errAttrs("cat-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...),
 		uiw.FormField("Category type",
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   kindOpts,
@@ -114,7 +114,7 @@ func categoryAddForm(props CategoryAddFormProps) ui.Node {
 				OnChange:  func(v string) { parentID.Set(v) },
 				AriaLabel: uistate.T("categories.parentOptional"),
 			})),
-		uiw.Field(color.Get(), css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), OnInput(onColor)),
+		Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), OnInput(onColor), uiw.FieldValue(color.Get())),
 		Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
 			Input(Type("checkbox"), Attr("id", "cat-add-deductible"), Attr("aria-label", uistate.T("categories.deductible")), CheckedIf(deductible.Get()), OnChange(onDeductible)),
 			Text(" "+uistate.T("categories.deductible")),

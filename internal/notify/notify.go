@@ -14,9 +14,10 @@ package notify
 
 import (
 	"fmt"
-	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
 )
 
 // Channel is a delivery surface for a notification. Phase A ships InApp and

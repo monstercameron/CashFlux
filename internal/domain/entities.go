@@ -1493,6 +1493,17 @@ type Holding struct {
 	Sector string `json:"sector,omitempty"`
 	Region string `json:"region,omitempty"`
 
+	// PriceAsOf is when CurrentPriceMinorPerShare was last known to be right
+	// (FP-T2c). The zero time means NO DATE RECORDED, which surfaces as exactly
+	// that rather than as a date — a price with an unknown age and a price from
+	// this morning are different claims, and a portfolio valued on a two-year-old
+	// price is wrong in a way no amount of arithmetic downstream can detect.
+	//
+	// Note: `omitempty` does not omit a zero time.Time — it marshals as
+	// "0001-01-01T00:00:00Z". Left as-is deliberately, matching the four sibling
+	// time fields on other entities; the readers here test IsZero, not presence.
+	PriceAsOf time.Time `json:"priceAsOf,omitempty"`
+
 	// ExpenseRatioBps is the fund's annual expense ratio in basis points
 	// (100 bps = 1.00%), zero when unknown or not applicable (C378).
 	//

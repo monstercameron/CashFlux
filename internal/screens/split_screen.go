@@ -268,8 +268,8 @@ func Split() ui.Node {
 			Fragment(
 				P(css.Class("muted"), uistate.T("split.hint")),
 				Div(css.Class("form-grid"),
-					uiw.NumField(amountS.Get(), css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Step("0.01"), OnInput(onAmount)),
-					uiw.Field(descS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("split.whatForLabel")), Placeholder(uistate.T("split.whatForLabel")), OnInput(onDesc)),
+					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get())),
+					Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("split.whatForLabel")), Placeholder(uistate.T("split.whatForLabel")), OnInput(onDesc), uiw.FieldValue(descS.Get())),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
@@ -377,9 +377,9 @@ func SplitMemberRow(props splitMemberRowProps) ui.Node {
 
 	weightField := Fragment()
 	if props.Weighted && props.On {
-		weightField = uiw.NumField(props.Weight, css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
+		weightField = Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.weight")),
 			Style(map[string]string{"max-width": "8rem"}),
-			Placeholder(uistate.T("split.weight")), Step("1"), OnInput(onWeight))
+			Placeholder(uistate.T("split.weight")), Step("1"), OnInput(onWeight), uiw.FieldValue(props.Weight))
 	}
 	share := Fragment()
 	if props.Share != "" {

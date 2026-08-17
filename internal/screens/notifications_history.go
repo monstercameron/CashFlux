@@ -100,8 +100,8 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 	items := uistate.ArchiveItems(q, s)
 
 	bar := Div(css.Class("nhx-bar"),
-		uiw.Field(q, css.Class("nhx-search"), Type("search"), Attr("data-testid", "notif-history-search"),
-			Placeholder(uistate.T("notifHistory.searchPlaceholder")), Attr("aria-label", uistate.T("notifHistory.searchAria")), OnInput(onSearch)),
+		Input(css.Class("nhx-search"), Type("search"), Attr("data-testid", "notif-history-search"),
+			Placeholder(uistate.T("notifHistory.searchPlaceholder")), Attr("aria-label", uistate.T("notifHistory.searchAria")), OnInput(onSearch), uiw.FieldValue(q)),
 		Select(css.Class("nhx-select"), Attr("data-testid", "notif-history-filter"),
 			Attr("aria-label", uistate.T("notifications.showLabel")), OnChange(onSev),
 			Option(Value(""), SelectedIf(s == ""), uistate.T("notifHistory.filterAll")),

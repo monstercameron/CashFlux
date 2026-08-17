@@ -444,8 +444,8 @@ func musicSettings() uic.Node {
 		}),
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.musicVolume")),
-			ui.Field(strconv.Itoa(pct), Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
-				Attr("aria-label", uistate.T("settings.musicVolume")), OnInput(onVol), OnChange(onVolCommit)),
+			Input(Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
+				Attr("aria-label", uistate.T("settings.musicVolume")), OnInput(onVol), OnChange(onVolCommit), ui.FieldValue(strconv.Itoa(pct))),
 		),
 	)
 }
@@ -688,7 +688,7 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		return Div(css.Class("toggle-row"),
 			Span(label),
 			// aria-label mirrors the visible Span so the number field has an accessible name (WCAG 4.1.2).
-			ui.NumField(strconv.Itoa(f.Int(props.Cfg)), css.Class("rate-in"), Type("number"), Attr("aria-label", label), OnInput(on)),
+			Input(css.Class("rate-in"), Type("number"), Attr("aria-label", label), OnInput(on), ui.FieldValue(strconv.Itoa(f.Int(props.Cfg)))),
 		)
 	case widgetcfg.Select:
 		on := uic.UseEvent(func(e uic.Event) { props.OnSet(f.Key, e.GetValue()) })
@@ -706,8 +706,8 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		on := uic.UseEvent(func(v string) { props.OnSet(f.Key, v) })
 		return Div(css.Class("toggle-row", tw.FlexCol, tw.ItemsStart, tw.Gap1),
 			Span(f.Label),
-			ui.Field(f.Str(props.Cfg), css.Class("set-input", tw.WFull), Type("text"), Attr("aria-label", f.Label),
-				Attr("spellcheck", "false"), OnInput(on)),
+			Input(css.Class("set-input", tw.WFull), Type("text"), Attr("aria-label", f.Label),
+				Attr("spellcheck", "false"), OnInput(on), ui.FieldValue(f.Str(props.Cfg))),
 		)
 	default:
 		return Fragment()
@@ -747,7 +747,7 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "110px"}), props.Label),
 		// aria-label mirrors the row's type label so the staleness-window field has an accessible name.
-		ui.NumField(strconv.Itoa(props.Days), css.Class("rate-in"), Type("number"), Attr("aria-label", uistate.T("settings.freshnessAria", props.Label)), OnInput(on)),
+		Input(css.Class("rate-in"), Type("number"), Attr("aria-label", uistate.T("settings.freshnessAria", props.Label)), OnInput(on), ui.FieldValue(strconv.Itoa(props.Days))),
 		Span(css.Class(tw.TextFaint), uistate.T("settings.freshNever")),
 	)
 }

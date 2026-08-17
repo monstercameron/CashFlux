@@ -12,9 +12,10 @@ package notifyhistory
 
 import (
 	"encoding/json"
-	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
 )
 
 // maxRecords caps the archive so it can never grow without bound in the KV

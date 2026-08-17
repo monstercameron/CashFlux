@@ -6,6 +6,7 @@ package uistate
 
 import (
 	"fmt"
+
 	"github.com/monstercameron/CashFlux/internal/copytext"
 
 	"github.com/monstercameron/CashFlux/internal/notifyhistory"

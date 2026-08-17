@@ -197,7 +197,7 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 			Span(css.Class("goal-plan-amt", tw.FontDisplay), uistate.T("goals.planPerMo", fmtMoney(money.New(cur.Get(), g.TargetAmount.Currency)))),
 		),
 		Div(css.Class("goal-plan-controls", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			uiw.Field(strconv.FormatInt(cur.Get(), 10), Type("range"), css.Class("set-range goal-plan-slider"),
+			Input(Type("range"), css.Class("set-range goal-plan-slider"),
 				Attr("min", strconv.FormatInt(min.Amount, 10)),
 				Attr("max", strconv.FormatInt(max.Amount, 10)),
 				Attr("step", strconv.FormatInt(step.Amount, 10)),
@@ -205,14 +205,14 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 				Attr("aria-label", uistate.T("goals.planSliderLabel")),
 				// QA #51: assistive tech announced the raw minor-units number
 				// ("24059"); valuetext carries the formatted money-per-month.
-				Attr("aria-valuetext", uistate.T("goals.planPerMo", fmtMoney(money.New(cur.Get(), g.TargetAmount.Currency)))), OnInput(onSlide), OnKeyDown(onSlideKey)),
+				Attr("aria-valuetext", uistate.T("goals.planPerMo", fmtMoney(money.New(cur.Get(), g.TargetAmount.Currency)))), OnInput(onSlide), OnKeyDown(onSlideKey), uiw.FieldValue(strconv.FormatInt(cur.Get(), 10))),
 			// QA #51: precise entry without dragging — a compact $/mo field kept in
 			// two-way sync with the slider.
-			uiw.Field(draft.Get(), Type("text"), css.Class("field goal-plan-amount-input"),
+			Input(Type("text"), css.Class("field goal-plan-amount-input"),
 				Style(map[string]string{"width": "7.5rem", "flex": "none"}),
 				Attr("inputmode", "decimal"),
 				Attr("data-testid", "goal-plan-amount-"+g.ID),
-				Attr("aria-label", uistate.T("goals.planAmountLabel")), OnInput(onDraft), OnBlur(onDraftBlur)),
+				Attr("aria-label", uistate.T("goals.planAmountLabel")), OnInput(onDraft), OnBlur(onDraftBlur), uiw.FieldValue(draft.Get())),
 		),
 		// aria-live so the projected finish is ANNOUNCED as the plan changes.
 		Div(css.Class("goal-plan-readout"), Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", "goal-plan-readout-"+g.ID), readout),

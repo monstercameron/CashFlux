@@ -880,7 +880,7 @@ func transactionsLegacy() ui.Node {
 					Option(Value("true"), SelectedIf(f.CustomVal == "true"), uistate.T("common.yes")),
 					Option(Value("false"), SelectedIf(f.CustomVal == "false"), uistate.T("common.no")))
 			default:
-				valControl = uiw.Field(f.CustomVal, css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Attr("data-testid", "txn-filter-custom-val"), Placeholder(uistate.T("transactions.filterCustomValue")), OnInput(onFilterCustomValText))
+				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.filterCustomValue")), Attr("data-testid", "txn-filter-custom-val"), Placeholder(uistate.T("transactions.filterCustomValue")), OnInput(onFilterCustomValText), uiw.FieldValue(f.CustomVal))
 			}
 		}
 		customFilterNode = Label(css.Class("field-label"), uistate.T("transactions.filterCustomField"),
@@ -899,14 +899,14 @@ func transactionsLegacy() ui.Node {
 		If(len(tagList) > 0, Label(css.Class("field-label"), uistate.T("transactions.filterTag"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.filterTag")), Attr("data-testid", "txn-filter-tag"), OnChange(onFilterTag), filterTagOptions))),
 		Label(css.Class("field-label"), uistate.T("transactions.fromDate"),
-			uiw.Field(f.From, css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), OnInput(onFilterFrom))),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.fromDate")), OnInput(onFilterFrom), uiw.FieldValue(f.From))),
 		Label(css.Class("field-label"), uistate.T("transactions.toDate"),
-			uiw.Field(f.To, css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), OnInput(onFilterTo))),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.toDate")), OnInput(onFilterTo), uiw.FieldValue(f.To))),
 		// C53: absolute-amount range (major units). Either bound optional.
 		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMin"),
-			uiw.NumField(f.AmountMin, css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMin")), Attr("data-testid", "txn-filter-amount-min"), Placeholder(uistate.T("transactions.filterAmountMinPh")), OnInput(onFilterAmountMin))),
+			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMin")), Attr("data-testid", "txn-filter-amount-min"), Placeholder(uistate.T("transactions.filterAmountMinPh")), OnInput(onFilterAmountMin), uiw.FieldValue(f.AmountMin))),
 		Label(css.Class("field-label"), uistate.T("transactions.filterAmountMax"),
-			uiw.NumField(f.AmountMax, css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMax")), Attr("data-testid", "txn-filter-amount-max"), Placeholder(uistate.T("transactions.filterAmountMaxPh")), OnInput(onFilterAmountMax))),
+			Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"), Attr("aria-label", uistate.T("transactions.filterAmountMax")), Attr("data-testid", "txn-filter-amount-max"), Placeholder(uistate.T("transactions.filterAmountMaxPh")), OnInput(onFilterAmountMax), uiw.FieldValue(f.AmountMax))),
 		Label(css.Class("field-label"), uistate.T("transactions.clearedStatus"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("transactions.clearedStatus")), OnChange(onFilterCleared),
 				Option(Value(""), SelectedIf(f.Cleared == ""), uistate.T("transactions.clearedAll")),

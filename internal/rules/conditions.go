@@ -3,10 +3,11 @@
 package rules
 
 import (
-	"github.com/monstercameron/CashFlux/internal/payeeclean"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/payeeclean"
 )
 
 // TxnView is the minimal transaction projection a Condition matches against — kept

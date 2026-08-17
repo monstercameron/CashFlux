@@ -179,9 +179,9 @@ type aiSpendCapProps struct {
 func aiSpendCapControl(p aiSpendCapProps) ui.Node {
 	if p.Editing {
 		return Div(css.Class("ai-meter-cap"),
-			uiw.NumField(p.Draft, css.Class("field"), Type("number"), Attr("min", "0"), Attr("step", "0.5"),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("step", "0.5"),
 				Attr("data-testid", "ai-spend-cap-input"),
-				Attr("aria-label", uistate.T("aispend.capAria")), OnInput(p.OnDraft)),
+				Attr("aria-label", uistate.T("aispend.capAria")), OnInput(p.OnDraft), uiw.FieldValue(p.Draft)),
 			Button(css.Class("btn btn-sm btn-primary"), Type("button"),
 				Attr("data-testid", "ai-spend-cap-save"), OnClick(p.OnSave), uistate.T("action.save")),
 			Button(css.Class("btn btn-sm"), Type("button"),

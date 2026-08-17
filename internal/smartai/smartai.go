@@ -22,31 +22,37 @@ type Request struct {
 // /smart catalog only offers a toggle for AI features that actually do something
 // (mirroring the Free-engine HasEngine gate). It grows as features ship.
 var implemented = map[string]bool{
-	"SMART-A3":    true, // account name/type cleanup
-	"SMART-A5":    true, // natural-language account Q&A
-	"SMART-A10":   true, // account health explanation
-	"SMART-A11":   true, // AI credit-health analysis (demerits + advice)
-	"SMART-T1":    true, // auto-categorization
-	"SMART-T3":    true, // natural-language search
-	"SMART-T5":    true, // merchant name cleanup
-	"SMART-T12":   true, // tax-relevant tagging
-	"SMART-G4":    true, // goal drafting from a wish
-	"SMART-G9":    true, // goal-priority suggestion
-	"SMART-P2":    true, // plain-language scenario draft
-	"SMART-P3":    true, // narrated forecast/outlook summary
-	"SMART-AL4":   true, // plain-language allocation intent
-	"SMART-SU2":   true, // overlapping-service detection
-	"SMART-SU10":  true, // category-benchmark context
-	"SMART-SU13":  true, // bundle-opportunity finder
-	"SMART-T10":   true, // smart import field-mapping
-	"SMART-T8":    true, // receipt OCR (vision)
-	"SMART-D4":    true, // natural-language to-do quick-add
-	"SMART-T14":   true, // Smart+ rule suggestions (/rules AI scan)
-	"SMART-T15":   true, // suggest new categories from uncategorized txns
-	"SMART-T16":   true, // auto-categorize uncategorized txns (with review)
-	"SMART-T17":   true, // miscategorization review
-	"SMART-T18":   true, // statement import (AI PDF → review → import)
-	"SMART-QUOTE": true, // daily money-mindset quote (hub)
+	"SMART-A3":      true, // account name/type cleanup
+	"SMART-A5":      true, // natural-language account Q&A
+	"SMART-A10":     true, // account health explanation
+	"SMART-A11":     true, // AI credit-health analysis (demerits + advice)
+	"SMART-A12":     true, // explain one unusual balance move (SM-5)
+	"SMART-B15":     true, // why this budget went over (SM-4)
+	"SMART-T21":     true, // split suggestion for one charge (SM-3)
+	"SMART-T22":     true, // type a transaction in words (SM-15)
+	"SMART-G22":     true, // goal pace nudge (SM-13)
+	"SMART-EXPLAIN": true, // explain one alert (SM-7)
+	"SMART-T1":      true, // auto-categorization
+	"SMART-T3":      true, // natural-language search
+	"SMART-T5":      true, // merchant name cleanup
+	"SMART-T12":     true, // tax-relevant tagging
+	"SMART-G4":      true, // goal drafting from a wish
+	"SMART-G9":      true, // goal-priority suggestion
+	"SMART-P2":      true, // plain-language scenario draft
+	"SMART-P3":      true, // narrated forecast/outlook summary
+	"SMART-AL4":     true, // plain-language allocation intent
+	"SMART-SU2":     true, // overlapping-service detection
+	"SMART-SU10":    true, // category-benchmark context
+	"SMART-SU13":    true, // bundle-opportunity finder
+	"SMART-T10":     true, // smart import field-mapping
+	"SMART-T8":      true, // receipt OCR (vision)
+	"SMART-D4":      true, // natural-language to-do quick-add
+	"SMART-T14":     true, // Smart+ rule suggestions (/rules AI scan)
+	"SMART-T15":     true, // suggest new categories from uncategorized txns
+	"SMART-T16":     true, // auto-categorize uncategorized txns (with review)
+	"SMART-T17":     true, // miscategorization review
+	"SMART-T18":     true, // statement import (AI PDF → review → import)
+	"SMART-QUOTE":   true, // daily money-mindset quote (hub)
 }
 
 // Implemented reports whether the AI feature has a shipped UI.

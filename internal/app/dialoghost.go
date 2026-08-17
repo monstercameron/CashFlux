@@ -5,6 +5,7 @@
 package app
 
 import (
+	"github.com/monstercameron/CashFlux/internal/ui"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -162,8 +163,12 @@ func DialogHost() uic.Node {
 		If(req.Title != "", H3(css.Class("cf-dialog-title"), Attr("id", "cf-dialog-title"), req.Title)),
 		P(css.Class("cf-dialog-msg"), req.Message),
 		If(req.Kind == uistate.DialogPrompt,
+			// FieldValue, not Value: this box is read on confirm rather than bound to
+			// state, but the dialog still re-renders around it (the host re-renders on
+			// any dialog-state change), and a Value option is rewritten on every one of
+			// those — over whatever has been typed since.
 			Input(css.Class("set-input cf-dialog-input"), Attr("id", dialogInputID), Type("text"),
-				Attr("aria-label", req.Message), Value(req.Default))),
+				Attr("aria-label", req.Message), ui.FieldValue(req.Default))),
 		Div(css.Class("cf-dialog-actions"),
 			Button(css.Class("btn"), Type("button"), Attr("id", "cf-dialog-cancel"), OnClick(func() { finish(false) }), uistate.T("action.cancel")),
 			Button(ClassStr(confirmCls), Type("button"), Attr("id", "cf-dialog-confirm"), OnClick(func() { finish(true) }), confirmLabel),

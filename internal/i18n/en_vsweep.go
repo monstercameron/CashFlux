@@ -536,6 +536,13 @@ var vSweepKeys = Catalog{
 	// FP-T2b — the per-payee shape beside the per-payee total.
 	"rpta.payeeSparkAlt": "Monthly spending at %s over the year",
 
+	// FP-T2c — the holding price editor and how old the price is.
+	"investments.updatePrice":     "Update price",
+	"investments.priceLabelPer":   "Price per share (%s)",
+	"investments.priceAsOfLabel":  "Price as of",
+	"investments.pricedOn":        "priced %s",
+	"investments.priceNoDate":     "price date not recorded",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

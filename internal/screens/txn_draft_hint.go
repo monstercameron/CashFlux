@@ -187,10 +187,10 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 
 	return Div(css.Class("sm15"), Attr("data-testid", "sm15-draft"),
 		Div(css.Class("sm15-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			uiw.Field(sentence.Get(), css.Class("field field-wide"), Type("text"),
+			Input(css.Class("field field-wide"), Type("text"),
 				Attr("data-testid", "sm15-input"),
 				Attr("aria-label", uistate.T("sm15.label")),
-				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput)),
+				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput), uiw.FieldValue(sentence.Get())),
 			askBtn,
 		),
 		hint,

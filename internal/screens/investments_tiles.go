@@ -390,6 +390,20 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 		})
 	}
 
+	// FP-T2c: record a new price and the date it was true. Replace-by-ID through
+	// PutHolding, so every other field on the position survives untouched — the
+	// old path (delete and re-add) lost the cost basis, the sector and the
+	// expense ratio every time somebody updated a number.
+	onPrice := func(h domain.Holding, priceMinor int64, asOf time.Time) {
+		h.CurrentPriceMinorPerShare = priceMinor
+		h.PriceAsOf = asOf
+		if err := app.PutHolding(h); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+	}
+
 	var listBody ui.Node
 	if len(v.Securities) == 0 {
 		listBody = P(css.Class("empty"), Attr("data-testid", "invest-no-securities"), uistate.T("investments.emptyHoldings"))
@@ -400,7 +414,7 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 			if total != 0 {
 				weight = float64(portfolio.HoldingValueMinor(portfolio.FromDomain(h))) / float64(total) * 100
 			}
-			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete})
+			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete, OnPrice: onPrice})
 		})
 		listBody = Div(css.Class("inv-list"), rows)
 	}

@@ -321,7 +321,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 					args = append(args, Attr("id", props.MatchInputID))
 				}
 				args = append(args, errAttrs("rule-err", errMsg.Get())...)
-				return uiw.Field(match.Get(), args...)
+				return Input(append(args, uiw.FieldValue(match.Get()))...)
 			}(),
 		),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
@@ -332,7 +332,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				AriaLabel: uistate.T("rules.categoryFieldLabel"),
 			})),
 		uiw.FormField(uistate.T("rules.tagsFieldLabel"),
-			uiw.Field(tags.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), OnInput(onTags)),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tags.Get())),
 		),
 		uiw.FormField(uistate.T("rules.billAccountFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -480,10 +480,10 @@ func condSlotRow(
 					OnChange:  onOp,
 					AriaLabel: uistate.T("rulecond.opLabel"),
 				}),
-				uiw.Field(value, css.Class("field"), Type("text"),
+				Input(css.Class("field"), Type("text"),
 					Placeholder(hint),
 					Attr("aria-label", uistate.T("rulecond.valueLabel")),
-					OnInput(onValue)),
+					OnInput(onValue), uiw.FieldValue(value)),
 			),
 		),
 	)

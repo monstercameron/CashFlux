@@ -55,11 +55,11 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 		}
 		return Select(css.Class("field"), Title(label), OnChange(onSel), opts)
 	case customfields.TypeNumber:
-		return uiw.NumField(props.Value, css.Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), OnInput(onText))
+		return Input(css.Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), OnInput(onText), uiw.FieldValue(props.Value))
 	case customfields.TypeDate:
-		return uiw.Field(props.Value, css.Class("field"), Type("date"), Title(label), OnInput(onText))
+		return Input(css.Class("field"), Type("date"), Title(label), OnInput(onText), uiw.FieldValue(props.Value))
 	default: // text
-		return uiw.Field(props.Value, css.Class("field"), Type("text"), Title(label), Placeholder(label), OnInput(onText))
+		return Input(css.Class("field"), Type("text"), Title(label), Placeholder(label), OnInput(onText), uiw.FieldValue(props.Value))
 	}
 }
 

@@ -617,7 +617,7 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 		valInput = append(valInput, Attr("autofocus", ""))
 	}
 	return Div(css.Class("acct-value-section"), Attr("data-testid", "acct-value-section"),
-		labeledField(uistate.T(updateActionKey(a.Type)), uiw.NumField(setBalAmtS.Get(), valInput...)),
+		labeledField(uistate.T(updateActionKey(a.Type)), Input(append(valInput, uiw.FieldValue(setBalAmtS.Get()))...)),
 		Span(css.Class("t-caption acct-value-now", tw.TextDim), Attr("data-testid", "acct-value-now"),
 			uistate.T("accounts.currentValueNow", fmtMoney(curBal))),
 		deltaNode,
@@ -727,12 +727,12 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 					Style(map[string]string{"margin": "0 0 0.5rem"}),
 					uistate.T("accounts.reconDraftNote"))),
 				labeledField(uistate.T("accounts.statementBalance"),
-					uiw.NumField(stmtBalS.Get(), css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
+					Input(css.Class("field"), Attr("id", "acct-reconcile-stmt-"+a.ID), Attr("autofocus", ""),
 						Attr("data-testid", "reconcile-statement-input"), Type("number"), Step("0.01"),
-						Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(onStmtBal))),
+						Placeholder(uistate.T("accounts.statementBalancePh")), OnInput(onStmtBal), uiw.FieldValue(stmtBalS.Get()))),
 				labeledField(uistate.T("accounts.reconStmtDate"),
-					uiw.Field(stmtDateS.Get(), css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
-						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(onStmtDate))),
+					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
+						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(onStmtDate), uiw.FieldValue(stmtDateS.Get()))),
 				Div(css.Class("reconcile-summary"),
 					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
 					Span(ClassStr(remainingCls), Attr("data-testid", "reconcile-difference"),
@@ -810,17 +810,17 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "acct-xfer-to-select"})),
 			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
 			labeledField(uistate.T("accounts.transferAmount"),
-				uiw.NumField(xferAmtS.Get(), css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID), Attr("autofocus", ""),
+				Input(css.Class("field"), Attr("id", "acct-xfer-amt-"+a.ID), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
-					Step("0.01"), Attr("min", "0.01"), OnInput(onXferAmt))),
+					Step("0.01"), Attr("min", "0.01"), OnInput(onXferAmt), uiw.FieldValue(xferAmtS.Get()))),
 			// G7: cross-currency semantics — denomination + converted preview / no-rate warning.
 			acctTransferFXNote(app, fromID, toID, xferAmtS.Get()),
 			// Before/after balances for both sides (shared with the page form).
 			acctTransferBalancePreview(app, fromID, toID, xferAmtS.Get(), "", ""),
 			labeledField(uistate.T("accounts.transferDateLabel"),
-				uiw.Field(xferDateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onXferDate))),
+				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onXferDate), uiw.FieldValue(xferDateS.Get()))),
 			labeledField(uistate.T("accounts.transferDescLabel"),
-				uiw.Field(xferDescS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onXferDesc))),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onXferDesc), uiw.FieldValue(xferDescS.Get()))),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
@@ -905,7 +905,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 			// its label — value on top, everything else opt-in. The Edit entry keeps
 			// the full form expanded.
 			foldAccountDetails(focusValue, Fragment(
-				labeledField(uistate.T("common.name"), uiw.Field(nameS.Get(), nameInput...)),
+				labeledField(uistate.T("common.name"), Input(append(nameInput, uiw.FieldValue(nameS.Get()))...)),
 				labeledField(uistate.T("accounts.typeLabel"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   typeOptions,
@@ -958,22 +958,22 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 					)
 				}()),
 				labeledField(uistate.T("accounts.openingBalance"),
-					uiw.NumField(balS.Get(), css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onBal))),
+					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onBal), uiw.FieldValue(balS.Get()))),
 				If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-					uiw.NumField(climS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onClim)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onClim), uiw.FieldValue(climS.Get())))),
 				If(isLiab, labeledField(uistate.T("accounts.apr"),
-					uiw.NumField(aprS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr), uiw.FieldValue(aprS.Get())))),
 				If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-					uiw.NumField(minpS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinp)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinp), uiw.FieldValue(minpS.Get())))),
 				If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-					uiw.NumField(dueS.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDue)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDue), uiw.FieldValue(dueS.Get())))),
 				// AC3: statement-close day — the day the billing cycle closes, distinct from the
 				// payment due day above. Powers real due dates in the bill calendar and a tighter
 				// on-time payment window.
 				If(isLiab, labeledField(uistate.T("accountsstmt.statementDay"),
-					uiw.NumField(x.stmtDayS.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), OnInput(x.onStmtDay)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "31"), Step("1"), Attr("data-testid", "acct-edit-statement-day"), Placeholder(uistate.T("accountsstmt.statementDay")), OnInput(x.onStmtDay), uiw.FieldValue(x.stmtDayS.Get())))),
 				If(isLiab, labeledField(uistate.T("accounts.lender"),
-					uiw.Field(lenderS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender)))),
+					Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender), uiw.FieldValue(lenderS.Get())))),
 				// C6: ONE Institution section. The directory picker leads (it colors the row
 				// and powers multi-institution analytics); picking an entry also sets the
 				// free-text label, which only shows as a fallback input while nothing is
@@ -1021,29 +1021,29 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 							Span(uistate.T("accounts.freshExempt")),
 							Span(css.Class("row-meta", tw.TextDim), uistate.T("accounts.freshExemptHint")))),
 					If(!x.freshExemptS.Get(), labeledField(uistate.T("accounts.freshSnoozeLabel"),
-						uiw.Field(x.freshSnoozeS.Get(), css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
-							Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")), OnInput(x.onFreshSnooze)))),
+						Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-edit-fresh-snooze"),
+							Attr("aria-label", uistate.T("accounts.freshSnoozeLabel")), Title(uistate.T("accounts.freshSnoozeHint")), OnInput(x.onFreshSnooze), uiw.FieldValue(x.freshSnoozeS.Get())))),
 				)),
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-					uiw.NumField(retS.Get(), css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onRet)))),
+					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onRet), uiw.FieldValue(retS.Get())))),
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.apyLabel"),
-					uiw.NumField(apyS.Get(), css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Step("0.01"), OnInput(onApy)))),
+					Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.apyHint")), Attr("data-testid", "account-apy"), Placeholder(uistate.T("accounts.apyLabel")), Step("0.01"), OnInput(onApy), uiw.FieldValue(apyS.Get())))),
 				// The canonical score scale is 0..100 (domain, validate, allocate). These
 				// inputs briefly enforced 1-5, which made every sample account with a
 				// seeded score (e.g. liquidity 100) fail native validation on Save.
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-					uiw.NumField(liqS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiq)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiq), uiw.FieldValue(liqS.Get())))),
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.stability"),
-					uiw.NumField(stabS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStab)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStab), uiw.FieldValue(stabS.Get())))),
 				If(!isLiab && editAdvOpen.Get(), labeledField(uistate.T("accounts.lockUntilEdit"),
-					uiw.Field(lockS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), OnInput(onLock)))),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntilEdit")), Title(uistate.T("accounts.lockUntilEdit")), OnInput(onLock), uiw.FieldValue(lockS.Get())))),
 				// AC5: how often to refresh a periodically-ESTIMATED asset (property, vehicle,
 				// crypto, or an "Other" you're treating as one) — 0/blank keeps the type's
 				// default cadence (internal/revalue). The freshness machinery already reads
 				// Account.RevalueDays; this is only the missing input.
 				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), labeledField(uistate.T("accounts.revalueDaysLabel"),
-					uiw.NumField(x.revalueDaysS.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
-						Placeholder(uistate.T("accounts.revalueDaysPh")), OnInput(x.onRevalueDays)))),
+					Input(css.Class("field"), Type("number"), Attr("min", "1"), Step("1"), Attr("data-testid", "acct-edit-revalue-days"),
+						Placeholder(uistate.T("accounts.revalueDaysPh")), OnInput(x.onRevalueDays), uiw.FieldValue(x.revalueDaysS.Get())))),
 				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
 				If(len(accDefs) > 0, Fragment(
 					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),

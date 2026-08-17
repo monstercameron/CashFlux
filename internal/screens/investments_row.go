@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -31,6 +32,9 @@ type holdingRowProps struct {
 	WeightPct float64      // this holding's share of total securities value
 	OnClose   func(string) // mark the position sold (confirm + remove)
 	OnDelete  func(string) // remove an entered-in-error record
+	// OnPrice records a new price and the date it was true (FP-T2c). Nil leaves
+	// the row read-only.
+	OnPrice func(h domain.Holding, priceMinor int64, asOf time.Time)
 }
 
 // holdingRow renders one security position as a card: a security-type badge + name/ticker,
@@ -38,6 +42,41 @@ type holdingRowProps struct {
 // cost meta line, and a portfolio-weight bar. Its own component (stable per-row hooks).
 func holdingRow(props holdingRowProps) ui.Node {
 	h := props.H
+
+	// FP-T2c: the price editor. Until now a price change meant deleting the
+	// position and re-entering it, which loses the record and is enough friction
+	// that nobody does it — so a portfolio was stale by design and said nothing
+	// about it.
+	pricing := ui.UseState(false)
+	priceS := ui.UseState("")
+	asOfS := ui.UseState("")
+	openPrice := func() {
+		priceS.Set(strconv.FormatFloat(
+			float64(h.CurrentPriceMinorPerShare)/float64(minorMul(props.Dec)), 'f', -1, 64))
+		asOfS.Set(time.Now().Format("2006-01-02"))
+		pricing.Set(true)
+	}
+	onPriceIn := ui.UseEvent(func(v string) { priceS.Set(v) })
+	onAsOfIn := ui.UseEvent(func(v string) { asOfS.Set(v) })
+	cancelPrice := ui.UseEvent(Prevent(func() { pricing.Set(false) }))
+	savePrice := ui.UseEvent(Prevent(func() {
+		f, err := strconv.ParseFloat(strings.TrimSpace(priceS.Get()), 64)
+		if err != nil || f < 0 {
+			uistate.PostNotice(uistate.T("investments.priceRequired"), true)
+			return
+		}
+		// The as-of date defaults to today but is EDITABLE, because the price you
+		// are entering is often last night's close or a statement from last week,
+		// and stamping it "now" would quietly make stale data look fresh.
+		asOf := time.Now()
+		if d, derr := time.Parse("2006-01-02", strings.TrimSpace(asOfS.Get())); derr == nil {
+			asOf = d
+		}
+		if props.OnPrice != nil {
+			props.OnPrice(h, int64(f*float64(minorMul(props.Dec))), asOf)
+		}
+		pricing.Set(false)
+	}))
 	ph := portfolio.FromDomain(h)
 	valueMinor := portfolio.HoldingValueMinor(ph)
 	gainMinor := portfolio.UnrealizedGainMinor(ph)
@@ -78,7 +117,26 @@ func holdingRow(props holdingRowProps) ui.Node {
 				uistate.T("investments.sharesAt", fmtShares(h.Shares), fmtSignedMoney(h.CurrentPriceMinorPerShare, props.Sym, props.Dec)),
 				Span(css.Class("inv-sep"), " · "),
 				uistate.T("investments.costMeta", fmtSignedMoney(h.CostBasisMinor, props.Sym, props.Dec)),
+				Span(css.Class("inv-sep"), " · "),
+				holdingPriceAge(h),
 			),
+			If(pricing.Get(), Form(css.Class("inv-price-form"), Attr("data-testid", "holding-price-form-"+h.ID),
+				OnSubmit(savePrice),
+				labeledField(uistate.T("investments.priceLabelPer", props.Sym),
+					Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+						Attr("data-testid", "holding-price-input-"+h.ID),
+						Value(priceS.Get()), OnInput(onPriceIn))),
+				labeledField(uistate.T("investments.priceAsOfLabel"),
+					Input(css.Class("field"), Type("date"),
+						Attr("data-testid", "holding-price-date-"+h.ID),
+						Value(asOfS.Get()), OnInput(onAsOfIn))),
+				Div(css.Class("inv-price-actions"),
+					Button(css.Class("btn", "btn-primary"), Type("submit"),
+						Attr("data-testid", "holding-price-save-"+h.ID), uistate.T("action.save")),
+					Button(css.Class("btn"), Type("button"),
+						Attr("data-testid", "holding-price-cancel-"+h.ID),
+						OnClick(cancelPrice), uistate.T("action.cancel"))),
+			)),
 			Div(css.Class("inv-weight"),
 				Div(css.Class("inv-weight-track"),
 					Div(css.Class("inv-weight-fill"), Attr("style", fmt.Sprintf("width:%.1f%%", w)))),
@@ -99,6 +157,11 @@ func holdingRow(props holdingRowProps) ui.Node {
 				AriaLabel:    uistate.T("investments.holdingMenuAria"),
 				ToggleTestID: "holding-menu-btn-" + h.ID,
 				Items: []ui.Node{
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "holding-price-"+h.ID),
+						Title(uistate.T("investments.updatePrice")),
+						OnClick(openPrice),
+						uistate.T("investments.updatePrice")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "holding-close-"+h.ID),
 						Title(uistate.T("investments.closePosition")),
@@ -255,23 +318,23 @@ func InvestAddForm(props InvestAddFormProps) ui.Node {
 					OnChange: func(v string) { typeS.Set(v) }, AriaLabel: uistate.T("investments.securityTypeLabel"),
 					TestID: "hld-type"})),
 			labeledField(uistate.T("investments.tickerLabel"),
-				uiw.Field(tickerS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "hld-ticker"),
-					Placeholder(uistate.T("investments.tickerPlaceholder")), OnInput(onTicker))),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "hld-ticker"),
+					Placeholder(uistate.T("investments.tickerPlaceholder")), OnInput(onTicker), uiw.FieldValue(tickerS.Get()))),
 			labeledField(uistate.T("investments.nameLabel"),
-				uiw.Field(nameS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "hld-name"),
-					Placeholder(uistate.T("investments.namePlaceholder")), OnInput(onName))),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "hld-name"),
+					Placeholder(uistate.T("investments.namePlaceholder")), OnInput(onName), uiw.FieldValue(nameS.Get()))),
 			labeledField(uistate.T("investments.sharesLabel"),
-				uiw.NumField(sharesS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-shares"),
-					Placeholder(uistate.T("investments.sharesPlaceholder")), OnInput(onShares))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-shares"),
+					Placeholder(uistate.T("investments.sharesPlaceholder")), OnInput(onShares), uiw.FieldValue(sharesS.Get()))),
 			labeledField(fmt.Sprintf(uistate.T("investments.costBasisLabel"), sym),
-				uiw.NumField(costS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-cost"),
-					Placeholder(fmt.Sprintf(uistate.T("investments.costBasisPlaceholder"), sym)), OnInput(onCost))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-cost"),
+					Placeholder(fmt.Sprintf(uistate.T("investments.costBasisPlaceholder"), sym)), OnInput(onCost), uiw.FieldValue(costS.Get()))),
 			labeledField(fmt.Sprintf(uistate.T("investments.priceLabel"), sym),
-				uiw.NumField(priceS.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-price"),
-					Placeholder(fmt.Sprintf(uistate.T("investments.pricePlaceholder"), sym)), OnInput(onPrice))),
+				Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "hld-price"),
+					Placeholder(fmt.Sprintf(uistate.T("investments.pricePlaceholder"), sym)), OnInput(onPrice), uiw.FieldValue(priceS.Get()))),
 			labeledField(uistate.T("investments.assetClassLabel"),
-				uiw.Field(classS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "hld-class"),
-					Placeholder(uistate.T("investments.assetClassPlaceholder")), OnInput(onClass))),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "hld-class"),
+					Placeholder(uistate.T("investments.assetClassPlaceholder")), OnInput(onClass), uiw.FieldValue(classS.Get()))),
 		),
 		If(errS.Get() != "", P(css.Class("err"), Attr("role", "alert"), errS.Get())),
 		If(errS.Get() == "" && savedS.Get() != "", P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), savedS.Get())),
@@ -282,3 +345,42 @@ func InvestAddForm(props InvestAddFormProps) ui.Node {
 	)
 	return Div(css.Class("inv-add-modal"), Attr("data-testid", "invest-add-form"), form)
 }
+
+// minorMul is 10^dec — the multiplier between a major-unit price and minor units.
+func minorMul(dec int) int64 {
+	mul := int64(1)
+	for range dec {
+		mul *= 10
+	}
+	return mul
+}
+
+// holdingPriceAge states when the holding's price was last true (FP-T2c).
+//
+// An unrecorded date reads as "price date not recorded", not as a blank and
+// certainly not as today. A price with an unknown age and a price from this
+// morning are different claims about the same number, and every value, weight
+// and return on this page is computed from it — a portfolio priced two years ago
+// is wrong in a way nothing downstream can detect.
+//
+// Past a threshold the line raises its voice, because the failure mode here is
+// silent: a stale portfolio looks exactly like a fresh one.
+func holdingPriceAge(h domain.Holding) ui.Node {
+	if h.PriceAsOf.IsZero() {
+		return Span(css.Class("inv-price-age"), Attr("data-testid", "holding-price-age-"+h.ID),
+			uistate.T("investments.priceNoDate"))
+	}
+	days := int(time.Since(h.PriceAsOf).Hours() / 24)
+	cls := "inv-price-age"
+	if days > holdingPriceStaleDays {
+		cls = "inv-price-age is-stale"
+	}
+	return Span(css.Class(cls), Attr("data-testid", "holding-price-age-"+h.ID),
+		uistate.T("investments.pricedOn", h.PriceAsOf.Format("2 Jan 2006")))
+}
+
+// holdingPriceStaleDays is when a price stops being worth trusting silently.
+//
+// Thirty days: long enough that a household pricing monthly from a statement is
+// not nagged, short enough that a quarter-old price cannot pass as current.
+const holdingPriceStaleDays = 30

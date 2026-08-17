@@ -182,15 +182,15 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 
 	return Form(css.Class("acct-edit-form"), Attr("id", "task-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("todo.taskLabel"),
-			uiw.Field(titleS.Get(), css.Class("field"), Attr("id", "task-edit-"+t.ID), Attr("autofocus", ""), Type("text"),
-				Placeholder(uistate.T("todo.taskPlaceholder")), OnInput(onTitle))),
+			Input(css.Class("field"), Attr("id", "task-edit-"+t.ID), Attr("autofocus", ""), Type("text"),
+				Placeholder(uistate.T("todo.taskPlaceholder")), OnInput(onTitle), uiw.FieldValue(titleS.Get()))),
 		labeledField(uistate.T("todo.priorityLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: prioOpts, Selected: prioS.Get(),
 				OnChange: func(v string) { prioS.Set(v) }, AriaLabel: "Priority",
 			})),
 		labeledField(uistate.T("common.dueDate"),
-			uiw.Field(dueS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), OnInput(onDue))),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), OnInput(onDue), uiw.FieldValue(dueS.Get()))),
 		// Remind me sits directly under Due date (it's anchored to it), then Repeat.
 		remindField,
 		repeatField,
@@ -201,7 +201,7 @@ func TaskEditForm(props TaskEditFormProps) ui.Node {
 				OnChange: func(v string) { memberS.Set(v) }, AriaLabel: uistate.T("todo.assignTo"), TestID: "task-edit-assignee-" + t.ID,
 			}))),
 		labeledField(uistate.T("todo.notesEdit"),
-			uiw.Field(notesS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), OnInput(onNotes))),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("todo.notesEdit")), OnInput(onNotes), uiw.FieldValue(notesS.Get()))),
 		labeledField(uistate.T("todo.linkTo"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options: linkTypeSelectOptions(linkTypeS.Get()), Selected: linkTypeS.Get(),

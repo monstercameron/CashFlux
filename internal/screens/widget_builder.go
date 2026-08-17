@@ -585,8 +585,8 @@ func VisualBuilder() ui.Node {
 			),
 			Div(css.Class("vb-group"),
 				Span(css.Class("vb-group-label"), uistate.T("vbld.thisCard")),
-				uiw.Field(cardName.Get(), css.Class("set-input"), Type("text"), Attr("placeholder", uistate.T("vbld.cardName")),
-					Attr("aria-label", uistate.T("vbld.cardName")), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
+				Input(css.Class("set-input"), Type("text"), Attr("placeholder", uistate.T("vbld.cardName")),
+					Attr("aria-label", uistate.T("vbld.cardName")), Style(map[string]string{"width": "9rem"}), OnInput(onCardName), uiw.FieldValue(cardName.Get())),
 				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), uistate.T("vbld.save")),
 				Button(css.Class("btn btn-primary vb-publish"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), uistate.T("vbld.publishBtn")),
 				Button(css.Class("data-btn vb-danger"), Type("button"), Attr("title", uistate.T("vbld.deleteTitle")), Attr("aria-label", uistate.T("vbld.deleteTitle")), OnClick(deleteCard), uistate.T("vbld.delete")),
@@ -1832,7 +1832,7 @@ func vbMetricField(p vbMetricFieldProps) ui.Node {
 
 	kids := []any{ClassStr("wb-field"),
 		Span(css.Class("wb-field-label"), uistate.T("vbld.figure")),
-		uiw.Field(q.Get(), css.Class("set-input"), Type("search"), Placeholder(uistate.T("vbld.filterMetrics")), Attr("aria-label", uistate.T("vbld.filterMetrics")), OnInput(onQ)),
+		Input(css.Class("set-input"), Type("search"), Placeholder(uistate.T("vbld.filterMetrics")), Attr("aria-label", uistate.T("vbld.filterMetrics")), OnInput(onQ), uiw.FieldValue(q.Get())),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("vbld.figure")), OnChange(onSel), opts),
 	}
 	if selDoc != "" {
@@ -1970,7 +1970,7 @@ func vbTextField(p vbTextFieldProps) ui.Node {
 	}
 	return Div(css.Class("wb-field"),
 		Span(css.Class("wb-field-label"), p.Label),
-		uiw.Field(p.Value, css.Class("set-input"), Type(typ), Attr("placeholder", p.Placeholder), Attr("aria-label", p.Label), OnInput(on)),
+		Input(css.Class("set-input"), Type(typ), Attr("placeholder", p.Placeholder), Attr("aria-label", p.Label), OnInput(on), uiw.FieldValue(p.Value)),
 	)
 }
 

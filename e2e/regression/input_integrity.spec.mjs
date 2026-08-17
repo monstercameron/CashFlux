@@ -102,3 +102,41 @@ test.describe("forms: fields across the app keep what is typed", () => {
     expect(await app.evaluate(() => document.documentElement.getAttribute("data-app-ready"))).toBe("true");
   });
 });
+
+test.describe("forms: what is typed also REACHES the app", () => {
+  // Every test above this point asks the box what it holds. That is only half the
+  // contract, and the half that hid a worse bug than the one being fixed: an
+  // earlier version of the shared field wrapped the element in a component, which
+  // silently broke the call site's own OnInput. The DOM kept the text and looked
+  // perfect — the search filtered nothing and the form saved no account. So these
+  // assert the EFFECT of typing, never the text.
+
+  test("typing in the ledger search actually filters the rows", async ({ app }) => {
+    await nav(app, "/transactions");
+    const search = app.locator("input[type='search']").first();
+    await expect(search).toBeVisible();
+    const rows = app.locator(".data-table tbody tr");
+    expect(await rows.count()).toBeGreaterThan(0);
+    await search.click();
+    for (const ch of "zzzzqqq") await app.keyboard.type(ch);
+    // A query nothing matches must empty the table, not merely sit in the box.
+    await expect(rows).toHaveCount(0, { timeout: 10_000 });
+    await expect(search).toHaveValue("zzzzqqq");
+  });
+
+  test("a name typed into the account form is the name that gets saved", async ({ app }) => {
+    await nav(app, "/accounts");
+    await app.getByTestId("accounts-add").click();
+    const name = app.locator("form input[type='text']").first();
+    await name.click();
+    await name.fill("");
+    for (const ch of "ProbeAcct") await app.keyboard.type(ch);
+    const amount = app.locator("form input[type='number']").first();
+    await amount.click();
+    await amount.fill("");
+    for (const ch of "1250.75") await app.keyboard.type(ch);
+    // The Save control is pinned in the modal footer, OUTSIDE the form element.
+    await app.locator("button").filter({ hasText: /^Add account$|^Save/i }).last().click();
+    await expect(app.locator("body")).toContainText("ProbeAcct", { timeout: 10_000 });
+  });
+});

@@ -238,7 +238,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					// the reconciler write it back meant the shared search — every list screen
 					// in the app — deleted characters mid-word, and the more the user typed
 					// the further behind the written-back value was.
-					Field(props.Search, css.Class("fctrl-input"), Type("search"),
+					Input(css.Class("fctrl-input"), Type("search"), FieldValue(props.Search),
 						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						// C619: while the debounce is still pending the rows below are the
 						// PREVIOUS query's. aria-busy tells assistive tech the region is

@@ -291,7 +291,7 @@ func Planning() ui.Node {
 				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
 				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
 				Form(css.Class("form-grid"),
-					labeledField(uistate.T("planning.trimLabel", base), uiw.NumField(trimStr.Get(), css.Class("field"), Type("number"), Step("0.01"), OnInput(onTrim))),
+					labeledField(uistate.T("planning.trimLabel", base), Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onTrim), uiw.FieldValue(trimStr.Get()))),
 					If(len(savedPlans) > 0,
 						// G7: compare-with is a secondary overlay action; compact class
 						// keeps it visually subordinate to the primary trim input.
@@ -374,9 +374,9 @@ func Planning() ui.Node {
 			Fragment(
 				P(css.Class("muted"), uistate.T("planning.affordHint")),
 				Form(css.Class("form-grid"),
-					labeledField(uistate.T("planning.affordAmountPlaceholder", base), uiw.NumField(afAmount.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), OnInput(onAfAmount))),
-					labeledField(uistate.T("planning.affordMonthsPlaceholder"), uiw.NumField(afMonths.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("1"), OnInput(onAfMonths))),
-					labeledField(uistate.T("planning.affordReservePlaceholder", base), uiw.NumField(afReserve.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), OnInput(onAfReserve))),
+					labeledField(uistate.T("planning.affordAmountPlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), OnInput(onAfAmount), uiw.FieldValue(afAmount.Get()))),
+					labeledField(uistate.T("planning.affordMonthsPlaceholder"), Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("1"), OnInput(onAfMonths), uiw.FieldValue(afMonths.Get()))),
+					labeledField(uistate.T("planning.affordReservePlaceholder", base), Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), OnInput(onAfReserve), uiw.FieldValue(afReserve.Get()))),
 				),
 				afBody,
 			)))
@@ -540,7 +540,7 @@ func Planning() ui.Node {
 				// placeholdered buffer input rather than a full-width empty box.
 				Div(css.Class("plan-inline-field"),
 					labeledField(uistate.T("planning.runwayBufferPlaceholder", base),
-						uiw.NumField(rwBuffer.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder("500"), Step("0.01"), OnInput(onRwBuffer))),
+						Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder("500"), Step("0.01"), OnInput(onRwBuffer), uiw.FieldValue(rwBuffer.Get()))),
 				),
 			)))
 	}
@@ -717,9 +717,9 @@ func RecurringRow(props recurringRowProps) ui.Node {
 		return Div(css.Class("row row-edit"),
 			Form(css.Class("form-grid"), Attr("data-testid", "recurring-edit-"+r.ID), OnSubmit(saveEdit),
 				labeledField(uistate.T("recurring.labelPlaceholder"),
-					uiw.Field(labelS.Get(), css.Class("field"), Type("text"), OnInput(onLabel))),
+					Input(css.Class("field"), Type("text"), OnInput(onLabel), uiw.FieldValue(labelS.Get()))),
 				labeledField(uistate.T("recurring.amountPlaceholder", base),
-					uiw.NumField(amountS.Get(), css.Class("field"), Type("number"), Step("0.01"), OnInput(onAmount))),
+					Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), OnChange(onCadence), cadOpts),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.account")), OnChange(onAccount), acctOpts),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.category")), OnChange(onCategory), catOpts),

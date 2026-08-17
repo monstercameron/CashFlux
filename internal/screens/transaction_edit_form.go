@@ -678,10 +678,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 
 	return Form(css.Class("form-grid txn-edit"), Attr("id", "txn-edit-form"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("transactions.descPlaceholder"),
-			uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc))),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
 		labeledField(uistate.T("transactions.payeeLabel"),
 			Fragment(
-				uiw.Field(payeeS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee)),
+				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee), uiw.FieldValue(payeeS.Get())),
 				// Parity: the ORIGINAL statement text stays visible beside the
 				// cleaned merchant — when the resolver (alias table + cleanup)
 				// displays this transaction under a different name, say what the
@@ -714,9 +714,9 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// inputmode=decimal, which is exactly why C546 worked there and C547 did not
 		// work here.
 		labeledField(uistate.T("transactions.amountPlaceholder"),
-			uiw.Field(amountS.Get(), css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
+			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
 				Attr("data-testid", "txn-edit-amount"),
-				Placeholder(uistate.T("transactions.amountPlaceholder")), OnInput(onAmount))),
+				Placeholder(uistate.T("transactions.amountPlaceholder")), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
 		// Direction sits beside the amount because together they ARE the amount.
 		If(!txn.IsTransfer(), labeledField(uistate.T("transactions.directionLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -747,17 +747,17 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				// transaction's flow) and selects it without leaving the modal.
 				If(addingCat.Get(),
 					Div(css.Class("txn-cat-add"),
-						uiw.Field(newCatName.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
+						Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
 							Attr("aria-label", uistate.T("transactions.newCategoryName")),
-							Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey)),
+							Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey), uiw.FieldValue(newCatName.Get())),
 						Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"),
 							OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
 						Button(css.Class("btn btn-ghost"), Type("button"),
 							OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")))))),
 		labeledField(uistate.T("transactions.dateLabel"),
-			uiw.Field(dateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate))),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
 		labeledField(uistate.T("transactions.tagsLabel"),
-			uiw.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags))),
+			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
 		If(len(members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   memberOpts,

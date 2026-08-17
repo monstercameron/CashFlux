@@ -698,10 +698,10 @@ func OwnerShareRow(props ownerShareRowProps) ui.Node {
 		Span(css.Class(tw.TextDim), props.Member.Name),
 		Label(css.Class("labeled-field"),
 			Style(map[string]string{"display": "flex", "flex-direction": "row", "align-items": "center", "gap": "0.25rem"}),
-			uiw.NumField(shareStr, css.Class("field"),
+			Input(css.Class("field"),
 				Style(map[string]string{"width": "5rem"}),
 				Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"),
-				Attr("aria-label", props.Member.Name+" "+uistate.T("account.sharePercent")), OnInput(onChange)),
+				Attr("aria-label", props.Member.Name+" "+uistate.T("account.sharePercent")), OnInput(onChange), uiw.FieldValue(shareStr)),
 			Span(css.Class(tw.TextDim), "%"),
 		),
 	)

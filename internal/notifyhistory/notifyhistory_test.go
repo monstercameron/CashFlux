@@ -4,9 +4,10 @@ package notifyhistory
 
 import (
 	"encoding/json"
-	"github.com/monstercameron/CashFlux/internal/copytext"
 	"strings"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
 )
 
 func TestAddDedupeOrderingAndPrune(t *testing.T) {

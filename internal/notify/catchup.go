@@ -3,9 +3,10 @@
 package notify
 
 import (
-	"github.com/monstercameron/CashFlux/internal/copytext"
 	"sort"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/copytext"
 )
 
 // Candidate is a potential notification occurrence discovered for the gap since

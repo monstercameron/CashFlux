@@ -63,13 +63,13 @@ func filterSelect(label, selected string, opts []uiw.SelectOption, onPick func(s
 // created by the caller and passed in, since a text input fires on every keystroke
 // (so the handler must live at a stable position in the owning component).
 func dateField(label, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, uiw.Field(value, css.Class("field"), Type("date"),
-		Attr("aria-label", label), OnInput(onInput)))
+	return withFieldLabel(label, Input(css.Class("field"), Type("date"),
+		Attr("aria-label", label), OnInput(onInput), uiw.FieldValue(value)))
 }
 
 func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, uiw.NumField(value, css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
-		Attr("aria-label", label), Placeholder(placeholder), OnInput(onInput)))
+	return withFieldLabel(label, Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+		Attr("aria-label", label), Placeholder(placeholder), OnInput(onInput), uiw.FieldValue(value)))
 }
 
 // containsStr reports whether ss contains v.
@@ -772,7 +772,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				}
 				valControl = uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: f.CustomVal, AriaLabel: valAria, OnChange: setVal})
 			default:
-				valControl = uiw.Field(f.CustomVal, css.Class("field"), Type("text"), Attr("aria-label", valAria), Placeholder(valAria), OnInput(onFilterCustomValText))
+				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", valAria), Placeholder(valAria), OnInput(onFilterCustomValText), uiw.FieldValue(f.CustomVal))
 			}
 		}
 		customFilterNode = withFieldLabel(uistate.T("transactions.filterCustomField"), Fragment(keySelect, valControl))

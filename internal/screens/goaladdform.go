@@ -288,7 +288,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 				// The essentials: Name, Type, then the kind's defining figures + deadline.
 				Div(css.Class("fg-span"),
 					labeledField(uistate.T("common.name"),
-						uiw.Field(name.Get(), append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...)...))),
+						Input(append(append([]any{css.Class("field"), Attr("id", "goal-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(onName)}, errAttrs("goal-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
 				Div(css.Class("fg-span"),
 					labeledField(uistate.T("goals.kindLabel"),
 						Div(
@@ -300,7 +300,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 						))),
 				If(financial, wishAssist),
 				If(financial, labeledField(uistate.T("goals.targetLabel"),
-					uiw.NumField(target.Get(), css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Step("0.01"), OnInput(onTarget)))),
+					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("goals.targetPlaceholder", base)), Step("0.01"), OnInput(onTarget), uiw.FieldValue(target.Get())))),
 				// Habit essentials: check-in rhythm + how many check-ins finish it.
 				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitCadenceLabel"),
 					uiw.SelectInput(uiw.SelectInputProps{
@@ -308,16 +308,16 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 						OnChange: func(v string) { cadenceS.Set(v) }, AriaLabel: uistate.T("goals.habitCadenceLabel"),
 					}))),
 				If(kind == domain.GoalKindHabit, labeledField(uistate.T("goals.habitTargetLabel"),
-					uiw.NumField(habitTargetS.Get(), css.Class("field"), Type("number"), Attr("data-testid", "goal-add-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Step("1"), OnInput(onHabitTarget)))),
+					Input(css.Class("field"), Type("number"), Attr("data-testid", "goal-add-habit-target"), Placeholder(uistate.T("goals.habitTargetPlaceholder")), Step("1"), OnInput(onHabitTarget), uiw.FieldValue(habitTargetS.Get())))),
 				labeledField(uistate.T("goals.dateLabel"),
-					uiw.Field(dateStr.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), OnInput(onDate))),
+					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("goals.dateLabel")), OnInput(onDate), uiw.FieldValue(dateStr.Get()))),
 				// More options: seed money, ownership, links, fund flags, custom fields.
 				Div(css.Class("fg-span"),
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "goal-add-advanced"),
 						Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(toggleAdv), Text(advLabel))),
 				If(advOpen.Get(), Fragment(
 					If(financial, labeledField(uistate.T("goals.savedSoFar"),
-						uiw.NumField(current.Get(), css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Step("0.01"), OnInput(onCurrent)))),
+						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("goals.savedSoFar")), Step("0.01"), OnInput(onCurrent), uiw.FieldValue(current.Get())))),
 					labeledField(uistate.T("goals.owner"),
 						uiw.SelectInput(uiw.SelectInputProps{
 							Options:   ownerOptions,

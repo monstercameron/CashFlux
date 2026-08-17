@@ -178,14 +178,14 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 
 		footer = Div(
 			Div(css.Class("form-grid"),
-				uiw.Field(props.ReceiptMerchant, css.Class("field"), Type("text"),
+				Input(css.Class("field"), Type("text"),
 					Attr("aria-label", uistate.T("documents.storeName")),
 					Placeholder(uistate.T("documents.storeNamePh")),
-					OnInput(props.OnReceiptMerchant)),
-				uiw.Field(props.ReceiptTotal, css.Class("field"), Type("text"),
+					OnInput(props.OnReceiptMerchant), uiw.FieldValue(props.ReceiptMerchant)),
+				Input(css.Class("field"), Type("text"),
 					Attr("aria-label", uistate.T("documents.receiptTotal")),
 					Placeholder(uistate.T("documents.receiptTotal")),
-					OnInput(props.OnReceiptTotal)),
+					OnInput(props.OnReceiptTotal), uiw.FieldValue(props.ReceiptTotal)),
 			),
 			remainderLine,
 			Form(css.Class("form-grid"), OnSubmit(props.OnImportReceipt),

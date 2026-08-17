@@ -571,12 +571,12 @@ func QuickAddHost() uic.Node {
 			},
 		})),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			ui.Field(amount.Get(), css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), OnInput(onAmount), OnBlur(onAmountBlur))),
+			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), OnInput(onAmount), OnBlur(onAmountBlur), ui.FieldValue(amount.Get()))),
 		amountNote,
 		ui.FormField(uistate.T("quickAdd.payee"),
-			ui.Field(payee.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), OnInput(onPayee))),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), OnInput(onPayee), ui.FieldValue(payee.Get()))),
 		ui.FormField(uistate.T("quickAdd.description"),
-			ui.Field(desc.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), OnInput(onDesc))),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), OnInput(onDesc), ui.FieldValue(desc.Get()))),
 		descAssist,
 		ui.FormField(uistate.T("quickAdd.category"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
@@ -584,7 +584,7 @@ func QuickAddHost() uic.Node {
 		learnedCatAssist,
 		budgetImpact,
 		ui.FormField(uistate.T("quickAdd.date"),
-			ui.Field(effDate, css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), OnInput(onDate))),
+			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), OnInput(onDate), ui.FieldValue(effDate))),
 		// C47: wrap the checkbox in a block container so the helper caption sits
 		// below the label text, not inline with it. The outer Div is not a label
 		// so screen-readers read the Input's associated Label normally.
@@ -610,8 +610,8 @@ func QuickAddHost() uic.Node {
 			Summary(uistate.T("quickAdd.moreDetails")),
 			Div(css.Class("form-grid"), Style(map[string]string{"margin-top": "0.5rem"}),
 				ui.FormField(uistate.T("quickAdd.tags"),
-					ui.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
-						Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags))),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
+						Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags), ui.FieldValue(tagsS.Get()))),
 				If(len(app.Members()) > 0, ui.FormField(uistate.T("quickAdd.member"),
 					Select(css.Class("field"), Attr("data-testid", "txn-add-member"), Attr("aria-label", uistate.T("quickAdd.member")), OnChange(onMember),
 						func() []uic.Node {
@@ -622,8 +622,8 @@ func QuickAddHost() uic.Node {
 							return opts
 						}()))),
 				ui.FormField(uistate.T("quickAdd.note"),
-					ui.Field(noteS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
-						Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote))),
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
+						Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote), ui.FieldValue(noteS.Get()))),
 				Label(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 					Input(Type("checkbox"), Attr("data-testid", "txn-add-cleared"), OnChange(onCleared), Checked(clearedS.Get())),
 					uistate.T("quickAdd.cleared")),

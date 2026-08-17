@@ -977,9 +977,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 					AriaLabel: uistate.T("accounts.transferToLabel"), TestID: "page-xfer-to-select"})),
 			If(sameAcct, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferSameAccountErr"))),
 			labeledField(uistate.T("accounts.transferAmount"),
-				uiw.NumField(amtS.Get(), css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
+				Input(css.Class("field"), Attr("id", "page-xfer-amt"), Attr("data-testid", "page-xfer-amt"), Attr("autofocus", ""),
 					Type("number"), Placeholder(uistate.T("accounts.transferAmount")),
-					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt))),
+					Step("0.01"), Attr("min", "0.01"), OnInput(onAmt), uiw.FieldValue(amtS.Get()))),
 			// G7: cross-currency semantics said out loud — denomination + live converted
 			// preview at the saved rate, or a no-rate warning before anything posts.
 			acctTransferFXNote(app, pfrom, pto, amtS.Get()),
@@ -987,16 +987,16 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// rate; hidden for same-currency pairs where it can't apply.
 			If(crossCcy, Fragment(
 				labeledField(uistate.T("accounts.transferReceivedLabel", toCcy),
-					uiw.NumField(recvS.Get(), css.Class("field"), Attr("data-testid", "page-xfer-received"),
+					Input(css.Class("field"), Attr("data-testid", "page-xfer-received"),
 						Type("number"), Step("0.01"), Attr("min", "0.01"),
-						Attr("title", uistate.T("accounts.transferReceivedHint")), OnInput(onRecv))),
+						Attr("title", uistate.T("accounts.transferReceivedHint")), OnInput(onRecv), uiw.FieldValue(recvS.Get()))),
 				If(!recvOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
 			)),
 			If(fromCcy != "", Fragment(
 				labeledField(uistate.T("accounts.transferFeeLabel", fromCcy),
-					uiw.NumField(feeS.Get(), css.Class("field"), Attr("data-testid", "page-xfer-fee"),
+					Input(css.Class("field"), Attr("data-testid", "page-xfer-fee"),
 						Type("number"), Step("0.01"), Attr("min", "0.01"),
-						Attr("title", uistate.T("accounts.transferFeeHint")), OnInput(onFee))),
+						Attr("title", uistate.T("accounts.transferFeeHint")), OnInput(onFee), uiw.FieldValue(feeS.Get()))),
 				If(!feeOK, P(css.Class("err"), Attr("role", "alert"), uistate.T("accounts.transferInvalidExtra"))),
 			)),
 			// Before/after balances for both sides, straight from the same leg
@@ -1004,9 +1004,9 @@ func AccountPageTransferForm(props AccountPageTransferProps) ui.Node {
 			// received override and fee.
 			acctTransferBalancePreview(app, pfrom, pto, amtS.Get(), recvS.Get(), feeS.Get()),
 			labeledField(uistate.T("accounts.transferDateLabel"),
-				uiw.Field(dateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onDate))),
+				Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.transferDateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
 			labeledField(uistate.T("accounts.transferDescLabel"),
-				uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onDesc))),
+				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.transferDefaultDesc")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),

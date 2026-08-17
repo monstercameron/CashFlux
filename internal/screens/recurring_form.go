@@ -167,8 +167,8 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 	return Div(css.Class("rec-modal"), Attr("data-testid", "recurring-form"),
 		Form(css.Class("form-grid rec-modal-form"), Attr("id", "recurring-form"), OnSubmit(save),
 			labeledField(uistate.T("recurring.labelPlaceholder"),
-				uiw.Field(labelS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "rec-label"), Attr("autofocus", "true"),
-					Placeholder(uistate.T("recurring.labelPlaceholder")), OnInput(onLabel))),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "rec-label"), Attr("autofocus", "true"),
+					Placeholder(uistate.T("recurring.labelPlaceholder")), OnInput(onLabel), uiw.FieldValue(labelS.Get()))),
 			labeledField(uistate.T("recurring.directionLabel"),
 				uiw.Segmented(uiw.SegmentedProps{
 					Label:    uistate.T("recurring.directionLabel"),
@@ -186,7 +186,7 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 				// minus fail HTML constraint validation first, so the submit was
 				// blocked and the handler never ran — the same silent no-op that hid
 				// behind the transaction edit form.
-				uiw.Field(amountS.Get(), css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "rec-amount"), OnInput(onAmount))),
+				Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "rec-amount"), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
 			labeledField(uistate.T("recurring.cadence"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("recurring.cadence")), Attr("data-testid", "rec-cadence"),
 					OnChange(onCadence), cadenceOpts)),
@@ -198,8 +198,8 @@ func RecurringForm(props RecurringFormProps) ui.Node {
 					OnChange(onCategory), catOpts)),
 			Div(css.Class("rec-modal-wide"),
 				labeledField(uistate.T("recurring.nextDueLabel"),
-					uiw.Field(dueS.Get(), css.Class("field"), Type("date"), Attr("data-testid", "recurring-nextdue"),
-						Attr("aria-label", uistate.T("recurring.nextDueLabel")), OnInput(onDue)))),
+					Input(css.Class("field"), Type("date"), Attr("data-testid", "recurring-nextdue"),
+						Attr("aria-label", uistate.T("recurring.nextDueLabel")), OnInput(onDue), uiw.FieldValue(dueS.Get())))),
 			Div(css.Class("rec-modal-toggles"),
 				// Auto-post is inert without an account — dim it and say why, instead of
 				// letting the dependency fail silently at post time.

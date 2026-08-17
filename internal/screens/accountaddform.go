@@ -319,7 +319,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 		// it: an edge case shouldn't be the first field a new user meets.)
 		Div(Attr("style", "grid-column:1 / -1"),
 			labeledField(uistate.T("common.name"),
-				uiw.Field(name.Get(), append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...)...))),
+				Input(append(append([]any{css.Class("field"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("acct-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
 		// G5: the copy-existing starter (only once accounts exist to copy), demoted
 		// below the name field.
 		If(len(app.Accounts()) > 0, Div(Attr("style", "grid-column:1 / -1"),
@@ -410,7 +410,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "account-use-other-currency"),
 				OnClick(onRevealCurr), uistate.T("accounts.useOtherCurrency"))),
 		labeledField(uistate.T("accounts.openingBalance"),
-			uiw.NumField(amount.Get(), css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onAmount))),
+			Input(css.Class("field"), Type("number"), Placeholder(uistate.T("accounts.openingBalance")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amount.Get()))),
 		// C27: explain what the opening balance is — and that for a card/loan you enter
 		// the amount currently owed (it's tracked as a liability).
 		P(css.Class(tw.TextFaint, tw.Text12), func() string {
@@ -420,15 +420,15 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			return uistate.T("accounts.openingBalanceHint")
 		}()),
 		If(isLiab, labeledField(uistate.T("accounts.creditLimit"),
-			uiw.NumField(creditLimit.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onCreditLimit)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.creditLimit")), Step("0.01"), OnInput(onCreditLimit), uiw.FieldValue(creditLimit.Get())))),
 		If(isLiab, labeledField(uistate.T("accounts.apr"),
-			uiw.NumField(apr.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.apr")), Step("0.01"), OnInput(onApr), uiw.FieldValue(apr.Get())))),
 		If(isLiab, labeledField(uistate.T("accounts.minPayment"),
-			uiw.NumField(minPayment.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinPayment)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Placeholder(uistate.T("accounts.minPayment")), Step("0.01"), OnInput(onMinPayment), uiw.FieldValue(minPayment.Get())))),
 		If(isLiab, labeledField(uistate.T("accounts.dueDay"),
-			uiw.NumField(dueDay.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDueDay)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", "28"), Step("1"), Placeholder(uistate.T("accounts.dueDay")), OnInput(onDueDay), uiw.FieldValue(dueDay.Get())))),
 		If(isLiab, labeledField(uistate.T("accounts.lender"),
-			uiw.Field(lender.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender)))),
+			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("accounts.lender")), OnInput(onLender), uiw.FieldValue(lender.Get())))),
 		// MIA-extend (#445-10): institution field shown for all account types.
 		labeledField(uistate.T("accounts.institution"),
 			uiw.Combobox(uiw.SuggestProps{
@@ -447,18 +447,18 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			labeledField(uistate.T("accounts.varNameLabel"),
 				entityVarField(accountVarKind, accountVarEntities(app.Accounts()), "", "account-add-varname", "account-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName)))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.expReturn"),
-			uiw.NumField(expReturn.Get(), css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onExpReturn)))),
+			Input(css.Class("field"), Type("number"), Attr("title", uistate.T("accounts.expReturnTitle")), Placeholder(uistate.T("accounts.expReturn")), Step("0.01"), OnInput(onExpReturn), uiw.FieldValue(expReturn.Get())))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.liquidity"),
-			uiw.NumField(liquidity.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiquidity)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.liquidityTitle")), Placeholder(uistate.T("accounts.liquidity")), OnInput(onLiquidity), uiw.FieldValue(liquidity.Get())))),
 		If(!isLiab && advOpen.Get(), labeledField(uistate.T("accounts.stability"),
-			uiw.NumField(stability.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStability)))),
+			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("max", "100"), Step("1"), Attr("title", uistate.T("accounts.stabilityTitle")), Placeholder(uistate.T("accounts.stability")), OnInput(onStability), uiw.FieldValue(stability.Get())))),
 		// C74: lock-until is surfaced directly for lockable asset types (savings /
 		// investment / retirement / crypto / other) — no Advanced toggle required.
 		// Liquid everyday accounts (checking / debit / cash) can still reach it via
 		// Advanced when it's genuinely useful (e.g. a locked flex-savings account
 		// classified loosely as "checking"). Liabilities never show this field.
 		If(isLockableAsset || (!isLiab && advOpen.Get()), labeledField(uistate.T("accounts.lockUntil"),
-			uiw.Field(lockUntil.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), OnInput(onLockUntil)))),
+			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("accounts.lockUntil")), Title(uistate.T("accounts.lockUntil")), OnInput(onLockUntil), uiw.FieldValue(lockUntil.Get())))),
 		MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
 		}),

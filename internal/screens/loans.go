@@ -178,13 +178,13 @@ func loanCard(props loanCardProps) ui.Node {
 			Attr("for", "loan-term-"+a.ID),
 			Style(map[string]string{"white-space": "nowrap"}),
 			uistate.T("loans.termLabel")),
-		uiw.NumField(termS.Get(), css.Class("field"),
+		Input(css.Class("field"),
 			Attr("id", "loan-term-"+a.ID),
 			Type("number"), Attr("min", "1"), Attr("max", "1200"),
 			Style(map[string]string{"width": "6rem"}),
 			Placeholder(uistate.T("loans.termPlaceholder")),
 			OnInput(onTerm),
-			Attr("aria-label", uistate.T("debt.loanTermAria", a.Name))),
+			Attr("aria-label", uistate.T("debt.loanTermAria", a.Name)), uiw.FieldValue(termS.Get())),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.termMonthsSuffix")),
 	)
 
@@ -224,13 +224,13 @@ func loanCard(props loanCardProps) ui.Node {
 			Attr("for", "loan-extra-"+a.ID),
 			Style(map[string]string{"white-space": "nowrap"}),
 			uistate.T("loans.extraLabel")),
-		uiw.NumField(extraS.Get(), css.Class("field"),
+		Input(css.Class("field"),
 			Attr("id", "loan-extra-"+a.ID),
 			Type("number"), Attr("min", "0"), Attr("step", "any"),
 			Style(map[string]string{"width": "9.5rem"}),
 			Placeholder(fmt.Sprintf(uistate.T("loans.extraPlaceholder"), sym)),
 			OnInput(onExtra),
-			Attr("aria-label", uistate.T("debt.loanExtraAria", a.Name))),
+			Attr("aria-label", uistate.T("debt.loanExtraAria", a.Name)), uiw.FieldValue(extraS.Get())),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.extraPerMonth")),
 	)
 

@@ -536,11 +536,11 @@ func Categories() ui.Node {
 				// C549: name the target when it does not exist yet. Kind and parent
 				// are inherited from the source, so there is nothing else to ask.
 				If(reassignTo.Get() == mergeNewSentinel,
-					uiw.Field(mergeNewName.Get(), css.Class("field"), Type("text"),
+					Input(css.Class("field"), Type("text"),
 						Attr("data-testid", "cats-merge-newname"),
 						Attr("aria-label", uistate.T("categories.mergeNewNameLabel")),
 						Placeholder(uistate.T("categories.mergeNewNamePlaceholder")),
-						OnInput(onMergeNewName))),
+						OnInput(onMergeNewName), uiw.FieldValue(mergeNewName.Get()))),
 				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cats-move-confirm"), confirmLabel),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelReassign), uistate.T("action.cancel")),
 			),

@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: MIT
 
-// Package amountmath evaluates arithmetic typed directly into a money amount
-// field (TX16). A user can enter "45.99*3" or "(12+8)*2" and, on blur/Enter,
-// have it replaced by the computed result. Evaluation goes through the app's
-// own sandboxed formula engine with an EMPTY environment — arithmetic only, no
-// variables, no host references — so it inherits the engine's finite-result
-// guarantee and can never reach app state.
+// Package amountmath owns what text typed into a money amount field MEANS. Two
+// questions live here, and both used to be answered ad-hoc in view code:
+//
+//   - "Is this arithmetic?" — EvalAmount (TX16). A user can enter "45.99*3" or
+//     "(12+8)*2" and, on blur/Enter, have it replaced by the computed result.
+//     Evaluation goes through the app's own sandboxed formula engine with an
+//     EMPTY environment — arithmetic only, no variables, no host references —
+//     so it inherits the engine's finite-result guarantee and can never reach
+//     app state.
+//   - "Which way does this money move?" — ParseSigned (C546/C547). Every add and
+//     edit form pairs a magnitude field with a separate direction control, and
+//     each one used to reconcile the two by hand. They disagreed: some rejected
+//     a typed minus, and some let it through and then flipped it, storing the
+//     exact opposite of what was typed.
 //
 // The package is pure (no syscall/js) and unit-tested on native Go.
 package amountmath

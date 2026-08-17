@@ -20,9 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"net/http/httptest"
+
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/syncbridge"
-	"net/http/httptest"
 )
 
 // TestSoakSyncPushPull hammers the push (PutWorkspace) path with many

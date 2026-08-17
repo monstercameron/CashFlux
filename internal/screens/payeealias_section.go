@@ -89,11 +89,11 @@ func payeeAliasSection(_ struct{}) ui.Node {
 	}
 
 	addRow := Form(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2), OnSubmit(add),
-		uiw.Field(rawS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.rawLabel")),
-			Placeholder(uistate.T("payeealias.rawPlaceholder")), OnInput(onRaw)),
+		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.rawLabel")),
+			Placeholder(uistate.T("payeealias.rawPlaceholder")), OnInput(onRaw), uiw.FieldValue(rawS.Get())),
 		Span(css.Class("muted"), "→"),
-		uiw.Field(dispS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")),
-			Placeholder(uistate.T("payeealias.displayPlaceholder")), OnInput(onDisp)),
+		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")),
+			Placeholder(uistate.T("payeealias.displayPlaceholder")), OnInput(onDisp), uiw.FieldValue(dispS.Get())),
 		Button(css.Class("btn btn-tool"), Type("submit"), Attr("data-testid", "payeealias-add"), uistate.T("payeealias.addBtn")),
 	)
 
@@ -146,7 +146,7 @@ func payeeAliasRow(props payeeAliasRowProps) ui.Node {
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "payeealias-row"),
 		Span(css.Class(tw.Flex1, "t-caption"), props.Alias.RawPayee),
 		Span(css.Class("muted"), "→"),
-		uiw.Field(dispS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")), OnInput(onDisp)),
+		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")), OnInput(onDisp), uiw.FieldValue(dispS.Get())),
 		If(dirty, Button(css.Class("btn btn-tool"), Type("button"), OnClick(save), uistate.T("action.save"))),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "payeealias-del"),
 			Attr("aria-label", uistate.T("action.delete")), OnClick(del), uistate.T("action.delete")),

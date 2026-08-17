@@ -158,9 +158,9 @@ func pager(props PagerProps) uic.Node {
 				// The field shows the typed draft while one is in flight, and the REAL
 				// page the rest of the time — so it can never sit there displaying a
 				// page the ledger is not on (C627).
-				NumField(jumpValue, css.Class("std-pager-jump-input"), sh.Type("number"), sh.Attr("data-testid", prefix+"-jump"),
+				sh.Input(css.Class("std-pager-jump-input"), sh.Type("number"), sh.Attr("data-testid", prefix+"-jump"),
 					sh.Attr("aria-label", uistate.T("ui.table.jumpAria")), sh.Attr("min", "1"), sh.Attr("max", strconv.Itoa(totalPages)),
-					sh.OnInput(onJumpInput), sh.OnChange(onJumpCommit),
+					FieldValue(jumpValue), sh.OnInput(onJumpInput), sh.OnChange(onJumpCommit),
 					sh.OnBlur(onJumpCommit), sh.OnKeyDown(onJumpKey)),
 				sh.Span(css.Class("std-pager-jump-total"), uistate.T("ui.table.of")+" "+strconv.Itoa(totalPages)),
 			),

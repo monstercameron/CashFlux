@@ -114,9 +114,9 @@ func savedReportsControl(props struct{}) ui.Node {
 		OnClose:      func() { nameOpen.Set(false); nameS.Set("") },
 		Back: Form(Attr("id", "reports-saved-form"), OnSubmit(saveCurrent),
 			uiw.FormField(uistate.T("reports.savedNameLabel"),
-				uiw.Field(nameS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "reports-saved-name"),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "reports-saved-name"),
 					Attr("aria-label", uistate.T("reports.savedNameLabel")), Attr("autofocus", "true"),
-					Placeholder(uistate.T("reports.savedNamePh")), OnInput(onName))),
+					Placeholder(uistate.T("reports.savedNamePh")), OnInput(onName), uiw.FieldValue(nameS.Get()))),
 		),
 	})
 

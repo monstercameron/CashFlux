@@ -336,8 +336,8 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 		list = Div(css.Class("budgetcats-list"), Attr("data-testid", "budgetcats-rows"), rows)
 	}
 	return Div(css.Class(tw.FlexCol, tw.Gap15),
-		uiw.Field(query.Get(), css.Class("field"), Type("search"), Attr("data-testid", "budgetcats-search"),
-			Attr("aria-label", uistate.T("budgets.catsSearch")), Placeholder(uistate.T("budgets.catsSearch")), OnInput(onQuery)),
+		Input(css.Class("field"), Type("search"), Attr("data-testid", "budgetcats-search"),
+			Attr("aria-label", uistate.T("budgets.catsSearch")), Placeholder(uistate.T("budgets.catsSearch")), OnInput(onQuery), uiw.FieldValue(query.Get())),
 		list,
 		kindNote,
 	)
@@ -456,8 +456,8 @@ func budgetTagPicker(props budgetTagPickerProps) ui.Node {
 		body = P(css.Class("muted", tw.Text13), Attr("data-testid", "budgettags-none"), uistate.T("budgets.tagsNoneYet"))
 	}
 	return Div(css.Class(tw.FlexCol, tw.Gap15),
-		uiw.Field(query.Get(), css.Class("field"), Type("search"), Attr("data-testid", "budgettags-search"),
-			Attr("aria-label", uistate.T("budgets.tagsSearchPh")), Placeholder(uistate.T("budgets.tagsSearchPh")), OnInput(onQuery)),
+		Input(css.Class("field"), Type("search"), Attr("data-testid", "budgettags-search"),
+			Attr("aria-label", uistate.T("budgets.tagsSearchPh")), Placeholder(uistate.T("budgets.tagsSearchPh")), OnInput(onQuery), uiw.FieldValue(query.Get())),
 		body,
 		addRow,
 	)

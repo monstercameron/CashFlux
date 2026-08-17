@@ -39,6 +39,23 @@ and every commit updates this file under `Unreleased`.
   screen, adjustable, and restated under the figures they produced.
 
 ### Fixed
+- **The field sweep's first shape broke every call site it touched — corrected.** Wrapping each text
+  box in a shared *component* meant an `On*` handler created by the CALLER's `UseEvent` and passed
+  through into the child's element never bound. It looked wired from the outside — the DOM had an
+  `oninput` function and real input events fired — but nothing reached the application: the ledger
+  search kept its text and filtered nothing, and the account form typed a name and saved no account.
+  The fields' text was fine, which is exactly why the first round of tests missed it; they asked the
+  box what it held and never asked whether anything happened.
+
+  The value now travels as an **attribute** (`uiw.FieldValue`) instead of a `value` prop, so the
+  element stays with its caller and its handlers bind exactly as they always did, and the reconciler
+  can no longer clobber typed text because it is not writing `value` at all. One delegated input
+  listener and one MutationObserver carry the attribute into the property under the same rule as
+  before: while the box has focus and the user has typed since the app last wrote, the box wins.
+  Migrating a field is now a one-word change from `Value` to `FieldValue`.
+
+  The regression tests now assert the EFFECT of typing — that the search empties the table, that the
+  typed name is the name that gets saved — not merely that the characters are still on screen.
 - **The sample 401(k) and Roth IRA are typed as retirement accounts.** They were generic investments,
   so the new retirement projection had nothing to work with on a first run. They still appear on
   Investments exactly as before.
