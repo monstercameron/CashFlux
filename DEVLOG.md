@@ -1,3 +1,43 @@
+## 2026-08-16 - a doubled balance is not a return (FP-T1c)
+
+The chart plots a balance. A balance that doubled tells you nothing about performance, because it
+doubles the same way whether the market went up or you paid more in - and those are opposite facts
+about how the portfolio is doing. That is the whole ticket, and it is also the headline test: $10,000
+in, $10,000 contributed, ending at $20,000. The chart shows a doubling. The time-weighted return is
+zero, because the investments did nothing.
+
+Both returns ship, and I would resist shipping one. They answer different questions:
+
+Time-weighted removes the effect of WHEN money went in. It is what a fund quotes, precisely because a
+fund does not control its investors' deposits - it measures the investments.
+
+Money-weighted (IRR) includes that effect. It measures the investor. Buying heavily just before a fall
+is a real outcome someone lived through, and TWR hides it completely.
+
+Shipping only TWR tells people their portfolio did well when their experience of it did not. Shipping
+only IRR tells them their fund is bad when their timing was. The gap between the two is the honest
+third number: what the timing cost.
+
+Implementation decisions worth recording:
+
+**Bisection, not Newton, for the IRR.** Newton is faster and can diverge on the irregular cash flows a
+real portfolio produces. A return figure that occasionally comes back NaN is worse than one that always
+takes forty iterations, and forty iterations of arithmetic is free.
+
+**A 30-day floor.** Annualizing three good days multiplies their noise by exactly the factor it
+multiplies the return. The result is a spectacular, meaningless number - and spectacular numbers are the
+ones people act on.
+
+**A total loss inside a sub-period reports nothing, not -100%.** The chained product goes to zero and
+every later sub-period becomes meaningless. For a portfolio that later recovered, -100% is simply false.
+
+**A sub-period starting at zero is skipped.** An account funded from nothing has no percentage return
+over the interval in which it was funded; the alternative is a division by zero propagating through the
+chain.
+
+Left in progress: the engine is done, the /investments chart still plots a balance line. Marking it
+done would claim a number nobody can see.
+
 ## 2026-08-16 - the number everyone reads wrong (FP-T2d)
 
 The ticket calls this "low effort, high leverage" and both halves are right, but the leverage is not

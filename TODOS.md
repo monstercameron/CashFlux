@@ -1143,9 +1143,33 @@ bottom-up per SDLC.
   unreachable target rather than a large number, so "never" is never presented as "eventually" — and it
   takes a REAL return, because mixing a nominal growth path with a today's-money target is the easiest
   way to be cheerfully years wrong.
-- [ ] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
-  line (`ledger.NetWorthSeries`), not a return. Add money-/time-weighted return (IRR/TWR) over dated
-  contributions + holding values. Empower/Monarch/Copilot lead here. (`internal/portfolio` is the seam.)
+- [~] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
+  line, not a return. Add money-/time-weighted return (IRR/TWR) over dated contributions + holding
+  values. (`internal/portfolio` is the seam.)
+  — ENGINE DONE (2026-08-16), `portfolio.Returns`. SURFACE STILL OPEN.
+
+  BOTH returns ship, because they answer different questions and shipping one is how people end up
+  believing the wrong thing about their own money. **Time-weighted** removes the effect of WHEN money
+  went in — "how did these investments do", the number a fund quotes precisely because a fund does not
+  control its investors' deposits. **Money-weighted (IRR)** includes it — "how did I do", often a much
+  worse number, because buying heavily just before a fall is a real outcome the investor lived through
+  and TWR hides completely. `GapPct` is the difference: what the timing of contributions cost.
+
+  The headline test is the one the whole feature exists for: $10,000 in, $10,000 contributed, ending at
+  $20,000 — a balance chart shows a doubling and the time-weighted return is ~0%, because the
+  investments did nothing.
+
+  Decisions worth keeping. **Bisection, not Newton**, for the IRR: Newton is faster and can diverge on
+  the irregular flows a real portfolio produces, and a return that occasionally comes back NaN is worse
+  than one that always takes forty iterations. **A 30-day floor** — annualizing three good days
+  multiplies their noise by the same factor it multiplies the return, and a spectacular figure is one
+  people act on. **A total loss inside a sub-period reports NOTHING** rather than -100%, which would be
+  wrong for a portfolio that later recovered. **A sub-period starting at zero is skipped**, not treated
+  as an infinite return. **Flows outside the valuation window are ignored**, so a strong quarter is not
+  attributed to a deposit made a year earlier. And the result carries its evidence — days, flows,
+  valuations — so a surface can say where the number came from.
+
+  REMAINING: the `/investments` surface (the chart still plots a balance line).
 - [ ] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
   (`investments_tiles.go:292`). Model per-lot acquisitions (qty/date/price), relieve basis on sale,
   compute realized P&L + short/long-term holding period. Unblocks investment tax reporting.
