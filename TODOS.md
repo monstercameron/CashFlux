@@ -5617,9 +5617,18 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   than unfinished. Every figure in the report is bucketed by month, so a range ending on the 17th
   would compare a partial bucket against whole ones and understate it silently. A day-level report
   is a different report; if it is wanted, file it as its own ticket.
-- [ ] **C384 [MINOR][RPT] Export coverage audit.** CSV exists for ~9 typed tables and "Save as PDF"
+- [x] **C384 [MINOR][RPT] Export coverage audit.** CSV exists for ~9 typed tables and "Save as PDF"
   is browser print. Audit: every table gets CSV; add a print stylesheet pass so print-to-PDF is
-  clean (page breaks per chapter, no nav chrome).
+  clean (page breaks per chapter, no nav chrome). — DONE (2026-08-16). AUDIT FINDING: the nine
+  exports were built per ANALYSIS (category spend, top payees, tax totals), which is why the
+  month-by-month grid — the raw shape everything else is derived from, and the table people most
+  want in a spreadsheet — had none. `reports.MonthlyFlowCSV` added with tests covering a negative
+  net, a zero-income month, and an empty export that still writes its header (an empty file reads as
+  a failed download). Print pass: each numbered chapter starts a fresh page (first one excepted so
+  the masthead does not leave a blank sheet), the masthead gets its own page, section headings never
+  end a page, rows and the methodology drawer never split, and the report nav chrome — jump index,
+  window picker, ask buttons, drill links, toolbar — is hidden, since none of it can be operated on
+  paper.
 - [x] **C385 [MINOR][RPT] Methodology drawer.** Reviewer: "broad benchmark language without
   exposing the benchmark source inline." Per-section "How this is computed" drawer: score
   formulas, benchmark values + where they come from, exclusions (feed from `internal/provenance`

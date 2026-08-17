@@ -116,3 +116,35 @@ func TestLargestExpensesCSV(t *testing.T) {
 		t.Errorf("blank-desc row = %q", lines[2])
 	}
 }
+
+// C384: the monthly grid is the report's raw shape and had no export. It is also
+// the table people most want in a spreadsheet.
+func TestMonthlyFlowCSV(t *testing.T) {
+	flows := []PeriodFlow{
+		{Start: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC), Income: 500000, Expense: 400000},
+		// A month that spent more than it earned: the negative net and negative
+		// rate must round-trip as numbers a spreadsheet will read as numbers.
+		{Start: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC), Income: 300000, Expense: 450000},
+		// No income at all — the rate is 0, not a divide-by-zero or a blank.
+		{Start: time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC), Income: 0, Expense: 12000},
+	}
+	got := string(MonthlyFlowCSV(flows, func(v int64) string {
+		return strconv.FormatFloat(float64(v)/100, 'f', 2, 64)
+	}))
+	want := "Month,Income,Spending,Net,Savings rate %\n" +
+		"2026-06,5000.00,4000.00,1000.00,20\n" +
+		"2026-07,3000.00,4500.00,-1500.00,-50\n" +
+		"2026-08,0.00,120.00,-120.00,0\n"
+	if got != want {
+		t.Errorf("MonthlyFlowCSV =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// An empty report still exports its header, so the file opens as a table with
+// no rows rather than as an empty file that looks like a failed download.
+func TestMonthlyFlowCSVEmptyKeepsItsHeader(t *testing.T) {
+	got := string(MonthlyFlowCSV(nil, func(int64) string { return "0" }))
+	if got != "Month,Income,Spending,Net,Savings rate %\n" {
+		t.Errorf("empty export = %q", got)
+	}
+}

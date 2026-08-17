@@ -684,7 +684,7 @@ func Reports() ui.Node {
 	// ── Toolbar (tabless): scope, metrics, export. ───────────────────────────
 	toolbar := rptaToolbar(app, sc, scopeOpen.Get(), onToggleScope, showFormulas.Get(), toggleFormulas,
 		exportOpen.Get(), onToggleExport, onCloseExport, scopedTxns, rows, incomeRows, payees, largest,
-		memberSpend, nameOf, base, w.Res, as, rates)
+		memberSpend, nameOf, base, w.Res, as, rates, monthFlows)
 
 	// ── The sticky section index (jump links, zone-dotted). ──────────────────
 	index := rptaIndex()
@@ -2278,7 +2278,8 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 	formulasOn bool, toggleFormulas ui.Handler, exportOpenV bool, onToggleExport, onCloseExport ui.Handler,
 	scopedTxns []domain.Transaction, rows []reports.CategorySpend, incomeRows []reports.CategorySpend,
 	payees []reports.PayeeTotal, largest []reports.ExpenseItem, memberSpend []reports.MemberSpend,
-	nameOf func(string) string, base string, res period.Resolution, from time.Time, rates currency.Rates) ui.Node {
+	nameOf func(string) string, base string, res period.Resolution, from time.Time, rates currency.Rates,
+	monthFlows []reports.PeriodFlow) ui.Node {
 
 	scopeCount := len(sc.Institutions) + len(sc.Owners) + len(sc.Types) + len(sc.AccountIDs)
 	scopeChipText := rptaScopeChipText(sc, app.Accounts(), app.Members())
@@ -2343,6 +2344,12 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 			}),
 			exportItem("reports-export-member", uistate.T("reports.byMember"), func() {
 				downloadBytes(reports.ExportFilename("spending-by-member", res, from), "text/csv", reports.MemberCSV(memberSpend, memberNm, csvAmount))
+			}),
+			// C384: the monthly grid is the report's raw shape and the table people
+			// most want in a spreadsheet, and it was the largest one with no export —
+			// missed because the exports were built per analysis, and this is not one.
+			exportItem("reports-export-months", uistate.T("reports.monthlyFlow"), func() {
+				downloadBytes(reports.ExportFilename("monthly-cash-flow", res, from), "text/csv", reports.MonthlyFlowCSV(monthFlows, csvAmount))
 			}),
 			exportItem("reports-export-tax", uistate.T("reports.taxSummary"), func() {
 				summary, _ := reports.YearTax(scopedTxns, taxYear, ys, ye, rates)

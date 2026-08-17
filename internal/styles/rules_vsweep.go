@@ -364,4 +364,53 @@ func registerVSweep() {
 		fontSize("0.72rem"),
 	)
 
+	// ─── C384: printing the report ───────────────────────────────────────────
+	// "Save as PDF" is the browser's print dialog, so print IS the export format
+	// for the whole narrative. The base sheet already strips the app shell; what
+	// it did not know about is the report's own navigation chrome and its chapter
+	// structure.
+	//
+	// Each numbered section starts a fresh page. A twelve-chapter review whose
+	// chapters straddle page breaks is a document nobody can hand to anyone, and
+	// the sections are already self-contained — that is what the numbering means.
+	ruleMedia("print", ".rpta-sec",
+		prop("break-before", "page"),
+		prop("page-break-before", "always"),
+	)
+	// …except the first, which would otherwise leave a blank sheet behind the
+	// masthead.
+	ruleMedia("print", ".rpta-sec:first-of-type",
+		prop("break-before", "auto"),
+		prop("page-break-before", "auto"),
+	)
+	// Report navigation is worthless on paper: jump links point nowhere, the
+	// window picker cannot be operated, and the ask-the-assistant buttons are
+	// affordances for a screen.
+	ruleMedia("print", ".rpta-index, .rpta-range, .rpta-sec-actions, .rpta-drill, "+
+		".rpta-scope-toggle, .rpta-toolbar, .rpta-srclink, .rpta-partial-chip",
+		display("none !important"),
+	)
+	// A section heading must never be the last thing on a page.
+	ruleMedia("print", ".rpta-sec-head",
+		prop("break-after", "avoid"),
+		prop("page-break-after", "avoid"),
+	)
+	ruleMedia("print", ".rpta-cat-row, .rpta-flow-row, .goal-hist-row",
+		breakInside("avoid"),
+		pageBreakInside("avoid"),
+	)
+	// The methodology drawer prints in whatever state the reader left it, which
+	// is the point — but an open one must not split across a page break.
+	ruleMedia("print", ".rpta-method",
+		breakInside("avoid"),
+		pageBreakInside("avoid"),
+	)
+	// A <details> the reader opened stays open on paper; native print behaviour
+	// already does this, and forcing them all open would print eleven appendices
+	// nobody asked for.
+	ruleMedia("print", ".rpta-masthead",
+		prop("break-after", "page"),
+		prop("page-break-after", "always"),
+	)
+
 }

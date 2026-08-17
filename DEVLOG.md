@@ -1,3 +1,26 @@
+## 2026-08-16 — the export that was missing because of how the others were built (C384)
+
+The audit half of this ticket found one gap, and the interesting part is why it existed. Nine typed
+tables had CSV. The month-by-month grid did not. It is the largest table on the page and the one
+anybody would actually want in a spreadsheet, so how did it get skipped nine times?
+
+Because every existing export was built for an ANALYSIS. Spending by category, income by source, top
+payees, largest expenses, spending by member, tax summary — each of those is a question someone asked
+and a table built to answer it, and an export was added alongside. The monthly grid is not an answer
+to a question; it is the raw shape the other six are derived from. Nobody ever "added the monthly
+analysis", so nobody ever added its export. Worth remembering as a pattern: coverage built
+feature-by-feature reliably misses the substrate.
+
+The print pass was more mechanical but has one judgement in it. Every numbered chapter breaks to a
+fresh page — the sections are already self-contained, which is what numbering them means, and a
+twelve-chapter review whose chapters straddle page breaks is not a document you can hand to anyone.
+The first section is excepted so the masthead does not leave a blank sheet behind it.
+
+The methodology drawers print in whatever state the reader left them. Forcing them all open would
+print eleven appendices nobody asked for; forcing them shut would drop the one the reader opened
+because they wanted it in the PDF. Native behaviour is right here — the rule only stops an open one
+from splitting across a break.
+
 ## 2026-08-16 — the composer was eating four characters in five
 
 Cam: "the assistant input field is buggy, it might be re-rendering too much when the user is typing."

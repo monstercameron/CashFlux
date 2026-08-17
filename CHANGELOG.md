@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The month-by-month grid exports to CSV, and the report prints as a document (C384).** The export
+  audit turned up one real gap and its cause: the nine existing exports were each built for an
+  ANALYSIS — spending by category, top payees, tax totals — so the monthly cash-flow grid was missed
+  precisely because it is not an analysis. It is the raw shape everything else is derived from, and
+  the table people most want in a spreadsheet. An empty export still writes its header, so the file
+  opens as a table with no rows rather than as an empty file that reads like a failed download.
+
+  "Save as PDF" is the browser print dialog, which makes print the export format for the whole
+  narrative. Each numbered chapter now starts a fresh page, the masthead gets its own, section
+  headings never end a page, and rows and methodology drawers never split across one. The report's
+  own navigation — jump index, window picker, ask-the-assistant buttons, drill links, toolbar — is
+  hidden, since none of it can be operated on paper.
 - **Categorize one charge without leaving the ledger (SM-2).** An uncategorized row now offers the
   category your rules and history already imply, as a chip in the category cell — one click and it is
   filed, undoably. Only confident suggestions get the chip: a merchant you have filed both ways is a

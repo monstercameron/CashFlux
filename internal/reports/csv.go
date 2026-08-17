@@ -116,3 +116,32 @@ func YearTaxCSV(s YearTaxSummary, name func(id string) string, amount func(int64
 	w.Flush()
 	return buf.Bytes()
 }
+
+// MonthlyFlowCSV renders the month-by-month review as CSV bytes: one row per
+// month with income, spending, net and savings rate (C384).
+//
+// This was the report's largest table with no export. The audit finding worth
+// recording is why it was missed: the exports were built per ANALYSIS — category
+// spend, top payees, tax totals — and the monthly grid is not an analysis, it is
+// the raw shape everything else is derived from. It is also the one people most
+// want in a spreadsheet.
+//
+// Savings rate is written as a plain integer percent with no sign decoration; a
+// negative rate is a real reading (a month that spent more than it earned) and
+// must round-trip as a negative number rather than as text.
+func MonthlyFlowCSV(flows []PeriodFlow, amount func(int64) string) []byte {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"Month", "Income", "Spending", "Net", "Savings rate %"})
+	for _, f := range flows {
+		_ = w.Write([]string{
+			f.Start.Format("2006-01"),
+			amount(f.Income),
+			amount(f.Expense),
+			amount(f.Net()),
+			strconv.Itoa(f.SavingsRate()),
+		})
+	}
+	w.Flush()
+	return buf.Bytes()
+}

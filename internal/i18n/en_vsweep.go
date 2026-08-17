@@ -340,6 +340,9 @@ var vSweepKeys = Catalog{
 	// C385 — the per-section "How this is computed" drawer. Benchmarks state
 	// their source in the same line as the value: splitting the two is how an
 	// unsourced-looking claim happens even when the source exists.
+	// C384 — the monthly grid export.
+	"reports.monthlyFlow": "Month-by-month cash flow",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",
