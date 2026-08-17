@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Security
+- **The app lock rejects argon2id parameters too large for the types it uses them at.**
+  `verifyArgon2id` reads time, memory and threads out of the stored hash — deliberately, since that
+  is what lets an existing passcode keep verifying after the cost constants are raised — but checked
+  only that they were positive before narrowing them to `uint32`/`uint32`/`uint8`. A stored `p=256`
+  wrapped to 0 threads and `t=4294967297` to a single pass, so a hash that should have been rejected
+  as malformed was verified against parameters nobody chose. They are now parsed with `ParseUint` at
+  the exact width argon2 takes them at, so an out-of-range value fails where it is read rather than
+  being silently truncated after. The derived-key length is bounded too.
+  This had been invisible: CI's gosec step was *skipped* on every run for a dozen commits because
+  Vet failed first, so repairing the build is what surfaced it.
+
 ### Added
 - **Top payees on the full report now show their shape over the year (FP-T2b).** A single total cannot
   tell a steady $200 a month from one $2,400 January, and those call for opposite responses. Each payee
