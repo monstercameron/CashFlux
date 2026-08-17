@@ -1,3 +1,44 @@
+## 2026-08-16 — the two halves of one question (FP-T1a, FP-T1b)
+
+Two tickets, one package, because "how much will I have" and "how long will it last" are the same arc.
+They share a balance, a return assumption and an inflation assumption, and building them separately is
+exactly how the accumulation number and the drawdown number come to disagree — the E3 defect class,
+invited in at design time.
+
+Four decisions, each with a test behind it:
+
+**Real dollars are the headline.** A nominal projection of $2.1M in 2056 is arithmetically correct and
+communicates nothing, because a person cannot price 2056 groceries. Both are carried and the real one
+leads. The test I care about is the boring one: with zero inflation the two must agree EXACTLY. That is
+how you catch discounting applied in the wrong place, which is otherwise invisible.
+
+**The real return is the Fisher relation, not a subtraction.** 7% and 3% is 3.883%, not 4%. Annually
+that looks like rounding. Over thirty years it is roughly a 4% error in the final balance — about a
+whole year of contributions — and it costs one division to be right.
+
+**Contributions land at year end.** Money paid in through the year has, on average, been invested for
+half of it. Crediting a full year's growth to a December contribution is the single commonest way a
+retirement projection flatters itself, and the flattering direction is the dangerous one.
+
+**Annual granularity, deliberately.** The ticket says "monthly/annual". Monthly is worse here. The
+inputs are a guessed return, a guessed inflation rate, and a contribution that will certainly change —
+monthly compounding adds digits none of those can support, and false precision on a projection invites
+people to act on noise.
+
+For the drawdown, the correctness story is entirely inflation-indexing. Someone withdrawing $60,000
+today needs more than $60,000 in ten years for the same life. A flat nominal withdrawal is the failure
+mode of every over-simple calculator: it reports the nest egg lasting years longer than it will, in the
+one direction where being wrong is expensive. There is a test asserting indexing SHORTENS the run
+relative to the flat case, because that is the property, not an implementation detail.
+
+And the refusals, which by now are a habit in this codebase: `Known=false` rather than a zero balance
+("you will have nothing"), `FIRENumber` refusing a zero rate (a division by zero dressed as "never
+withdraw") and zero expenses ("you need nothing"), `YearsToFI` returning not-ok for an unreachable
+target rather than a big number that reads as "eventually".
+
+Both tickets stay open as in-progress: the engines are done, the `/planning` surface is not, and the
+tickets name it. Marking them done would claim a feature that has no way in.
+
 ## 2026-08-16 — three P3s, and two of them were half-done (DP-F5a/b/c)
 
 A cluster of deferred design-critic polish. Worth a note because two of the three had shifted since

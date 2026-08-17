@@ -1104,13 +1104,45 @@ deterministic + local-first (fits the house rules; the only exception is FP-T3d 
 bottom-up per SDLC.
 
 **Tier 1 — whole domains the comps own that CashFlux lacks:**
-- [ ] **FP-T1a — Retirement / long-horizon projection engine.** `TypeRetirement` is only an account
-  type; there is NO projection. Add a pure `internal/retirement` engine: monthly/annual compounding of
-  balances + contributions to a retirement age, expected-return + inflation assumptions, real-vs-nominal
-  output; then a `/planning` (or dedicated) surface. Empower/Quicken's flagship. ★ (pairs with FP-T1b/FP-T2d)
-- [ ] **FP-T1b — Retirement drawdown / "will it last" + FIRE number.** Decumulation engine (nest egg,
-  withdrawal rate/amount, return, inflation → depletion age) reusing the `cashflow` depletion pattern at
-  annual granularity; FIRE target = annual-expenses ÷ SWR, solve years-to-FI at current savings rate.
+- [~] **FP-T1a — Retirement / long-horizon projection engine.** Add a pure `internal/retirement` engine:
+  compounding of balances + contributions to a retirement age, expected-return + inflation assumptions,
+  real-vs-nominal output; then a `/planning` (or dedicated) surface.
+  — ENGINE DONE (2026-08-16), `internal/retirement`. SURFACE STILL OPEN (see the note below).
+
+  Four commitments, each a test. **Real dollars are the headline** — a nominal $2.1M in 2056 is
+  technically correct and means nothing, because nobody can price 2056 groceries; both figures are
+  carried and, with zero inflation, they must agree EXACTLY (a test, because that is how you catch
+  discounting applied in the wrong place). **The real return is the Fisher relation, not a
+  subtraction**: at 7% and 3% that is 3.88% vs 4.00%, which over thirty years is about a 4% error in
+  the final balance — a whole year of contributions. **Contributions land at YEAR END**, because
+  crediting a full year's growth to money that arrived in December is the commonest way a retirement
+  projection flatters itself. **ANNUAL granularity, deliberately not monthly**: the inputs are a
+  guessed return, a guessed inflation rate and a contribution that will certainly change, and monthly
+  compounding adds digits those inputs cannot support.
+
+  Bad inputs return `Known=false`, never a zero balance — a zero here reads as "you will have nothing".
+
+  REMAINING: the `/planning` surface. Left open rather than closed because the ticket names it and it
+  is a real piece of work, not a wiring detail.
+- [~] **FP-T1b — Retirement drawdown / "will it last" + FIRE number.** Decumulation engine (nest egg,
+  withdrawal rate/amount, return, inflation → depletion age); FIRE target = annual-expenses ÷ SWR,
+  solve years-to-FI at current savings rate.
+  — ENGINE DONE (2026-08-16), same package as FP-T1a because accumulation and decumulation share a
+  balance and both assumptions; splitting them is how the two halves come to disagree. SURFACE OPEN.
+
+  **Withdrawals are inflation-INDEXED**, which is the whole correctness story: someone withdrawing
+  $60,000 today needs more than $60,000 in ten years to buy the same life, and a flat nominal
+  withdrawal reports a nest egg lasting far longer than it does — the failure mode of every over-simple
+  retirement calculator. A test asserts indexing SHORTENS the run against the flat case.
+
+  Withdrawals come out at the START of the year, before growth (a year's spending cannot compound
+  through the year it is spent — the mirror of the end-of-year contribution rule). The final year takes
+  what is LEFT, not what was wanted. Surviving the horizon is reported as survival, not conflated with
+  "we did not check". `FIRENumber` refuses a zero rate (a division by zero dressed as "never withdraw")
+  and zero expenses ("you need nothing" is a confident absurdity). `YearsToFI` returns not-ok for an
+  unreachable target rather than a large number, so "never" is never presented as "eventually" — and it
+  takes a REAL return, because mixing a nominal growth path with a today's-money target is the easiest
+  way to be cheerfully years wrong.
 - [ ] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
   line (`ledger.NetWorthSeries`), not a return. Add money-/time-weighted return (IRR/TWR) over dated
   contributions + holding values. Empower/Monarch/Copilot lead here. (`internal/portfolio` is the seam.)
