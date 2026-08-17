@@ -1419,8 +1419,47 @@ survived the duplicate/scope filters but didn't make the engine cut):
   account's typical clearing window; feeds reconciliation.
 - [ ] **EC-5 What is this charge?** (SMART+, Transactions) — one cryptic row → "this is likely X"
   from model merchant knowledge. Explains an unknown; distinct from SM-1 rename.
-- [ ] **EC-6 Effective-rate detector** (SMART, Accounts) — realized APY/interest cost per account
+- [x] **EC-6 Effective-rate detector** (SMART, Accounts) — realized APY/interest cost per account
   from its own postings; flag when a "high-yield" account isn't. Sharpens SMART-A4.
+  — DONE (2026-08-17). New pure `internal/realizedrate` + detector SMART-A13.
+
+  A RATE YOU WERE PROMISED AND A RATE YOU RECEIVED ARE DIFFERENT FACTS, and only the second is
+  evidence. Nothing in the app checked the second.
+
+  THE PACKAGE REFUSES TO DECIDE WHICH POSTINGS ARE INTEREST. That is a judgement about the household's
+  own categories, and a package that guessed — by payee text, or by assuming all income into a savings
+  account is interest — would produce a confident annual percentage from a birthday cheque. The detector
+  matches on the household's own CATEGORY name (interest / dividend / yield), because a category is
+  something somebody chose and a payee line is whatever the bank's processor wrote. A household that
+  files interest somewhere else gets silence, which is the right failure for a feature whose output is
+  an accusation about a bank.
+
+  A TEST CAUGHT REAL ARITHMETIC. Twelve monthly payments span ELEVEN months from first to last, so
+  annualising from the first posting reported 1.31% for what any reader would call 1.2%. A payment covers
+  the period BEFORE it, so the span now includes the first payment's own accrual period, taken as the
+  average gap between postings — the account's own rhythm.
+
+  THE SPAN RUNS TO NOW, NOT TO THE LAST PAYMENT: interest that stopped three months ago is part of the
+  story, and measuring only to the final posting would quietly hide an account that went quiet.
+
+  SHORTFALL IS RELATIVE, NOT A FIXED GAP. A 5% account paying 4.6% is within the noise of when interest
+  posts; a 5% account paying 1% is a different product from the one that was chosen. A fixed point-gap
+  would shout about every high-rate account and stay silent about a 0.5% "savings" account paying 0.05%.
+
+  Thin evidence reports Known=false rather than a rate of zero — "we cannot tell" and "it paid nothing"
+  would otherwise look identical, and the second is an accusation. Minimum three postings over ninety
+  days.
+
+  SAMPLE DATA: the Joint Savings (HYSA) is recorded at 4.2% and now posts real monthly interest well
+  below it, because a detector with nothing to detect reads as unbuilt. The insight declares an ANNUAL
+  amount, so WF-SM3 ranks it against everything else.
+
+  VERIFIED IN A BROWSER: 4/4 (`e2e/_effrate_check.mjs`) — "Joint Savings (HYSA) isn't paying what it says
+  — $563.86 a year", ranked among the other actions.
+
+  NOTE for whoever picks up the sibling gap: `Account.ExpectedReturnAPR` and `APY` have the same
+  zero-vs-unset conflation WF4-b removed from `InterestRateAPR`. This detector sidesteps it by requiring a
+  stated rate above zero, but the model is still ambiguous.
 - [ ] **EC-7 Transfer memory prefill** (SMART, Accounts) — repeated cross-currency corridor →
   prefill FX rate + fee from last time (rides ReceivedMinor/FeeMinor).
 - [ ] **EC-8 Credit-utilization threshold watch** (SMART, Accounts) — per-liability 30/50/90% bands;

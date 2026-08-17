@@ -212,6 +212,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 		catPartTime  = "cat-parttime"
 		catBizInc    = "cat-business-income"
 		catInvestInc = "cat-investing-income" // realized trading gains
+		catInterest  = "cat-interest"         // interest the bank actually posted
 		catOtherInc  = "cat-other-income"
 		// Expense parents
 		catHousing    = "cat-housing"
@@ -694,6 +695,13 @@ func SampleDatasetAt(now time.Time) Dataset {
 			}
 			addTransfer("xfer-hysa", hysa, "Transfer to savings", save+boolN(babyMonth, 8000))
 		}
+		// EC-6: the savings account is recorded at 4.2% but the bank actually posts
+		// a fraction of that — the "high-yield" account that isn't, which is the
+		// quiet loss nothing in the app used to check. Posted monthly, small, and
+		// categorised as Interest so the effective-rate check has something honest
+		// to measure.
+		txn("hysa-interest", 28, hysa, "Beacon Bank", "Interest paid", catInterest, 950)
+
 		if i >= rehiredAt+1 { // the Roth started once the Meridian job stuck
 			addTransfer("xfer-roth", roth, "Transfer to Roth IRA", 10000)
 		}
@@ -882,6 +890,7 @@ func SampleDatasetAt(now time.Time) Dataset {
 			{ID: catPartTime, Name: "Part-time", Kind: domain.KindIncome, Color: "#4ade80"},
 			{ID: catBizInc, Name: "Online business", Kind: domain.KindIncome, Color: "#10b981"},
 			{ID: catInvestInc, Name: "Investing gains", Kind: domain.KindIncome, Color: "#22d3ee"},
+			{ID: catInterest, Name: "Interest", Kind: domain.KindIncome, Color: "#2dd4bf"},
 			{ID: catOtherInc, Name: "Other income", Kind: domain.KindIncome, Color: "#86efac"},
 			{ID: catHousing, Name: "Housing", Kind: domain.KindExpense, Color: "#60a5fa"},
 			{ID: catMortgage, Name: "Mortgage", Kind: domain.KindExpense, Color: "#3b82f6", ParentID: catHousing, CategoryClass: domain.ClassFixed},

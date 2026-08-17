@@ -70,6 +70,7 @@ var catalog = []Feature{
 	rule("SMART-A9", PageAccounts, "Fee-bleed on a dormant account", "Catch a recurring fee draining an otherwise-inactive account, and offer to close it."),
 	ai("SMART-A10", PageAccounts, "Account health score", "A 0–100 health score per account, explained in plain language.", true, tokClassifyIn, tokClassifyOut),
 	ai("SMART-A11", PageAccounts, "AI credit-health analysis", "A personalized read of your credit-health estimate — the biggest demerits and the highest-impact fix.", true, tokLanguageIn, tokLanguageOut),
+	rule("SMART-A13", PageAccounts, "Effective-rate check", "Compare what an account actually paid, from its own interest postings, against the rate recorded on it."),
 	ai("SMART-A12", PageAccounts, "Explain an unusual balance move", "A plain-English read of a flagged balance change: what most likely explains it, and whether it needs you.", true, tokLanguageIn, tokLanguageOut),
 
 	// ── Transactions ──────────────────────────────────────────────────────────

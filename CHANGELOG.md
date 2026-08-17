@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Checks what an account actually paid (EC-6).** If a savings account is recorded at 4.2% but the
+  interest it really posted works out at a fraction of that, the app now says so — with the money it
+  actually paid, over how long, and how far short that is.
+
+### Added
 - **"What I'll remember" on Allocate (WF-SM4).** Tell it to keep at least so much cash, or never to
   suggest drawing from an account, and it stops asking. These shape what the app SUGGESTS and never what
   you can do — if you go below your own floor it says so and blocks nothing.

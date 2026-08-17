@@ -2844,6 +2844,11 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-6 (SMART-A13): what an account actually paid, from its own postings.
+	"smart.a13.title":                "%s isn't paying what it says",
+	"smart.a13.detail":               "%s is recorded at %s, but the %s of interest it actually posted over the last %s works out at %s a year — about %s short.",
+	"smart.a13.assumeBalance":        "Measured against the balance in the account today.",
+	"smart.a13.action":               "Open accounts",
 	"standing.title":                 "What I'll remember",
 	"standing.hint":                  "Decisions I'll hold on to, so you don't have to say them twice. They shape what I suggest — never what you can do.",
 	"standing.keepLiquid":            "Keep at least this much cash",

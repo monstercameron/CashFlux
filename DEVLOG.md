@@ -1,3 +1,36 @@
+## 2026-08-17 - the rate you were promised is not the rate you received (EC-6)
+
+Only the second is evidence, and nothing in the app checked it. A "high-yield" account quietly paying
+0.4% is one of the easiest losses in a household's finances to miss, because the number on the marketing
+page is the one everybody remembers.
+
+The package refuses to decide which postings are interest. That is a judgement about the household's own
+categories, and a version that guessed - by payee text, or by treating all income into a savings account
+as interest - would produce a confident annual percentage from a birthday cheque. The detector matches on
+the household's own category name, because a category is something somebody chose deliberately and a
+payee line is whatever the bank's processor wrote. A household that files interest somewhere else gets
+silence, which is the right failure for a feature whose output is an accusation about a bank.
+
+A test caught real arithmetic, which is the second time today. Twelve monthly payments span eleven months
+from the first to the last, so annualising from the first posting reported 1.31% for what any reader
+would call 1.2%. A payment covers the period BEFORE it, so the span now includes the first payment's own
+accrual period, taken as the average gap between postings - the account's own rhythm rather than an
+assumed month.
+
+Two more rules earned their place. The span runs to NOW rather than to the last payment, because interest
+that stopped three months ago is part of the story and measuring only to the final posting would hide an
+account that went quiet. And the shortfall test is relative rather than a fixed number of points: a 5%
+account paying 4.6% is within the noise of when interest posts, while a fixed point-gap would shout about
+every high-rate account and stay silent about a 0.5% "savings" account paying 0.05%.
+
+The sample now has a savings account recorded at 4.2% that posts a fraction of it. A detector with
+nothing to detect reads as unbuilt - that was the lesson from five earlier sample gaps this session, and
+it applies harder to a feature whose whole point is catching something the household cannot see.
+
+It lands on the "what to do next" list at $563.86 a year, ranked against the debts and the idle cash,
+which is the first time today that two features built hours apart met on a surface without either being
+touched for it.
+
 ## 2026-08-17 - it remembers what you told it, and constrains only itself (WF-SM4)
 
 The audit was most of this ticket. Four of its six examples already existed: "this merchant is always
