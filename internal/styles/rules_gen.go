@@ -2245,7 +2245,13 @@ func registerGenerated() {
 		background("#f7f6f3 !important"),
 		color("#3c3c43 !important"),
 	)
-	rule("[data-theme=\"light\"] .txn-table tbody td, [data-theme=\"light\"] .txn-table tbody tr.row",
+	// The tone classes are excluded on purpose. This blanket `!important` was
+	// painting EVERY cell near-black in light mode, the amount cells included, so
+	// money-in and money-out rendered in identical ink — the ledger's one at-a-glance
+	// signal, gone, and the only remaining cue for an expense was the parentheses.
+	// The light palette already defines accessible tones (--up #157a43, --down
+	// #b3322f); nothing was reaching them.
+	rule("[data-theme=\"light\"] .txn-table tbody td:not(.text-up):not(.text-down):not(.text-warn), [data-theme=\"light\"] .txn-table tbody tr.row",
 		color("#1c1c1e !important"),
 	)
 	rule("[data-theme=\"light\"] .txn-table tbody tr.row:hover",
@@ -7764,6 +7770,15 @@ func registerGenerated() {
 	)
 	rule(".todo-search-input::placeholder, .fctrl-input::placeholder",
 		color("var(--text-faint)"),
+	)
+	// C619: the "Searching…" note inside the search pill, shown while a debounced
+	// query has not yet been applied. Quiet by design — it reports a transient
+	// state, so it must not out-shout the query the user is typing.
+	rule(".fctrl-pending",
+		flex("none"),
+		fontSize("0.75rem"),
+		color("var(--text-faint)"),
+		whiteSpace("nowrap"),
 	)
 	rule(".todo-search-clear, .fctrl-clear",
 		display("grid"),
