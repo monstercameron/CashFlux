@@ -27,6 +27,11 @@ import (
 // It is one component rather than two because the only real difference is the
 // prompt, and two copies of a request/loading/error/answer cycle drift.
 
+// notifyExplainCode gates SM-7 on the notification feed. It is a Hub-page code
+// because a notification is not owned by any one page's feature set — the same
+// feed carries budget, bill, account and goal alerts.
+const notifyExplainCode = "SMART-EXPLAIN"
+
 // explainKind selects which prompt frames the ask.
 type explainKind string
 

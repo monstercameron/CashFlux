@@ -66,6 +66,42 @@ func registerSmartRowHint() {
 		flex("1 1 100%"),
 	)
 
+	// --- SM-8 / SM-10: the ledger row's own flag ------------------------------
+	// A compact chip in the description cell, sized and spaced like the tag and
+	// event chips beside it so a flagged row reads as one line, not two. The tone
+	// is the semantic warning colour, never the accent: these say "look at this",
+	// which is a different claim from the accent's "here is a suggestion".
+	rule(".txn-flag",
+		display("inline-flex"),
+		alignItems("center"),
+		gap("0.25rem"),
+		flexShrink("0"),
+		padding("0.05rem 0.35rem"),
+		border("1px solid color-mix(in srgb, var(--warn, var(--danger)) 45%, transparent)"),
+		borderRadius("var(--radius-sm, 6px)"),
+		background("color-mix(in srgb, var(--warn, var(--danger)) 10%, transparent)"),
+		color("var(--warn, var(--danger))"),
+		fontSize("var(--type-11)"),
+		fontWeight("600"),
+		lineHeight("1.4"),
+		whiteSpace("nowrap"),
+		cursor("pointer"),
+	)
+	// A duplicate is a data error with a concrete fix, so it carries the stronger
+	// danger tone; a spike is an observation and stays in the warning tone.
+	rule(".txn-flag.is-dupe",
+		borderColor("color-mix(in srgb, var(--danger) 50%, transparent)"),
+		background("color-mix(in srgb, var(--danger) 10%, transparent)"),
+		color("var(--danger)"),
+	)
+	rule(".txn-flag:hover",
+		filter("brightness(1.08)"),
+	)
+	rule(".txn-flag:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("1px"),
+	)
+
 	// --- SM-5 / SM-11 / SM-16: an entity's findings, stated inline on its row ---
 	// Indented to the row's text column and separated by a hairline, so a stack of
 	// findings reads as belonging to the row above rather than as new rows.

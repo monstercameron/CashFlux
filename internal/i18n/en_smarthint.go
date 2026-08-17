@@ -58,6 +58,7 @@ var smartHintKeys = Catalog{
 	"sm6.empty":   "Nothing on this account repeats on a schedule yet.",
 
 	// SM-8 — a likely duplicate charge.
+	"sm8.chip":   "Duplicate?",
 	"sm8.hint":   "This looks like a duplicate.",
 	"sm8.detail": "Same amount and merchant as another charge within a few days.",
 	"sm8.action": "Compare them",
@@ -69,6 +70,7 @@ var smartHintKeys = Catalog{
 
 	// SM-10 — a category spiked against its own baseline.
 	// %s = the category, %s = how much above its baseline.
+	"sm10.chip":   "Unusual",
 	"sm10.hint":   "%s is running %s above its usual.",
 	"sm10.action": "See the charges",
 

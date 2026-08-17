@@ -7,6 +7,57 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **One-at-a-time Review now says how many charges a click will change — and changes only those
+  (C653).** The card showed a single Blue Bottle charge and a button reading "Categorize & next";
+  one click categorized 122. The cause was that the write path chose its own population: a
+  `batch bool` made it re-derive a merchant key and sweep the ledger for matches, which is also how
+  the same line once matched *zero* (C616). A boolean cannot express "the charges this card is
+  standing in for". It now takes the exact id list the surface used to draw and count the card, so
+  the number on the button and the number written come from one place. The card carries a scope
+  control — `1 selected charge` / `122 charges from Blue Bottle` — defaulting to the charge you can
+  see; snooze and dismiss follow the same scope; and the merchant-wide write needs a second click
+  through a confirmation naming the count, the category, the total and the date range. Fixed while
+  here: confirming used to skip a merchant, because the queue advanced and the cursor advanced too.
+- **Review works through what the ledger is showing, if you want it to (C554).** Filtering the
+  ledger to one payee and a month and then pressing Review opened the *global* queue. Review now
+  asks `txnfilter` — the same code the ledger uses — what is on screen and intersects by id, so it
+  inherits search, tags, categories, members, period and money-in/out without knowing any of them
+  exist. A strip at the top of the modal states the scope and both counts (`This view (12)` /
+  `Everything (251)`), defaults to the filtered set when you arrived from a filtered ledger, and is
+  reversible. "Nothing to review in this view" now says how many are waiting outside it instead of
+  congratulating you for a filter you may not remember setting.
+- **A missing category can be created from the single review card (C556).** The button had been
+  written, wired and passed to the card months ago, and simply never rendered — an unused function
+  parameter is not a compile error. Creating `Housing › Home maintenance` mid-review meant leaving
+  Review, visiting Categories, returning to Transactions and reopening the queue.
+- **Leaving Review for Categories or Rules comes back to the same card (C559).** Both links name
+  their destination, leave a "Back to Review, this view (12 left)" crumb, and reopen the queue where
+  it was — the review position now outlives the surface. The Rules link arrives with the merchant
+  and category already filled in.
+- **Duplicate review names the entry it keeps, not just the one it removes (C652).** In a group of
+  near-identical rows, "the entry kept at the top of the group is untouched" does not answer the
+  reader's actual question. Both entries now print with description, date, amount and account. The
+  undo point is also captured *before* the delete or merge rather than after — the confirmation
+  promised recovery to a checkpoint that had already lost the row. The merge preview now discloses
+  that tags and cleared status are unioned onto the kept entry.
+- **Stale rows can no longer be clicked while the ledger catches up (C625, C628).** A sort or a
+  debounced search left the rows dimmed and fully clickable for a sub-second window — long enough to
+  read the old order and click the row you saw. The table is inert for that window, and says what it
+  is doing through a screen-reader caption that announces both the busy state and the order that
+  settled. The search's pending flag now reaches the table it is warning about, instead of living in
+  the toolbar tile next door.
+- **"All" no longer promises 3,284 rows a screen reader cannot reach (C626).** The windowed body
+  renders about forty rows at a time, which was true and undeclared: the pager said "1–3284 of 3284"
+  and the table offered forty. It now carries `aria-rowcount`, per-row `aria-rowindex` for absolute
+  position, and a caption stating both numbers. The optimization is unchanged.
+- **Clear search clears it now, and there is a way out of an empty result (C628).** The ✕ went
+  through the same 400 ms debounce as typing — the one control whose job is to undo what you typed
+  left it on screen for exactly that window. The no-match state gained a Clear search button and a
+  line saying your period, member and category filters stay as they are.
+- **"Filter to #coffee" says that it happened (C651).** The filter was being applied the whole time;
+  on a view already narrowed to the one row carrying the tag, nothing visible could change, which is
+  indistinguishable from a dead button. The drill is now a tested property of the filter model
+  (`Criteria.DrillToTag`) and the ledger announces the resulting scope and how to undo it.
 - **Report drill-throughs now carry the report's window (C386).** Six "view transactions" links were
   plain anchors with no filter attached, so clicking one from a January-to-August report landed on
   whatever the ledger had last been left showing — a different set of rows from the figure that was
@@ -18,6 +69,17 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **A duplicate or an unusual charge says so on its own row (SM-8, SM-10).** Both detectors already
+  ran, and both already reported to the /smart hub — where a finding costs you a hunt back through
+  the ledger to act on it. The charge itself now carries a small chip: "Duplicate?" opens the review
+  side by side, "Unusual" opens the charge with the detector's own sentence ("about 4× the typical
+  Groceries charge") as its tooltip. Only one chip shows even when both apply — a duplicate is a data
+  error with a fix, a spike is an observation, and two warnings on one row halve the weight of both.
+  Both answers cost a full ledger scan, so they are resolved once per table render, not once per row.
+- **Any alert can explain itself (SM-7).** A one-sentence Smart+ gloss on a single notification: what
+  it means and what to do about it, grounded in the figures the alert already carries. Smart+ only —
+  the alert's own copy *is* the deterministic version, so a rule-based "explanation" would just
+  restate it.
 - **An account row now says what it found, not just that it found something (SM-5, SM-11, SM-16).**
   The balance-anomaly, overdraft-forecast and fee-bleed detectors have been running and tested for a
   while, and each produces a headline, a plain-English reason, and a one-tap action. All the account
