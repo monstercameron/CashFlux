@@ -420,7 +420,18 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// makes them inert for the same window this note covers.
 	searchPending := uistate.UseTxnSearchPending()
 	onFilterText := func(v string) {
-		searchPending.Set(true)
+		// Only raise the flag when it is not already up. Setting a shared atom
+		// re-renders the surface, and this surface's render re-runs the whole
+		// filter — ApplyWithLabels over every transaction in the ledger, which is
+		// ~1.5s on a 3,000-row household. Re-asserting `true` on every keystroke
+		// therefore bought one full re-filter per character to say something the
+		// screen was already saying: typing six characters cost six of them, about
+		// 9.5 seconds, and the 400ms debounce below could not help because it only
+		// coalesces the FILTER write, not these renders. One raise per typing burst,
+		// one lower when it commits.
+		if !searchPending.Get() {
+			searchPending.Set(true)
+		}
 		debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) {
 			x.Text = v
 			searchPending.Set(false)
