@@ -893,8 +893,23 @@ survived the duplicate/scope filters but didn't make the engine cut):
   freshness config rather than a default, so this count and the accounts page cannot disagree about the
   same account. Zero counts render nothing at all — "0 uncategorized" is a panel talking about itself.
 - [ ] **LF-9 Print / PDF-friendly report view** — a browser-native print stylesheet; fully local.
-- [ ] **LF-10 Recurring-transaction detection → create rule** (deterministic sibling of SM-6, surfaced on
+- [x] **LF-10 Recurring-transaction detection → create rule** (deterministic sibling of SM-6, surfaced on
   /transactions or /recurring).
+  — DONE (2026-08-16). The recurring-review candidate row (`/recurring`) gained a third action beside
+  Confirm and Not recurring: "Also file these automatically", which creates the categorization rule.
+
+  The insight the ticket is really about: a detected recurring pattern is ALSO a categorization
+  pattern. The app has just proved this merchant charges you on a schedule; if its charges also land
+  consistently in one category, the same evidence supports a rule.
+
+  The confidence bar comes from `rulesuggest`, NOT from the recurrence confidence — they are different
+  claims ("this repeats monthly" versus "this is always groceries") and a merchant can clear one while
+  failing the other. New `rulesuggest.ForPayee` asks the shared judge about one merchant rather than
+  re-deriving "confident enough" at the call site: two definitions is how a merchant gets offered a
+  rule on /recurring and refused it on /rules. A test asserts the two paths agree.
+
+  The button appears only when the history supports it. An always-present action that usually does
+  nothing teaches people to ignore it.
 
 ### UX polish backlog (deferred from the v1.0.33 design-review loop)
 - [ ] **DP1 — Recurring "Next 30 days" overdue grouping:** already-overdue occurrences (dates in the

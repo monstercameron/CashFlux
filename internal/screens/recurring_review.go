@@ -16,9 +16,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
+	"github.com/monstercameron/CashFlux/internal/rulesuggest"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -704,6 +706,31 @@ func rhyReviewCand(props rhyReviewCandProps) ui.Node {
 	if show.Get() {
 		evLabel = uistate.T("rhythm.hideEvidence")
 	}
+
+	// LF-10: a detected recurring pattern is also a categorization pattern. The
+	// app has just proved this merchant charges you on a schedule; if its charges
+	// also land consistently in one category, the same evidence supports a rule.
+	//
+	// The confidence bar comes from rulesuggest, NOT from the recurrence
+	// confidence. They are different claims — "this repeats monthly" and "this is
+	// always groceries" — and a merchant can clear one while failing the other.
+	// Reusing rulesuggest also means this offer and the /rules suggestions cannot
+	// disagree about what a confident rule looks like.
+	ruleSug, hasRuleSug := rhyRuleSuggestionFor(c.Payee)
+	addRule := ui.UseEvent(Prevent(func() {
+		app := appstate.Default
+		if app == nil || !hasRuleSug {
+			return
+		}
+		r := ruleSug.Rule
+		r.ID = id.New()
+		if err := app.PutRule(r); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("rhythm.ruleAdded", r.Match, ruleSug.Support), false)
+		uistate.BumpDataRevision()
+	}))
 	return Div(css.Class("rhy-cand"), Attr("data-testid", "rhy-review-"+sig),
 		Div(css.Class("rhy-cand-top"),
 			Span(css.Class("rhy-cand-name"), c.Payee),
@@ -712,6 +739,13 @@ func rhyReviewCand(props rhyReviewCandProps) ui.Node {
 				OnClick(confirm), uistate.T("rhythm.confirm")),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "rhy-review-reject-"+sig),
 				OnClick(reject), uistate.T("rhythm.notRecurring")),
+			// Offered only when the merchant's own history supports it — an
+			// always-present button that usually does nothing teaches people to
+			// ignore it.
+			If(hasRuleSug, Button(css.Class("btn btn-sm"), Type("button"),
+				Attr("data-testid", "rhy-review-rule-"+sig),
+				Attr("title", uistate.T("rhythm.ruleHint", ruleSug.Support, ruleSug.Total)),
+				OnClick(addRule), uistate.T("rhythm.alsoFile"))),
 		),
 		P(css.Class("rhy-cand-ev"), rhyEvidenceSentence(c.Evidence, props.Base)),
 		Button(css.Class("btn btn-sm strip-toggle", tw.Mt1), Type("button"), Attr("aria-expanded", ariaBool(show.Get())),
@@ -829,4 +863,19 @@ func rhyOrdinal(n int) string {
 		}
 	}
 	return strconv.Itoa(n) + suffix
+}
+
+// rhyRuleSuggestionFor asks whether this merchant's history also supports a
+// categorization rule (LF-10).
+//
+// It goes through rulesuggest rather than judging for itself, so the offer here
+// and the suggestions on /rules apply one definition of "confident enough". A
+// merchant offered a rule on one screen and refused it on another is worse than
+// no offer at all.
+func rhyRuleSuggestionFor(payee string) (rulesuggest.Suggestion, bool) {
+	app := appstate.Default
+	if app == nil {
+		return rulesuggest.Suggestion{}, false
+	}
+	return rulesuggest.ForPayee(app.Transactions(), app.Rules(), payee, 3)
 }

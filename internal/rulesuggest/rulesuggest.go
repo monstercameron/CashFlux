@@ -117,3 +117,27 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 	})
 	return out
 }
+
+// ForPayee returns the rule suggestion for ONE payee, or ok=false when that
+// payee does not clear the same bar a bulk suggestion has to (LF-10).
+//
+// It exists so a surface that has already identified a merchant — a discovered
+// recurring candidate, say — can ask "would you also suggest a rule for this
+// one?" without re-deriving what "confident enough" means. Two definitions of a
+// confident rule, one here and one at the call site, is how a merchant comes to
+// be offered a rule on one screen and refused it on another.
+//
+// minCount is the same threshold Suggest applies, and below 2 is treated as 2
+// for the same reason: one transaction is not a pattern.
+func ForPayee(txns []domain.Transaction, existing []rules.Rule, payee string, minCount int) (Suggestion, bool) {
+	want := strings.ToLower(strings.TrimSpace(payee))
+	if want == "" {
+		return Suggestion{}, false
+	}
+	for _, s := range Suggest(txns, existing, minCount) {
+		if strings.ToLower(strings.TrimSpace(s.Rule.Match)) == want {
+			return s, true
+		}
+	}
+	return Suggestion{}, false
+}

@@ -470,6 +470,11 @@ var vSweepKeys = Catalog{
 	"rhyCal.label":  "Bills and recurring payments by month",
 	"rhyCal.legend": "Each day shows what is due. Dimmed means settled; highlighted means overdue.",
 
+	// LF-10 — a detected recurring pattern is also a categorization pattern.
+	"rhythm.alsoFile":  "Also file these automatically",
+	"rhythm.ruleHint":  "%d of this merchant's %d charges land in one category — a rule would file the rest for you",
+	"rhythm.ruleAdded": "Charges from %s will file automatically from now on (%d matched so far).",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

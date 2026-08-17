@@ -1,3 +1,25 @@
+## 2026-08-16 — one pattern, two claims (LF-10)
+
+The ticket reads as plumbing: recurring detection exists, the rules engine exists, connect them. The
+part worth thinking about is what the connection actually asserts.
+
+Detecting recurrence proves one thing — this merchant charges you on a schedule. Creating a filing
+rule asserts a different thing — this merchant's charges always belong in one category. They usually
+travel together, which is why the connection is worth making, but they are not the same claim and a
+merchant can clear one while failing the other. A utility bills monthly and lands in Utilities every
+time: both. A landlord takes rent monthly while you occasionally send them a repair reimbursement
+filed elsewhere: recurring, not consistently categorized.
+
+So the offer is gated on `rulesuggest`, not on the recurrence confidence. And it goes through a new
+`rulesuggest.ForPayee` rather than filtering `Suggest`'s output at the call site, because what I
+wanted was for the two surfaces to be unable to disagree: a merchant offered a rule on /recurring and
+refused one on /rules would be a small, maddening inconsistency with no visible cause. There is a test
+asserting the single-payee answer matches what the bulk pass proposes.
+
+The button appears only when the history supports it. The alternative — always show it, refuse on
+click — is how an action becomes noise: people learn it usually does nothing and stop reading it,
+including on the occasions it would have worked.
+
 ## 2026-08-16 — the calendar that existed and was not routed (LF-7)
 
 The ticket says to reuse the standardized `uiw.Calendar` primitive for bills. Checking first turned up

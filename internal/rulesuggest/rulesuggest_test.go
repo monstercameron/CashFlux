@@ -4,6 +4,7 @@ package rulesuggest
 
 import (
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -99,5 +100,68 @@ func TestSuggestSkipsConditionCoveredKeys(t *testing.T) {
 	// Without the rule the key IS suggested (sanity check).
 	if got := Suggest(txns, nil, 3); len(got) != 1 {
 		t.Fatalf("Suggest without rules = %d, want 1", len(got))
+	}
+}
+
+// ─── LF-10: asking about one payee ───────────────────────────────────────────
+
+func fpTxn(id, payee, cat string) domain.Transaction {
+	return domain.Transaction{ID: id, Payee: payee, CategoryID: cat, Desc: payee,
+		Date:   time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		Amount: money.New(-2500, "USD")}
+}
+
+// A surface that already knows the merchant must not re-derive what "confident
+// enough" means — two definitions is how a merchant gets offered a rule on one
+// screen and refused it on another.
+func TestForPayeeAgreesWithSuggest(t *testing.T) {
+	txns := []domain.Transaction{
+		fpTxn("a", "Greenfield Market", "c-groceries"),
+		fpTxn("b", "Greenfield Market", "c-groceries"),
+		fpTxn("c", "Greenfield Market", "c-groceries"),
+		fpTxn("d", "Rare Shop", "c-misc"),
+	}
+	bulk := Suggest(txns, nil, 3)
+	one, ok := ForPayee(txns, nil, "Greenfield Market", 3)
+	if !ok {
+		t.Fatal("ForPayee refused a payee Suggest proposed")
+	}
+	var found bool
+	for _, s := range bulk {
+		if s.Rule.Match == one.Rule.Match && s.Rule.SetCategoryID == one.Rule.SetCategoryID &&
+			s.Support == one.Support && s.Total == one.Total {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("ForPayee = %+v, which Suggest did not propose: %+v", one, bulk)
+	}
+	// A payee below the threshold is refused, exactly as the bulk path skips it.
+	if _, ok := ForPayee(txns, nil, "Rare Shop", 3); ok {
+		t.Error("ForPayee proposed a rule for a payee Suggest skipped")
+	}
+}
+
+func TestForPayeeIsCaseAndWhitespaceInsensitive(t *testing.T) {
+	txns := []domain.Transaction{
+		fpTxn("a", "Greenfield Market", "c-groceries"),
+		fpTxn("b", "Greenfield Market", "c-groceries"),
+	}
+	if _, ok := ForPayee(txns, nil, "  greenfield market ", 2); !ok {
+		t.Error("a differently-cased payee was not matched")
+	}
+}
+
+func TestForPayeeGuards(t *testing.T) {
+	txns := []domain.Transaction{fpTxn("a", "X", "c"), fpTxn("b", "X", "c")}
+	if _, ok := ForPayee(txns, nil, "", 2); ok {
+		t.Error("an empty payee produced a suggestion")
+	}
+	if _, ok := ForPayee(nil, nil, "X", 2); ok {
+		t.Error("no transactions produced a suggestion")
+	}
+	// An existing rule already covering the payee means nothing to suggest.
+	if _, ok := ForPayee(txns, []rules.Rule{{ID: "r", Match: "X", SetCategoryID: "c"}}, "X", 2); ok {
+		t.Error("a payee already covered by a rule was proposed again")
 	}
 }
