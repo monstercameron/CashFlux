@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The split editor already knows how you usually split this shop (SM-3).** Open Split on a charge
+  from a merchant you have split before and a faint line offers the same breakdown, with how many past
+  charges it learned from. It is a hint, not a pre-filled form: proposing a breakdown is a guess, and
+  a guess that silently fills the fields is one you have to notice before you can disagree with it.
+  Accepting it fills them, and the lines always sum to the charge exactly. Where there is no history
+  to copy — the only case a model is worth paying for — Smart+ can propose one instead, and it is
+  asked for *percentages*, never amounts, so the app still does the arithmetic.
+- **One shared surface for the item-scoped smart hints.** The SM features that live on a single row or
+  card now render through one component with one set of gates — the feature enabled, the density dial
+  permitting that kind of affordance, and the hint not already dismissed. Ten hand-rolled versions of
+  "✦ one sentence → do it / not now" would have drifted in tone and spacing inside a release, and a
+  caller that forgot one of the three gates would have shipped a hint nobody could turn off.
 - **The month-by-month grid exports to CSV, and the report prints as a document (C384).** The export
   audit turned up one real gap and its cause: the nine existing exports were each built for an
   ANALYSIS — spending by category, top payees, tax totals — so the monthly cash-flow grid was missed

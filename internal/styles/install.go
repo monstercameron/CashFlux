@@ -73,6 +73,7 @@ func Register() {
 	registerMerchantTrendSurface()
 	registerPayeeCleanSurface()
 	registerCatSuggestSurface()
+	registerSmartRowHint()
 	registerRecapSurface()
 	registerPeriodBadge()
 	registerMobileShell()

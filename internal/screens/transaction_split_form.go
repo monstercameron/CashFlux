@@ -74,6 +74,20 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		return nil
 	}, "mount")
 
+	// SM-3: accepting the split proposal seeds the editor through the SAME state
+	// the receipt-derived proposal (XC11) uses, so there is one path by which a
+	// proposal reaches these fields rather than two that can diverge.
+	useProposal := func(lines []domain.CategorySplit) {
+		if len(lines) == 0 {
+			return
+		}
+		t := txn
+		t.Splits = lines
+		seededTxn.Set(t)
+		proposedNote.Set("")
+		haveSeed.Set(true)
+	}
+
 	editorTxn := txn
 	if haveSeed.Get() {
 		// Keep the live transaction's mutable fields but carry the proposed splits.
@@ -97,6 +111,9 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	}
 
 	return Fragment(
+		// SM-3: the merchant's usual breakdown, offered as a hint above the editor.
+		// Its own component (it owns click + request hooks).
+		ui.CreateElement(splitSuggestHint, splitSuggestProps{Txn: editorTxn, OnUse: useProposal}),
 		If(proposedNote.Get() != "",
 			Div(css.Class("callout"), Attr("role", "status"), Attr("data-testid", "receipt-split-note"),
 				Style(map[string]string{"margin-bottom": "0.5rem", "padding": "0.6rem 0.75rem",
