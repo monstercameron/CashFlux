@@ -21,6 +21,13 @@ var txnScopeKeys = Catalog{
 	// rate saved for it). Without this the net silently covered fewer rows than the
 	// count printed beside it.
 	"transactions.scopeUnconverted": "%d not counted — no exchange rate",
+	// C681: transfer legs are money you still own. Summed into a figure labelled
+	// "net" they describe moving money as earning or spending it — and filtering
+	// to one leg of a pair makes that the only available reading. Stated apart.
+	"transactions.scopeMoved": "%s moved between your accounts",
+	// The counterpart is not in THIS VIEW. It may exist outside the filter, so the
+	// wording describes the view rather than accusing the data of being broken.
+	"transactions.scopeUnpaired": "%d with the other side not shown",
 
 	// The member lens, shown as its own chip rather than folded in with the page's
 	// filters — it comes from the top bar and its ✕ clears the top bar, not a filter.

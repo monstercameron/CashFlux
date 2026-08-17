@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nlfilter"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -1066,12 +1067,37 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// that prints a count and a money figure side by side measured against different
 	// populations, and understates the total by exactly the rows nobody was told
 	// about. The unconvertible rows are counted so the line can say so.
-	var shownNet int64
-	unconverted := 0
+	// C681: a transfer leg is NOT cash flow, and summing it into a figure labelled
+	// "net" describes it as one. A complete checking→savings pair cancels itself
+	// and hides the problem; filter to either leg and the same line calls $500 of
+	// money you still own spending — the exact figure reports and budgets already
+	// exclude. So the sum splits: cash flow is what entered or left the household,
+	// and moved money is stated separately rather than folded in or dropped.
+	//
+	// Counted, not hidden, because a filtered view of one leg has to say something:
+	// silence about a row that is on screen is how someone concludes the ledger
+	// lost it.
+	var shownNet, movedMinor int64
+	unconverted, movedRows, unpairedRows := 0, 0, 0
 	for _, t := range props.Shown {
 		c, err := props.Rates.Convert(t.Amount, props.Base)
 		if err != nil {
 			unconverted++
+			continue
+		}
+		if t.IsTransfer() {
+			movedRows++
+			if c.Amount > 0 {
+				movedMinor += c.Amount
+			} else {
+				movedMinor -= c.Amount
+			}
+			// An "unpaired movement" is a leg whose far side is not in view. Its
+			// partner may exist elsewhere in the ledger, so this describes the
+			// VIEW, not the data — which is the honest claim to make from here.
+			if _, ok := txnclassify.FindReciprocal(t, t.TransferAccountID, props.Shown); !ok {
+				unpairedRows++
+			}
 			continue
 		}
 		shownNet += c.Amount
@@ -1092,6 +1118,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		Shown: len(props.Shown), Total: len(txns),
 		Net: money.New(shownNet, props.Base), Lens: lensName,
 		Unconverted: unconverted,
+		Moved:       money.New(movedMinor, props.Base), MovedRows: movedRows, UnpairedRows: unpairedRows,
 	})
 
 	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /

@@ -25,6 +25,15 @@ type txnCountLineProps struct {
 	// printed side by side, so a net that quietly covers fewer rows than the count
 	// is two different facts wearing one sentence — it is stated instead.
 	Unconverted int
+	// C681: Net covers CASH FLOW only. Transfer legs are money you still own, so
+	// summing them into a figure labelled "net" describes moving money as earning
+	// or spending it — and a filter showing one leg of a pair makes that reading
+	// unavoidable. Moved is their total magnitude, MovedRows how many there are,
+	// and UnpairedRows how many have no counterpart IN THIS VIEW (a claim about
+	// the view, not about the data: the far side may sit outside the filter).
+	Moved        money.Money
+	MovedRows    int
+	UnpairedRows int
 }
 
 // txnCountLine is the ledger's one-sentence answer to "what am I looking at?".
@@ -65,8 +74,29 @@ func txnCountLine(props txnCountLineProps) ui.Node {
 	}
 	parts := []ui.Node{Span(css.Class("txn-count-main"), text)}
 	if props.Shown > 0 {
+		// C681: only say "net" about rows that actually are cash flow. When the view
+		// holds nothing BUT transfer legs, a net of $0.00 is true and useless — it
+		// invites the reader to conclude the money vanished — so the figure is
+		// dropped entirely and the moved-money sentence carries the view instead.
+		if props.MovedRows == 0 || props.Shown > props.MovedRows {
+			parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
+				Span(css.Class("txn-count-net"), uistate.T("transactions.scopeNet", fmtMoney(props.Net))))
+		}
+	}
+	if props.MovedRows > 0 {
+		// Money that changed accounts without entering or leaving the household.
+		// Said separately from the net rather than folded into it: a transfer leg
+		// summed into a cash-flow figure describes moving money as spending it.
 		parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
-			Span(css.Class("txn-count-net"), uistate.T("transactions.scopeNet", fmtMoney(props.Net))))
+			Span(css.Class("txn-count-moved"), Attr("data-testid", "txn-count-moved"),
+				uistate.T("transactions.scopeMoved", fmtMoney(props.Moved))))
+		if props.UnpairedRows > 0 {
+			// The far side is not in view. It may exist outside the filter, so this
+			// says the view is one-sided rather than claiming the data is broken.
+			parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
+				Span(css.Class("txn-count-unpaired"), Attr("data-testid", "txn-count-unpaired"),
+					uistate.T("transactions.scopeUnpaired", props.UnpairedRows)))
+		}
 	}
 	if props.Unconverted > 0 {
 		parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
