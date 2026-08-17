@@ -1,3 +1,28 @@
+## 2026-08-17 - "below last month" and "below typical" are different claims (EC-1)
+
+The audit halved this ticket, which is becoming the pattern. The driver half already existed: recap has
+carried the biggest-moving category for a while, and the widget renders it. Rebuilding it would have
+given the app a second answer to the same question.
+
+What was missing was "typical". The recap compared this month against the same span of LAST month - one
+month - and one month is an anecdote. A bad prior month makes an ordinary month look like a triumph; a
+good one makes it look like a collapse. So the recap now also carries the median net over the same span
+of the trailing six months, and how far this month sits from it.
+
+Median rather than mean, for the third time today: one month carrying a car repair would drag a mean far
+enough that nothing afterwards reads as unusual. Like-spans rather than whole months, matching how the
+existing prior-month comparison already works, so a mid-month recap is not measured against complete
+ones.
+
+The subtlety worth writing down is the empty month. A month with no activity is absence of data, not a
+net of zero, and counting it would drag the typical toward zero for every household that started using
+the app recently - making their first real month look like a triumph. They are skipped, and three
+non-empty months are required, because a median of two numbers is just their midpoint wearing a better
+name.
+
+The widget's sub-line says how many months the baseline rests on. A baseline nobody can size is a number
+to be taken on faith, and this app's whole position is that it does not ask for that.
+
 ## 2026-08-17 - a band is a state, a crossing is an event (EC-8)
 
 The ticket asked for per-liability 30/50/90% bands and, to its credit, told me to check the overlap with

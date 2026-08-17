@@ -1409,8 +1409,34 @@ Per-page surfaces (thin wiring over E1–E5; each also lands in the SMART catalo
 
 E-series candidates (2026-07-19 brainstorm — for later review, NOT yet agreed; granular ideas that
 survived the duplicate/scope filters but didn't make the engine cut):
-- [ ] **EC-1 Recap driver callout** (SMART, Dashboard) — month-vs-typical anomaly on the recap:
+- [x] **EC-1 Recap driver callout** (SMART, Dashboard) — month-vs-typical anomaly on the recap:
   "net $412 below typical — biggest driver: Groceries (+$310)." Thin E1 surface on `recap`.
+  — DONE (2026-08-17), and the audit halved it: the DRIVER half already existed. `recap.MonthRecap` has
+  carried `MoverID`/`MoverDelta` for a while and the widget already renders "Biggest change · Shopping ·
+  ↑ $2,183.50 vs last month". Rebuilding that would have been a second answer to the same question.
+
+  WHAT WAS MISSING IS "TYPICAL". Recap compared against THE SAME SPAN OF LAST MONTH — one month — and
+  "below last month" and "below typical" are different claims. Only the second survives a lumpy month:
+  one bad prior month makes an ordinary month look like a triumph, and one good one makes it look like a
+  collapse. `MonthRecap` now carries `TypicalNet` / `NetVsTypical` / `TypicalMonths` / `TypicalKnown`.
+
+  MEDIAN, NOT MEAN, over six trailing months, compared LIKE SPANS (the first 17 days of each month when
+  today is the 17th, matching how the existing prior-month comparison already works). A single month
+  carrying a car repair would drag a mean far enough that nothing afterwards reads as unusual — the same
+  reasoning as the clearing-window and habit engines built earlier today.
+
+  A MONTH WITH NO ACTIVITY IS ABSENCE OF DATA, NOT A NET OF ZERO, so empty months are skipped rather than
+  averaged in; counting them would drag the typical toward zero for every household that started using
+  the app recently. Three non-empty months minimum — two give a median that is just the midpoint of two
+  numbers.
+
+  `BelowTypical` returns `(amount, ok)` so "we have no typical yet" cannot be read as "you are exactly
+  typical", and the widget's sub-line says how many months the baseline rests on: a baseline nobody can
+  size is a number taken on faith.
+
+  VERIFIED IN A BROWSER: 5/5 (`e2e/_recap_typical_check.mjs`) — "VERSUS TYPICAL · $2,483.50 · below your
+  usual, going on 6 months", sitting beside the existing driver callout, which together is the ticket's
+  sentence.
 - [ ] **EC-2 Explain this number** (SMART+, Dashboard) — ✨ on any headline stat → one-shot narration
   of the existing deterministic breakdown (RuleCore). Dashboard sibling of E-RP ask-this-chart.
 - [ ] **EC-3 Split-template suggestion** (SMART, Transactions) — merchants you historically split

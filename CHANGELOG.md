@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The monthly recap now compares against typical, not just last month (EC-1).** "Versus typical ·
+  $2,483.50 · below your usual, going on 6 months" — a median of the same span across recent months, so
+  one unusual month cannot define normal.
+
+### Added
 - **Says when a card's utilization crosses a band (EC-8).** Not what band it is in — the credit page
   already shows that — but when it moves, in either direction, with what a payment would take to put it
   back.

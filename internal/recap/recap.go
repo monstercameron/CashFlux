@@ -11,6 +11,7 @@
 package recap
 
 import (
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -56,9 +57,50 @@ type MonthRecap struct {
 	NetWorthEnd   int64 // net worth as of AsOf
 	NetWorthDelta int64 // NetWorthEnd - NetWorthStart
 
+	// TypicalNet is the median net over the same span of the trailing months, and
+	// NetVsTypical is how far this month sits from it (EC-1).
+	//
+	// Distinct from the prior-month comparison above because "below last month"
+	// and "below typical" are different claims, and only the second survives a
+	// lumpy month: one bad prior month makes an ordinary month look like a
+	// triumph, and one good one makes it look like a collapse.
+	//
+	// The MEDIAN, not the mean — a single month carrying a car repair or an annual
+	// premium would drag a mean far enough that nothing afterwards reads as
+	// unusual, which is the same reasoning as the clearing-window and habit
+	// engines.
+	TypicalNet    int64
+	NetVsTypical  int64
+	TypicalMonths int  // how many months the typical rests on
+	TypicalKnown  bool // false when there is too little history to have a typical
+
 	NoSpendDays int  // days in the window with no spending
 	TxnCount    int  // non-transfer transactions in the window
 	HasData     bool // any activity to recap
+}
+
+// TypicalMinMonths is how many complete prior months are needed before a
+// "typical" exists.
+//
+// Three. Two months give a median that is just the midpoint of two numbers, and
+// calling that "typical" would dress a coin-flip as a baseline.
+const TypicalMinMonths = 3
+
+// TypicalLookbackMonths is how far back the typical is read.
+//
+// Six. Far enough that one unusual month cannot define normal, near enough that
+// a household whose circumstances changed — a new job, a new baby — is not
+// measured against a life they no longer live.
+const TypicalLookbackMonths = 6
+
+// BelowTypical reports whether this month is materially worse than usual, and by
+// how much. Callers get the pair so "we have no typical yet" cannot be mistaken
+// for "you are exactly typical".
+func (r MonthRecap) BelowTypical() (int64, bool) {
+	if !r.TypicalKnown || r.NetVsTypical >= 0 {
+		return 0, false
+	}
+	return -r.NetVsTypical, true
 }
 
 // Saved reports whether the month is net-positive (income exceeded spend).
@@ -68,6 +110,21 @@ func (r MonthRecap) Saved() bool { return r.Net > 0 }
 func (r MonthRecap) SpendDown() bool { return r.SpendDeltaKnown && r.SpendDeltaPct < 0 }
 
 // dayStart truncates t to midnight UTC.
+// medianInt64 is the middle value, which resists the one month that carried a
+// car repair.
+func medianInt64(in []int64) int64 {
+	v := append([]int64(nil), in...)
+	sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
+	n := len(v)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return v[n/2]
+	}
+	return (v[n/2-1] + v[n/2]) / 2
+}
+
 func dayStart(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
@@ -124,6 +181,34 @@ func Compute(now time.Time, txns []domain.Transaction, accounts []domain.Account
 	rec.PrevExpense = prev.Expense
 	if pct, ok := ledger.PercentChange(cur.Expense, prev.Expense); ok {
 		rec.SpendDeltaPct, rec.SpendDeltaKnown = pct, true
+	}
+
+	// EC-1: the same span of each trailing month, so a mid-month recap is compared
+	// against the first N days of other months rather than against whole ones.
+	var nets []int64
+	for i := 1; i <= TypicalLookbackMonths; i++ {
+		start := dateutil.AddMonths(monthStart, -i)
+		end := start.AddDate(0, 0, span)
+		if limit := dateutil.AddMonths(start, 1); end.After(limit) {
+			end = limit
+		}
+		past, perr := reports.IncomeVsExpense(txns, start, end, rates)
+		if perr != nil {
+			return MonthRecap{}, perr
+		}
+		// A month with no activity at all is absence of data, not a net of zero;
+		// counting it would drag the typical toward zero for every household that
+		// started using the app recently.
+		if past.Income == 0 && past.Expense == 0 {
+			continue
+		}
+		nets = append(nets, past.Net())
+	}
+	if len(nets) >= TypicalMinMonths {
+		rec.TypicalNet = medianInt64(nets)
+		rec.TypicalMonths = len(nets)
+		rec.TypicalKnown = true
+		rec.NetVsTypical = rec.Net - rec.TypicalNet
 	}
 
 	rows, err := reports.SpendingByCategory(txns, monthStart, curEnd, true, prevStart, prevEnd, rates)

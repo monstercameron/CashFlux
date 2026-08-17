@@ -153,3 +153,66 @@ func TestComputeCompleteMonth(t *testing.T) {
 		t.Errorf("AsOf = %v, want Jul 1 (capped at month end)", r.AsOf)
 	}
 }
+
+// EC-1: "below last month" and "below typical" are different claims, and only
+// the second survives a lumpy month.
+func TestTypicalUsesTheMedianNotOneMonth(t *testing.T) {
+	now := time.Date(2026, time.August, 20, 12, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	accts := []domain.Account{{ID: "a", Name: "Checking", Class: domain.ClassAsset, Currency: "USD"}}
+
+	var txns []domain.Transaction
+	// Six trailing months: five ordinary (+$1,000 net) and one disaster (-$4,000),
+	// which a MEAN would let define normal.
+	for i := 1; i <= 6; i++ {
+		start := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC).AddDate(0, -i, 0)
+		income := int64(300_000)
+		spend := int64(200_000)
+		if i == 3 {
+			spend = 700_000 // the month the car died
+		}
+		txns = append(txns,
+			domain.Transaction{ID: "in-" + start.Format("2006-01"), AccountID: "a", Date: start.AddDate(0, 0, 1),
+				Amount: money.New(income, "USD")},
+			domain.Transaction{ID: "out-" + start.Format("2006-01"), AccountID: "a", Date: start.AddDate(0, 0, 2),
+				Amount: money.New(-spend, "USD"), CategoryID: "c"})
+	}
+	// This month: an ordinary one.
+	txns = append(txns,
+		domain.Transaction{ID: "in-now", AccountID: "a", Date: now.AddDate(0, 0, -18), Amount: money.New(300_000, "USD")},
+		domain.Transaction{ID: "out-now", AccountID: "a", Date: now.AddDate(0, 0, -17), Amount: money.New(-200_000, "USD"), CategoryID: "c"})
+
+	rec, err := Compute(now, txns, accts, rates)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if !rec.TypicalKnown {
+		t.Fatalf("no typical from %d months", rec.TypicalMonths)
+	}
+	if rec.TypicalNet != 100_000 {
+		t.Errorf("typical = %d, want 100000 — the median, not dragged by the car repair", rec.TypicalNet)
+	}
+	if _, below := rec.BelowTypical(); below {
+		t.Errorf("an ordinary month read as below typical (net %d vs %d)", rec.Net, rec.TypicalNet)
+	}
+}
+
+// "We have no typical yet" must not be mistaken for "you are exactly typical".
+func TestTooLittleHistoryHasNoTypical(t *testing.T) {
+	now := time.Date(2026, time.August, 20, 12, 0, 0, 0, time.UTC)
+	rates := currency.Rates{Base: "USD"}
+	accts := []domain.Account{{ID: "a", Name: "Checking", Class: domain.ClassAsset, Currency: "USD"}}
+	txns := []domain.Transaction{
+		{ID: "in", AccountID: "a", Date: now.AddDate(0, 0, -5), Amount: money.New(300_000, "USD")},
+	}
+	rec, err := Compute(now, txns, accts, rates)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if rec.TypicalKnown {
+		t.Errorf("a typical was claimed from %d months", rec.TypicalMonths)
+	}
+	if _, below := rec.BelowTypical(); below {
+		t.Error("an unknown typical reported the month as below it")
+	}
+}

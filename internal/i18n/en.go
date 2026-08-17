@@ -2844,6 +2844,14 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-1: the month against TYPICAL rather than against last month. The sub-line
+	// carries how many months "typical" rests on, because a baseline nobody can
+	// size is a number to be taken on faith.
+	"dashboard.recapVsTypicalLabel":    "Versus typical",
+	"dashboard.recapBelowTypical":      "below your usual, %s",
+	"dashboard.recapAboveTypical":      "better than usual, %s",
+	"dashboard.recapTypicalMonthsOne":  "going on %d month",
+	"dashboard.recapTypicalMonthsMany": "going on %d months",
 	// EC-8 (SMART-A14): a utilization band CROSSING, which is an event — the
 	// current band is already on the credit page, and repeating it is not news.
 	"smart.a14.titleUp":   "%s has moved up into %s use",

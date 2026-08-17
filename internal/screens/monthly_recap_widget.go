@@ -123,6 +123,21 @@ func monthlyRecapWidget(c widgetrender.RenderCtx) ui.Node {
 			categoryDisplayName(c, rec.MoverID), arrow+" "+m(d)+" "+vsLast, tone))
 	}
 
+	// Stat 4b — this month against TYPICAL, not against last month (EC-1). The
+	// mover above already says what changed versus one prior month; this says
+	// whether the month itself is unusual, which one prior month cannot.
+	if rec.TypicalKnown && rec.NetVsTypical != 0 {
+		glyph, tone, key := icon.TrendingUp, "good", "dashboard.recapAboveTypical"
+		d := rec.NetVsTypical
+		if d < 0 {
+			glyph, tone, key, d = icon.TrendingDown, "bad", "dashboard.recapBelowTypical", -d
+		}
+		stats = append(stats, recapStat("recap-typical", glyph,
+			uistate.T("dashboard.recapVsTypicalLabel"), m(d),
+			uistate.T(key, uistate.TN("dashboard.recapTypicalMonthsOne", "dashboard.recapTypicalMonthsMany", rec.TypicalMonths)),
+			tone))
+	}
+
 	// Stat 5 — no-spend-days streak, folded into the grid (not a footer orphan).
 	if rec.NoSpendDays > 0 {
 		sub := uistate.T("dashboard.recapNoSpendSub")
