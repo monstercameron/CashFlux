@@ -6,6 +6,17 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Report drill-throughs now carry the report's window (C386).** Six "view transactions" links were
+  plain anchors with no filter attached, so clicking one from a January-to-August report landed on
+  whatever the ledger had last been left showing — a different set of rows from the figure that was
+  clicked, with nothing on either screen saying so. Every drill now writes the report's own window
+  into the filter first, along with any narrowing the section implies (expenses only under "biggest
+  expenses", income only under "income by source"). The report's window boundary is exclusive and the
+  ledger's is inclusive, so the conversion happens in one place; without it every drilled total would
+  disagree with its figure by a day. Top-payee rows became drills of their own — a reader looking at
+  one merchant's total should not have to re-filter by hand for something the chart already knew.
+
 ### Added
 - **The split editor already knows how you usually split this shop (SM-3).** Open Split on a charge
   from a merchant you have split before and a faint line offers the same breakdown, with how many past

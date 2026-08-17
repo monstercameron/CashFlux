@@ -1,3 +1,27 @@
+## 2026-08-16 — a drill-down that drills nowhere (C386)
+
+The ticket said to audit the report's charts and make every mark drill to the FILTERED transaction
+list. The audit found the marks were mostly fine and the SECTION links were the problem: six of them
+were `<a href="/transactions">` with no filter attached at all.
+
+That is worse than a missing link. A missing link makes the reader navigate and filter themselves,
+which is annoying but honest. A link that navigates and applies no filter lands them on whatever the
+ledger was last left with — possibly last month, possibly one account, possibly a search from
+yesterday — and the page looks exactly like a successful drill-through. They read rows that have
+nothing to do with the figure they clicked, and nothing on either screen contradicts them.
+
+The fix is a component rather than six edits because of a detail that would otherwise get one of
+them wrong: the report's window end is EXCLUSIVE and the ledger's To is INCLUSIVE. Convert in six
+places and one of them eventually keeps the exclusive boundary, pulls in the first day of the next
+month, and produces a drilled total a dollar or two off its own figure — the kind of discrepancy that
+costs an afternoon. It converts once, in `rptaDrill`.
+
+Sections that are about one side of the ledger now carry direction too. "Biggest expenses" drilling
+to a list that includes deposits was technically a superset and practically a wrong answer.
+
+And the top-payee rows became marks in their own right. Sending someone from "Kroger $1,240" to the
+whole window's transaction list asks them to re-filter by hand for something the chart already knew.
+
 ## 2026-08-16 — the export that was missing because of how the others were built (C384)
 
 The audit half of this ticket found one gap, and the interesting part is why it existed. Nine typed

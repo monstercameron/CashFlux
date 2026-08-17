@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall/js"
 	"time"
@@ -859,7 +860,7 @@ func Reports() ui.Node {
 				Thead(Tr(Th(uistate.T("rpta.per100Where")), Th("/$100"), Th(uistate.T("rpta.per100Year")))),
 				Tbody(per100Rows),
 			),
-			A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "moneyflow-drill"), uistate.T("reports.viewTransactions")),
+			ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "moneyflow-drill", From: as, To: ae}),
 		),
 	))
 
@@ -1161,7 +1162,7 @@ func Reports() ui.Node {
 		Div(css.Class("rpta-hist-scale"), uistate.T("rpta.histScale", fmtMinor(maxCat))),
 		Div(css.Class("rpta-hist"), Attr("data-testid", "rpta-cat-hist"), catHist),
 		If(len(tagNodes) > 0, Fragment(
-			rptaSubG("↘", "down", uistate.T("rpta.byTag"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "tags-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSubG("↘", "down", uistate.T("rpta.byTag"), ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "tags-drill", From: as, To: ae})),
 			Div(css.Class("rpta-hist-scale"), uistate.T("rpta.histScaleSame")),
 			Div(css.Class("rpta-hist"), tagNodes),
 			P(css.Class("rpta-muted", "rpta-tag-note"), uistate.T("rpta.tagOverlapNote")))),
@@ -1206,7 +1207,18 @@ func Reports() ui.Node {
 		if nm == "" {
 			nm = uistate.T("reports.noPayee")
 		}
-		payeeNodes = append(payeeNodes, quietRow(nm, "", p.Amount))
+		// C386: every MARK drills, not just the section. A reader looking at
+		// "Kroger $1,240" wants those transactions, and sending them to the whole
+		// window's list makes them re-filter by hand for something the chart
+		// already knew.
+		payeeNodes = append(payeeNodes, Div(css.Class("row"),
+			Div(css.Class("row-main"),
+				ui.CreateElement(rptaDrill, rptaDrillProps{
+					Label: nm, TestID: "rpta-payee-drill-" + strconv.Itoa(i),
+					From: as, To: ae, Text: p.Name, ExpenseOnly: true,
+					Class: "rpta-drill rpta-row-drill",
+				})),
+			Span(css.Class("budget-amount"), fmtMinor(p.Amount))))
 	}
 	var largestNodes []ui.Node
 	for i, e := range largest {
@@ -1289,7 +1301,7 @@ func Reports() ui.Node {
 	}
 	whereGoes := rptaSection("rpta-05", "05", uistate.T("rpta.secWhere"), "neutral", uistate.T("rpta.secWhereSub"), askWhere, Fragment(Div(css.Class("rpta-cols2"),
 		Div(css.Class("rpta-col"),
-			rptaSubG("↘", "down", uistate.T("reports.topPayees"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "payees-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSubG("↘", "down", uistate.T("reports.topPayees"), ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "payees-drill", From: as, To: ae, ExpenseOnly: true})),
 			listRows(payeeNodes),
 			rptaSubG("↗", "up", uistate.T("reports.biggestDeposits"), nil),
 			listRows(depositNodes),
@@ -1298,9 +1310,9 @@ func Reports() ui.Node {
 				listRows(memberNodes))),
 		),
 		Div(css.Class("rpta-col"),
-			rptaSubG("↘", "down", uistate.T("reports.biggestExpenses"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "expenses-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSubG("↘", "down", uistate.T("reports.biggestExpenses"), ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "expenses-drill", From: as, To: ae, ExpenseOnly: true})),
 			listRows(largestNodes),
-			rptaSubG("↗", "up", uistate.T("reports.incomeBySource"), A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "income-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSubG("↗", "up", uistate.T("reports.incomeBySource"), ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "income-drill", From: as, To: ae, IncomeOnly: true})),
 			listRows(srcNodes),
 		),
 	)))
@@ -1619,7 +1631,7 @@ func Reports() ui.Node {
 				Span(css.Class("budget-amount", "rpta-tone-down"), fmtMinor(it.Amount))))
 		}
 		problemBits = append(problemBits,
-			rptaSub(head, A(css.Class("rpta-drill"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "costs-drill"), uistate.T("reports.viewTransactions"))),
+			rptaSub(head, ui.CreateElement(rptaDrill, rptaDrillProps{Label: uistate.T("reports.viewTransactions"), TestID: "costs-drill", From: as, To: ae, ExpenseOnly: true})),
 			Div(css.Class("rows"), Attr("data-testid", "rpta-costs"), costRows))
 	}
 	if len(debtRowNodes) > 0 {

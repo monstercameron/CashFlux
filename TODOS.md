@@ -5640,8 +5640,16 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   when the answer is "a CashFlux convention" rather than dressing a house rule as an industry
   standard. A test also enforces that every money-flow section declares the transfer exclusion —
   transfers are the most common reason a total looks too big.
-- [ ] **C386 [MINOR][RPT] Clickable drill-downs on every chart.** Some exist (annual-grid cells,
+- [x] **C386 [MINOR][RPT] Clickable drill-downs on every chart.** Some exist (annual-grid cells,
   category links). Audit all report charts; every mark drills to the filtered transaction list.
+  — DONE (2026-08-16). AUDIT FINDING: six section links were `<a href="/transactions">` with NO
+  filter, so clicking "view transactions" from a Jan-Aug report landed on whatever the ledger was
+  last left with — a drill that silently showed a different set of rows from the figure clicked.
+  New `rptaDrill` component writes the report's own window (and any narrowing) into the filter before
+  navigating, converting the exclusive report boundary to the ledger's inclusive last day in ONE
+  place so a drilled total can never disagree with the figure by a day. Payee, largest-expense and
+  income sections also carry direction. Top-payee rows are now per-mark drills (payee + window +
+  expenses only) instead of a section-level link the reader had to re-filter by hand.
 
 ### W5 — Assistant trust: evidence, permission, undo (reviewer priority 4)
 

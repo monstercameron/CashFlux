@@ -413,4 +413,21 @@ func registerVSweep() {
 		prop("page-break-after", "always"),
 	)
 
+	// ─── C386: a drillable mark inside a quiet row ───────────────────────────
+	// The row label becomes a button, so it must read as the label it replaced
+	// until it is hovered — a list of six link-blue payee names would shout.
+	rule(".rpta-row-drill",
+		padding("0"),
+		border("0"),
+		background("none"),
+		font("inherit"),
+		color("inherit"),
+		textAlign("left"),
+		cursor("pointer"),
+	)
+	rule(".rpta-row-drill:hover, .rpta-row-drill:focus-visible",
+		color("var(--accent)"),
+		textDecoration("underline"),
+	)
+
 }

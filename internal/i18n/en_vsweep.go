@@ -343,6 +343,9 @@ var vSweepKeys = Catalog{
 	// C384 — the monthly grid export.
 	"reports.monthlyFlow": "Month-by-month cash flow",
 
+	// C386 — report drills carry the report's own window into the ledger.
+	"rpta.drillTitle": "Open these in the transaction list, %s to %s",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",
