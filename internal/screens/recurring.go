@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/cancelwatch"
 	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -29,7 +30,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
 	"github.com/monstercameron/CashFlux/internal/runway"
-	"github.com/monstercameron/CashFlux/internal/cancelwatch"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -231,9 +231,9 @@ type rhythmView struct {
 	// cancelled subscription actually stopped charging.
 	Cancellations []domain.SubscriptionCancellation
 	Txns          []domain.Transaction
-	Stopped     []recurdiscover.StopSignal
-	LiquidMinor int64
-	Rates       currency.Rates
+	Stopped       []recurdiscover.StopSignal
+	LiquidMinor   int64
+	Rates         currency.Rates
 }
 
 // computeRhythm assembles the whole surface model from the store and the pure

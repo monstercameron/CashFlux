@@ -310,7 +310,7 @@ func loanCard(props loanCardProps) ui.Node {
 			{Name: uistate.T("preview.mMonthly"), Before: baseMonthlyPayment,
 				After: baseMonthlyPayment + extraMinor, Goodness: actionpreview.LowerBetter,
 				DisplayBefore: fmtMoney(baseMonthlyPayment),
-				DisplayAfter: fmtMoney(baseMonthlyPayment + extraMinor)},
+				DisplayAfter:  fmtMoney(baseMonthlyPayment + extraMinor)},
 			// Stated as unchanged rather than omitted: its absence would be
 			// indistinguishable from nobody having checked.
 			{Name: uistate.T("preview.mBalance"), Before: balance, After: balance,

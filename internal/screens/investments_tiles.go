@@ -14,11 +14,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/investincome"
-	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	"github.com/monstercameron/CashFlux/internal/taxlot"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -469,7 +469,7 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 			// record of anything.
 			Ticker: h.Ticker, Name: h.Name, Date: when, Shares: sale.SharesSold,
 			ProceedsMinor: sale.ProceedsMinor, BasisMinor: sale.BasisMinor,
-			GainMinor:     sale.GainMinor,
+			GainMinor:          sale.GainMinor,
 			ShortTermGainMinor: sale.ShortTermGainMinor,
 			LongTermGainMinor:  sale.LongTermGainMinor,
 			Method:             string(method),
