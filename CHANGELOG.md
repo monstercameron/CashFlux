@@ -69,6 +69,14 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **Type a whole transaction in words (SM-15).** "spent 40 at whole foods yesterday" fills the
+  quick-add amount, merchant, date and direction in one click. The local read is two parsers that
+  already existed doing the halves each does well and had never been introduced: `rapidcapture` for
+  the amount and the merchant words, `duedate` for "yesterday" / "friday" / "on the 3rd". The date is
+  lifted out *first*, so "yesterday" can never end up as part of the payee. Smart+ handles the
+  sentences neither can read, and is the only path that also picks a category — resolved against your
+  real list and dropped if it does not match. A bare number is always money out; only an explicit
+  income word flips it, because guessing income from a number is what quietly corrupts the split.
 - **Type "pay rent friday" and the to-do dates itself (SM-14).** As soon as the title line contains
   something datable, a hint underneath offers the parse — cleaned title, due date, and any repeat —
   and one click fills all three fields. It offers rather than applies: silently rewriting a field

@@ -102,6 +102,18 @@ var smartHintKeys = Catalog{
 	"sm14.aiPending":  "Thinking…",
 	"sm14.aiNoAnswer": "Smart+ couldn't find a date in that.",
 
+	// SM-15 — typing a transaction in words.
+	"sm15.label":       "Type it in words",
+	"sm15.placeholder": "spent 40 at whole foods yesterday",
+	"sm15.action":      "Fill it in",
+	"sm15.readLocal":   "Read on this device — no key needed.",
+	"sm15.aiAction":    "Read it with Smart+",
+	"sm15.aiPending":   "Thinking…",
+	"sm15.aiNoAnswer":  "Smart+ couldn't read a transaction from that.",
+	// %s = the amount as typed.
+	"sm15.amountOut": "−%s out",
+	"sm15.amountIn":  "+%s in",
+
 	// SM-16 — a fee draining an otherwise-idle account.
 	// %s = the yearly cost of the fee.
 	"sm16.hint":   "This account is idle but still charging fees — about %s a year.",
