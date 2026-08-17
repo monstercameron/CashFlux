@@ -59,6 +59,21 @@ and every commit updates this file under `Unreleased`.
   screen, adjustable, and restated under the figures they produced.
 
 ### Fixed
+- **The search's "Searching…" note arrived 520ms after the keystroke that needed it (C628).** The
+  indicator existed and was wired correctly — it was just late. Raising the pending flag is an
+  application state write, and on the ledger that costs a full re-render of a screen heavy enough to
+  stall the main thread for 300ms at a time, so the word "Searching…" appeared after the 400ms
+  debounce it was describing had nearly elapsed. Worse, the flag's lifetime was SHORTER than that
+  round trip, so the render that would have dimmed the stale rows and made them inert usually never
+  happened at all — the rows a superseded query had already excluded stayed fully clickable for the
+  whole window.
+
+  The note now lives in the DOM at all times, hidden by a class, so the input handler can reveal it
+  and mark the results stale synchronously in the keystroke; measured at under 20ms instead of 520ms,
+  with the rows inert for the same window. The marking undoes itself on the render where the query
+  has committed rather than waiting for the vdom to notice, because the vdom frequently never sees
+  the flag at all. Stale rows use a class the toolbar owns outright rather than `aria-busy`, so
+  clearing it can never cancel the protection around a sort that is genuinely still running.
 - **The field sweep's first shape broke every call site it touched — corrected.** Wrapping each text
   box in a shared *component* meant an `On*` handler created by the CALLER's `UseEvent` and passed
   through into the child's element never bound. It looked wired from the outside — the DOM had an

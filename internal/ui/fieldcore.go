@@ -86,22 +86,40 @@ func installFieldSync() {
 		if !obs.Truthy() {
 			return
 		}
+		// One sweep per tick, never per mutated node.
+		//
+		// The first version walked every added subtree as it arrived, which meant a
+		// wasm callback and a querySelectorAll for each of the thousands of nodes a
+		// full screen render inserts. It took the ledger from usable to 28 SECONDS
+		// before its first paint. Fields number in the dozens and the whole-document
+		// query is trivial, so the batched sweep costs one call per render instead of
+		// one per node — and it cannot miss a field, because it looks at all of them.
+		var sweep js.Func
+		pending := false
+		sweep = js.FuncOf(func(js.Value, []js.Value) any {
+			pending = false
+			seedAllFields()
+			return nil
+		})
 		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
 			if len(args) == 0 {
 				return nil
 			}
 			records := args[0]
+			// Attribute changes are already targeted, so they are applied directly —
+			// this is the common case once a screen is up, and it touches one node.
+			needSweep := false
 			for i := 0; i < records.Length(); i++ {
 				r := records.Index(i)
-				switch r.Get("type").String() {
-				case "attributes":
+				if r.Get("type").String() == "attributes" {
 					applyFieldValue(r.Get("target"))
-				case "childList":
-					added := r.Get("addedNodes")
-					for j := 0; j < added.Length(); j++ {
-						seedFieldSubtree(added.Index(j))
-					}
+					continue
 				}
+				needSweep = true
+			}
+			if needSweep && !pending {
+				pending = true
+				js.Global().Call("setTimeout", sweep, 0)
 			}
 			return nil
 		})
@@ -114,19 +132,18 @@ func installFieldSync() {
 		})
 		// Fields already on the page when this installs (the first render's own
 		// output) never produce a mutation record, so they are seeded directly.
-		seedFieldSubtree(doc.Get("documentElement"))
+		seedAllFields()
 	})
 }
 
-// seedFieldSubtree fills every field in a freshly mounted subtree.
-func seedFieldSubtree(node js.Value) {
-	if !node.Truthy() || node.Get("querySelectorAll").IsUndefined() {
+// seedAllFields fills every field currently on the page. One document-wide query
+// is cheaper than walking each inserted subtree, and it cannot miss a field.
+func seedAllFields() {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
 		return
 	}
-	if node.Get("hasAttribute").Truthy() && node.Call("hasAttribute", fieldValueAttr).Bool() {
-		applyFieldValue(node)
-	}
-	found := node.Call("querySelectorAll", "["+fieldValueAttr+"]")
+	found := doc.Call("querySelectorAll", "["+fieldValueAttr+"]")
 	for i := 0; i < found.Length(); i++ {
 		applyFieldValue(found.Index(i))
 	}

@@ -140,3 +140,60 @@ test.describe("forms: what is typed also REACHES the app", () => {
     await expect(app.locator("body")).toContainText("ProbeAcct", { timeout: 10_000 });
   });
 });
+
+test.describe("search: the pending state is immediate, not eventually", () => {
+  // C628. The indicator existed and worked — 520ms after the keystroke that needed
+  // it. Raising the flag is an application state write, and on the ledger that
+  // costs a full re-render of a screen heavy enough to stall the main thread for
+  // 300ms at a time, so the word "Searching…" arrived after the 400ms debounce it
+  // was describing had nearly elapsed. Worse, the flag's lifetime was SHORTER than
+  // the round trip, so the render that would have made the stale rows inert usually
+  // never happened at all.
+  //
+  // These measure from inside the page, because a Playwright round-trip is itself
+  // longer than the window being measured.
+  test("typing marks the search busy and the stale rows inert in the same tick", async ({ app }) => {
+    await nav(app, "/transactions");
+    await expect(app.locator("input[type='search']").first()).toBeVisible();
+    await expect(app.locator(".data-table tbody tr").first()).toBeVisible();
+
+    const first = await app.evaluate(async () => {
+      const el = document.querySelector("input[type='search']");
+      el.focus();
+      el.value = "co";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 20));
+      const note = document.querySelector(".fctrl-pending");
+      const body = document.querySelector(".data-table tbody");
+      return {
+        noteVisible: note ? getComputedStyle(note).display !== "none" : false,
+        ariaBusy: document.querySelector("input[type='search']")?.getAttribute("aria-busy"),
+        rowsInert: body ? getComputedStyle(body).pointerEvents === "none" : null,
+      };
+    });
+    expect(first.noteVisible).toBe(true);
+    expect(first.ariaBusy).toBe("true");
+    expect(first.rowsInert).toBe(true);
+  });
+
+  test("once the query has been applied the rows are clickable again", async ({ app }) => {
+    // The stale marking is made outside the vdom's knowledge, so nothing else will
+    // ever take it off. A results table left permanently inert would be a far worse
+    // bug than the one being fixed.
+    await nav(app, "/transactions");
+    const search = app.locator("input[type='search']").first();
+    await expect(app.locator(".data-table tbody tr").first()).toBeVisible();
+    await search.click();
+    await app.keyboard.type("co");
+    await expect
+      .poll(async () =>
+        app.evaluate(() => {
+          const body = document.querySelector(".data-table tbody");
+          return body ? getComputedStyle(body).pointerEvents : "?";
+        }),
+      { timeout: 10_000 })
+      .toBe("auto");
+    const note = app.locator(".fctrl-pending").first();
+    await expect(note).toBeHidden();
+  });
+});

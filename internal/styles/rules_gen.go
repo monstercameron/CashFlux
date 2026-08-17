@@ -7780,6 +7780,12 @@ func registerGenerated() {
 		color("var(--text-faint)"),
 		whiteSpace("nowrap"),
 	)
+	// C628: the note lives in the DOM at all times so the keystroke can reveal it
+	// without waiting for a re-render. display:none rather than opacity, so a
+	// screen reader does not announce a status that is not currently true.
+	rule(".fctrl-pending.is-idle",
+		display("none"),
+	)
 	rule(".todo-search-clear, .fctrl-clear",
 		display("grid"),
 		placeItems("center"),

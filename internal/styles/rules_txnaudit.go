@@ -193,7 +193,14 @@ func registerTxnAudit() {
 	// --- C569: the ledger says it is re-sorting until the new order is painted --
 	// The rows dim while a sort is in flight, so a fast click-and-read cannot mistake
 	// the old order for the new one. Kept subtle: this is a sub-second state.
-	rule(".data-table[aria-busy=\"true\"] tbody",
+	// C628: the same treatment, driven by a class the filter toolbar owns outright.
+	// The search-pending flag is application state, and raising it costs a full
+	// re-render of a screen heavy enough to stall for 300ms — longer than the flag
+	// itself lives, so the render that would have made the rows inert usually never
+	// happened. The toolbar sets this class in the keystroke instead, and clears it
+	// on the render where the query has committed. Kept separate from aria-busy so
+	// clearing it can never cancel a sort that is genuinely still in flight.
+	rule(".data-table.is-search-stale tbody, .data-table[aria-busy=\"true\"] tbody",
 		opacity(".55"),
 		transition("opacity .12s ease"),
 		// C625: dimming said "these rows are stale" and then let you click one
@@ -205,7 +212,7 @@ func registerTxnAudit() {
 		// table's own re-entrancy guard rather than by being unreachable.
 		pointerEvents("none"),
 	)
-	ruleMedia("(prefers-reduced-motion: reduce)", ".data-table[aria-busy=\"true\"] tbody",
+	ruleMedia("(prefers-reduced-motion: reduce)", ".data-table.is-search-stale tbody, .data-table[aria-busy=\"true\"] tbody",
 		transition("none"),
 	)
 }

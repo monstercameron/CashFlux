@@ -940,8 +940,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		OnSearch:      onFilterText,
 		OnClearSearch: clearSearchNow,
 		SearchPending: searchPending.Get(),
-		FiltersLabel:  uistate.T("transactions.filters"),
-		FiltersTitle:  uistate.T("transactions.filtersTitle"),
+		// The ledger table is what a typed query re-filters, so it is what must stop
+		// being clickable while the rows on screen answer the previous one.
+		ResultsSelector: ".data-table",
+		FiltersLabel:    uistate.T("transactions.filters"),
+		FiltersTitle:    uistate.T("transactions.filtersTitle"),
 		ActiveAriaLabel: func(n int) string {
 			if n == 0 {
 				return uistate.T("transactions.filters")

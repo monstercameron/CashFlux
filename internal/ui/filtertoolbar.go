@@ -49,6 +49,12 @@ type FilterToolbarProps struct {
 	// click and act on rows their query had already excluded (C619). When true the
 	// control shows a searching state and marks itself busy for assistive tech.
 	SearchPending bool
+	// ResultsSelector names the element holding the rows this search filters — the
+	// ledger's table, say. While a typed query has not been applied, those rows
+	// answer a superseded query, and the toolbar marks them stale IN THE KEYSTROKE
+	// rather than waiting for a re-render that (measured on the ledger) arrives
+	// after the flag it reports has already been lowered. Empty disables it.
+	ResultsSelector string
 	// OnClearSearch clears the query NOW, skipping the debounce. C628: the ✕ went
 	// through the same 400ms coalescing as typing, so the one control whose whole
 	// job is "undo what I typed" left the query on screen for the same window it
@@ -95,6 +101,71 @@ func FilterToolbar(props FilterToolbarProps) uic.Node {
 	return uic.CreateElement(filterToolbar, props)
 }
 
+// markSearchPending shows the "Searching…" note and marks the box busy in the
+// same tick as the keystroke.
+//
+// Both attributes belong to the vdom, and that is deliberate rather than a leak:
+// this only has to bridge the gap until the render carrying props.SearchPending
+// lands, and that render writes the same two values. When the query commits, the
+// ordinary render puts the note back to idle — nothing here has to undo itself.
+func markSearchPending(searchID, pendingID, resultsSelector string) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	if el := doc.Call("getElementById", searchID); el.Truthy() {
+		el.Call("setAttribute", "aria-busy", "true")
+	}
+	if el := doc.Call("getElementById", pendingID); el.Truthy() {
+		el.Get("classList").Call("remove", "is-idle")
+	}
+	setSearchStale(resultsSelector, true)
+}
+
+// clearSearchPending undoes markSearchPending.
+//
+// It cannot be left to the ordinary render to undo. The app's SearchPending flag
+// often never survives long enough to appear in ANY render — raising it costs a
+// re-render slower than the debounce it describes — so the rendered class list
+// stays "idle" the whole time, the vdom sees no change, and the note this revealed
+// by hand would sit there saying "Searching…" forever.
+func clearSearchPending(searchID, pendingID, resultsSelector string) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	if el := doc.Call("getElementById", searchID); el.Truthy() {
+		el.Call("setAttribute", "aria-busy", "false")
+	}
+	if el := doc.Call("getElementById", pendingID); el.Truthy() {
+		el.Get("classList").Call("add", "is-idle")
+	}
+	setSearchStale(resultsSelector, false)
+}
+
+// setSearchStale dims the results and makes them inert while a typed query has
+// not been applied. It is a class of this component's own rather than aria-busy,
+// which the table sets for its own reasons: clearing a shared attribute here
+// could cancel the protection around a sort that is genuinely still running.
+func setSearchStale(selector string, stale bool) {
+	if selector == "" {
+		return
+	}
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	nodes := doc.Call("querySelectorAll", selector)
+	for i := 0; i < nodes.Length(); i++ {
+		cl := nodes.Index(i).Get("classList")
+		if stale {
+			cl.Call("add", "is-search-stale")
+		} else {
+			cl.Call("remove", "is-search-stale")
+		}
+	}
+}
+
 func filterToolbar(props FilterToolbarProps) uic.Node {
 	open := uic.UseState(false)
 	// Escape closes the filter panel. Registered unconditionally (never inside the
@@ -114,7 +185,19 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 			open.Set(false)
 		}
 	})
-	onSearch := uic.UseEvent(props.OnSearch)
+	// Stable ids for the two nodes the keystroke has to touch before the app can
+	// re-render (C628).
+	uid := uic.UseId()
+	searchID, pendingID := "fctrl-search-"+uid, "fctrl-pending-"+uid
+	onSearch := uic.UseEvent(func(v string) {
+		// Reveal the pending note NOW, in the keystroke, rather than waiting for the
+		// re-render that raising the app's flag will eventually cause. On the ledger
+		// that round trip measured 520ms — longer than the debounce it is reporting.
+		markSearchPending(searchID, pendingID, props.ResultsSelector)
+		if props.OnSearch != nil {
+			props.OnSearch(v)
+		}
+	})
 	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
 	// position even though the button itself only renders when there's a query.
 	onClear := uic.UseEvent(func() {
@@ -125,6 +208,16 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		if props.OnSearch != nil {
 			props.OnSearch("")
 		}
+	})
+	// Clear the stale marking on the render where the query has actually been
+	// applied. It runs every render on purpose: the marking was made outside the
+	// vdom's knowledge, so nothing else will ever take it off, and a results table
+	// left permanently inert would be a far worse bug than the one being fixed.
+	uic.UseLayoutEffect(func() func() {
+		if !props.SearchPending {
+			clearSearchPending(searchID, pendingID, props.ResultsSelector)
+		}
+		return nil
 	})
 	n := len(props.Chips)
 
@@ -185,8 +278,10 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	// C619: the search region's busy state, in the same string form this file
 	// already uses for aria-expanded.
 	searchBusy := "false"
+	pendingCls := "fctrl-pending is-idle"
 	if props.SearchPending {
 		searchBusy = "true"
+		pendingCls = "fctrl-pending"
 	}
 	trigger := Button(css.Class(triggerCls), Type("button"),
 		// A disclosure, not a dialog: aria-expanded + aria-controls describe what this
@@ -239,6 +334,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					// in the app — deleted characters mid-word, and the more the user typed
 					// the further behind the written-back value was.
 					Input(css.Class("fctrl-input"), Type("search"), FieldValue(props.Search),
+						Attr("id", searchID), Attr("aria-controls", pendingID),
 						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						// C619: while the debounce is still pending the rows below are the
 						// PREVIOUS query's. aria-busy tells assistive tech the region is
@@ -246,10 +342,25 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 						// so nobody acts on a result the query has already excluded.
 						Attr("aria-busy", searchBusy),
 						OnInput(onSearch)),
-					If(props.SearchPending, Span(css.Class("fctrl-pending"),
+					// C628: the note is ALWAYS in the DOM and hidden by a class, rather
+					// than conditionally rendered.
+					//
+					// Rendering it only when props.SearchPending is true made the feedback
+					// arrive 520ms after the keystroke that needed it — the flag is app
+					// state, so raising it costs a full re-render of a screen heavy enough
+					// to stall the main thread for 300ms at a time, and by the time the
+					// word "Searching…" appeared the 400ms debounce it was describing had
+					// nearly elapsed. A pending indicator that lags the thing it reports on
+					// is not an indicator.
+					//
+					// With the element already present, the input handler can reveal it
+					// SYNCHRONOUSLY on the keystroke (see markSearchPending), and the
+					// render that follows simply agrees. The class is the vdom's to own, so
+					// when the query commits the ordinary render hides it again.
+					Span(ClassStr(pendingCls), Attr("id", pendingID),
 						Attr("data-testid", "filter-search-pending"),
 						Attr("role", "status"), Attr("aria-live", "polite"),
-						uistate.T("filters.searchPending"))),
+						uistate.T("filters.searchPending")),
 					// "Clear search", not "Clear": on a page that also offers a filter
 					// reset and a panel close, a control named only for its verb leaves
 					// the user guessing how much of the view it takes with it (C574).
