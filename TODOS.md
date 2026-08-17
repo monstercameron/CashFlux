@@ -1451,13 +1451,19 @@ survived the duplicate/scope filters but didn't make the engine cut):
   transaction passes through, with a per-account cadence (debit 1 day, card 3, travel card 5). A test pins
   that the sample produces exactly one finding with a real learned window.
 
-  STILL OPEN — the SURFACE. The detector lands correctly in `RunPage(PageTransactions)` at position 2 of
-  17, but the inline Smart strip renders NOTHING on /transactions in a browser even after enabling the
-  free features from the Smart hub: the peek control is in the DOM but never visible, and no pre-existing
-  detector shows there either (the duplicate and unusual-spend findings are equally absent). That is a
-  pre-existing surface condition, not this ticket's, but it means EC-4 has no user-visible proof yet.
-  Worth someone tracing `SmartStripForPath` → `smart-peek-<page>` visibility before more SMART features
-  are built against that surface.
+  STILL OPEN — PLACEMENT, not plumbing. I first recorded that the Smart strip "renders nothing on
+  /transactions"; that was wrong, and the correction is worth more than the original note. The strip works
+  — 26 findings on that page — but reaching it takes THREE steps a reader will not guess: enable the free
+  features on the Smart hub, open the top bar's ⋯ More popover (where `smart-peek-transactions` is
+  relocated by `rules_dp_header`; it is in the DOM but invisible until that popover opens), then expand
+  the peek. The strip then shows THREE findings, and this one is severity Nudge among 26, so it never
+  makes the cut. The Smart hub's own list filters further.
+
+  So EC-4 is correct and effectively unreachable, and raising its severity to win a placement contest
+  would be inventing urgency. What it needs is a placement decision — either the reconciliation surface
+  this ticket says it feeds, or a Smart-hub entry point somebody can find. Verified instead by tests
+  against the real sample dataset (`TestT23FiresOnTheSampleDataset` pins exactly one finding carrying a
+  learned window), plus a store round-trip check that `ClearedAt` survives persistence.
 - [ ] **EC-5 What is this charge?** (SMART+, Transactions) — one cryptic row → "this is likely X"
   from model merchant knowledge. Explains an unknown; distinct from SM-1 rename.
 - [x] **EC-6 Effective-rate detector** (SMART, Accounts) — realized APY/interest cost per account

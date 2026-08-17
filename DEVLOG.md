@@ -28,11 +28,16 @@ pushed everything else off the page, and a reader who stops reading the strip do
 either. One finding now names the worst - furthest past its own account's normal, not merely oldest - and
 counts the rest.
 
-What I could not prove is the surface. The detector lands correctly at position 2 of 17 in the
-transactions page run, but the inline Smart strip renders nothing in a browser even after enabling the
-free features: the peek control is in the DOM and never visible, and no pre-existing detector shows there
-either. That is not this ticket's doing, but it means EC-4 has no user-visible proof, and it is worth
-tracing before more SMART features are built against that surface.
+What I could not prove is the placement, and I got that wrong twice before getting it right. First I
+recorded that the Smart strip renders nothing on /transactions. It does render - 26 findings - but
+reaching it takes three steps a reader will not guess: enable the free features on the Smart hub, open
+the top bar's More popover (the peek is relocated into it, which is why it sits in the DOM invisible),
+then expand the peek. The strip then shows three findings, and this one is a nudge among 26.
+
+So the feature is correct and effectively unreachable. Raising its severity to win a placement contest
+would be inventing urgency, so it stays a nudge and the ticket carries the placement question instead.
+It is verified by tests against the real sample dataset rather than by a browser drive, plus a
+round-trip check that ClearedAt survives the store - which is the thing I would otherwise have assumed.
 
 ## 2026-08-17 - the rate you were promised is not the rate you received (EC-6)
 
