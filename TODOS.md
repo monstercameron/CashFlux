@@ -818,9 +818,30 @@ survived the duplicate/scope filters but didn't make the engine cut):
   backed by the existing `mutationrev` + `auditlog`.
 - [ ] **LF-4 Global spotlight search** — one instant local substring search across accounts / txns /
   budgets / goals / tasks (confirm no first-class one exists; NL search is the separate SMART+ path).
-- [ ] **LF-5 Notification delivery prefs + quiet hours** — finish `internal/notify` (was CP3).
-- [ ] **LF-6 Cash-runway + savings-rate tiles** (Dashboard) — "your balance lasts N days at current burn";
+- [x] **LF-5 Notification delivery prefs + quiet hours** — finish `internal/notify` (was CP3).
+  — VERIFIED DONE (2026-08-16). `notify.RuleConfig` carries per-rule Enabled, per-rule Thresholds, an
+  account-wide quiet-hours window (QuietStartMin/QuietEndMin, wrap-past-midnight supported) and a
+  digest cadence; Settings renders one row per alert type with its threshold input, plus a quiet-hours
+  control (`settings.go:181`, `quietHoursRow`). Quiet hours suppress browser pop-ups only — the in-app
+  feed still records everything, so nothing is lost to a do-not-disturb window (C416). C407 added
+  per-member routing and C408 a per-rule "Test this rule" preview on top of the same config.
+- [x] **LF-6 Cash-runway + savings-rate tiles** (Dashboard) — "your balance lasts N days at current burn";
   savings rate this month. Deterministic, local.
+  — DONE (2026-08-16). The savings-rate half already shipped (`savingsRateWidget`, the `savings_rate`
+  molecule). The runway half is new: pure `runway.DaysAtBurn`/`MonthsAtBurn` plus a `cash_runway_days`
+  engine variable, so the tile is a widget-catalog entry rather than new render code.
+
+  The burn is a TRAILING three-month average, deliberately NOT the selected period's expense. A
+  period-based burn swings with the calendar — on the 2nd of a month, spending so far is tiny and the
+  runway reads as years — and that is exactly the number a household would act on and be wrong about.
+  Three months smooths a quarterly bill without burying a real change in habit.
+
+  `DaysAtBurn` returns `(int, bool)` and refuses to answer in the two cases where a number misleads:
+  no burn (spending nothing means the balance does not run down — reporting 0 days says the opposite
+  of what is true) and an overdrawn balance (it has already arrived; 0 reads as a forecast rather than
+  a current fact). Capped at ten years so a household spending almost nothing reads as "over ten
+  years" rather than a five-figure day count that looks like a bug. The variable surface has no
+  "unknown", so it exposes 0 and the catalog doc says explicitly that 0 means not-applicable.
 - [ ] **LF-7 Bill/due-date calendar** — reuse the v1.0.43 `uiw.Calendar` primitive for bills + recurring
   cash flows (dogfoods the standardized calendar further).
 - [ ] **LF-8 Data health check** — a small "12 uncategorized · 3 stale accounts · 2 unreconciled" panel
@@ -867,12 +888,20 @@ portfolio (`internal/portfolio` + `domain.Holding`, Investments page), OFX/QFX i
     nudge** + honest **capability explainer** that detects standalone/installed mode and states the
     ~12h coarse ceiling. Skeleton contract drafted (page globals `cashfluxWriteReminders` /
     `cashfluxEnableReminders` / `cashfluxReminderCapability`; SW `deliverDue()` over the queue).
-- [ ] **CP2 — Recurring tasks + reminders (To-do gap).** Tasks have no recurrence today (only recurring
+- [x] **CP2 — Recurring tasks + reminders (To-do gap).** Tasks have no recurrence today (only recurring
   *transactions* do). Add cadence + next-due + optional reminder lead to `domain.Task`; completing a
-  recurring task spawns the next occurrence; feed the CP1 reminder queue. SDLC: domain → tested logic →
-  store → state → UI (recurrence controls in the task add/edit form + a recurring chip on rows).
-- [ ] **CP3 — Notification delivery preferences.** The Notifications page has no per-type thresholds /
+  recurring task spawns the next occurrence; feed the CP1 reminder queue.
+  — VERIFIED DONE (2026-08-16), the whole SDLC ladder. Domain: `Task.Recurrence` +
+  `Task.ReminderLeadDays`. Logic: `taskrecur.NextOccurrence` (completing a recurring task spawns its
+  successor atomically) + `taskrecur.ReminderDue`. State: `appstate.CompleteTask` drives the spawn.
+  UI: cadence and reminder-lead controls in the task edit form, a cadence chip on the row. The last
+  piece — feeding the reminder queue — landed as C403 today: a `task-reminder` notify event with its
+  own default rule, so the per-task offset finally reaches the feed rather than only the digest.
+- [x] **CP3 — Notification delivery preferences.** The Notifications page has no per-type thresholds /
   quiet-hours UI; fold this into CP1's prefs.
+  — VERIFIED DONE (2026-08-16). Superseded by LF-5, which is the same work: per-type on/off and
+  thresholds plus a quiet-hours window all render in Settings. Closing the duplicate rather than
+  leaving two tickets pointing at one shipped feature.
 
 ### First-8-pages competitive gaps + standout polish (2026-07-15)
 What the market leaders put ON these same 8 surfaces (Dashboard/Transactions/Accounts/Budgets/Goals/

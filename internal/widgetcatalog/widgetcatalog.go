@@ -229,6 +229,7 @@ var metricMeta = map[string]struct {
 	"expense":            {"Spending", GroupActivity, "Money out over the chosen period."},
 	"cashflow_net":       {"Net cash flow", GroupActivity, "Income minus spending for the period."},
 	"savings_rate":       {"Savings rate", GroupActivity, "Percent of income you kept."},
+	"cash_runway_days":   {"Cash runway (days)", GroupActivity, "How many days your liquid cash lasts at your average spending over the last three months. 0 means it does not apply — you are not spending down, or the balance is already negative."},
 	"bills_due":          {"Bills due", GroupActivity, "Bills due before month-end."},
 	"goal_needs":         {"Goal set-asides", GroupActivity, "What your goals need this month."},
 	"income_count":       {"Number of deposits", GroupCounts, "How many deposits this period."},

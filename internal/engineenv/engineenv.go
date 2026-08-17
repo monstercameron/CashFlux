@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -42,6 +43,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/runway"
 	"github.com/monstercameron/CashFlux/internal/safespend"
 )
 
@@ -169,6 +171,7 @@ var atomNames = []string{
 	"min_payments_total",       // Σ minimum monthly payments across non-archived liabilities
 	"interest_drag_monthly",    // Σ monthly interest cost to hold every liability at its APR (AC4)
 	"idle_cash",                // liquid cash beyond this month's bills + goal set-asides (AC15)
+	"cash_runway_days",         // how long liquid cash lasts at the TRAILING burn (LF-6)
 	"idle_cash_forgone_annual", // yearly yield left on the table on idle_cash at the benchmark (AC15)
 	"idle_cash_benchmark",      // the user-entered benchmark APR% the forgone figure uses (AC15)
 	"transactions",             // count of transactions
@@ -366,6 +369,27 @@ func computeAtoms(d Data) map[string]float64 {
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
 	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
+	// LF-6: how long the liquid balance lasts at the current burn.
+	//
+	// The burn is a TRAILING three-month average, deliberately NOT the selected
+	// period's expense. A period-based burn makes the runway swing wildly with the
+	// calendar — on the 2nd of a month, spending so far is tiny and the runway
+	// reads as years — which is exactly the number a household would act on and be
+	// wrong about. Three months smooths a quarterly bill without burying a real
+	// change in habit.
+	//
+	// Zero when there is no answer (no burn, or an overdrawn balance). The
+	// variable surface has no "unknown", so the molecules and widgets that read it
+	// must treat 0 as "not applicable" rather than "no runway" — which is why the
+	// catalog entry says so in its doc.
+	runwayDaysAtBurn := 0.0
+	if liquidErr == nil {
+		_, burn := cashflow.TrailingMonthly(d.Transactions, d.Rates, base, d.Now, 3)
+		if days, ok := runway.DaysAtBurn(liquid.Amount, burn); ok {
+			runwayDaysAtBurn = float64(days)
+		}
+	}
+
 	// idle-cash figure (AC15): liquid cash beyond this month's committed bills + goal
 	// set-asides, priced at the user's benchmark yield. Same committed basis as the
 	// safe_to_spend molecule, so the two figures reconcile.
@@ -416,6 +440,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"liquid_cash":              major(liquid.Amount),
 		"income":                   major(income.Amount),
 		"expense":                  major(expense.Amount),
+		"cash_runway_days":         runwayDaysAtBurn,
 		"income_count":             float64(incCount),
 		"expense_count":            float64(expCount),
 		"bills_due":                major(billsDue),
@@ -1400,6 +1425,7 @@ var atomSources = map[string]string{
 	"liquid_cash":              "Σ balances of non-archived cash-type accounts",
 	"income":                   "Σ positive non-transfer transactions in the period",
 	"expense":                  "Σ |negative non-transfer transactions| in the period",
+	"cash_runway_days":         "How many days liquid cash lasts at the trailing 3-month burn (0 = not applicable: no burn, or already overdrawn)",
 	"income_count":             "count of income transactions in the period",
 	"expense_count":            "count of expense transactions in the period",
 	"bills_due":                "Σ bills due before this calendar month-end",

@@ -92,3 +92,52 @@ func DaysToNextInflow(recs []domain.Recurring, from time.Time, days int, rates c
 	}
 	return max(best, 1), nil
 }
+
+// ─── LF-6: how long the money lasts at the current burn ──────────────────────
+
+// MaxBurnDays caps the reported runway. Ten years is far past the horizon of a
+// cash-runway reading, and the cap exists so a household spending almost nothing
+// gets "over 10 years" rather than a number in the tens of thousands that reads
+// as a bug.
+const MaxBurnDays = 3650
+
+// DaysAtBurn reports how many days a liquid balance lasts at a given monthly
+// burn rate, and whether the question has an answer at all.
+//
+// ok is false in the two cases where a number would mislead:
+//
+//   - burn <= 0. Spending nothing (or earning more than you spend within the
+//     measured window) means the balance does not run down, and reporting 0 days
+//     would say the exact opposite of what is true. "Not running down" is the
+//     honest reading, and it is a different statement from any number of days.
+//   - liquid < 0. An overdrawn balance has no runway to report; it has already
+//     arrived. Zero days is arguably right but reads as a forecast rather than a
+//     current fact, so the caller is made to say which.
+//
+// The month is taken as 30 days. Not 30.44: the input is a trailing average, its
+// own error dwarfs the difference, and a round number keeps the figure legible
+// as the estimate it is.
+func DaysAtBurn(liquidMinor, monthlyBurnMinor int64) (int, bool) {
+	if monthlyBurnMinor <= 0 || liquidMinor < 0 {
+		return 0, false
+	}
+	perDay := float64(monthlyBurnMinor) / 30.0
+	if perDay <= 0 {
+		return 0, false
+	}
+	days := int(float64(liquidMinor) / perDay)
+	if days > MaxBurnDays {
+		return MaxBurnDays, true
+	}
+	return days, true
+}
+
+// MonthsAtBurn is DaysAtBurn expressed in whole months, for a headline that
+// reads better in months than in three-digit days. Same honesty rules.
+func MonthsAtBurn(liquidMinor, monthlyBurnMinor int64) (int, bool) {
+	days, ok := DaysAtBurn(liquidMinor, monthlyBurnMinor)
+	if !ok {
+		return 0, false
+	}
+	return days / 30, true
+}

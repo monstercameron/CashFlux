@@ -1,3 +1,35 @@
+## 2026-08-16 — the burn window is the whole design (LF-6)
+
+"Your balance lasts N days at current burn" is a division. The interesting part is entirely in which
+burn you divide by.
+
+The obvious choice is the selected period's expense figure — it is already computed, it is already a
+variable, and it is right there. It is also wrong in a way that would actively hurt: on the 2nd of a
+month, spending so far is a rounding error, so the runway reads as several years. That is not a
+harmless glitch on a quiet tile; it is a confident number about whether you can afford something,
+delivered at the exact moment it is most wrong, and it would be right again by the 20th so nobody
+would ever catch it.
+
+So the burn is a trailing three-month average. Three rather than one because a quarterly bill landing
+in the measured month would otherwise halve the reading; three rather than twelve because a genuine
+change in spending should show up inside a season, not a year.
+
+The `(int, bool)` return is the same discipline as `payoff.RemainingMonths` and E5's `HasImpact`,
+which keeps recurring because the failure keeps recurring: the zero value of a number is a real
+number, and "does not apply" is not. Two cases here. Spending nothing means the balance does not run
+down — reporting 0 days says the exact opposite of what is true. And an overdrawn balance has already
+arrived; 0 days reads as a forecast rather than a current fact, so the caller has to say which it
+means.
+
+The cap at ten years exists for legibility, not correctness. A household spending almost nothing gets
+a mathematically fine five-figure day count that reads as a bug, and "over ten years" is both true and
+believable.
+
+One compromise recorded: the engine's variable surface is `map[string]float64` with no way to express
+"unknown", so `cash_runway_days` exposes 0 for the not-applicable cases. The catalog doc says so
+explicitly. A tile reading it should treat 0 as "not applicable" rather than "no runway" — the pure
+function keeps the distinction, and only the variable layer has to flatten it.
+
 ## 2026-08-16 — the sweep, and being wrong three times about the same line
 
 236 hand-rolled controlled inputs, all with the bug the assistant composer had. The mechanical part

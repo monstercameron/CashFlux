@@ -157,3 +157,54 @@ func TestDaysToNextInflow(t *testing.T) {
 		}
 	})
 }
+
+// ─── LF-6: runway at the current burn ────────────────────────────────────────
+
+func TestDaysAtBurn(t *testing.T) {
+	// $3,000 liquid against $1,500 a month = 60 days.
+	if got, ok := DaysAtBurn(300000, 150000); !ok || got != 60 {
+		t.Errorf("DaysAtBurn = %d,%v want 60,true", got, ok)
+	}
+	// Partial days truncate — "lasts 44 days" must not round up into a day the
+	// money does not cover.
+	if got, ok := DaysAtBurn(220000, 150000); !ok || got != 44 {
+		t.Errorf("DaysAtBurn = %d,%v want 44,true", got, ok)
+	}
+	if got, ok := MonthsAtBurn(300000, 150000); !ok || got != 2 {
+		t.Errorf("MonthsAtBurn = %d,%v want 2,true", got, ok)
+	}
+}
+
+// Spending nothing means the balance does not run down. Reporting 0 days would
+// say the exact opposite of what is true.
+func TestDaysAtBurnRefusesToAnswerWithNoBurn(t *testing.T) {
+	for _, burn := range []int64{0, -5000} {
+		if got, ok := DaysAtBurn(300000, burn); ok {
+			t.Errorf("burn %d produced %d days — 'not running down' is not a number", burn, got)
+		}
+	}
+}
+
+// An overdrawn balance has already arrived; zero days reads as a forecast rather
+// than a current fact, so the caller is made to say which.
+func TestDaysAtBurnRefusesToAnswerWhenAlreadyNegative(t *testing.T) {
+	if got, ok := DaysAtBurn(-1, 150000); ok {
+		t.Errorf("an overdrawn balance produced %d days", got)
+	}
+	// Exactly zero IS answerable: nothing left, burning something, zero days.
+	if got, ok := DaysAtBurn(0, 150000); !ok || got != 0 {
+		t.Errorf("a zero balance = %d,%v want 0,true", got, ok)
+	}
+}
+
+// A household spending almost nothing should read "over ten years", not a
+// five-figure day count that looks like a bug.
+func TestDaysAtBurnIsCapped(t *testing.T) {
+	got, ok := DaysAtBurn(1_000_000_000, 100)
+	if !ok {
+		t.Fatal("a tiny burn reported unknown")
+	}
+	if got != MaxBurnDays {
+		t.Errorf("DaysAtBurn = %d, want the cap %d", got, MaxBurnDays)
+	}
+}
