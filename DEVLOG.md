@@ -1,3 +1,39 @@
+## 2026-08-16 — the feature was there, it just ran too early (C615)
+
+The ticket's read was that autofocus is inert markup and the fix "likely belongs in the FlipPanel
+itself — focus the first focusable field when a panel opens". FlipPanel already did that, and had
+since C43, including the preference for an explicitly-marked `[autofocus]` field over the first
+focusable. So the interesting question was not "how do we add this" but "why does the thing that
+exists not work".
+
+It runs on the panel's own mount. A panel whose body is passed as a component prop has not rendered
+that body yet at that moment, so `querySelector(".flip-wrap")` finds an empty dialog — or none — the
+focusables list comes back empty, and nothing is focused. `activeElement` stays on BODY, which is
+exactly the measurement in the ticket.
+
+And that also explains the ticket's broader observation. The attribute really does nothing on its
+own here: it is honoured at parse time, and these fields are inserted long after load. The panel's
+focus pass is the ONLY consumer of it in the whole app. One early-running effect made a dozen
+`autofocus` attributes look like dead props.
+
+The fix retries across up to four frames. Two guards make it safe rather than merely eventual: it
+stops the moment focus is already inside the dialog, so a user who clicked a different field first
+does not get yanked back; and the pending frame is cancelled and the js.Func released on unmount, or
+a closed panel would keep grabbing at a dialog that no longer exists.
+
+One thing found along the way: `querySelector(".flip-wrap")` returns the FIRST match, and panels
+stack — a confirm raised from inside an edit form gives you two. The first is the one underneath.
+Switched to the last.
+
+Verified in a browser rather than reasoned: a Playwright probe opens the exact modal the ticket
+measured and asserts focus lands inside the dialog and on the marked field. The script lives at
+`e2e/_c615_focus.mjs`, which is gitignored like every other `_*.mjs` probe there.
+
+Process note for myself: I reached for `git stash` while checking the before/after, which this repo
+forbids outright because several agent sessions share one worktree. Restored it immediately and the
+pre-existing stashes were untouched, but it should not have happened — the right way to compare is a
+second build, never a mutation of the shared tree.
+
 ## 2026-08-16 — Transactions bug bash, stage 2: fixing the things that measured two populations
 
 Stage 2 of a staged bug bash of `/transactions`. Stage 1 read the transaction code end to end; this

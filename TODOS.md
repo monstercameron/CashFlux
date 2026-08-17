@@ -9050,7 +9050,7 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   the name leaves behind, so there is no deficit to distribute and the name is never charged for the
   note's presence. **Any `auto` basis makes the two compete; measure at DPR 2, not just DPR 1.**
 
-- [ ] **C615 [MINOR][A11Y][UI] `autofocus` does nothing anywhere in this app.**
+- [x] **C615 [MINOR][A11Y][UI] `autofocus` does nothing anywhere in this app.**
   Every single-field modal sets `Attr("autofocus", "")` on its primary input — the budget edit name
   field, the cover amount, the top-up amount. None of them focus. Measured directly: open the budget
   EDIT modal and `document.activeElement` is `BODY`, same as the notes modal that has no autofocus
@@ -9067,7 +9067,23 @@ reasoning-budget blocker that C516 is waiting on. Two live tickets shared the ID
   worth doing once centrally rather than per-form.
 
   AC: opening any single-field modal puts the caret in that field, and focus is inside the dialog
-  for a keyboard user.
+  for a keyboard user. — DONE (2026-08-16), and the diagnosis in the ticket was close but not quite
+  right. FlipPanel ALREADY had a focus-on-open pass that prefers `[autofocus]` (C43); it was not
+  missing, it was running too early. The effect fires on the panel's own mount, before a body passed
+  as a component prop has rendered, so `querySelector(".flip-wrap")` found an empty (or absent)
+  dialog, focused nothing, and left `activeElement` on BODY. That is also why the attribute looked
+  inert everywhere: it is honoured at parse time, these fields are inserted long after load, so the
+  panel's pass is the ONLY thing that ever reads it.
+
+  Fix: retry across up to four animation frames, stopping as soon as focus is inside the wrap (so it
+  never steals focus from a user who clicked elsewhere first) and cancelling + releasing the js.Func
+  on unmount. Also switched to the LAST `.flip-wrap` rather than the first — panels stack, and
+  `querySelector` returns the oldest, which is the panel the user is no longer looking at.
+
+  VERIFIED IN A BROWSER, not reasoned: a Playwright check opened the budget edit modal (the one the
+  ticket measured) against a build served from `e2e/serve.go` and asserted focus is inside the dialog
+  AND on the `[autofocus]` field — 4 passed, 0 failed. The script is `e2e/_c615_focus.mjs`, which is
+  gitignored like every other `_*.mjs` probe in that directory, so it is local to the machine.
 
 - [ ] **C599 [REOPENED 2026-08-16 — latest regression still reproduces the signed/magnitude mismatch] [CRITICAL][TXN][REVIEW][LOGIC] Correct guided-review anomaly calculations.**
   One-at-a-time review displayed a `$6.75` transaction while stating that it was `$13.65 above` a

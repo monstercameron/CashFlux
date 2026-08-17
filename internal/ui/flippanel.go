@@ -91,6 +91,12 @@ func FlipPanel(props FlipPanelProps) uic.Node {
 	return uic.CreateElement(flipPanel, props)
 }
 
+// focusRetryFrames bounds how many animation frames the open-focus pass waits
+// for a panel body that renders after the panel itself (C615). Four frames is
+// well past a child component's first render and short enough that a dialog with
+// genuinely no focusable content stops trying almost immediately.
+const focusRetryFrames = 4
+
 func flipPanel(props FlipPanelProps) uic.Node {
 	// shown drives both the backdrop fade-in and the card flip; it flips to true
 	// once just after mount so the CSS transition animates.
@@ -119,8 +125,18 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		prevFocus := doc.Get("activeElement")
 
 		// focusables lists the dialog's tabbable elements in DOM order.
+		//
+		// The LAST .flip-wrap, not the first (C615): panels can stack (a confirm
+		// raised from inside an edit form), and focus belongs to the one that just
+		// opened. querySelector returns the oldest, which is the panel the user is
+		// no longer looking at.
 		focusables := func() []js.Value {
-			wrap := doc.Call("querySelector", ".flip-wrap")
+			wraps := doc.Call("querySelectorAll", ".flip-wrap")
+			n := wraps.Get("length").Int()
+			if n == 0 {
+				return nil
+			}
+			wrap := wraps.Index(n - 1)
 			if wrap.IsNull() || wrap.IsUndefined() {
 				return nil
 			}
@@ -143,7 +159,36 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		// rather than behind it. C43: prefer an element explicitly marked [autofocus]
 		// (e.g. quick-add's Amount field) over the first focusable, so a form can land
 		// the cursor on the field the user actually fills first; fall back to fs[0].
-		if fs := focusables(); len(fs) > 0 {
+		//
+		// C615: this ran once, synchronously, on the panel's own mount — before a
+		// body passed as a component prop had rendered. So it found nothing and
+		// focus stayed on BODY, which is why every `autofocus` attribute in the app
+		// appeared to do nothing: the attribute is honoured at PARSE time and these
+		// fields are inserted long after load, so the panel's focus pass is the only
+		// thing that ever reads it, and it was looking at an empty dialog.
+		//
+		// The fix is to retry across a few animation frames. Bounded, because an
+		// unbounded retry against a dialog that legitimately has no focusable
+		// content would spin for the panel's whole life; and it stops as soon as
+		// focus is inside the wrap, so it never steals focus back from a user who
+		// clicked somewhere else first.
+		focusAttempts := 0
+		var focusCB js.Func
+		var raf js.Value
+		tryFocus := func() bool {
+			fs := focusables()
+			if len(fs) == 0 {
+				return false
+			}
+			// Already inside the dialog — the user got there first (or a previous
+			// attempt landed). Do not move them.
+			if active := doc.Get("activeElement"); !active.IsNull() && !active.IsUndefined() {
+				for _, el := range fs {
+					if el.Equal(active) {
+						return true
+					}
+				}
+			}
 			target := fs[0]
 			for _, el := range fs {
 				if el.Call("hasAttribute", "autofocus").Bool() {
@@ -152,6 +197,18 @@ func flipPanel(props FlipPanelProps) uic.Node {
 				}
 			}
 			target.Call("focus")
+			return true
+		}
+		if !tryFocus() {
+			focusCB = js.FuncOf(func(js.Value, []js.Value) any {
+				focusAttempts++
+				if tryFocus() || focusAttempts >= focusRetryFrames {
+					return nil
+				}
+				raf = js.Global().Call("requestAnimationFrame", focusCB)
+				return nil
+			})
+			raf = js.Global().Call("requestAnimationFrame", focusCB)
 		}
 
 		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -232,6 +289,14 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		doc.Call("addEventListener", "click", backdropCb)
 
 		return func() {
+			// C615: a pending focus retry must not outlive the panel — it would fire
+			// against a dialog that has closed and, worse, leak the js.Func.
+			if !focusCB.IsUndefined() {
+				if !raf.IsUndefined() && !raf.IsNull() {
+					js.Global().Call("cancelAnimationFrame", raf)
+				}
+				focusCB.Release()
+			}
 			doc.Call("removeEventListener", "keydown", cb)
 			cb.Release()
 			doc.Call("removeEventListener", "click", backdropCb)
