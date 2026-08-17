@@ -1,3 +1,39 @@
+## 2026-08-16 — an action is not a decision (E5)
+
+E5 is the foundation the rest of the E-series emits through, so the schema is the deliverable and
+getting the distinctions right matters more than the line count.
+
+The one everything turns on: an ACTION is one obvious follow-up — "add a to-do" — and `Insight.Action`
+already expressed it. A DECISION is two or three options with their consequences attached: "you are
+$180 over on Dining — move $180 from Entertainment, raise the limit to $520, or absorb it." Those are
+different objects and conflating them produces the two failure modes the E-series exists to avoid.
+Render a decision as one button and you have hidden the alternatives. Render it as prose and you have
+handed the arithmetic back to the reader, which was the work being compressed away.
+
+So `Prepared` is a separate type with its own bounds, and `Validate` enforces them:
+
+**Two is the floor, three the ceiling.** One option is an action; use the existing field. Four is a
+menu, which is the thing being compressed. Both are errors, not warnings.
+
+**A choice must be priced, and zero must be DECLARED.** `HasImpact` exists because a zero that means
+"free" and a zero that means "nobody worked this out" render identically, and the second reads as the
+first. That is the most misleading thing a prepared decision can do.
+
+**Evidence is an ID and a kind, never a rendered sentence.** The point of evidence is that the reader
+can go there. "Based on 14 transactions" without the ability to show them is asking for trust, which
+is precisely what evidence exists to replace.
+
+**Evidence is demanded only of uncertain findings that propose actions.** A restatement of recorded
+data does not need to justify itself — it IS the data. But an inference that could be wrong, offering
+buttons that change things, has to be checkable. And `ValidatePrepared` validates against the RESOLVED
+confidence rather than the raw field, because an insight that stated none inherits its feature's
+default; validating the zero value would treat every silent detector as certain, which is exactly the
+case where a missing evidence trail matters most.
+
+Not shipped: the inline renderer and changeset backing, filed as E5b. Building a renderer before any
+engine emits through the schema is guessing at the shape it needs, and this schema exists to be built
+against by E1–E4 first.
+
 ## 2026-08-16 — the hard part of a benchmark is the units (C380)
 
 "Import a benchmark CSV and overlay it" sounds like a parsing ticket. Parsing took twenty minutes.

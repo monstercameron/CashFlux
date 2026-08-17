@@ -260,6 +260,11 @@ type Insight struct {
 	// value here means "the detector didn't say", not "certain".
 	Confidence    Confidence
 	confidenceSet bool
+	// Prepared is the E5 payload: evidence, assumptions, a headline impact, and
+	// two or three quantified choices. Optional — a finding that is genuinely
+	// informational carries none, and one with a single obvious follow-up uses
+	// Action. See prepared.go for why the two are distinct.
+	Prepared Prepared
 }
 
 // WithTitle sets the insight's headline from a catalog key and the English

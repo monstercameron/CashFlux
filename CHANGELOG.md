@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The prepared-decision schema every intelligence engine will emit through (E5).** A finding can now
+  carry the things that make it checkable and actionable where it appears: the evidence it rests on as
+  entity references rather than a rendered sentence, the assumptions it takes as given, its dollar
+  impact, and two or three quantified options each with its own consequence and action.
+
+  The distinction it turns on is between an action and a decision. An action is one obvious follow-up
+  and already existed. A decision is "you are $180 over on Dining: move $180 from Entertainment, raise
+  the limit, or absorb it" — and presenting that as a single button hides the alternatives, while
+  presenting it as prose hands the arithmetic back to the reader, which is the work the engine was
+  supposed to do. Validation enforces the contract in tests rather than by convention, and is
+  deliberately strict about the failures that look fine on screen: an unpriced option reads as a free
+  one, two recommended options read as none, and an uncertain finding that proposes actions without
+  evidence asks for trust exactly where it has not been earned.
 - **Compare your portfolio against a benchmark you bring yourself (C380).** CashFlux has no
   market-data feed and is not getting one, which is the local-first position rather than a gap — but
   "is my portfolio doing well" cannot be answered in isolation, and every index provider hands out a

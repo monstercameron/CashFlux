@@ -629,6 +629,11 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   a budget overage, an account balance move) into ranked contributors with evidence txn/account IDs.
   One engine behind: dashboard change explainer, budget overage drivers, account balance-change
   explanation, report period-diff. *(Dashboard vertical slice started 2026-07-19 as the UX experiment.)*
+- [ ] **E5b Prepared-action rendering + changeset backing.** E5 shipped the schema and its contract.
+  Two clauses of its ticket remain: rendering a `Prepared` inline (evidence list, assumptions, and the
+  2–3 choices as buttons) and applying a chosen option through the changeset layer so it is undoable.
+  Deliberately deferred until an engine emits through the schema — a renderer built before that is a
+  guess at the shape it needs.
 - [ ] **E2 Unified case queue.** Merge related signals (missed-bill + unlinked txn + task + notification)
   into ONE case with root cause, actionability rank, prepared actions; dedupe across all surfaces; a case
   whose trigger clears closes itself (extends `taskresolve`). Subsumes: notification root-cause grouping,
@@ -640,9 +645,29 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
 - [ ] **E4 Batch resolution.** Compress repeated work into one reviewed changeset: "186 review items
   resolve under 6 proposed rules — 172 high-confidence, 14 need you. Preview." Subsumes confidence-tiered
   inbox, bulk transfer/payment matching, rule impact preview, import reconciliation. Target: inbox −70–90%.
-- [ ] **E5 Insight schema + prepared-action primitive.** Evidence links, confidence, $ impact,
+- [x] **E5 Insight schema + prepared-action primitive.** Evidence links, confidence, $ impact,
   assumptions, and 2–3 quantified action choices on `smart.Insight`; rendered inline; changeset-backed.
-  Every engine above emits through this.
+  Every engine above emits through this. — SCHEMA DONE (2026-08-16), `internal/smart/prepared.go`.
+
+  The distinction the whole primitive turns on: an ACTION is one obvious follow-up ("add a to-do"),
+  which `Insight.Action` already covers; a DECISION is two or three options each with its consequence
+  attached. Presenting a decision as a single button hides the alternatives; presenting it as prose
+  hands the arithmetic back to the reader, which is the work the engine existed to do. So `Prepared`
+  carries Evidence (an ID + kind, never a rendered sentence — the point is the reader can GO there),
+  Assumptions, a headline impact, and Choices.
+
+  `Validate` enforces the contract in a test rather than a habit, and is strict about the failures
+  that LOOK fine on screen: one choice is an action not a decision; four is a menu, which is the thing
+  being compressed away; two recommended options is no recommendation; a choice with no quantified
+  impact reads as a FREE option, so a zero must be declared rather than left as the zero value; and an
+  uncertain finding that proposes choices must carry evidence, because a claim that could be wrong has
+  to be checkable — while a restatement of recorded data need not justify itself, since it IS the data.
+  `ValidatePrepared` deliberately validates against the RESOLVED confidence, so a detector that stated
+  none is judged by its feature's default rather than treated as certain.
+
+  STILL OPEN as E5b: the rendering ("rendered inline") and the changeset backing. Those are surface
+  and apply-layer work that the engines (E1–E4) will drive; shipping a renderer before any engine
+  emits through the schema would be guessing at the shape it needs.
 
 Per-page surfaces (thin wiring over E1–E5; each also lands in the SMART catalog where opt-in applies):
 - [~] **E-DB Dashboard** — top-3 consequential changes (E1+E2) + persisted "since your last visit"
