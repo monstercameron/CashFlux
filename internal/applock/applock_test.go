@@ -447,6 +447,38 @@ func TestMalformedArgon2idHashErrors(t *testing.T) {
 	}
 }
 
+// A parameter too large for the type argon2 takes it in must be REJECTED, not
+// wrapped. Parsing these as ints and converting meant "p=256" silently became 0
+// threads and "t=4294967297" became a single pass, so a hash that should have
+// failed as malformed was verified against parameters nobody chose.
+func TestOutOfRangeArgon2idParametersAreRejected(t *testing.T) {
+	for _, bad := range []string{
+		"argon2id$4294967296$19456$1$deadbeef", // time overflows uint32
+		"argon2id$2$4294967296$1$deadbeef",     // memory overflows uint32
+		"argon2id$2$19456$256$deadbeef",        // threads overflows uint8 (wrapped to 0)
+		"argon2id$-1$19456$1$deadbeef",         // negative time
+		"argon2id$2$19456$1$",                  // no derived key at all
+	} {
+		if _, _, err := VerifyPasscode("pw", "s", bad); err == nil {
+			t.Errorf("%q verified without an error", bad)
+		}
+	}
+}
+
+// The range checks must not cost a real hash its verification — the parameters
+// are read from the hash precisely so an existing one keeps working.
+func TestInRangeArgon2idParametersStillVerify(t *testing.T) {
+	salt := "range-salt"
+	hash := HashPasscodeArgon2id("pw", salt)
+	ok, _, err := VerifyPasscode("pw", salt, hash)
+	if err != nil || !ok {
+		t.Fatalf("a freshly made hash failed to verify: ok=%v err=%v", ok, err)
+	}
+	if bad, _, _ := VerifyPasscode("wrong", salt, hash); bad {
+		t.Error("the wrong passcode verified")
+	}
+}
+
 // The lazy migration only works if something drives it. Verify discards the
 // flag, so an unlock through it leaves the old hash forever.
 func TestVerifyAndUpgradeMovesALegacyHashForward(t *testing.T) {

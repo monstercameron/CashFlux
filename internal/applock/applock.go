@@ -131,6 +131,10 @@ const (
 	// Argon2Threads is the parallelism. One, because wasm is single-threaded
 	// here: asking for more would cost memory and buy nothing.
 	Argon2Threads = 1
+	// maxArgon2KeyLen bounds the derived key read back out of a stored hash. The
+	// bound is generous next to Argon2KeyLen (32) because its job is to reject a
+	// malformed hash, not to pin the length a future cost bump might choose.
+	maxArgon2KeyLen = 1024
 	// Argon2KeyLen is the derived-key length in bytes.
 	Argon2KeyLen = 32
 )
@@ -161,17 +165,39 @@ func verifyArgon2id(passcode, salt, storedHash string) (bool, error) {
 	if len(parts) != 5 {
 		return false, errors.New("applock: malformed argon2id hash: expected 5 '$'-separated parts")
 	}
-	t, errT := strconv.Atoi(parts[1])
-	m, errM := strconv.Atoi(parts[2])
-	p, errP := strconv.Atoi(parts[3])
-	if errT != nil || errM != nil || errP != nil || t <= 0 || m <= 0 || p <= 0 {
+	// Parsed at the WIDTH argon2 will use them at, not as ints that are narrowed
+	// afterwards. These three come from the stored string, and argon2.IDKey takes
+	// uint32/uint32/uint8 — so parsing into int and converting let a parameter
+	// larger than its destination type wrap on the way in rather than be rejected:
+	// "p=256" became 0 threads and "t=4294967297" became a single pass, so a hash
+	// that should have failed as malformed was instead verified against parameters
+	// nobody chose (gosec G115). ParseUint with an explicit bit size rejects those
+	// at the point of reading, which is also where the error message belongs.
+	//
+	// Reading the parameters out of the hash at all is deliberate — it is what lets
+	// an existing hash keep verifying after the cost constants are raised — and that
+	// is exactly why they have to be range-checked rather than trusted.
+	t, errT := strconv.ParseUint(parts[1], 10, 32)
+	m, errM := strconv.ParseUint(parts[2], 10, 32)
+	p, errP := strconv.ParseUint(parts[3], 10, 8)
+	if errT != nil || errM != nil || errP != nil || t == 0 || m == 0 || p == 0 {
 		return false, fmt.Errorf("applock: invalid argon2id parameters %q/%q/%q", parts[1], parts[2], parts[3])
 	}
 	storedBytes, decErr := hex.DecodeString(parts[4])
 	if decErr != nil {
 		return false, fmt.Errorf("applock: malformed argon2id hash hex: %w", decErr)
 	}
-	dk := argon2.IDKey([]byte(passcode), []byte(salt), uint32(t), uint32(m), uint8(p), uint32(len(storedBytes)))
+	// A derived key longer than this is not a key, it is a malformed hash — and the
+	// bound is what makes the length's narrowing to uint32 safe.
+	if len(storedBytes) == 0 || len(storedBytes) > maxArgon2KeyLen {
+		return false, errors.New("applock: argon2id hash has no usable derived key")
+	}
+	// #nosec G115 -- len(storedBytes) is bounded to [1, maxArgon2KeyLen] by the check
+	// immediately above, so this cannot overflow uint32. The narrowings that COULD
+	// overflow were the parameters read out of the hash, and those are now parsed at
+	// their target width by ParseUint rather than range-checked after the fact.
+	keyLen := uint32(len(storedBytes))
+	dk := argon2.IDKey([]byte(passcode), []byte(salt), uint32(t), uint32(m), uint8(p), keyLen)
 	return subtle.ConstantTimeCompare(dk, storedBytes) == 1, nil
 }
 

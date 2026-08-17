@@ -108,6 +108,11 @@ func exprString(fset *token.FileSet, e ast.Expr) string {
 }
 
 func convert(path string, keys map[string]string) (int, error) {
+	// #nosec G703 -- path is os.Args[1:], i.e. the file list a developer typed when
+	// running this tool by hand on a checkout ("copyconv internal/screens/foo.go").
+	// There is no request, no upload and no untrusted caller to traverse anywhere
+	// from: the operator already has the shell that invoked it. Sanitizing their own
+	// argument would only stop the tool doing the job it was asked to do.
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
@@ -246,6 +251,9 @@ func convert(path string, keys map[string]string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("reformat: %w", err)
 	}
+	// #nosec G703 -- same path, same operator: this writes the reformatted source
+	// back over the file they named on the command line, which is the whole point
+	// of the tool.
 	return count, os.WriteFile(path, formatted, 0o644)
 }
 
