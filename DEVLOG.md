@@ -1,3 +1,37 @@
+## 2026-08-16 — the hard part of a benchmark is the units (C380)
+
+"Import a benchmark CSV and overlay it" sounds like a parsing ticket. Parsing took twenty minutes.
+The real problem is that the two series are not in the same units and never will be: your portfolio
+is in dollars, an index is in points, a peer fund is in its own NAV. Plot them on one axis and the
+$40,000 line and the 4,700 line share a scale, so one of them is a flat smear at the bottom and the
+chart is worse than no chart.
+
+So both get indexed to 100 at their common start. That makes the visible quantity relative growth
+over the same window, which is the only comparison that is actually meaningful between a portfolio
+and an index — and it is the comparison people mean when they ask the question.
+
+"Common start" is doing real work there. A benchmark you download today may only go back two years
+while your history goes back five. Indexing the portfolio from its own start and the benchmark from
+its own start compares different windows and produces a confident, wrong lead. So the comparison is
+the OVERLAP, indexed from the first date both cover, and the panel says how many points it dropped —
+a short overlay is honest only if it admits it is short.
+
+Two smaller decisions that are each a test:
+
+**`ValueAt` carries forward, never backward.** A weekly series has to answer for a Wednesday, so the
+last close carries forward. Carrying the FIRST value backward, though, would claim the index was flat
+before it existed — a fabrication that looks like data.
+
+**A two-digit year is rejected outright.** "03/04/05" has three readings and no way to choose. Getting
+it wrong misdates a whole series and every conclusion drawn from it, silently.
+
+The copy states the constraint plainly — no market feed, you bring the numbers, they stay on this
+device — because the alternative is people waiting for a price feed that is not coming.
+
+Scoped out as C380b: importing an account's historical BALANCES. That writes dated balances into
+account history, which is dataset data with reconciliation semantics (what happens when an imported
+balance disagrees with the transactions already on file?), not a reference series kept beside a chart.
+
 ## 2026-08-16 — a position is not an event (C376)
 
 The ticket says to reuse the transaction CSV mapping-wizard machinery, and the shape does transfer:

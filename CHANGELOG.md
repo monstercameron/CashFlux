@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Compare your portfolio against a benchmark you bring yourself (C380).** CashFlux has no
+  market-data feed and is not getting one, which is the local-first position rather than a gap — but
+  "is my portfolio doing well" cannot be answered in isolation, and every index provider hands out a
+  date,value CSV. Paste one and the growth panel says how you did against it, in words: "you are 4.2%
+  ahead of S&P 500 over this window", with both totals and the number of points compared.
+
+  The work is in the units. A portfolio is dollars, an index is points, a peer fund is its own NAV —
+  overlaying them raw draws one line as a flat smear along the bottom. Both are indexed to 100 at
+  their common start, so the chart shows relative growth over the same window, which is the only
+  honest comparison available. A benchmark that starts after your history does not get stretched
+  backwards to cover months it knows nothing about; the panel compares the overlap and says how many
+  points it left out. The series lives in preserved settings, because it is reference data you went
+  and fetched by hand and the app has no way to fetch it again.
 - **Paste a brokerage export instead of typing every position (C376).** Setting up an investment
   account meant entering each holding by hand, while every brokerage exports exactly that table. The
   investments screen now takes a CSV or a straight spreadsheet paste, reads the column mapping from

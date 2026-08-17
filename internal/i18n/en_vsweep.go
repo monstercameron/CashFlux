@@ -426,6 +426,27 @@ var vSweepKeys = Catalog{
 	"holdingImport.fSector":      "sector",
 	"holdingImport.fRegion":      "region",
 
+	// C380 — a user-imported comparison series. No market feed; the user brings
+	// the numbers, so the copy says so rather than implying one is coming.
+	"bench.add":             "Compare against a benchmark",
+	"bench.replace":         "Replace %s",
+	"bench.remove":          "Remove the comparison",
+	"bench.nameLabel":       "What is this series",
+	"bench.namePlaceholder": "S&P 500, my old 401k, …",
+	"bench.pasteLabel":      "Paste the series",
+	"bench.placeholder":     "Two columns: a date and a value. Paste a CSV, or copy the rows out of a spreadsheet.",
+	"bench.import":          "Use this series",
+	"bench.localOnly":       "CashFlux has no market-data feed and never fetches prices. Export a series from wherever you already get it and paste it here — it stays on this device.",
+	"bench.imported":        "Comparing against %s — %d points, %s to %s.",
+	"bench.removed":         "Comparison removed.",
+	"bench.errName":         "Give the series a name, so the comparison says what it is comparing against.",
+	"bench.errParse":        "That does not read as a dated series. Two columns: a date and a value.",
+	"bench.ahead":           "You are %s ahead of %s over this window.",
+	"bench.behind":          "You are %s behind %s over this window.",
+	"bench.detail":          "Your portfolio %s, %s %s, over %d points.",
+	"bench.skipped":         "%d points of this window fall outside the series you imported, so they are not compared.",
+	"bench.noOverlap":       "%s does not cover this window, so there is nothing to compare yet.",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

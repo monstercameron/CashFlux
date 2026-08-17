@@ -261,11 +261,27 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	})
 	_ = valueLabels
 
+	// C380: the growth line has no reference on its own. A user-imported
+	// comparison series — the app has no market feed and is not getting one —
+	// turns it into a comparison, stated in words rather than left as a gap the
+	// reader has to eyeball between two lines.
+	benchDates := make([]time.Time, 0, len(cutoffs))
+	benchVals := make([]float64, 0, len(series))
+	for i := range series {
+		if i < len(cutoffs) {
+			benchDates = append(benchDates, cutoffs[i])
+			benchVals = append(benchVals, currency.MajorFromMinor(series[i].Amount, base))
+		}
+	}
+
 	body := investSection("sec-growth", uistate.T("investments.growthTitle"), Fragment(),
 		Div(css.Class("inv-growth"), head,
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-growth-caption"),
 				Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.growthCaption")),
-			chart))
+			chart,
+			ui.CreateElement(investBenchmarkPanel, benchmarkPanelProps{
+				Dates: benchDates, Values: benchVals,
+			})))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-growth", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,

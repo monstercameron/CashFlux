@@ -581,4 +581,50 @@ func registerVSweep() {
 		marginTop("0.4rem"),
 	)
 
+	// ─── C380: the imported benchmark comparison ─────────────────────────────
+	rule(".invest-bench",
+		marginTop("0.6rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px dashed var(--border)"),
+		display("flex"),
+		flexDirection("column"),
+		gap("0.4rem"),
+	)
+	// The verdict is the point of the panel, so it is the only line with weight.
+	rule(".invest-bench-read",
+		margin("0"),
+		fontSize("0.95rem"),
+	)
+	rule(".invest-bench-ahead",
+		color("var(--accent)"),
+	)
+	rule(".invest-bench-behind",
+		color("var(--text-dim)"),
+	)
+	rule(".invest-bench-actions",
+		display("flex"),
+		flexWrap("wrap"),
+		gap("0.4rem"),
+	)
+	rule(".invest-bench-form",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.45rem"),
+		padding("0.7rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid var(--border)"),
+		background("var(--surface)"),
+	)
+	rule(".invest-bench-ctrl",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+		maxWidth("18rem"),
+	)
+	rule(".invest-bench-text",
+		width("100%"),
+		fontFamily("var(--font-mono, ui-monospace, monospace)"),
+		fontSize("0.78rem"),
+	)
+
 }

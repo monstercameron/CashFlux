@@ -5623,9 +5623,38 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   the case where drift matters most, and the one a targets-only loop would silently drop. The bar's
   length is the current weight with a tick at the target, so "on target" reads as a full bar rather
   than as nothing at all.
-- [ ] **C380 [MINOR][INVEST] User-imported benchmark + balance-history series.** CSV import of a
+- [x] **C380 [MINOR][INVEST] User-imported benchmark + balance-history series.** CSV import of a
   benchmark series and of investment-account balance history; growth chart gains a comparison
-  overlay. Keeps the no-live-market-data constraint.
+  overlay. Keeps the no-live-market-data constraint. — DONE (2026-08-16). New pure
+  `internal/benchseries`. The hard part is not parsing, it is UNITS: a portfolio is dollars, an index
+  is points, a peer fund is its own NAV, and overlaying them raw draws one line as a flat smear. Both
+  are indexed to 100 at their COMMON start, which makes relative growth over the same window — the
+  only honest comparison — the one shown.
+
+  Load-bearing rules, each a test: the comparison window is the OVERLAP, because a benchmark starting
+  later cannot speak for earlier months and stretching it there invents performance (and the panel
+  says how many points it dropped); indexing refuses a zero base, since growth from zero is not a
+  number and dividing by it renders as a blank chart nobody can explain; `ValueAt` carries the last
+  close FORWARD but never backward, since a weekly series must have a Wednesday value while claiming
+  the index was flat before it existed would be a fabrication; a two-digit year is rejected outright
+  because "03/04/05" has three readings; and a paste with no usable rows is an error rather than an
+  empty series that presents as success and then shows nothing.
+
+  The reading is stated in words — "you are 4.2% ahead of S&P 500 over this window" — rather than
+  left as a gap between two lines the reader has to eyeball. The copy states the local-first
+  constraint outright so nobody waits for a price feed that is not coming. Series lives in the
+  PRESERVED settings KV: it is reference data the user fetched by hand and the app has no feed to
+  re-fetch it from.
+
+  NOT DONE: importing investment-account BALANCE history (the ticket's second clause). That would
+  write dated balances into account history, which is dataset data with its own reconciliation
+  semantics, not a reference series — filed as C380b.
+
+- [ ] **C380b [MINOR][INVEST] Import investment-account balance history.** C380 shipped the
+  comparison series. Importing an account's historical BALANCES is a different thing: it writes dated
+  balances into account history, which is dataset data with reconciliation semantics (what happens
+  when an imported balance disagrees with the transactions already on file?), not a reference series
+  kept beside the chart.
 - [x] **C381 [MINOR][ACCT] Projected account cash flow on account detail.** From local recurring
   data (`internal/forecast` exists): next-90-day inflow/outflow projection line under the balance
   chart, per account. — DONE (2026-08-16). Note for future tickets: `internal/acctproject` ALREADY
