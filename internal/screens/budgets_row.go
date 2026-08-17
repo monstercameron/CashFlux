@@ -580,6 +580,20 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					// taken the width it needs, and drops out entirely on narrow panes.
 					Span(css.Class("budget-crow-notes-text"), noteText))),
 				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
+				// WF17: a paused target has to show HERE too. The card's target line
+				// lives behind the details disclosure, which compact mode omits — so
+				// pausing from the ⋯ menu produced no visible change at all, and the
+				// action looked like it had failed. That is precisely the report C545
+				// fixed for notes, arriving again through a different door, so it gets
+				// the same answer: the smallest honest marker, carrying the resume date
+				// as its label.
+				If(s.Budget.TargetSnoozed(time.Now()),
+					Span(css.Class("pill budget-crow-chip", tw.TextDim),
+						Attr("data-testid", "budget-snoozed-chip-"+s.Budget.ID),
+						Attr("title", uistate.T("budgets.targetSnoozed",
+							fmtMoney(s.Budget.TargetAmount),
+							uistate.LoadPrefs().FormatDate(s.Budget.TargetSnoozedUntil))),
+						uistate.T("budgets.targetPausedChip"))),
 			),
 			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
 				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),

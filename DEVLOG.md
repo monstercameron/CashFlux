@@ -1,3 +1,32 @@
+## 2026-08-17 - when a probe cannot see it, neither can a user (WF17, continued)
+
+I marked WF17 in-progress because the browser check could not open the budget row's details disclosure,
+and I would not write "verified in a browser" for something I could not open. Then I went back to find
+out why, because two tickets in a row hitting the same wall stopped looking like coincidence.
+
+It was not a probe problem. `/budgets` renders its rows in COMPACT mode, which omits the details
+disclosure entirely - so the target line, and with it the paused state, was invisible on the page people
+actually use. Pausing a target from the kebab menu produced no visible change at all. The action would
+have looked like it had failed.
+
+The codebase had already learned this exact lesson. A comment three lines from where I was working
+records C545: showing no trace of a saved note in the default density "meant saving a note produced no
+visible change at all - the write looked like it had failed, which is exactly how it was reported". Same
+failure, different door, and the same answer: a small marker in the name cell carrying the detail as its
+label.
+
+The generalisable bit, and the reason I am writing it down rather than just fixing it: when an
+automated check cannot see a state change, the first hypothesis should be that a user cannot see it
+either. I spent two tickets treating that as a tooling limitation and working around it. The second
+time it was a real defect hiding behind the workaround.
+
+Now genuinely verified, 8/8: pause from the menu, the row reads "target paused" with "Target of $40.00
+paused until Sep 17, 2026" as its label, the action flips to "Resume this target now", and resuming
+clears it. Promoted from [~] to done.
+
+I still owe WF8 the same treatment - its saved-view rows may well have the same shape of problem, and I
+should assume they do until I have looked.
+
 ## 2026-08-17 - deleting to silence something is how settings get lost (WF17)
 
 Most of WF17 exists: weekly through quarterly periods, three target kinds with target dates, rollover

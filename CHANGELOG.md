@@ -12,6 +12,8 @@ and every commit updates this file under `Unreleased`.
   A paused target still shows what it is paused at and when it resumes — it comes back on its own.
 
 ### Fixed
+- **A paused target is visible on the budget row itself.** The target line lives behind a disclosure the
+  default density does not show, so pausing produced no visible change and looked like it had failed.
 - **The sample data now demonstrates funding targets.** No sample budget had one, so the feature read as
   unbuilt on a first run.
 

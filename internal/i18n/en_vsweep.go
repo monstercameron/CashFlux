@@ -738,6 +738,7 @@ var vSweepKeys = Catalog{
 
 	// WF17 — pausing a funding target without losing it.
 	"budgets.targetSnoozed":   "Target of %s paused until %s",
+	"budgets.targetPausedChip": "target paused",
 	"budgets.snoozeTarget":    "Pause this target for a month",
 	"budgets.resumeTarget":    "Resume this target now",
 	"budgets.snoozedNotice":   "Paused %s's target until %s. It comes back on its own — nothing to remember.",

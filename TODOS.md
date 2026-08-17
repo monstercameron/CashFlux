@@ -187,7 +187,7 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   per-member/household dashboard emphasis.
 
 **Budgets & goals connective tissue**
-- [~] **WF17 — Flexible budget targets.** Weekly/biweekly/semimonthly/monthly/custom periods; "set
+- [x] **WF17 — Flexible budget targets.** Weekly/biweekly/semimonthly/monthly/custom periods; "set
   aside another" vs "refill up to"; target dates & funding deadlines; per-category rollover (±);
   starting balances; last-month / 3-mo-avg presets; fixed/flexible/non-monthly types; **snooze a
   target** without deleting; priority-+due-date auto-assign; clear available-cash vs planned-income
@@ -217,10 +217,20 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   categories (FP-T3b). Two sample budgets now carry targets, one of each kind, with a store test
   asserting it stays that way.
 
-  CAVEAT, and why this is `[~]`: the engine changes have unit tests (snooze, resume, expiry, unset) and
-  the sample data has one, but I could NOT drive the surface in a browser — the target line lives behind
-  each row's details disclosure (C595) and the toggle would not open under automation. Not claiming
-  coverage I do not have.
+  THE AUTOMATION BLOCK TURNED OUT TO BE A REAL BUG, not a probe problem. Chasing why the details
+  disclosure would not open found that `/budgets` renders rows in COMPACT mode, which omits the
+  disclosure entirely — so the target line, and therefore the paused state, was invisible on the page
+  people actually use. Pausing from the ⋯ menu produced NO visible change at all, and the action would
+  have looked like it had failed.
+
+  That is precisely the report C545 fixed for per-period notes, arriving again through a different door,
+  so it gets the same answer: a small marker in the compact row's name cell, carrying the level and the
+  resume date as its label. The general lesson is worth keeping — when a probe cannot see a state change,
+  the first hypothesis should be that a user cannot either.
+
+  VERIFIED IN A BROWSER: 8/8 — pause from the menu, the row shows "target paused" with "Target of $40.00
+  paused until Sep 17, 2026" as its label, the action flips to "Resume this target now", and resuming
+  clears the marker.
 
   STILL OPEN in this bundle: starting balances, last-month / 3-month-average presets, priority-plus-due-
   date auto-assign, and the available-cash vs planned-income split.
