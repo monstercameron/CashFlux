@@ -314,6 +314,16 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			Div(ClassStr("tc-write p-"+string(priority.Get())),
 				Input(append([]any{css.Class("tc-title"), Attr("id", "task-add"), Attr("autofocus", ""), Type("text"), Attr("aria-required", "true"), Attr("aria-label", uistate.T("todo.titleLabel")), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
 				errText("todo-err", errMsg.Get()),
+				// SM-14: read the date (and any repeat) out of what was typed and offer
+				// it, rather than rewriting a field somebody is still typing in.
+				ui.CreateElement(taskParseHint, taskParseHintProps{
+					Raw: title.Get(),
+					OnApply: applyTaskParse(
+						func(v string) { title.Set(v) },
+						func(v string) { dueStr.Set(v) },
+						func(v string) { addRecur.Set(v) },
+					),
+				}),
 				Textarea(css.Class("tc-notes"), Attr("aria-label", uistate.T("todo.notesEdit")), Placeholder(uistate.T("todo.notesCompose")), OnInput(onNotes), notes.Get()),
 			),
 			// RIGHT — the details rail (an inspector, not a labelled-field stack).

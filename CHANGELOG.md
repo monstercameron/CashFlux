@@ -69,6 +69,14 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **Type "pay rent friday" and the to-do dates itself (SM-14).** As soon as the title line contains
+  something datable, a hint underneath offers the parse — cleaned title, due date, and any repeat —
+  and one click fills all three fields. It offers rather than applies: silently rewriting a field
+  somebody is still typing in is the most annoying thing a form can do, and a wrong silent parse is
+  worse than none, because you have to notice a date you never typed before you can fix it. It works
+  with no API key; Smart+ is offered only for the lines the local parser could not read. A repeat the
+  form's own select cannot display (daily, fortnightly) keeps its date and drops the repeat rather
+  than setting a value the control would show as blank.
 - **A goal's trajectory can tell you the number that would fix it (SM-13).** The pace rail already
   projects where a goal lands; with Smart+ on, one line under it says what monthly amount would land
   it on the date you actually wanted. The model is handed the finished projection — saved, planned

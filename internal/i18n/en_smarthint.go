@@ -91,6 +91,17 @@ var smartHintKeys = Catalog{
 	"sm13.action":  "Ask Smart+",
 	"sm13.pending": "Thinking…",
 
+	// SM-14 — reading a date out of a typed to-do.
+	// %s = the date, %s = the repeat label.
+	"sm14.dueSuffix":    " · due %s",
+	"sm14.repeatSuffix": " · repeats %s",
+	// %s = the words the parser consumed ("on friday").
+	"sm14.readFrom":   "Read from “%s”.",
+	"sm14.action":     "Use this",
+	"sm14.aiAction":   "Read it with Smart+",
+	"sm14.aiPending":  "Thinking…",
+	"sm14.aiNoAnswer": "Smart+ couldn't find a date in that.",
+
 	// SM-16 — a fee draining an otherwise-idle account.
 	// %s = the yearly cost of the fee.
 	"sm16.hint":   "This account is idle but still charging fees — about %s a year.",
