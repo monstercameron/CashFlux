@@ -634,10 +634,29 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   2–3 choices as buttons) and applying a chosen option through the changeset layer so it is undoable.
   Deliberately deferred until an engine emits through the schema — a renderer built before that is a
   guess at the shape it needs.
-- [ ] **E2 Unified case queue.** Merge related signals (missed-bill + unlinked txn + task + notification)
+- [x] **E2 Unified case queue.** Merge related signals (missed-bill + unlinked txn + task + notification)
   into ONE case with root cause, actionability rank, prepared actions; dedupe across all surfaces; a case
   whose trigger clears closes itself (extends `taskresolve`). Subsumes: notification root-cause grouping,
-  actionability score, next-actions ranking, self-resolving task closure.
+  actionability score, next-actions ranking, self-resolving task closure. — ENGINE DONE (2026-08-16),
+  `internal/casequeue`.
+
+  Grouping is by SUBJECT, not by kind: two signals about a-checking's overdraft are one case; two
+  notifications about different accounts are two. An unattributed signal gets its own case rather than
+  being lumped with other unattributed ones — an absent subject is not evidence two signals share one.
+
+  Three decisions worth keeping. **Actionability outranks severity**, which is what makes it a queue
+  rather than a sorted list: a critical situation with nothing to do about it belongs BELOW a warning
+  the reader can clear in one click, because an unactionable item at the top is a wall. **The amount is
+  the LARGEST, never the sum** — the same overdraft reported by three surfaces is one amount, and
+  summing would triple it, which is precisely the app-disagrees-with-itself failure the E-series exists
+  to remove. **A case closes only when EVERY signal has cleared**; closing on the first would hide the
+  parts that had not. `Summarize` reports the gap between signal count and case count, which is the
+  number that justifies one row standing for four.
+
+  NOT DONE: the per-surface WIRING (mapping notifications / tasks / insights / review items into
+  Signals, and dismissing a case's ids on each surface) and prepared actions on a case, which should
+  ride E5's `Prepared`. Filed as E2b — the engine is the contract; the adapters are per-surface work
+  each of which needs that surface's dismissal semantics.
 - [x] **E3 Contradiction detector.** Cross-page invariant checks, always-on (NOT an opt-in toggle):
   bill unpaid despite a matching payment; securities ≠ investment balance; report total ≠ dashboard
   total; spending with no budget category; task open after its linked action occurred; one-sided
@@ -662,6 +681,11 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   NOT DONE: "bill unpaid despite a matching payment" and "report total ≠ dashboard total". The first
   needs the bill-payment matching heuristic (which payment settles which occurrence) and the second
   needs both totals computed the same way to compare at all — each is its own ticket, filed as E3b.
+- [ ] **E2b Case-queue surface adapters + prepared actions.** E2 shipped the engine. What remains is
+  per-surface: adapters that map notifications, tasks, insights, review items and E3 contradictions
+  into `casequeue.Signal`; dismissing a resolved case's ids on each surface it came from (each has its
+  own dismissal semantics, which is why this is not one change); and attaching E5 `Prepared` choices to
+  a case so it can be resolved from wherever it appears.
 - [ ] **E3b Two more invariants: bill-vs-payment and report-vs-dashboard.** E3 shipped the engine and
   six checks. Two from its list did not: "bill unpaid despite a matching payment" needs the
   bill-payment matching heuristic (which payment settles which occurrence, given amount and date

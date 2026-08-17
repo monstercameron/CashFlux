@@ -1,3 +1,38 @@
+## 2026-08-16 — one problem, four inboxes (E2)
+
+An unpaid bill currently generates a notification, a review-queue entry when the payment finally
+arrives unmatched, a to-do somebody or some workflow created, and a dashboard insight. Four surfaces
+each holding a fragment of one situation, and the reader doing the join in their head — then
+dismissing it four times, in four places, four different ways.
+
+The engine's job is that join, and the decision that makes it work is grouping by SUBJECT rather than
+by kind. Two signals about a-checking's overdraft are one case even though one is a notification and
+one is an insight; two notifications about different accounts are two cases even though they are the
+same kind. Kind is where a signal came from; subject is what it is about, and "what it is about" is
+what makes two reports the same report.
+
+Three choices I want to be able to point at later:
+
+**Actionability outranks severity.** This is what makes it a queue and not a sorted list. A critical
+situation with nothing to do about it at the top of the list is a wall — the reader opens the queue,
+reads something alarming they cannot act on, and closes it. A clearable warning above it means the
+queue can be worked down, which is the only thing a queue is for.
+
+**The amount is the largest, never the sum.** Three surfaces reporting the same $180 overdraft would
+sum to $540. That is the exact "the app disagrees with itself" failure the E-series exists to remove,
+reintroduced by the thing meant to fix it.
+
+**A case closes only when every signal has cleared.** Closing on the first clearing feels tidier and
+is wrong: the bill notification clears when the payment posts, but the to-do about calling the biller
+does not, and a case that vanished on the first would take the second with it silently.
+
+Not shipped, and filed as E2b rather than half-done: the per-surface adapters. Mapping each surface's
+items into Signals is easy; dismissing a resolved case's ids back on each surface is not, because
+every surface has its own dismissal semantics (a notification dismisses, a task completes, a review
+item resolves to a category). That is per-surface work, and doing one of them badly to claim the
+ticket would leave a queue that half-cleans up after itself — worse than one that does not, because
+nobody would know which half.
+
 ## 2026-08-16 — the bug neither screen can see (E3)
 
 The defect class this engine exists for: one page said 47% and another said 38% about the same thing.

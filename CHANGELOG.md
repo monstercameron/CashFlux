@@ -7,6 +7,17 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The engine that merges one problem's several signals into one case (E2).** A bill that did not get
+  paid currently produces four separate things — a notification, a review-queue entry for the unmatched
+  payment, a to-do, and a dashboard insight — and the reader has to work out that they are all the same
+  situation, then dismiss it four times in four places. The new case queue groups signals by what they
+  are ABOUT rather than by which surface raised them, so one situation is one row.
+
+  It ranks by actionability before severity, because a queue is a list of work: a critical situation
+  with nothing to do about it belongs below a warning that can be cleared in one click. It takes the
+  largest amount rather than the sum, since the same overdraft reported three times is one overdraft.
+  And a case closes itself only when every one of its signals reports its situation resolved — closing
+  on the first would hide the parts that had not.
 - **The app now notices when its own numbers disagree with each other (E3).** A transfer with only one
   leg, holdings that do not add up to the account balance beside them, a to-do still open after the
   goal it was about was reached, a category budgeted twice so its spending counts against two limits.
