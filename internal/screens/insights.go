@@ -2468,17 +2468,23 @@ func AssistantBubble(p asstBubbleProps) ui.Node {
 	pinned := ui.UseState(false)
 	copied := ui.UseState(false)
 	mdID := "cf-md-" + p.ID
-	// Render the Markdown after mount and whenever the text changes (streaming-ready).
-	// The signature also folds in the local action toggles so the effect re-fills the
-	// innerHTML after a self re-render (pin/copy) that the vdom would otherwise clear.
-	sig := p.Text
-	if pinned.Get() {
-		sig += "|p"
-	}
-	if copied.Get() {
-		sig += "|c"
-	}
-	ui.UseEffect(func() func() { renderMarkdown(mdID, p.Text); return nil }, sig)
+	// Fill the answer body after EVERY render, not only when the text changes.
+	//
+	// The answer is Markdown written imperatively into a node the vdom owns, so the
+	// vdom — which believes that node has no children — strips it on any re-render of
+	// this bubble. The fill therefore has to be re-applied every time, and the old
+	// signature (text, plus the pin/copy toggles) only covered the re-renders this
+	// component causes ITSELF. Everything else left the bubble blank: a rating, a
+	// citation arriving, the session tally ticking, the spend meter writing settings —
+	// each re-rendered the bubble without changing the text, so the effect never
+	// re-fired and the answer appeared for a moment and then vanished.
+	//
+	// No deps means "run on every render" (the runtime treats an empty dep list as
+	// always-changed), and UseLayoutEffect runs synchronously after the DOM mutation
+	// and before paint, so the refill lands in the same frame that cleared it and
+	// there is no flicker. renderMarkdown skips the parse when the node already holds
+	// this text, so the common case costs one attribute read.
+	ui.UseLayoutEffect(func() func() { renderMarkdown(mdID, p.Text); return nil })
 	pin := ui.UseEvent(Prevent(func() {
 		if p.OnPin(p.Text) {
 			pinned.Set(true)
@@ -2630,6 +2636,19 @@ func renderMarkdownAttempt(elemID, mdText string, retriesLeft int) {
 		}
 		return
 	}
+	// The caller re-fills on every render, so skip the Markdown parse and the
+	// sanitize when this node already holds this exact text.
+	//
+	// Both halves of the check are load-bearing. The fingerprint alone would be
+	// wrong because a re-render strips the node's CHILDREN while leaving its
+	// attributes behind — the stamp would still claim the answer is on screen
+	// after the answer had been wiped off it. The emptiness check alone would be
+	// wrong because it would re-parse an unchanged answer on every render.
+	stamp := markdownStamp(mdText)
+	dataset := el.Get("dataset")
+	if dataset.Truthy() && dataset.Get("cfMd").String() == stamp && el.Get("innerHTML").String() != "" {
+		return
+	}
 	html := mdText
 	if m := js.Global().Get("marked"); m.Truthy() {
 		html = m.Call("parse", mdText).String()
@@ -2638,6 +2657,26 @@ func renderMarkdownAttempt(elemID, mdText string, retriesLeft int) {
 		html = dp.Call("sanitize", html).String()
 	}
 	el.Set("innerHTML", html)
+	if dataset.Truthy() {
+		dataset.Set("cfMd", stamp)
+	}
+}
+
+// markdownStamp fingerprints an answer for the re-fill guard. It is a hash rather
+// than the text itself because the stamp lives in a DOM attribute, and answers run
+// to kilobytes — storing one verbatim on every bubble would double the thread's
+// weight in the DOM to save a string compare.
+func markdownStamp(mdText string) string {
+	const (
+		offset64 = 14695981039346656037
+		prime64  = 1099511628211
+	)
+	hash := uint64(offset64)
+	for i := 0; i < len(mdText); i++ {
+		hash ^= uint64(mdText[i])
+		hash *= prime64
+	}
+	return strconv.FormatUint(hash, 16)
 }
 
 // reasoningModel reports whether a model id is an OpenAI reasoning model (o-series
@@ -3018,13 +3057,12 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(p.ID) }))
 	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 	mdID := "cf-pin-" + p.ID
-	// Render the Markdown after mount / when expanded toggles (the vdom would clear
-	// the innerHTML on a self re-render otherwise).
-	sig := mdID
-	if expanded.Get() {
-		sig += "|x"
-	}
-	ui.UseEffect(func() func() { renderMarkdown(mdID, p.Text); return nil }, sig)
+	// Re-fill on every render: the vdom strips this imperatively written innerHTML
+	// whenever it re-renders the row, and the old signature only changed when the
+	// row expanded — so a re-render from anywhere else (a pin added elsewhere in
+	// the list, the surrounding screen updating) blanked the insight permanently.
+	// See AssistantBubble for the full reasoning.
+	ui.UseLayoutEffect(func() func() { renderMarkdown(mdID, p.Text); return nil })
 
 	long := len([]rune(p.Text)) > 140 || strings.Contains(p.Text, "\n")
 	descClass := "insights-answer " + tw.Fold(tw.Text135)
@@ -3780,7 +3818,9 @@ type affordResultBubbleProps struct {
 func AffordResultBubble(p affordResultBubbleProps) ui.Node {
 	del := ui.UseEvent(Prevent(func() { p.OnDelete(p.ID) }))
 	mdID := "cf-afford-" + p.ID
-	ui.UseEffect(func() func() { renderMarkdown(mdID, p.HTML); return nil }, p.HTML)
+	// Re-filled every render for the same reason as AssistantBubble: keying on the
+	// text meant any re-render that did not change the text left the card blank.
+	ui.UseLayoutEffect(func() func() { renderMarkdown(mdID, p.HTML); return nil })
 	actBtn := tw.Fold(tw.TextFaint, tw.Opacity70, tw.HoverOpacity100, tw.InlineFlex, tw.ItemsCenter)
 	return Div(Attr("data-cf", "afford-result"), css.Class("group", tw.Flex, tw.FlexCol, tw.ItemsStart),
 		Div(css.Class(tw.MaxW85, tw.Rounded2xl, tw.Px35, tw.Py25, tw.Border, "border-sky-200 bg-sky-50"),

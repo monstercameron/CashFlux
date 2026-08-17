@@ -293,3 +293,55 @@ test.describe("assistant: the key gate answers what it costs", () => {
     await expect(app.getByTestId("assistant-edit-prompt")).toHaveCount(0);
   });
 });
+
+test.describe("assistant: the answer stays on screen", () => {
+  // The answer is Markdown written imperatively into a node the vdom owns, so the
+  // vdom strips it on any re-render of the bubble. Every assertion in this file
+  // reads the answer the moment it lands, which is precisely the window in which
+  // that bug is invisible: the text appeared and then vanished a beat later, when
+  // the session tally, the spend meter or a rating re-rendered the thread.
+  //
+  // These cases read the answer AFTER something else has re-rendered it.
+  const ANSWER = "You spent $312.40 on groceries in August, which is up on July.";
+
+  /** The rendered answer body of the most recent assistant turn. */
+  function answerBody(app) {
+    return app.locator(".chat-agent-body").last();
+  }
+
+  test("the answer survives the re-renders that follow it", async ({ app }) => {
+    await configureKey(app);
+    await mockResponses(app, [{ text: ANSWER }]);
+    await nav(app, "/assistant");
+    await ask(app, "How much did we spend on groceries and is that unusual");
+
+    const body = answerBody(app);
+    await expect(body).toContainText("$312.40");
+    // Long enough for the tally bump, the spend write and the usage note to land.
+    await app.waitForTimeout(1500);
+    await expect(body).toContainText("$312.40");
+  });
+
+  test("rating an answer does not erase it", async ({ app }) => {
+    // A rating changes the action row's classes and the turn's stored feedback,
+    // re-rendering the bubble without changing a character of the answer.
+    await configureKey(app);
+    await mockResponses(app, [{ text: ANSWER }]);
+    await nav(app, "/assistant");
+    await ask(app, "How much did we spend on groceries and is that unusual");
+
+    const body = answerBody(app);
+    await expect(body).toContainText("$312.40");
+    await app.getByTestId("assistant-rate-up").last().click();
+    await expect(app.getByTestId("assistant-rate-up").last()).toHaveAttribute("aria-pressed", "true");
+    await expect(body).toContainText("$312.40");
+  });
+
+  test("answers already in the thread render on load", async ({ app }) => {
+    // The saved conversation's answers mount together on first paint, which is the
+    // race the retry was added for — and they were arriving blank.
+    await nav(app, "/assistant");
+    const bodies = app.locator(".chat-agent-body");
+    await expect(bodies.first()).not.toBeEmpty();
+  });
+});

@@ -271,6 +271,22 @@ and every commit updates this file under `Unreleased`.
   wrong, and rewriting the same figure would log a change that did not happen.
 
 ### Fixed
+- **The assistant's answer appeared for a moment and then vanished.** Every answer is Markdown
+  written imperatively into a node the virtual DOM owns, so the virtual DOM — which believes that
+  node is empty — strips the text on any re-render of the bubble. The re-fill was gated on the
+  answer's text changing, which only covers the re-renders the bubble causes itself: a rating, a
+  citation arriving, the session tally ticking, the spend meter writing settings, all re-rendered the
+  bubble without changing a character, so the fill never re-fired and the reply was wiped off the
+  screen a beat after it landed. Answers already in a saved conversation arrived blank for the same
+  reason. The fill now runs after every render as a layout effect — synchronously after the DOM
+  mutation and before paint, so the refill lands in the frame that cleared it and nothing flickers —
+  and skips the Markdown parse when the node already holds that exact text, so re-rendering a settled
+  thread costs one attribute read per bubble. Pinned insights and the affordability card were built
+  on the same pattern and had the same defect; both are fixed with it.
+
+  It was caught by watching one answer over three seconds rather than asserting on it the instant it
+  arrived, which is exactly the window in which this bug is invisible. Three regression cases now
+  read the answer *after* something else has re-rendered it.
 - **Seven more problems a second adversarial review found**, worst first:
 
   **A what-if scenario could spend real money.** The sandbox's whole promise is that nothing escapes,

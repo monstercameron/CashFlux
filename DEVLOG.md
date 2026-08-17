@@ -1,3 +1,53 @@
+## 2026-08-16 — the answer that was there a second ago
+
+Cam reported it in one line: the agent's message shows for a second, then disappears. And the second
+half of the report was the real finding — "are you not visually inspecting it?" No. I had fifteen
+green e2e cases over this surface and every one of them asserted on the answer the instant it landed,
+which is precisely the window in which this bug does not exist. The citation panel and the action row
+are real virtual-DOM nodes and survived, so the assertions passed while the answer itself was being
+wiped off the screen a beat later. A passing suite was reporting on a broken feature.
+
+So the first thing I wrote was not a fix, it was a probe: ask one question, then sample the thread
+every 100ms for three seconds and print `innerText.length` per bubble as a timeline. It showed the
+answer body at 0 bytes — and, more usefully than the bug as reported, showed the SEEDED conversation's
+answer at 0 bytes too, before I had asked anything. That widened the fault from "the new streaming
+path" to "the markdown fill in general" and pointed straight at the mechanism.
+
+The mechanism: answers are Markdown written imperatively into `<div id="cf-md-...">` via marked +
+DOMPurify. The virtual DOM owns that node and believes it has no children, so it strips the content
+on any re-render of the bubble. The fill was a `UseEffect` keyed on the answer's text plus the
+pin/copy toggles — a signature that only changes for re-renders the bubble triggers ITSELF. Everything
+external blanked it permanently: a rating (which flips the action row's classes), a citation arriving,
+the session tally ticking, the spend meter writing settings. I added most of those re-render sources
+this week, which is how a long-standing latent fragility became a visible bug.
+
+Reading the framework's `goUseEffectImpl` settled the fix: `if len(parseDeps) == 0 || ...` — an effect
+with no deps runs after every render, the React convention, and v5 also exposes `UseLayoutEffect`,
+which runs synchronously after DOM mutation and before paint. That is the correct hook for this: the
+refill lands in the same frame that cleared it, so there is no flicker rather than a fast one.
+
+The cost objection is real — marked + DOMPurify on every bubble on every render — so the fill stamps
+an FNV hash of the source text on the node and returns early when it matches. Both halves of that
+guard are load-bearing, and getting either alone wrong reintroduces the bug: the stamp alone is wrong
+because a re-render strips CHILDREN and leaves ATTRIBUTES, so the stamp would still claim an answer
+was on screen after it had been wiped; the emptiness check alone re-parses an unchanged answer every
+render. It has to be "same text AND still non-empty".
+
+Two siblings had the identical defect and are fixed with it. `PinnedInsightRow` was keyed on the
+element id — a constant — so it was blanked by literally any parent re-render. `AffordResultBubble`
+was keyed on its text, same as the bubble.
+
+Three regression cases now read the answer AFTER something else has re-rendered it: once 1.5s later,
+once after rating it, and once on a cold load of a saved conversation. The generalisable lesson is
+narrower than "take screenshots": an assertion that fires at the moment of arrival cannot see a bug
+whose whole shape is what happens next, and any DOM the framework does not own needs a test with a
+delay in it.
+
+Still open, same root cause, different surface: `rptaFlowView` (sankey), `chartd3` and `mermaidview`
+all inject into vdom-owned nodes keyed on their content, so an unchanged-content re-render blanks
+them too. Separate commit — they are not the assistant, and I want to verify each one blanks in a
+browser before touching it rather than assuming from the shape.
+
 ## 2026-08-16 — a saved view has to know when it stopped being true (C404)
 
 The saving half of saved views is trivial: copy eight strings into a struct, name it, persist. The
