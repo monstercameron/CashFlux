@@ -69,6 +69,11 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **A charge that hasn't arrived says so on its own row (SM-9).** The missing-transaction detector
+  has been running for a while, and its finding could only ever be read on the Smart hub — because it
+  is catalogued under Transactions while its subject is a subscription, and the Subscriptions page
+  indexes only its own page's findings. The one row that could act on it was the one row that never
+  saw it. It now appears on that row, with its reason and its action.
 - **The repeats found on one account, with the action worth having on them (SM-6).** The detector
   already said "6 recurring charges on Joint Checking" and linked to Subscriptions — where the
   account context is gone and the list is the household's, not this account's. The row now carries a

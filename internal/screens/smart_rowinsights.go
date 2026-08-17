@@ -127,6 +127,41 @@ func smartRowInsightsFor(settings smart.Settings, byEntity map[string][]smart.In
 	return ui.CreateElement(smartRowInsights, smartRowInsightsProps{ID: relatedID, Insights: qualifying})
 }
 
+// subRowSmartCodes is the set of findings that belong ON a subscription row. T7
+// ("this hasn't posted yet") is catalogued under Transactions, so it never
+// appeared in the subscriptions page's own RunPage sweep — see mergeEntityInsights.
+var subRowSmartCodes = []string{"SMART-T7"}
+
+// mergeEntityInsights folds a second page's findings into an existing entity
+// index, keeping only the given feature codes.
+//
+// It exists because a finding's PAGE (where it is catalogued and where the hub
+// groups it) is not always the surface its subject lives on. The
+// missing-transaction detector is a transactions feature that is about a
+// subscription, and the subscriptions page indexes only PageSubscriptions
+// findings — so the one row that could act on it was the one row that never saw
+// it. Merging is the narrow fix; re-homing the feature would move it on the hub
+// too, where it belongs exactly where it is.
+func mergeEntityInsights(dst map[string][]smart.Insight, extra []smart.Insight, codes []string) map[string][]smart.Insight {
+	if dst == nil {
+		dst = map[string][]smart.Insight{}
+	}
+	want := map[string]bool{}
+	for _, c := range codes {
+		want[c] = true
+	}
+	for _, ins := range extra {
+		if len(want) > 0 && !want[ins.Feature] {
+			continue
+		}
+		if ins.Action == nil || ins.Action.RelatedID == "" {
+			continue
+		}
+		dst[ins.Action.RelatedID] = append(dst[ins.Action.RelatedID], ins)
+	}
+	return dst
+}
+
 // accountRowSmartCodes is the set of findings that belong ON an account row: the
 // unusual balance move (SM-5), the overdraft forecast (SM-11), and the fee draining
 // an idle account (SM-16 — A9 prices the fee, A2 spots the dormancy).

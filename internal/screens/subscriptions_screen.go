@@ -512,6 +512,14 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		subInsights = smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageSubscriptions)
 	}
 	subByEntity := insightsByEntity(subInsights)
+	// SM-9: the missing-transaction finding is catalogued under Transactions but is
+	// ABOUT a subscription, so the page's own sweep never carried it to the one row
+	// that can act on it. Fold it in, keyed by the subscription name (T7's action
+	// carries it — a detected subscription has no stable id).
+	if subReady {
+		subByEntity = mergeEntityInsights(subByEntity,
+			smartengine.RunPage(subSmartIn, subSmartSettings, smart.PageTransactions), subRowSmartCodes)
+	}
 
 	// C162: the "Renewing soon" section reuses the same SubscriptionRow, so any sub
 	// renewing within 7 days otherwise appeared twice. Render the main list as the
@@ -1105,6 +1113,9 @@ func SubscriptionRow(props subscriptionRowProps) ui.Node {
 			confChip,
 			reviewBadge,
 			subShareBar(s.MonthlyAmount(), props.MonthlyTotal),
+			// SM-9: an expected charge that has not posted, stated on the row it is
+			// about rather than only as a dot beside the name.
+			smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, s.Name, subRowSmartCodes),
 		),
 		// Actual charge amount leads (G10 §4/§6): the charge the user sees on
 		// their bank statement is the primary figure; cadence badge clarifies

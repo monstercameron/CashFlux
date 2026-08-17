@@ -210,7 +210,13 @@ func t7MissingTxn(in Input) []smart.Insight {
 			WithTitle("smart.t7.title", "%s hasn't posted yet", s.Name).
 			WithDetail("smart.t7.detail", "%s usually charges about %s by %s, but no charge is recorded — check for a forgotten entry or a failed payment.", s.Name, hmoneyc(s.Amount, s.Currency), expected.Format("Jan 2")).
 			WithAmount(mny(s.Amount, s.Currency)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
+			// RelatedID is the subscription NAME, not an id: a detected subscription
+			// has no stable id (the app already links transactions to one by name via
+			// Transaction.SubscriptionName), and without an entity reference the
+			// finding could only ever be listed on a hub — never shown on the row of
+			// the very charge it is about (SM-9).
+			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions",
+				RelatedType: "subscription", RelatedID: s.Name}.
 				WithLabel("smart.t7.action", "Check transactions")))
 	}
 	return out
