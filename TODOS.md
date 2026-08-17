@@ -809,9 +809,26 @@ survived the duplicate/scope filters but didn't make the engine cut):
   To-do) — same: ordinary product work extracted from the intelligence lists.
 
 ### Local-first (non-AI) gaps + nice-to-haves (curated 2026-07-15)
-- [ ] **LF-1 Command palette fix + expand** — the Ctrl+K palette exists but has a known crash (theme-toggle
+- [x] **LF-1 Command palette fix + expand** — the Ctrl+K palette exists but has a known crash (theme-toggle
   panic per notes — confirm still open); fix it, then make it a real quick-action/nav launcher (jump to
   page, add txn, run a saved view). Highest low-click leverage. ★
+  — DONE (2026-08-16). **The crash was already fixed** and the fix is documented in place: `toggleTheme`
+  and `toggleSidebar` run from a JS callback, not a render, so they use the captured-atom setters
+  (`CurrentPrefs`/`SetPrefs`) because calling the hook there panics. Confirmed live rather than assumed
+  — a Playwright probe runs the theme command from the palette and asserts the theme flips with zero
+  page errors.
+
+  Expanded per the ticket: quick-ADD commands (transaction / to-do / account / budget / goal) — a
+  launcher that can only navigate leaves the most common intent as a navigate-then-hunt-for-the-button
+  sequence — and the household's SAVED LEDGER VIEWS as rows that apply the view's filter before landing
+  on the ledger. A row that named a view and then did not show it would be worse than no row.
+
+  Also fixed a duplicate I introduced with LF-4 in the same session: `entityJumpCommands` (capped,
+  browsable, shown with no query) and the new entity search both listed accounts, so "checking"
+  returned "Joint Checking · Account" AND "Joint Checking — checking". The jump rows now stand down as
+  soon as there is a query, since entitysearch is strictly better there — more kinds, ordered, and it
+  filters the ledger for a transaction hit. Verified before and after: the duplicate is gone.
+  (Probe at `e2e/_palette_check.mjs`, gitignored like every `_*.mjs` there. 6/6.)
 - [ ] **LF-2 Encrypted local backup/restore** — passphrase-encrypted backup file (today's export is plain
   JSON/CSV). Dovetails with the encrypted-sync vision; crypto primitives already exist (vault/artifactcrypto).
 - [ ] **LF-3 Universal Undo** — a consistent "Deleted — Undo" toast on destructive actions everywhere,

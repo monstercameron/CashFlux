@@ -475,6 +475,14 @@ var vSweepKeys = Catalog{
 	"rhythm.ruleHint":  "%d of this merchant's %d charges land in one category — a rule would file the rest for you",
 	"rhythm.ruleAdded": "Charges from %s will file automatically from now on (%d matched so far).",
 
+	// LF-1 — the palette as a launcher, not only a navigator.
+	"cmd.addTransaction": "Add a transaction",
+	"cmd.addTask":        "Add a to-do",
+	"cmd.addAccount":     "Add an account",
+	"cmd.addBudget":      "Add a budget",
+	"cmd.addGoal":        "Add a goal",
+	"palette.groupViews": "Saved views",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

@@ -254,6 +254,11 @@ type paletteCmd struct {
 	keywords []string
 	group    string // palette section header; "" = inherit the previous group
 	run      func()
+	// entityJump marks the browsable, capped entity rows shown when NOTHING is
+	// typed. Once there is a query, entitysearch owns entities — it covers more
+	// kinds, orders them, and filters the ledger for a transaction hit — so
+	// keeping these too would list the same account twice under two labels.
+	entityJump bool
 }
 
 var (
@@ -294,6 +299,14 @@ func buildPaletteCommands() []paletteCmd {
 	addNav(navGroupStatic(screens.GroupSystem), "")
 	cmds = append(cmds,
 		paletteCmd{label: uistate.T("addmenu.transaction"), group: uistate.T("palette.groupActions"), keywords: []string{"add", "new", "create", "transaction", "expense", "income", "spend"}, run: func() { uistate.SetQuickAdd(true) }},
+		// LF-1: quick ADD, not just quick navigate. A launcher that can only move
+		// you between pages still leaves the most common intent — "I want to record
+		// something" — as a navigate-then-hunt-for-the-button sequence.
+		paletteCmd{label: uistate.T("cmd.addTransaction"), keywords: []string{"add", "new", "transaction", "expense", "income", "spend", "record", "log"}, run: func() { uistate.SetAddTarget("transaction") }},
+		paletteCmd{label: uistate.T("cmd.addTask"), keywords: []string{"add", "new", "task", "todo", "to-do", "reminder"}, run: func() { uistate.SetAddTarget("task") }},
+		paletteCmd{label: uistate.T("cmd.addAccount"), keywords: []string{"add", "new", "account"}, run: func() { uistate.SetAddTarget("account") }},
+		paletteCmd{label: uistate.T("cmd.addBudget"), keywords: []string{"add", "new", "budget"}, run: func() { uistate.SetAddTarget("budget") }},
+		paletteCmd{label: uistate.T("cmd.addGoal"), keywords: []string{"add", "new", "goal", "saving"}, run: func() { uistate.SetAddTarget("goal") }},
 		paletteCmd{label: uistate.T("cmd.toggleTheme"), keywords: []string{"theme", "dark", "light", "appearance"}, run: toggleTheme},
 		paletteCmd{label: uistate.T("cmd.toggleSidebar"), keywords: []string{"sidebar", "rail", "collapse", "expand"}, run: toggleSidebar},
 		paletteCmd{label: uistate.T("shortcuts.title"), keywords: []string{"keyboard", "shortcuts", "keys"}, run: toggleHelpOverlay},
@@ -370,8 +383,47 @@ func buildPaletteCommands() []paletteCmd {
 	// unfiltered list ballooned to 58+ rows, overwhelming first-glance scan. The full
 	// set remains reachable by typing a few letters (fuzzy filter surfaces all entities).
 	cmds = append(cmds, entityJumpCommands()...)
+	// LF-1: a saved ledger view is a destination the household defined itself, so
+	// it belongs in the launcher alongside the built-in pages. Appended last, and
+	// rebuilt with the rest of the list on every open, so a view saved a minute
+	// ago is reachable without a reload.
+	cmds = append(cmds, savedViewPaletteCommands()...)
 
 	return cmds
+}
+
+// savedViewPaletteCommands turns the household's saved ledger views into palette
+// rows that apply the view's filter and land on the ledger (LF-1).
+//
+// Applying the filter is the whole point: a row that navigated to /transactions
+// without it would name a view and then not show it.
+func savedViewPaletteCommands() []paletteCmd {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	views := app.SavedTxnViews()
+	if len(views) == 0 {
+		return nil
+	}
+	out := make([]paletteCmd, 0, len(views))
+	for i, v := range views {
+		crit := v.Criteria
+		group := ""
+		if i == 0 {
+			group = uistate.T("palette.groupViews")
+		}
+		out = append(out, paletteCmd{
+			label:    v.Name,
+			keywords: []string{"view", "saved", "filter"},
+			group:    group,
+			run: func() {
+				uistate.PersistTxFilter(crit.Normalize())
+				uistate.NavigateTo("/transactions")
+			},
+		})
+	}
+	return out
 }
 
 // entityJumpMaxUnfiltered is the maximum number of entity-jump commands shown in
@@ -397,9 +449,10 @@ func entityJumpCommands() []paletteCmd {
 		}
 		path := route
 		cmds = append(cmds, paletteCmd{
-			label:    name + " · " + typeWord,
-			keywords: []string{name, typeWord, "go", "open", "jump"},
-			run:      func() { uistate.NavigateTo(path) },
+			label:      name + " · " + typeWord,
+			keywords:   []string{name, typeWord, "go", "open", "jump"},
+			run:        func() { uistate.NavigateTo(path) },
+			entityJump: true,
 		})
 	}
 	for _, a := range app.Accounts() {
@@ -599,9 +652,15 @@ func renderPalette(doc js.Value, query string) {
 	cmdPaletteCmds = append(append(make([]paletteCmd, 0, len(cmdPaletteBase)+len(entities)),
 		cmdPaletteBase...), entities...)
 
-	ranked := make([]cmdmatch.Command, len(cmdPaletteBase))
+	// With a query, entitysearch owns entities; the capped browsable jump rows
+	// would otherwise list the same account twice under two different labels.
+	searching := len(entities) > 0 || len([]rune(strings.TrimSpace(query))) >= entitysearch.MinQuery
+	ranked := make([]cmdmatch.Command, 0, len(cmdPaletteBase))
 	for i, c := range cmdPaletteBase {
-		ranked[i] = cmdmatch.Command{ID: strconv.Itoa(i), Title: c.label, Keywords: c.keywords}
+		if searching && c.entityJump {
+			continue
+		}
+		ranked = append(ranked, cmdmatch.Command{ID: strconv.Itoa(i), Title: c.label, Keywords: c.keywords})
 	}
 	cmdPaletteShown = cmdPaletteShown[:0]
 	for _, m := range cmdmatch.Match(query, ranked) {

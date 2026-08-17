@@ -1,3 +1,31 @@
+## 2026-08-16 — the crash was fixed and the duplicate was mine (LF-1)
+
+Two findings, one of them embarrassing.
+
+The ticket says "known crash (theme-toggle panic per notes — confirm still open)". It is not open. The
+fix is in the code with a comment explaining it: `toggleTheme` runs from a JS callback rather than a
+component render, so it uses the captured-atom setters because calling the `UsePrefs` hook outside a
+render panics. `toggleSidebar` has the same note. I confirmed it live rather than trusting the comment
+— a probe opens the palette, runs the theme command, and asserts the theme actually flips with no page
+errors. Worth the ten minutes: "confirm still open" is an instruction to check, and closing it on the
+strength of a comment would have been exactly the shortcut the ticket warns against.
+
+The second finding is that the entity search I added an hour ago for LF-4 duplicated something that
+already existed. `entityJumpCommands` has been in the palette all along, offering accounts, goals and
+budgets as capped browsable rows. So typing "checking" now returned "Joint Checking · Account" from
+one path and "Joint Checking — checking" from the other. My own verification probe printed both rows
+side by side, which is the only reason I noticed.
+
+The fix keeps both, because they are good at different things. With NO query, the capped jump list is
+a browsable menu — that cap exists because the unfiltered palette had ballooned past fifty rows. With
+a query, entitysearch is strictly better: more kinds, ordered by kind, and it filters the ledger for a
+transaction hit. So the jump rows stand down as soon as something is typed.
+
+The lesson I want to keep: I searched for "global search" before building LF-4 and found `cmdmatch`
+and `spotlight`, and correctly concluded neither was it. I did not read the palette's own command
+list, which is where the overlap was. Searching for the CONCEPT is not the same as reading what the
+surface you are about to modify already does.
+
 ## 2026-08-16 — one pattern, two claims (LF-10)
 
 The ticket reads as plumbing: recurring detection exists, the rules engine exists, connect them. The
