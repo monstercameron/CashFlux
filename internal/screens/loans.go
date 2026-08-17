@@ -125,7 +125,7 @@ func loanCard(props loanCardProps) ui.Node {
 		}
 	}
 
-	apr := a.InterestRateAPR
+	apr, aprKnown := a.RateAPR()
 	now := time.Now()
 
 	// --- C204: base amortization schedule ---
@@ -184,8 +184,12 @@ func loanCard(props loanCardProps) ui.Node {
 
 	// APR display — self-contained (includes the "APR" word) so the "0% APR" no-rate
 	// label doesn't get a second "APR" appended below.
+	// "No APR recorded" and "0.00% APR" are different statements, and only the
+	// first is a gap (WF4-b). A family loan at no interest is a real loan with a
+	// real payoff date; saying its rate is missing sends somebody looking for a
+	// number that does not exist.
 	aprLabel := fmt.Sprintf("%.2f%% APR", apr)
-	if apr == 0 {
+	if !aprKnown {
 		aprLabel = uistate.T("loans.noApr")
 	}
 
@@ -256,7 +260,7 @@ func loanCard(props loanCardProps) ui.Node {
 	// A reason, never a bare score: "62% confident" cannot be acted on, argued
 	// with, or improved. Naming the field makes the next step obvious.
 	assessment := trust.Assess([]trust.Input{
-		{Name: uistate.T("trust.inLoanApr"), Required: true, Missing: apr <= 0},
+		{Name: uistate.T("trust.inLoanApr"), Required: true, Missing: !aprKnown},
 		{Name: uistate.T("trust.inLoanTerm"), Required: true, Missing: term <= 0,
 			Assumed: a.TermMonths <= 0},
 		{Name: uistate.T("trust.inLoanBalance"), Required: true,

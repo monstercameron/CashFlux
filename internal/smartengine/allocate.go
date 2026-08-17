@@ -128,7 +128,8 @@ func suggestProfile(in Input) (profile, why string) {
 // and a non-zero balance.
 func hasHighAPRDebt(in Input) bool {
 	for _, a := range in.Accounts {
-		if a.Archived || a.Class != domain.ClassLiability || a.InterestRateAPR < highAPRThreshold {
+		r, known := a.RateAPR()
+		if a.Archived || a.Class != domain.ClassLiability || !known || r < highAPRThreshold {
 			continue
 		}
 		bal, err := ledger.Balance(a, in.Transactions)

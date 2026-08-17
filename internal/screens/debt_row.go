@@ -98,8 +98,10 @@ func DebtRow(props debtRowProps) ui.Node {
 
 	// APR chip.
 	var aprChip ui.Node = Fragment()
-	if a.InterestRateAPR > 0 {
-		aprChip = Span(css.Class("debt-chip debt-apr"), fmt.Sprintf("%.2f%% APR", a.InterestRateAPR))
+	// A RECORDED 0% still gets a chip — it is a fact about the debt, and one the
+	// household deliberately entered (WF4-b). Only an unrecorded rate shows none.
+	if r, ok := a.RateAPR(); ok {
+		aprChip = Span(css.Class("debt-chip debt-apr"), fmt.Sprintf("%.2f%% APR", r))
 	}
 
 	// Lender / institution note.
@@ -138,8 +140,8 @@ func DebtRow(props debtRowProps) ui.Node {
 	}
 	// AC4: carrying cost — the monthly interest to hold this debt (owed × APR/100 ÷ 12),
 	// a concrete dollar figure that competes with the discretionary spend it finances.
-	if a.InterestRateAPR > 0 && props.Owed.Amount > 0 {
-		carryMinor := int64(float64(props.Owed.Amount) * a.InterestRateAPR / 100 / 12)
+	if r, ok := a.RateAPR(); ok && r > 0 && props.Owed.Amount > 0 {
+		carryMinor := int64(float64(props.Owed.Amount) * r / 100 / 12)
 		if carryMinor > 0 {
 			metaParts = append(metaParts, uistate.T("accountsstmt.carryingCost", fmtMoney(money.New(carryMinor, props.Owed.Currency))))
 		}

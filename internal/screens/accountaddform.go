@@ -166,7 +166,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			asLiab.Set(ac.Type == domain.TypeOther && ac.Class == domain.ClassLiability)
 			if ac.Class == domain.ClassLiability {
 				creditLimit.Set(moneyMajorOrEmpty(ac.CreditLimit, currency.Decimals(ac.Currency)))
-				apr.Set(floatOrEmpty(ac.InterestRateAPR))
+				apr.Set(rateFieldValue(ac))
 				minPayment.Set(moneyMajorOrEmpty(ac.MinPayment, currency.Decimals(ac.Currency)))
 				dueDay.Set(intOrEmpty(ac.DueDayOfMonth))
 				lender.Set(ac.Lender)
@@ -214,9 +214,7 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			if cl, e := money.ParseMinor(strings.TrimSpace(creditLimit.Get()), currency.Decimals(c)); e == nil && cl > 0 {
 				acc.CreditLimit = money.New(cl, c)
 			}
-			if a, e := strconv.ParseFloat(strings.TrimSpace(apr.Get()), 64); e == nil {
-				acc.InterestRateAPR = a
-			}
+			acc = applyRateAPR(acc, apr.Get())
 			if mp, e := money.ParseMinor(strings.TrimSpace(minPayment.Get()), currency.Decimals(c)); e == nil && mp > 0 {
 				acc.MinPayment = money.New(mp, c)
 			}

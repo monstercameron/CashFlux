@@ -47,7 +47,7 @@ func livePlanInputs(app *appstate.App, now time.Time) finplan.Inputs {
 			continue
 		}
 		hasNonMort = true
-		if a.InterestRateAPR >= finplan.HighInterestAPR() {
+		if r, ok := a.RateAPR(); ok && r >= finplan.HighInterestAPR() {
 			hasHighInt = true
 		}
 	}

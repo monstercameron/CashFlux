@@ -41,7 +41,7 @@ func carLoan() domain.Account {
 		ID: "acct-carloan", Name: "Marcus's Car Loan", Type: domain.TypeLoan,
 		Class: domain.ClassLiability, Currency: "USD", DueDayOfMonth: 15,
 		MinPayment: usd(62000), Lender: "Apex Auto Finance",
-		OpeningBalance: usd(-3800000), InterestRateAPR: 7.4,
+		OpeningBalance: usd(-3800000), InterestRateAPR: domain.APR(7.4),
 	}
 }
 
@@ -50,7 +50,7 @@ func studentLoan() domain.Account {
 		ID: "acct-studentloan", Name: "Priya's Student Loan", Type: domain.TypeLoan,
 		Class: domain.ClassLiability, Currency: "USD", DueDayOfMonth: 5,
 		MinPayment: usd(32000), Lender: "EdFinance Servicing",
-		OpeningBalance: usd(-3800000), InterestRateAPR: 5.5,
+		OpeningBalance: usd(-3800000), InterestRateAPR: domain.APR(5.5),
 	}
 }
 

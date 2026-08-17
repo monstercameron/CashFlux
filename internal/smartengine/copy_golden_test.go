@@ -275,7 +275,7 @@ func collectAllInsights(t *testing.T) []smart.Insight {
 		ID: "visa", Name: "Visa", Type: domain.TypeCreditCard,
 		Class: domain.ClassLiability, Currency: "USD",
 		DueDayOfMonth: 18, MinPayment: usd(2500),
-		OpeningBalance: usd(-200000), InterestRateAPR: 22.0,
+		OpeningBalance: usd(-200000), InterestRateAPR: domain.APR(22.0),
 	}
 	in.Accounts = append(in.Accounts, card)
 

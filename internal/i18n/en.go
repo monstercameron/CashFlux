@@ -3497,7 +3497,10 @@ var english = Catalog{
 	"loans.typeMortgage":     "Mortgage",
 	"loans.typePersonalLoan": "Personal loan",
 	"loans.typeLoan":         "Loan",
-	"loans.noApr":            "0% APR",
+	// WF4-b: this string used to READ "0% APR", which is the exact conflation the
+	// model change removed — a loan nobody has given a rate is not a loan at zero
+	// percent, and the household that entered a genuine 0% deserves to see it.
+	"loans.noApr":            "No APR recorded",
 	"loans.termLabel":        "Term",
 	"loans.termPlaceholder":  "Months",
 	"loans.termMonthsSuffix": "months",

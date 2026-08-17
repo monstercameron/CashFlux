@@ -263,7 +263,7 @@ func buildDebts(in Input) []payoff.Debt {
 		out = append(out, payoff.Debt{
 			Name:       a.Name,
 			Balance:    owed,
-			AprPercent: a.InterestRateAPR,
+			AprPercent: a.RateAPROrZero(),
 			MinPayment: abs64(in.toBaseMinor(a.MinPayment.Amount, a.Currency)),
 		})
 	}

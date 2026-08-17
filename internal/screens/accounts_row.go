@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -216,6 +217,29 @@ func floatOrEmpty(f float64) string {
 		return ""
 	}
 	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// rateFieldValue renders an account's APR for a form field, or "" when no rate
+// has been recorded — which is what the empty box means on the way back in
+// (WF4-b). A recorded 0% shows as "0", not as blank, because somebody typed it.
+func rateFieldValue(a domain.Account) string {
+	r, ok := a.RateAPR()
+	if !ok {
+		return ""
+	}
+	return strconv.FormatFloat(r, 'f', -1, 64)
+}
+
+// applyRateAPR reads an APR field back onto an account: a blank box records NO
+// rate, and any number — including zero — records that number. This is the seam
+// where "nobody said" stays distinguishable from "0%", so it must not go through
+// ParseFloat, which answers 0 for both.
+func applyRateAPR(a domain.Account, raw string) domain.Account {
+	v, ok := textutil.ParseOptionalFloat(raw)
+	if !ok {
+		return a.WithoutRateAPR()
+	}
+	return a.WithRateAPR(v)
 }
 
 // intOrEmpty renders an int, or "" when zero.

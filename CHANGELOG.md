@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **A 0% loan is no longer treated as a loan with a missing rate (WF4-b).** An interest-free family loan
+  or a 0% promotional card now keeps its rate, its payoff date and its APR chip; only an account nobody
+  has given a rate reads as missing one — and it now says "No APR recorded" instead of "0% APR".
+
 ### Added
 - **Say what you make of a spending flag (WF-SM1).** Mark it one-time, expected, wrong category, a new
   normal, or something to investigate. The first three stop it coming back — for one month, a year, or

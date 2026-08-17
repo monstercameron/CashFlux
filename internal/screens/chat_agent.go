@@ -1096,7 +1096,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 				}
 				if cls == domain.ClassLiability {
 					if a.APR > 0 {
-						acc.InterestRateAPR = a.APR
+						acc = acc.WithRateAPR(a.APR)
 					}
 					if a.CreditLimit > 0 {
 						acc.CreditLimit = money.New(currency.MinorFromMajor(a.CreditLimit, base), base)

@@ -404,7 +404,10 @@ func bl4Autopay(in Input) []smart.Insight {
 func bl13StatementClarity(in Input) []smart.Insight {
 	var out []smart.Insight
 	for _, a := range in.Accounts {
-		if a.Archived || a.Class != domain.ClassLiability || a.InterestRateAPR <= 0 {
+		// A liability with no recorded rate cannot be told what the minimum costs
+		// it, and one recorded at 0% genuinely costs nothing (WF4-b).
+		rate, known := a.RateAPR()
+		if a.Archived || a.Class != domain.ClassLiability || !known || rate <= 0 {
 			continue
 		}
 		minPay := abs64(in.toBaseMinor(a.MinPayment.Amount, a.Currency))
@@ -419,7 +422,7 @@ func bl13StatementClarity(in Input) []smart.Insight {
 		if owed <= minPay { // not revolving — the minimum clears it
 			continue
 		}
-		monthlyInterest := pctOf(owed, a.InterestRateAPR) / 12
+		monthlyInterest := pctOf(owed, rate) / 12
 		out = append(out, smart.Insight{
 			Feature:  "SMART-BL13",
 			Page:     smart.PageBills,
@@ -427,7 +430,7 @@ func bl13StatementClarity(in Input) []smart.Insight {
 			Severity: smart.SeverityNudge,
 		}.
 			WithTitle("smart.bl13.title", "Paying only the minimum on %s is costing you", a.Name).
-			WithDetail("smart.bl13.detail", "%s owes %s at %s APR. The %s minimum payment leaves about %s/mo in interest — paying more would cut that down.", a.Name, in.hmoney(owed), fmtPct(a.InterestRateAPR), in.hmoney(minPay), in.hmoney(monthlyInterest)).
+			WithDetail("smart.bl13.detail", "%s owes %s at %s APR. The %s minimum payment leaves about %s/mo in interest — paying more would cut that down.", a.Name, in.hmoney(owed), fmtPct(rate), in.hmoney(minPay), in.hmoney(monthlyInterest)).
 			WithAmount(in.baseMoney(monthlyInterest)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
 				WithLabel("smart.bills.openAction", labelOpenBills)))
@@ -449,7 +452,10 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 		if a.Archived || a.Class != domain.ClassLiability || a.DueDayOfMonth <= 0 {
 			continue
 		}
-		if a.InterestRateAPR < lateFeeMinAPR {
+		// An unrecorded rate is not a low one — but it is not evidence of a costly
+		// one either, so the nudge stays quiet rather than guessing (WF4-b).
+		rate, known := a.RateAPR()
+		if !known || rate < lateFeeMinAPR {
 			continue
 		}
 		due := bills.NextDue(a.DueDayOfMonth, in.Now)
@@ -463,7 +469,7 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 		}
 		owed := abs64(in.toBaseMinor(bal.Amount, a.Currency))
 		// A week of interest at the card's APR ≈ balance × APR/52.
-		weekInterest := pctOf(owed, a.InterestRateAPR) / 52
+		weekInterest := pctOf(owed, rate) / 52
 		if weekInterest < lateFeeMinCost {
 			continue
 		}
@@ -474,7 +480,7 @@ func bl6LateFeeRisk(in Input) []smart.Insight {
 			Severity: smart.SeverityWarn,
 		}.
 			WithTitle("smart.bl6.title", "%s is due %s — paying late adds up", a.Name, due.Format("Jan 2")).
-			WithDetail("smart.bl6.detail", "At %s APR, slipping a week past the %s due date costs roughly %s in interest (plus any late fee).", fmtPct(a.InterestRateAPR), due.Format("Jan 2"), in.hmoney(weekInterest)).
+			WithDetail("smart.bl6.detail", "At %s APR, slipping a week past the %s due date costs roughly %s in interest (plus any late fee).", fmtPct(rate), due.Format("Jan 2"), in.hmoney(weekInterest)).
 			WithAmount(in.baseMoney(weekInterest)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/bills", RelatedType: "account", RelatedID: a.ID}.
 				WithLabel("smart.bills.openAction", labelOpenBills)))

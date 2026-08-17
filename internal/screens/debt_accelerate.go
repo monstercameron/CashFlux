@@ -88,7 +88,7 @@ func accelerateDebts(app *appstate.App) []debtplan.Debt {
 		}
 		out = append(out, debtplan.Debt{
 			ID: a.ID, Name: a.Name, BalanceMinor: owed,
-			APRPct: a.InterestRateAPR, MinPaymentMinor: a.MinPayment.Amount,
+			APRPct: a.RateAPROrZero(), MinPaymentMinor: a.MinPayment.Amount,
 		})
 	}
 	return out

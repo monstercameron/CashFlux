@@ -39,7 +39,7 @@ func TestAL1SuggestsDebtForHighAPR(t *testing.T) {
 	in := baseInput()
 	card := domain.Account{
 		ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 22.0, OpeningBalance: usd(-50000),
+		Currency: "USD", InterestRateAPR: domain.APR(22.0), OpeningBalance: usd(-50000),
 	}
 	in.Accounts = []domain.Account{card}
 	got := al1SuggestedProfile(in)

@@ -807,7 +807,7 @@ func addAllocVars(out map[string]float64, d Data, major func(int64) float64) {
 			continue
 		}
 		if a.Class == domain.ClassLiability {
-			if a.InterestRateAPR > 0 {
+			if r, ok := a.RateAPR(); ok && r > 0 {
 				destinations++
 			}
 			continue
@@ -1324,9 +1324,9 @@ func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBa
 		// Carrying cost (AC4): the monthly interest to hold this debt at its APR —
 		// balance × (APR/100) ÷ 12. A concrete dollar figure that competes with the
 		// discretionary spend it's quietly financing. Zero when APR or balance is zero.
-		carry := balance * (a.InterestRateAPR / 100) / 12
+		carry := balance * (a.RateAPROrZero() / 100) / 12
 		out[base.Prefix+"balance"] = balance
-		out[base.Prefix+"apr"] = a.InterestRateAPR
+		out[base.Prefix+"apr"] = a.RateAPROrZero()
 		out[base.Prefix+"min_payment"] = major(toBase(a.MinPayment.Amount, a.MinPayment.Currency))
 		out[base.Prefix+"limit"] = limit
 		out[base.Prefix+"available"] = available

@@ -91,7 +91,10 @@ func AggregateDebts(
 		debts = append(debts, Debt{
 			Name:       a.Name,
 			Balance:    owedBase,
-			AprPercent: a.InterestRateAPR,
+			// A debt with no recorded rate carries none for planning purposes; the
+			// caller that needs to ASK for the missing rate reads it off the account,
+			// which still knows the difference (WF4-b).
+			AprPercent: a.RateAPROrZero(),
 			MinPayment: minBase,
 		})
 	}

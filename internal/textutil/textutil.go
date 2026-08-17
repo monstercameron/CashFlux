@@ -30,6 +30,29 @@ func ParseFloat(s string) float64 {
 	return f
 }
 
+// ParseOptionalFloat parses a number that may legitimately be absent: it reports
+// the value and whether one was given at all.
+//
+// It exists because ParseFloat answers 0 for an empty box and for a typed "0",
+// and those are different statements about the world (WF4-b). An interest rate
+// nobody filled in is unknown; one somebody typed as 0 is a genuine zero
+// percent, and a form that cannot tell them apart records the wrong fact
+// whichever way it guesses.
+//
+// Unparseable input reports absent rather than zero — a typo is not a number,
+// and inventing one from it is the same error in a different coat.
+func ParseOptionalFloat(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
 // ParseInt parses a (possibly space-padded) integer string, returning 0 when it
 // isn't a valid integer.
 func ParseInt(s string) int {

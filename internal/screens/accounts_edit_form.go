@@ -301,7 +301,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	ev := useEntityVarField(accountVarKind, nameS, a.VarName)
 	balS := ui.UseState(money.FormatMinor(a.OpeningBalance.Amount, dec))
 	climS := ui.UseState(moneyMajorOrEmpty(a.CreditLimit, dec))
-	aprS := ui.UseState(floatOrEmpty(a.InterestRateAPR))
+	aprS := ui.UseState(rateFieldValue(a))
 	minpS := ui.UseState(moneyMajorOrEmpty(a.MinPayment, dec))
 	dueS := ui.UseState(intOrEmpty(a.DueDayOfMonth))
 	stmtDayS := ui.UseState(intOrEmpty(a.StatementDay))
@@ -436,7 +436,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		}
 		if cp.Class == domain.ClassLiability {
 			cp.CreditLimit = parseMoneyOrZero(climS.Get(), dec, a.Currency)
-			cp.InterestRateAPR = textutil.ParseFloat(aprS.Get())
+			cp = applyRateAPR(cp, aprS.Get())
 			cp.MinPayment = parseMoneyOrZero(minpS.Get(), dec, a.Currency)
 			cp.DueDayOfMonth = textutil.ParseInt(dueS.Get())
 			cp.StatementDay = textutil.ParseInt(stmtDayS.Get())
@@ -459,7 +459,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				cp.LockUntil = time.Time{}
 			}
 			cp.CreditLimit = money.Money{}
-			cp.InterestRateAPR = 0
+			cp = cp.WithoutRateAPR()
 			cp.MinPayment = money.Money{}
 			cp.DueDayOfMonth = 0
 			cp.StatementDay = 0

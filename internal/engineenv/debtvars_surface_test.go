@@ -21,10 +21,10 @@ func TestAddDebtVarsSurface(t *testing.T) {
 		// A credit card: $2,000 owed against a $5,000 limit (40% utilization), 19.99% APR,
 		// $50 minimum. Opening balance is negative (a liability owes).
 		{ID: "cc", Name: "Visa", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD",
-			OpeningBalance: usd(-200000), CreditLimit: usd(500000), InterestRateAPR: 19.99, MinPayment: usd(5000)},
+			OpeningBalance: usd(-200000), CreditLimit: usd(500000), InterestRateAPR: domain.APR(19.99), MinPayment: usd(5000)},
 		// A car loan: $10,000 owed, 6% APR, $200 minimum, no credit limit (installment).
 		{ID: "car", Name: "Car Loan", Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD",
-			OpeningBalance: usd(-1000000), InterestRateAPR: 6, MinPayment: usd(20000)},
+			OpeningBalance: usd(-1000000), InterestRateAPR: domain.APR(6), MinPayment: usd(20000)},
 		// An asset — must NOT produce debt_* vars.
 		{ID: "chk", Name: "Checking", Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD",
 			OpeningBalance: usd(300000)},

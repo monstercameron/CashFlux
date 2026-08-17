@@ -38,7 +38,7 @@ func liabilityCardAPR(id string, dueDay int, openingOwed int64, apr float64) dom
 	return domain.Account{
 		ID: id, Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
 		Currency: "USD", DueDayOfMonth: dueDay, MinPayment: usd(2500),
-		OpeningBalance: usd(openingOwed), InterestRateAPR: apr,
+		OpeningBalance: usd(openingOwed), InterestRateAPR: domain.APR(apr),
 	}
 }
 
@@ -183,7 +183,7 @@ func TestP8ExtraDebt(t *testing.T) {
 	in := baseInput().withBaseline(500000, 300000) // $2000/mo surplus
 	card := domain.Account{
 		ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000), DueDayOfMonth: 18,
+		Currency: "USD", InterestRateAPR: domain.APR(20.0), OpeningBalance: usd(-500000), MinPayment: usd(20000), DueDayOfMonth: 18,
 	}
 	in.Accounts = []domain.Account{card}
 	got := p8ExtraDebt(in)
@@ -226,9 +226,9 @@ func TestP1SkipsAlreadyTracked(t *testing.T) {
 func TestG15DebtStrategy(t *testing.T) {
 	in := baseInput()
 	hi := domain.Account{ID: "hi", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 24.0, OpeningBalance: usd(-500000), MinPayment: usd(10000)}
+		Currency: "USD", InterestRateAPR: domain.APR(24.0), OpeningBalance: usd(-500000), MinPayment: usd(10000)}
 	lo := domain.Account{ID: "lo", Name: "Car Loan", Type: domain.TypeLoan, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 5.0, OpeningBalance: usd(-300000), MinPayment: usd(10000)}
+		Currency: "USD", InterestRateAPR: domain.APR(5.0), OpeningBalance: usd(-300000), MinPayment: usd(10000)}
 	in.Accounts = []domain.Account{hi, lo}
 	got := g15DebtStrategy(in)
 	if len(got) != 1 {
@@ -726,7 +726,7 @@ func TestG20Shared(t *testing.T) {
 func TestAL5OutcomePreview(t *testing.T) {
 	in := baseInput().withBaseline(500000, 300000) // $2000/mo surplus
 	card := domain.Account{ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000)}
+		Currency: "USD", InterestRateAPR: domain.APR(20.0), OpeningBalance: usd(-500000), MinPayment: usd(20000)}
 	in.Accounts = []domain.Account{card}
 	got := al5OutcomePreview(in)
 	if len(got) != 1 {
@@ -782,7 +782,7 @@ func TestP8NoSurplusNoSuggestion(t *testing.T) {
 	in := baseInput().withBaseline(300000, 500000) // negative surplus
 	card := domain.Account{
 		ID: "c", Name: "Visa", Type: domain.TypeCreditCard, Class: domain.ClassLiability,
-		Currency: "USD", InterestRateAPR: 20.0, OpeningBalance: usd(-500000), MinPayment: usd(20000),
+		Currency: "USD", InterestRateAPR: domain.APR(20.0), OpeningBalance: usd(-500000), MinPayment: usd(20000),
 	}
 	in.Accounts = []domain.Account{card}
 	if got := p8ExtraDebt(in); len(got) != 0 {

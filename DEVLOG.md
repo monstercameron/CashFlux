@@ -1,3 +1,34 @@
+## 2026-08-17 - a rate of zero is not a missing rate (WF4-b)
+
+I filed this against the trust assessment I had just built: it asked whether a loan's APR was `<= 0` to
+decide whether the payoff date could be trusted, which tells a household with a genuine interest-free
+family loan that its own figure is unreliable. The root cause was in the model - `InterestRateAPR` was a
+plain float64 with no way to say "nobody has told us", so every consumer read zero as unknown.
+
+It is now a pointer, and the pointer is what made this cheap. The field already carried `omitempty`, so
+a dataset written before the change has no key at all where the rate was zero, and decodes to nil - the
+same "unknown" those datasets already meant. A paired `Set bool` would have needed a migration and would
+have read every existing real rate as unset until it ran.
+
+The sweep was thirty-odd call sites and each one is a decision, not a conversion. Arithmetic that
+genuinely treats an unrecorded rate as no interest - carrying cost, projected balances, payoff
+aggregation - says so through RateAPROrZero. Anything that branches on whether a rate exists takes the
+pair. Whether that distinction matters at each site is exactly what the old type made impossible to ask.
+
+The find of the ticket was in the copy, not the code: the string shown when a loan has NO rate, keyed
+`loans.noApr`, literally read "0% APR". The conflation was not just implied by the model, it was written
+down and displayed. It now reads "No APR recorded", and a debt row shows an APR chip for a recorded zero
+- somebody entered that - and none for a rate on file nowhere.
+
+The form is where "unset" becomes enterable, so that seam moved into pure code where it could be tested:
+ParseOptionalFloat reports the value AND whether one was given, because ParseFloat answers 0 for an
+empty box and for a typed "0". Unparseable input reports absent rather than zero, on the grounds that a
+typo is not a number and inventing one from it is the same error in a different coat.
+
+Verified end to end in a browser: the sample's family loan reads "No APR recorded" with the trust line
+naming the gap; type 0 into its rate field and it reads "0.00% APR" and the payoff date stops being
+called unreliable.
+
 ## 2026-08-17 - five buttons that all dismiss would be worse than one (WF-SM1, second clause)
 
 The ticket asks to let the user classify a flag: one-time, expected, wrong category, new normal,

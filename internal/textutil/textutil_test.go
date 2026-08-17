@@ -116,3 +116,26 @@ func TestPlural(t *testing.T) {
 		}
 	}
 }
+
+// ParseFloat answers 0 for an empty box and for a typed "0", and those are
+// different statements about the world (WF4-b).
+func TestParseOptionalFloatTellsAbsentFromZero(t *testing.T) {
+	if v, ok := ParseOptionalFloat("0"); !ok || v != 0 {
+		t.Errorf(`ParseOptionalFloat("0") = %v, %v — a typed zero is a value`, v, ok)
+	}
+	for _, in := range []string{"", "   ", "\t"} {
+		if v, ok := ParseOptionalFloat(in); ok || v != 0 {
+			t.Errorf("ParseOptionalFloat(%q) = %v, %v — an empty box is not a zero", in, v, ok)
+		}
+	}
+	if v, ok := ParseOptionalFloat(" 4.25 "); !ok || v != 4.25 {
+		t.Errorf("ParseOptionalFloat(\" 4.25 \") = %v, %v", v, ok)
+	}
+	// A typo is not a number, and inventing a zero from it is the same error in
+	// a different coat.
+	for _, in := range []string{"abc", "4.2.5", "%"} {
+		if _, ok := ParseOptionalFloat(in); ok {
+			t.Errorf("ParseOptionalFloat(%q) reported a value", in)
+		}
+	}
+}

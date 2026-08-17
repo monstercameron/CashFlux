@@ -101,11 +101,40 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   (last transaction date, last reconciliation, missing APR/min/limit/term/due-day, currency consistency,
   accounts excluded from plans), and trust lines on the other calculated conclusions — runway, net worth,
   projections. This is one engine and one surface, not the centre.
-- [ ] **WF4-b — A rate of zero is not a missing rate.** `domain.Account.InterestRateAPR` has no "unset"
+- [x] **WF4-b — A rate of zero is not a missing rate.** `domain.Account.InterestRateAPR` has no "unset"
   state, so every consumer treats `<= 0` as missing — including the new trust assessment, which will tell
   a household with a genuine 0% loan that its payoff date is unreliable. Needs an explicit unset
   representation (a pointer, a paired bool, or a sentinel) and a sweep of the callers that assume the
   conflation. Small model change, wide blast radius, worth doing deliberately.
+  — DONE (2026-08-17). `domain.Account.InterestRateAPR` is now a `*float64`, with `RateAPR() (float64,
+  bool)`, `HasRateAPR`, `RateAPROrZero`, `WithRateAPR`, `WithoutRateAPR` and `domain.APR` for literals.
+
+  THE POINTER MIGRATES OLD DATA FOR FREE, which is why it beat a paired bool. The field was a float64
+  with `omitempty`, so a dataset written before this change has NO key where the rate was zero and
+  decodes to nil — exactly the "unknown" those datasets already meant. A paired `Set bool` would have
+  needed a migration and would have read every existing real rate as unset until it ran.
+
+  THE SWEEP: 30-odd call sites, each decided rather than mechanically converted. Arithmetic that
+  genuinely treats an unrecorded rate as no interest (carry cost, projections, payoff aggregation) says
+  so with `RateAPROrZero`; anything that BRANCHES on whether a rate exists takes the pair. The one that
+  filed the ticket — the loans trust line — asked `apr <= 0` and now asks `!aprKnown`, so a 0% family
+  loan keeps its payoff date instead of being told the figure could not be trusted.
+
+  THE COPY CARRIED THE SAME CONFLATION, and that was the find of the ticket: `loans.noApr` — the string
+  shown when a loan has NO rate — literally read "0% APR". Now "No APR recorded". A debt row shows a
+  chip for a recorded 0% (somebody entered that) and none for an unrecorded rate.
+
+  The form is where "unset" becomes enterable, so that seam moved into pure code and got tests:
+  `textutil.ParseOptionalFloat` reports value AND presence, because `ParseFloat` answers 0 for an empty
+  box and for a typed "0". Unparseable input reports absent rather than zero — a typo is not a number.
+
+  VERIFIED IN A BROWSER: 7/7 (`e2e/_apr_check.mjs`) — the sample's family loan reads "No APR recorded"
+  with the trust line naming the gap; typing 0 into its rate field makes it read "0.00% APR" and the
+  payoff date stops being called unreliable.
+
+  NOTE for whoever picks up WF4: the "*Refined 2026-07-23*" paragraph below is about per-account
+  FRESHNESS (cadence, reconciliation state, the four-state label), not about the rate. It belongs to WF4
+  proper and is untouched by this.
   *Refined 2026-07-23 (external review):* the per-account model is: last transaction date, last
   balance date, **expected update cadence** (user-set), reconciliation state, source type
   (imported/manual/calculated), confidence. Every aggregate derives a four-state freshness label —

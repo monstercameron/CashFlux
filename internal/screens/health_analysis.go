@@ -75,7 +75,7 @@ func liveResilienceInput(app *appstate.App, now time.Time) resilience.Input {
 			continue
 		}
 		revBal += conv
-		wAprNum += float64(conv) * a.InterestRateAPR
+		wAprNum += float64(conv) * a.RateAPROrZero()
 		wAprDen += float64(conv)
 	}
 	avgAPR := 0.0

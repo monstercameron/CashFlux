@@ -27,7 +27,7 @@ func TestAccountLoanTermsRoundTrip(t *testing.T) {
 		ID: "l1", Name: "Mortgage", Currency: "USD", Type: domain.TypeMortgage,
 		Class: domain.ClassLiability, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
 		OpeningBalance:  money.New(-24400000, "USD"),
-		InterestRateAPR: 4.1, TermMonths: 360, OriginationDate: orig,
+		InterestRateAPR: domain.APR(4.1), TermMonths: 360, OriginationDate: orig,
 	}
 	if err := st.PutAccount(acc); err != nil {
 		t.Fatalf("PutAccount: %v", err)

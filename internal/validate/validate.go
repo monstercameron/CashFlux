@@ -109,7 +109,9 @@ func ValidateAccount(a domain.Account) Issues {
 	if a.StatementDay < 0 || a.StatementDay > 31 {
 		is.add("statementDay", "must be between 1 and 31")
 	}
-	if a.InterestRateAPR < 0 {
+	// A rate that was never recorded is not a negative rate (WF4-b): there is
+	// nothing to reject when nobody has filled one in.
+	if r, ok := a.RateAPR(); ok && r < 0 {
 		is.add("interestRateApr", "cannot be negative")
 	}
 	return is

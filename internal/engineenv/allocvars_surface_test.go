@@ -17,8 +17,8 @@ func TestAddAllocVars(t *testing.T) {
 	accts := []domain.Account{
 		{ID: "a1", Name: "Brokerage", Class: domain.ClassAsset, Type: domain.TypeInvestment, Currency: "USD", OpeningBalance: usd(100000)},
 		{ID: "a2", Name: "Savings", Class: domain.ClassAsset, Type: domain.TypeSavings, Currency: "USD", OpeningBalance: usd(100000)},
-		{ID: "d1", Name: "Card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", InterestRateAPR: 22},
-		{ID: "d2", Name: "0% Card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", InterestRateAPR: 0},
+		{ID: "d1", Name: "Card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", InterestRateAPR: domain.APR(22)},
+		{ID: "d2", Name: "0% Card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", InterestRateAPR: domain.APR(0)},
 		{ID: "x", Name: "Archived", Class: domain.ClassAsset, Currency: "USD", Archived: true},
 	}
 	goals := []domain.Goal{{ID: "g1", Name: "Trip"}, {ID: "g2", Name: "Car"}}

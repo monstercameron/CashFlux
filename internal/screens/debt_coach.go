@@ -48,7 +48,7 @@ func coachAlerts(app *appstate.App) []debtcoach.Alert {
 		lines = append(lines, debtcoach.DebtLine{
 			Name:       ac.Name,
 			Balance:    owed.Amount,
-			AprPercent: ac.InterestRateAPR,
+			AprPercent: ac.RateAPROrZero(),
 			MinPayment: ac.MinPayment.Amount,
 			Limit:      ac.CreditLimit.Amount,
 			Revolving:  ac.CreditLimit.Amount > 0,

@@ -128,8 +128,8 @@ func nwsAccountPanel(r nwsAcctRow, v nwsView) ui.Node {
 		confirmed = uistate.LoadPrefs().FormatDate(r.AsOf)
 	}
 	facts = append(facts, nwsFact(uistate.T("nws.factConfirmed"), confirmed))
-	if r.Acct.InterestRateAPR > 0 {
-		facts = append(facts, nwsFact(uistate.T("nws.factRate"), strconv.FormatFloat(r.Acct.InterestRateAPR, 'f', -1, 64)+"%"))
+	if rate, ok := r.Acct.RateAPR(); ok {
+		facts = append(facts, nwsFact(uistate.T("nws.factRate"), strconv.FormatFloat(rate, 'f', -1, 64)+"%"))
 	}
 
 	return Fragment(

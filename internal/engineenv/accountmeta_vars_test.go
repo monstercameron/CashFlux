@@ -17,7 +17,7 @@ func TestCarryingCostVars(t *testing.T) {
 	d := Data{
 		Accounts: []domain.Account{
 			{ID: "visa", Name: "Visa", Class: domain.ClassLiability, Type: domain.TypeCreditCard,
-				Currency: "USD", OpeningBalance: usd(-6000), InterestRateAPR: 24},
+				Currency: "USD", OpeningBalance: usd(-6000), InterestRateAPR: domain.APR(24)},
 		},
 		Rates: currency.Rates{Base: "USD"},
 		Now:   now,

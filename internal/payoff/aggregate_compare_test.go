@@ -29,7 +29,7 @@ func liabilityAccount(id, name, cur string, openingMinor int64, apr float64, min
 		Type:            domain.TypeCreditCard,
 		Currency:        cur,
 		OpeningBalance:  money.New(openingMinor, cur),
-		InterestRateAPR: apr,
+		InterestRateAPR: domain.APR(apr),
 		MinPayment:      money.New(minPayMinor, cur),
 	}
 }
@@ -105,7 +105,7 @@ func TestAggregateDebts(t *testing.T) {
 					Type:            domain.TypeMortgage,
 					Currency:        "USD",
 					OpeningBalance:  money.New(-30000000, "USD"),
-					InterestRateAPR: 3.5,
+					InterestRateAPR: domain.APR(3.5),
 					MinPayment:      money.New(150000, "USD"),
 				},
 			},

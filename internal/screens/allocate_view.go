@@ -53,9 +53,9 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 			continue
 		}
 		if a.Class == domain.ClassLiability {
-			if a.InterestRateAPR > 0 {
+			if r, ok := a.RateAPR(); ok && r > 0 {
 				cands = append(cands, allocate.Candidate{
-					ID: a.ID, Name: uistate.T("allocate.payDown", a.Name), ExpectedReturnAPR: a.InterestRateAPR,
+					ID: a.ID, Name: uistate.T("allocate.payDown", a.Name), ExpectedReturnAPR: r,
 					StabilityScore: 100, LiquidityScore: 0, DebtReduction: true,
 				})
 			}
@@ -164,7 +164,7 @@ func allocMarginalDestinations(app *appstate.App, activeMember string) []margina
 			}
 			out = append(out, marginal.Destination{
 				ID: a.ID, Name: uistate.T("allocate.payDown", a.Name),
-				Kind: marginal.KindDebt, AnnualRatePct: a.InterestRateAPR,
+				Kind: marginal.KindDebt, AnnualRatePct: a.RateAPROrZero(),
 				CapacityMinor: owed,
 			})
 			continue

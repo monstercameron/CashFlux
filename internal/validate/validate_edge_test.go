@@ -18,7 +18,7 @@ func TestValidateAccountMoreProblems(t *testing.T) {
 		Type: "bogus", Class: domain.ClassAsset, // type is invalid
 		Currency:        "usd", // 3 letters but lowercase → invalid code
 		StabilityScore:  -5,
-		InterestRateAPR: -1,
+		InterestRateAPR: domain.APR(-1),
 	}
 	is := ValidateAccount(a)
 	for _, f := range []string{"type", "currency", "stabilityScore", "interestRateApr"} {

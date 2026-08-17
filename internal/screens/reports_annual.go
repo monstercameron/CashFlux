@@ -399,7 +399,7 @@ func Reports() ui.Node {
 		vitDebts = append(vitDebts, vitals.Debt{
 			Name:            a.Name,
 			BalanceMinor:    mag,
-			AprPercent:      a.InterestRateAPR,
+			AprPercent:      a.RateAPROrZero(),
 			MinPaymentMinor: toBaseVit(a.MinPayment.Amount, a.MinPayment.Currency),
 			IsMortgage:      a.Type == domain.TypeMortgage,
 			InPayoff:        a.IncludedInPayoff(),
@@ -440,7 +440,10 @@ func Reports() ui.Node {
 	var debts []debtRow
 	var debtInterestTotal int64
 	for _, a := range accounts {
-		if a.Archived || a.Class != domain.ClassLiability || a.InterestRateAPR <= 0 {
+		// The interest table costs money to be in: a debt at a recorded 0%, or one
+		// with no rate on file, owes nothing this table can state (WF4-b).
+		rate, known := a.RateAPR()
+		if a.Archived || a.Class != domain.ClassLiability || !known || rate <= 0 {
 			continue
 		}
 		bal, _ := ledger.Balance(a, txns)
@@ -448,8 +451,8 @@ func Reports() ui.Node {
 		if ab == 0 {
 			continue
 		}
-		est := int64(float64(ab) * a.InterestRateAPR / 100)
-		debts = append(debts, debtRow{name: a.Name, balance: bal, apr: a.InterestRateAPR, estYearMinor: est, minimum: a.MinPayment})
+		est := int64(float64(ab) * rate / 100)
+		debts = append(debts, debtRow{name: a.Name, balance: bal, apr: rate, estYearMinor: est, minimum: a.MinPayment})
 		debtInterestTotal += est
 	}
 	sort.SliceStable(debts, func(i, j int) bool { return debts[i].apr > debts[j].apr })

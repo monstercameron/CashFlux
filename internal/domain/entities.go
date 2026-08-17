@@ -121,8 +121,24 @@ type Account struct {
 	VarName string `json:"varName,omitempty"`
 
 	// Liability-only fields.
-	CreditLimit     money.Money `json:"creditLimit,omitempty"`
-	InterestRateAPR float64     `json:"interestRateApr,omitempty"`
+	CreditLimit money.Money `json:"creditLimit,omitempty"`
+	// InterestRateAPR is the annual rate, or nil when no rate has been recorded
+	// (WF4-b).
+	//
+	// It is a POINTER because a rate of zero is not a missing rate. As a plain
+	// float64 there was no way to say "nobody has told us", so every consumer read
+	// `<= 0` as unknown — which quietly claims a genuine 0% promotional card or a
+	// family loan at no interest is missing its rate, and told the household its
+	// payoff date could not be trusted for a figure it had entered deliberately.
+	//
+	// Reach for RateAPR / WithRateAPR rather than the field: they make the
+	// question "is one recorded?" impossible to skip, and keep callers from
+	// sharing a pointer between two copies of an account.
+	//
+	// The JSON name and omitempty are unchanged, so a dataset written before this
+	// change simply has no key where the rate was zero, and decodes to nil — the
+	// same "unknown" those datasets already meant.
+	InterestRateAPR *float64    `json:"interestRateApr,omitempty"`
 	MinPayment      money.Money `json:"minPayment,omitempty"`
 	DueDayOfMonth   int         `json:"dueDayOfMonth,omitempty"`
 	// TermMonths and OriginationDate are the two facts an INSTALLMENT loan needs
@@ -244,6 +260,52 @@ func (a Account) IsInstallment() bool { return a.IsLiability() && a.Type.IsInsta
 // its term" are different facts, and a surface that conflates them shows an
 // empty schedule instead of asking for the missing number.
 func (a Account) HasLoanTerms() bool { return a.IsInstallment() && a.TermMonths > 0 }
+
+// APR is a recorded interest rate, for struct literals that would otherwise need
+// a temporary just to take its address. APR(0) is a genuine zero percent; nil is
+// no rate on file (WF4-b).
+func APR(v float64) *float64 { return &v }
+
+// RateAPR returns the account's annual interest rate and whether one has been
+// recorded (WF4-b).
+//
+// The pair is the point: "0" and "nobody said" are different answers, and a
+// caller that takes only the number cannot tell a 0% family loan from a rate
+// nobody has filled in. Prefer this to reading the field.
+func (a Account) RateAPR() (float64, bool) {
+	if a.InterestRateAPR == nil {
+		return 0, false
+	}
+	return *a.InterestRateAPR, true
+}
+
+// HasRateAPR reports whether a rate has been recorded, whatever its value.
+func (a Account) HasRateAPR() bool { return a.InterestRateAPR != nil }
+
+// RateAPROrZero is the rate for arithmetic that treats an unrecorded rate as no
+// interest — carry cost, projected balances. Callers that must DISTINGUISH the
+// two want RateAPR instead; this exists so the ones that genuinely do not are
+// explicit about it rather than dereferencing.
+func (a Account) RateAPROrZero() float64 {
+	r, _ := a.RateAPR()
+	return r
+}
+
+// WithRateAPR returns a copy carrying the given rate. It takes the address of a
+// local, so two copies of an account never share one pointer and an edit to one
+// cannot reach through to the other.
+func (a Account) WithRateAPR(v float64) Account {
+	r := v
+	a.InterestRateAPR = &r
+	return a
+}
+
+// WithoutRateAPR returns a copy with no rate recorded — the state that says
+// nobody has told us, as opposed to a rate of zero.
+func (a Account) WithoutRateAPR() Account {
+	a.InterestRateAPR = nil
+	return a
+}
 
 // Reconciliation is one recorded statement reconciliation on an account: the
 // moment the cleared balance was confirmed to match a bank statement. At is
