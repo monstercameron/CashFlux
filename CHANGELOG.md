@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The app no longer terminates when a text field is filled in while focused.** A caret clamp asked
+  JavaScript for a string's length in a way that ends the whole program; opening the category editor was
+  enough to trigger it.
+
 ### Added
 - **Investments tracks what your positions PAY you (FP-T1f).** Dividends and distributions are recorded
   against the position that paid them, so each one can say what it has actually handed you and what that

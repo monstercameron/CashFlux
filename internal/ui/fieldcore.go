@@ -7,6 +7,7 @@ package ui
 import (
 	"sync"
 	"syscall/js"
+	"unicode/utf16"
 
 	"github.com/monstercameron/GoWebComponents/v5/html"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -233,8 +234,20 @@ func writeFieldValue(el js.Value, v string) {
 	}
 	// Clamp in UTF-16 units, which is what the selection API counts in — Go's len
 	// would be wrong the moment somebody types a currency symbol or an emoji.
-	if n := el.Get("value").Get("length").Int(); caret > n {
+	// Measured in Go, not through JS. `value` comes back as a JS string, and a
+	// string is not an object in syscall/js: both Get("length") and Length() panic
+	// on one and take the whole Go runtime down with them, so every field seeded
+	// while focused was a live crash. We already hold the string we just wrote, so
+	// there is nothing to ask the DOM for.
+	if n := utf16Len(v); caret > n {
 		caret = n
 	}
 	el.Call("setSelectionRange", caret, caret)
+}
+
+// utf16Len is a string's length in UTF-16 code units — what the selection API
+// counts in. Go's len() would be wrong the moment somebody types a currency
+// symbol, and a rune count would be wrong for anything outside the BMP.
+func utf16Len(s string) int {
+	return len(utf16.Encode([]rune(s)))
 }
