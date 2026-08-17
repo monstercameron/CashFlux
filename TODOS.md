@@ -5704,12 +5704,28 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W8 — To-do: bulk, reminders, automations (reviewer priority 7)
 
-- [ ] **C402 [MAJOR][TODO] Bulk select / assign / complete / reschedule.** No selection mechanism
+- [x] **C402 [MAJOR][TODO] Bulk select / assign / complete / reschedule.** No selection mechanism
   exists in list or board. Checkbox multi-select + action bar (assign member, complete, due-date
-  shift, delete), undoable.
-- [ ] **C403 [MINOR][TODO] Browser reminders with offsets.** `taskrecur.ReminderDue` feeds the
+  shift, delete), undoable. — DONE (2026-08-16), LIST VIEW. New pure `internal/taskbulk` decides what
+  a bulk edit means (`Plan` returns only rows that actually change; `Completable` skips done rows so
+  a recurring task cannot spawn two successors; `Range` for shift-click). Opt-in "Select several"
+  mode adds a checkbox column + a sticky action bar (assign / unassign, reschedule to
+  today·tomorrow·next week·next month·push a week·clear, mark done, delete, clear) with a one-level
+  undo banner that outlives the mode. Delete confirms on the whole blast radius, sub-trees included.
+  The bar is its own component because `todoListWidget` returns early for board/calendar and hooks
+  declared after those returns would shift position on a view switch. BOARD-view selection is NOT
+  covered — see C402b.
+- [ ] **C402b [MINOR][TODO] Bulk selection in the board view.** C402 shipped multi-select for the
+  to-do LIST. The board (`taskboard`) still has no selection mechanism; the same `taskbulk` plan
+  functions and `todoBulkBar` component should drive it, with the selection surviving a drag between
+  columns.
+- [x] **C403 [MINOR][TODO] Browser reminders with offsets.** `taskrecur.ReminderDue` feeds the
   attention digest only. Wire task reminders into the notification feed + browser notifications
-  (existing notify targets), honoring the per-task offset from C368.
+  (existing notify targets), honoring the per-task offset from C368. — DONE (2026-08-16): new
+  `task-reminder` event + default in-app rule + `notifyfeed.TaskReminderCandidates`, keyed
+  `<taskID>@<due>` so it is idempotent across opens and re-arms on recurrence; expires 30 days past
+  due (backlog is not a reminder); severity critical when due/overdue. Settings gets its own on/off
+  row, and the alert offers "Mark done" via the C409 resolution seam.
 - [ ] **C404 [MINOR][TODO] Saved views + single adaptive toolbar.** Reviewer: "Three control rows
   create toolbar density." Persist named filter/sort/view combos; collapse the three rows into one
   toolbar + a filters popover (FilterToolbar pattern).
@@ -5717,8 +5733,12 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
   Ship the reviewer's four as workflow-engine presets surfaced from More tools (subscription price
   change → task; overdue bill → task; monthly reconciliation; quarterly account update) + grow the
   financial template list (checklists via `taskchecklist`).
-- [ ] **C406 [MINOR][TODO] Note truncation.** List view clamps notes to 2 lines with expand-on-click
-  instead of heavy truncation.
+- [x] **C406 [MINOR][TODO] Note truncation.** List view clamps notes to 2 lines with expand-on-click
+  instead of heavy truncation. — VERIFIED ALREADY DONE (2026-08-16). `todo.go` renders a note over 46
+  runes as a `.todo-note-row.is-clamp2` button (`-webkit-line-clamp: 2`, `aria-expanded`, keyboard
+  reachable) that toggles to `.is-open` for the full text, with a 600-rune DOM cap so an expanded
+  note stays bounded; shorter notes render plain with no affordance. CSS in `styles/rules_detail4.go`.
+  No code change needed — the ticket describes the shipped behaviour.
 
 ### W9 — Notifications: routing, evidence, copy (reviewer priority 8)
 

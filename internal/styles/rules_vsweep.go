@@ -120,4 +120,36 @@ func registerVSweep() {
 		textTransform("uppercase"),
 		fontSize("0.66rem"),
 	)
+	// ─── C402: to-do bulk selection ──────────────────────────────────────────
+	// The bar sits above the list and stays put while you scroll a long page —
+	// a selection you built over three screenfuls with the action bar scrolled
+	// off the top is a selection you cannot act on.
+	rule(".todo-bulk-entry",
+		display("flex"),
+		justifyContent("flex-end"),
+		marginBottom("0.5rem"),
+	)
+	rule(".todo-bulkbar",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("center"),
+		gap("0.5rem"),
+		position("sticky"),
+		top("0"),
+		zIndex("3"),
+		padding("0.5rem 0.65rem"),
+		marginBottom("0.6rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid var(--border)"),
+		background("var(--surface-2, var(--surface))"),
+	)
+	rule(".todo-select",
+		flex("0 0 auto"),
+		width("1rem"),
+		height("1rem"),
+		marginRight("0.15rem"),
+		accentColor("var(--accent)"),
+		cursor("pointer"),
+	)
+
 }

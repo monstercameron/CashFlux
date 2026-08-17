@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/pagination"
 	"github.com/monstercameron/CashFlux/internal/taskboard"
+	"github.com/monstercameron/CashFlux/internal/taskbulk"
 	"github.com/monstercameron/CashFlux/internal/taskchecklist"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
@@ -378,6 +379,15 @@ func todoListWidget(props todoListProps) ui.Node {
 	prefsAtom := uistate.UsePrefs()
 	errMsg := ui.UseState("")
 	dragSrc := ui.UseState("") // id of the task currently being dragged (Custom order)
+	// C402: bulk selection. selectMode gates the checkbox column so the common
+	// single-task case is not permanently taxed with one; selected holds the picked
+	// ids; lastSelID anchors shift-click ranges; bulkMember/bulkDue hold the pending
+	// edit; undoTasks is a one-level snapshot of what a bulk write overwrote.
+	selectMode := ui.UseState(false)
+	selected := ui.UseState(map[string]bool{})
+	lastSelID := ui.UseState("")
+	undoTasks := ui.UseState([]domain.Task(nil))
+	undoLabel := ui.UseState("")
 
 	// The top field is a SEARCH box, but users reliably type a task title into it and
 	// expect it to add — then hit "No tasks match". When a search yields nothing, the
@@ -601,6 +611,170 @@ func todoListWidget(props todoListProps) ui.Node {
 		uistate.BumpDataRevision()
 	}
 
+	// ─── C402: bulk selection over the visible page ──────────────────────────
+	//
+	// visibleOrder is the on-screen order of the current page, which is what a
+	// shift-click range means: the rows between these two, as displayed — not as
+	// stored. Select-all likewise means "everything I can see", never the whole
+	// unfiltered table, or one click on a filtered view would silently grab rows
+	// the filter was hiding.
+	visibleOrder := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		visibleOrder = append(visibleOrder, n.Task.ID)
+	}
+	copySel := func() map[string]bool {
+		m := selected.Get()
+		nm := make(map[string]bool, len(m)+1)
+		for k, v := range m {
+			if v {
+				nm[k] = v
+			}
+		}
+		return nm
+	}
+	toggleSelect := func(taskID string, shift bool) {
+		nm := copySel()
+		if shift && lastSelID.Get() != "" && lastSelID.Get() != taskID {
+			if r := taskbulk.Range(visibleOrder, lastSelID.Get(), taskID); len(r) > 0 {
+				for _, x := range r {
+					nm[x] = true
+				}
+				selected.Set(nm)
+				lastSelID.Set(taskID)
+				return
+			}
+		}
+		if nm[taskID] {
+			delete(nm, taskID)
+		} else {
+			nm[taskID] = true
+		}
+		selected.Set(nm)
+		lastSelID.Set(taskID)
+	}
+	clearSelection := func() {
+		selected.Set(map[string]bool{})
+		lastSelID.Set("")
+	}
+	selectAllVisible := func() {
+		nm := map[string]bool{}
+		for _, x := range visibleOrder {
+			nm[x] = true
+		}
+		selected.Set(nm)
+	}
+	exitSelectMode := func() {
+		selectMode.Set(false)
+		clearSelection()
+	}
+	enterSelectMode := func() { selectMode.Set(true) }
+
+	// Every bulk write records what it overwrote, so one click can put it back.
+	// Bulk edits are the one place where a mis-click costs a dozen rows at once,
+	// and an action that expensive has to be reversible.
+	remember := func(prior []domain.Task, label string) {
+		undoTasks.Set(prior)
+		undoLabel.Set(label)
+	}
+	priorOf := func(ids []string) []domain.Task {
+		out := make([]domain.Task, 0, len(ids))
+		for _, x := range ids {
+			if t, ok := byID[x]; ok {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	undoBulk := func() {
+		for _, t := range undoTasks.Get() {
+			if err := app.PutTask(t); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+		}
+		n := len(undoTasks.Get())
+		undoTasks.Set(nil)
+		undoLabel.Set("")
+		uistate.PostNotice(uistate.T("todo.bulkUndone", n), false)
+		uistate.BumpDataRevision()
+	}
+
+	applyBulkEdit := func(e taskbulk.Edit) {
+		plan := taskbulk.Plan(tasks, selected.Get(), e, time.Now())
+		if len(plan) == 0 {
+			// Nothing would change. Saying so beats a silent click and beats a
+			// "12 tasks updated" toast for twelve rows that already matched.
+			uistate.PostNotice(uistate.T("todo.bulkNoChange"), false)
+			return
+		}
+		prior := make([]domain.Task, 0, len(plan))
+		for _, t := range plan {
+			if p, ok := byID[t.ID]; ok {
+				prior = append(prior, p)
+			}
+			if err := app.PutTask(t); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+		}
+		remember(prior, uistate.T("todo.bulkUpdated", len(plan)))
+		uistate.PostNotice(uistate.T("todo.bulkUpdated", len(plan)), false)
+		uistate.BumpDataRevision()
+	}
+	bulkComplete := func() {
+		ids := taskbulk.Completable(tasks, selected.Get())
+		if len(ids) == 0 {
+			uistate.PostNotice(uistate.T("todo.bulkNoneOpen"), false)
+			return
+		}
+		prior := priorOf(ids)
+		for _, x := range ids {
+			// CompleteTask, not a status write: a recurring task must spawn its
+			// successor here exactly as it does from the single-row checkbox.
+			if err := app.CompleteTask(x, id.New(), time.Now()); err != nil {
+				errMsg.Set(err.Error())
+				return
+			}
+		}
+		remember(prior, uistate.T("todo.bulkCompleted", len(ids)))
+		uistate.PostNotice(uistate.T("todo.bulkCompleted", len(ids)), false)
+		clearSelection()
+		uistate.BumpDataRevision()
+	}
+	bulkDelete := func() {
+		ids := taskbulk.Deletable(tasks, selected.Get())
+		if len(ids) == 0 {
+			return
+		}
+		// Count the whole blast radius, sub-trees included: deleting a parent takes
+		// its children, and a confirm that undercounts is worse than none.
+		doomed := map[string]bool{}
+		for _, x := range ids {
+			doomed[x] = true
+			for _, dsc := range tasktree.Descendants(tasks, x) {
+				doomed[dsc] = true
+			}
+		}
+		uistate.ConfirmModal(uistate.T("todo.bulkDeleteConfirm", len(doomed)), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			prior := make([]domain.Task, 0, len(doomed))
+			for _, t := range tasks {
+				if doomed[t.ID] {
+					prior = append(prior, t)
+				}
+			}
+			for x := range doomed {
+				_ = app.DeleteTask(x)
+			}
+			remember(prior, uistate.T("todo.bulkDeleted", len(doomed)))
+			uistate.PostNotice(uistate.T("todo.bulkDeleted", len(doomed)), false)
+			clearSelection()
+			uistate.BumpDataRevision()
+		})
+	}
+
 	var listBody ui.Node
 	switch {
 	case len(tasks) == 0:
@@ -634,6 +808,9 @@ func todoListWidget(props todoListProps) ui.Node {
 					Draggable:   manualMode,
 					OnDragStart: func() { dragSrc.Set(n.Task.ID) },
 					OnDrop:      func() { reorderTask(n.Task.ID) },
+					Selectable:  selectMode.Get(),
+					Selected:    selected.Get()[n.Task.ID],
+					OnSelect:    toggleSelect,
 				})
 			},
 		)
@@ -663,10 +840,38 @@ func todoListWidget(props todoListProps) ui.Node {
 		})
 	}
 
+	// The selection bar and the undo banner live in their own component: their
+	// buttons need hooks, and this function returns early for the board and
+	// calendar views, so hooks declared down here would shift position whenever the
+	// user switched view. A child component owns its own hook list and simply is
+	// not rendered in those views.
+	bulkBar := ui.CreateElement(todoBulkBar, todoBulkBarProps{
+		Active:      selectMode.Get(),
+		Count:       len(selected.Get()),
+		HasRows:     len(nodes) > 0,
+		Members:     app.Members(),
+		UndoCount:   len(undoTasks.Get()),
+		UndoLabel:   undoLabel.Get(),
+		OnEnter:     enterSelectMode,
+		OnExit:      exitSelectMode,
+		OnSelectAll: selectAllVisible,
+		OnClear:     clearSelection,
+		OnAssign:    func(memberID string) { applyBulkEdit(taskbulk.Edit{MemberID: memberID}) },
+		OnReschedule: func(shift taskbulk.DueShift) {
+			applyBulkEdit(taskbulk.Edit{Due: shift})
+		},
+		OnComplete: bulkComplete,
+		OnDelete:   bulkDelete,
+		OnUndo:     undoBulk,
+	})
+
 	body := uiw.EntityListSection(uiw.EntityListSectionProps{
 		Title: uistate.T("todo.listTitle"),
 		Body: Fragment(
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"), errMsg.Get())),
+			// C402: selection is opt-in — the bar is a small "Select several" button
+			// until you ask for it.
+			bulkBar,
 			// Committed/manual tasks lead. The pager belongs to this list.
 			listBody,
 			hiddenDoneNote,

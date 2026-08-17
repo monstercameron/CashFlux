@@ -45,6 +45,13 @@ type taskRowProps struct {
 	Draggable   bool
 	OnDragStart func()
 	OnDrop      func()
+	// Bulk selection (C402). Selectable turns on a leading checkbox; OnSelect is
+	// called with the row id and whether shift was held, so the list can extend a
+	// range the same way the transactions table does. Selection is a LIST concern
+	// — the row only reports the gesture.
+	Selectable bool
+	Selected   bool
+	OnSelect   func(taskID string, shift bool)
 }
 
 // TaskRow renders one task with complete/edit/delete. It can be edited inline
@@ -55,6 +62,13 @@ func TaskRow(props taskRowProps) ui.Node {
 
 	nav := router.UseNavigate()
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
+	// Shift-click extends the selection; the hook is declared unconditionally even
+	// when the row is not selectable, because hook order must never depend on props.
+	pick := ui.UseEvent(func(e ui.Event) {
+		if props.OnSelect != nil {
+			props.OnSelect(t.ID, e.JSValue().Get("shiftKey").Bool())
+		}
+	})
 	del := ui.UseEvent(Prevent(func() { props.OnDelete(t.ID) }))
 	addSub := ui.UseEvent(Prevent(func() {
 		if props.OnAddSub != nil {
@@ -256,6 +270,16 @@ func TaskRow(props taskRowProps) ui.Node {
 				Attr("data-testid", "task-grip-"+t.ID), Attr("aria-label", uistate.T("todo.dragReorder")),
 				Title(uistate.T("todo.dragReorder")), OnDragStart(dragStart),
 				uiw.Icon(icon.Grip, css.Class(tw.W35, tw.H35))))
+	}
+	// Bulk-selection checkbox, ahead of everything else so the column of boxes reads
+	// as one control down the left edge (C402). Shown only while selection mode is on
+	// — a permanently-visible checkbox column is clutter for the common single-task
+	// case.
+	if props.Selectable {
+		rowArgs = append(rowArgs, Input(css.Class("todo-select"), Type("checkbox"),
+			Attr("data-testid", "task-select-"+t.ID), CheckedIf(props.Selected),
+			Attr("aria-label", uistate.T("todo.selectTask")+" — "+t.Title),
+			Title(uistate.T("todo.selectTask")), OnClick(pick)))
 	}
 	// A leading connector glyph makes a nested sub-task unmistakable as a child of the
 	// row above it (paired with the indent + left guide rail in CSS).

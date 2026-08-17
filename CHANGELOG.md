@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Bulk select, assign, reschedule, complete and delete on the to-do list (C402).** The list had no
+  selection mechanism at all, so reassigning six tasks to one person meant opening six edit modals.
+  A "Select several" button turns on a checkbox column and a sticky action bar; shift-click takes the
+  range between two rows as displayed, and "Select all" means the visible page, never the rows the
+  current filter is hiding. The new pure `internal/taskbulk` package decides what a bulk edit means:
+  a plan returns only the rows that actually change (writing rows that already match would inflate
+  "12 to-dos updated" into a lie), completion skips rows that are already done (re-completing a
+  recurring task would spawn a second successor), and an explicit sentinel separates "leave the owner
+  alone" from "take the owner off". Reschedule targets are absolute — today, tomorrow, next week,
+  next month, clear — because the point of a bulk reschedule is to land a scattered pile on one day;
+  "push a week" is the one relative option, for a set that slipped together. Every bulk write records
+  what it overwrote behind a one-level Undo that outlives selection mode, and a bulk delete confirms
+  on the full blast radius with sub-trees counted in.
 - **To-do reminders are actually delivered (C403).** A task's `ReminderLeadDays` — "remind me three
   days before" — fed only the needs-attention digest, so a user who set an offset and then didn't
   open the digest was reminded by nothing. `notifyfeed.TaskReminderCandidates` turns every open task

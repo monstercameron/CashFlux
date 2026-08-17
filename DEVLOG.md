@@ -1,3 +1,32 @@
+## 2026-08-16 — bulk edit is a semantics problem, not a checkbox problem (C402)
+
+The ticket reads like UI work: add checkboxes and an action bar. The checkboxes took twenty minutes.
+The decisions took the rest, and they all landed in a pure package (`internal/taskbulk`) precisely
+because they are decisions, not markup.
+
+**A plan returns only what changes.** The obvious implementation writes every selected row. That is
+wrong three ways: it bumps revisions on rows nobody touched, it fills the undo snapshot with rows
+that need no undoing, and it reports "12 to-dos updated" when two were updated. `Plan` diffs first.
+
+**Completion is not a field write.** Completing a recurring to-do spawns its successor through a
+store transaction, so a bulk complete has to go through `CompleteTask` per row, and it has to skip
+rows that are already done — otherwise a selection containing one finished recurring task quietly
+spawns a second copy of it.
+
+**Empty cannot mean two things.** `MemberID: ""` already means "leave the owner alone", so bulk
+unassign needs its own sentinel. Without one there is literally no way to express it.
+
+**Absolute targets, not offsets.** "Shift the due date" reads like +7 days. But applying +7 days to
+a mixed selection produces a differently-scattered pile, and the reason anyone bulk-reschedules is
+to land things on one day. So the menu is today / tomorrow / next week / next month / clear, plus one
+relative "push a week" for the case where a set slipped together and the internal order matters.
+
+The one structural surprise: `todoListWidget` returns early for the board and calendar views, and my
+first pass put the action bar's event hooks below those returns. Switching view would have reordered
+the hook list — the single thing GWC's hook model cannot survive. The bar became its own component,
+which is also what the framework notes have said all along about per-row interactive elements. The
+rule generalizes: any hook below an early return is a bug waiting for a view switch.
+
 ## 2026-08-16 — a reminder that reminded nobody (C403)
 
 The per-task reminder offset shipped a while back: set a to-do to remind three days early and the
