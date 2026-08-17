@@ -47,21 +47,25 @@ var english = Catalog{
 	"addmenu.document":    "Scan a document",
 
 	// Quick-add transaction panel
-	"quickAdd.title":             "Add a transaction",
-	"quickAdd.account":           "Account",
-	"quickAdd.kind":              "Type",
-	"quickAdd.expense":           "Expense",
-	"quickAdd.income":            "Income",
-	"quickAdd.transfer":          "Transfer…",
-	"quickAdd.amount":            "Amount",
-	"quickAdd.description":       "Description",
-	"quickAdd.descPlaceholder":   "What was it for?",
-	"quickAdd.reviewed":          "I've reviewed this — don't flag it",
-	"quickAdd.category":          "Category",
-	"quickAdd.noCategory":        "— No category —",
-	"quickAdd.date":              "Date",
-	"quickAdd.needAccount":       "Add an account first, then log a transaction.",
-	"quickAdd.needAmount":        "Enter a non-zero amount.",
+	"quickAdd.title":           "Add a transaction",
+	"quickAdd.account":         "Account",
+	"quickAdd.kind":            "Type",
+	"quickAdd.expense":         "Expense",
+	"quickAdd.income":          "Income",
+	"quickAdd.transfer":        "Transfer…",
+	"quickAdd.amount":          "Amount",
+	"quickAdd.description":     "Description",
+	"quickAdd.descPlaceholder": "What was it for?",
+	"quickAdd.reviewed":        "I've reviewed this — don't flag it",
+	"quickAdd.category":        "Category",
+	"quickAdd.noCategory":      "— No category —",
+	"quickAdd.date":            "Date",
+	"quickAdd.needAccount":     "Add an account first, then log a transaction.",
+	"quickAdd.needAmount":      "Enter a non-zero amount.",
+	// C624: said while a typed minus is still in the box, so the form states which
+	// way the amount will be stored instead of leaving "Expense" over "-1" for the
+	// reader to resolve.
+	"quickAdd.minusMeansOut":     "Saving as money out: %s.",
 	"quickAdd.saveAndAnother":    "Save & add another",
 	"quickAdd.added":             "Transaction added.",
 	"resolution.fromEarlier":     "Move start earlier",
@@ -2044,7 +2048,11 @@ var english = Catalog{
 	"transactions.assignMember":        "Assign to",
 	"transactions.assignMemberTitle":   "Assign the selected transactions to a household member",
 	"transactions.bulkUndoBanner":      "%s · Undo",
-	"transactions.bulkDeleteConfirm":   "Delete %d transactions? This can't be undone.",
+	// Says "you can undo this" because you can: the bulk delete saves a checkpoint
+	// first and then offers an Undo banner that restores the rows. Telling people a
+	// reversible action is permanent makes them abandon work they could have taken
+	// back, and teaches them not to believe the next warning that IS real.
+	"transactions.bulkDeleteConfirm":   "Delete %d transactions? You can undo this.",
 	"transactions.bulkOpDeleted":       "Deleted %d",
 	"transactions.bulkOpRecategorized": "Recategorized %d",
 	"transactions.bulkOpCleared":       "Marked %d cleared",
@@ -3206,9 +3214,15 @@ var english = Catalog{
 	// L-series 6-lane sweep (2026-06-22)
 	"transactions.deleteConfirm":         "Delete \"%s\"? This can't be undone.",
 	"transactions.deleteTransferConfirm": "Delete the transfer \"%s\"? This removes both sides — the money out and the matching money in. This can't be undone.",
-	"goals.contributePostLedger":         "Also debit %s (move money from this account)",
-	"goals.contributedLedger":            "Transaction posted to linked account.",
-	"goals.completionPrompt":             "Goal funded! Move it to Achieved when you're ready.",
+	// C620: name the row being deleted — who, when, how much, from where — so a
+	// misclick on the wrong row is caught before it commits rather than after.
+	"transactions.deleteConfirmDetail": "Delete %s from %s for %s in %s? You can undo this from the toast that follows.",
+	// C621: deletion strands any follow-up task pointing at this charge, so the
+	// effect on other work is stated before the click, not discovered later.
+	"transactions.deleteConfirmTasks": "%d open follow-up task(s) link to it and will lose that link.",
+	"goals.contributePostLedger":      "Also debit %s (move money from this account)",
+	"goals.contributedLedger":         "Transaction posted to linked account.",
+	"goals.completionPrompt":          "Goal funded! Move it to Achieved when you're ready.",
 	// C189/C192/C194 — sinking-fund concept (F25)
 	"goals.sinkingFund":                "Sinking fund",
 	"goals.sinkingFundHint":            "A bucket you save into regularly for an irregular future expense (car repairs, holidays, annual subscriptions, etc.)",

@@ -58,6 +58,11 @@ var txnAuditKeys = Catalog{
 	"transactions.rowEditAria": "Edit %s",
 	"transactions.rowEditHint": "Open this transaction to edit it",
 
+	// The row's ⋯ trigger, named after its row like the checkbox and the pencil
+	// beside it. The unparameterised "Transaction actions" was identical on every
+	// row, so tabbing the actions column announced the same name over and over.
+	"transactions.rowActionsFor": "Actions for %s",
+
 	// --- C564: the receipt split always says what happens next -----------------
 	"receiptsplit.choosing": "Choose a photo of the receipt to read.",
 	"receiptsplit.noTxn":    "That transaction is no longer in the ledger, so there is nothing to split.",

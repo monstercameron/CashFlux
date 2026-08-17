@@ -17,6 +17,10 @@ var txnScopeKeys = Catalog{
 	"transactions.scopeNet":      "net %s",
 	"transactions.scopeLens":     "viewing as %s",
 	"transactions.scopeAria":     "What this ledger is showing",
+	// Said only when a row could not be folded into the base currency (no exchange
+	// rate saved for it). Without this the net silently covered fewer rows than the
+	// count printed beside it.
+	"transactions.scopeUnconverted": "%d not counted — no exchange rate",
 
 	// The member lens, shown as its own chip rather than folded in with the page's
 	// filters — it comes from the top bar and its ✕ clears the top bar, not a filter.
@@ -93,6 +97,13 @@ var txnScopeKeys = Catalog{
 	// asks for a person; this joins the other one back on for the tooltip.
 	"transactions.statusAlso":    "%s · %s",
 	"transactions.colStatusHint": "Spells out reconciled / cleared / needs review, so the row's state reads without decoding the ✓ ✓✓ • markers.",
+	// C618: "Needs review" claims the row is waiting in the Review inbox. A charge
+	// that already HAS a category (filed by a rule, or added without ticking
+	// "Mark as reviewed") is not in that queue, so saying it needs review sent
+	// people looking for a card that was never there. It is unconfirmed, which is
+	// a different thing, and the tooltip says where it actually stands.
+	"transactions.statusUnconfirmed":      "Not confirmed",
+	"transactions.statusUnconfirmedTitle": "Already categorized, so it isn't waiting in the Review inbox — open the row to confirm or change its category.",
 
 	// The pending band above the ledger (C582), collapsed to one fact by default.
 	"transactions.upcomingSummary":     "%d scheduled this month, %s still to come",
@@ -104,9 +115,13 @@ var txnScopeKeys = Catalog{
 
 	// Shared toolbar controls whose labels were generic enough to be ambiguous
 	// once several clear/close controls sat next to each other.
-	"action.clearSearch":  "Clear search",
-	"filters.closePanel":  "Close the filter panel — your filters stay applied",
-	"filters.summaryLead": "Filtering by",
+	"action.clearSearch": "Clear search",
+	"filters.closePanel": "Close the filter panel — your filters stay applied",
+	// C619: search is debounced, so for a moment the rows below still answer the
+	// PREVIOUS query. Say so, rather than letting someone act on results their
+	// typing has already excluded.
+	"filters.searchPending": "Searching…",
+	"filters.summaryLead":   "Filtering by",
 }
 
 func init() {
