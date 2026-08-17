@@ -7,8 +7,12 @@ package i18n
 // it. Merged via init so this file does not touch en.go.
 var smartHintKeys = Catalog{
 	// The shared control.
-	"smartHint.dismiss":    "Not now",
+	"smartHint.dismiss":     "Not now",
 	"smartHint.dismissAria": "Hide this suggestion",
+
+	// The shared "explain this one thing" affordance (SM-5, SM-7).
+	"smartExplain.action":  "Explain with Smart+",
+	"smartExplain.pending": "Thinking…",
 
 	// SM-3 — split suggestion on one charge.
 	// %d = how many past charges the shares were averaged over.
@@ -54,9 +58,9 @@ var smartHintKeys = Catalog{
 	"sm6.empty":   "Nothing on this account repeats on a schedule yet.",
 
 	// SM-8 — a likely duplicate charge.
-	"sm8.hint":     "This looks like a duplicate.",
-	"sm8.detail":   "Same amount and merchant as another charge within a few days.",
-	"sm8.action":   "Compare them",
+	"sm8.hint":   "This looks like a duplicate.",
+	"sm8.detail": "Same amount and merchant as another charge within a few days.",
+	"sm8.action": "Compare them",
 
 	// SM-9 — an expected charge that hasn't posted.
 	// %s = the merchant, %s = when it was expected.

@@ -66,6 +66,31 @@ func registerSmartRowHint() {
 		flex("1 1 100%"),
 	)
 
+	// --- SM-5 / SM-11 / SM-16: an entity's findings, stated inline on its row ---
+	// Indented to the row's text column and separated by a hairline, so a stack of
+	// findings reads as belonging to the row above rather than as new rows.
+	rule(".smart-rowinsights",
+		display("flex"),
+		flexDirection("column"),
+		marginTop("0.35rem"),
+		paddingTop("0.35rem"),
+		borderTop("1px solid color-mix(in srgb, var(--border) 55%, transparent)"),
+	)
+	// The shared explain affordance sits under whatever it explains, indented so it
+	// reads as a follow-up to that line rather than a control for the whole row.
+	rule(".smart-explain",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.25rem"),
+		alignItems("flex-start"),
+		paddingLeft("0.5rem"),
+	)
+	rule(".smart-explain-answer",
+		margin("0"),
+		color("var(--text-dim)"),
+		overflowWrap("anywhere"),
+	)
+
 	// --- SM-4: the "why this went over" sentence -------------------------------
 	// It leads the budget card's drivers disclosure, so it is styled as the lede of
 	// that panel rather than as another aside: no tint, no rule, just a slightly

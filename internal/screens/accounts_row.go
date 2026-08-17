@@ -609,6 +609,11 @@ func AccountRow(props accountRowProps) ui.Node {
 			),
 		),
 		detailsNode,
+		// SM-5 / SM-11 / SM-16: the account's OWN findings, stated inline. The dot
+		// above says something is true about this row; these say what, and let it be
+		// acted on. Gated at Standard density and up — at Minimal the row keeps only
+		// the dot it has always had.
+		smartRowInsightsFor(props.SmartSettings, props.SmartByEntity, a.ID, accountRowSmartCodes),
 	)
 }
 

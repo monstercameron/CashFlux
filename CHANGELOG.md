@@ -18,6 +18,15 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **An account row now says what it found, not just that it found something (SM-5, SM-11, SM-16).**
+  The balance-anomaly, overdraft-forecast and fee-bleed detectors have been running and tested for a
+  while, and each produces a headline, a plain-English reason, and a one-tap action. All the account
+  row ever showed was a severity *dot* with the headline as a tooltip, plus a popover that only
+  appears at the "Everywhere" density. A dot can tell you something is true about a row; it cannot
+  tell you what, or let you do anything about it — which was the whole point of those three features.
+  The finding now renders inline, with its action, at Standard density and up; Minimal keeps the dot.
+  On an unusual balance move, Smart+ can additionally say what most likely explains it and whether it
+  needs you.
 - **An over-budget now says what kind of thing happened (SM-4).** The card's "what's driving this"
   disclosure listed the merchants behind an overage and left you to infer the rest from three names.
   It now leads with the finding: one purchase did it (named, with its amount), you shopped more often
