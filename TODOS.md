@@ -1216,13 +1216,34 @@ bottom-up per SDLC.
   says why, but a window control offering a choice that can never produce a figure is a small dead end.
   Filed as FP-T1c-b rather than fixed by lowering the floor, because annualizing three weeks is the
   thing the floor exists to prevent.
-- [ ] **FP-T1c-b — The 1M window on /investments can never report a return.** The growth chart's 1M
+- [x] **FP-T1c-b — The 1M window on /investments can never report a return.** The growth chart's 1M
   option spans under `portfolio.MinReturnDays` (30), so the return reading beneath it always says "not
   enough history yet". Honest, but a control that can never succeed is a dead end. Options: report an
   UNannualized period return for short windows (clearly labelled "over this month", not "a year"),
   disable the reading's window rather than the chart's, or drop 1M. Do NOT lower the floor —
   annualizing three weeks multiplies noise by the same factor it multiplies the return, which is
   exactly what the floor prevents.
+  — DONE (2026-08-17), the first option, and the floor is untouched.
+
+  `portfolio.Returns` now reports `PeriodPct` — the time-weighted return OVER THE WINDOW — for any span
+  with elapsed time, while the YEARLY figures stay gated on `MinReturnDays`. The window happened; what
+  cannot honestly be said is what it implies about a year.
+
+  The wording never contains "a year" on that path, and the reason is stated rather than left as an
+  absence: "Too short to state as a yearly rate — annualizing under 30 days multiplies the noise as
+  much as the return." The yearly figures are WITHHELD, not shown as zero.
+
+  `Days == 0` now means NO ELAPSED TIME rather than "refused": two valuations on the same day describe
+  an instant, and an instant has no return. That is a different thing from a short window and reports
+  nothing at all.
+
+  One existing test changed shape (`TestVeryShortPeriodsAreRefused` → `…AreNotAnnualized`). Its
+  `Days == 0` assertion encoded the old refuse-everything contract, not the principle; the principle —
+  no yearly rate from three days — is still asserted, alongside the new period figure and the fact that
+  `TimeWeightedPct` is left unclaimed.
+
+  VERIFIED IN A BROWSER: 14/14. The 1M window now reads "The investments returned -0.2% over these 29
+  days" where it previously reported nothing.
 - [x] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
   (`investments_tiles.go:292`). Model per-lot acquisitions (qty/date/price), relieve basis on sale,
   compute realized P&L + short/long-term holding period. Unblocks investment tax reporting.

@@ -49,9 +49,22 @@ func investReturnsReading(accts []domain.Account, txns []domain.Transaction,
 	}
 	perf := portfolio.Returns(valuations, investExternalFlows(accts, txns))
 
-	// Under thirty days there is nothing honest to report. Say why, rather than
-	// showing an empty space that reads as a bug or, worse, a zero.
+	// FP-T1c-b: a window shorter than the floor still HAPPENED. Say what it
+	// returned over the window rather than nothing — the 1M option on the chart
+	// above spans fewer days than the floor, so refusing outright made it a
+	// control that could never succeed. What is withheld is the YEARLY rate, and
+	// the wording never says "a year".
 	if !perf.TWRKnown && !perf.IRRKnown {
+		if perf.PeriodKnown {
+			return Div(css.Class("inv-returns"), Attr("data-testid", "invest-returns"),
+				P(css.Class("t-caption", tw.TextDim), uistate.T("invret.why")),
+				P(css.Class("inv-return-line"), Attr("data-testid", "invest-return-period"),
+					uistate.T("invret.period", perf.PeriodPct, perf.Days)),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-return-noyear"),
+					uistate.T("invret.noYearlyRate", portfolio.MinReturnDays)),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-return-basis"),
+					uistate.T("invret.basis", perf.Days, perf.Valuations, perf.Flows)))
+		}
 		return P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-return-none"),
 			uistate.T("invret.tooShort", portfolio.MinReturnDays))
 	}

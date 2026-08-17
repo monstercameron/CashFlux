@@ -1,3 +1,29 @@
+## 2026-08-17 - a control that could never succeed (FP-T1c-b)
+
+I filed this against my own work yesterday: the growth chart's 1M option spans fewer days than the
+return engine's 30-day annualizing floor, so choosing it always reported "not enough history yet". True,
+and it said why - but a control that can never produce a figure is a dead end, and the honest fix was
+not to lower the floor.
+
+The floor exists because annualizing three weeks multiplies its noise by exactly the factor it
+multiplies the return, and a spectacular number is one people act on. That reasoning is about the YEARLY
+RATE, not about the window. The window happened. What it returned over those 29 days is a fact.
+
+So `portfolio.Returns` now reports a period return for any span with elapsed time, and gates only the
+annualized figures on the floor. The surface says "The investments returned -0.2% over these 29 days"
+and, immediately after, why there is no yearly figure. The word "year" never appears on that path, and
+the yearly numbers are withheld rather than shown as zero.
+
+One thing worth separating out: `Days == 0` now means NO ELAPSED TIME rather than "refused". Two
+valuations on the same day describe an instant, and an instant has no return - a different thing from a
+short window, and it still reports nothing at all.
+
+And a note on the test I changed. `TestVeryShortPeriodsAreRefused` asserted `Days == 0` for a three-day
+window. That assertion encoded the old refuse-everything shape, not the principle it was protecting, and
+the principle - no yearly rate from three days - is still asserted, now alongside the period figure and
+an explicit check that `TimeWeightedPct` is left unclaimed. Renaming it to `…AreNotAnnualized` says what
+it actually guards.
+
 ## 2026-08-17 - tax depth, and a crash hiding under it (FP-T1e)
 
 Three engines and a report section. The engines were the straightforward part; the two bugs the browser

@@ -102,16 +102,61 @@ func TestReturnsAreAnnualized(t *testing.T) {
 
 // Annualizing three good days multiplies their noise by the same factor it
 // multiplies the return, and a spectacular figure is one people act on.
-func TestVeryShortPeriodsAreRefused(t *testing.T) {
+//
+// The window still HAPPENED, though, so what it returned is reported over the
+// window (FP-T1c-b) — what is refused is stating it as a yearly rate.
+func TestVeryShortPeriodsAreNotAnnualized(t *testing.T) {
 	p := Returns([]Valuation{
 		{Date: perfDay(2026, time.January, 1), ValueMinor: 1000000},
 		{Date: perfDay(2026, time.January, 4), ValueMinor: 1100000},
 	}, nil)
 	if p.TWRKnown || p.IRRKnown {
-		t.Errorf("a three-day window produced a return: %+v", p)
+		t.Errorf("a three-day window produced a yearly rate: %+v", p)
 	}
-	if p.Days != 0 {
-		t.Errorf("Days = %d, want 0 for a refused window", p.Days)
+	if p.Annualized {
+		t.Error("a three-day window must not claim to be annualized")
+	}
+	if !p.PeriodKnown {
+		t.Fatal("the window still happened — its return over the window must be reported")
+	}
+	if p.PeriodPct < 9.9 || p.PeriodPct > 10.1 {
+		t.Errorf("period return = %v, want about 10%% over the window", p.PeriodPct)
+	}
+	// Annualizing that 10%% over three days would be roughly 300,000%. The gap
+	// between the two numbers is the entire reason for the floor.
+	if p.TimeWeightedPct != 0 {
+		t.Errorf("TimeWeightedPct = %v, want it left at zero and unclaimed", p.TimeWeightedPct)
+	}
+}
+
+// Two valuations on the same day describe an instant, and an instant has no
+// return — that is not a short window, it is no window.
+func TestNoElapsedTimeReportsNothingAtAll(t *testing.T) {
+	p := Returns([]Valuation{
+		{Date: perfDay(2026, time.January, 1), ValueMinor: 1000000},
+		{Date: perfDay(2026, time.January, 1), ValueMinor: 1100000},
+	}, nil)
+	if p.PeriodKnown || p.TWRKnown || p.IRRKnown || p.Days != 0 {
+		t.Errorf("an instant produced a return: %+v", p)
+	}
+}
+
+// A long window reports BOTH, and the annualized figure must be the smaller of
+// the two for a multi-year run — that is what annualizing a cumulative return
+// does, and getting it backwards would flatter every long holding.
+func TestALongWindowReportsBothAndAnnualizingScalesDown(t *testing.T) {
+	p := Returns([]Valuation{
+		{Date: perfDay(2020, time.January, 1), ValueMinor: 1000000},
+		{Date: perfDay(2026, time.January, 1), ValueMinor: 2000000},
+	}, nil)
+	if !p.PeriodKnown || !p.TWRKnown || !p.Annualized {
+		t.Fatalf("a six-year window must report both: %+v", p)
+	}
+	if p.PeriodPct < 99 || p.PeriodPct > 101 {
+		t.Errorf("period return = %v, want about 100%% over six years", p.PeriodPct)
+	}
+	if p.TimeWeightedPct >= p.PeriodPct {
+		t.Errorf("annualized %v should be well below the cumulative %v", p.TimeWeightedPct, p.PeriodPct)
 	}
 }
 

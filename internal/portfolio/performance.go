@@ -68,6 +68,22 @@ type Performance struct {
 	// no flows has a TWR and a degenerate IRR, and reporting a zero for the
 	// missing one would read as "you made nothing".
 	TWRKnown, IRRKnown bool
+	// PeriodPct is the time-weighted return OVER THE WINDOW, not per year, and
+	// PeriodKnown says whether it means anything (FP-T1c-b).
+	//
+	// It exists because a window shorter than MinReturnDays has a perfectly real
+	// return — it simply cannot be stated as a yearly rate without multiplying
+	// its noise by the same factor it multiplies the result. Refusing outright
+	// left the app's own one-month chart option unable to ever report anything,
+	// which is a control that can never succeed. The unannualized figure is the
+	// honest thing to say instead, and callers must label it as covering the
+	// window rather than a year.
+	PeriodPct   float64
+	PeriodKnown bool
+	// Annualized reports whether the yearly figures were computed at all. False
+	// means the window was too short and only PeriodPct is available — the two
+	// must never be presented in the same words.
+	Annualized bool
 	// Days is the span covered, and Flows/Valuations how much evidence there was
 	// — so a surface can say "over 94 days, 3 contributions" rather than
 	// presenting a number with no provenance.
@@ -106,10 +122,13 @@ func Returns(vals []Valuation, flows []Flow) Performance {
 	sort.SliceStable(v, func(i, j int) bool { return v[i].Date.Before(v[j].Date) })
 	start, end := v[0], v[len(v)-1]
 	days := int(end.Date.Sub(start.Date).Hours() / 24)
-	if days < MinReturnDays {
+	if days <= 0 {
+		// No elapsed time is not a short window, it is no window: two valuations on
+		// the same day describe an instant, and an instant has no return.
 		return p
 	}
 	p.Days, p.Valuations = days, len(v)
+	p.Annualized = days >= MinReturnDays
 
 	inWindow := make([]Flow, 0, len(flows))
 	for _, f := range flows {
@@ -121,23 +140,35 @@ func Returns(vals []Valuation, flows []Flow) Performance {
 	sort.SliceStable(inWindow, func(i, j int) bool { return inWindow[i].Date.Before(inWindow[j].Date) })
 	p.Flows = len(inWindow)
 
-	if twr, ok := timeWeighted(v, inWindow, days); ok {
+	// The period return is computed for ANY window with elapsed time. The yearly
+	// figures are gated on the floor, so a short window reports what happened
+	// without dressing it as a rate.
+	growth, ok := twrGrowth(v, inWindow)
+	if ok {
+		p.PeriodPct, p.PeriodKnown = (growth-1)*100, true
+	}
+	if !p.Annualized {
+		return p
+	}
+	if twr, ok2 := annualize(growth, days); ok && ok2 {
 		p.TimeWeightedPct, p.TWRKnown = twr, true
 	}
-	if irr, ok := moneyWeighted(v, inWindow); ok {
+	if irr, ok2 := moneyWeighted(v, inWindow); ok2 {
 		p.MoneyWeightedPct, p.IRRKnown = irr, true
 	}
 	return p
 }
 
-// timeWeighted chains the return of each sub-period between valuations, so a
-// contribution changes the balance without registering as performance.
+// twrGrowth chains the return of each sub-period between valuations, so a
+// contribution changes the balance without registering as performance. It
+// returns the GROWTH FACTOR (1.07 for +7%), leaving the caller to decide whether
+// to state it over the window or annualize it.
 //
 // A sub-period whose starting value is zero is SKIPPED rather than treated as an
 // infinite return: an account funded from nothing has no percentage return over
 // the interval in which it was funded, and the alternative is a division by zero
 // that propagates through the whole chain.
-func timeWeighted(v []Valuation, flows []Flow, days int) (float64, bool) {
+func twrGrowth(v []Valuation, flows []Flow) (float64, bool) {
 	growth := 1.0
 	measured := false
 	for i := 1; i < len(v); i++ {
@@ -165,7 +196,7 @@ func timeWeighted(v []Valuation, flows []Flow, days int) (float64, bool) {
 	if !measured {
 		return 0, false
 	}
-	return annualize(growth, days)
+	return growth, true
 }
 
 // moneyWeighted solves the annualized rate that makes the discounted flows and

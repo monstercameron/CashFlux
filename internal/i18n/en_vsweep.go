@@ -526,6 +526,8 @@ var vSweepKeys = Catalog{
 	"invret.gapCost":  "The timing of your contributions cost about %.1f points a year.",
 	"invret.gapGain":  "The timing of your contributions gained about %.1f points a year.",
 	"invret.basis":    "Over %d days, from %d valuations and %d transfers in or out.",
+	"invret.period":       "The investments returned %.1f%% over these %d days.",
+	"invret.noYearlyRate": "Too short to state as a yearly rate — annualizing under %d days multiplies the noise as much as the return.",
 	"invret.tooShort": "There is not enough history yet — a return needs at least %d days to mean anything.",
 
 	// FP-T2d — long-horizon figures restated in money the reader can price. One

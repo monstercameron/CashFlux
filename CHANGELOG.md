@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The one-month view on Investments reports a return again (FP-T1c-b).** It spans fewer days than the
+  minimum for a yearly rate, so it used to say only "not enough history". It now says what the portfolio
+  returned over the window, states why there is no yearly figure, and does not call a month's result a
+  yearly rate.
+
 ### Added
 - **A "Business and tax" section on the full report (FP-T1e).** Three things a household with untaxed
   income needs and had to assemble by hand. Deductible spending grouped by the Schedule C line it goes
