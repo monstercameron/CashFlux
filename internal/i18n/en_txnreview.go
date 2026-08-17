@@ -49,6 +49,17 @@ var txnReviewKeys = Catalog{
 	"txnreview.apply":        "Link these transfers",
 
 	"txnreview.appliedToast": "Linked %s.",
+
+	// C672: the leak notice. It changes no total — it states the size of an error
+	// beside the figures it affects. A report wrong by a known amount that says so
+	// is honest; the same report saying nothing is not.
+	"txnleak.title":        "%s in this %s look like transfers that were never linked, so they are counted here.",
+	"txnleak.income":       "%s of it is counted as income you didn't earn.",
+	"txnleak.spending":     "%s of it is counted as spending you didn't do.",
+	"txnleak.review":       "Review them",
+	"txnleak.reviewTitle":  "Open the transfer review, where you can link them in a few clicks",
+	"txnleak.whereReport":  "report",
+	"txnleak.whereBudgets": "period",
 }
 
 func init() {

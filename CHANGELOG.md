@@ -6,6 +6,15 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Reports and budgets say when transfer-shaped rows are inflating them (C672).** Rows that look like money
+  moved between your own accounts, but were never linked, count as income and spending — and now the report
+  and the budgets page say so above the figures, with the amount and a link to fix them. They are still
+  counted, deliberately: a household can legitimately call a category "Transfer" for something that really is
+  spending, and hiding every row that wears the name would conceal real money. The figures are stated per
+  currency and scoped to the same window and budgets the surrounding numbers are, so the notice describes what
+  you are actually looking at.
+
 ### Added
 - **Fix a statement's worth of mis-filed transfers in a few clicks (C676).** A new "Review transfers" panel
   on the ledger finds the rows that look like money moved between your own accounts but were never linked —

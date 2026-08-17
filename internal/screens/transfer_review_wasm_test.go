@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
@@ -407,5 +408,252 @@ func TestTransferReviewNotesAnAmbiguousLegWithoutRefusingIt(t *testing.T) {
 	// It is a note, not a refusal: the row is still appliable.
 	if byTestID(f, "span", "txnreview-rowerr-t1") != nil {
 		t.Error("an uncertain pairing was reported as a refusal — the classification is still correct")
+	}
+}
+
+// ─── C672: the leak notice ───────────────────────────────────────────────────
+
+// The ticket forbids hiding these rows: a household can legitimately call a
+// category "Transfer" for something that really is spending. So the notice
+// changes no total — it states the size of the error beside the figures it
+// distorts, and offers the repair.
+func TestTransferLeakNoticeStatesTheErrorWithoutHidingIt(t *testing.T) {
+	txrApp(t)
+	f := render.New(t)
+	// Income and spending are named separately: money you did not earn and money
+	// you did not spend are two different wrongnesses, and one netted figure
+	// would understate both.
+	f.Render(ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: appstate.Default.Transactions(), Where: "report",
+	}))
+
+	title := byTestID(f, "span", "txnleak-title")
+	if title == nil || title.Text() == "" {
+		t.Fatal("the notice says nothing about the rows distorting the figures")
+	}
+	if !strings.Contains(title.Text(), "3") {
+		t.Errorf("the notice does not say how many rows; got %q", title.Text())
+	}
+	// The seeded rows are all outgoing, so only the spending half applies.
+	spend := byTestID(f, "span", "txnleak-spending-USD")
+	if spend == nil || !strings.Contains(spend.Text(), fmtMoney(money.New(85000, "USD"))) {
+		t.Errorf("the spending figure is wrong or missing; got %v", spend)
+	}
+	if byTestID(f, "span", "txnleak-income-USD") != nil {
+		t.Error("an income figure is claimed where every suspect row is outgoing")
+	}
+	if byTestID(f, "button", "txnleak-review") == nil {
+		t.Error("the notice states a problem and offers no way to fix it")
+	}
+}
+
+// A clean population renders nothing: this is a state, not a fixture.
+func TestTransferLeakNoticeIsSilentWhenThereIsNoLeak(t *testing.T) {
+	txrApp(t)
+	f := render.New(t)
+	f.Render(ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: nil, Where: "report",
+	}))
+	if byTestID(f, "div", "txnleak-notice") != nil {
+		t.Error("the notice rendered over a population with nothing wrong in it")
+	}
+}
+
+// It describes the population it was given, so a scoped report quotes its own
+// leak rather than the household's.
+func TestTransferLeakNoticeDescribesThePopulationItWasGiven(t *testing.T) {
+	app := txrApp(t)
+	all := app.Transactions()
+	var one []domain.Transaction
+	for _, tx := range all {
+		if tx.ID == "t1" {
+			one = append(one, tx)
+		}
+	}
+	f := render.New(t)
+	f.Render(ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: one, Where: "report",
+	}))
+	spend := byTestID(f, "span", "txnleak-spending-USD")
+	if spend == nil {
+		t.Fatal("no spending figure for the scoped population")
+	}
+	if !strings.Contains(spend.Text(), fmtMoney(money.New(50000, "USD"))) {
+		t.Errorf("the notice quoted a figure outside its own population; got %q", spend.Text())
+	}
+}
+
+// Review finding 1, the second time: Leaked does not FX-convert, by design and by
+// its own doc comment. Summing its figures and stamping the household currency on
+// the result prints a number belonging to no currency at all — worse than the
+// silence it replaced, because a notice that lies is a reason to distrust the next
+// one. Exactly the bug found in the review panel; it must not recur here.
+func TestTransferLeakNoticeKeepsCurrenciesApart(t *testing.T) {
+	app := txrApp(t)
+	if err := app.PutAccount(domain.Account{
+		ID: "a-jpy", Name: "Tokyo", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "JPY", BalanceAsOf: time.Now(),
+	}); err != nil {
+		t.Fatalf("PutAccount: %v", err)
+	}
+	if err := app.PutTransaction(domain.Transaction{
+		ID: "t-jpy", AccountID: "a-jpy", Desc: "ONLINE TRANSFER", Date: txrDay,
+		Amount: money.New(-50000, "JPY"),
+	}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	uistate.BumpDataRevision()
+
+	f := render.New(t)
+	f.Render(ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: app.Transactions(), Where: "report",
+	}))
+
+	usd := byTestID(f, "span", "txnleak-spending-USD")
+	jpy := byTestID(f, "span", "txnleak-spending-JPY")
+	if usd == nil || jpy == nil {
+		t.Fatalf("expected a line per currency; usd=%v jpy=%v", usd, jpy)
+	}
+	if !strings.Contains(usd.Text(), fmtMoney(money.New(85000, "USD"))) {
+		t.Errorf("USD line = %q, want the USD total alone", usd.Text())
+	}
+	if !strings.Contains(jpy.Text(), fmtMoney(money.New(50000, "JPY"))) {
+		t.Errorf("JPY line = %q, want the JPY total alone", jpy.Text())
+	}
+	// And nowhere does a combined figure appear.
+	if strings.Contains(usd.Text(), fmtMoney(money.New(135000, "USD"))) {
+		t.Error("the notice summed yen into dollars")
+	}
+}
+
+// Review finding 2: the notice must describe the window the surrounding figures
+// were computed over. Quoting a household's whole history beside one year's
+// numbers names money the reader cannot find in them.
+func TestTransferLeakNoticeClipsToTheWindow(t *testing.T) {
+	app := txrApp(t)
+	// An old suspect row, well outside the window under test.
+	if err := app.PutTransaction(domain.Transaction{
+		ID: "t-old", AccountID: "a-check", Desc: "TRANSFER TO SAVINGS",
+		Date: txrDay.AddDate(-3, 0, 0), Amount: money.New(-999900, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	uistate.BumpDataRevision()
+
+	from := txrDay.AddDate(0, -1, 0)
+	to := txrDay.AddDate(0, 6, 0)
+	f := render.New(t)
+	f.Render(ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: app.Transactions(), From: from, To: to, Where: "report",
+	}))
+
+	spend := byTestID(f, "span", "txnleak-spending-USD")
+	if spend == nil {
+		t.Fatal("no spending figure inside the window")
+	}
+	if strings.Contains(spend.Text(), fmtMoney(money.New(1084900, "USD"))) {
+		t.Errorf("the notice counted a row three years outside the window: %q", spend.Text())
+	}
+	if !strings.Contains(spend.Text(), fmtMoney(money.New(85000, "USD"))) {
+		t.Errorf("spending figure = %q, want only the in-window rows", spend.Text())
+	}
+	title := byTestID(f, "span", "txnleak-title")
+	if title == nil || !strings.Contains(title.Text(), "3") {
+		t.Errorf("the count is not clipped to the window; got %v", title)
+	}
+}
+
+// Review round 2: the Budgets page shows ONE toolbar window but scores N budgets
+// on N independent cadences, so no single window describes what its totals sum.
+// Clipping the notice to the toolbar rendered "nothing wrong" beside a total that
+// was wrong — a silent miss of the exact thing the flag exists to prevent.
+func TestBudgetLeakRowsFollowEachBudgetsOwnWindow(t *testing.T) {
+	app := txrApp(t)
+	if err := app.PutCategory(domain.Category{ID: "c-tax", Name: "Transfer", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	now := time.Now()
+	// A YEARLY budget: its window spans the whole calendar year, so a charge from
+	// eight months ago is inside it and already counted.
+	if err := app.PutBudget(domain.Budget{
+		ID: "b-year", Name: "Property tax", CategoryID: "c-tax",
+		Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+		Period: domain.PeriodYearly, Limit: money.New(500000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	old := time.Date(now.Year(), time.February, 10, 0, 0, 0, 0, time.UTC)
+	if err := app.PutTransaction(domain.Transaction{
+		ID: "t-tax", AccountID: "a-check", Desc: "ANNUAL SWEEP", CategoryID: "c-tax",
+		Date: old, Amount: money.New(-300000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	uistate.BumpDataRevision()
+
+	pr := uistate.LoadPrefs()
+	// The page's toolbar window is the CURRENT month — which does not contain the
+	// February row, while the yearly budget's own window does.
+	vw := period.NewWindow(period.Month, now, pr.WeekStartWeekday())
+	v := computeBudgetView(app, "", vw, pr, false)
+
+	found := false
+	for _, row := range v.LeakRows {
+		if row.ID == "t-tax" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("a row counted by a yearly budget was dropped because the toolbar showed a month — the notice would read 'nothing wrong' beside a total that includes it")
+	}
+	// And it is genuinely in the figure the notice sits beside.
+	if v.TotalSpent == 0 {
+		t.Fatal("the seeded row did not reach TotalSpent, so this test proves nothing")
+	}
+
+	// Rows no budget counts are not claimed either: the notice describes THESE
+	// figures, not the household.
+	for _, row := range v.LeakRows {
+		if row.ID == "t3" {
+			t.Error("an uncategorized suspect no budget tracks was claimed as inflating the budget totals")
+		}
+	}
+}
+
+// One row counted by two budgets is still one row.
+func TestBudgetLeakRowsAreDedupedAcrossBudgets(t *testing.T) {
+	app := txrApp(t)
+	if err := app.PutCategory(domain.Category{ID: "c-x", Name: "Transfer", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	now := time.Now()
+	for _, id := range []string{"b-one", "b-two"} {
+		if err := app.PutBudget(domain.Budget{
+			ID: id, Name: id, CategoryID: "c-x",
+			Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+			Period: domain.PeriodYearly, Limit: money.New(500000, "USD"),
+		}); err != nil {
+			t.Fatalf("PutBudget %s: %v", id, err)
+		}
+	}
+	if err := app.PutTransaction(domain.Transaction{
+		ID: "t-dup", AccountID: "a-check", Desc: "SWEEP", CategoryID: "c-x",
+		Date:   time.Date(now.Year(), time.March, 3, 0, 0, 0, 0, time.UTC),
+		Amount: money.New(-10000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutTransaction: %v", err)
+	}
+	uistate.BumpDataRevision()
+
+	pr := uistate.LoadPrefs()
+	v := computeBudgetView(app, "", period.NewWindow(period.Month, now, pr.WeekStartWeekday()), pr, false)
+	seen := 0
+	for _, row := range v.LeakRows {
+		if row.ID == "t-dup" {
+			seen++
+		}
+	}
+	if seen != 1 {
+		t.Errorf("the row appears %d times, want 1 — two budgets counting it is still one row", seen)
 	}
 }

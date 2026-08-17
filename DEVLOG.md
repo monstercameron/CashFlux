@@ -1,3 +1,40 @@
+## 2026-08-17 - a flag that lies is worse than no flag (C672)
+
+The detector and the repair path both existed by the time I got here. What was missing was the diagnostic
+where the distortion actually shows: reports and budgets count these rows through CountsInReports, which IS
+the leak, and the ticket forbids hiding them - a household can legitimately name a category "Transfer" for
+something that really is spending, and dropping every row that wears the name would conceal real money.
+
+So the notice changes no total. The whole justification is that a report wrong by a KNOWN amount and saying
+so is honest. Which means the amount has to be right, and three separate times it wasn't.
+
+First: I summed minor units across currencies and stamped the household symbol on the result. This is the
+same bug the review found in the transfer panel earlier the same day, and I reproduced it hours later in a
+component whose entire purpose is to state a figure accurately. The fix is not "remember to bucket" - I had
+already learned that and forgot anyway. LeakedByCurrency lives in the pure layer so a caller never HOLDS a
+cross-currency sum. You cannot print a number you never computed.
+
+Second: the notice described the account's whole history while sitting above one year's figures. A reader
+would have gone looking for money that is not in the numbers in front of them.
+
+Third, and the one worth remembering: I "fixed" the budgets page by clipping to the page's toolbar window,
+which looked obviously right and is architecturally wrong. That page shows one macro window but scores N
+budgets on N independent cadences. A yearly budget's February charge is in TotalSpent while the toolbar says
+August - so the notice rendered "nothing wrong" beside a total that was wrong. Silent under-reporting is
+precisely what the acceptance criterion exists to prevent, and I had built it into the thing meant to satisfy
+it. The rows are now collected inside the same loop that computes each budget's spend, in that budget's own
+window and category set, deduped across budgets.
+
+The pattern across all three: a diagnostic is a claim about other numbers, so it inherits every scoping rule
+those numbers obey. Getting the population wrong is not a presentation bug, it is the diagnostic being false.
+
+I did not build the import-time diagnostic. It belongs in buildCSVPreflight beside the existing duplicate and
+transfer-pair advisories - that seam already runs read-only checks over staged rows and tells the user before
+commit, which is the advantage a post-import prompt throws away. It must not block: JumpWarning, a stronger
+integrity signal than a category-name heuristic, only renders a banner above an always-enabled confirm.
+Filed as C682 rather than claimed. C672 is a BLOCKER and I would rather ship a partial fix that names its own
+gap than a complete-looking one that has a hole in it.
+
 ## 2026-08-17 - the suggestion is not the answer (C676)
 
 The bulk planner for transfer classification already existed, with no surface. So did Suspects, which finds

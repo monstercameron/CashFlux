@@ -376,6 +376,12 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		// C587: directly under the allocation bar, because that bar is what makes
 		// "fully assigned" look like "fully funded". Renders nothing when the plan
 		// IS funded, so it is a state rather than a permanent fixture.
+		// C672: the rows that inflated THESE figures — collected per budget, in each
+		// budget's own window and category set, because this page scores N budgets
+		// on N cadences and no single toolbar window describes them all.
+		ui.CreateElement(transferLeakNotice, transferLeakProps{
+			Txns: v.LeakRows, Where: uistate.T("txnleak.whereBudgets"),
+		}),
 		// ScalableCount comes from the SAME preview the Adjust-all form builds, under
 		// the SAME scope the button seeds, so the count promised here is the count
 		// the form shows (C671).

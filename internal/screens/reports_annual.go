@@ -176,6 +176,14 @@ func Reports() ui.Node {
 		return nil
 	}, persistKey)
 
+	// C672: rows that look like unlinked transfers are counted in every figure
+	// below. The notice covers the SAME population and the SAME window those
+	// figures do — a leak quoted from the account's whole history beside one
+	// year's numbers would name money the reader cannot find in them.
+	leakNotice := ui.CreateElement(transferLeakNotice, transferLeakProps{
+		Txns: scopedTxns, From: as, To: ae, Where: uistate.T("txnleak.whereReport"),
+	})
+
 	// ── Year computations (all pure-core calls over [as, ae)). ────────────────
 	flow, _ := reports.IncomeVsExpense(scopedTxns, as, ae, rates)
 	rows, _ := reports.SpendingByCategory(scopedTxns, as, ae, true, ps, pe, rates)
@@ -1924,6 +1932,10 @@ func Reports() ui.Node {
 
 	return Div(css.Class("rpta"),
 		masthead,
+		// C672: stated above the report, not inside one section, because the leak
+		// distorts every figure below it — spending, income, the flow diagram and
+		// the category totals alike.
+		leakNotice,
 		modeToggle,
 		If(summaryMode.Get(), summaryView),
 		If(!summaryMode.Get(), Fragment(

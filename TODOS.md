@@ -5347,7 +5347,45 @@ Remaining atomic todos:
 - [ ] **[C68][MAJOR]** Guard `ActionFlagReview` against transfer legs — `internal/appstate/appstate.go` `case workflow.ActionFlagReview:` (~l1226) — add `if t.IsTransfer() { return }` (audit other applyEffect cases for the same).
 - [ ] **[C69][MAJOR]** "From account" `<select>` in the new modal — exclude archived + the selected "To" account (mirror `accounts_row.go:406-431`); block submit if `fromID == toID`.
 - [ ] **[C70][MAJOR]** Branch delete-confirm on `t.IsTransfer()` — `internal/screens/transactions_row.go:~64` — new i18n key `transactions.deleteTransferConfirm` ("Both sides of this transfer will be removed…").
-- [ ] **[C672][BLOCKER][REPORTS][TRANSFER][DATA]** Prevent category-only transfer rows from leaking into income/spending — production Money Flow currently shows positive rows categorized `Transfer` as income and negative rows categorized `Transfers` as expenditure when `TransferAccountID` is empty. The structural relationship, not the category label or sign, must decide whether a row is a transfer. Add an import/backfill diagnostic for canonical transfer categories and transfer-like descriptions, route ambiguous rows to review, and repair confirmed rows by setting the counterparty account (plus `BillAccountID` only for an intentional card/loan payment). Do not globally hide every category named Transfer, because that could conceal legitimate income or spending. Acceptance: the supplied 40-row statement produces zero transfer income/spending after review; Money Flow, reports, and spending budgets agree; unresolved rows are visibly flagged rather than silently counted.
+- [~] **[C672][BLOCKER][REPORTS][TRANSFER][DATA]** Category-only transfer rows leaking into income/spending — PARTIALLY DONE, one gap named below.
+  Detection (`txnclassify.Suspects`) and the per-row ledger mark landed earlier; the repair workflow landed
+  with C676. What was missing was the diagnostic WHERE THE DISTORTION SHOWS: reports and budgets count these
+  rows through `CountsInReports`, which is the leak, and the ticket forbids hiding them — a household can
+  legitimately name a category "Transfer" for something that really is spending, and dropping every row that
+  wears the name would conceal real money.
+  So `transferLeakNotice` changes no total. It states how many rows are inflating the figures beside it and by
+  how much, splitting income from spending (money you did not earn and money you did not spend are two
+  different wrongnesses; one netted figure understates both), and offers the review panel.
+  Four defects found by adversarial review and fixed before landing: the notice summed minor units across
+  currencies and stamped one symbol on the result (the same bug found in C676, repeated — now impossible,
+  because `LeakedByCurrency` means the caller never holds a cross-currency sum); it described the account's
+  whole history beside one year's figures (now clipped to the report's own window via `SuspectsIn`); its hooks
+  ran after an early return; and the budgets notice, clipped to the page's single toolbar window, rendered
+  "nothing wrong" beside a total that included a yearly budget's out-of-window charge — the rows are now
+  collected per budget, in each budget's own window and category set, deduped.
+  **STILL UNBUILT — no import-time diagnostic.** `documents_preflight.go`/`documents.go`'s `buildCSVPreflight`
+  never runs `txnclassify.Suspects` over staged rows before commit. Tracked as C682.
+  AC met: reports and budgets agree (both gate on `IsIncome`/`IsExpense`/`CountsInReports`, and
+  `statement_surfaces_test.go` proves they zero out together after review); `BillAccountID` is set only on an
+  explicit debt claim against a liability; nothing is hidden from any total.
+  AC not met: unresolved rows are flagged on the ledger, the annual report and the budgets page, but not at
+  import time.
+
+- [ ] **[C682][MAJOR][TXN][TRANSFER][IMPORT]** Add the import-time transfer diagnostic C672 left unbuilt.
+  `documents_preflight.go`/`documents.go`'s `buildCSVPreflight` never runs `txnclassify.Suspects` over staged
+  rows before commit; add it there as a third advisory alongside `Whys`/`Pairs`, informational only, matching
+  `JumpWarning`'s non-blocking precedent.
+  That seam already runs read-only advisories over staged-but-uncommitted rows and renders them beside the
+  only two actions, so telling the user before commit — while they are still looking at this statement — is
+  the whole advantage a post-import prompt throws away. It complements rather than duplicates
+  `importsafe.TransferPairs`: that matcher only catches transfers where BOTH legs are visible, and
+  `txnclassify.Suspects` catches the single-leg, category-or-description-only case it structurally cannot.
+  **Do not gate Import on it.** `JumpWarning` — an implausible balance jump, a stronger integrity signal than
+  a category-name heuristic — renders a warning above an always-enabled confirm. Blocking on transfer
+  classification would be a harsher gate than the codebase applies to its most severe existing import warning,
+  and would penalise exactly the case the diagnostic is for: a large statement with genuinely ambiguous rows.
+  Acceptance: importing the 40-row statement names the suspect rows before commit, Import stays enabled, and
+  the count agrees with what the review panel then shows.
 - [ ] **[C673][MAJOR][TXN][TRANSFER][UX]** Make the transfer action explicit in the transaction editor — replace the easy-to-miss `Other account this money moved to or from` field with a clearly grouped **Mark as transfer** control that explains that positive/negative signs are account-relative and that the row will leave income, spending, budgets, and reports. Keep category assignment separate and prevent a user from believing that choosing a `Transfer` category alone is sufficient.
 - [ ] **[C674][MAJOR][TXN][TRANSFER][PAIR][WORKFLOW]** Add a first-class unmatched-leg pairing workflow — from Review inbox and the transaction row, let a user choose the owned counterparty account for an imported leg, preview the resulting classification, and show whether a reciprocal leg was found. Never invent a counterpart transaction as a side effect of classification. Handle one-sided card/loan payments and duplicated same-account legs with an explicit repair path; fold the domain decision into C527 rather than guessing from description text.
 - [ ] **[C675][MAJOR][TXN][TRANSFER][UX][VISUAL]** Add unmistakable transfer and debt-payment affordances in the ledger — show a Transfer badge/relationship summary for both legs, show Debt payment when `BillAccountID` is set, and avoid relying on income-green/spending-red amount color for transfer rows. The row and editor should make clear that a transfer affects balances but not cash-flow totals.

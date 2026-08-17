@@ -26,6 +26,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/safespend"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -68,10 +69,20 @@ type budgetView struct {
 	// inclusive ISO dates, so drill-throughs (e.g. the attention strip's "View
 	// spending") can scope the ledger to the same period the figures describe
 	// instead of dumping the category's full history (UI/UX task #14).
-	PeriodFrom        map[string]string
-	PeriodTo          map[string]string
-	OverCount         int
-	NearCount         int
+	PeriodFrom map[string]string
+	PeriodTo   map[string]string
+	OverCount  int
+	NearCount  int
+	// LeakRows are the suspect transfer rows that actually contributed to the
+	// figures above — each one counted by SOME budget, in THAT budget's own
+	// window and category set (C672).
+	//
+	// It cannot be derived from the page's toolbar window, which is the mistake
+	// the first attempt made: this page shows one macro window but scores N
+	// budgets on N independent cadences, so a yearly budget's March charge is in
+	// TotalSpent while the toolbar says August. A leak notice clipped to the
+	// toolbar renders "nothing wrong" beside a total that is wrong.
+	LeakRows          []domain.Transaction
 	TotalSpent        int64
 	TotalLimit        int64
 	TotalOver         int64
@@ -399,6 +410,9 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	// summed across budgets that DON'T carry their own remaining, when the user opts
 	// to roll leftover into next month's assignable pool (zero-based view).
 	var pooledRollover int64
+	// C672 accumulators: the suspect rows that actually land in these figures.
+	leakSeen := map[string]bool{}
+	var leakRows []domain.Transaction
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
 		// Inclusive window for drill-throughs: be is the exclusive next-period
@@ -461,9 +475,24 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 			}
 			rollEffCapMath[b.ID] = strings.Join(parts, " ")
 		}
-		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
+		covers := categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())
+		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, covers)
 		if err != nil {
 			continue
+		}
+		// C672: the suspect rows this budget just counted — same window, same
+		// category set, so they are exactly the rows inflating the figure the bar
+		// is about to draw. Deduped across budgets, because two budgets tracking
+		// one category count one row once each and it is still one row.
+		for _, sus := range txnclassify.SuspectsIn(txns, func(id string) string { return catName[id] }, bs, be) {
+			if !b.TracksCategory(sus.Txn.CategoryID) && !covers[sus.Txn.CategoryID] {
+				continue
+			}
+			if leakSeen[sus.Txn.ID] {
+				continue
+			}
+			leakSeen[sus.Txn.ID] = true
+			leakRows = append(leakRows, sus.Txn)
 		}
 		// XC3: in a smoothed bill's landing period, the accrued set-aside pays the
 		// posted charge — offset it so the row (and totals/pace below) read on-pace
@@ -679,6 +708,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EnvDebtStart: envDebtStart, Covered: covered, EffMethod: effMethod,
 		EarlyPeriod: earlyPeriod,
 		OverCount:   overCount, NearCount: nearCount,
+		LeakRows:   leakRows,
 		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
 		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
 		SavingsBudgeted: savingsBudgeted, SavingsMoved: savingsMoved,
