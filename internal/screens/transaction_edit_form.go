@@ -914,6 +914,41 @@ func classifyField(app *appstate.App, txn domain.Transaction, selected string, d
 		opts = append(opts, uiw.SelectOption{Value: c.AccountID, Label: c.Name})
 	}
 
+	// C674: the far side, and what this save is actually worth.
+	//
+	// Classifying an imported leg never creates its counterpart — inventing a third
+	// transaction would invent money — so the far side is usually another imported
+	// row waiting for the same treatment. Whether one was FOUND changes what the
+	// user should expect, and saying nothing is how a one-sided transfer gets
+	// discovered later, from a balance that disagrees with the bank.
+	//
+	// The preview runs Apply's own validation without writing, so it can never
+	// promise a save that will be refused.
+	pairNote := Fragment()
+	if selected != "" {
+		pv := txnclassify.PreviewApply(txn, selected, debtPay && isLiabilityAccount(app, selected),
+			app.Accounts(), app.Transactions())
+		switch {
+		case pv.Err != nil:
+			// Shown here rather than only on submit: a control that looks available
+			// and fails on click is worse than one that explains itself first.
+			pairNote = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-pair"),
+				Attr("role", "status"), pv.Err.Error())
+		case pv.HasPartner && pv.Partner.Exact:
+			pairNote = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-pair"),
+				Attr("role", "status"), uistate.T("transactions.classifyPairFound", pv.CounterpartyName))
+		case pv.HasPartner:
+			// Same two accounts and dates, different magnitude — a fee usually. Worth
+			// showing as a near match rather than claiming a clean pair.
+			pairNote = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-pair"),
+				Attr("role", "status"), uistate.T("transactions.classifyPairNear", pv.CounterpartyName,
+					fmtMoney(pv.Partner.Txn.Amount)))
+		default:
+			pairNote = P(css.Class("muted", tw.Text12), Attr("data-testid", "txn-edit-classify-pair"),
+				Attr("role", "status"), uistate.T("transactions.classifyPairNone", pv.CounterpartyName))
+		}
+	}
+
 	// Name the consequence of the CURRENT selection, so what the save will do is
 	// readable before it happens rather than inferable afterwards.
 	effect := Fragment()
@@ -956,6 +991,7 @@ func classifyField(app *appstate.App, txn domain.Transaction, selected string, d
 				TestID:    "txn-edit-classify",
 			})),
 		effect,
+		pairNote,
 		Span(css.Class("muted", tw.Text12), uistate.T("transactions.classifyHint")),
 		// Shown only once the row IS a transfer: before that there is no leg to
 		// explain, and the note would be answering a question nobody asked.

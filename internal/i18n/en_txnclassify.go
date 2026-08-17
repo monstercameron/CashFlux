@@ -37,6 +37,15 @@ var txnClassifyKeys = Catalog{
 	"transactions.classifyEffectNeutral": "Kept out of income and spending — it moved between your own accounts.",
 	"transactions.classifyEffectDebt":    "Kept out of spending — it pays down what you owe on %s.",
 	// The debt claim, offered only when the chosen account is a card or loan.
+	// C674: whether the far side was found. Classifying a leg never creates its
+	// counterpart — that would invent money — so the other side is usually another
+	// imported row, and whether one exists changes what to expect. Saying nothing
+	// is how a one-sided transfer is discovered later, from a balance that
+	// disagrees with the bank.
+	"transactions.classifyPairFound": "The matching row in %s will pair with this one.",
+	"transactions.classifyPairNear":  "A row in %s looks like the other side, for %s — close, but not the same amount. Check it before relying on the pair.",
+	"transactions.classifyPairNone":  "No matching row was found in %s. Only this side will change; the other account will not balance until its row is imported or added.",
+
 	"transactions.classifyDebtLabel": "Count this as a payment toward %s",
 	"transactions.classifyDebtHint":  "The debt pages read the most recent payment you have marked this way as what you actually paid.",
 
