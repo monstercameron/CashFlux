@@ -1,3 +1,98 @@
+## 2026-08-16 — routing is not permission (C407)
+
+Per-member notifications sound like an access-control feature and are not one. If assigning an alert
+to Alex hid it from Cam, the first missed bill would be caused by the feature meant to organize
+bills. So the member is a LENS: everyone sees everything, and the routing exists so the center can
+answer "what needs me" instead of "what needs somebody" — which in a household is a genuinely
+different and much more useful question.
+
+The second rule is the one I would have got wrong without stating it: a member lens must still show
+household-wide alerts. It is tempting to make the filter exact — pick Cam, see Cam's rows — but every
+alert is household-wide by default, so an exact filter means an unassigned overdue bill is invisible
+to every member using their own lens. The work nobody claimed is precisely the work that most needs
+seeing. Both rules are tests, because both are the kind of thing a later refactor "simplifies".
+
+One structural note: the member is stamped once, at the single exit of `buildNotifyCandidates`, not
+threaded through ten generator signatures. A generator's job is to find occurrences; who an alert
+belongs to is a routing decision the household made in settings. Ten signatures would be ten places
+to forget it, and the failure would be silent — an unrouted alert looks exactly like a household-wide
+one.
+
+Not shipped: per-member digests. The digest is one household summary computed from household totals,
+and splitting it needs per-member income and spend attribution. That is a different computation, not
+a filter over the existing one, so it is filed as C407b rather than half-built.
+
+## 2026-08-16 — the scope a button acts on has to be the scope the card shows (C553-C559, C625-C628, C651-C653)
+
+Nine tickets off one bug bash of `/transactions`. Most of them turned out to be one idea repeated:
+a control acted on a population the user could not see and could not count.
+
+**C653 is the sharp one, and the fix was a signature change.** The single-charge Review card showed
+one Blue Bottle charge and a button reading "Categorize & next". One click categorized 122. The
+temptation is to relabel the button. The actual cause is that `applyReviewChoice` took a
+`batch bool`, and on `true` it re-derived a merchant key from the current charge and swept the whole
+ledger for matches — so the *write path* decided its own population, and the card had no say. That is
+also exactly how C616 broke it in the opposite direction: a raw payee where a normalized key was
+required matched zero rows.
+
+Both failure modes lived in the same line because a boolean cannot express "the three charges this
+card is standing in for". So the boolean is gone: `applyReviewChoice(app, ids []string, categoryID)`
+writes the ids it is handed, and the surface hands it the list it already used to draw and count the
+card. The number on the button and the number written now come from one slice. That is not a
+defensive check; it is the class of bug becoming unrepresentable.
+
+The rest of C653 follows from having a list: a scope control the user can read (`1 selected charge`
+/ `122 charges from Blue Bottle`), the merchant-wide option gated behind a second click that states
+the total and the date range, and snooze/dismiss following the same scope so one control describes
+everything on the card. The scope choice is pinned to the merchant it was made on, so it expires with
+the card — a "Categorize all" inherited by a merchant you have not looked at is the same bug wearing
+a consent form.
+
+**An unreported bug fell out of it.** Confirming used to call `advance()`. But the confirmed group
+leaves the queue, so the rows shift down by one and the cursor stepped over the shift — every
+confirmation skipped a merchant. Nothing advances the cursor now. The queue advances itself, and
+"and next" is a description of what happens rather than an instruction.
+
+**C554: do not reimplement "what am I looking at".** Review read `app.Transactions()`, so a ledger
+filtered to one payee and a month opened a review of everything. The wrong fix is to teach Review
+about search, tags, members, periods and money-in/out — five places to forget the sixth. It asks
+`txnfilter`, the code the ledger itself runs, and intersects by id. A filter dimension added next
+year is inherited without anyone remembering to.
+
+Two things I would have got wrong without thinking about it. Pagination is stripped before the
+intersection: paging is a property of the ledger's *screen*, not of its working set, and reviewing
+"what I am looking at" after filtering to 300 charges must not mean the 25 on page one. And an empty
+scope is not an empty queue — the "all caught up" state now names how many are waiting outside the
+view, because congratulating someone for a filter they may not remember setting is worse than saying
+nothing.
+
+**C556 is a lesson about Go, not about categories.** The "New category" button on the single review
+card had been written, wired, and passed into the view as a parameter. It was never used in the body.
+An unused function *parameter* is not a compile error, so a fully built feature was invisible and the
+report ("creating a sub-category means leaving Review") was exactly right about the symptom and gave
+no hint that the code was already there.
+
+**Two reports were about the served bundle, not the source.** C628's pending-search feedback and
+C652's duplicate confirmation both existed in source and were reproduced against a stale wasm build.
+I have recorded that in both tickets rather than silently "fixing" what was not broken — and then
+looked at what each ticket's *Expected behavior* asked for beyond what shipped, which in both cases
+was real. C628 wanted the stale rows made unavailable, and the pending flag was in the toolbar tile
+while the rows are in another; a warning that cannot reach what it warns about is half a warning.
+C652 wanted the *kept* entry named, and the undo point was being captured after the delete, so the
+confirmation promised a recovery to a checkpoint that had already lost the row.
+
+**C651 I nearly closed as "works as designed", which would have been wrong.** A wasm test that mounts
+the real chip and clicks it shows the tag filter was applied correctly all along. What made it read
+as a no-op is that on the reported view nothing it could change was visible: the search had already
+narrowed the ledger to the one row carrying the tag. A control that alters state invisibly and says
+nothing *is* a dead button from where the user sits. So the fix is the sentence it was missing, plus
+moving the drill into `txnfilter` where its promises (additive, single-tag, individually removable)
+are testable properties rather than two lines in a click handler.
+
+**C625/C626 are the same shape as C653 in a different surface.** Dimmed rows you can still click are
+not a busy state; a table that renders forty of 3,284 rows and declares nothing is lying about its own
+size. Both are cases of the interface knowing something it did not say.
+
 ## 2026-08-16 — a preview that can drift is worse than no preview (C408)
 
 Two halves, and the second one forced a refactor I would not otherwise have done.

@@ -83,6 +83,11 @@ type Rule struct {
 	QuietStartMin int
 	QuietEndMin   int
 
+	// MemberID optionally scopes this rule to one household member (C407). Empty
+	// means household-wide. It routes and filters; it does not restrict who can
+	// see the alert.
+	MemberID string
+
 	// FrequencyCap is the most notifications this rule may emit per its natural
 	// period (0 = uncapped). The catch-up engine enforces it via a DeliveredLog.
 	FrequencyCap int
@@ -137,6 +142,9 @@ type Notification struct {
 	At        time.Time
 	Severity  Severity
 	DedupeKey string
+	// MemberID is the household member this alert belongs to (C407), empty for
+	// household-wide.
+	MemberID string
 	// Reason is the evidence behind the alert (C408), carried from the candidate
 	// so the center can answer "why did this fire" without re-deriving it — a
 	// re-derivation would answer with TODAY's data, which is a different

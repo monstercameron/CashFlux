@@ -47,6 +47,11 @@ type FeedItem struct {
 	// question about the moment it fired, and a drawer quoting a budget that has
 	// since been raised explains nothing and looks like a bug.
 	Reason notify.Reason `json:"reason,omitempty"`
+	// MemberID is the household member this alert belongs to (C407). Empty means
+	// household-wide, which is what every alert written before this shipped is —
+	// and correctly so: retro-assigning them to whoever happens to be selected
+	// would hide history from the rest of the household.
+	MemberID string `json:"memberId,omitempty"`
 }
 
 // OverdueDays returns how many whole calendar days past its due date a
@@ -211,4 +216,19 @@ func SortForAttention(items []FeedItem, now int64) {
 		}
 		return a.At > b.At
 	})
+}
+
+// MatchesMemberFilter reports whether an item passes the Notification Center's
+// member lens (C407).
+//
+// A household-wide item (no member) passes under EVERY member's lens rather
+// than being hidden. "What needs me" has to include the things that need
+// somebody and were never assigned, or an unassigned overdue bill goes
+// permanently unseen in a household where each person uses their own view.
+//
+// It lives in this file, which carries no build constraints, because it is pure
+// string logic and exactly the kind of rule that should be covered by plain
+// `go test`.
+func (f FeedItem) MatchesMemberFilter(memberID string) bool {
+	return memberID == "" || f.MemberID == "" || f.MemberID == memberID
 }

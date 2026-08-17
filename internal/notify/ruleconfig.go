@@ -29,6 +29,16 @@ type RuleConfig struct {
 	// rule's default uses (minor currency units for money rules; days for bill-due).
 	// A zero or negative value means "use the rule default".
 	Thresholds map[string]int64 `json:"thresholds"`
+	// Members maps ruleID → the household member this alert belongs to (C407).
+	// An absent or empty value means the alert is household-wide, which is the
+	// only behaviour that existed before and stays the default: silently
+	// assigning every alert to whoever is currently selected would hide alerts
+	// from the rest of the household on upgrade.
+	//
+	// This is ownership for ROUTING and filtering, not permission. Everyone in
+	// the household still sees every alert; the member is what lets the center
+	// answer "what needs me" instead of "what needs someone".
+	Members map[string]string `json:"members,omitempty"`
 
 	// QuietStartMin and QuietEndMin define a single account-wide do-not-disturb
 	// window in minutes since local midnight, in [0, 1440). End is exclusive; when
@@ -44,6 +54,10 @@ type RuleConfig struct {
 	// JSON when empty so older payloads round-trip unchanged.
 	DigestCadence DigestCadence `json:"digestCadence,omitempty"`
 }
+
+// MemberFor returns the member a rule's alerts belong to, or empty for
+// household-wide.
+func (c RuleConfig) MemberFor(ruleID string) string { return c.Members[ruleID] }
 
 // QuietHoursEnabled reports whether a non-empty do-not-disturb window is set.
 func (c RuleConfig) QuietHoursEnabled() bool {

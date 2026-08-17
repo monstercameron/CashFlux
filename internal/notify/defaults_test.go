@@ -56,3 +56,29 @@ func TestDefaultRules(t *testing.T) {
 		}
 	}
 }
+
+// C407: routing is opt-in. Every rule starts household-wide, and an upgrade
+// must not silently assign existing alerts to whoever happens to be selected —
+// that would hide them from the rest of the household.
+func TestRuleConfigMemberDefaultsToHouseholdWide(t *testing.T) {
+	var cfg RuleConfig
+	if got := cfg.MemberFor("default-bill-due"); got != "" {
+		t.Errorf("MemberFor on an unconfigured rule = %q, want household-wide", got)
+	}
+	// A round trip through the persisted form must not invent one either.
+	cfg = UnmarshalRuleConfig(MarshalRuleConfig(cfg))
+	if got := cfg.MemberFor("default-bill-due"); got != "" {
+		t.Errorf("after a round trip, MemberFor = %q", got)
+	}
+	// And a set member survives it.
+	cfg.Members = map[string]string{"default-bill-due": "m-cam"}
+	cfg = UnmarshalRuleConfig(MarshalRuleConfig(cfg))
+	if got := cfg.MemberFor("default-bill-due"); got != "m-cam" {
+		t.Errorf("MemberFor = %q, want m-cam", got)
+	}
+	for _, r := range DefaultRules() {
+		if r.MemberID != "" {
+			t.Errorf("default rule %q ships assigned to %q", r.ID, r.MemberID)
+		}
+	}
+}

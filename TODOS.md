@@ -5798,9 +5798,27 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W9 — Notifications: routing, evidence, copy (reviewer priority 8)
 
-- [ ] **C407 [MAJOR][NOTIF] Per-member routing.** No MemberID exists on `notify.Rule`/`Target` —
+- [x] **C407 [MAJOR][NOTIF] Per-member routing.** No MemberID exists on `notify.Rule`/`Target` —
   notifications are household-wide. Add optional member ownership on rules + a member filter in
-  the center + member chip on rows; digests can be per-member.
+  the center + member chip on rows; digests can be per-member. — DONE (2026-08-16). `MemberID` on
+  `notify.Rule` / Candidate / Notification / FeedItem, with the household's choice persisted in
+  `RuleConfig.Members` (the default rules are code-defined, so the routing has to live beside the
+  enabled/threshold overrides). The member is stamped ONCE at the single exit of
+  `buildNotifyCandidates` rather than threaded through ten generator signatures — a generator finds
+  occurrences; who an alert belongs to is a routing decision made in settings.
+
+  Two rules that matter: routing is NOT permission (everyone still sees everything; the member is
+  what lets the center answer "what needs me" instead of "what needs somebody"), and a member lens
+  keeps household-wide alerts visible rather than hiding them — otherwise an unassigned overdue bill
+  goes permanently unseen in a household where each person uses their own view. Everything defaults
+  to household-wide on upgrade; silently assigning existing alerts to whoever is selected would hide
+  them from everyone else. Both are tests. Per-member DIGESTS are not covered — the digest is one
+  household summary computed from household totals, and splitting it is a different feature; filed
+  as C407b.
+- [ ] **C407b [MINOR][NOTIF] Per-member digests.** C407 routes individual alerts to a member. The
+  spending digest is still one household summary computed from household totals; a per-member digest
+  needs per-member income/spend attribution, which is a different computation, not a filter over the
+  existing one.
 - [x] **C408 [MAJOR][NOTIF] Alert evidence + rule test/preview.** Feed candidates carry only
   Title/Body. Add a structured Reason (rule fired, threshold, observed value, entity link) rendered
   as "Why this fired"; alert settings gain a "Test this rule" preview showing what would fire today.
@@ -8289,7 +8307,17 @@ development-environment recovery issues, not product tickets; refresh is the doc
 
 ### Confirmed live defects
 
-- [ ] **C553 [BLOCKER][REVIEW][TXN] Single-review confirmation advances without a durable write.**
+- [x] **C553 [DONE 2026-08-16 — reproduction re-run against the build, as the caveat below required] [BLOCKER][REVIEW][TXN] Single-review confirmation advances without a durable write.**
+
+  **Closed 2026-08-16.** The caveat below said not to close this until the original
+  reproduction was re-run against the build, and the TR post-change replay did exactly that:
+  one-at-a-time `Categorize & next` advanced only after the write, the queue count fell, and
+  the confirmed ledger row persisted as `Reviewed` after returning to the ledger. The
+  don't-advance-on-a-failed-write guard survives the C653 rewrite — `applyReviewChoice` still
+  returns whether the write landed and the caller still holds position with
+  `review.commitFailed` on failure — and the screenlint AST guards still enforce both halves
+  (the RequestPersist guard now tracks `assignReviewToCharges`, the single helper the two it
+  named were collapsed into).
   Selecting a category and pressing `Categorize & next` advanced the card, but after closing and
   reloading the transaction remained Uncategorized and the Review count did not decrease. Make the
   commit await the write result: on success, clear the review state and decrement the live queue; on
@@ -8305,7 +8333,8 @@ development-environment recovery issues, not product tickets; refresh is the doc
      position and states the reason beside the action (`review.commitFailed`) instead of moving on.
      This is the half that makes the reported symptom impossible to produce silently.
   2. **Flush the write.** `assignReviewCategory` / `assignReviewByMerchant` now call
-     `uistate.RequestPersist()`.
+     `uistate.RequestPersist()`. (C653 later collapsed those two into one
+     `assignReviewToCharges`; the flush and its AST guard moved with it.)
   **Caveat, recorded rather than glossed:** I first read the missing `RequestPersist` as the root
   cause and it is NOT sufficient to explain the report. The dataset also autosaves on a 4-second
   ticker AND on `pagehide`/`visibilitychange` (`app/persist.go:434-442`), so an ordinary reload
@@ -9439,7 +9468,26 @@ was recreated before ending the pass.
   disable row actions/second sort clicks. Once settled, the header direction, first/last visible rows,
   pagination, and screen-reader announcement must all describe the same ordering.
 
-- [ ] **C626 [MINOR][TXN][A11Y][PERF] “All” mode virtualizes rows without exposing table position metadata.**
+- [x] **C626 [DONE 2026-08-16 — keep the optimization, stop the table lying about its own size] [MINOR][TXN][A11Y][PERF] “All” mode virtualizes rows without exposing table position metadata.**
+
+  The performance behaviour is right and stays. What was wrong is that the table declared
+  nothing about it: assistive tech was told `1–3284 of 3284` by the pager and then handed a
+  table it could count about 40 rows in, with no way to tell that the other 3,244 exist or
+  where the rendered ones sit among them. The status was accurate about the MATCHES and false
+  about the DOM, and nothing marked which of the two it was.
+  Three additions, all only when the body is windowed:
+  - `aria-rowcount` on the `<table>` = matches + 1 (ARIA counts the header row).
+  - `aria-rowindex` on the header (1) and on each rendered row (`i + 2`), so a row three
+    thousand entries down announces its real position rather than its DOM position. Wired
+    through a new `txnFrameRowProps.RowIndex`; a fully rendered page leaves it zero, because
+    there the DOM order already is the answer and restating it would be noise that goes wrong
+    the moment the page size changes.
+  - The sr-only `<caption>` states both numbers: `3284 rows match. Only the rows near the
+    viewport are rendered; scroll, or use the page controls, to reach the rest.`
+  Keyboard reach was already there and is left alone — focusing a row scrolls it into view,
+  which is what advances the window.
+  Guards in `ui/datatable_aria_wasm_test.go`, including the negative case (a non-virtual
+  table must claim no row count).
   Selecting All announced `1–3284 of 3284`, but only about 40–50 rows existed in the table DOM at a
   time and the table had no `aria-rowcount`, `aria-rowindex`, or equivalent virtualized-list metadata.
   This may be intentional for performance, but it makes keyboard and screen-reader navigation
@@ -9476,7 +9524,32 @@ was recreated before ending the pass.
   or non-numeric values should leave the current page intact and show an inline error. Enter, blur,
   Previous, Next, filters, and row-count changes must all share one canonical page state.
 
-- [ ] **C628 [MINOR][TXN][SEARCH][REGRESSION] Served build lacks the pending-search feedback promised by C619.**
+- [x] **C628 [DONE 2026-08-16 — the note was real and in the wrong tile; the rows it warned about stayed clickable] [MINOR][TXN][SEARCH][REGRESSION] Served build lacks the pending-search feedback promised by C619.**
+
+  C619's implementation was present in source the whole time (`aria-busy` on the search box, a
+  `role=status` "Searching…" note). The reproduction was against a stale served bundle — the
+  dev server on :8080 rebuilds `web/bin/main.wasm` on change, so this half reconciles on the
+  next hot reload plus a hard refresh (the PWA service worker serves the cached wasm on a
+  plain reload).
+  But the contract in the ticket's Expected behavior went further than C619 did, and three
+  parts of it were genuinely absent:
+  1. **"make stale row actions unavailable"** — the pending flag lived in the toolbar tile's
+     component state, and the rows it warns about are in a DIFFERENT tile. A warning that
+     cannot reach the thing it is warning about is half a warning. It is now a shared atom
+     (`uistate.UseTxnSearchPending`); the table takes it as `DataTableProps.Busy`, which
+     dims the rows and drops their pointer events for exactly that window, and announces
+     "Searching…" through the table's own caption.
+  2. **"Clear search must immediately restore the full query"** — the ✕ went through the same
+     400ms debounce as typing, so the one control whose whole job is "undo what I typed" left
+     the query on screen for the window it was pressed to end. `OnClearSearch` clears now, and
+     flushes the pending debounce first — otherwise it fires afterwards and writes the query
+     straight back.
+  3. **"on no match, show a stable empty state with Clear search"** — the no-match state was a
+     bare sentence whose only escape was an unlabelled ✕ in a toolbar the user had to go find.
+     It is now `txnNoMatch`: names the query that found nothing, offers Clear search where the
+     disappointment is, and states that the period/member/category filters stay as they are —
+     a "clear" that silently widened the view to a year they were not looking at would be a
+     worse surprise than the empty list.
   Typing `UXJ-S02` left the previous ledger visible during the debounce window, but the live searchbox
   had no `aria-busy` attribute and no visible/accessible `Searching…` status before the result changed.
   Reconcile the served bundle with the C619 implementation, or update the implementation/test if the
@@ -9508,6 +9581,11 @@ merchant charges, which is itself tracked below.
 
 - [x] **C611 home quick-add live behavior now passes:** the dashboard quick-add panel rendered,
   accepted focus, and exposed its fields and Save/Cancel controls on the first activation.
+  **This does NOT close C611 (checked 2026-08-16).** C611's own correction is that the panel
+  fails to reveal on a COLD first open — the state a warmed-up replay session does not reach,
+  and the same state the e2e `openVia` retry helper hid for a whole shipped fix. One passing
+  observation cannot disprove an intermittent cold-start failure; C611 stays open until it is
+  driven from a fresh load.
 
 - [x] **C651 [DONE 2026-08-16 — it was applying the filter and saying nothing, which is indistinguishable from a dead button] [MINOR][TXN][TAGS][UX] “Filter to #coffee” is a no-op from a filtered row.**
 

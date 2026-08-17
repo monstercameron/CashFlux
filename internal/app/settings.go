@@ -123,9 +123,10 @@ func notifySettings() uic.Node {
 	rows := make([]any, 0, len(rules))
 	for _, r := range rules {
 		props := alertRowProps{
-			RuleID:  r.ID,
-			Label:   alertLabel(r.ID),
-			Enabled: cfg.IsEnabled(r.ID),
+			RuleID:   r.ID,
+			Label:    alertLabel(r.ID),
+			Enabled:  cfg.IsEnabled(r.ID),
+			MemberID: cfg.MemberFor(r.ID),
 		}
 		// Attach threshold controls for rules that expose a user-tunable threshold.
 		switch r.ID {
@@ -244,6 +245,9 @@ type alertRowProps struct {
 	Label  string
 	// Enabled is the initial enabled state read from the persisted config.
 	Enabled bool
+	// MemberID is the household member this rule's alerts are routed to (C407),
+	// empty for household-wide.
+	MemberID string
 	// ThresholdLabel is the unit label shown next to the threshold input
 	// ("$" for money rules, "days" for bill-due). Empty means no threshold input.
 	ThresholdLabel string
@@ -335,6 +339,19 @@ func alertRow(props alertRowProps) uic.Node {
 			preview.Set(uistate.T("settings.alert.testMany", n, first))
 		}
 	}))
+	// C407: who this alert belongs to. Household-wide is the default and stays
+	// the default on upgrade — silently assigning every existing alert to whoever
+	// happens to be selected would hide them from the rest of the household.
+	var memberRow uic.Node = Fragment()
+	if app := appstate.Default; app != nil && len(app.Members()) >= 2 {
+		memberRow = uic.CreateElement(alertMemberRow, alertMemberRowProps{
+			RuleID:  props.RuleID,
+			Label:   props.Label,
+			Members: app.Members(),
+			Current: props.MemberID,
+		})
+	}
+
 	testRow := Div(css.Class("toggle-row alert-thresh-row"),
 		Button(css.Class("btn btn-sm"), Type("button"),
 			Attr("data-testid", "alert-test-"+props.RuleID),
@@ -351,7 +368,7 @@ func alertRow(props alertRowProps) uic.Node {
 		OnChange: onToggle,
 	})
 	if props.ThresholdLabel == "" {
-		return Fragment(toggle, testRow)
+		return Fragment(toggle, memberRow, testRow)
 	}
 	ariaLabel := props.Label + " threshold (" + props.ThresholdLabel + ")"
 	// alert-thresh-row: compact, left-aligned, indented under its toggle so the
@@ -364,7 +381,7 @@ func alertRow(props alertRowProps) uic.Node {
 			Value(strconv.Itoa(thresh.Get())),
 			OnChange(onThresh)),
 	)
-	return Fragment(toggle, threshInput, testRow)
+	return Fragment(toggle, threshInput, memberRow, testRow)
 }
 
 // learnThresholdRow renders a small number-input control (C35) that lets the
@@ -1759,4 +1776,54 @@ func dataButton(props dataBtnProps) uic.Node {
 		}
 	}), props.Label)
 	return Button(args...)
+}
+
+// alertMemberRowProps drives the per-rule member picker (C407).
+type alertMemberRowProps struct {
+	RuleID  string
+	Label   string
+	Members []domain.Member
+	Current string
+}
+
+// alertMemberRow lets a household route one alert type to one member.
+//
+// Its own component so the select's hook sits at a stable position — alertRow
+// renders a variable number of controls depending on whether the rule has a
+// threshold, and a hook declared alongside them would move when it does.
+//
+// Routing is not permission: everyone still sees every alert. The member is what
+// lets the Notification Center answer "what needs me" instead of "what needs
+// somebody", which is a different and much more useful question in a household.
+func alertMemberRow(props alertMemberRowProps) uic.Node {
+	sel := uic.UseState(props.Current)
+	onChange := uic.UseEvent(func(e uic.Event) {
+		v := e.GetValue()
+		sel.Set(v)
+		// Re-read, mutate, write back, so two rows changed in quick succession
+		// compose instead of clobbering — the same rule the toggle follows.
+		cfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
+		if cfg.Members == nil {
+			cfg.Members = map[string]string{}
+		}
+		if v == "" {
+			delete(cfg.Members, props.RuleID)
+		} else {
+			cfg.Members[props.RuleID] = v
+		}
+		uistate.SettingKVSet(notify.RuleConfigKey(), notify.MarshalRuleConfig(cfg))
+		// Settings KV only reaches IndexedDB on the autosave ticker; without this
+		// a change followed by a quick reload silently reverts.
+		uistate.RequestPersist()
+	})
+	opts := []uic.Node{Option(Value(""), SelectedIf(sel.Get() == ""), uistate.T("settings.alert.memberAll"))}
+	for _, m := range props.Members {
+		opts = append(opts, Option(Value(m.ID), SelectedIf(sel.Get() == m.ID), m.Name))
+	}
+	return Div(css.Class("toggle-row alert-thresh-row"),
+		Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.alert.memberLabel")),
+		Select(css.Class("rate-in"), Attr("data-testid", "alert-member-"+props.RuleID),
+			Attr("aria-label", uistate.T("settings.alert.memberAria", props.Label)),
+			OnChange(onChange), opts),
+	)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -311,6 +312,10 @@ type notifyRowProps struct {
 	// confirming its account balance (C409). Nil when the alert has none, which
 	// is what hides the button.
 	OnResolve func(uistate.Resolution)
+	// Members is the household roster, used only to resolve this alert's member
+	// id into a name for the chip (C407). Passed in rather than read from
+	// appstate so the row stays a pure function of its props.
+	Members []domain.Member
 }
 
 // notifyRow renders one notification as a card: a severity medallion (icon) on the left,
@@ -545,6 +550,10 @@ func notifyRow(props notifyRowProps) ui.Node {
 				Span(ClassStr("notif-sev-tag "+notifySeverityClass(sev)), notifySeverityLabel(sev)),
 				Span(css.Class("notif-sep"), "·"),
 				Span(css.Class("notif-time"), props.TimeStr),
+				// C407: whose alert this is. Household-wide rows carry no chip —
+				// "everyone" is the default, and a chip on every row would be noise
+				// that makes the assigned ones harder to spot.
+				notifMemberChip(it.MemberID, props.Members),
 			),
 		),
 	)

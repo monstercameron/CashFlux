@@ -467,4 +467,20 @@ func registerVSweep() {
 		color("var(--accent)"),
 	)
 
+	// ─── C407: whose alert this is ───────────────────────────────────────────
+	// A quiet chip, not a badge: it identifies, it does not rank. The severity
+	// tag beside it is the thing that should carry colour.
+	rule(".notif-member-chip",
+		marginLeft("0.35rem"),
+		padding("0.05rem 0.4rem"),
+		borderRadius("999px"),
+		border("1px solid var(--border)"),
+		fontSize("0.68rem"),
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".notif-member-lens",
+		maxWidth("11rem"),
+	)
+
 }

@@ -377,6 +377,15 @@ var vSweepKeys = Catalog{
 	"settings.alert.testOne":  "1 alert would fire: %s",
 	"settings.alert.testMany": "%d alerts would fire, starting with: %s",
 
+	// C407 — per-member notification routing.
+	"settings.alert.memberLabel":    "Belongs to",
+	"settings.alert.memberAll":      "Everyone",
+	"settings.alert.memberAria":     "Who this alert belongs to: %s",
+	"notifications.memberAll":       "Everyone's alerts",
+	"notifications.memberLensLabel": "Show whose alerts",
+	"notifications.memberChipTitle": "This alert belongs to %s",
+	"notifications.memberGone":      "Unassigned",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

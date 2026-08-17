@@ -269,3 +269,13 @@ func SetBrowserNotifyEnabled(on bool) {
 	}
 	SettingKVSet(notifyBrowserKey, val)
 }
+
+// UseNotifyMemberFilter is the shared member filter for the Notification Center
+// (C407): a member id narrows the feed to that member's alerts, empty shows
+// everything.
+//
+// Household-wide alerts (no member) are shown under EVERY member's filter, not
+// hidden. "What needs me" has to include the things that need somebody and have
+// not been assigned — filtering them out would let an unassigned overdue bill go
+// unseen by a household where everyone uses their own lens.
+func UseNotifyMemberFilter() state.Atom[string] { return state.UseAtom("notify:member", "") }

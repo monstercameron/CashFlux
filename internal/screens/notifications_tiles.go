@@ -81,6 +81,7 @@ func notifSummaryWidget(props notifProps) ui.Node {
 	// clicking "All" (or the active chip again) resets. This unifies the severity
 	// breakdown with the control that used to live in a separate, near-empty strip.
 	filter := uistate.UseNotifyFilter()
+	memberFilter := uistate.UseNotifyMemberFilter()
 	f := filter.Get()
 	pick := func(sev string) func() { return func() { filter.Set(sev) } }
 	toggle := func(sev string) func() {
@@ -180,6 +181,15 @@ func notifSummaryWidget(props notifProps) ui.Node {
 				Count: crit, Active: f == "critical", OnPick: pick("critical"),
 			})),
 			Div(filtersArgs...),
+			// C407: the member lens, beside the severity chips. Only shown in a
+			// household with more than one member — a select with a single option
+			// is a control that cannot change anything.
+			If(len(props.App.Members()) >= 2,
+				ui.CreateElement(notifMemberLens, notifMemberLensProps{
+					Members:  props.App.Members(),
+					Selected: memberFilter.Get(),
+					OnPick:   func(id string) { memberFilter.Set(id) },
+				})),
 			// Safe, non-destructive bulk actions grouped together (Mark all read +
 			// Alert settings). The destructive Clear all is deliberately split out of
 			// this group — see below — so a wipe isn't one slip away from "Mark all read".
@@ -276,12 +286,27 @@ func notifListWidget(props notifProps) ui.Node {
 	_ = props
 	feedAtom := uistate.UseNotifyFeed()
 	filter := uistate.UseNotifyFilter()
+	memberFilter := uistate.UseNotifyMemberFilter()
 	feed := feedAtom.Get()
 	now := time.Now().Unix()
 	// Apply the triage view (Needs you / Watching) + dedupe before the severity
 	// filter, so the feed shows only the active bucket's deduplicated rows.
 	view := UseNotifyView().Get()
 	visible := triageVisibleFeed(view, feed, now)
+
+	// C407: the member lens. Household-wide alerts (no member) pass under EVERY
+	// member's lens rather than being hidden — "what needs me" has to include the
+	// things that need somebody and were never assigned, or an unassigned overdue
+	// bill goes unseen in a household where everyone uses their own view.
+	if m := memberFilter.Get(); m != "" {
+		kept := visible[:0:0]
+		for _, it := range visible {
+			if it.MatchesMemberFilter(m) {
+				kept = append(kept, it)
+			}
+		}
+		visible = kept
+	}
 
 	// Severity filter (empty severity is treated as "info").
 	if f := filter.Get(); f != "" {
@@ -361,6 +386,7 @@ func notifListWidget(props notifProps) ui.Node {
 			timeStr = notifyDueLabel(it.DueAt, now, pr)
 		}
 		return ui.CreateElement(notifyRow, notifyRowProps{
+			Members: props.App.Members(),
 			Item:    it,
 			TimeStr: timeStr,
 			OnRead:  func() { uistate.MarkFeedItemRead(id, !isRead) },

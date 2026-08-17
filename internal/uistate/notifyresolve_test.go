@@ -85,3 +85,31 @@ func TestResolutionForTaskReminder(t *testing.T) {
 		t.Errorf("a key with no task id resolved to %+v", got)
 	}
 }
+
+// ─── C407: the member lens ───────────────────────────────────────────────────
+
+// A member lens must NOT hide household-wide alerts. "What needs me" has to
+// include the things that need somebody and were never assigned, or an
+// unassigned overdue bill goes permanently unseen in a household where everyone
+// uses their own view.
+func TestMemberFilterKeepsHouseholdWideAlerts(t *testing.T) {
+	mine := uistate.FeedItem{ID: "a", MemberID: "m-cam"}
+	theirs := uistate.FeedItem{ID: "b", MemberID: "m-alex"}
+	everyone := uistate.FeedItem{ID: "c"}
+
+	if !mine.MatchesMemberFilter("m-cam") {
+		t.Error("my own alert was filtered out of my lens")
+	}
+	if theirs.MatchesMemberFilter("m-cam") {
+		t.Error("another member's alert passed my lens")
+	}
+	if !everyone.MatchesMemberFilter("m-cam") {
+		t.Error("an unassigned alert was hidden — this is how work nobody claimed goes unseen")
+	}
+	// No lens shows everything.
+	for _, it := range []uistate.FeedItem{mine, theirs, everyone} {
+		if !it.MatchesMemberFilter("") {
+			t.Errorf("%s was hidden with no lens set", it.ID)
+		}
+	}
+}

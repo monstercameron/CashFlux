@@ -104,7 +104,8 @@ func runNotifyCatchUp() {
 			// read. "Why did this fire" is a question about the moment it fired,
 			// and a drawer quoting a budget that has since been raised explains
 			// nothing and reads as a bug.
-			Reason: n.Reason,
+			Reason:   n.Reason,
+			MemberID: n.MemberID,
 		}
 	}
 	uistate.PrependNotifyFeed(feed)
@@ -193,6 +194,13 @@ func buildNotifyCandidates(app *appstate.App, now time.Time, ruleCfg notify.Rule
 	cands = append(cands, backupReminderCandidates(app, now)...)
 	cands = append(cands, lowBalanceCandidates(app, now, ruleCfg)...)
 	cands = append(cands, paycheckLandedCandidates(app, now, ruleCfg)...)
+	// C407: the member is stamped ONCE, here, from the rule config — not in each
+	// generator. A generator's job is to find occurrences; who an alert belongs to
+	// is a routing decision the household made in settings, and threading it
+	// through ten signatures would mean ten places to forget it.
+	for i := range cands {
+		cands[i].MemberID = ruleCfg.MemberFor(cands[i].RuleID)
+	}
 	return cands
 }
 

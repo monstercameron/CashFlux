@@ -27,6 +27,9 @@ type Candidate struct {
 	TitleText copytext.Text
 	BodyText  copytext.Text
 	Severity  Severity
+	// MemberID routes this occurrence to a household member (C407). Empty is
+	// household-wide.
+	MemberID string
 	// Reason is the structured evidence behind this occurrence (C408). Optional:
 	// a generator with nothing to show beyond its title leaves it zero, and the
 	// UI shows no drawer rather than an empty one.
@@ -105,6 +108,7 @@ func CatchUp(rules []Rule, candidates []Candidate, now time.Time, log DeliveredL
 				Severity:  f.c.Severity,
 				DedupeKey: f.key,
 				Reason:    f.c.Reason,
+				MemberID:  f.c.MemberID,
 			})
 		}
 	}
