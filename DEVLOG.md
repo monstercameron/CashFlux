@@ -1,3 +1,37 @@
+## 2026-08-17 - a monitor needs a baseline, not just a limit (WF8, partial)
+
+Saved views already had a scope, a drill to the contributing transactions, and an optional amount
+threshold. What they lacked is what turns a view into a monitor.
+
+**A near signal.** The threshold was binary - crossed or not - and a binary answer arrives too late to
+act on. Somebody watching a category wants to know they are on course to overshoot while there is still
+a month left. "Near" fires at 80%: early enough to change course, late enough that it is not going off
+on the third of the month.
+
+No target reports its own signal, deliberately distinct from "under". A view with no target is not doing
+well, it is not being measured, and reporting it as fine answers a question nobody asked.
+
+**A comparison to normal**, which is the number that actually does the work. A target is a guess
+somebody made once; the trailing average is what they do. "$135 more than usual, against your last 5
+months" needs no target at all, and it explains a figure rather than merely flagging it.
+
+Three refusals in it. Fewer than three completed months gives no baseline - two months give an average
+either of them can swing entirely, and calling that "normal" invents a baseline out of a coincidence. A
+zero average refuses rather than dividing. And a gap under 20% says nothing at all, because spending is
+lumpy and a monitor that flags every ordinary month teaches people to ignore it.
+
+The prior totals exclude the current month and skip months with no transactions. A half-finished month
+against full ones would report every household as spending less than usual until the 28th; a month with
+no records is a gap in the history, not a month of zero spending.
+
+**Left in progress, and worth being blunt about why.** The engine has ten passing tests. The surface
+compiles and is wired. But I could not drive it in a browser: creating a saved view needs an active
+filter, the views popover would not open under automation, and the dataset is not in localStorage before
+a flush, so it cannot be seeded either. I spent a long time on the probe before stopping.
+
+Marking it done would be claiming coverage I do not have. Every other ticket this week says "verified in
+a browser" and means it; this one has to say it does not, or that phrase stops meaning anything.
+
 ## 2026-08-17 - "are you sure?" is not a question anyone can answer (WF-BACKUP)
 
 Most of WF-BACKUP existed: encrypted backup and restore with format sniffing, versioned checkpoints,

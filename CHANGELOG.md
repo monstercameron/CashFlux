@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Saved views say where they stand and what normal looks like (WF8, partial).** A view with an amount
+  alert now reports how far through it you are before you cross it, not only afterwards — and, when
+  there are enough completed months to say so, how this period compares with your usual. It stays quiet
+  when the difference is ordinary, because a monitor that flags every normal month is one nobody reads.
+
+### Added
 - **Restoring a backup tells you what it would replace (WF-BACKUP).** The confirmation now says how many
   records you would lose, what each entity goes from and to, and how far behind the backup's data is —
   measured from its newest transaction rather than the file's timestamp. Restoring discards everything

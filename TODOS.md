@@ -131,10 +131,39 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   payee, description, amount, account and date. (3) SMART+ drafting a rule from a corrected transaction.
   Split and transfer actions are NOT in scope here — `internal/rules/rules.go` documents why they are
   deliberate absences rather than gaps, and that reasoning still holds.
-- [ ] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
+- [~] **WF8 — Watchlists ("track anything").** Lightweight monitors separate from budgets: spending by
   category/payee/tag/member with optional targets, near-/over-limit signals, average comparison, and
   drill to contributing txns (e.g. "Amazon excl. groceries", "all discretionary subs", "fees &
   interest", "cash withdrawals"). (Simplifi benchmark.)
+  — ENGINE DONE + WIRED (2026-08-17); SURFACE NOT BROWSER-VERIFIED. Marked in-progress rather than done
+  for that reason alone — see the caveat at the end, which is the honest state.
+
+  Audited first: saved transaction views (TX3) already cover the scope, the drill to contributing
+  transactions, and an optional amount threshold. What they did not have is what makes a view a MONITOR.
+
+  (1) A NEAR SIGNAL. The threshold was binary — crossed or not — and a binary answer arrives too late to
+  act on. `watchlist.Evaluate` reports under / near / over, with "near" at 80% of the target: early
+  enough that a month still has room to change course, late enough that it is not firing on the third.
+  No target reports `SignalNone`, deliberately distinct from "under": a view with no target is not doing
+  well, it is not being measured, and calling that fine answers a question nobody asked.
+
+  (2) A COMPARISON TO NORMAL, which is the number that actually does the work. A target is a guess
+  somebody made once; the trailing average is what they do. "$135 more than usual, against your last 5
+  months" needs no target at all. It refuses under three completed months — two give an average either
+  can swing entirely — and refuses a zero baseline, because a percentage against zero is not a large
+  percentage but a division nobody should have done. It stays silent under a 20% gap: spending is lumpy,
+  and a monitor that flags every ordinary month teaches people to ignore it.
+
+  The prior-month totals exclude the CURRENT month and skip months with no transactions at all. A
+  half-finished month compared against full ones would report every household as spending less than
+  usual until the 28th; a month with no records is a gap in the history, not a month of zero spending.
+
+  CAVEAT, and the reason this is `[~]`: the engine has 10 passing unit tests, and the surface compiles
+  and is wired, but I could NOT drive it in a browser. Creating a saved view needs an active filter, the
+  views popover would not open under automation, and the dataset is not in localStorage before a flush
+  so it cannot be seeded either. Rather than claim coverage I do not have, this stays in progress until
+  somebody can confirm the two lines render. What is NOT done: the standalone watchlist surface the
+  ticket implies (these are saved-view rows, not their own page).
 - [ ] **WF9 — Projected-balance cash-flow calendar.** Day-by-day account calendar: expected income,
   bills/subs, debt payments, goal contributions, projected closing balance, earliest shortfall, min
   balance, days-at-risk, safe-to-spend by date. **Drag a planned payment to another date** and the

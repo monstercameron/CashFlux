@@ -729,6 +729,13 @@ var vSweepKeys = Catalog{
 	"restore.stale":   "The backup's most recent transaction is %d days older than your current data.",
 	"restore.newer":   "The backup's data is %d days more recent than what is here now.",
 
+	// WF8 — a saved view as a monitor: where it stands, and what normal looks like.
+	"savedViews.standingUnder": "%.0f%% of your alert — %s to go",
+	"savedViews.standingNear":  "%.0f%% of your alert — only %s left",
+	"savedViews.standingOver":  "%.0f%% of your alert — %s over",
+	"savedViews.usualAbove":    "%s more than usual, against your last %d months",
+	"savedViews.usualBelow":    "%s less than usual, against your last %d months",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

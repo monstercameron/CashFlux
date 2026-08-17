@@ -5,12 +5,15 @@
 package screens
 
 import (
+	"time"
+
 	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -20,6 +23,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/watchlist"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -140,10 +144,12 @@ func savedViewsMenuBody(props txnSavedViewsMenuProps) ui.Node {
 	} else {
 		rows := make([]any, 0, len(views)+1)
 		rows = append(rows, css.Class("saved-views-list"))
+		txns := app.Transactions()
 		for _, v := range views {
-			count, total := v.Summary(app.Transactions(), amount)
+			count, total := v.Summary(txns, amount)
 			rows = append(rows, ui.CreateElement(savedViewRow, savedViewRowProps{
 				App: app, View: v, Base: props.Base, Count: count, Total: total,
+				PriorTotals: savedViewPriorTotals(v, txns, amount),
 			}))
 		}
 		list = Div(rows...)
@@ -218,6 +224,10 @@ type savedViewRowProps struct {
 	Base  string
 	Count int
 	Total int64
+	// PriorTotals is this view's total in each COMPLETED prior month, oldest
+	// first — the baseline "usual" is measured against (WF8). Fewer than
+	// watchlist.MinPeriodsForAverage entries means no baseline is claimed.
+	PriorTotals []int64
 }
 
 // savedViewRow renders one saved view: name, live count + total, Apply, and a
@@ -258,6 +268,46 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 	summary := uistate.T("savedViews.rowSummary",
 		fmtMoney(money.New(props.Total, props.Base)), savedViewMatches(props.Count))
 
+	// WF8: the threshold was binary — crossed or not — and a binary answer
+	// arrives too late to act on. This says where the total stands BEFORE it
+	// crosses, so somebody watching a category still has a month to change course.
+	var standing ui.Node = Fragment()
+	if st := watchlist.Evaluate(props.Total, v.Threshold); st.Signal != watchlist.SignalNone {
+		key, tone := "savedViews.standingUnder", "text-up"
+		switch st.Signal {
+		case watchlist.SignalOver:
+			key, tone = "savedViews.standingOver", "text-down"
+		case watchlist.SignalNear:
+			key, tone = "savedViews.standingNear", "text-warn"
+		}
+		remaining := st.RemainingMinor
+		if remaining < 0 {
+			remaining = -remaining
+		}
+		standing = Span(ClassStr("saved-view-standing "+tw.ColorClass(tone)),
+			Attr("data-testid", "saved-view-standing-"+v.ID),
+			uistate.T(key, st.PctOfTarget, fmtMoney(money.New(remaining, props.Base))))
+	}
+
+	// WF8: and what NORMAL looks like. A target is a guess somebody made once;
+	// the trailing average is what they actually do, and "$135 above your usual"
+	// explains a figure rather than merely flagging it. Only shown when the gap is
+	// big enough to mean something — spending is lumpy, and a monitor that flags
+	// every ordinary month teaches people to ignore it.
+	var usual ui.Node = Fragment()
+	if c, ok := watchlist.Compare(props.Total, props.PriorTotals); ok && c.Unusual() {
+		key := "savedViews.usualBelow"
+		delta := c.DeltaMinor
+		if delta > 0 {
+			key = "savedViews.usualAbove"
+		} else {
+			delta = -delta
+		}
+		usual = Span(css.Class("saved-view-usual", tw.TextDim),
+			Attr("data-testid", "saved-view-usual-"+v.ID),
+			uistate.T(key, fmtMoney(money.New(delta, props.Base)), c.Periods))
+	}
+
 	alertLabel := uistate.T("savedViews.setAlert")
 	if v.Threshold > 0 {
 		alertLabel = uistate.T("savedViews.editAlert")
@@ -283,6 +333,7 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 	}
 
 	return Div(css.Class("saved-view-row"), Attr("data-testid", "saved-view-row"),
+		standing, usual,
 		Div(css.Class("saved-view-main"),
 			Button(css.Class("saved-view-apply"), Type("button"), Attr("data-testid", "saved-view-apply"),
 				Attr("aria-label", uistate.T("savedViews.applyAria", v.Name)), OnClick(apply),
@@ -468,4 +519,38 @@ func savedViewMatches(n int) string {
 		return uistate.T("savedViews.matchesOne")
 	}
 	return uistate.T("savedViews.matchesMany", n)
+}
+
+// savedViewPriorTotals is this view's total in each COMPLETED prior month,
+// oldest first (WF8).
+//
+// Completed months only, and the current one excluded. Comparing a half-finished
+// month against full ones would report every household as spending less than
+// usual until the 28th, which is the most reliable way to make a monitor useless.
+func savedViewPriorTotals(v savedtxnview.SavedTxnView, txns []domain.Transaction,
+	amount savedtxnview.AmountFunc) []int64 {
+
+	const months = 6
+	now := time.Now()
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	out := make([]int64, 0, months)
+	for i := months; i >= 1; i-- {
+		from := dateutil.AddMonths(thisMonth, -i)
+		to := dateutil.AddMonths(thisMonth, -i+1)
+		window := make([]domain.Transaction, 0, len(txns)/8)
+		for _, t := range txns {
+			if !t.Date.Before(from) && t.Date.Before(to) {
+				window = append(window, t)
+			}
+		}
+		if len(window) == 0 {
+			// A month with no transactions at all is a gap in the record, not a
+			// month of zero spending — including it would drag every average down.
+			continue
+		}
+		_, total := v.Summary(window, amount)
+		out = append(out, total)
+	}
+	return out
 }
