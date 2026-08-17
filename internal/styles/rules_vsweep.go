@@ -514,4 +514,71 @@ func registerVSweep() {
 		color("var(--text-faint)"),
 	)
 
+	// ─── C376: the holdings paste importer ───────────────────────────────────
+	rule(".hld-import",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.6rem"),
+		padding("0.85rem"),
+		marginTop("0.6rem"),
+		borderRadius("var(--radius, 10px)"),
+		border("1px solid var(--border)"),
+		background("var(--surface)"),
+	)
+	rule(".hld-import-head",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap("0.5rem"),
+	)
+	rule(".hld-import-ctrl",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+		maxWidth("18rem"),
+	)
+	rule(".hld-import-text",
+		width("100%"),
+		fontFamily("var(--font-mono, ui-monospace, monospace)"),
+		fontSize("0.78rem"),
+	)
+	rule(".hld-import-table",
+		width("100%"),
+		borderCollapse("collapse"),
+		fontSize("0.78rem"),
+	)
+	rule(".hld-import-table th, .hld-import-table td",
+		textAlign("left"),
+		padding("0.25rem 0.4rem"),
+		borderBottom("1px solid var(--border)"),
+	)
+	// The action tag is the column a reader scans, so it is the only coloured
+	// thing in the table — an add and an update must be distinguishable at a
+	// glance, and a skip must not shout.
+	rule(".hld-import-tag",
+		padding("0.05rem 0.4rem"),
+		borderRadius("999px"),
+		fontSize("0.68rem"),
+		whiteSpace("nowrap"),
+		border("1px solid var(--border)"),
+	)
+	rule(".hld-import-add",
+		color("var(--accent)"),
+		borderColor("var(--accent)"),
+	)
+	rule(".hld-import-update",
+		color("var(--text)"),
+	)
+	rule(".hld-import-skip",
+		color("var(--text-faint)"),
+	)
+	rule(".hld-import-map",
+		margin("0"),
+		fontSize("0.7rem"),
+		color("var(--text-faint)"),
+	)
+	rule(".hld-import-entry",
+		marginTop("0.4rem"),
+	)
+
 }

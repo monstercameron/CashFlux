@@ -301,6 +301,8 @@ func investToolbarWidget(props investPanelProps) ui.Node {
 			Attr("data-testid", "invest-add"), Title(uistate.T("investments.addHoldingTitle")), OnClick(openAdd),
 			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("investments.addSecurity"))),
+		// C376: paste a brokerage export instead of typing every position.
+		ui.CreateElement(holdingImportPanel, holdingImportProps{Accounts: props.App.Accounts()}),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "invest-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

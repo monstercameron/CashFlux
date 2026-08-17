@@ -5560,10 +5560,29 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W3 — Investment analysis depth (reviewer priority 2; base surface already shipped)
 
-- [ ] **C376 [MAJOR][INVEST] Holdings CSV/paste import.** Only manual per-row add exists. Reuse
+- [x] **C376 [MAJOR][INVEST] Holdings CSV/paste import.** Only manual per-row add exists. Reuse
   the transaction CSV mapping-wizard machinery for a holdings import (ticker, name, shares, cost
   basis, price, as-of, class), preview before commit, dedupe by account+ticker (merge = update
-  shares/price), undoable.
+  shares/price), undoable. — DONE (2026-08-16). New pure `internal/holdingimport`. The transaction
+  importer solved the SHAPE (map, preview, commit) but not the content: a holdings row is a POSITION,
+  not an event, so three rules drive the package and each is a test — match on account+ticker falling
+  back to account+name; a match UPDATES and never adds (Monday's export then Friday's leaves you
+  holding what Friday said); and a blank cell means "leave it alone", not zero, because brokerage
+  exports routinely omit cost basis and treating that as $0 reports every position as pure gain.
+  Also: duplicate rows within one file fold, another account's holdings are never matched, rows that
+  would change nothing are skipped so "12 imported" never means "12 rewritten to what they said", and
+  unreadable rows stay in the preview with their reason rather than being silently dropped.
+  `GuessProfile` maps a common brokerage header with no manual mapping and refuses to guess at
+  unrecognised columns. The panel accepts CSV or a spreadsheet paste (tab-detected), states the
+  column mapping it inferred, and previews add/update/skip per row before writing.
+
+  NOT DONE: the ticket's "as-of" column and "undoable". As-of has no field on `domain.Holding` to
+  land in, and undo for a multi-row write needs the snapshot machinery the bulk to-do edit uses —
+  both filed as C376b rather than half-built.
+- [ ] **C376b [MINOR][INVEST] Holdings import: as-of date and undo.** C376 shipped the importer.
+  Two pieces of its ticket did not: an "as-of" column has no field on `domain.Holding` to land in
+  (adding one means deciding whether a price is stamped per-holding or per-import), and undo for a
+  multi-row write needs a before-snapshot like the C402 bulk to-do edit keeps.
 - [x] **C377 DONE (2026-08-16) - Sector + geography allocation.** `domain.Holding` gained optional
   `Sector`/`Region`, with `portfolio.AllocationBySector`/`ByRegion` over one shared grouping the four
   allocation views now use.

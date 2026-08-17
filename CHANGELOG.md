@@ -6,6 +6,21 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Paste a brokerage export instead of typing every position (C376).** Setting up an investment
+  account meant entering each holding by hand, while every brokerage exports exactly that table. The
+  investments screen now takes a CSV or a straight spreadsheet paste, reads the column mapping from
+  the header, states what it inferred so a wrong guess is visible rather than silent, and previews
+  every row as new, an update, or skipped with a reason before anything is written.
+
+  A holdings row is a position, not an event, which is what makes this different from importing
+  transactions. Importing Monday's export and then Friday's leaves you holding what Friday said
+  rather than both, matched on ticker — or on name, for the many funds that have none. A blank cell
+  means "leave it alone" rather than zero, because exports routinely omit cost basis and reading that
+  as $0 would report every position as pure gain. Rows that would change nothing are skipped, so
+  "12 imported" never means twelve rows rewritten to exactly what they already said, and rows that
+  could not be read stay in the preview with their reason instead of quietly disappearing from it.
+
 ### Fixed
 - **The period you pick now survives a reload (C555).** Stepping to a different month held for the
   session and reverted afterwards, with nothing on screen admitting the reset. The window was being

@@ -1,3 +1,39 @@
+## 2026-08-16 — a position is not an event (C376)
+
+The ticket says to reuse the transaction CSV mapping-wizard machinery, and the shape does transfer:
+map columns, preview, commit. The content does not, and the difference is the whole ticket.
+
+A transaction is an EVENT. Importing the same file twice should produce a duplicate, which is why
+transaction import has duplicate detection as a separate concern layered on top. A holding is a
+POSITION — a statement about what you hold right now. Importing the same file twice must leave you
+holding the same thing, and importing a newer file must leave you holding what the newer file says.
+That is not deduplication; it is upsert, and it has to be the default rather than an option.
+
+Three rules fell out, each with a test:
+
+**Match on account + ticker, falling back to name.** A position is identified by what it is. Plenty
+of funds — company 401(k) options especially — have no ticker at all, so name-only matching is not a
+degenerate case, it is the normal one for retirement accounts.
+
+**A blank cell means leave it alone.** This is the one that would have quietly corrupted portfolios.
+Brokerage exports omit cost basis constantly (it is often not the broker's to know). Reading a blank
+as zero sets basis to $0, and every position then reports as pure gain — a plausible-looking, deeply
+wrong number that nobody would question until tax time.
+
+**Skip rows that change nothing.** Re-importing an unchanged file should plan zero writes, not
+rewrite every row to exactly what it already said. Otherwise "12 imported" is technically true and
+tells the reader nothing about whether anything happened.
+
+Two smaller decisions. Unreadable rows stay in the preview carrying their reason — a preview that
+silently drops what it could not parse is how someone commits an import believing it covered
+everything. And `GuessProfile` refuses to map an unrecognised header rather than guessing: a column
+read as "price" when it was "day change" would corrupt every position in the file, and a wrong guess
+here is worse than no guess because the preview makes it look considered.
+
+Scoped out honestly: the ticket's "as-of" column has no field on `domain.Holding` to land in, and
+undo for a multi-row write needs the before-snapshot machinery the bulk to-do edit keeps. Both filed
+as C376b rather than half-built.
+
 ## 2026-08-16 — persisted from the wrong place (C555)
 
 The report was that selecting a month reverts. The obvious first guess is that nothing persists the
