@@ -1924,6 +1924,9 @@ func Reports() ui.Node {
 			plan,
 			// FP-T1e: the business-and-tax section, given the SAME window as the
 			// report above it so the two can never describe different periods.
+			// FP-T3b: how much of the period was a commitment rather than a choice,
+			// and how far each budget landed from plan.
+			ui.CreateElement(spendMixSection, spendMixProps{From: as, To: ae}),
 			ui.CreateElement(taxDepthSection, taxSectionProps{From: as, To: ae, Year: as.Year()}),
 			appendix,
 		)),

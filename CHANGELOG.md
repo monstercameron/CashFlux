@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **"Commitments and choices" on the full report (FP-T3b).** How much of a period was spoken for before
+  any decisions — rent, insurance, loan payments — and how much was actually chosen, led by the share
+  rather than the amount because that is what compares month to month. Irregular costs are their own
+  bucket rather than folded either way, and spending with no category is named rather than assumed to be
+  discretionary. Underneath, how far each budget landed from plan, with over and under stated apart
+  because being over on one and under on another is not the same as being on plan.
+
+### Fixed
+- **The sample data now classifies its commitments.** Nothing was marked fixed or irregular, so a
+  household with a mortgage read "97% of what you spent was a choice" on a first run.
+
 ### Fixed
 - **The one-month view on Investments reports a return again (FP-T1c-b).** It spans fewer days than the
   minimum for a yearly rate, so it used to say only "not enough history". It now says what the portfolio

@@ -1,3 +1,43 @@
+## 2026-08-17 - how much of the month was actually a choice (FP-T3b)
+
+The report said what was spent and on what. Neither answers the question someone looking at a bad month
+is actually asking: how much of this could I have done anything about. A $4,200 month that is 80%
+commitments and the same $4,200 at 30% are completely different situations, and the category chart
+renders them identically.
+
+The classification was already there. `domain.CategoryClass` has carried fixed / non-monthly / flex
+since BG2, and nothing outside the budgeting screens ever read it.
+
+Four decisions:
+
+**The headline is the SHARE, not the amount.** "You spent $1,300 on things you chose" is a number. "31%
+of what you spent was a choice" is the answer, and it is the one that means something next month too.
+
+**Non-monthly is its own bucket.** Folding it into fixed overstates how trapped the month was; folding
+it into flex suggests it could simply be skipped. It is neither.
+
+**Uncategorized spending is named, never defaulted into "chosen".** That is the flattering guess: it
+tells the reader they had more room than they did.
+
+**Over and under are never netted.** $300 over on groceries and $300 under on travel is not a month that
+went to plan, and a net of zero would say it was. `NetMinor()` exists for a caller that genuinely wants
+it rather than being produced by default.
+
+And one tolerance: a near miss reads as on plan. A budget hit to the dollar does not happen, and
+flagging a $2 overspend on a $400 grocery budget is how you teach someone to ignore the flag.
+
+The browser check found the same shape of problem as the retirement card two days ago: the sample data
+classified NOTHING as fixed or non-monthly, so a household with a mortgage read "97% of what you spent
+was a choice". A meaningless split presented as an insight. Ten categories are classified now.
+
+Travel stayed a CHOICE, deliberately. Irregular is not the same as unavoidable, and classing a holiday
+as a commitment overstates how trapped the month was - which is the exact error this section exists to
+correct.
+
+The assertion I care about in the probe is not that the card rendered but that the headline share agrees
+with the amounts beneath it. A split whose parts do not add up is the failure this kind of card makes
+invisible.
+
 ## 2026-08-17 - a control that could never succeed (FP-T1c-b)
 
 I filed this against my own work yesterday: the growth chart's 1M option spans fewer days than the

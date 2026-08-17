@@ -1506,8 +1506,45 @@ bottom-up per SDLC.
 **Tier 3 — differentiators (more effort, valued by power users):**
 - [ ] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,
   per-scenario start balances, rate-of-return; scaffolding (Plan + overlay-compare) already exists.
-- [ ] **FP-T3b — Reports: recurring-vs-discretionary split + budget-variance view.** `domain.CategoryClass`
+- [x] **FP-T3b — Reports: recurring-vs-discretionary split + budget-variance view.** `domain.CategoryClass`
   already classifies Fixed/NonMonthly/Flex and budgeting has pace/variance math — reuse both as `/reports` cards.
+  — DONE (2026-08-17). New pure `internal/spendmix` plus a "Commitments and choices" section on the full
+  report.
+
+  WHY IT IS WORTH A SECTION: the report already said what was spent and on what. Neither answers what
+  someone looking at a bad month is actually asking — how much of this could I have done anything about.
+  A $4,200 month that is 80% commitments and the same $4,200 at 30% are completely different situations,
+  and the category chart renders them identically.
+
+  THE HEADLINE IS THE SHARE, not the amount. "You spent $1,300 on things you chose" is a number; "31% of
+  what you spent was a choice" is the answer, and it is the one that compares month to month.
+
+  NON-MONTHLY IS ITS OWN BUCKET, not folded either way. Folding it into fixed overstates how trapped the
+  month was; folding it into flex suggests it could simply be skipped.
+
+  UNCATEGORIZED SPENDING IS NAMED, never defaulted into "chosen". Calling unknown spending discretionary
+  is the flattering guess — it tells the reader they had more room than they did.
+
+  OVER AND UNDER ARE NEVER NETTED. $300 over on groceries and $300 under on travel is not a month that
+  went to plan, and a net of zero would say it was. `NetMinor()` exists for a caller that genuinely wants
+  it, rather than being produced by default.
+
+  A NEAR MISS READS AS ON PLAN (5% tolerance). A budget hit to the dollar does not happen, and flagging a
+  $2 overspend on a $400 grocery budget trains people to ignore the flag entirely.
+
+  The variance table takes limits and spend from `budgeting.Spent` — the same function the budgets screen
+  uses — so the two can never disagree about what was spent.
+
+  FOUND WHILE VERIFYING: the sample dataset classified NOTHING as fixed or non-monthly, so a household
+  with a mortgage read "97% of what you spent was a choice" on a first run — a meaningless split
+  presented as an insight. Ten sample categories are now classified (mortgage, HOA, electricity, gas,
+  internet, insurance, auto loan, subscriptions as commitments; property tax as irregular). Travel was
+  deliberately left as a CHOICE: irregular is not the same as unavoidable, and classing a holiday as a
+  commitment overstates how trapped the month was.
+
+  VERIFIED IN A BROWSER: 10/10, and the assertion that mattered is that the headline share agrees with
+  the amounts beneath it (68% against $30,837.96 chosen of $45,177 total) — a split whose parts do not
+  add up is the failure this kind of card makes invisible.
 - [ ] **FP-T3c — Debt: biweekly/accelerated payments + consolidation/refinance modeling.** Both absent, both
   buildable on `payoff` primitives (26 half-payments/yr; "combine N debts at new APR/term vs keep-separate").
 - [ ] **FP-T3d — Portfolio power features:** rebalancing suggestions (target weights + drift — nearest
