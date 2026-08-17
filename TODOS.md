@@ -629,6 +629,10 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   a budget overage, an account balance move) into ranked contributors with evidence txn/account IDs.
   One engine behind: dashboard change explainer, budget overage drivers, account balance-change
   explanation, report period-diff. *(Dashboard vertical slice started 2026-07-19 as the UX experiment.)*
+- [ ] **E4b Batch-resolution review wiring.** E4 shipped the engine. What remains is the surface:
+  feeding the live review queue in as `batchresolve.Row`s, rendering the confident / needs-you tiers
+  with their evidence rows, and applying accepted proposals as ONE undoable changeset. Deliberately not
+  done alongside the engine because the review surfaces were mid-rewrite by another session.
 - [ ] **E5b Prepared-action rendering + changeset backing.** E5 shipped the schema and its contract.
   Two clauses of its ticket remain: rendering a `Prepared` inline (evidence list, assumptions, and the
   2–3 choices as buttons) and applying a chosen option through the changeset layer so it is undoable.
@@ -692,9 +696,28 @@ Engines (build in this order — E5 → E1 → E2 → E3 → E4; pure pkg + test
   drift), and "report total ≠ dashboard total" needs both totals computed through one shared path
   before they can be compared at all — comparing two independent computations would report a
   contradiction every time rounding differed.
-- [ ] **E4 Batch resolution.** Compress repeated work into one reviewed changeset: "186 review items
+- [x] **E4 Batch resolution.** Compress repeated work into one reviewed changeset: "186 review items
   resolve under 6 proposed rules — 172 high-confidence, 14 need you. Preview." Subsumes confidence-tiered
   inbox, bulk transfer/payment matching, rule impact preview, import reconciliation. Target: inbox −70–90%.
+  — ENGINE DONE (2026-08-16), `internal/batchresolve`.
+
+  The premise: a 186-item queue is not 186 decisions, it is six or seven decisions repeated. Reviewing
+  it row by row is the app asking the user to be the pattern-matcher, which is the one job software is
+  unambiguously better at.
+
+  Decisions, each a test. **Three rows minimum** — two agreeing is a coincidence often enough that the
+  rule gets corrected later, and a wrong rule silently mis-files every future transaction it matches.
+  **85% agreement for high confidence**, not unanimity: nineteen groceries and one gift is still a
+  groceries rule, and demanding 100% would push the most useful proposals into the needs-you pile over
+  a single outlier. **Dissenting rows stay unresolved and are counted**, so the reduction figure is not
+  a lie — a proposal covering 6 of 10 reports 60%, not 100%. **Only a TRAILING store number is folded**
+  ("KROGER #418" = "Kroger #522"); stripping digits anywhere would merge "76 Gas" with "Gas", and
+  merging two real merchants is worse than failing to merge two spellings of one — the first mis-files
+  forever, the second just leaves a row in the queue.
+
+  NOT DONE: the review-surface WIRING (feeding the queue in, rendering the tiered preview, applying the
+  accepted proposals as one changeset). The review surfaces are being actively rewritten by another
+  session right now, so wiring into them would conflict; filed as E4b.
 - [x] **E5 Insight schema + prepared-action primitive.** Evidence links, confidence, $ impact,
   assumptions, and 2–3 quantified action choices on `smart.Insight`; rendered inline; changeset-backed.
   Every engine above emits through this. — SCHEMA DONE (2026-08-16), `internal/smart/prepared.go`.

@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The engine that turns a review backlog into a handful of rules (E4).** A 186-item review queue is
+  not 186 decisions — it is six or seven decisions repeated, and working through it one row at a time
+  is the app asking the user to be the pattern-matcher. The new engine reads the queue, finds the
+  repeated shapes, and proposes rules with the rows behind each one as evidence, split into the ones it
+  is confident about and the ones that need a person.
+
+  The second pile is as much the point as the first: a batch tool that claims to handle everything is
+  one nobody trusts twice. Rows that disagree with their merchant's majority stay in the queue and are
+  counted, so a proposal covering six of ten reports sixty percent rather than claiming the lot. Three
+  matching rows are needed before anything is proposed, because two agreeing is a coincidence often
+  enough that the rule gets corrected later — and a wrong rule quietly mis-files every future
+  transaction it matches.
 - **The engine that merges one problem's several signals into one case (E2).** A bill that did not get
   paid currently produces four separate things — a notification, a review-queue entry for the unmatched
   payment, a to-do, and a dashboard insight — and the reader has to work out that they are all the same

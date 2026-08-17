@@ -1,3 +1,38 @@
+## 2026-08-16 — a backlog is not a list of decisions (E4)
+
+The engine's whole premise fits in one observation: a 186-item review queue is almost never 186
+decisions. It is six or seven decisions repeated — "everything from this merchant is groceries", made
+twenty-eight times. Presenting it as 186 rows is the app asking the user to do the pattern-matching,
+which is the single job software is unambiguously better at than people.
+
+Four thresholds, and each is a judgement I want to be able to defend:
+
+**Three rows minimum.** Two rows agreeing is a coincidence often enough to matter. A rule built on two
+is one the user corrects later, and the cost of getting it wrong is asymmetric: a missing rule leaves
+a row in the queue, a wrong rule silently mis-files every future transaction it matches.
+
+**85% agreement, not unanimity.** Nineteen groceries and one gift is still a groceries rule. Demanding
+100% would push exactly the most useful proposals into the needs-you pile over a single outlier, which
+inverts the feature. But not 60% either — at that point the rule is wrong two times in five, and that
+is a guess wearing a rule's clothes.
+
+**Dissenting rows stay unresolved, and are counted.** A proposal covering six rows out of ten reports
+sixty percent, not a hundred. The temptation is to report the proposal count and let the reduction
+look total; that is the sort of claim that survives exactly one use.
+
+**Only a TRAILING store number is folded.** "KROGER #418" and "Kroger #522" are one merchant. Stripping
+digits anywhere in the string would also merge "76 Gas" with "Gas", and that error is much worse than
+the one it prevents: merging two real merchants produces a rule that mis-files forever, while failing
+to merge two spellings of one just leaves a row in the queue.
+
+The needs-you tier is not a fallback, it is the feature. A batch tool that claims to handle everything
+is one nobody trusts twice, and the honest version — "172 I am confident about, 14 that need you" — is
+what makes the 172 acceptable to apply unread.
+
+Not wired into the review surface, and filed as E4b rather than forced: those surfaces are mid-rewrite
+in another session right now, and wiring into a file being restructured would either conflict or land
+on top of work about to change.
+
 ## 2026-08-16 — one problem, four inboxes (E2)
 
 An unpaid bill currently generates a notification, a review-queue entry when the payment finally
