@@ -3909,9 +3909,26 @@ ALREADY DONE: `/budgets` route exists (404 is dev-server only = C115); `IncomeFo
 
 ## R21 loan amortization UI (#418 → atomic)
 ALREADY DONE: `payoff.Amortize*` engine committed+tested; `domain.Account` has APR/MinPayment/DueDay/Lender/CreditLimit; installment vs revolving distinguished at type level (`enums.go:41-74`).
-- [ ] [C204][MAJOR] Add `TermMonths int` + `OriginationDate time.Time` to `domain.Account` (`entities.go:91`) + `IsInstallment()` helper + `payoff.RemainingMonths()` helper. (BLOCKING prereq)
-- [ ] [C206][MAJOR] Persist new fields (store JSON round-trip + test) + fix sample loans (`sample.go:428-430`: set TermMonths/OriginationDate; mortgage 360).
-- [ ] [C204][MAJOR] Term fields in add form (`accountaddform.go`, gated `isLiab && IsInstallment`) + inline edit (`accounts_row.go`).
+- [x] [C204][MAJOR] Add `TermMonths int` + `OriginationDate time.Time` to `domain.Account` (`entities.go:91`) + `IsInstallment()` helper + `payoff.RemainingMonths()` helper. (BLOCKING prereq)
+  — DONE (2026-08-16). Two helpers, not one, because "this is a mortgage" and "we know its term" are
+  different facts: `IsInstallment()` gates the schedule affordance, `HasLoanTerms()` gates whether it
+  can actually be drawn — a surface conflating them shows an empty table instead of asking for the
+  missing number. `AccountType.IsInstallment()/IsRevolving()` are stated positively so a caller does
+  not write a negation that also catches assets. `payoff.RemainingMonths` counts WHOLE months from the
+  origination day-of-month (Jan 15 → Feb 14 is zero), clamps to [0, term] so a finished loan is not
+  negative and a future origination is not more than its term, and returns ok=false rather than 0 for
+  missing inputs — a bare zero would render as "already paid off".
+- [x] [C206][MAJOR] Persist new fields (store JSON round-trip + test) + fix sample loans (`sample.go:428-430`: set TermMonths/OriginationDate; mortgage 360).
+  — DONE (2026-08-16). Export/import round-trip tested both ways: a loan WITH terms keeps them, and one
+  saved before the fields existed imports as unknown rather than as a zero-month loan. All four sample
+  loans carry realistic terms (mortgage 360, car loans 72/60, student 120) so the amortization surfaces
+  have something to show on a first run; a test also asserts the sample CREDIT CARD did not gain one.
+  Noted while testing: `OriginationDate` serializes even when zero, because encoding/json only omits
+  zero values of basic kinds. Not a defect introduced here — `BalanceAsOf`, `LockUntil` and
+  `FreshnessSnoozeUntil` have always done it — and matching the four siblings beats making this one
+  field's absence mean something different. Asserted in the test so it is stated, not rediscovered.
+- [ ] [C204b][MAJOR] Term fields in add form (`accountaddform.go`, gated `isLiab && IsInstallment`) + inline edit (`accounts_row.go`). The DATA prereq is done (C204/C206); this is the UI half, left open
+  because both files were mid-rewrite in another session on 2026-08-16.
 - [ ] [C204/C205][MAJOR] NEW `internal/screens/loan_amort_panel.go` `LoanAmortPanel` — `AmortizeFixed`/`AmortSummary` schedule table (Map, no On* in loop) + extra-payment simulator (`AmortizeWithExtra`) callout; wire into AccountRow read-only branch for installment liabilities. (negate signed ledger balance before AmortizeFixed)
 - [ ] [C207][DESIGN] "Installment"/"Revolving" badge in account meta (`accounts.go:446`) + fix `TypeLineOfCredit` icon→CreditCard (`accounts.go:429`).
 

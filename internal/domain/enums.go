@@ -132,6 +132,33 @@ func (t AccountType) Class() AccountClass {
 // IsLiability reports whether the type represents money owed.
 func (t AccountType) IsLiability() bool { return t.Class() == ClassLiability }
 
+// IsInstallment reports whether this liability type is repaid on a fixed
+// schedule rather than revolving (C204).
+//
+// Loans and mortgages amortize: a lender set a term and a payment, and the
+// balance walks predictably to zero. Credit cards and lines of credit do not —
+// the balance moves with spending and whatever is repaid — so they have no
+// schedule to draw, only a payoff projection from the payment chosen. Utilities
+// are neither; they are a recurring obligation, not borrowed principal.
+func (t AccountType) IsInstallment() bool {
+	switch t {
+	case TypeLoan, TypePersonalLoan, TypeMortgage:
+		return true
+	}
+	return false
+}
+
+// IsRevolving reports whether this liability type carries a revolving balance —
+// the complement of IsInstallment within liabilities, stated positively so a
+// caller need not write a negation that would also catch non-liabilities.
+func (t AccountType) IsRevolving() bool {
+	switch t {
+	case TypeCreditCard, TypeLineOfCredit:
+		return true
+	}
+	return false
+}
+
 // IsSavingsLike reports whether the type is a savings or investment vehicle you
 // deliberately fund each month — savings, investment, retirement, or crypto. It
 // selects the accounts the zero-based Budgets view lists under "Savings &

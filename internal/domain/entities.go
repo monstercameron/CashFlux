@@ -125,6 +125,21 @@ type Account struct {
 	InterestRateAPR float64     `json:"interestRateApr,omitempty"`
 	MinPayment      money.Money `json:"minPayment,omitempty"`
 	DueDayOfMonth   int         `json:"dueDayOfMonth,omitempty"`
+	// TermMonths and OriginationDate are the two facts an INSTALLMENT loan needs
+	// that a revolving one does not (C204). A credit card has no term — it is
+	// paid down, not paid off on a schedule — which is why these sit beside the
+	// other liability fields rather than being required of every account.
+	//
+	// Without a term, the app can compute a payoff PLAN for a loan (how long at
+	// $X a month) but not its actual amortization schedule, because that schedule
+	// is defined by the term the lender set, not by the payment the borrower
+	// happens to make. Zero means unknown, and callers must treat it as "we
+	// cannot draw the schedule" rather than as a zero-month loan.
+	//
+	// Additive: existing accounts load with zero values and round-trip through
+	// JSON unchanged; no store migration.
+	TermMonths      int       `json:"termMonths,omitempty"`
+	OriginationDate time.Time `json:"originationDate,omitempty"`
 	// StatementDay is the day of the month (1–31) a liability's statement closes —
 	// distinct from DueDayOfMonth, which is THE payment due day (the day a payment is
 	// owed). The statement-close day feeds the real billing cycle: the on-time payment
@@ -212,6 +227,23 @@ type Account struct {
 // user flagged as a liability), where AccountType.Class() alone would not. Prefer this
 // over t.Type.IsLiability() anywhere a formula asks "is this account money owed?".
 func (a Account) IsLiability() bool { return a.Class == ClassLiability }
+
+// IsInstallment reports whether this account is a liability repaid on a fixed
+// schedule — a loan or a mortgage — as opposed to a revolving one (C204).
+//
+// The distinction matters because only an installment loan HAS an amortization
+// schedule: a credit card's balance is paid down at whatever rate the holder
+// chooses, so there is no lender-set term to draw. Surfaces that offer a
+// schedule must gate on this, or a credit card will be shown a table of
+// payments nobody agreed to.
+func (a Account) IsInstallment() bool { return a.IsLiability() && a.Type.IsInstallment() }
+
+// HasLoanTerms reports whether this account carries enough to draw an actual
+// amortization schedule: it is an installment loan AND someone recorded the
+// term. Separate from IsInstallment because "this is a mortgage" and "we know
+// its term" are different facts, and a surface that conflates them shows an
+// empty schedule instead of asking for the missing number.
+func (a Account) HasLoanTerms() bool { return a.IsInstallment() && a.TermMonths > 0 }
 
 // Reconciliation is one recorded statement reconciliation on an account: the
 // moment the cleared balance was confirmed to match a bank statement. At is

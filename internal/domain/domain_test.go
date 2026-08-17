@@ -3,6 +3,8 @@
 package domain
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -222,5 +224,105 @@ func TestRecurringCadencePrev(t *testing.T) {
 					cad, d.Format("2006-01-02"), got.Format("2006-01-02"))
 			}
 		}
+	}
+}
+
+// ─── C204: installment loans vs revolving credit ─────────────────────────────
+
+// Only an installment loan HAS an amortization schedule. A credit card's balance
+// is paid down at whatever rate the holder chooses, so offering it a table of
+// payments nobody agreed to is the failure this gate prevents.
+func TestIsInstallmentSeparatesLoansFromRevolvingCredit(t *testing.T) {
+	installment := []AccountType{TypeLoan, TypePersonalLoan, TypeMortgage}
+	revolving := []AccountType{TypeCreditCard, TypeLineOfCredit}
+
+	for _, ty := range installment {
+		if !ty.IsInstallment() {
+			t.Errorf("%s is not installment", ty)
+		}
+		if ty.IsRevolving() {
+			t.Errorf("%s is both installment and revolving", ty)
+		}
+	}
+	for _, ty := range revolving {
+		if ty.IsInstallment() {
+			t.Errorf("%s is installment", ty)
+		}
+		if !ty.IsRevolving() {
+			t.Errorf("%s is not revolving", ty)
+		}
+	}
+	// Utilities are a liability but neither: a recurring obligation, not
+	// borrowed principal.
+	if TypeUtilities.IsInstallment() || TypeUtilities.IsRevolving() {
+		t.Error("utilities classed as installment or revolving")
+	}
+	// An asset is neither, and must not be swept in by a negation somewhere.
+	if TypeChecking.IsInstallment() || TypeChecking.IsRevolving() {
+		t.Error("an asset type classed as a liability shape")
+	}
+}
+
+// "This is a mortgage" and "we know its term" are different facts. A surface
+// that conflates them shows an empty schedule instead of asking for the number.
+func TestHasLoanTermsIsSeparateFromIsInstallment(t *testing.T) {
+	loan := Account{Class: ClassLiability, Type: TypeMortgage}
+	if !loan.IsInstallment() {
+		t.Fatal("a mortgage is not installment")
+	}
+	if loan.HasLoanTerms() {
+		t.Error("a mortgage with no term claimed to have loan terms")
+	}
+	loan.TermMonths = 360
+	if !loan.HasLoanTerms() {
+		t.Error("a mortgage with a term does not have loan terms")
+	}
+	// A credit card with a term set by mistake is still not amortizable.
+	card := Account{Class: ClassLiability, Type: TypeCreditCard, TermMonths: 24}
+	if card.IsInstallment() || card.HasLoanTerms() {
+		t.Error("a credit card with a stray term was treated as amortizable")
+	}
+	// And an ASSET with a term is not a loan.
+	asset := Account{Class: ClassAsset, Type: TypeSavings, TermMonths: 12}
+	if asset.IsInstallment() || asset.HasLoanTerms() {
+		t.Error("an asset was treated as an installment loan")
+	}
+}
+
+// Additive fields must round-trip so existing accounts load unchanged and new
+// ones persist — the store keeps accounts as JSON.
+func TestLoanTermFieldsRoundTripThroughJSON(t *testing.T) {
+	orig := time.Date(2021, time.July, 15, 0, 0, 0, 0, time.UTC)
+	in := Account{ID: "a", Name: "Mortgage", Class: ClassLiability, Type: TypeMortgage,
+		TermMonths: 360, OriginationDate: orig}
+	b, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var out Account
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TermMonths != 360 {
+		t.Errorf("TermMonths = %d", out.TermMonths)
+	}
+	if !out.OriginationDate.Equal(orig) {
+		t.Errorf("OriginationDate = %v", out.OriginationDate)
+	}
+	// An account without a term must not gain the field.
+	plain, _ := json.Marshal(Account{ID: "b", Name: "Checking"})
+	if strings.Contains(string(plain), "termMonths") {
+		t.Errorf("an account with no term serialized one: %s", plain)
+	}
+	// OriginationDate DOES serialize as a zero time even with omitempty, because
+	// encoding/json only omits zero values of basic kinds — a struct is never
+	// "empty" to it. That is not a defect introduced here: BalanceAsOf, LockUntil
+	// and FreshnessSnoozeUntil have always behaved this way, and matching the four
+	// siblings is worth more than a pointer or a custom marshaller that would make
+	// this one field's absence mean something different from the others'.
+	// Asserted so the shared behaviour is stated rather than rediscovered.
+	if !strings.Contains(string(plain), "originationDate") {
+		t.Error("originationDate stopped serializing — if that was deliberate, the four " +
+			"sibling time fields should change with it, not just this one")
 	}
 }

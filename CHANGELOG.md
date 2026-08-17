@@ -7,6 +7,18 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Loans know their term (C204, C206).** An account could record its rate, minimum payment and due
+  day but not the two facts that make an installment loan amortizable: how many months the lender set,
+  and when it started. Without them the app could project a payoff — how long at $X a month — but not
+  draw the actual schedule, which is defined by the term, not by the payment someone happens to make.
+  Both now persist and survive an export/import, and the sample mortgage, car loans and student loan
+  carry realistic terms so the schedule surfaces have something to show on a first run.
+
+  Two separate checks rather than one, because "this is a mortgage" and "we know its term" are
+  different facts and conflating them shows an empty table instead of asking for the missing number.
+  Credit cards and lines of credit are explicitly excluded: a revolving balance is paid down at
+  whatever rate the holder chooses, so there is no lender-set schedule to draw. And a loan with no term
+  recorded reports as unknown rather than as zero months, which would have rendered as already paid off.
 - **The engine that turns a review backlog into a handful of rules (E4).** A 186-item review queue is
   not 186 decisions — it is six or seven decisions repeated, and working through it one row at a time
   is the app asking the user to be the pattern-matcher. The new engine reads the queue, finds the

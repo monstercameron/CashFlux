@@ -298,3 +298,79 @@ func TestAmortSummary_TotalPaidEqualsInterestPlusPrincipal(t *testing.T) {
 		t.Errorf("totalPaid(%d) != balance(%d) + totalInterest(%d)", totalPaid, balance, totalInterest)
 	}
 }
+
+// ─── C204: how much of a loan's term is left ─────────────────────────────────
+
+func c204Day(y int, m time.Month, d int) time.Time {
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// The day of month decides the boundary: a loan originated on the 15th has used
+// a payment on the following 15th, not on the 1st.
+func TestRemainingMonthsCountsWholeMonths(t *testing.T) {
+	orig := c204Day(2026, time.January, 15)
+	cases := []struct {
+		now  time.Time
+		left int
+	}{
+		{c204Day(2026, time.January, 15), 60},  // day zero
+		{c204Day(2026, time.February, 14), 60}, // not yet a whole month
+		{c204Day(2026, time.February, 15), 59}, // exactly one
+		{c204Day(2027, time.January, 15), 48},  // a year in
+	}
+	for _, c := range cases {
+		got, ok := RemainingMonths(60, orig, c.now)
+		if !ok {
+			t.Fatalf("RemainingMonths at %s reported unknown", c.now.Format("2006-01-02"))
+		}
+		if got != c.left {
+			t.Errorf("at %s = %d, want %d", c.now.Format("2006-01-02"), got, c.left)
+		}
+	}
+}
+
+// A loan past its term has nothing left, not a negative count.
+func TestRemainingMonthsClampsAtZero(t *testing.T) {
+	got, ok := RemainingMonths(12, c204Day(2020, time.January, 1), c204Day(2026, time.January, 1))
+	if !ok || got != 0 {
+		t.Errorf("a long-finished loan = %d,%v want 0,true", got, ok)
+	}
+}
+
+// A future origination has its full term, not more than it.
+func TestRemainingMonthsClampsAtTheTerm(t *testing.T) {
+	got, ok := RemainingMonths(36, c204Day(2027, time.January, 1), c204Day(2026, time.January, 1))
+	if !ok || got != 36 {
+		t.Errorf("a future origination = %d,%v want 36,true", got, ok)
+	}
+}
+
+// "We do not know" must never render as "already paid off", which is what a
+// bare zero would look like.
+func TestRemainingMonthsReportsUnknownRatherThanZero(t *testing.T) {
+	if _, ok := RemainingMonths(0, c204Day(2026, time.January, 1), c204Day(2026, time.June, 1)); ok {
+		t.Error("a loan with no term reported a known answer")
+	}
+	if _, ok := RemainingMonths(60, time.Time{}, c204Day(2026, time.June, 1)); ok {
+		t.Error("a loan with no origination date reported a known answer")
+	}
+}
+
+func TestPaymentsMadeIsTheComplement(t *testing.T) {
+	orig := c204Day(2026, time.January, 15)
+	now := c204Day(2027, time.January, 15)
+	left, ok1 := RemainingMonths(60, orig, now)
+	made, ok2 := PaymentsMade(60, orig, now)
+	if !ok1 || !ok2 {
+		t.Fatal("unknown")
+	}
+	if left+made != 60 {
+		t.Errorf("%d left + %d made = %d, want 60", left, made, left+made)
+	}
+	if made != 12 {
+		t.Errorf("PaymentsMade = %d, want 12", made)
+	}
+	if _, ok := PaymentsMade(0, orig, now); ok {
+		t.Error("PaymentsMade reported known with no term")
+	}
+}

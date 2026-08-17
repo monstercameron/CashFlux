@@ -1,3 +1,32 @@
+## 2026-08-16 — two facts that look like one (C204, C206)
+
+R21's blocking prereq, done in the only clean territory available today — 112 files under
+`internal/screens` are mid-rewrite in another session, so the UI half of the cluster has to wait.
+
+The design decision worth recording is that this needed TWO predicates, not one. `IsInstallment()`
+answers "is this the kind of debt that has a schedule" — a mortgage yes, a credit card no, because a
+revolving balance is paid down at whatever rate the holder picks and no lender set a term.
+`HasLoanTerms()` answers "do we actually know this one's term". They look like the same question and
+are not: the first gates whether to offer a schedule affordance at all, the second gates whether it
+can be drawn. A surface that conflates them renders an empty amortization table on a mortgage whose
+term nobody has entered, when it should be asking for the number.
+
+`AccountType.IsInstallment()` and `IsRevolving()` are both stated positively for a related reason. A
+caller reaching for "not revolving" would also catch every asset account, and that negation is exactly
+the kind of thing that reads correct and is not.
+
+`RemainingMonths` returns `(int, bool)` rather than an int. A loan with no term recorded has an
+unknown remaining count, and returning 0 for it would render as "already paid off" — the most
+confidently wrong answer available. Same reasoning as `HasImpact` in E5 and `Known()` in acctproject;
+it keeps recurring because the zero value of a number is a real number and "we don't know" is not.
+
+One thing found while testing, recorded rather than fixed: `OriginationDate` serializes even when
+zero, because `encoding/json` only omits zero values of basic kinds and a struct is never "empty" to
+it. That is not new — `BalanceAsOf`, `LockUntil` and `FreshnessSnoozeUntil` have always done it — and
+making this one field behave differently, via a pointer or a custom marshaller, would mean its absence
+carried information the four siblings' absence does not. Consistency wins; the test asserts the
+behaviour so the next person finds it stated rather than rediscovering it.
+
 ## 2026-08-16 — a backlog is not a list of decisions (E4)
 
 The engine's whole premise fits in one observation: a 186-item review queue is almost never 186

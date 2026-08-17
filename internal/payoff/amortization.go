@@ -161,3 +161,52 @@ func AmortSummary(rows []AmortRow) (totalInterestMinor, totalPaidMinor int64, pa
 	}
 	return totalInterestMinor, totalPaidMinor, payoffDate
 }
+
+// RemainingMonths reports how many scheduled payments a loan has left at `now`,
+// given its term and when it originated (C204).
+//
+// It counts WHOLE elapsed months from origination, so a loan originated on the
+// 15th has used one payment on the following 15th, not on the 1st. The result is
+// clamped to [0, termMonths]: a loan past its term has nothing left rather than a
+// negative count, and a loan whose origination is in the future has its full term
+// rather than more than it.
+//
+// ok is false when the inputs cannot answer the question — no term, or no
+// origination date. Callers must treat that as "we do not know" and ask for the
+// missing field, never as "zero months remain", which would render as a loan
+// that is already paid off.
+func RemainingMonths(termMonths int, origination, now time.Time) (int, bool) {
+	if termMonths <= 0 || origination.IsZero() {
+		return 0, false
+	}
+	elapsed := wholeMonthsBetween(origination, now)
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	left := termMonths - elapsed
+	if left < 0 {
+		left = 0
+	}
+	return left, true
+}
+
+// PaymentsMade is RemainingMonths' complement: how many of the term's payments
+// have come due. Clamped to [0, termMonths] for the same reasons.
+func PaymentsMade(termMonths int, origination, now time.Time) (int, bool) {
+	left, ok := RemainingMonths(termMonths, origination, now)
+	if !ok {
+		return 0, false
+	}
+	return termMonths - left, true
+}
+
+// wholeMonthsBetween counts complete calendar months from a to b. The day of
+// month decides the boundary: Jan 15 → Feb 14 is zero whole months, Jan 15 →
+// Feb 15 is one.
+func wholeMonthsBetween(a, b time.Time) int {
+	months := (b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
+	if b.Day() < a.Day() {
+		months--
+	}
+	return months
+}
