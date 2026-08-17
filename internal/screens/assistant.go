@@ -562,9 +562,23 @@ func assistantInsightsDataPanel() ui.Node {
 	}
 	pinnedTile := astTile("ast-pinned", "span 2", astSection("sec-ast-pinned", uistate.T("insights.pinnedTitle"), nil, pinnedBody))
 
+	// ── Habits: what repeats, as opposed to what happened once (WF-SM2) ───────
+	habits := spendHabitLines(scopedTxns, rates, base, now)
+	var habitsBody ui.Node
+	if len(habits) == 0 {
+		habitsBody = P(css.Class("empty"), Attr("data-testid", "ast-habits-empty"), uistate.T("habits.empty"))
+	} else {
+		rows := make([]ui.Node, 0, len(habits))
+		for _, line := range habits {
+			rows = append(rows, P(css.Class("insight-row"), Attr("data-testid", "ast-habit"), line))
+		}
+		habitsBody = Div(css.Class("insight-list"), rows)
+	}
+	habitsTile := astTile("ast-habits", "span 2", astSection("sec-ast-habits", uistate.T("habits.title"), nil, habitsBody))
+
 	// ── Assemble the surface ───────────────────────────────────────────────────
 
-	tiles := []ui.Node{heroTile, toolbar, flaggedTile, highlightsTile, trendTile, merchantsTile, pinnedTile}
+	tiles := []ui.Node{heroTile, toolbar, flaggedTile, highlightsTile, habitsTile, trendTile, merchantsTile, pinnedTile}
 	if showFormulas.Get() {
 		tiles = append(tiles, astTile("ast-formula", "1 / span 4", Fragment(
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("assistant.formulaHint")),

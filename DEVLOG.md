@@ -1,3 +1,38 @@
+## 2026-08-17 - a habit is a thing that repeats (WF-SM2)
+
+"Spend rises after payday" and "weekend delivery is accelerating" are the same question asked twice: is
+money going out faster during THESE days than during the others, again and again. So they are one engine
+rather than two detectors, and a third phase is now a phase test rather than a new algorithm.
+
+Two rules carry it, and both are about not finding patterns that are not there.
+
+Rates, never totals. There are five weekdays and two weekend days, so comparing totals finds "you spend
+more on weekdays" in every household that has ever existed and calls it a finding. Compare always divides
+by the days on each side, and takes days rather than sums so a caller cannot hand it totals by accident.
+One test exists purely to fail if that changes: flat daily spending, where totals would report a 2.5x
+weekday habit and the engine reports zero.
+
+A pattern is a repeated thing. One expensive weekend is an anomaly and the app already detects those, so
+a finding has to hold in two thirds of the months observed rather than in the pooled average, which a
+single blowout month carries on its own. Without that rule this engine would compete with the anomaly
+detector and lose - a one-off dressed as a habit sends somebody to change a routine that was never the
+problem.
+
+Two smaller decisions mattered more than they look. The daily series includes the days nothing was spent:
+skip them and you measure how big a spending day is rather than how often money goes out, and a household
+that spends once a week in large amounts would read identically to one that spends every day. And
+paydays come from income transactions rather than a pay-cycle setting, because the question is when money
+actually arrived - a stated cadence describes an intention, and a late paycheque moves the phase it is
+meant to mark.
+
+On the sample it reports that spending runs 35% hotter for the four days after payday - about $40 a day
+extra, in four of the last five months - and says nothing at all about weekends, because there is nothing
+there. The silence is the feature.
+
+Five of the ticket's seven patterns are still open. Two of those are ratio comparisons rather than phase
+comparisons ("small" purchases collectively outweighing large ones; subscription creep offsetting debt
+progress), so they do not belong in this package and should not be forced into it.
+
 ## 2026-08-17 - a rate of zero is not a missing rate (WF4-b)
 
 I filed this against the trust assessment I had just built: it asked whether a loan's APR was `<= 0` to

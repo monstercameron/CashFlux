@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **"Habits I notice" on Insights (WF-SM2).** Spending that repeats — money going out faster in the days
+  after payday, or at weekends — with how much extra a day and in how many months it held. Nothing is
+  reported unless it kept happening: one expensive weekend is an anomaly, not a habit.
+
 ### Fixed
 - **A 0% loan is no longer treated as a loan with a missing rate (WF4-b).** An interest-free family loan
   or a 0% promotional card now keeps its rate, its payoff date and its APR chip; only an account nobody

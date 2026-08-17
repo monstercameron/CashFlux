@@ -650,10 +650,48 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   STILL OPEN: the dashboard's attention widget renders the same anomaly as a single line and carries
   neither the explanation nor the verdict control; and `spendingHighlights` (the older /insights card,
   which the agent-first surface no longer routes to) passes no OnJudge, so its rows show no control.
-- [ ] **WF-SM2 — Behavioral pattern detection.** Surface patterns users miss: spend rises after
+- [~] **WF-SM2 — Behavioral pattern detection.** Surface patterns users miss: spend rises after
   payday; weekend delivery accelerating; savings dips in irregular-income months; a card paid just
   after interest posts; a category blows its budget in the final week; sub increases offsetting debt
   progress; "small" purchases collectively > large ones.
+  — TWO OF THE SEVEN DONE (2026-08-17), and more importantly the engine they share. New pure
+  `internal/spendpattern`, surfaced as a "Habits I notice" tile on /insights.
+
+  "SPEND RISES AFTER PAYDAY" AND "WEEKEND SPENDING" ARE THE SAME QUESTION ASKED TWICE — is money going
+  out faster during THESE days than during the others, again and again — so they are one engine and not
+  two detectors. Adding a third phase is a phase test, not a new algorithm.
+
+  RATES, NEVER TOTALS. There are five weekdays and two weekend days, so comparing totals finds "you spend
+  more on weekdays" in every household that has ever existed and calls it a pattern. `Compare` always
+  divides by the days on each side, and takes DAYS rather than sums so a caller cannot hand it totals by
+  accident. There is a test whose entire job is to fail if that ever changes.
+
+  A PATTERN IS A REPEATED THING. One expensive weekend is an anomaly, and the app already detects those —
+  so a finding must hold in two thirds of the months observed, not merely in the pooled average, which a
+  single blowout month can carry alone. Without that rule this engine would compete with the anomaly
+  detector and lose, because a one-off dressed as a habit sends somebody to change a routine that was
+  never the problem.
+
+  EVERY CLAIM CARRIES ITS EVIDENCE: how much extra per DAY (a percentage cannot be argued with, "$40 a
+  day" can) and in how many of the months it held.
+
+  THE ZERO DAYS ARE THE DATA. The series has one entry per day including the days nothing was spent —
+  skipping them would measure how big a spending day is rather than how often money goes out, and a
+  household that spends once a week in large amounts would read identically to one that spends daily.
+
+  Paydays come from the LEDGER (income transactions), not a pay-cycle setting: the question is when money
+  actually arrived, and a late paycheque moves the phase it is meant to mark.
+
+  VERIFIED IN A BROWSER: 5/5 (`e2e/_habits_check.mjs`). On the sample it reports "Spending runs hotter for
+  the 4 days after payday: about 35% more per day, roughly $40.27 a day extra, in 4 of the last 5 months",
+  and the weekend question correctly stays quiet — the sample has no weekend habit, and saying nothing is
+  the right answer.
+
+  STILL OPEN — five patterns, each needing its own comparison rather than another phase: savings dips in
+  irregular-income months; a card paid just after interest posts; a category blowing its budget in the
+  final week; subscription increases offsetting debt progress; and "small" purchases collectively
+  outweighing large ones. The last two are ratio comparisons rather than phase comparisons, so they do not
+  fit `spendpattern` and should not be forced into it.
 - [ ] **WF-SM3 — Next-best-action ranking.** Rank actions by monthly impact, one-time impact, effort,
   reversibility, urgency, and confidence — and show *why* one outranks another.
 - [ ] **WF-SM4 — Local financial memory.** Remember decisions: "this merchant is always groceries",

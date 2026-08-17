@@ -2835,6 +2835,13 @@ var english = Catalog{
 	"insights.attribUnnamedPayee":  "Unnamed",
 	// WF-SM1 second clause: judging a flag. Two of the five deliberately do NOT
 	// hide it, so each says plainly what it leaves behind.
+	// WF-SM2: habits, not incidents. Each line carries the evidence — how much a
+	// day, and in how many of the months looked at — because a bare percentage
+	// cannot be argued with.
+	"habits.weekend":                     "You spend about %d%% more per day at weekends — roughly %s a day extra, in %d of the last %d months.",
+	"habits.payday":                      "Spending runs hotter for the %d days after payday: about %d%% more per day, roughly %s a day extra, in %d of the last %d months.",
+	"habits.title":                       "Habits I notice",
+	"habits.empty":                       "Nothing that repeats yet — habits need a few months before they can be told apart from a busy week.",
 	"insights.verdictAria":               "What do you make of the %s flag?",
 	"insights.verdictNone":               "Not judged",
 	"insights.verdictOneTime":            "One-time",
