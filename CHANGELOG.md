@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **"Two ways to pay this off faster" on Debt (FP-T3c).** What paying every two weeks would actually do —
+  with the extra annual cost stated as plainly as the saving, because the whole effect is a thirteenth
+  payment a year and someone who cannot afford one cannot afford the plan. And what combining your debts
+  into one loan would do, with the origination fee counted, your current blended rate shown as the number
+  an offer has to beat, and any debt that could not be modelled named rather than quietly left out. Both
+  comparisons can say no.
+
+### Added
 - **"Commitments and choices" on the full report (FP-T3b).** How much of a period was spoken for before
   any decisions — rent, insurance, loan payments — and how much was actually chosen, led by the share
   rather than the amount because that is what compares month to month. Irregular costs are their own

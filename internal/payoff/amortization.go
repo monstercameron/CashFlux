@@ -210,3 +210,55 @@ func wholeMonthsBetween(a, b time.Time) int {
 	}
 	return months
 }
+
+// MaxPaymentMonths bounds a fixed-payment schedule.
+//
+// A hundred years. Not a realistic term — a backstop, so a payment that only
+// just exceeds the interest cannot spin forever building a slice nobody will
+// read. A schedule that hits the cap is reported as-is rather than refused,
+// because "this takes longer than a lifetime" is the answer the reader needs.
+const MaxPaymentMonths = 1200
+
+// AmortizeAtPayment amortizes a balance at a FIXED monthly payment rather than
+// over a fixed term — the shape of a credit card, or of any debt where the
+// household knows what it pays each month but not when it ends.
+//
+// Returns nil when the payment can never clear the balance, which is the case
+// worth being strict about: a payment at or below the monthly interest does not
+// mean "a very long time", it means never. Reporting a large number of months
+// would dress an impossibility as a plan, and the caller must be able to tell
+// the difference.
+//
+// The final payment takes what is LEFT, not the full amount, so the schedule
+// ends at exactly zero rather than overshooting into a negative balance.
+func AmortizeAtPayment(balanceMinor int64, aprPct float64, paymentMinor int64, start time.Time) []AmortRow {
+	if balanceMinor <= 0 || paymentMinor <= 0 {
+		return nil
+	}
+	r := aprPct / 100.0 / 12.0
+	firstInterest := int64(math.Round(float64(balanceMinor) * r))
+	if paymentMinor <= firstInterest {
+		return nil
+	}
+
+	rows := make([]AmortRow, 0, 60)
+	balance := balanceMinor
+	date := start
+	for i := 1; i <= MaxPaymentMonths && balance > 0; i++ {
+		interest := int64(math.Round(float64(balance) * r))
+		principal := paymentMinor - interest
+		pay := paymentMinor
+		if principal >= balance {
+			// The last payment settles the balance and no more.
+			principal = balance
+			pay = principal + interest
+		}
+		balance -= principal
+		date = date.AddDate(0, 1, 0)
+		rows = append(rows, AmortRow{
+			PaymentNo: i, Date: date, PaymentMinor: pay,
+			PrincipalMinor: principal, InterestMinor: interest, BalanceMinor: balance,
+		})
+	}
+	return rows
+}

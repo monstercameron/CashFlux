@@ -938,4 +938,24 @@ func registerVSweep() {
 		margin("0.5rem 0 0.75rem"),
 	)
 
+	// ─── FP-T3c: the debt-acceleration comparisons ───────────────────────────
+	rule(".accel-block",
+		marginTop("1rem"),
+		paddingTop("0.75rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".accel-block:first-of-type",
+		borderTop("none"),
+		paddingTop("0"),
+	)
+	rule(".accel-inputs",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(9rem, 1fr))"),
+		gap("0.6rem"),
+		margin("0.5rem 0 0.75rem"),
+	)
+	rule(".accel-head",
+		marginBottom("0.25rem"),
+	)
+
 }

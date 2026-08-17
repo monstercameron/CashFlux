@@ -1,3 +1,40 @@
+## 2026-08-17 - two pieces of advice, finally with arithmetic (FP-T3c)
+
+Biweekly payments and debt consolidation are advice people are given constantly and almost never given
+the numbers for. The app held every figure needed for both and computed neither.
+
+The design rule for both panels: they have to be able to say NO. A comparison that can only report good
+news is an advertisement, and both of these ideas are genuinely bad for some households.
+
+**Biweekly.** The effect is real and the reason is duller than the slogan. Twenty-six half-payments is
+thirteen monthly payments, not twelve. The gain comes from paying MORE, not from paying more often -
+which is why the extra annual cost is stated as prominently as the saving. Someone who cannot afford a
+thirteenth payment cannot afford this plan, and should find that out here rather than three months in.
+
+I modelled it as "monthly plus one extra payment a year" rather than 26 literal fortnights. The literal
+simulation would be more precise about a mechanism that varies between lenders while being less accurate
+about the thing actually being asked.
+
+**Consolidation.** The origination fee is financed and counted, because a comparison that ignores it
+flatters every consolidation offer ever made. The weighted-average APR is shown as the number an offer
+has to beat - people compare against their worst rate, which almost anything beats. And debts with no
+recorded payment, or a payment that never clears the balance, are named as excluded rather than dropped;
+a total that quietly omitted a debt reads as complete.
+
+The browser probe found a real flaw, and it is the kind I would not have caught by reading. On the
+sample, consolidating at 6% reported a $50,997 saving while the blended rate was 5.8%. The saving was
+real - but the reason was the TERM, a 48-month loan replacing a 198-month payoff, and the card was
+crediting the rate. Without a caveat it would tell someone a 12% loan beat their 6% mortgage.
+
+`Consolidation.TermDriven()` now flags it and the card says "most of that comes from the shorter term,
+not the rate - 48 months instead of 198. You would save something similar by paying your current debts
+down that fast, and the higher monthly payment is what buys it."
+
+Also new: `payoff.AmortizeAtPayment`, amortizing at a fixed PAYMENT rather than a fixed term - the shape
+of a credit card, and the primitive the consolidation comparison needed. It returns nil when the payment
+can never clear the balance, because that is not "a very long time", it is never, and a large month
+count would dress an impossibility as a plan.
+
 ## 2026-08-17 - how much of the month was actually a choice (FP-T3b)
 
 The report said what was spent and on what. Neither answers the question someone looking at a bad month

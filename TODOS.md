@@ -1545,8 +1545,40 @@ bottom-up per SDLC.
   VERIFIED IN A BROWSER: 10/10, and the assertion that mattered is that the headline share agrees with
   the amounts beneath it (68% against $30,837.96 chosen of $45,177 total) — a split whose parts do not
   add up is the failure this kind of card makes invisible.
-- [ ] **FP-T3c — Debt: biweekly/accelerated payments + consolidation/refinance modeling.** Both absent, both
+- [x] **FP-T3c — Debt: biweekly/accelerated payments + consolidation/refinance modeling.** Both absent, both
   buildable on `payoff` primitives (26 half-payments/yr; "combine N debts at new APR/term vs keep-separate").
+  — DONE (2026-08-17). New pure `internal/debtplan`, a new `payoff.AmortizeAtPayment` primitive, and a
+  "Two ways to pay this off faster" panel on /debt.
+
+  BOTH PANELS ARE BUILT TO BE ABLE TO SAY NO. A comparison that can only report good news is an
+  advertisement, and both of these ideas are genuinely bad for some households.
+
+  BIWEEKLY: the effect is real and the reason is duller than the slogan. Twenty-six half-payments is
+  THIRTEEN monthly payments, not twelve — the gain comes from paying MORE, not from paying more often.
+  The extra annual cost is stated as prominently as the saving, because somebody who cannot afford a
+  thirteenth payment cannot afford this plan and should learn that here rather than three months in.
+  Modelled as "monthly plus one extra payment a year" rather than 26 literal fortnights: lenders credit
+  biweekly payments differently, and the literal simulation would be more precise about a mechanism that
+  varies while being LESS accurate about the thing being asked.
+
+  CONSOLIDATION: the origination fee is FINANCED and counted — a comparison that ignores it flatters
+  every consolidation offer ever made. The weighted-average APR is shown as the number an offer has to
+  beat, because people compare against their WORST rate, which almost anything beats. Debts with no
+  recorded payment, or a payment that never clears the balance, are NAMED as excluded rather than
+  dropped — a total that quietly omitted a debt reads as complete.
+
+  `payoff.AmortizeAtPayment` is new: amortize at a fixed PAYMENT rather than a fixed term, the shape of
+  a credit card. It returns nil when the payment can never clear the balance, because that is not "a
+  very long time", it is never — and a large month count would dress an impossibility as a plan.
+
+  REAL FLAW THE BROWSER PROBE EXPOSED: on the sample, consolidating at 6% reported a $50,997 saving
+  while the blended rate was 5.8%. The saving was real but the reason was the TERM — a 48-month loan
+  replacing a 198-month payoff — and the card was crediting the rate. Added `Consolidation.TermDriven()`
+  and a line that says "most of that comes from the shorter term, not the rate — 48 months instead of
+  198". Without it the card would tell someone a 12% loan beat their 6% mortgage.
+
+  VERIFIED IN A BROWSER: 11/11, including both directions — 6% saves, 39% is reported as costing
+  $148,313.05 MORE, and an 8% financed fee visibly eats into the saving.
 - [ ] **FP-T3d — Portfolio power features:** rebalancing suggestions (target weights + drift — nearest
   PARTIAL→HAVE since allocation already computed), expense-ratio/fee analysis, benchmark comparison,
   sector/geography breakdown. Plus styled PDF export + a visual custom-report builder (today PDF = `window.print()`).

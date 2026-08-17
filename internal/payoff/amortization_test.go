@@ -374,3 +374,67 @@ func TestPaymentsMadeIsTheComplement(t *testing.T) {
 		t.Error("PaymentsMade reported known with no term")
 	}
 }
+
+func TestAmortizeAtPayment_ClearsTheBalanceExactly(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	rows := AmortizeAtPayment(500_000, 18, 25_000, start)
+	if len(rows) == 0 {
+		t.Fatal("a $250 payment on $5,000 at 18% must pay off")
+	}
+	last := rows[len(rows)-1]
+	if last.BalanceMinor != 0 {
+		t.Errorf("final balance = %d, want exactly 0", last.BalanceMinor)
+	}
+	if last.PaymentMinor > 25_000 {
+		t.Errorf("final payment = %d, must not exceed the regular payment", last.PaymentMinor)
+	}
+}
+
+// A payment at or below the monthly interest does not mean "a very long time",
+// it means never — and reporting months would dress an impossibility as a plan.
+func TestAmortizeAtPayment_RefusesAPaymentThatNeverClears(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	// $5,000 at 24% accrues $100 a month.
+	if rows := AmortizeAtPayment(500_000, 24, 10_000, start); rows != nil {
+		t.Errorf("a payment equal to the interest produced %d rows, want none", len(rows))
+	}
+	if rows := AmortizeAtPayment(500_000, 24, 5_000, start); rows != nil {
+		t.Errorf("a payment below the interest produced %d rows, want none", len(rows))
+	}
+	// A dollar more clears it, eventually.
+	if rows := AmortizeAtPayment(500_000, 24, 10_100, start); len(rows) == 0 {
+		t.Error("a payment just above the interest must still pay off")
+	}
+}
+
+func TestAmortizeAtPayment_ZeroAPRIsPurePrincipal(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	rows := AmortizeAtPayment(100_000, 0, 10_000, start)
+	if len(rows) != 10 {
+		t.Fatalf("rows = %d, want 10", len(rows))
+	}
+	for _, r := range rows {
+		if r.InterestMinor != 0 {
+			t.Errorf("payment %d charged interest at 0%% APR", r.PaymentNo)
+		}
+	}
+}
+
+func TestAmortizeAtPayment_BoundedByTheCap(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	// A payment barely above the interest: real, and effectively endless.
+	rows := AmortizeAtPayment(10_000_000, 24, 200_100, start)
+	if len(rows) > MaxPaymentMonths {
+		t.Errorf("rows = %d, want no more than the %d-month cap", len(rows), MaxPaymentMonths)
+	}
+}
+
+func TestAmortizeAtPayment_RefusesUnusableInput(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	if AmortizeAtPayment(0, 12, 10_000, start) != nil {
+		t.Error("no balance must produce no schedule")
+	}
+	if AmortizeAtPayment(100_000, 12, 0, start) != nil {
+		t.Error("no payment must produce no schedule")
+	}
+}

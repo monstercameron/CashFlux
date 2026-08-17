@@ -85,6 +85,10 @@ func DebtPlanner() ui.Node {
 		// The tuner drives the ladder + summary, so it sits just above the strategy
 		// comparison it feeds.
 		specs = append(specs, debtNativeSpec("debt-tuner"), debtNativeSpec("debt-strategy"))
+		// FP-T3c: paying fortnightly and combining debts sit right after the
+		// strategy comparison — they are the same question (what would pay this off
+		// faster) asked two other ways.
+		specs = append(specs, debtNativeSpec("debt-accelerate"))
 		if hasCC {
 			specs = append(specs, debtNativeSpec("debt-credit"))
 		}
@@ -141,6 +145,9 @@ func init() {
 	})
 	R("debt-strategy", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtStrategyWidget, debtPanelProps{App: c.App})
+	})
+	R("debt-accelerate", func(c widgetrender.RenderCtx) ui.Node {
+		return ui.CreateElement(debtAccelerateWidget, debtPanelProps{App: c.App})
 	})
 	R("debt-credit", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(debtCreditWidget, debtPanelProps{App: c.App})
