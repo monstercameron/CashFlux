@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A charge can be split the way this merchant is usually split (SM-3 core).** The warehouse run
+  that is always three categories was three categories to re-type, every time. `internal/splitsuggest`
+  reads the merchant's own past split charges and proposes the same shape for a new one. Shares are
+  averaged per PRECEDENT rather than pooled across their money, so one unusually large past run does
+  not dictate every future one, and the proposed lines sum to the charge exactly — largest-remainder
+  apportionment in integer minor units, so an applied proposal never needs a reconciling line. A
+  merchant whose "split" is really one category taking 95% is not offered: that is a categorization,
+  and pretending otherwise would be noise.
 - **Goal Compare says who can be compared, and what funding order costs (C398).** The picker applied
   a rule inline and said nothing about it, so a reader expecting four goals and seeing two had no way
   to learn why. The rule is now named — measured in money, has a target amount, not archived — stated

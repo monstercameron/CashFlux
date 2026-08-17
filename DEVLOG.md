@@ -1,3 +1,49 @@
+## 2026-08-16 — the SMART/SMART+ micro-features, built bottom-up (SM-2…SM-16)
+
+Fifteen open items in the SMART / SMART+ section, all sharing one shape: a small,
+single-purpose, item-scoped affordance on ONE row or card — never a chat agent, never
+orchestration. Working the list in the order the ticket itself prescribes (pure scorer
+package with tests → row affordance → wire), which front-loads everything that can be
+proved on native Go before any of it touches a screen.
+
+The survey came first, because it changed the plan. Most of these features already have
+their arithmetic: the balance-anomaly, recurring-charge, duplicate, spending-spike,
+missing-transaction, low-balance and fee-bleed detectors all exist in `internal/smartengine`,
+and `catsuggest`, `budgeting.SuggestLimit`, `budgeting.TopDrivers` and `goaltrajectory` cover
+several more. What is missing for those is not math — it is the item-scoped surface. So only
+a few items needed a new pure package, and the rest are surfacing work over engines that
+already pass tests.
+
+**SM-3 (`splitsuggest`).** The interesting decision was averaging per precedent rather than
+pooling the money. Pool it and one $900 warehouse run sets the shape of every $40 one after
+it, which is the opposite of "typical". The other is refusing to answer: when one category
+takes 95%+ of the typical charge there is no split to propose, only a category, and SM-2
+already does that.
+
+**SM-4 (`whyover`).** "Over by $180" is on the meter already; the useful sentence is the one
+after it. Four causes — one purchase, more trips, pricier trips, or genuinely nothing — each
+with a different fix, so guessing wrong sends the user to the wrong one. The first draft
+tested "count jumped AND the average held steady" for the more-often case, and a count that
+went up 2.5× with an average drifting 1.2× fell through every branch to "no single cause". A
+tight band on the second variable was suppressing a clean finding about the first. The test
+is now count-jumped-and-price-did-not-claim-otherwise, with an explicit tie-break naming the
+bigger lever when both moved.
+
+**SM-14 (`duedate`).** The ticket files this as SMART+, and the model can have the ambiguous
+tail, but "pay rent friday" does not need an API key and should not cost one. The rule that
+shaped the grammar is that it never guesses: a bare `15` in a task sentence is far more often
+an amount than a day of the month, so an ordinal SUFFIX is required, and anything unrecognized
+stays visible in the title rather than being silently resolved to a wrong date. It also reports
+the phrase it consumed, so the UI can show what it read instead of asking to be trusted.
+
+**SM-12** needed no new package at all — `budgeting.SuggestLimit` (trailing average) and
+`HealthyLimit` (spike-resistant) have both been there since the auto-budget work. It is an
+affordance on one category row and nothing else.
+
+Note for whoever reads this next: this ran alongside another session in the same worktree, so
+`internal/screens` was intermittently uncompilable from the other side's in-flight edits.
+Commits here are file-scoped to the packages named in each message.
+
 ## 2026-08-16 — the cap that was doing two jobs (C398, C399)
 
 Two goals tickets, and the second one turned on a distinction worth writing down.
