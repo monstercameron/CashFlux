@@ -18,6 +18,19 @@ and every commit updates this file under `Unreleased`.
   one merchant's total should not have to re-filter by hand for something the chart already knew.
 
 ### Added
+- **An over-budget now says what kind of thing happened (SM-4).** The card's "what's driving this"
+  disclosure listed the merchants behind an overage and left you to infer the rest from three names.
+  It now leads with the finding: one purchase did it (named, with its amount), you shopped more often
+  (how many more times), the same trips cost more (this average against last period's), the pace will
+  land you over (by how much), or genuinely nothing in particular — which it says plainly rather than
+  inventing a cause. With Smart+ on you can have it rephrased with a next step; the model is handed
+  the finding and told not to recompute, because a second opinion on arithmetic the app owns is just
+  two numbers disagreeing on one card. Every figure comes through the same period, rate and category
+  path the meter above it uses, so the sentence cannot contradict the number.
+- **`budgeting.ContributingCount`** — how many charges fed a budget over a window, matching `Spent`
+  branch for branch (report exclusions, tracked-tag priority, per-line split ownership, refund-pair
+  netting). A split receipt counts once: the question is how many times you shopped, not how many
+  ledger lines exist. It is what lets "you shopped 4 more times" be a fact rather than an estimate.
 - **The split editor already knows how you usually split this shop (SM-3).** Open Split on a charge
   from a merchant you have split before and a faint line offers the same breakdown, with how many past
   charges it learned from. It is a hint, not a pre-filled form: proposing a breakdown is a guess, and

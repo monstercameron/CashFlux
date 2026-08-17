@@ -65,4 +65,34 @@ func registerSmartRowHint() {
 	ruleMedia("(max-width:560px)", ".smart-rowhint-body",
 		flex("1 1 100%"),
 	)
+
+	// --- SM-4: the "why this went over" sentence -------------------------------
+	// It leads the budget card's drivers disclosure, so it is styled as the lede of
+	// that panel rather than as another aside: no tint, no rule, just a slightly
+	// stronger line above the merchant list it explains.
+	rule(".budget-whyover",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.35rem"),
+		marginBottom("0.5rem"),
+	)
+	rule(".budget-whyover-row",
+		display("flex"),
+		alignItems("flex-start"),
+		gap("0.4rem"),
+	)
+	rule(".budget-whyover-text",
+		color("var(--text)"),
+		fontSize("var(--type-13)"),
+		lineHeight("1.45"),
+		overflowWrap("anywhere"),
+	)
+	// The model's rephrasing is visibly secondary to the deterministic sentence
+	// above it: same size, quieter colour, indented to the sentence's text column.
+	rule(".budget-whyover-ai",
+		margin("0"),
+		paddingLeft("1.15rem"),
+		color("var(--text-dim)"),
+		overflowWrap("anywhere"),
+	)
 }

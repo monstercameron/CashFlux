@@ -1024,6 +1024,11 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 	var body ui.Node = Fragment()
 	if open {
 		drivers, base := budgetTopDriversFor(props.Budget, 3, props.Anchor)
+		// SM-4: name WHAT KIND of thing happened before listing who. The merchants
+		// answer "who", and the reader was left to infer the rest from three names.
+		reason := ui.CreateElement(budgetWhyOverHint, budgetWhyOverProps{
+			Budget: props.Budget, Anchor: props.Anchor,
+		})
 		if len(drivers) == 0 {
 			body = P(css.Class("budget-drivers-empty"), Attr("id", listID), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
 				uistate.T("budgets.driversNone"))
@@ -1054,6 +1059,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 			}
 			body = Div(css.Class("budget-drivers-list"), Attr("id", listID), rows)
 		}
+		body = Fragment(reason, body)
 	}
 	return Div(css.Class("budget-drivers"), head, body)
 }
