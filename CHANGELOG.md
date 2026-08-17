@@ -6,6 +6,20 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **A retirement card on Planning (FP-T1a, FP-T1b).** The projection engines shipped without anywhere
+  to see them; this is the surface. It projects from your own retirement accounts rather than asking
+  you to re-type a balance the app already holds, leads with what the pot is worth in today's money
+  and puts the future-dollar figure beneath it, says how long it lasts at your expected spending, and
+  gives the number you would need to stop working — with the four-percent rule labelled as a rule of
+  thumb about one historical period rather than presented as plain arithmetic. The assumptions are on
+  screen, adjustable, and restated under the figures they produced.
+
+### Fixed
+- **The sample 401(k) and Roth IRA are typed as retirement accounts.** They were generic investments,
+  so the new retirement projection had nothing to work with on a first run. They still appear on
+  Investments exactly as before.
+
 ### Fixed
 - **Overdue bills no longer sit under a future month's heading (DP1).** The "Up next" agenda groups by
   month, so an already-overdue payment appeared beneath a heading naming a month that has passed, in a
