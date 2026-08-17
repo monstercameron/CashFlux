@@ -219,11 +219,45 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   routed". I read the wrong one and built a feature into dead code. Either delete `BillsPanel` and
   `billsCalendar` if nothing else uses them, or fix the comment; a comment that says code is live when
   it is not costs more than the code does.
-- [ ] **WF10 — Explainable allocation optimizer.** One place to compare spare-cash destinations
+- [~] **WF10 — Explainable allocation optimizer.** One place to compare spare-cash destinations
   (emergency reserve, high-interest debt, upcoming annual bill, goals, underfunded budgets,
   investments) under constraints (keep N months cash, never miss minimums, hit a goal by date, keep
   utilization <30%, prefer guaranteed interest savings, keep a spending reserve). Show marginal
   benefit + assumptions per destination; lock a destination and rerun. (Extend the allocate engine.)
+  — MARGINAL BENEFIT DONE (2026-08-17). Audited first: `internal/allocate` already ranks destinations,
+  applies constraints (`RankWith`), splits a pot (`Distribute`/`DistributeFillToTarget`), and explains
+  its scoring (`Breakdown`). Seventh audit-first ticket.
+
+  WHAT WAS MISSING was the comparison a person can actually check. A rank says "this one first"; it does
+  not say by how much. Paying down a 22% card and topping up a 4% account are not "rank 1 and rank 4",
+  they are $249.90 a year and $106.47 a year — and the second phrasing is a claim somebody can disagree
+  with, which is the difference between an explanation and an assertion.
+
+  THE RULE THE PACKAGE IS BUILT AROUND: only destinations with a RATE get a figure. Debt avoids
+  interest, savings earn it; both are arithmetic. A goal, an emergency reserve, an underfunded budget
+  have real value that is NOT interest, and attaching a dollar figure would be inventing a number to
+  fill a column. They are listed with no figure rather than dropped — removing the emergency fund from a
+  list of places to put money would be a recommendation dressed as a filter.
+
+  A missing rate reports UNKNOWN, never zero: "we do not know what this card charges" and "this card
+  charges nothing" are different facts and only one is ever true. A zero would sort next to a genuinely
+  useless destination and read as a measurement.
+
+  CAPACITY CAPS THE FIGURE — $5,000 at a card owing $1,000 only avoids interest on $1,000 — and the row
+  says why it is smaller than the amount offered.
+
+  THE SPREAD IS REPORTED because it says whether the choice is worth making at all. Below $10 a year the
+  copy says so outright: a ranking that presents a $3 gap with the same confidence as a $300 gap is
+  wasting somebody's attention.
+
+  `Lock` refuses a lock larger than the pot rather than trimming it — a plan that allocates money nobody
+  has is not a plan, and trimming would answer a question the user did not ask.
+
+  VERIFIED IN A BROWSER: 7/7.
+
+  STILL OPEN in this bundle: the wider constraint set (keep N months of cash, never miss minimums, hit a
+  goal by date, keep utilization under 30%), an upcoming-annual-bill destination, and the lock-and-rerun
+  loop wired into the allocate surface — `marginal.Lock` exists but nothing calls it yet.
 - [ ] **WF11 — Transaction relationship graph.** Auto-connect transfers, card payments, refunds↔
   purchases, reimbursements, split purchases, duplicate imports, receipt↔payment, recurring series —
   to prevent double-counting and make unusual activity legible.

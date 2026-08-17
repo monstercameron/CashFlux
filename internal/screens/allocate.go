@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/allocate"
+	"github.com/monstercameron/CashFlux/internal/marginal"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -118,6 +119,9 @@ type allocView struct {
 	MaxPerMinor  int64
 	Remainder    int64 // unallocated leftover (buffer + caps/rounding)
 	MonthIncome  money.Money
+	// Marginal describes each destination for the money-per-year comparison
+	// (WF10): what another dollar there actually earns or avoids.
+	Marginal []marginal.Destination
 }
 
 // Allocate is the widgetized /allocate surface — a bento host of native tiles that plan where
@@ -418,6 +422,11 @@ func Allocate() ui.Node {
 		ui.CreateElement(allocPlanTile, allocPlanProps{
 			View: v, AmountFor: amountFor, OnExclude: toggleExclude, ExcludedRows: excludedRows,
 			OnViewSource: func(route string) { nav.Navigate(uistate.RoutePath(route)) },
+		}),
+		// WF10: the same destinations priced in money per year, so the ranking above
+		// can be checked rather than only trusted.
+		ui.CreateElement(allocMarginalTile, allocMarginalProps{
+			Dests: v.Marginal, AmountMinor: v.TotalMinor, Base: v.Base,
 		}),
 		ui.CreateElement(allocExplainTile, allocExplainProps{
 			HasRanked: len(v.Ranked) > 0, AiResult: aiResult.Get(), AiLoading: aiLoading.Get(),

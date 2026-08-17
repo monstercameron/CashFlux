@@ -13,8 +13,15 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/marginal"
 	"github.com/monstercameron/CashFlux/internal/money"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/css"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // computeAllocInput carries everything computeAllocView needs to build the model — the scoring
@@ -90,6 +97,13 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 	}
 	v.Candidates = cands
 
+	// WF10: the same destinations on ONE scale a person can check. A rank says
+	// "this first"; "$220 a year against $40" says why, and is a claim somebody
+	// can disagree with. Only destinations with a RATE get a figure — a goal or an
+	// emergency reserve has real value that is not interest, and attaching a
+	// dollar number to it would be inventing one to fill a column.
+	v.Marginal = allocMarginalDestinations(app, in.ActiveMember)
+
 	ranked := allocate.RankWith(cands, in.Weights, allocate.Constraints{Exclude: in.Excluded})
 	scored := make([]allocate.Ranked, 0, len(ranked))
 	for _, r := range ranked {
@@ -125,3 +139,130 @@ func (v allocView) Allocatable() int64 {
 	}
 	return 0
 }
+
+// allocMarginalDestinations describes each destination for the money-per-year
+// comparison (WF10).
+//
+// Debt carries the APR it avoids and the balance it can absorb; an account
+// carries its expected return. Everything else is KindOther, which reports no
+// figure rather than a zero — see internal/marginal for why that distinction is
+// the whole point.
+func allocMarginalDestinations(app *appstate.App, activeMember string) []marginal.Destination {
+	var out []marginal.Destination
+	txns := app.Transactions()
+	for _, a := range app.Accounts() {
+		if a.Archived || !ownerVisibleTo(a.OwnerID, activeMember) {
+			continue
+		}
+		if a.Class == domain.ClassLiability {
+			owed := int64(0)
+			if bal, err := ledger.Balance(a, txns); err == nil {
+				owed = bal.Amount
+				if owed < 0 {
+					owed = -owed
+				}
+			}
+			out = append(out, marginal.Destination{
+				ID: a.ID, Name: uistate.T("allocate.payDown", a.Name),
+				Kind: marginal.KindDebt, AnnualRatePct: a.InterestRateAPR,
+				CapacityMinor: owed,
+			})
+			continue
+		}
+		if !a.LockUntil.IsZero() && a.LockUntil.After(time.Now()) {
+			continue
+		}
+		out = append(out, marginal.Destination{
+			ID: a.ID, Name: a.Name, Kind: marginal.KindSavings,
+			AnnualRatePct: a.ExpectedReturnAPR,
+		})
+	}
+	for _, g := range app.Goals() {
+		if done, _ := goalsvc.IsComplete(g); done || !ownerVisibleTo(g.OwnerID, activeMember) {
+			continue
+		}
+		// A goal's value is hitting it by a date, which is not a rate. Listed so it
+		// is not silently dropped from the places money could go, with no figure.
+		out = append(out, marginal.Destination{
+			ID: "goal:" + g.ID, Name: uistate.T("allocate.goalPrefix", g.Name),
+			Kind: marginal.KindOther,
+		})
+	}
+	return out
+}
+
+// --- WF10: what another dollar actually earns, per destination ------------------
+
+// allocMarginalProps carries the destinations and the amount being compared.
+type allocMarginalProps struct {
+	Dests       []marginal.Destination
+	AmountMinor int64
+	Base        string
+}
+
+// allocMarginalTile prices every destination in money per year.
+//
+// The ranking tile says which order; this says by how much, which is the part
+// somebody can argue with. Destinations with no rate are LISTED WITHOUT A FIGURE
+// rather than dropped — removing the emergency fund from a list of places to put
+// money would be a recommendation dressed as a filter.
+func allocMarginalTile(props allocMarginalProps) ui.Node {
+	if len(props.Dests) == 0 {
+		return Fragment()
+	}
+	if props.AmountMinor <= 0 {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "alloc-marginal", Title: "", GridColumn: "1 / span 4", Preview: true,
+			Body: allocSection("sec-alloc-marginal", uistate.T("allocMarginal.title"), Fragment(),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "alloc-marginal-empty"),
+					uistate.T("allocMarginal.needAmount"))),
+		})
+	}
+	bs := marginal.Compare(props.Dests, props.AmountMinor)
+
+	// Whether the choice is even worth making. A $3-a-year gap between the top two
+	// deserves less of somebody's attention than the ranking implies.
+	var spreadNode ui.Node = Fragment()
+	if gap, ok := marginal.SpreadMinor(bs); ok {
+		key := "allocMarginal.spread"
+		if gap < smallSpreadMinor {
+			key = "allocMarginal.spreadSmall"
+		}
+		spreadNode = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "alloc-marginal-spread"),
+			uistate.T(key, fmtMoney(money.New(gap, props.Base))))
+	}
+
+	rows := make([]ui.Node, 0, len(bs))
+	for _, b := range bs {
+		val := uistate.T("allocMarginal.noFigure")
+		cls := "t-caption " + tw.Fold(tw.TextFaint)
+		if b.Known {
+			val = uistate.T("allocMarginal.perYear", fmtMoney(money.New(b.AnnualMinor, props.Base)))
+			cls = "t-body"
+		}
+		rows = append(rows, Div(css.Class("alloc-marginal-row"),
+			Attr("data-testid", "alloc-marginal-"+b.Destination.ID),
+			Span(css.Class("alloc-marginal-name"), b.Destination.Name),
+			Span(ClassStr(cls), val),
+			// Why a figure is smaller than the amount offered, when it is.
+			If(b.Capped, Span(css.Class("t-caption", tw.TextFaint),
+				uistate.T("allocMarginal.capped",
+					fmtMoney(money.New(b.EffectiveMinor(), props.Base))))),
+		))
+	}
+	return uiw.Widget(uiw.WidgetProps{
+		ID: "alloc-marginal", Title: "", GridColumn: "1 / span 4", Preview: true,
+		Body: allocSection("sec-alloc-marginal", uistate.T("allocMarginal.title"), Fragment(),
+			Fragment(
+				P(css.Class("t-caption", tw.TextDim), uistate.T("allocMarginal.sub",
+					fmtMoney(money.New(props.AmountMinor, props.Base)))),
+				spreadNode,
+				Div(css.Class("alloc-marginal-list"), rows),
+				P(css.Class("t-caption", tw.TextFaint), uistate.T("allocMarginal.note")),
+			)),
+	})
+}
+
+// smallSpreadMinor is the gap below which choosing between the top two
+// destinations is not worth deliberating over ($10 a year).
+const smallSpreadMinor = 1_000

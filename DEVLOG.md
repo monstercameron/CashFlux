@@ -1,3 +1,33 @@
+## 2026-08-17 - a rank is not a comparison (WF10)
+
+The allocation engine already ranked destinations, applied constraints, split a pot and explained its
+scoring. Seventh audit-first ticket this week, and again most of the bundle existed.
+
+What was missing is the part a person can check. A rank says "this one first". It does not say by how
+much, and "rank 1 versus rank 4" is not something anybody can agree or disagree with. "$249.90 a year
+against $106.47 a year" is.
+
+The rule the package is built around: only destinations with a RATE get a figure. Debt avoids interest,
+savings earn it, and both are arithmetic. A goal, an emergency reserve, an underfunded budget have real
+value that is not interest - and attaching a dollar figure to them would be inventing a number to fill a
+column. A table with blanks is honest; a table where every row has a number and half are made up is
+worse precisely because it looks finished.
+
+They are listed WITHOUT a figure rather than dropped. Removing the emergency fund from a list of places
+to put money would be a recommendation dressed as a filter.
+
+A missing rate reports unknown, never zero. "We do not know what this card charges" and "this card
+charges nothing" are different facts and only one of them is ever true - and a zero would sort next to a
+genuinely useless destination and read as a measurement.
+
+The one I like most is the spread. It says whether the choice is worth making: below $10 a year the copy
+says so outright. A ranking that presents a $3 gap with the same confidence as a $300 gap is wasting
+somebody's attention, and the ranking alone cannot tell them which they are looking at.
+
+Left in progress: the wider constraint set the ticket lists, an upcoming-annual-bill destination, and the
+lock-and-rerun loop. `marginal.Lock` exists and is tested but nothing calls it yet, which I would rather
+say than imply by closing the ticket.
+
 ## 2026-08-17 - the curve was being computed and thrown away (WF9)
 
 The recurring calendar already placed bills and income on their days. What it could not say was what the

@@ -760,6 +760,17 @@ var vSweepKeys = Catalog{
 	// WF9 — a calendar of what the balance will be, not only what is due.
 	"bills.calShortfall": "On this projection the balance first goes short on %s, bottoming at %s across %d days.",
 
+	// WF10 — every destination priced in money per year, on one scale.
+	"allocMarginal.title":       "What another dollar earns",
+	"allocMarginal.sub":         "Putting %s at each of these, for a year.",
+	"allocMarginal.perYear":     "%s a year",
+	"allocMarginal.noFigure":    "no interest either way",
+	"allocMarginal.capped":      "only %s of it fits here",
+	"allocMarginal.spread":      "The best option is %s a year ahead of the next.",
+	"allocMarginal.spreadSmall": "The top two are within %s a year of each other — this is not a decision worth agonising over.",
+	"allocMarginal.needAmount":  "Enter an amount above and this will price each destination.",
+	"allocMarginal.note":        "Interest avoided on debt, interest earned on savings. A goal or an emergency fund has real value that is not interest, so no figure is invented for it.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

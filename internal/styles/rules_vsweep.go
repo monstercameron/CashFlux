@@ -999,4 +999,26 @@ func registerVSweep() {
 		background("color-mix(in srgb, var(--text-down, #dc2626) 8%, transparent)"),
 	)
 
+	// ─── WF10: the money-per-year comparison ─────────────────────────────────
+	rule(".alloc-marginal-row",
+		display("grid"),
+		gridTemplateColumns("1fr auto auto"),
+		alignItems("baseline"),
+		gap("0.6rem"),
+		padding("0.25rem 0"),
+		borderBottom("1px solid var(--border)"),
+	)
+	rule(".alloc-marginal-row:last-child",
+		borderBottom("none"),
+	)
+	rule(".alloc-marginal-name",
+		overflow("hidden"),
+		textOverflow("ellipsis"),
+		whiteSpace("nowrap"),
+	)
+	rule(".alloc-marginal-list",
+		marginTop("0.5rem"),
+		fontVariantNumeric("tabular-nums"),
+	)
+
 }

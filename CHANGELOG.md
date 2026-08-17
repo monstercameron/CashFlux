@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Allocate prices each destination in money per year (WF10).** Beneath the ranking, every place your
+  spare cash could go now shows what another dollar there actually earns or avoids — and says how far
+  ahead the best option is, including when the gap is small enough that the choice barely matters.
+  Destinations without an interest rate say so rather than showing a made-up zero.
+
+### Added
 - **The recurring calendar shows what your balance will be, not only what is due (WF9).** Each day of the
   displayed month carries its projected closing balance, days that end short are marked, and a note names
   the first day the balance goes negative — the day you can still do something about — alongside the
