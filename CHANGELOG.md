@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Investments now says what it actually returned (FP-T1c).** Under the growth chart, over exactly the
+  window the chart plots: what the investments returned, what you returned once the timing of your
+  contributions is counted, and the gap between the two named as a cost or a gain. The chart plots a
+  balance, which rises both when the market rises and when you pay in — two opposite facts — so the
+  reading opens by saying so. It also states its basis: how many days, valuations and transfers it read.
+
+### Added
 - **A retirement card on Planning (FP-T1a, FP-T1b).** The projection engines shipped without anywhere
   to see them; this is the surface. It projects from your own retirement accounts rather than asking
   you to re-type a balance the app already holds, leads with what the pot is worth in today's money

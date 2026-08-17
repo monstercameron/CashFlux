@@ -1163,7 +1163,7 @@ bottom-up per SDLC.
   withdrawal rate is stated as "a widely-used rule of thumb about one historical period, not a
   guarantee" — it is the kind of number people plan a decade around, and presenting it as bare
   arithmetic would be the app lending it authority it does not have.
-- [~] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
+- [x] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
   line, not a return. Add money-/time-weighted return (IRR/TWR) over dated contributions + holding
   values. (`internal/portfolio` is the seam.)
   — ENGINE DONE (2026-08-16), `portfolio.Returns`. SURFACE STILL OPEN.
@@ -1189,7 +1189,40 @@ bottom-up per SDLC.
   attributed to a deposit made a year earlier. And the result carries its evidence — days, flows,
   valuations — so a surface can say where the number came from.
 
-  REMAINING: the `/investments` surface (the chart still plots a balance line).
+  SURFACE DONE (2026-08-16): the reading sits directly UNDER the growth chart, over exactly the window
+  the chart plots, so the line and the sentence can never describe different periods. It opens by
+  naming the problem it solves — "the line above is a balance; it rises when the market rises and when
+  you pay in" — because a reader who does not know the chart was ambiguous has no reason to read a
+  second number.
+
+  The gap names its DIRECTION ("cost about 0.1 points a year") rather than printing a signed figure the
+  reader has to work out the sign convention for.
+
+  WHAT COUNTS AS A CONTRIBUTION, and the cost of the rule: only money crossing the boundary of the
+  investment accounts, i.e. a transfer whose counterparty sits outside the set. A transfer BETWEEN two
+  investment accounts is not a flow — the portfolio moved a dollar, it did not gain one, and counting it
+  would make rebalancing look like saving. A dividend posted with no counterparty is likewise not a
+  flow; it IS the return. The price: a deposit recorded as a bare credit rather than a transfer is
+  invisible and inflates the figure. Erring this way is still right, because the app can SEE whether a
+  transfer exists and cannot see what a bare credit meant — and the basis line prints the flow count, so
+  a reader whose contributions are missing can tell.
+
+  VERIFIED IN A BROWSER: 10/10. On the sample the two returns genuinely diverge (3.5% time-weighted vs
+  3.4% money-weighted over 381 days, 13 valuations, 28 transfers), which is the whole point — one
+  number could not have shown that.
+
+  FOUND WHILE VERIFYING, left honest rather than papered over: the 1M window spans fewer than
+  `MinReturnDays` days, so selecting it always reports "not enough history yet". That is true and it
+  says why, but a window control offering a choice that can never produce a figure is a small dead end.
+  Filed as FP-T1c-b rather than fixed by lowering the floor, because annualizing three weeks is the
+  thing the floor exists to prevent.
+- [ ] **FP-T1c-b — The 1M window on /investments can never report a return.** The growth chart's 1M
+  option spans under `portfolio.MinReturnDays` (30), so the return reading beneath it always says "not
+  enough history yet". Honest, but a control that can never succeed is a dead end. Options: report an
+  UNannualized period return for short windows (clearly labelled "over this month", not "a year"),
+  disable the reading's window rather than the chart's, or drop 1M. Do NOT lower the floor —
+  annualizing three weeks multiplies noise by the same factor it multiplies the return, which is
+  exactly what the floor prevents.
 - [ ] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
   (`investments_tiles.go:292`). Model per-lot acquisitions (qty/date/price), relieve basis on sale,
   compute realized P&L + short/long-term holding period. Unblocks investment tax reporting.

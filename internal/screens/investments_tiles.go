@@ -279,6 +279,9 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-growth-caption"),
 				Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.growthCaption")),
 			chart,
+			// FP-T1c: the chart is a balance line. Say what it actually RETURNED,
+			// over exactly the window it plots.
+			investReturnsReading(investAccts, app.Transactions(), cutoffs, series, base),
 			ui.CreateElement(investBenchmarkPanel, benchmarkPanelProps{
 				Dates: benchDates, Values: benchVals,
 			})))

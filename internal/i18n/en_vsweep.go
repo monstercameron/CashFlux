@@ -518,6 +518,16 @@ var vSweepKeys = Catalog{
 	"retire.fireSource":      "Uses a %.0f%% withdrawal rate — a widely-used rule of thumb about one historical period, not a guarantee.",
 	"retire.assumptions":     "Assumes %.1f%% return and %.1f%% inflation — %.2f%% after inflation.",
 
+	// FP-T1c — the return under the balance chart. Both returns ship because they
+	// answer different questions; the gap between them is what timing cost.
+	"invret.why":      "The line above is a balance — it rises when the market rises and when you pay in. These are the returns.",
+	"invret.twr":      "The investments returned %.1f%% a year.",
+	"invret.irr":      "You returned %.1f%% a year, counting when you paid in.",
+	"invret.gapCost":  "The timing of your contributions cost about %.1f points a year.",
+	"invret.gapGain":  "The timing of your contributions gained about %.1f points a year.",
+	"invret.basis":    "Over %d days, from %d valuations and %d transfers in or out.",
+	"invret.tooShort": "There is not enough history yet — a return needs at least %d days to mean anything.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

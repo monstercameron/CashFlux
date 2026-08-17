@@ -787,4 +787,15 @@ func registerVSweep() {
 		color("var(--text)"),
 	)
 
+	// ─── FP-T1c: the return reading under the growth chart ───────────────────
+	rule(".inv-returns",
+		margin("0.75rem 0 0"),
+		paddingTop("0.6rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".inv-return-line",
+		margin("0.2rem 0"),
+		fontSize("0.95rem"),
+	)
+
 }

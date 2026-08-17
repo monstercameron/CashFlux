@@ -1,3 +1,39 @@
+## 2026-08-16 - the return reading under the balance chart (FP-T1c surface)
+
+The engine landed this morning; this is where you can see it, and the interesting decision was not
+where to put it but what counts as a contribution.
+
+The rule I shipped: a flow is money crossing the BOUNDARY of the investment accounts - a transfer
+whose counterparty sits outside the set. Two consequences fall out of it, one obviously right and one
+that costs something.
+
+A transfer between two investment accounts is not a flow. The portfolio moved a dollar, it did not
+gain one, and counting it would make rebalancing look like saving.
+
+A dividend posted with no counterparty is not a flow either - it IS the return. This is the case the
+engine's doc comment warns about, and getting it backwards would make a portfolio look like it grew
+because you fed it.
+
+The price: a deposit someone recorded as a bare credit rather than a transfer is invisible here, and
+that inflates the return. I chose that side deliberately. The app can SEE whether a transfer exists;
+it cannot see what a bare credit meant. And the basis line prints the flow count, so a reader whose
+contributions are missing can notice - which a silently-guessed classification would not give them.
+
+Two smaller decisions. The reading names the problem before answering it ("the line above is a
+balance; it rises when the market rises and when you pay in"), because a reader who never knew the
+chart was ambiguous has no reason to read a second number. And the gap names its direction in words
+rather than printing a signed figure, since the sign convention on "money-weighted minus
+time-weighted" is exactly the kind of thing a reader gets backwards.
+
+Verified in a browser, 10/10. On the sample the two returns genuinely diverge - 3.5% time-weighted
+against 3.4% money-weighted over 381 days - which is the case for shipping both.
+
+One dead end found and left standing rather than papered over: the 1M window spans fewer than the
+engine's 30-day floor, so choosing it always reports "not enough history yet". True, and it says why,
+but a control that can never produce a figure is a small dead end. Filed as FP-T1c-b. The fix is NOT
+to lower the floor - annualizing three weeks multiplies its noise by the same factor it multiplies the
+return, and a spectacular number is one people act on.
+
 ## 2026-08-16 - the sample had no retirement accounts (FP-T1a/T1b surface)
 
 Building the card was routine. Verifying it was not, and the verification is the reason to write this
