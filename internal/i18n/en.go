@@ -2844,6 +2844,13 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-10 (SMART-B16): a monthly budget for spending that does not happen
+	// monthly. One key per rhythm, because the detectors carry copy as keys.
+	"smart.b16.title":           "%s is budgeted monthly but doesn't spend monthly",
+	"smart.b16.detailQuarterly": "%s had spending in %s of the last %s, totalling %s — that is quarterly, not monthly. A monthly budget reads as blown once and unused the rest of the time. Setting aside %s a month covers it instead.",
+	"smart.b16.detailAnnual":    "%s had spending in %s of the last %s, totalling %s — that is once or twice a year, not monthly. A monthly budget reads as blown once and unused the rest of the time. Setting aside %s a month covers it instead.",
+	"smart.b16.detailIrregular": "%s had spending in %s of the last %s, totalling %s — that is occasional, not monthly. A monthly budget reads as blown once and unused the rest of the time. Setting aside %s a month covers it instead.",
+	"smart.b16.action":          "Open budgets",
 	// EC-4 (SMART-T23): a charge still pending past this account's own normal.
 	"smart.t23.title":      "A charge on %s still hasn't cleared",
 	"smart.t23.detail":     "%s from %s is %s old and still pending. Charges on %s usually clear in %s, going on the last %s.",

@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Spots a budget with the wrong rhythm (EC-10).** A category budgeted monthly but actually spent on
+  once or twice a year now says so, and offers the monthly set-aside that covers it — instead of reading
+  as blown once and unused the rest of the time.
+
+### Added
 - **Notices a charge that never posted (EC-4).** The app now records WHEN a transaction cleared, learns
   how long each account normally takes, and flags a charge still pending well past that account's own
   normal — with the window it learned and how many charges that rests on.

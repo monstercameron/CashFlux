@@ -1513,8 +1513,39 @@ survived the duplicate/scope filters but didn't make the engine cut):
   check overlap with credithealth's internals first.
 - [ ] **EC-9 Close-out preview** (SMART, Budgets) — before committing period close-out: rolls over
   $X, carried debt $Y, next month's caps become Z.
-- [ ] **EC-10 Cadence mismatch detector** (SMART, Budgets) — monthly budget whose spend posts
+- [x] **EC-10 Cadence mismatch detector** (SMART, Budgets) — monthly budget whose spend posts
   quarterly/annually → suggest cadence change or sinking fund (bridges SMART-BL9).
+  — DONE (2026-08-17). New pure `internal/cadencefit` + detector SMART-B16.
+
+  A MONTHLY BUDGET FOR A YEARLY BILL IS NOT WRONG ABOUT THE MONEY, IT IS WRONG ABOUT THE RHYTHM. The
+  consequence is eleven months of a green bar that means nothing and one month of a red one that means
+  "this was always going to happen". Neither reading tells the household anything, and both train them to
+  stop looking at the bar.
+
+  IT MEASURES CONCENTRATION, NOT VARIABILITY. Groceries swing wildly month to month and belong on a
+  monthly budget; car insurance arrives twice a year and does not. The difference is not how much the
+  amounts move but how many periods contain any spending at all — there is a test with a category ranging
+  $50–$900 a month that must NOT be flagged.
+
+  EVENNESS SEPARATES A CADENCE FROM A BURST. Four payments three months apart are quarterly; four
+  payments in one fortnight are one event that happened to cross a period boundary, and calling that
+  quarterly would have somebody set money aside for a repeat that is not coming. Gaps must agree within
+  one period — loose enough that a bill paid a month late is still quarterly.
+
+  THE EMPTY PERIODS ARE THE SIGNAL, so the series carries one entry per month including the zeros; a
+  caller passing only the months with spending would describe every category as annual. Twelve months
+  minimum, because "annual" is unprovable in less — one payment in six months is one payment.
+
+  IT DOES NOT DUPLICATE SMART-BL9, which acts on recurring items somebody DECLARED, where the cadence is
+  already known. This discovers the rhythm from what actually posted — the spending nobody wrote down,
+  which is most of it — and points at the same sinking-fund remedy rather than inventing a second one. A
+  budget already on a quarterly or yearly period is skipped: it IS the remedy, and flagging it would be
+  advising somebody to do what they did.
+
+  It declares a MONTHLY amount (the set-aside), so unlike EC-4 it lands somewhere a reader can actually
+  reach: VERIFIED IN A BROWSER on the "What to do next" list — "Baby & Childcare is budgeted monthly but
+  doesn't spend monthly · $156.66 a month" — plus four detector tests and a check that the sample produces
+  exactly one such finding.
 - [ ] **EC-11 Future-month readiness score** (SMART, Budgets) — missing income, upcoming annual
   expenses, unfunded categories for next month. Rides `budgetplan`.
 - [ ] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding

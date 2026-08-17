@@ -1,3 +1,35 @@
+## 2026-08-17 - the budget is not wrong about the money, it is wrong about the rhythm (EC-10)
+
+A monthly budget for a bill that arrives once a year produces eleven months of a green bar that means
+nothing and one month of a red one that means "this was always going to happen". Neither reading tells
+the household anything, and both teach them to stop looking at the bar.
+
+The engine measures concentration rather than variability, and that distinction is the whole design.
+Groceries swing between $50 and $900 a month and belong on a monthly budget; car insurance arrives twice
+a year and does not. The difference is not how much the amounts move, it is how many months contain any
+spending at all - so there is a test with a wildly varying category that must NOT be flagged, sitting
+next to one with a single annual payment that must be.
+
+Evenness is what separates a cadence from a burst. Four payments three months apart are quarterly; four
+payments in a fortnight are one event that crossed a period boundary, and calling that quarterly would
+have somebody set money aside every month for a repeat that is not coming. The gaps have to agree within
+one period - loose enough that a bill paid a month late is still quarterly, strict enough that a cluster
+is not.
+
+Two smaller decisions carried real weight. The series includes the empty months, because they are the
+entire signal - a caller passing only the months with spending would describe every category as annual.
+And a budget already on a quarterly or yearly period is skipped: that budget IS the remedy being
+suggested, and flagging it would be advising somebody to do what they already did.
+
+It does not duplicate the existing sinking-fund nudge. That one acts on recurring items somebody
+declared, where the cadence is known because it was typed in. This one discovers the rhythm from what
+actually posted, which is where most spending lives, and points at the same remedy.
+
+The placement lesson from EC-4 an hour earlier changed how I finished it: because this declares a monthly
+set-aside, it lands on the ranked "what to do next" list rather than three clicks deep in a capped strip.
+On the sample it reads "Baby & Childcare is budgeted monthly but doesn't spend monthly - $156.66 a
+month", which is a sentence somebody can act on the moment they see it.
+
 ## 2026-08-17 - the ticket was unbuildable, so the model changed first (EC-4)
 
 "Flag entries uncleared past that account's typical clearing window" cannot be built against a bare
