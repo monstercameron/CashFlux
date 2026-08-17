@@ -1603,8 +1603,36 @@ survived the duplicate/scope filters but didn't make the engine cut):
   reach: VERIFIED IN A BROWSER on the "What to do next" list — "Baby & Childcare is budgeted monthly but
   doesn't spend monthly · $156.66 a month" — plus four detector tests and a check that the sample produces
   exactly one such finding.
-- [ ] **EC-11 Future-month readiness score** (SMART, Budgets) — missing income, upcoming annual
+- [x] **EC-11 Future-month readiness score** (SMART, Budgets) — missing income, upcoming annual
   expenses, unfunded categories for next month. Rides `budgetplan`.
+  — DONE (2026-08-17) as new pure `internal/monthready`, surfaced on the budgets forward view.
+
+  IT IS NOT A SCORE, and that is the whole design. "Next month: 68/100" cannot be acted on, argued with,
+  or improved — the reader learns something is wrong and nothing about what. The engine reports the
+  SPECIFIC gaps and borrows `internal/trust` for the verdict, so "next month is not ready" and "this
+  payoff date is unreliable" speak one vocabulary instead of two scales somebody has to learn.
+
+  EXPECTED INCOME COMES FROM THE RECURRING SCHEDULE, not from last month's actual. The question is what
+  the household has told the app to expect; inferring it from history would quietly promise that an
+  unusual month repeats. No recurring income declared reports income UNKNOWN — a finding, not a zero,
+  which is why `IncomeKnown` is a separate field and an unknown month is never called over-committed.
+
+  IT STILL WARNS WHEN IT CANNOT SCORE. A household with no income recorded still benefits from knowing an
+  insurance premium lands next month, so the annual charges surface regardless — withholding everything
+  until every input is present makes a feature useless exactly when it is most needed.
+
+  TWO FIXES CAME OUT OF SEEING IT RENDER, both of them rules I had written down elsewhere and broken
+  here. The headroom figure was gated on everything being in order, so a household with one unbudgeted
+  category never saw the number they came for — it is now stated whatever else is missing. And the gap
+  list printed all ELEVEN unbudgeted categories in one sentence, which is the ledger again with a warning
+  colour; it now names three and counts the rest.
+
+  VERIFIED IN A BROWSER: 5/5 (`e2e/_monthready_check.mjs`) — "Next month has $1,293.00 of room after
+  everything already committed." and "Still missing for next month: a budget for Auto loans; a budget for
+  Business expenses; a budget for Car insurance — and 8 more."
+
+  PLACEMENT NOTE: it renders on the budgets FORWARD view, which appears when the period control is paged
+  into the future — one click, and exactly when somebody is asking whether next month is set up.
 - [ ] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding
   this now delays Vacation ~2 months." Per-action sibling of E-GL's feasibility check.
 - [~] **EC-13 Round-up accelerator estimate** (SMART, Goals) — "at current round-up rate this goal

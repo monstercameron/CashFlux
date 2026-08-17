@@ -108,6 +108,10 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 		Body: Fragment(
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.future.desc")),
 			stats,
+			// EC-11: whether the month ahead is actually set up, as sentences
+			// naming what is missing. A score would tell the reader something is
+			// wrong and nothing about what.
+			readinessNotes(app, now, rates, base),
 			listBody,
 		),
 	})

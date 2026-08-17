@@ -1,3 +1,29 @@
+## 2026-08-17 - a readiness score is the one thing this must not produce (EC-11)
+
+The ticket asked for a "future-month readiness score", and "Next month: 68/100" is exactly the output
+that cannot be acted on, argued with, or improved. The reader learns something is wrong and nothing about
+what. So the engine reports the specific gaps and borrows internal/trust for the verdict, which means
+"next month is not ready" and "this payoff date is unreliable" speak one vocabulary rather than two
+scales somebody has to learn.
+
+Expected income comes from the recurring schedule rather than last month's actual. The question is what
+the household has told the app to expect, and inferring it from history would quietly promise that an
+unusual month repeats. A household with no recurring income declared reports income as unknown - a
+finding, not a zero - which is why an unknown month is never called over-committed.
+
+It still warns when it cannot score. Somebody with no income recorded still benefits from knowing an
+insurance premium lands next month, and withholding everything until every input is present makes a
+feature useless exactly when it is most needed.
+
+Two fixes came out of watching it render, both of them rules I had written down elsewhere today and
+broken here. The headroom figure was gated on everything being in order, so a household with a single
+unbudgeted category never saw the number they came for. And the gap list printed all eleven unbudgeted
+categories in one sentence - the ledger again with a warning colour, which a reader skips. Three named,
+the rest counted, which is the same shape as the stale-charge finding and the diffuse-overspend one.
+
+Seeing a feature rendered is worth more than reading it twice. Both flaws were invisible in the tests,
+which asserted behaviour rather than legibility, and obvious in one screenshot's worth of text.
+
 ## 2026-08-17 - a page of stale figures looks exactly like a page of fresh ones (EC-20)
 
 That is the whole argument for this one. Balances nobody has confirmed in two months produce numbers just

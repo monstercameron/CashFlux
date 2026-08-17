@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Budgets say whether next month is set up (EC-11).** Page the period forward and it states the room
+  left after everything already committed, the large yearly charges landing, and what is still missing —
+  in sentences, not a score.
+
+### Added
 - **The dashboard says how much of itself you can trust (EC-20).** "Only 6 of 15 accounts were confirmed
   recently — 9 are stale or never confirmed, so treat these figures as partial." In plain text on the
   page, not hidden in a tooltip.

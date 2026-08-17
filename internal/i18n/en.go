@@ -2844,6 +2844,14 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-11: whether the month ahead is set up. Sentences, not a score — "68/100"
+	// says something is wrong and nothing about what.
+	"monthready.ready":       "Next month has %s of room after everything already committed.",
+	"monthready.tight":       "Next month leaves only %s after everything already committed — no room for the ordinary surprise.",
+	"monthready.over":        "Next month is committed to %s more than it expects to receive.",
+	"monthready.annual":      "%s lands next month: %s. It doesn't happen most months, which is why it hurts.",
+	"monthready.missing":     "Still missing for next month: %s.",
+	"monthready.missingMore": "Still missing for next month: %s — and %d more.",
 	// EC-20: how much of this page rests on confirmed data. Counts are IN the
 	// sentence — "mostly current" alone invites the reader to decide what "mostly"
 	// means, and they will decide generously.
