@@ -312,7 +312,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 			// LEFT — the writing zone. A live priority "spine" (the coloured left edge)
 			// glows faint / green / red as you pick priority: the slip is tinted by its urgency.
 			Div(ClassStr("tc-write p-"+string(priority.Get())),
-				Input(append([]any{css.Class("tc-title"), Attr("id", "task-add"), Attr("autofocus", ""), Type("text"), Attr("aria-required", "true"), Attr("aria-label", uistate.T("todo.titleLabel")), Placeholder(uistate.T("todo.titlePlaceholder")), Value(title.Get()), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
+				uiw.Field(title.Get(), append([]any{css.Class("tc-title"), Attr("id", "task-add"), Attr("autofocus", ""), Type("text"), Attr("aria-required", "true"), Attr("aria-label", uistate.T("todo.titleLabel")), Placeholder(uistate.T("todo.titlePlaceholder")), OnInput(onTitle)}, errAttrs("todo-err", errMsg.Get())...)...),
 				errText("todo-err", errMsg.Get()),
 				// SM-14: read the date (and any repeat) out of what was typed and offer
 				// it, rather than rewriting a field somebody is still typing in.
@@ -339,7 +339,7 @@ func taskAddForm(props TaskAddFormProps) ui.Node {
 				),
 				Div(css.Class("tc-rail-row"),
 					Span(css.Class("tc-rail-label"), uistate.T("common.dueDate")),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), Value(dueStr.Get()), OnInput(onDue)),
+					uiw.Field(dueStr.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("common.dueDate")), OnInput(onDue)),
 					Div(css.Class("task-quick"),
 						Button(css.Class("task-quick-chip"), Type("button"), Attr("data-testid", "task-quick-today"), OnClick(quickToday), uistate.T("todo.quickToday")),
 						Button(css.Class("task-quick-chip"), Type("button"), Attr("data-testid", "task-quick-week"), OnClick(quickWeek), uistate.T("todo.quickWeek")),

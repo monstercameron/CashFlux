@@ -819,11 +819,10 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					Div(css.Class("cover-amount-block"),
 						Div(css.Class("cover-amount-row"),
 							IfElse(amtFxS.Get(),
-								Input(css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
-									Placeholder("overspend"), Value(amtFormulaS.Get()), OnInput(onAmtFormula)),
-								Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
-									Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")),
-									Value(coverAmtS.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt))),
+								uiw.Field(amtFormulaS.Get(), css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
+									Placeholder("overspend"), OnInput(onAmtFormula)),
+								uiw.NumField(coverAmtS.Get(), css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
+									Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt))),
 							If(!amtFxS.Get() && coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
 								OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
 							Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(amtFxS.Get())),
@@ -849,8 +848,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						Span(css.Class("cover-fx-ratio-label"), uistate.T("budgets.coverWeightFxBtn")), "ƒx")),
 				),
 				If(wtFxS.Get() && selCount > 0, Div(css.Class("cover-weight-fx"),
-					Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
-						Placeholder("cf_budget_priority"), Value(wtFormulaS.Get()), OnInput(onWtFormula)),
+					uiw.Field(wtFormulaS.Get(), css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
+						Placeholder("cf_budget_priority"), OnInput(onWtFormula)),
 					If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
 					Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
 				)),
@@ -922,9 +921,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 					uistate.T("budgets.topupHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)), fmtMoney(b.Limit))),
 				labeledField(uistate.T("budgets.amountToAdd"),
-					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
-						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")),
-						Value(topupAmt.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
+					uiw.NumField(topupAmt.Get(), css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
+						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt))),
 				// Duration: this period only (a one-time boost) vs a permanent cap change.
 				labeledField(uistate.T("budgets.topupDuration"),
 					uiw.Segmented(uiw.SegmentedProps{
@@ -1014,12 +1012,12 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),
 		Div(css.Class("modal-scroll"),
 			labeledField(uistate.T("common.name"),
-				Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(ev.OnName))),
+				uiw.Field(nameS.Get(), css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName))),
 			// The core budget params pair into two columns so the form reads calmly and fits
 			// the panel instead of a long single stack: amount + cadence, then owner + method.
 			Div(css.Class("budget-edit-row"),
 				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Value(limitS.Get()), Step("0.01"), OnInput(onLimit))),
+					uiw.NumField(limitS.Get(), css.Class("field"), Type("number"), Placeholder(uistate.T("budgets.limitLabel")), Step("0.01"), OnInput(onLimit))),
 				labeledField(uistate.T("budgets.period"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
@@ -1329,7 +1327,7 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 		shareCls += " is-over"
 	}
 	weightAttrs := []any{css.Class("field", "cover-src-weight"), Type("number"), Attr("min", "0"),
-		Attr("aria-label", uistate.T("budgets.coverRatio")), Value(strconv.Itoa(w)), Step("1"), OnInput(onWeight)}
+		Attr("aria-label", uistate.T("budgets.coverRatio")), Step("1"), OnInput(onWeight)}
 	if props.Max || props.WeightLocked {
 		// Pinned to full remaining, or driven by the shared ratio formula — either way the
 		// number isn't hand-edited here.
@@ -1348,7 +1346,7 @@ func coverSourceRow(props coverSourceRowProps) ui.Node {
 			Attr("data-testid", "cover-src-committed-"+props.ID), props.CommittedStr)),
 		If(props.Selected, Div(css.Class("cover-src-ratio"),
 			Span(css.Class("cover-src-ratio-label"), uistate.T("budgets.coverRatio")),
-			Input(weightAttrs...),
+			uiw.NumField(strconv.Itoa(w), weightAttrs...),
 			Label(css.Class("cover-src-maxlabel"), Title(uistate.T("budgets.coverUseAllTitle")),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "cover-max-"+props.ID), OnChange(onMax)}, checkedAttr(props.Max)...)...),
 				Span(uistate.T("budgets.coverUseAll")),

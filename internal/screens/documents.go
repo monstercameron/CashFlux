@@ -1590,9 +1590,9 @@ func DraftRow(props draftRowProps) ui.Node {
 		// form-grid, which wrapped its six controls unpredictably in the modal width.
 		return Div(css.Class("row-edit"),
 			Form(css.Class("draft-edit-grid"), OnSubmit(saveEdit),
-				Input(css.Class("field"), Attr("id", draftFieldID), Type("date"), Value(dateS.Get()), OnInput(onDate)),
-				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), Value(descS.Get()), OnInput(onDesc)),
-				Input(css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), Value(amtS.Get()), OnInput(onAmt)),
+				uiw.Field(dateS.Get(), css.Class("field"), Attr("id", draftFieldID), Type("date"), OnInput(onDate)),
+				uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc)),
+				uiw.Field(amtS.Get(), css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), OnInput(onAmt)),
 				// Category is a select of existing categories (plus the AI's extracted
 				// value when it doesn't match one) so editing can't introduce an
 				// orphan/typo category on import (C60).
@@ -1820,10 +1820,43 @@ func pickImageDataURL(onData func(string), onErr func(string)) (opened bool) {
 		return nil
 	})
 	input.Set("onchange", onChange)
-	// The input stays detached from the document: appending it would let page CSS
-	// and the modal focus trap reach it. Chrome and Firefox both open the dialog for
-	// a detached input inside a user gesture; if one refuses, the throw is caught
-	// above and reported as "not opened".
+	// C623: the input is ATTACHED before it is clicked.
+	//
+	// It used to stay detached, on the reasoning that a detached input still opens
+	// the dialog inside a user gesture and that a refusal would throw and be caught
+	// as "not opened". Browsers do not cooperate with either half: a click on a
+	// detached input is SILENTLY ignored, no exception is raised, and this function
+	// then returned true having opened nothing. "Split from receipt…" therefore
+	// posted "Choose a photo of the receipt to read.", opened no picker, reported no
+	// error, and let its own toast expire — an action with no next step at all.
+	//
+	// Attaching it makes the click a real one. The element is hidden and removed as
+	// soon as the dialog resolves, so the page CSS / focus-trap concern that
+	// motivated the detached version does not get a chance to apply: it is never
+	// focusable, never laid out, and never outlives the pick.
+	input.Set("style", "position:fixed;left:-9999px;width:1px;height:1px;opacity:0")
+	input.Set("tabindex", "-1")
+	input.Set("aria-hidden", "true")
+	body := doc.Get("body")
+	attached := false
+	if body.Truthy() {
+		body.Call("appendChild", input)
+		attached = true
+	}
+	// Remove the node once the browser is done with it, whichever way it ends.
+	// "cancel" fires when the user dismisses the dialog; change covers the pick.
+	if attached {
+		var cleanup js.Func
+		cleanup = js.FuncOf(func(js.Value, []js.Value) any {
+			defer cleanup.Release()
+			if p := input.Get("parentNode"); p.Truthy() {
+				p.Call("removeChild", input)
+			}
+			return nil
+		})
+		input.Call("addEventListener", "cancel", cleanup)
+		input.Call("addEventListener", "change", cleanup)
+	}
 	input.Call("click")
 	return true
 }
@@ -1972,12 +2005,10 @@ func wizardCard(
 			Div(css.Class(tw.Mt2),
 				H3(css.Class("card-title"), uistate.T("documents.profileSaveTitle")),
 				Form(css.Class("form-grid"), OnSubmit(onSaveProfile),
-					Input(css.Class("field"), Type("text"),
+					uiw.Field(profileNameVal, css.Class("field"), Type("text"),
 						Attr("aria-label", uistate.T("documents.profileSaveTitle")),
 						Placeholder(uistate.T("documents.profileNamePlaceholder")),
-						Value(profileNameVal),
-						OnInput(onProfileName),
-					),
+						OnInput(onProfileName)),
 					Button(css.Class("btn"), Type("submit"), uistate.T("documents.profileSave")),
 				),
 			),

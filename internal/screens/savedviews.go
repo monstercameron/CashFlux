@@ -199,9 +199,8 @@ func saveViewForm(props saveViewFormProps) ui.Node {
 
 	return Div(css.Class("saved-views-form"),
 		Label(css.Class("t-caption"), Attr("for", "saved-view-name"), uistate.T("savedViews.nameLabel")),
-		Input(css.Class("field"), Attr("id", "saved-view-name"), Type("text"),
-			Attr("data-testid", "saved-view-name"), Placeholder(uistate.T("savedViews.namePlaceholder")),
-			Value(name.Get()), OnInput(onName)),
+		uiw.Field(name.Get(), css.Class("field"), Attr("id", "saved-view-name"), Type("text"),
+			Attr("data-testid", "saved-view-name"), Placeholder(uistate.T("savedViews.namePlaceholder")), OnInput(onName)),
 		errNode,
 		Div(css.Class("saved-views-form-actions"),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "saved-view-cancel"),
@@ -353,8 +352,8 @@ func savedViewAlertForm(props savedViewAlertFormProps) ui.Node {
 
 	return Div(css.Class("saved-view-alert-form"),
 		Label(css.Class("t-caption"), uistate.T("savedViews.thresholdLabel")),
-		Input(css.Class("field"), Type("text"), Attr("data-testid", "saved-view-threshold-input"),
-			Placeholder(uistate.T("savedViews.thresholdPlaceholder")), Value(val.Get()), OnInput(onVal)),
+		uiw.Field(val.Get(), css.Class("field"), Type("text"), Attr("data-testid", "saved-view-threshold-input"),
+			Placeholder(uistate.T("savedViews.thresholdPlaceholder")), OnInput(onVal)),
 		errNode,
 		Div(css.Class("saved-views-form-actions"),
 			Button(css.Class("btn btn-sm"), Type("button"), OnClick(onCancel), uistate.T("savedViews.cancel")),

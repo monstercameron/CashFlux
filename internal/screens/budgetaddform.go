@@ -532,8 +532,8 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				TestID:    "budget-existing-cat",
 			}))),
 		If(wantNewCat && !mustCreateCat, labeledField(uistate.T("budgets.newCategoryName"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
-				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), Value(newCatName.Get()), OnInput(onNewCatName)))),
+			uiw.Field(newCatName.Get(), css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
+				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), OnInput(onNewCatName)))),
 		catFateNode,
 	)
 
@@ -652,7 +652,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				// The essentials: Name, then Limit + Period. Everything else is Advanced.
 				Div(css.Class("ba-full"),
 					labeledField(uistate.T("common.name"),
-						Input(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), Value(name.Get()), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
+						uiw.Field(name.Get(), append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...)...))),
 				// What this budget measures, before what it watches: the direction
 				// changes which categories are even offered below.
 				Div(css.Class("ba-full"),
@@ -675,7 +675,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				// the silent default, which is how adding a budget minted twins.
 				catRow,
 				labeledField(uistate.T("budgets.limitLabel"),
-					Input(css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Value(limit.Get()), Step("0.01"), OnInput(onLimit))),
+					uiw.NumField(limit.Get(), css.Class("field"), Type("number"), Attr("aria-required", "true"), Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), OnInput(onLimit))),
 				labeledField(uistate.T("budgets.period"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   periodOptions(period.Get()),
@@ -720,9 +720,8 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					Div(css.Class("ba-full"),
 						labeledField(uistate.T("budgets.tagsFieldLabel"),
 							Fragment(
-								Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
-									Placeholder(uistate.T("budgets.tagsPlaceholder")),
-									Value(trackTags.Get()), OnInput(onTrackTags)),
+								uiw.Field(trackTags.Get(), css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
+									Placeholder(uistate.T("budgets.tagsPlaceholder")), OnInput(onTrackTags)),
 								Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
 					// --- How it behaves ---
 					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-behaviour"),

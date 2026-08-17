@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -146,11 +148,10 @@ func holdingImportPanel(props holdingImportProps) ui.Node {
 			Span(css.Class("t-caption"), uistate.T("holdingImport.account")),
 			Select(css.Class("field"), Attr("data-testid", "hld-import-account"),
 				Attr("aria-label", uistate.T("holdingImport.account")), OnChange(onAcct), acctOpts)),
-		Textarea(css.Class("field hld-import-text"), Attr("rows", "8"),
+		uiw.AreaField(raw.Get(), css.Class("field hld-import-text"), Attr("rows", "8"),
 			Attr("data-testid", "hld-import-paste"),
 			Attr("aria-label", uistate.T("holdingImport.pasteLabel")),
-			Placeholder(uistate.T("holdingImport.placeholder")),
-			Value(raw.Get()), OnInput(onRaw)),
+			Placeholder(uistate.T("holdingImport.placeholder")), OnInput(onRaw)),
 		body,
 		If(committed.Get() != "", P(css.Class("muted"), Attr("data-testid", "hld-import-done"), committed.Get())),
 		Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "hld-import-commit"),

@@ -7,6 +7,8 @@ package screens
 import (
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/allocate"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -164,12 +166,11 @@ func AllocProfileForm(props AllocProfileFormProps) ui.Node {
 				labeledField(uistate.T("allocate.profileLabel"),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("allocate.profileLabel")), OnChange(onProfile), profOpts)),
 				labeledField(uistate.T("allocate.reserveFieldLabel"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", uistate.T("allocate.reserveFieldLabel")),
-						Placeholder(uistate.T("allocate.reservePlaceholder", base)), Value(reserveAtom.Get()), OnInput(onReserve))),
+					uiw.NumField(reserveAtom.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", uistate.T("allocate.reserveFieldLabel")),
+						Placeholder(uistate.T("allocate.reservePlaceholder", base)), OnInput(onReserve))),
 				labeledField(uistate.T("allocate.maxPerFieldLabel"),
-					Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", uistate.T("allocate.maxPerFieldLabel")),
-						Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)),
-						Value(maxPerAtom.Get()), OnInput(onMaxPer))),
+					uiw.NumField(maxPerAtom.Get(), css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"), Attr("aria-label", uistate.T("allocate.maxPerFieldLabel")),
+						Title(uistate.T("allocate.maxPerTitle")), Placeholder(uistate.T("allocate.maxPerPlaceholder", base)), OnInput(onMaxPer))),
 			),
 			Div(css.Class("alloc-weights"),
 				Div(css.Class("alloc-weights-label", tw.TextDim), uistate.T("allocate.weightsLabel")),
@@ -181,8 +182,8 @@ func AllocProfileForm(props AllocProfileFormProps) ui.Node {
 					allocWeightField(uistate.T("allocate.critGoal"), wGoal.Get(), onWGoal),
 				),
 				Div(css.Class("alloc-save-profile"),
-					Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("allocate.profileNameLabel")),
-						Placeholder(uistate.T("allocate.profileNamePlaceholder")), Value(profName.Get()), OnInput(onProfName)),
+					uiw.Field(profName.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("allocate.profileNameLabel")),
+						Placeholder(uistate.T("allocate.profileNamePlaceholder")), OnInput(onProfName)),
 					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "allocate-save-profile"), OnClick(saveProfile), uistate.T("allocate.saveProfile")),
 					If(len(saved) > 0, Button(css.Class("btn btn-sm"), Type("button"), OnClick(deleteProfile), uistate.T("allocate.deleteProfile"))),
 				),

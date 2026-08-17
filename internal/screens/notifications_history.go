@@ -7,6 +7,8 @@ package screens
 import (
 	"time"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/notifyhistory"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -98,9 +100,8 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 	items := uistate.ArchiveItems(q, s)
 
 	bar := Div(css.Class("nhx-bar"),
-		Input(css.Class("nhx-search"), Type("search"), Attr("data-testid", "notif-history-search"),
-			Placeholder(uistate.T("notifHistory.searchPlaceholder")), Attr("aria-label", uistate.T("notifHistory.searchAria")),
-			Value(q), OnInput(onSearch)),
+		uiw.Field(q, css.Class("nhx-search"), Type("search"), Attr("data-testid", "notif-history-search"),
+			Placeholder(uistate.T("notifHistory.searchPlaceholder")), Attr("aria-label", uistate.T("notifHistory.searchAria")), OnInput(onSearch)),
 		Select(css.Class("nhx-select"), Attr("data-testid", "notif-history-filter"),
 			Attr("aria-label", uistate.T("notifications.showLabel")), OnChange(onSev),
 			Option(Value(""), SelectedIf(s == ""), uistate.T("notifHistory.filterAll")),

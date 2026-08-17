@@ -6,6 +6,7 @@ package ui
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/pagination"
@@ -59,11 +60,32 @@ func pager(props PagerProps) uic.Node {
 		props.OnPage(props.Page + 1)
 		scrollAnchorIntoView(props.AnchorID)
 	})
-	// Jump: read the typed page on change, clamp, and go. Change (not input) so it fires once
-	// on commit with the final value.
-	onJump := uic.UseEvent(func(e uic.Event) {
-		n, err := strconv.Atoi(e.GetValue())
+	// Jump: keep the typed text in LOCAL state and commit it on Enter or blur.
+	//
+	// C627: this used to be a controlled input reading e.GetValue() from a single
+	// OnChange. That is the same one-render-late read the rows-per-page control
+	// already avoids by using buttons ("a controlled select mis-reads its value one
+	// render late in this framework") — so the handler saw the OLD page, called
+	// OnPage with it, and nothing moved, while the DOM kept the number the user had
+	// typed. The control then reported a page that was not the rendered page, which
+	// is worse than not navigating: the ledger looked like page 132.
+	//
+	// Local state fed by OnInput is read back reliably, so the commit acts on what
+	// was actually typed. Committing on Enter/blur (not per keystroke) keeps "12"
+	// from paging to 1 on its way to 12.
+	jump := uic.UseState("")
+	onJumpInput := uic.UseEvent(func(v string) { jump.Set(v) })
+	// commitJump validates, clamps and navigates; an unparseable entry resets the
+	// box to the page actually being shown rather than leaving a number that never
+	// took effect sitting in the field.
+	commitJump := func() {
+		raw := strings.TrimSpace(jump.Get())
+		if raw == "" {
+			return
+		}
+		n, err := strconv.Atoi(raw)
 		if err != nil {
+			jump.Set("")
 			return
 		}
 		if n < 1 {
@@ -72,9 +94,24 @@ func pager(props PagerProps) uic.Node {
 		if n > totalPages {
 			n = totalPages
 		}
+		jump.Set("") // fall back to showing props.Page, which is now the real page
+		if n == props.Page {
+			return
+		}
 		props.OnPage(n)
 		scrollAnchorIntoView(props.AnchorID)
+	}
+	onJumpCommit := uic.UseEvent(func(uic.Event) { commitJump() })
+	onJumpKey := uic.UseEvent(func(e uic.KeyboardEvent) {
+		if e.GetKey() == "Enter" {
+			e.PreventDefault()
+			commitJump()
+		}
 	})
+	jumpValue := jump.Get()
+	if jumpValue == "" {
+		jumpValue = strconv.Itoa(props.Page)
+	}
 
 	// Rows-per-page choices (buttons — a controlled select mis-reads its value one render
 	// late in this framework, per the DataTable note).
@@ -118,9 +155,13 @@ func pager(props PagerProps) uic.Node {
 			sh.Button(prevArgs...),
 			sh.Label(css.Class("std-pager-jump"),
 				sh.Span(uistate.T("ui.table.pageWord")),
-				sh.Input(css.Class("std-pager-jump-input"), sh.Type("number"), sh.Attr("data-testid", prefix+"-jump"),
+				// The field shows the typed draft while one is in flight, and the REAL
+				// page the rest of the time — so it can never sit there displaying a
+				// page the ledger is not on (C627).
+				NumField(jumpValue, css.Class("std-pager-jump-input"), sh.Type("number"), sh.Attr("data-testid", prefix+"-jump"),
 					sh.Attr("aria-label", uistate.T("ui.table.jumpAria")), sh.Attr("min", "1"), sh.Attr("max", strconv.Itoa(totalPages)),
-					sh.Value(strconv.Itoa(props.Page)), sh.OnChange(onJump)),
+					sh.OnInput(onJumpInput), sh.OnChange(onJumpCommit),
+					sh.OnBlur(onJumpCommit), sh.OnKeyDown(onJumpKey)),
 				sh.Span(css.Class("std-pager-jump-total"), uistate.T("ui.table.of")+" "+strconv.Itoa(totalPages)),
 			),
 			sh.Button(nextArgs...),

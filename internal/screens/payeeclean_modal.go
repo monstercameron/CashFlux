@@ -209,8 +209,8 @@ func PayeeCleanBody(_ struct{}) ui.Node {
 		// The editable clean name + the optional AI suggest.
 		uiw.FormField(uistate.T("payeeClean.nameLabel"),
 			Div(css.Class("pclean-name-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "payeeclean-name"),
-					Attr("aria-label", uistate.T("payeeClean.nameLabel")), Value(name.Get()), OnInput(onName)),
+				uiw.Field(name.Get(), css.Class("field"), Type("text"), Attr("data-testid", "payeeclean-name"),
+					Attr("aria-label", uistate.T("payeeClean.nameLabel")), OnInput(onName)),
 				aiBtn,
 			),
 		),

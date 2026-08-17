@@ -101,9 +101,9 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 	return Fragment(
 		Form(css.Class("form-grid"), Attr("id", "member-add-form"), Attr("data-testid", "member-add-form"), OnSubmit(add),
 			labeledField(uistate.T("members.name"),
-				Input(append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), Value(name.Get()), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...)),
+				uiw.Field(name.Get(), append([]any{css.Class("field"), Attr("id", "member-add"), Type("text"), Attr("aria-label", uistate.T("members.name")), Attr("aria-required", "true"), Placeholder(uistate.T("members.name")), OnInput(onName)}, errAttrs("member-err", errMsg.Get())...)...)),
 			labeledField(uistate.T("members.color"),
-				Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(color.Get()), OnInput(onColor))),
+				uiw.Field(color.Get(), css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), OnInput(onColor))),
 			labeledField(uistate.T("members.roleLabel"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options:   memberRoleOptions(),

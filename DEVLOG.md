@@ -1,3 +1,68 @@
+## 2026-08-16 — the sweep, and being wrong three times about the same line
+
+236 hand-rolled controlled inputs, all with the bug the assistant composer had. The mechanical part
+was easy and the thinking part took three attempts, all of which looked correct and two of which I
+shipped far enough to measure.
+
+The mechanics first, because they are the reason the sweep was possible at all. `fieldCore` originally
+wrapped the caller's handler so it could observe keystrokes — which meant every call site had to
+convert its `ui.Handler` to a plain func, and those handlers are threaded through props structs three
+components deep. That is a retyping exercise across the whole app. Dropping the wrapper in favour of
+`Field(value, opts...)`, which takes the value that used to be a `Value()` option and passes every
+other option through untouched, turned each site into a one-line move — and let a script do 227 of
+them. Two shapes needed hands: options assembled into an `[]any` variable and spread later, and
+`append([]any{...}, errAttrs(...)...)...`, which is every "add" form in the app. Files that did not
+already import `internal/ui` were silently skipped by the first script version, which is how
+`allocate_profile_modal.go` and thirteen others looked migrated and were not.
+
+Now the part worth writing down.
+
+**Attempt one: compare against the last keystroke.** Wrong, and wrong in the most instructive way.
+State lands a render behind the keyboard, so the render carrying "Th" arrives when the box already
+says "The". Comparing to the latest echo says "the app disagrees with the box" and writes "Th",
+deleting the "e". That is the original bug rebuilt inside its own fix. 55 of 59.
+
+**Attempt two: compare against every value the user has produced.** Better in theory. It needed a DOM
+listener to populate the log, the listener was attached in a mount effect that did not reliably find
+the element, and a field with no log writes everything. Two of the three fields in the account form
+still ate two-thirds of a sentence. It also had a design flaw independent of the bug: once the user
+has backspaced to empty, "" is in the log forever, so a legitimate clear is refused.
+
+The lesson from both is the same and I should have reached it first: **you cannot distinguish a stale
+echo from a new instruction by looking at the value**, because they are routinely the same string.
+No amount of history fixes that. The question is not "what is this value" but "who is authoritative
+right now".
+
+**Attempt three: focus.** If the user is in the field, they are the authority on what it contains.
+Programmatic writes overwhelmingly happen when they are not — on mount, on load, on reopen. One
+refinement: focus alone is too blunt, because a form that clears on submit does so while the field
+still holds focus, and refusing that write leaves the submitted text sitting there. So the test is
+focused AND changed-since-last-render, which separates a user mid-word from a user who has stopped
+and had something happen to them. That is four lines and no history at all.
+
+Two hazards the sweep turned up, both silent:
+
+Reading `selectionStart` on a date, number, email or colour input THROWS in Chrome. I had caret
+preservation running on every field, and `Type("date")` fields exist in the account form — an
+exception crossing back into wasm does not mistype a value, it takes the page down to a blank screen.
+It is a whitelist now, and there is a test that asserts the app is still alive after a date field has
+been written to.
+
+A bare `css.Rule` cannot be passed as an element option; the renderer emits it as a text node. A
+linter had already moved `tw.Mt045` there when it could not compile my string concatenation, so a
+`c-1if38e3...` was being printed on screen next to the API key field. There is a `Rules []any` field
+now, and a test asserting no style rule appears as visible text anywhere.
+
+The debounced search in `filtertoolbar.go` is the one I would have missed by reasoning alone and
+would have hurt most: it is shared by every list screen, and being debounced means its bound value is
+deliberately several keystrokes behind. It was the worst-affected box in the app and the least
+likely to be noticed as a *code* problem, because the code reads perfectly.
+
+Method note: every wrong turn here was found by measuring, and the one that ended it was hooking the
+`value` setter, which printed `"The qu" -> "The"` and named my own layout effect as the writer. I had
+spent twenty minutes before that reasoning about which comparison was correct. The setter hook should
+be the first move on any "the DOM is not what I set it to" bug, not the last.
+
 ## 2026-08-16 — the arithmetic was right and the place was wrong (R-LEAK)
 
 Three items from the UI business-logic leak sweep, chosen because their files were among the few in

@@ -20,6 +20,11 @@ type txnCountLineProps struct {
 	Total int // rows in the whole ledger
 	Net   money.Money
 	Lens  string // the lensed member's name, "" for everyone
+	// Unconverted is how many of the Shown rows could not be folded into the base
+	// currency (no FX rate), and so are missing from Net. The count and the net are
+	// printed side by side, so a net that quietly covers fewer rows than the count
+	// is two different facts wearing one sentence — it is stated instead.
+	Unconverted int
 }
 
 // txnCountLine is the ledger's one-sentence answer to "what am I looking at?".
@@ -62,6 +67,11 @@ func txnCountLine(props txnCountLineProps) ui.Node {
 	if props.Shown > 0 {
 		parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
 			Span(css.Class("txn-count-net"), uistate.T("transactions.scopeNet", fmtMoney(props.Net))))
+	}
+	if props.Unconverted > 0 {
+		parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
+			Span(css.Class("txn-count-unconverted"),
+				uistate.T("transactions.scopeUnconverted", props.Unconverted)))
 	}
 	if props.Lens != "" {
 		// Stated here as well as on the chip: the chip is a control the eye skips, and

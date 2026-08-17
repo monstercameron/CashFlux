@@ -122,8 +122,23 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 
-	match := ui.UseState("")
-	categoryID := ui.UseState("")
+	// C622: SEED the prefill, don't assign it from a mount effect.
+	//
+	// "Create rule from this transaction" wrote a draft and navigated here, and the
+	// form still opened blank — turning a one-click correction back into manual
+	// re-entry. The draft was being consumed in a UseEffect whose state writes
+	// happen after the first paint, so the fields the user is looking at were
+	// rendered from the empty initial values. Reading the draft HERE, as UseState's
+	// initial value, means the very first render already carries the transaction's
+	// payee and category. The effect below still clears the draft, which is a
+	// bookkeeping write nobody has to see.
+	draft := uistate.UseRuleDraft()
+	seedMatch, seedCategory := "", ""
+	if d := draft.Get(); d != nil {
+		seedMatch, seedCategory = d.Match, d.CategoryID
+	}
+	match := ui.UseState(seedMatch)
+	categoryID := ui.UseState(seedCategory)
 	tags := ui.UseState("")
 	billAcct := ui.UseState("")
 	// C373: the three actions the benchmark audit found missing. All three are
@@ -163,11 +178,10 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	// seed match/category from the draft set by the transaction row, then clear
 	// it so a later blank visit starts empty. The atom is captured by the dialog
 	// host (dialoghost.go); reading it here is a stable hook position.
-	draft := uistate.UseRuleDraft()
+	// The seed above already rendered the draft into the fields; this only retires
+	// it, so a later blank visit to /rules starts empty.
 	ui.UseEffect(func() func() {
-		if d := draft.Get(); d != nil {
-			match.Set(d.Match)
-			categoryID.Set(d.CategoryID)
+		if draft.Get() != nil {
 			uistate.ClearRuleDraft()
 		}
 		return nil
@@ -302,12 +316,12 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 		// Order is trigger-first (Match → Category → Tags): "when payee contains X, assign Y".
 		uiw.FormField(uistate.T("rules.matchFieldLabel"),
 			func() ui.Node {
-				args := []any{css.Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), Value(match.Get()), OnInput(onMatch)}
+				args := []any{css.Class("field"), Type("text"), Placeholder(uistate.T("rules.matchPlaceholder")), OnInput(onMatch)}
 				if props.MatchInputID != "" {
 					args = append(args, Attr("id", props.MatchInputID))
 				}
 				args = append(args, errAttrs("rule-err", errMsg.Get())...)
-				return Input(args...)
+				return uiw.Field(match.Get(), args...)
 			}(),
 		),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
@@ -318,7 +332,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				AriaLabel: uistate.T("rules.categoryFieldLabel"),
 			})),
 		uiw.FormField(uistate.T("rules.tagsFieldLabel"),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tags.Get()), OnInput(onTags)),
+			uiw.Field(tags.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), OnInput(onTags)),
 		),
 		uiw.FormField(uistate.T("rules.billAccountFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -466,12 +480,10 @@ func condSlotRow(
 					OnChange:  onOp,
 					AriaLabel: uistate.T("rulecond.opLabel"),
 				}),
-				Input(css.Class("field"), Type("text"),
+				uiw.Field(value, css.Class("field"), Type("text"),
 					Placeholder(hint),
 					Attr("aria-label", uistate.T("rulecond.valueLabel")),
-					Value(value),
-					OnInput(onValue),
-				),
+					OnInput(onValue)),
 			),
 		),
 	)

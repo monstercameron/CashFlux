@@ -122,9 +122,9 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 			Div(css.Class("alloc-hero-label", tw.TextDim), uistate.T("allocate.heroLabel")),
 			Div(ClassStr(fieldCls),
 				Span(css.Class("alloc-amount-affix", tw.FontDisplay), Attr("aria-hidden", "true"), currency.Symbol(base)),
-				Input(css.Class("alloc-amount-input", tw.FontDisplay), Type("number"), Attr("min", "0"), Step("0.01"),
+				uiw.NumField(props.AmountStr, css.Class("alloc-amount-input", tw.FontDisplay), Type("number"), Attr("min", "0"), Step("0.01"),
 					Attr("data-testid", "allocate-amount"), Attr("aria-label", uistate.T("allocate.heroLabel")),
-					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), Value(props.AmountStr), OnInput(props.OnAmount)),
+					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), OnInput(props.OnAmount)),
 			),
 			nudge,
 			kept,
@@ -211,7 +211,7 @@ func allocModeLabel(mode string) string {
 // allocWeightField is one criterion weight input (a small number field with a caption).
 func allocWeightField(label, value string, onInput any) ui.Node {
 	return labeledField(label,
-		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.5"), Attr("aria-label", label), Value(value), OnInput(onInput)))
+		uiw.NumField(value, css.Class("field"), Type("number"), Attr("min", "0"), Step("0.5"), Attr("aria-label", label), OnInput(onInput)))
 }
 
 func allocMetricsLabel(on bool) string {

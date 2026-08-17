@@ -1406,14 +1406,13 @@ func Insights() ui.Node {
 	inputRow := Div(css.Class("asst-composer", tw.Mt1, tw.Flex, tw.Gap2, tw.ItemsCenter),
 		// The placeholder tells the truth about the current mode (review: "tell me
 		// what to do" overpromised agentic action a keyless session can't deliver).
-		Input(Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")),
+		uiw.Field(composerSeed.Get(), Attr("id", "cf-chat-input"), css.Class("field field-wide"), Type("text"), Attr("aria-label", uistate.T("insights.askPlaceholder")),
 			Placeholder(func() string {
 				if noAI {
 					return uistate.T("insights.askPlaceholderKeyless")
 				}
 				return uistate.T("insights.askPlaceholder")
-			}()),
-			Value(composerSeed.Get()), OnInput(onInput)),
+			}()), OnInput(onInput)),
 		// Voice input: dictate a question via the browser's built-in speech engine
 		// (no service, no key). Renders nothing where the API is unavailable. The
 		// transcript arrives on a raw speech callback (outside the framework's event
@@ -1982,10 +1981,9 @@ func convSearchBox(p convSearchBoxProps) ui.Node {
 	onInput := ui.UseEvent(func(e ui.Event) { p.OnQuery(e.GetValue()) })
 	clear := ui.UseEvent(Prevent(func() { p.OnQuery("") }))
 	return Div(css.Class("conv-search"),
-		Input(css.Class("field"), Type("search"), Attr("data-testid", "assistant-conv-search"),
+		uiw.Field(p.Query, css.Class("field"), Type("search"), Attr("data-testid", "assistant-conv-search"),
 			Attr("aria-label", uistate.T("insights.searchAria")),
-			Placeholder(uistate.T("insights.searchPlaceholder")),
-			Value(p.Query), OnInput(onInput)),
+			Placeholder(uistate.T("insights.searchPlaceholder")), OnInput(onInput)),
 		If(strings.TrimSpace(p.Query) != "", Button(css.Class("conv-search-clear"), Type("button"),
 			Attr("data-testid", "assistant-conv-search-clear"),
 			Attr("aria-label", uistate.T("insights.searchClear")), Title(uistate.T("insights.searchClear")),
@@ -2043,9 +2041,8 @@ func ConversationPill(p convPillProps) ui.Node {
 	}
 	if renaming.Get() {
 		return Div(css.Class("conv-rename"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "conv-rename-input"),
-				Attr("aria-label", uistate.T("insights.renameAria")),
-				Value(draft.Get()), OnInput(onDraft), OnKeyDown(onKey), OnBlur(commitRename)),
+			uiw.Field(draft.Get(), css.Class("field"), Type("text"), Attr("data-testid", "conv-rename-input"),
+				Attr("aria-label", uistate.T("insights.renameAria")), OnInput(onDraft), OnKeyDown(onKey), OnBlur(commitRename)),
 		)
 	}
 	pill := Div(ClassStr(cls),
@@ -2375,9 +2372,8 @@ func UserBubble(p userBubbleProps) ui.Node {
 	if editing.Get() {
 		return Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsEnd),
 			Div(css.Class("asst-msg-edit"), Attr("data-testid", "assistant-edit-box"),
-				Textarea(css.Class("field"), Attr("data-testid", "assistant-edit-input"),
-					Attr("aria-label", uistate.T("insights.editAria")), Attr("rows", "3"),
-					Value(draft.Get()), OnInput(onDraft), OnKeyDown(onKey)),
+				uiw.AreaField(draft.Get(), css.Class("field"), Attr("data-testid", "assistant-edit-input"),
+					Attr("aria-label", uistate.T("insights.editAria")), Attr("rows", "3"), OnInput(onDraft), OnKeyDown(onKey)),
 				Div(css.Class("asst-msg-edit-actions"),
 					Button(css.Class("btn btn-primary btn-sm"), Type("button"),
 						Attr("data-testid", "assistant-edit-send"), OnClick(submitEdit), uistate.T("insights.editSend")),

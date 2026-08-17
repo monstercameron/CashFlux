@@ -68,12 +68,34 @@ func QuickAddHost() uic.Node {
 	onCleared := uic.UseEvent(func(e uic.Event) { clearedS.Set(e.IsChecked()) })
 	onExclude := uic.UseEvent(func(e uic.Event) { excludeS.Set(e.IsChecked()) })
 	onAcct := uic.UseEvent(func(e uic.Event) { acctID.Set(e.GetValue()) })
-	onAmount := uic.UseEvent(func(v string) { amount.Set(v) })
+	onAmount := uic.UseEvent(func(v string) {
+		amount.Set(v)
+		// C624: a typed minus means money OUT (C546), and the toggle must say so
+		// while the user can still see it. Resolving the sign silently at save time
+		// let "-1" be entered with Income selected and stored as an expense — the
+		// direction/amount mismatch this ticket is about. Reflecting it here is the
+		// "show the resulting sign before commit" option the ticket allows, and it
+		// is safe in an INPUT handler (setting state mid-save is what loses writes).
+		if strings.HasPrefix(strings.TrimSpace(v), "-") && kind.Get() != "Expense" {
+			kind.Set("Expense")
+		}
+	})
 	// TX16: on blur/Enter, evaluate an arithmetic entry ("45.99*3", "(12+8)*2")
 	// and replace it with the result; a plain number or parse failure is left as-is.
 	onAmountBlur := uic.UseEvent(func(e uic.Event) {
-		if s, ok := screens.EvalAmountField(e.GetValue()); ok {
+		v := e.GetValue()
+		if s, ok := screens.EvalAmountField(v); ok {
+			v = s
 			amount.Set(s)
+		}
+		// C624: once the user leaves the field, the minus has done its job — the kind
+		// toggle carries the direction now. Leaving it in the box asks the reader to
+		// resolve "Expense" over "-1", a double negative, and that ambiguity is the
+		// whole complaint: nothing on the form said which way it would be stored. The
+		// stored value is unchanged (ParseSigned reads the magnitude plus the toggle);
+		// only the display stops contradicting itself.
+		if t := strings.TrimSpace(v); strings.HasPrefix(t, "-") {
+			amount.Set(strings.TrimSpace(strings.TrimPrefix(t, "-")))
 		}
 	})
 	onPayee := uic.UseEvent(func(v string) { payee.Set(v) })
@@ -432,6 +454,34 @@ func QuickAddHost() uic.Node {
 	}
 	budgetImpact := screens.QuickAddBudgetImpact(app, catID.Get(), impactMinor)
 
+	// C624: state the direction the typed amount resolves to, before commit.
+	//
+	// A typed minus means "money out" (C546/C547) and the kind toggle follows — but
+	// only when the toggle disagreed. With Expense already selected, which is the
+	// default, typing "-1" moved nothing and said nothing: the form sat reading
+	// "Expense" over "-1" with Save enabled, and the reader had no way to tell
+	// whether that would store a dollar out, a dollar in, or be rejected. The money
+	// was always stored correctly; the form simply never admitted what it was about
+	// to do. The ticket allows "normalize direction and show the resulting sign
+	// before commit" — this is the showing half, and it is a plain sentence rather
+	// than a badge because the question it answers is a sentence.
+	var amountNote uic.Node = Fragment()
+	if trimmed := strings.TrimSpace(amount.Get()); strings.HasPrefix(trimmed, "-") {
+		if acc, ok := accountByID(accounts, effAcct); ok {
+			dec := currency.Decimals(acc.Currency)
+			if v, perr := money.ParseMinor(trimmed, dec); perr == nil && v != 0 {
+				mag := v
+				if mag < 0 {
+					mag = -mag
+				}
+				amountNote = Div(css.Class("qa-amount-note"),
+					Attr("data-testid", "txn-add-amount-note"),
+					Attr("role", "status"), Attr("aria-live", "polite"),
+					uistate.T("quickAdd.minusMeansOut", money.FormatMinor(mag, dec)))
+			}
+		}
+	}
+
 	// Form validity (L78-T1): Save is disabled until Description and a non-zero
 	// Amount are present, so an invalid submit can't close the panel or lose input.
 	// Computed before the body so "Save & add another" (C40) shares the same gate.
@@ -457,8 +507,40 @@ func QuickAddHost() uic.Node {
 	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
 	// Wrap each in ui.FormField so they render a visible caption above the control,
 	// matching the .labeled-field pattern used by all entity add modals.
+	// SM-15: type the whole thing in words and fill the fields below in one click.
+	// It sits ABOVE the fields it fills — the point of the feature is to avoid
+	// touching them, and a shortcut placed after the long way round is decoration.
+	// Its own component: it owns its input state and the Smart+ request hooks.
+	draftHint := uic.CreateElement(screens.TxnDraftHint, screens.TxnDraftHintProps{
+		OnApply: func(f screens.TxnDraftFill) {
+			// Each field is filled only when the parse actually found it, so a
+			// partial read never wipes something already typed.
+			if f.AmountMajor != "" {
+				amount.Set(f.AmountMajor)
+			}
+			if f.Payee != "" {
+				payee.Set(f.Payee)
+				if strings.TrimSpace(desc.Get()) == "" {
+					desc.Set(f.Payee)
+				}
+			}
+			if !f.Date.IsZero() {
+				date.Set(dateutil.FormatDate(f.Date))
+			}
+			if f.CategoryID != "" {
+				catID.Set(f.CategoryID)
+			}
+			if f.Income {
+				kind.Set("Income")
+			} else if f.AmountMajor != "" {
+				kind.Set("Expense")
+			}
+		},
+	})
+
 	body := Div(css.Class("form-grid", "qa-grid"),
 		payeeDatalist,
+		draftHint,
 		// TXT: the templates zone — chips one-click pre-fill the form below, and "Save
 		// as template" (disabled until an amount is present) snapshots the current form.
 		// Kept together at the top so the feature it teaches is visible without scrolling.
@@ -488,11 +570,12 @@ func QuickAddHost() uic.Node {
 			},
 		})),
 		ui.FormField(uistate.T("quickAdd.amount"),
-			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), Value(amount.Get()), OnInput(onAmount), OnBlur(onAmountBlur))),
+			ui.Field(amount.Get(), css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), OnInput(onAmount), OnBlur(onAmountBlur))),
+		amountNote,
 		ui.FormField(uistate.T("quickAdd.payee"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), Value(payee.Get()), OnInput(onPayee))),
+			ui.Field(payee.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), OnInput(onPayee))),
 		ui.FormField(uistate.T("quickAdd.description"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), Value(desc.Get()), OnInput(onDesc))),
+			ui.Field(desc.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.descPlaceholder")), OnInput(onDesc))),
 		descAssist,
 		ui.FormField(uistate.T("quickAdd.category"),
 			Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
@@ -500,7 +583,7 @@ func QuickAddHost() uic.Node {
 		learnedCatAssist,
 		budgetImpact,
 		ui.FormField(uistate.T("quickAdd.date"),
-			Input(css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), Value(effDate), OnInput(onDate))),
+			ui.Field(effDate, css.Class("field"), Type("date"), Attr("data-testid", "txn-add-date"), Attr("aria-label", uistate.T("quickAdd.date")), OnInput(onDate))),
 		// C47: wrap the checkbox in a block container so the helper caption sits
 		// below the label text, not inline with it. The outer Div is not a label
 		// so screen-readers read the Input's associated Label normally.
@@ -526,8 +609,8 @@ func QuickAddHost() uic.Node {
 			Summary(uistate.T("quickAdd.moreDetails")),
 			Div(css.Class("form-grid"), Style(map[string]string{"margin-top": "0.5rem"}),
 				ui.FormField(uistate.T("quickAdd.tags"),
-					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
-						Placeholder(uistate.T("quickAdd.tagsPh")), Value(tagsS.Get()), OnInput(onTags))),
+					ui.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
+						Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags))),
 				If(len(app.Members()) > 0, ui.FormField(uistate.T("quickAdd.member"),
 					Select(css.Class("field"), Attr("data-testid", "txn-add-member"), Attr("aria-label", uistate.T("quickAdd.member")), OnChange(onMember),
 						func() []uic.Node {
@@ -538,8 +621,8 @@ func QuickAddHost() uic.Node {
 							return opts
 						}()))),
 				ui.FormField(uistate.T("quickAdd.note"),
-					Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
-						Placeholder(uistate.T("quickAdd.notePh")), Value(noteS.Get()), OnInput(onNote))),
+					ui.Field(noteS.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
+						Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote))),
 				Label(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "0.4rem", "font-size": "0.8rem"}),
 					Input(Type("checkbox"), Attr("data-testid", "txn-add-cleared"), OnChange(onCleared), Checked(clearedS.Get())),
 					uistate.T("quickAdd.cleared")),

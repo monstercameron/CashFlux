@@ -60,8 +60,25 @@ func rowStatusWord(p txnFrameRowProps) string {
 // "Needs review · cleared". Without this the reordering above would trade one
 // hidden fact for another.
 func statusDetail(p txnFrameRowProps) string {
-	word := rowStatusWord(p)
-	if p.Reviewed || p.IsTransfer {
+	return badgeStateLabel(p, rowStatusWord(p))
+}
+
+// badgeStateLabel appends the settlement axis to a word that dropped it, so the
+// cell's tooltip and the row glyph's accessible name both carry the whole state.
+//
+// C640: the gate used to be `p.Reviewed || p.IsTransfer`, which asked the wrong
+// question. Reviewed and Queued are not mutually exclusive — re-flagging an
+// already-reviewed charge (adding the needs-review tag in the Tags field, which
+// nothing filters) leaves Reviewed true AND Queued true. rowStatusWord then
+// correctly says "Needs review", but the old gate saw Reviewed and returned
+// early, so the cell stopped mentioning that the charge was also cleared. The
+// question that matters is whether the WORD is a review-axis word, because those
+// are the only ones that leave settlement unsaid.
+func badgeStateLabel(p txnFrameRowProps, word string) string {
+	saidReview := (p.Queued || !p.Reviewed) && !p.IsTransfer
+	if !saidReview {
+		// A settlement word already states settlement, and a transfer has no
+		// review axis to have dropped.
 		return word
 	}
 	switch {

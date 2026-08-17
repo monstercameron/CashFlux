@@ -294,8 +294,8 @@ func pyfForm(props pyfFormProps) ui.Node {
 		),
 		Label(css.Class("fld-field"),
 			Span(css.Class("fld-lbl"), amtPlaceholder),
-			Input(css.Class("field"), Attr("placeholder", amtPlaceholder), Attr("aria-label", amtPlaceholder),
-				Attr("inputmode", "decimal"), Value(amtStr.Get()), OnInput(onAmt)),
+			uiw.Field(amtStr.Get(), css.Class("field"), Attr("placeholder", amtPlaceholder), Attr("aria-label", amtPlaceholder),
+				Attr("inputmode", "decimal"), OnInput(onAmt)),
 		),
 		Label(css.Class("fld-field"),
 			Span(css.Class("fld-lbl"), uistate.T("workflows.pyfCadence")),
@@ -474,8 +474,8 @@ func sweepForm(_ sweepFormProps) ui.Node {
 		),
 		Label(css.Class("fld-field"),
 			Span(css.Class("fld-lbl"), bufPlaceholder),
-			Input(css.Class("field"), Attr("placeholder", bufPlaceholder), Attr("aria-label", bufPlaceholder),
-				Attr("inputmode", "decimal"), Value(bufStr.Get()), OnInput(onBuf)),
+			uiw.Field(bufStr.Get(), css.Class("field"), Attr("placeholder", bufPlaceholder), Attr("aria-label", bufPlaceholder),
+				Attr("inputmode", "decimal"), OnInput(onBuf)),
 		),
 		If(msg.Get() != "", P(css.Class("err"), Attr("role", "alert"), msg.Get())),
 		If(saved.Get(), P(css.Class("ok"), Attr("role", "status"), uistate.T("workflows.sweepSaved"))),
@@ -825,8 +825,8 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				Select(css.Class("field"), Attr("aria-label", uistate.T("wfs.transferTo")), OnChange(onDraftTo), toOpts)),
 			Label(css.Class("fld-field"),
 				Span(css.Class("fld-lbl"), amtLabel),
-				Input(css.Class("field"), Attr("placeholder", amtLabel), Attr("aria-label", amtLabel),
-					Attr("inputmode", "decimal"), Value(draftAmt.Get()), OnInput(onDraftAmt))),
+				uiw.Field(draftAmt.Get(), css.Class("field"), Attr("placeholder", amtLabel), Attr("aria-label", amtLabel),
+					Attr("inputmode", "decimal"), OnInput(onDraftAmt))),
 		)
 	case workflow.ActionApplyRules, workflow.ActionFlagReview, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
 		paramControl = P(css.Class("muted"), uistate.T("workflows.noParam"))
@@ -838,16 +838,14 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		paramControl = Fragment(
 			Label(css.Class("fld-field"),
 				Span(css.Class("fld-lbl"), uistate.T("workflows.agentPromptLabel")),
-				Textarea(css.Class("field"), Attr("rows", "3"),
+				uiw.AreaField(draftText.Get(), css.Class("field"), Attr("rows", "3"),
 					Attr("placeholder", uistate.T("workflows.agentPromptPlaceholder")),
-					Attr("aria-label", uistate.T("workflows.agentPromptLabel")),
-					Value(draftText.Get()), OnInput(onDraftText))),
+					Attr("aria-label", uistate.T("workflows.agentPromptLabel")), OnInput(onDraftText))),
 			P(css.Class("wf-hint"), uistate.T("workflows.agentRunHint")),
 		)
 	default: // createTask / notify / addTag
-		paramControl = Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
-			Attr("aria-label", uistate.T("workflows.actionText")),
-			Value(draftText.Get()), OnInput(onDraftText))
+		paramControl = uiw.Field(draftText.Get(), css.Class("field"), Attr("placeholder", uistate.T("workflows.actionText")),
+			Attr("aria-label", uistate.T("workflows.actionText")), OnInput(onDraftText))
 	}
 
 	// Rendered list of staged actions.
@@ -963,7 +961,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 		H3(css.Class("wf-comp-title"), uistate.T("workflows.create")),
 		P(css.Class("wf-comp-lede"), uistate.T("wfs.compLede")),
 		fld(uistate.T("workflows.name"),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), Value(name.Get()), OnInput(onName))),
+			uiw.Field(name.Get(), css.Class("field"), Attr("placeholder", uistate.T("workflows.name")), Attr("aria-label", uistate.T("workflows.name")), OnInput(onName))),
 		fld(uistate.T("workflows.triggerLabel"),
 			Select(css.Class("field"), Attr("aria-label", uistate.T("workflows.triggerLabel")), OnChange(onTrigger),
 				Option(Value(string(workflow.TriggerManual)), SelectedIf(trigger.Get() == string(workflow.TriggerManual)), uistate.T("workflows.triggerManual")),
@@ -983,7 +981,7 @@ func addWorkflowForm(props addWorkflowFormProps) ui.Node {
 				)),
 		),
 		fld(uistate.T("workflows.conditionLabel"),
-			Input(css.Class("field"), Attr("placeholder", uistate.T("wfs.condPlaceholder")), Attr("aria-label", uistate.T("workflows.conditionLabel")), Value(condition.Get()), OnInput(onCondition))),
+			uiw.Field(condition.Get(), css.Class("field"), Attr("placeholder", uistate.T("wfs.condPlaceholder")), Attr("aria-label", uistate.T("workflows.conditionLabel")), OnInput(onCondition))),
 		If(condWarn != "", P(css.Class("wf-cond-warn"), Attr("role", "status"), Attr("data-testid", "wf-cond-warn"), uistate.T("wfs.condWarn", condWarn))),
 		// Inline variable reference for the condition formula (C65): the four
 		// txn_* chips (each its own component so its OnClick hook never runs
@@ -1147,9 +1145,9 @@ func workflowRow(props workflowRowProps) ui.Node {
 		return Div(css.Class("row-edit"),
 			Form(css.Class("form-grid"), OnSubmit(saveEdit),
 				labeledField(uistate.T("workflows.name"),
-					Input(css.Class("field"), Attr("aria-label", uistate.T("workflows.name")), Value(editName.Get()), OnInput(onEditName))),
+					uiw.Field(editName.Get(), css.Class("field"), Attr("aria-label", uistate.T("workflows.name")), OnInput(onEditName))),
 				labeledField(uistate.T("workflows.conditionLabel"),
-					Input(css.Class("field"), Attr("aria-label", uistate.T("workflows.conditionLabel")), Placeholder(uistate.T("workflows.condition")), Value(editCond.Get()), OnInput(onEditCond))),
+					uiw.Field(editCond.Get(), css.Class("field"), Attr("aria-label", uistate.T("workflows.conditionLabel")), Placeholder(uistate.T("workflows.condition")), OnInput(onEditCond))),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
 				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
 			),

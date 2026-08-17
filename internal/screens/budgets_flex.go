@@ -179,9 +179,8 @@ func flexEditor(draft string, onDraft, onSave ui.Handler) ui.Node {
 	return Div(css.Class("bflex-editor"),
 		Span(css.Class("bflex-editor-label"), uistate.T("flex.targetLabel")),
 		Div(css.Class("bflex-editor-row"),
-			Input(css.Class("input bflex-editor-input"), Attr("data-testid", "flex-target-input"),
-				Attr("inputmode", "decimal"), Attr("aria-label", uistate.T("flex.targetLabel")),
-				Value(draft), OnInput(onDraft)),
+			uiw.Field(draft, css.Class("input bflex-editor-input"), Attr("data-testid", "flex-target-input"),
+				Attr("inputmode", "decimal"), Attr("aria-label", uistate.T("flex.targetLabel")), OnInput(onDraft)),
 			Button(css.Class("btn btn-primary"), Type("button"),
 				Attr("data-testid", "flex-target-save"), OnClick(onSave),
 				uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("flex.saveTarget")))))

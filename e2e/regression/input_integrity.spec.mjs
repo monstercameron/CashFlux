@@ -61,3 +61,44 @@ test.describe("settings: the AI credential fields keep what is typed", () => {
     expect(stray).toBe(0);
   });
 });
+
+test.describe("forms: fields across the app keep what is typed", () => {
+  // Spot-checks on the real forms, one per shape the shared component has to get
+  // right: a plain text field, a number field whose caret API cannot be read, and
+  // a date field — where reading the caret would throw and take the page down.
+  test("the account form's name field survives being typed", async ({ app }) => {
+    await nav(app, "/accounts");
+    await app.getByTestId("accounts-add").click();
+    const name = app.locator("form input[type='text']").first();
+    await expect(name).toBeVisible();
+    expect(await typeInto(app, name)).toBe(SENTENCE);
+  });
+
+  test("a number field takes a full amount without dropping digits", async ({ app }) => {
+    // 1250.75 silently becoming 120.75 is a wrong number that still looks like one.
+    await nav(app, "/accounts");
+    await app.getByTestId("accounts-add").click();
+    const amount = app.locator("form input[type='number']").first();
+    await expect(amount).toBeVisible();
+    await amount.click();
+    await amount.fill("");
+    for (const ch of "1250.75") await app.keyboard.type(ch);
+    await expect(amount).toHaveValue("1250.75");
+  });
+
+  test("typing in a form does not crash the page on a date field", async ({ app }) => {
+    // Reading selectionStart on input[type=date] throws in Chrome, and an exception
+    // crossing back into wasm takes the whole app down — a blank screen, not a
+    // mistyped value. This asserts the app is still alive and rendering after a
+    // date field has been focused and written to.
+    await nav(app, "/accounts");
+    await app.getByTestId("accounts-add").click();
+    const date = app.locator("form input[type='date']").first();
+    if ((await date.count()) > 0) {
+      await date.click();
+      await date.fill("2026-08-16");
+    }
+    await expect(app.getByTestId("accounts-add").or(app.locator("form"))).toBeVisible();
+    expect(await app.evaluate(() => document.documentElement.getAttribute("data-app-ready"))).toBe("true");
+  });
+});

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -53,11 +55,11 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 		}
 		return Select(css.Class("field"), Title(label), OnChange(onSel), opts)
 	case customfields.TypeNumber:
-		return Input(css.Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return uiw.NumField(props.Value, css.Class("field"), Type("number"), Step("any"), Title(label), Placeholder(label), OnInput(onText))
 	case customfields.TypeDate:
-		return Input(css.Class("field"), Type("date"), Title(label), Value(props.Value), OnInput(onText))
+		return uiw.Field(props.Value, css.Class("field"), Type("date"), Title(label), OnInput(onText))
 	default: // text
-		return Input(css.Class("field"), Type("text"), Title(label), Placeholder(label), Value(props.Value), OnInput(onText))
+		return uiw.Field(props.Value, css.Class("field"), Type("text"), Title(label), Placeholder(label), OnInput(onText))
 	}
 }
 

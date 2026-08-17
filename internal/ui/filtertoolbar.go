@@ -233,14 +233,19 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 				// same instead of a bare full-width field.
 				Label(css.Class(searchCls),
 					Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-					Input(css.Class("fctrl-input"), Type("search"),
+					// Field, not Input: the query this box is bound to is DEBOUNCED, so
+					// props.Search is deliberately several keystrokes behind the box. Letting
+					// the reconciler write it back meant the shared search — every list screen
+					// in the app — deleted characters mid-word, and the more the user typed
+					// the further behind the written-back value was.
+					Field(props.Search, css.Class("fctrl-input"), Type("search"),
 						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						// C619: while the debounce is still pending the rows below are the
 						// PREVIOUS query's. aria-busy tells assistive tech the region is
 						// mid-update, and the visible note beside it tells everyone else,
 						// so nobody acts on a result the query has already excluded.
 						Attr("aria-busy", searchBusy),
-						Value(props.Search), OnInput(onSearch)),
+						OnInput(onSearch)),
 					If(props.SearchPending, Span(css.Class("fctrl-pending"),
 						Attr("data-testid", "filter-search-pending"),
 						Attr("role", "status"), Attr("aria-live", "polite"),

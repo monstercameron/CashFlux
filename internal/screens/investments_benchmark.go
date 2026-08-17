@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/benchseries"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -109,15 +111,13 @@ func investBenchmarkPanel(props benchmarkPanelProps) ui.Node {
 		form = Div(css.Class("invest-bench-form"),
 			Label(css.Class("invest-bench-ctrl"),
 				Span(css.Class("t-caption"), uistate.T("bench.nameLabel")),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "invest-bench-name"),
+				uiw.Field(name.Get(), css.Class("field"), Type("text"), Attr("data-testid", "invest-bench-name"),
 					Attr("aria-label", uistate.T("bench.nameLabel")),
-					Placeholder(uistate.T("bench.namePlaceholder")),
-					Value(name.Get()), OnInput(onName))),
-			Textarea(css.Class("field invest-bench-text"), Attr("rows", "6"),
+					Placeholder(uistate.T("bench.namePlaceholder")), OnInput(onName))),
+			uiw.AreaField(raw.Get(), css.Class("field invest-bench-text"), Attr("rows", "6"),
 				Attr("data-testid", "invest-bench-paste"),
 				Attr("aria-label", uistate.T("bench.pasteLabel")),
-				Placeholder(uistate.T("bench.placeholder")),
-				Value(raw.Get()), OnInput(onRaw)),
+				Placeholder(uistate.T("bench.placeholder")), OnInput(onRaw)),
 			If(errMsg.Get() != "", P(css.Class("err"), Attr("role", "alert"),
 				Attr("data-testid", "invest-bench-error"), errMsg.Get())),
 			// Say the constraint rather than letting someone wait for a live feed

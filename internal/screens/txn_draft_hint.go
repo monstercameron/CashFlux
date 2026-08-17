@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/duedate"
 	"github.com/monstercameron/CashFlux/internal/rapidcapture"
@@ -185,11 +187,10 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 
 	return Div(css.Class("sm15"), Attr("data-testid", "sm15-draft"),
 		Div(css.Class("sm15-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Input(css.Class("field field-wide"), Type("text"),
+			uiw.Field(sentence.Get(), css.Class("field field-wide"), Type("text"),
 				Attr("data-testid", "sm15-input"),
 				Attr("aria-label", uistate.T("sm15.label")),
-				Placeholder(uistate.T("sm15.placeholder")),
-				Value(sentence.Get()), OnInput(onInput)),
+				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput)),
 			askBtn,
 		),
 		hint,

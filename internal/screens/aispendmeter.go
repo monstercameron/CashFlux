@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aispend"
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -177,10 +179,9 @@ type aiSpendCapProps struct {
 func aiSpendCapControl(p aiSpendCapProps) ui.Node {
 	if p.Editing {
 		return Div(css.Class("ai-meter-cap"),
-			Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("step", "0.5"),
+			uiw.NumField(p.Draft, css.Class("field"), Type("number"), Attr("min", "0"), Attr("step", "0.5"),
 				Attr("data-testid", "ai-spend-cap-input"),
-				Attr("aria-label", uistate.T("aispend.capAria")),
-				Value(p.Draft), OnInput(p.OnDraft)),
+				Attr("aria-label", uistate.T("aispend.capAria")), OnInput(p.OnDraft)),
 			Button(css.Class("btn btn-sm btn-primary"), Type("button"),
 				Attr("data-testid", "ai-spend-cap-save"), OnClick(p.OnSave), uistate.T("action.save")),
 			Button(css.Class("btn btn-sm"), Type("button"),

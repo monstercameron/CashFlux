@@ -461,7 +461,7 @@ func studioTextField(p studioTextFieldProps) ui.Node {
 	if p.Big {
 		inputCls = "field studio-field studio-field-lg"
 	}
-	input := Input(css.Class(inputCls), Type("text"), Value(p.Value), Placeholder(p.Placeholder), Attr("aria-label", p.Label), OnInput(h))
+	input := uiw.Field(p.Value, css.Class(inputCls), Type("text"), Placeholder(p.Placeholder), Attr("aria-label", p.Label), OnInput(h))
 	if p.Compact {
 		// Label-less (aria only) for table-style rows where a column header names the field.
 		return Label(css.Class("field-label field-compact"), input)

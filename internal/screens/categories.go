@@ -536,7 +536,7 @@ func Categories() ui.Node {
 				// C549: name the target when it does not exist yet. Kind and parent
 				// are inherited from the source, so there is nothing else to ask.
 				If(reassignTo.Get() == mergeNewSentinel,
-					Input(css.Class("field"), Type("text"), Value(mergeNewName.Get()),
+					uiw.Field(mergeNewName.Get(), css.Class("field"), Type("text"),
 						Attr("data-testid", "cats-merge-newname"),
 						Attr("aria-label", uistate.T("categories.mergeNewNameLabel")),
 						Placeholder(uistate.T("categories.mergeNewNamePlaceholder")),

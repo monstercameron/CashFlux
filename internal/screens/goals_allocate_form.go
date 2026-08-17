@@ -7,6 +7,8 @@ package screens
 import (
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -324,8 +326,8 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 				Div(css.Class("goal-alloc-split-row"),
 					Div(css.Class("goal-alloc-split-field"),
 						Span(css.Class("t-caption", tw.TextDim), uistate.T("goals.allocSplitLabel")),
-						Input(css.Class("field", "goal-alloc-total"), Type("number"), Attr("data-testid", "goal-alloc-total"),
-							Attr("min", "0"), Step("0.01"), Value(totalS.Get()), OnInput(onTotal)),
+						uiw.NumField(totalS.Get(), css.Class("field", "goal-alloc-total"), Type("number"), Attr("data-testid", "goal-alloc-total"),
+							Attr("min", "0"), Step("0.01"), OnInput(onTotal)),
 					),
 					Div(css.Class("goal-alloc-split-btns"),
 						Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "goal-alloc-split-even"), OnClick(onSplitEven), uistate.T("goals.allocSplitEven")),
@@ -410,7 +412,7 @@ func goalAllocateRow(props goalAllocateRowProps) ui.Node {
 	}
 	amtArgs := []any{css.Class("field", "goal-alloc-input"), Type("number"),
 		Attr("data-testid", "goal-alloc-"+props.AccountID), Placeholder("0"),
-		Value(props.Value), Step("0.01"), Attr("min", "0"), OnInput(onInput)}
+		Step("0.01"), Attr("min", "0"), OnInput(onInput)}
 	if !props.Selected {
 		amtArgs = append(amtArgs, Attr("disabled", ""))
 	}
@@ -432,6 +434,6 @@ func goalAllocateRow(props goalAllocateRowProps) ui.Node {
 				overNote,
 			),
 		),
-		Input(amtArgs...),
+		uiw.NumField(props.Value, amtArgs...),
 	)
 }

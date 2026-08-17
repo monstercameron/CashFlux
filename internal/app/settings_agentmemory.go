@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -68,9 +70,9 @@ func agentMemoryForm() uic.Node {
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.memoryHint")),
 		body,
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-			Input(css.Class("set-input"), Type("text"), Attr("spellcheck", "false"),
+			uiw.Field(addDraft.Get(), css.Class("set-input"), Type("text"), Attr("spellcheck", "false"),
 				Attr("aria-label", uistate.T("settings.memoryAddPlaceholder")), Attr("data-testid", "settings-agent-memory-add"),
-				Placeholder(uistate.T("settings.memoryAddPlaceholder")), Value(addDraft.Get()), OnInput(onAdd)),
+				Placeholder(uistate.T("settings.memoryAddPlaceholder")), OnInput(onAdd)),
 			Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "settings-agent-memory-add-btn"),
 				OnClick(commitAdd), uistate.T("settings.memoryAdd")),
 		),

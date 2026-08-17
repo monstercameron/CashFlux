@@ -394,7 +394,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			errMsg.Set(uistate.T("transactions.splitAmountMismatch"))
 			return
 		}
-		if err := app.PutTransaction(t); err != nil {
+		// C629: a transfer is two rows. Writing only the one the user opened left the
+		// other account stale and the pair no longer summing to zero, so pass the
+		// pre-edit copy too and let appstate keep the counterpart in step.
+		if err := app.PutTransactionWithTransferPair(txn, t); err != nil {
 			errMsg.Set(err.Error())
 			return
 		}
@@ -675,10 +678,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 
 	return Form(css.Class("form-grid txn-edit"), Attr("id", "txn-edit-form"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
 		labeledField(uistate.T("transactions.descPlaceholder"),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
+			uiw.Field(descS.Get(), css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc))),
 		labeledField(uistate.T("transactions.payeeLabel"),
 			Fragment(
-				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), Value(payeeS.Get()), OnInput(onPayee)),
+				uiw.Field(payeeS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee)),
 				// Parity: the ORIGINAL statement text stays visible beside the
 				// cleaned merchant — when the resolver (alias table + cleanup)
 				// displays this transaction under a different name, say what the
@@ -711,9 +714,9 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// inputmode=decimal, which is exactly why C546 worked there and C547 did not
 		// work here.
 		labeledField(uistate.T("transactions.amountPlaceholder"),
-			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
+			uiw.Field(amountS.Get(), css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
 				Attr("data-testid", "txn-edit-amount"),
-				Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), OnInput(onAmount))),
+				Placeholder(uistate.T("transactions.amountPlaceholder")), OnInput(onAmount))),
 		// Direction sits beside the amount because together they ARE the amount.
 		If(!txn.IsTransfer(), labeledField(uistate.T("transactions.directionLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
@@ -744,18 +747,17 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				// transaction's flow) and selects it without leaving the modal.
 				If(addingCat.Get(),
 					Div(css.Class("txn-cat-add"),
-						Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
+						uiw.Field(newCatName.Get(), css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
 							Attr("aria-label", uistate.T("transactions.newCategoryName")),
-							Placeholder(uistate.T("transactions.newCategoryName")),
-							Value(newCatName.Get()), OnInput(onNewCatName), OnKeyDown(onNewCatKey)),
+							Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey)),
 						Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"),
 							OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
 						Button(css.Class("btn btn-ghost"), Type("button"),
 							OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")))))),
 		labeledField(uistate.T("transactions.dateLabel"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate))),
+			uiw.Field(dateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate))),
 		labeledField(uistate.T("transactions.tagsLabel"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags))),
+			uiw.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags))),
 		If(len(members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   memberOpts,

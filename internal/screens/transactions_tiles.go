@@ -63,13 +63,13 @@ func filterSelect(label, selected string, opts []uiw.SelectOption, onPick func(s
 // created by the caller and passed in, since a text input fires on every keystroke
 // (so the handler must live at a stable position in the owning component).
 func dateField(label, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, Input(css.Class("field"), Type("date"),
-		Attr("aria-label", label), Value(value), OnInput(onInput)))
+	return withFieldLabel(label, uiw.Field(value, css.Class("field"), Type("date"),
+		Attr("aria-label", label), OnInput(onInput)))
 }
 
 func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
-		Attr("aria-label", label), Placeholder(placeholder), Value(value), OnInput(onInput)))
+	return withFieldLabel(label, uiw.NumField(value, css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+		Attr("aria-label", label), Placeholder(placeholder), OnInput(onInput)))
 }
 
 // containsStr reports whether ss contains v.
@@ -413,13 +413,27 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// saying so, and people clicked them. Track the gap explicitly: pending goes up
 	// the moment a keystroke lands and comes down inside the debounced callback, so
 	// it spans exactly the window where what is on screen is out of date.
-	searchPending := ui.UseState(false)
+	//
+	// C628: the flag moved from this tile's own state to a shared atom. The rows it
+	// warns about live in the TABLE tile, and a warning that cannot reach the thing
+	// it is warning about is only half a warning — the table now dims them and
+	// makes them inert for the same window this note covers.
+	searchPending := uistate.UseTxnSearchPending()
 	onFilterText := func(v string) {
 		searchPending.Set(true)
 		debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) {
 			x.Text = v
 			searchPending.Set(false)
 		})
+	}
+	// C628: the ✕ is the one control whose whole job is "undo what I just typed",
+	// and routing it through the same 400ms coalescing left the query on screen for
+	// exactly the window it was pressed to end. Cancel the pending call first —
+	// otherwise it fires afterwards and writes the query straight back.
+	clearSearchNow := func() {
+		debounce.Flush("txn-filter:text")
+		searchPending.Set(false)
+		setFilter(func(x *uistate.TxFilter) { x.Text = "" })
 	}
 	onFilterAmountMin := ui.UseEvent(func(v string) { debFilter("amtmin", func(x *uistate.TxFilter) { x.AmountMin = v }) })
 	onFilterAmountMax := ui.UseEvent(func(v string) { debFilter("amtmax", func(x *uistate.TxFilter) { x.AmountMax = v }) })
@@ -439,8 +453,18 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// doExportCSV downloads the filtered ledger as CSV. It's a plain closure (not a
 	// UseEvent hook) because it's invoked from the "More" overflow menu's OnSelect
 	// (a func()), not wired directly to a button's OnClick.
+	// props.Shown, NOT a re-derived filter. Both of the closures below used to
+	// recompute the population with txnfilter.Apply(app.Transactions(),
+	// filterAtom.Get()), which differed from what the ledger was actually showing in
+	// two ways: it dropped the top bar's member lens (filterAtom holds the user's own
+	// filter; the lens is layered on afterwards), and it passed no Labels, so the
+	// payee-alias resolver was nil and rows that matched the search only through a
+	// learned merchant alias fell out. Exporting or selecting a population the user
+	// cannot see is bad on its own; with Bulk Delete on the other end of a selection
+	// it is data loss. props.Shown is the very slice the table and the count line are
+	// built from, so these now agree with the screen by construction.
 	doExportCSV := func() {
-		rows := txnfilter.Apply(app.Transactions(), filterAtom.Get())
+		rows := props.Shown
 		if len(rows) == 0 {
 			uistate.PostNotice(uistate.T("transactions.noExport"), true)
 			return
@@ -459,7 +483,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// (2026-07-17 audit — thin the resting toolbar row), whose item component owns
 	// the click hook.
 	selectAllFiltered := func() {
-		shown := txnfilter.Apply(app.Transactions(), filterAtom.Get())
+		shown := props.Shown
 		cur := selAtom.Get()
 		// Toggle: if every shown row is already selected, clear the selection;
 		// otherwise select all shown rows.
@@ -737,7 +761,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 				}
 				valControl = uiw.SelectInput(uiw.SelectInputProps{Options: opts, Selected: f.CustomVal, AriaLabel: valAria, OnChange: setVal})
 			default:
-				valControl = Input(css.Class("field"), Type("text"), Attr("aria-label", valAria), Placeholder(valAria), Value(f.CustomVal), OnInput(onFilterCustomValText))
+				valControl = uiw.Field(f.CustomVal, css.Class("field"), Type("text"), Attr("aria-label", valAria), Placeholder(valAria), OnInput(onFilterCustomValText))
 			}
 		}
 		customFilterNode = withFieldLabel(uistate.T("transactions.filterCustomField"), Fragment(keySelect, valControl))
@@ -853,7 +877,14 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// The Import and duplicates-review buttons both open flip modals now, so they're
 	// plain actions — no open/close view-toggle labels. The dupes button badges its
 	// count when there are possible duplicates to review.
-	dupCount := dedupe.Count(dedupe.FindDuplicates(props.Shown))
+	// Counted over the WHOLE ledger, because that is what the panel this button
+	// opens scans (DuplicatesPanel builds its groups from app.Transactions()). The
+	// count used to be taken from props.Shown, so with any filter active the button
+	// advertised one number and the panel behind it showed another. Scoping the
+	// panel to the filter instead would be worse than the mismatch: a duplicate pair
+	// is only visible when BOTH rows are in the population, so a filter that hides
+	// one half would hide the duplicate entirely.
+	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
 	importBtnLabel := uistate.T("transactions.importBtn")
 	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
 	if dupCount > 0 {
@@ -896,6 +927,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		Search:        f.Text,
 		SearchLabel:   uistate.T("transactions.searchPlaceholder"),
 		OnSearch:      onFilterText,
+		OnClearSearch: clearSearchNow,
 		SearchPending: searchPending.Get(),
 		FiltersLabel:  uistate.T("transactions.filters"),
 		FiltersTitle:  uistate.T("transactions.filtersTitle"),
@@ -1015,11 +1047,20 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		},
 	})
 
+	// The net is a sum over the SAME rows the count beside it reports, so a row that
+	// cannot be converted into the base currency must not be dropped in silence —
+	// that prints a count and a money figure side by side measured against different
+	// populations, and understates the total by exactly the rows nobody was told
+	// about. The unconvertible rows are counted so the line can say so.
 	var shownNet int64
+	unconverted := 0
 	for _, t := range props.Shown {
-		if c, err := props.Rates.Convert(t.Amount, props.Base); err == nil {
-			shownNet += c.Amount
+		c, err := props.Rates.Convert(t.Amount, props.Base)
+		if err != nil {
+			unconverted++
+			continue
 		}
+		shownNet += c.Amount
 	}
 	// C575: the count line replaces the screen-reader-only summary that used to live
 	// here. It states the size of the view WITH its denominator and names the
@@ -1036,6 +1077,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	countLine := ui.CreateElement(txnCountLine, txnCountLineProps{
 		Shown: len(props.Shown), Total: len(txns),
 		Net: money.New(shownNet, props.Base), Lens: lensName,
+		Unconverted: unconverted,
 	})
 
 	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
@@ -1377,15 +1419,27 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			// #55: whole-dataset checkpoint before the bulk delete (restorable
 			// from Settings → Data even after the session undo stack is gone).
 			uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkDelete", plural(count, "transaction")))
-			var prior []domain.Transaction
-			for _, t := range app.Transactions() {
-				if sel[t.ID] {
-					prior = append(prior, t)
-				}
-			}
 			ids := make([]string, 0, len(sel))
 			for id := range sel {
 				ids = append(ids, id)
+			}
+			// Snapshot what the delete will ACTUALLY remove, not what was ticked.
+			// DeleteTransactionsBulk takes the reciprocal leg of any selected transfer
+			// down with it, and a snapshot built from the selection alone left those
+			// counterparts out — so Undo restored one leg of a transfer and silently
+			// dropped the other, leaving that account permanently short by the transfer
+			// amount. The undo path is the last line of defence for a destructive bulk
+			// action; it has to cover the same rows the action does.
+			doomed := app.ExpandTransferPairs(ids)
+			doomedSet := make(map[string]bool, len(doomed))
+			for _, id := range doomed {
+				doomedSet[id] = true
+			}
+			var prior []domain.Transaction
+			for _, t := range app.Transactions() {
+				if doomedSet[t.ID] {
+					prior = append(prior, t)
+				}
 			}
 			if err := app.DeleteTransactionsBulk(ids); err != nil {
 				uistate.PostNotice(err.Error(), true)

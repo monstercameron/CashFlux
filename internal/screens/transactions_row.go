@@ -217,12 +217,12 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			Td(Attr("colspan", editColspan),
 				Form(css.Class("form-grid"), OnSubmit(saveEdit), OnKeyDown(onEditKeyDown),
 					labeledField(uistate.T("transactions.descPlaceholder"),
-						Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), Value(descS.Get()), OnInput(onDesc))),
+						uiw.Field(descS.Get(), css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc))),
 					// C60: payee field in inline edit so the merchant name is editable.
 					labeledField(uistate.T("transactions.payeeLabel"),
-						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Attr("data-testid", "txn-edit-payee"), Placeholder(uistate.T("transactions.payeeLabel")), Value(payeeS.Get()), OnInput(onPayee))),
+						uiw.Field(payeeS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Attr("data-testid", "txn-edit-payee"), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee))),
 					labeledField(uistate.T("transactions.amountPlaceholder"),
-						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Value(amountS.Get()), Step("0.01"), OnInput(onAmount))),
+						uiw.NumField(amountS.Get(), css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Step("0.01"), OnInput(onAmount))),
 					uiw.FormField(uistate.T("transactions.categoryLabel"),
 						uiw.SelectInput(uiw.SelectInputProps{
 							Options:   catOpts,
@@ -230,10 +230,10 @@ func TransactionRow(props transactionRowProps) ui.Node {
 							AriaLabel: uistate.T("transactions.categoryLabel"),
 							OnChange:  func(v string) { catS.Set(v) },
 						})),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), Value(dateS.Get()), OnInput(onDate)),
+					uiw.Field(dateS.Get(), css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate)),
 					// C48: edit tags inline (comma-separated), matching the add/edit forms elsewhere.
 					labeledField(uistate.T("transactions.tagsLabel"),
-						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Attr("data-testid", "txn-edit-tags"), Placeholder(uistate.T("transactions.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags))),
+						uiw.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Attr("data-testid", "txn-edit-tags"), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags))),
 					If(len(props.Members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
 						uiw.SelectInput(uiw.SelectInputProps{
 							Options:   memberOpts,

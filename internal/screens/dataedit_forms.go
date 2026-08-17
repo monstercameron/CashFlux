@@ -156,12 +156,10 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 			Attr("data-testid", "member-pin-form-"+m.ID),
 			OnSubmit(savePIN),
 			uiw.FormField(uistate.T("profileSwitch.pinNew"),
-				Input(css.Class("field"), Attr("id", "member-pin-"+m.ID), Type("password"),
+				uiw.Field(pinS.Get(), css.Class("field"), Attr("id", "member-pin-"+m.ID), Type("password"),
 					Attr("autocomplete", "off"),
 					Attr("data-testid", "member-pin-input-"+m.ID),
-					Value(pinS.Get()),
-					OnInput(onPIN),
-				),
+					OnInput(onPIN)),
 			),
 			If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
 			Div(css.Class("modal-sticky-foot"),
@@ -181,9 +179,9 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 		})
 	return Form(css.Class("form-grid"), OnSubmit(saveEdit),
 		labeledField(uistate.T("members.name"),
-			Input(css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), Value(nameS.Get()), OnInput(onName))),
+			uiw.Field(nameS.Get(), css.Class("field"), Attr("id", "member-edit-"+m.ID), Type("text"), Attr("aria-label", uistate.T("members.name")), Placeholder(uistate.T("members.name")), OnInput(onName))),
 		labeledField(uistate.T("members.color"),
-			Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), Value(colorS.Get()), OnInput(onColor))),
+			uiw.Field(colorS.Get(), css.Class("color-input"), Type("color"), Attr("title", uistate.T("members.color")), Attr("aria-label", uistate.T("members.color")), OnInput(onColor))),
 		// Per-member preferences (§1.19): an optional personal date style and a
 		// default account that seeds this member's quick-add. "Inherit" = use the
 		// household default.
@@ -306,7 +304,7 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 		// Visible label for the name field (C63 labelling gap: placeholder-only
 		// is insufficient for screen readers and sighted users who clear the field).
 		labeledField(uistate.T("common.name"),
-			Input(css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), Value(nameS.Get()), OnInput(onName))),
+			uiw.Field(nameS.Get(), css.Class("field"), Attr("id", "cat-edit-"+c.ID), Type("text"), Placeholder(uistate.T("common.name")), OnInput(onName))),
 		labeledField(uistate.T("categories.kindAria"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   kindOpts,
@@ -322,7 +320,7 @@ func CategoryEditForm(props CategoryEditFormProps) ui.Node {
 				AriaLabel: uistate.T("categories.parent"),
 			})),
 		labeledField(uistate.T("categories.color"),
-			Input(css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), Value(colorS.Get()), OnInput(onColor))),
+			uiw.Field(colorS.Get(), css.Class("color-input"), Type("color"), Attr("title", uistate.T("categories.color")), Attr("aria-label", uistate.T("categories.color")), OnInput(onColor))),
 		Label(css.Class("checkbox-label"), Attr("title", uistate.T("categories.deductibleTitle")),
 			Input(Type("checkbox"), Attr("id", "cat-edit-deductible-"+c.ID), Attr("aria-label", uistate.T("categories.deductible")), Attr("data-testid", "cat-deductible-"+c.ID), CheckedIf(deductibleS.Get()), OnChange(onDeductible)),
 			Text(" "+uistate.T("categories.deductible")),
@@ -462,7 +460,7 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 
 	return Form(css.Class("form-grid"), Attr("id", "rule-edit-form"), OnSubmit(saveEdit),
 		labeledField(uistate.T("rules.matchFieldLabel"),
-			Input(css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), Value(matchS.Get()), OnInput(onMatch))),
+			uiw.Field(matchS.Get(), css.Class("field"), Attr("id", "rule-edit-"+r.ID), Type("text"), Attr("aria-label", uistate.T("rules.matchFieldLabel")), Placeholder(uistate.T("rules.matchPlaceholder")), OnInput(onMatch))),
 		labeledField(uistate.T("rules.categoryFieldLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   categorySelectOptions(cats, catS.Get()),
@@ -471,11 +469,11 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 				AriaLabel: uistate.T("rules.categoryFieldLabel"),
 			})),
 		labeledField(uistate.T("rules.tagsFieldLabel"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), Value(tagsS.Get()), OnInput(onTags))),
+			uiw.Field(tagsS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.tagsFieldLabel")), Placeholder(uistate.T("rules.tagsPlaceholder")), OnInput(onTags))),
 		// C102: rename description action — when filled, matching transactions have their
 		// description rewritten to this value (e.g. clean up garbled bank feed text).
 		labeledField(uistate.T("rules.renameDescFieldLabel"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), Value(renameDescS.Get()), OnInput(onRenameDesc))),
+			uiw.Field(renameDescS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("rules.renameDescFieldLabel")), Placeholder(uistate.T("rules.renameDescPlaceholder")), OnInput(onRenameDesc))),
 		// Bill-account action — link matching transactions as bill payments toward an
 		// account (drives the auto-link-future-payments rules).
 		labeledField(uistate.T("rules.billAccountFieldLabel"),
@@ -573,8 +571,7 @@ func ArtifactRenameForm(props ArtifactRenameFormProps) ui.Node {
 
 	return Form(css.Class("form-grid"), Attr("id", "artifact-rename-form"), OnSubmit(saveRename),
 		labeledField(uistate.T("artifacts.renameLabel"),
-			Input(css.Class("field"), Attr("id", "artifact-rename-"+a.ID), Attr("aria-label", uistate.T("artifacts.renameLabel")),
-				Value(nameS.Get()), OnInput(onName), Attr("data-testid", "artifact-rename-input"))),
+			uiw.Field(nameS.Get(), css.Class("field"), Attr("id", "artifact-rename-"+a.ID), Attr("aria-label", uistate.T("artifacts.renameLabel")), OnInput(onName), Attr("data-testid", "artifact-rename-input"))),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),
 	)
 }

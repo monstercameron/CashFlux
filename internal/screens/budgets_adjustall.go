@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -185,12 +187,12 @@ func AdjustAllBody(_ struct{}) ui.Node {
 			labeledField(uistate.T("budgets.adjustAllFieldLabel"),
 				Fragment(
 					Div(css.Class("adjustall-field"),
-						Input(css.Class("field"), Type("number"), Attr("data-testid", "adjustall-pct"),
+						uiw.NumField(pctStr.Get(), css.Class("field"), Type("number"), Attr("data-testid", "adjustall-pct"),
 							Attr("autofocus", ""), Attr("inputmode", "decimal"),
 							Attr("aria-label", uistate.T("budgets.adjustAllFieldLabel")),
 							Attr("min", formatAdjustPct(budgeting.AdjustMinPct)),
 							Attr("max", formatAdjustPct(budgeting.AdjustMaxPct)),
-							Step("0.5"), Placeholder("5"), Value(pctStr.Get()), OnInput(onPct)),
+							Step("0.5"), Placeholder("5"), OnInput(onPct)),
 						Span(css.Class("adjustall-suffix", tw.TextFaint), "%"),
 					),
 					Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "adjustall-hint"),

@@ -100,35 +100,68 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// Switching modes converts each parseable row in place — amounts become the
 	// percentage they represent, percentages become their share of the total — so
 	// the draft carries over instead of resetting.
+	//
+	// C632: converting each row on its own with plain integer division truncates
+	// PER ROW, so a draft that summed exactly to the parent before the toggle was
+	// short by a cent or more after it — the editor told the user their split no
+	// longer balanced when the only thing they had changed was the display mode.
+	// When the draft IS exactly balanced in the source mode, convert the whole set
+	// together through the largest-remainder helper (the same Hamilton
+	// apportionment split.ByPercents/ByWeights use), which sums to the destination
+	// target exactly. An already-unbalanced draft has no exact answer to preserve,
+	// so it keeps the cheap per-row conversion and stays unbalanced.
+	convertRows := func(cur []splitDraft, srcDec int, srcTotal int64, dstDec int, dstTotal int64) {
+		// Read every row that carries a parseable positive value; blanks are left
+		// alone, and anything unparseable means the draft cannot be balanced.
+		idx := make([]int, 0, len(cur))
+		weights := make([]split.WeightedMember, 0, len(cur))
+		var sum int64
+		exact := true
+		for i, d := range cur {
+			if d.Amt == "" {
+				continue
+			}
+			v, err := money.ParseMinor(d.Amt, srcDec)
+			if err != nil || v <= 0 {
+				exact = false
+				continue
+			}
+			idx = append(idx, i)
+			weights = append(weights, split.WeightedMember{MemberID: strconv.Itoa(i), Weight: absMinor(v)})
+			sum += absMinor(v)
+		}
+		if len(idx) == 0 || srcTotal == 0 {
+			return
+		}
+		if exact && sum == srcTotal {
+			if shares := split.ByWeights(dstTotal, weights); shares != nil {
+				for k, i := range idx {
+					cur[i].Amt = money.FormatMinor(shares[k].Amount, dstDec)
+				}
+				return
+			}
+		}
+		// Fallback: proportional per-row conversion for a draft that does not
+		// balance, so the numbers still carry over between modes.
+		for k, i := range idx {
+			cur[i].Amt = money.FormatMinor((weights[k].Weight*dstTotal+srcTotal/2)/srcTotal, dstDec)
+		}
+	}
 	toAmounts := ui.UseEvent(func() {
-		if !pctMode.Get() {
+		if !pctMode.Get() || txnAbsEarly == 0 {
 			return
 		}
 		cur := append([]splitDraft(nil), splits.Get()...)
-		for i, d := range cur {
-			bp, err := money.ParseMinor(d.Amt, 2)
-			if err != nil || bp <= 0 || txnAbsEarly == 0 {
-				continue
-			}
-			amt := txnAbsEarly * bp / split.PercentScale
-			cur[i].Amt = money.FormatMinor(amt, dec)
-		}
+		convertRows(cur, 2, split.PercentScale, dec, txnAbsEarly)
 		splits.Set(cur)
 		pctMode.Set(false)
 	})
 	toPercents := ui.UseEvent(func() {
-		if pctMode.Get() {
+		if pctMode.Get() || txnAbsEarly == 0 {
 			return
 		}
 		cur := append([]splitDraft(nil), splits.Get()...)
-		for i, d := range cur {
-			v, err := money.ParseMinor(d.Amt, dec)
-			if err != nil || v <= 0 || txnAbsEarly == 0 {
-				continue
-			}
-			bp := (absMinor(v)*split.PercentScale + txnAbsEarly/2) / txnAbsEarly
-			cur[i].Amt = money.FormatMinor(bp, 2)
-		}
+		convertRows(cur, dec, txnAbsEarly, 2, split.PercentScale)
 		splits.Set(cur)
 		pctMode.Set(true)
 	})
@@ -184,7 +217,17 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			parseErr = true
 			continue
 		}
-		total += absMinor(v)
+		// C634: a split line has to be a positive share of the parent. Taking the
+		// magnitude here let a negative entry ADD to the running total, so a draft
+		// containing "-5" could reach the target and read "Balanced" with Save
+		// enabled — and then fail on the click, because save rejects it. A value
+		// that save will refuse must fail the same check the footer and the Save
+		// button read, not a friendlier one.
+		if v <= 0 {
+			parseErr = true
+			continue
+		}
+		total += v
 	}
 	txnAbs := absMinor(props.Txn.Amount.Amount)
 	target := txnAbs
@@ -504,9 +547,9 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-owner-" + strconv.Itoa(props.Index),
 				OnChange:  onOwner,
 			}))),
-		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"max-width": "8rem"}),
+		uiw.Field(props.Amt, css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"max-width": "8rem"}),
 			Attr("aria-label", uistate.T(splitAmtKey(props.Percent))), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
-			Placeholder(uistate.T(splitAmtKey(props.Percent))), Value(props.Amt), OnInput(onAmt), OnBlur(onAmtBlur)),
+			Placeholder(uistate.T(splitAmtKey(props.Percent))), OnInput(onAmt), OnBlur(onAmtBlur)),
 		If(props.Percent, Span(css.Class("muted"), Attr("aria-hidden", "true"), "%")),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("splitEditor.remove")),
 			Title(uistate.T("splitEditor.remove")), Attr("data-testid", "split-remove-"+strconv.Itoa(props.Index)),

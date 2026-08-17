@@ -585,7 +585,7 @@ func VisualBuilder() ui.Node {
 			),
 			Div(css.Class("vb-group"),
 				Span(css.Class("vb-group-label"), uistate.T("vbld.thisCard")),
-				Input(css.Class("set-input"), Type("text"), Value(cardName.Get()), Attr("placeholder", uistate.T("vbld.cardName")),
+				uiw.Field(cardName.Get(), css.Class("set-input"), Type("text"), Attr("placeholder", uistate.T("vbld.cardName")),
 					Attr("aria-label", uistate.T("vbld.cardName")), Style(map[string]string{"width": "9rem"}), OnInput(onCardName)),
 				Button(css.Class("data-btn"), Type("button"), Attr("data-testid", "vb-save"), OnClick(saveCard), uistate.T("vbld.save")),
 				Button(css.Class("btn btn-primary vb-publish"), Type("button"), Attr("data-testid", "vb-publish"), OnClick(publish), uistate.T("vbld.publishBtn")),
@@ -1832,7 +1832,7 @@ func vbMetricField(p vbMetricFieldProps) ui.Node {
 
 	kids := []any{ClassStr("wb-field"),
 		Span(css.Class("wb-field-label"), uistate.T("vbld.figure")),
-		Input(css.Class("set-input"), Type("search"), Placeholder(uistate.T("vbld.filterMetrics")), Attr("aria-label", uistate.T("vbld.filterMetrics")), Value(q.Get()), OnInput(onQ)),
+		uiw.Field(q.Get(), css.Class("set-input"), Type("search"), Placeholder(uistate.T("vbld.filterMetrics")), Attr("aria-label", uistate.T("vbld.filterMetrics")), OnInput(onQ)),
 		Select(css.Class("set-input"), Attr("aria-label", uistate.T("vbld.figure")), OnChange(onSel), opts),
 	}
 	if selDoc != "" {
@@ -1970,7 +1970,7 @@ func vbTextField(p vbTextFieldProps) ui.Node {
 	}
 	return Div(css.Class("wb-field"),
 		Span(css.Class("wb-field-label"), p.Label),
-		Input(css.Class("set-input"), Type(typ), Value(p.Value), Attr("placeholder", p.Placeholder), Attr("aria-label", p.Label), OnInput(on)),
+		uiw.Field(p.Value, css.Class("set-input"), Type(typ), Attr("placeholder", p.Placeholder), Attr("aria-label", p.Label), OnInput(on)),
 	)
 }
 

@@ -11,7 +11,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -322,10 +324,24 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	txnDataRev := uistate.UseDataRevision().Get()
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
+	// C628: true while a typed search is still inside its debounce window, i.e.
+	// while the rows this table is about to render answer the previous query.
+	searchPending := uistate.UseTxnSearchPending().Get()
 	selAtom := uistate.UseTxnSelection()
 	anchorAtom := uistate.UseTxnSelAnchor()
 	previewAtom := uistate.UseTxnPreview()
 	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
+	// Register mode (TX12) forces the rows into chronological order so each running
+	// balance reads down the column. The HOST applies that force when it builds the
+	// frame; this tile did not, so the headers went on advertising the user's stored
+	// sort — caret, aria-sort and all — over rows that were in a different order
+	// entirely. Whatever orders the rows has to order the header too, so the same
+	// force is applied here, before the effective-sort fallback below.
+	regID, singleAcct := f.SingleAccount()
+	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
+	if registerActive {
+		f.Sort, f.Dir = "date", txnfilter.Asc
+	}
 	// The headers must claim the order the ROWS are actually in. The surface host
 	// applies the same fallback when it builds the frame, so reading it here too is
 	// what stops a hidden column's sort from being announced by a header that is no
@@ -344,17 +360,40 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	}
 	// Clicking a tag chip on a row narrows the ledger to that single tag (replacing any
 	// multi-tag selection). Plain closure — the tag chip component owns its click hook.
+	//
+	// C651: the action was reported as a no-op from a row the search had already
+	// narrowed to one result — and on that view it genuinely cannot move the count,
+	// because the one matching row is the one carrying the tag. What it can do, and
+	// did not, is SAY it happened. The criteria change is now announced as well as
+	// charted: a filter that changes no visible row and posts no word is
+	// indistinguishable from a dead button.
 	onTagFilter := func(tag string) {
-		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Tag = tag; x.Tags = "" })
+		prev := filterAtom.Get()
+		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { *x = x.DrillToTag(tag) })
+		next := filterAtom.Get()
+		// Speak ONLY when the user would otherwise see nothing. A toast on every
+		// drill would be noise for the ordinary case — where a chip appears and the
+		// row count moves, which is how every other filter change in the app
+		// communicates — to fix the case where neither does. So the test is not
+		// "did the criteria change" but "did anything VISIBLE change", which is the
+		// reported situation exactly: a search already narrowed to the one row that
+		// carries the tag, so the chip is the only difference and the count is
+		// identical. Two filter passes on a click is cheap next to a control the
+		// user has learned not to trust.
+		if txnfilter.ScopeChanged(prev, next) &&
+			len(txnfilter.Apply(props.App.Transactions(), next)) !=
+				len(txnfilter.Apply(props.App.Transactions(), prev)) {
+			return
+		}
+		uistate.PostNotice(uistate.T("transactions.tagFilterApplied", tag), false)
 	}
 
 	// Register mode (TX12): when the ledger is scoped to exactly one account and the
 	// toggle is on, compute each transaction's running balance from the account's FULL
 	// chronological history (ledger.RegisterBalances), so a paginated/filtered slice
 	// still shows the TRUE figure. A multi-currency account (whose fold errors) leaves
-	// runBal nil, and the column is simply not shown.
-	regID, singleAcct := f.SingleAccount()
-	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
+	// runBal nil, and the column is simply not shown. (regID/registerActive are
+	// resolved above, where they also force the header's sort to match the rows.)
 	var runBal map[string]money.Money
 	if registerActive {
 		for _, a := range props.App.Accounts() {
@@ -515,15 +554,68 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			return
 		}
 	}
-	// deleteRow removes the transaction (and its transfer pair). It's undoable via the toast — the
-	// same soft-safety the card view uses — so the ⋯-menu Delete needs no modal confirm.
+	// deleteRow removes the transaction (and its transfer pair).
+	//
+	// C620: this used to commit on the single ⋯-menu click, on the theory that the
+	// undoable toast was enough soft-safety. It was not, for two reasons. The toast
+	// only renders an Undo button when the undo stack is non-empty, and this
+	// handler never called auditview.CaptureNow() — the very function whose doc
+	// says delete handlers must call it "right before showing an Undo toast so the
+	// undo stack is ready when the user clicks Undo". So the one affordance the
+	// no-confirm decision rested on was the one that wasn't wired. Meanwhile BULK
+	// delete has had a confirm, a checkpoint and a snapshot all along, which left
+	// the riskier per-row path as the unguarded one.
+	//
+	// C621: deleting also strands any follow-up task pointing at this transaction —
+	// tasklink.EntityName returns ok=false for a missing id, so the task simply
+	// stops showing its link. The count goes in the confirmation, so the effect on
+	// other work is stated BEFORE the click rather than discovered later.
 	deleteRow := func(id string) {
-		if err := props.App.DeleteTransactionWithTransferPair(id); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		var txn domain.Transaction
+		found := false
+		for _, t := range props.App.Transactions() {
+			if t.ID == id {
+				txn, found = t, true
+				break
+			}
+		}
+		if !found {
 			return
 		}
-		uistate.BumpDataRevision()
-		uistate.PostUndoable(uistate.T("toast.txnDeleted"))
+		linked := 0
+		for _, tk := range props.App.Tasks() {
+			if tk.RelatedType == domain.RelatedTransaction && tk.RelatedID == id && tk.Status != domain.StatusDone {
+				linked++
+			}
+		}
+		acctName := ""
+		if a, ok := domain.AccountByID(props.App.Accounts(), txn.AccountID); ok {
+			acctName = a.Name
+		}
+		// Name the row the way the user is looking at it: who, when, how much, and
+		// out of which account. "Delete this transaction?" is not enough to catch a
+		// misclick on the wrong row.
+		what := uistate.T("transactions.deleteConfirmDetail",
+			firstNonEmpty(txn.Payee, txn.Desc),
+			dateutil.FormatDate(txn.Date),
+			fmtMoney(txn.Amount),
+			acctName)
+		if linked > 0 {
+			what += " " + uistate.T("transactions.deleteConfirmTasks", linked)
+		}
+		uistate.ConfirmModal(what, true, func(ok bool) {
+			if !ok {
+				return
+			}
+			// Capture BEFORE the write, so Undo has a point to return to.
+			auditview.CaptureNow()
+			if err := props.App.DeleteTransactionWithTransferPair(id); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			uistate.PostUndoable(uistate.T("toast.txnDeleted"))
+		})
 	}
 	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
 
@@ -599,6 +691,23 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	refundAtom := uistate.UseRefundPairTarget()
 	links := props.App.TxnLinks()
 	groupByTxn := txnlinks.GroupsByTxn(links)
+	// C-fix: an order group's TOTAL has to be measured against the group, not
+	// against whatever the current filter happens to show. txByID above is built
+	// from props.Shown (the filtered, searched, lensed page), and
+	// txnlinks.GroupMembers silently drops any id missing from the map it is
+	// given — so filtering to a category that matched only some members left the
+	// badge reading "3 items · $47.00" when the three items really totalled
+	// $65.00: a count and a money figure printed side by side, measured against
+	// different populations. The group's membership is filter-independent, so its
+	// sum is resolved against the whole ledger.
+	groupTxByID := make(map[string]domain.Transaction, len(props.Shown))
+	if len(groupByTxn) > 0 {
+		all := props.App.Transactions()
+		groupTxByID = make(map[string]domain.Transaction, len(all))
+		for _, t := range all {
+			groupTxByID[t.ID] = t
+		}
+	}
 	refundSide, refundedSide := map[string]bool{}, map[string]bool{}
 	billMatched := map[string]bool{} // TX9: rows that settle a recurring occurrence
 	// TX10: map each transaction to the name of the event it belongs to, so the row
@@ -653,6 +762,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		uistate.PostNotice(uistate.T("billmatch.unlinkLogged"), false)
 		uistate.BumpDataRevision()
 	}
+
+	// SM-8 / SM-10: resolve the duplicate and spike flags ONCE for the whole table.
+	// Both answers cost a full ledger scan, so asking them per rendered row is how a
+	// helpful flag becomes a scroll stutter. Each half self-gates on its feature, so
+	// this is free for anyone who has neither turned on.
+	smartFlags := buildTxnRowFlags(props.App, uistate.LoadSmartSettings(), uistate.LoadPrefs().WeekStartWeekday())
 
 	sel := selAtom.Get()
 
@@ -786,6 +901,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
 			Reviewed:            txByID[rid].Reviewed,
 			Queued:              reviewqueue.Needs(txByID[rid]),
+			Duplicate:           smartFlags.Duplicate[rid],
+			SpikeWhy:            smartFlags.Spike[rid],
+			Unfiled:             txByID[rid].CategoryID == "" && !txByID[rid].HasSplits(),
 			AutoCategory:        autoProv[rid].IsAutomatic(),
 			AutoCategoryWhy:     autoMarkWhy(autoProv[rid], srcCol.Str(i)),
 			Selected:            sel[rid],
@@ -813,6 +931,12 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	}
 	renderRow := func(i int) ui.Node {
 		r := rowPropsAt(i)
+		// C626: only the windowed body needs to state an absolute position — a
+		// rendered page's DOM order already is one. +2 because ARIA counts the
+		// header as row 1.
+		if virtualize {
+			r.RowIndex = i + 2
+		}
 		if g, ok := groupByTxn[r.ID]; ok {
 			r.GroupSize = len(g.TxnIDs)
 			r.GroupTotal = fmtMoney(txnlinks.GroupSum(txnlinks.GroupMembers(g, txByID)))
@@ -864,7 +988,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	case len(props.App.Transactions()) == 0:
 		tableBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
 	case total == 0:
-		tableBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
+		// C628: a no-match state that only says "nothing matched" leaves the way out
+		// as an unlabelled ✕ in a toolbar the user has to go looking for. The escape
+		// belongs where the disappointment is, and it removes ONLY the search — the
+		// period, member and category filters are not what the user just typed.
+		tableBody = ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(f.Text)})
 	default:
 		// Header columns, built to match the row cells' conditional set exactly (same
 		// order): Select + Date + Description are always shown; the rest follow the
@@ -922,12 +1050,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Dir:         f.Dir,
 			OnSort:      sortBy,
 			SortSpinner: true,
-			Page:        curPage,
-			Total:       total,
-			PageSize:    pageSize,
-			PageSizes:   txnfilter.PageSizes,
-			OnPage:      setPage,
-			OnPageSize:  setPageSize,
+			// C628: while a typed search is still inside its debounce the rows below
+			// answer the PREVIOUS query. The toolbar already said so in words; the
+			// table now dims them and drops their pointer events for the same window,
+			// so the stale rows cannot be acted on — which is what "explicitly marked
+			// as pending" has to mean for a row whose Edit button still worked.
+			Busy:       searchPending,
+			BusyLabel:  uistate.T("filters.searchPending"),
+			Page:       curPage,
+			Total:      total,
+			PageSize:   pageSize,
+			PageSizes:  txnfilter.PageSizes,
+			OnPage:     setPage,
+			OnPageSize: setPageSize,
 			// On a multi-page ledger, mirror the pager above the table too so rows-per-page
 			// (and "All") is reachable without scrolling to the very bottom of a long list.
 			TopPager: total > txnfilter.DefaultPageSize,
@@ -973,10 +1108,15 @@ func txnTableWidget(props txnTableProps) ui.Node {
 // Display strings are pre-formatted; the callbacks are plain funcs (not hooks) so
 // they pass safely through MapKeyed. The row owns its own interaction hooks.
 type txnFrameRowProps struct {
-	ID      string
-	Date    string
-	Amount  string
-	AmtTone string // color token for the amount figure (e.g. "text-down")
+	ID string
+	// RowIndex is this row's 1-based ARIA position in the whole match set,
+	// counting the header as row 1 — so the first data row is 2. Zero means "do
+	// not claim a position", which is correct for a fully rendered page where the
+	// DOM order already is the answer. See C626 in txnFrameRow.
+	RowIndex int
+	Date     string
+	Amount   string
+	AmtTone  string // color token for the amount figure (e.g. "text-down")
 	// AmountMoney is the raw amount (for the merchant-trend delta); TrendMerchant is the
 	// resolved merchant name when this row's merchant has enough history to show the
 	// spending-trend chip (TX6b), else "".
@@ -1008,6 +1148,17 @@ type txnFrameRowProps struct {
 	// tooltip and as its accessible name.
 	AutoCategory    bool
 	AutoCategoryWhy string
+	// Duplicate / SpikeWhy are the SM-8 / SM-10 row flags, resolved ONCE for the
+	// whole table (buildTxnRowFlags) rather than per row — either question costs a
+	// full ledger scan to answer, and asking it per rendered row is what turns a
+	// helpful flag into a scroll stutter.
+	Duplicate bool
+	SpikeWhy  string
+	// Unfiled marks a charge with no category AND no split breakdown — the set the
+	// SM-2 suggestion chip offers itself on. It is a precomputed flag rather than a
+	// test on Category, which is the DISPLAY string and reads "Uncategorized"
+	// (localized) precisely when the id is empty.
+	Unfiled bool
 	// OnConfirmCategory accepts the automatic category as the user's own decision,
 	// so the correction path for "the machine is right" costs one click and does not
 	// require opening the Rules page (C579).
@@ -1169,6 +1320,25 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 	switch {
 	case props.Vis.Status:
 		// the Status column says it in words
+	// C618 said this branch order mirrors rowStatusWord exactly. It did not: the
+	// two settlement cases sat FIRST here and LAST there, so with the Status column
+	// switched off a row that was both cleared and flagged wore "✓" and said
+	// nothing about the review queue — exactly the C601 defect the column's word
+	// order was rewritten to fix, re-introduced in the glyph. Needs-review outranks
+	// settlement in both places now, and the settled state is still carried in the
+	// badge's tooltip and accessible name below.
+	case props.Queued && !props.IsTransfer:
+		// "•" carries the tooltip "confirm it in the Review inbox", which is only
+		// true of a row the inbox actually holds.
+		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-needsreview-badge"),
+			Attr("role", "img"), Attr("title", uistate.T("transactions.needsReviewBadgeTitle")),
+			Attr("aria-label", badgeStateLabel(props, uistate.T("acctxn.legendNeedsReview"))), "•")
+	case !props.Reviewed && !props.IsTransfer:
+		// Categorized but unconfirmed: an open circle, not the filled dot, so the
+		// two states are distinguishable at a glance as well as in words.
+		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-unconfirmed-badge"),
+			Attr("role", "img"), Attr("title", uistate.T("transactions.statusUnconfirmedTitle")),
+			Attr("aria-label", badgeStateLabel(props, uistate.T("transactions.statusUnconfirmed"))), "◦")
 	case props.Reconciled:
 		// #63: the strongest state — this cleared row falls at or before its
 		// account's reconciled-through date, so a statement has vouched for it.
@@ -1179,19 +1349,6 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		stateBadge = Span(css.Class("badge"), Attr("data-testid", "txn-cleared-badge"),
 			Attr("role", "img"), Attr("title", uistate.T("transactions.clearedBadgeTitle")),
 			Attr("aria-label", uistate.T("acctxn.legendCleared")), "✓")
-	// C618: the glyph and the Status word must make the SAME claim, so this branch
-	// order mirrors rowStatusWord exactly. "•" carries the tooltip "confirm it in
-	// the Review inbox", which is only true of a row the inbox holds.
-	case props.Queued && !props.IsTransfer:
-		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-needsreview-badge"),
-			Attr("role", "img"), Attr("title", uistate.T("transactions.needsReviewBadgeTitle")),
-			Attr("aria-label", uistate.T("acctxn.legendNeedsReview")), "•")
-	case !props.Reviewed && !props.IsTransfer:
-		// Categorized but unconfirmed: an open circle, not the filled dot, so the
-		// two states are distinguishable at a glance as well as in words.
-		stateBadge = Span(css.Class("badge text-dim"), Attr("data-testid", "txn-unconfirmed-badge"),
-			Attr("role", "img"), Attr("title", uistate.T("transactions.statusUnconfirmedTitle")),
-			Attr("aria-label", uistate.T("transactions.statusUnconfirmed")), "◦")
 	}
 
 	// XC1/XC2: link badges beside the description, mirroring the classic view.
@@ -1252,6 +1409,15 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		memClass += " text-dim"
 	}
 	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), OnClick(open)}
+	// C626: this row's ABSOLUTE position in the match set, not its position in the
+	// DOM. In the virtualized "All" view those two differ by however far the user
+	// has scrolled, and without the absolute one assistive tech reads "row 3 of
+	// 3284" for a row three thousand entries down. Set only when the caller is
+	// windowing — a fully rendered page needs no correction, and asserting one
+	// that matched the DOM anyway would be noise.
+	if props.RowIndex > 0 {
+		rowArgs = append(rowArgs, Attr("aria-rowindex", strconv.Itoa(props.RowIndex)))
+	}
 	// XC1: a grouped member reads as a physical grouping — a quiet accent tie-line
 	// on the left rail shared by every member of the purchase.
 	if props.GroupSize > 1 {
@@ -1272,7 +1438,13 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 					Attr("title", uistate.T("transactions.excludeHint")), uistate.T("transactions.excludedBadge"))),
 				If(props.HasNote, Span(css.Class("txn-note-glyph"), Attr("data-testid", "txn-row-note"),
 					Attr("title", uistate.T("transactions.hasNote")), uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W35, tw.H35)))),
-				Span(css.Class("row-desc-text"), props.Desc),
+				// title carries the full text, because this cell truncates with an
+				// ellipsis at every viewport width and nothing else on the row repeats
+				// it. "CKE*DD DOORDASH WINGSTOP 855-431-0459" clipping to "CKE*DD
+				// DOORDASH WINGSTOP 855-4" hides exactly the identifying tail a person
+				// is squinting at the ledger to find, with no way to see the rest short
+				// of opening the row.
+				Span(css.Class("row-desc-text"), Attr("title", props.Desc), props.Desc),
 				stateBadge,
 				tagsNode,
 				// Follow-up indicator, to the right of the description: a chip with the open/total
@@ -1288,6 +1460,12 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 					Attr("data-testid", "txn-row-receipt"), OnClick(view),
 					uiw.Icon(icon.Paperclip, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(strconv.Itoa(props.Receipts)))),
 				linkBadge,
+				// SM-8 / SM-10: the row's own flag (a likely duplicate, or a charge
+				// unusually large for its category). Own component — it owns a click hook.
+				If(props.Duplicate || props.SpikeWhy != "",
+					ui.CreateElement(txnFlagChip, txnFlagChipProps{
+						TxnID: props.ID, Duplicate: props.Duplicate, SpikeWhy: props.SpikeWhy,
+					})),
 				If(props.EventName != "", Span(css.Class("badge"), Attr("data-testid", "txn-event-chip"),
 					Attr("title", uistate.T("events.chipTitle", props.EventName)), "◈ "+props.EventName)),
 				// TX6b: spending-trend chip when this merchant has history — opens the merchant
@@ -1306,6 +1484,12 @@ func txnFrameRow(props txnFrameRowProps) ui.Node {
 		If(props.Vis.Category, Td(ClassStr("td-cat"),
 			Span(css.Class("td-cat-inner"),
 				Span(css.Class("td-cat-name"), props.Category),
+				// SM-2: on an uncategorized row, offer the category the rules and
+				// history already imply — one click, in the cell the answer belongs
+				// in. Its own component: it owns a click hook, and this row renders
+				// inside a variable-length loop.
+				If(props.Unfiled && !props.IsTransfer,
+					ui.CreateElement(txnCatSuggestChip, txnCatSuggestChipProps{TxnID: props.ID})),
 				If(props.AutoCategory, ui.CreateElement(txnAutoMark, txnAutoMarkProps{Why: props.AutoCategoryWhy}))))),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
 		If(props.Vis.User, Td(ClassStr(memClass), member)),
@@ -1403,6 +1587,18 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 			Label: uistate.T("receiptsplit.menuAction"), Icon: icon.Receipt, Section: organize,
 			TestID:   "txn-receipt-split-open",
 			OnSelect: func() { props.OnReceiptSplit(props.ID) },
+		})
+	}
+	// SM-2: categorize this one charge. The row chip is the one-click path when the
+	// local suggestion is confident; this is the secondary entry point that also
+	// works when it is not (or when there is no suggestion at all), opening the
+	// modal that shows the evidence, the full category list, and the Smart+ ask.
+	// Gated like the other category actions: a transfer leg has no category to file.
+	if !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{
+			Label: uistate.T("catSuggest.menuAction"), Icon: icon.Sparkles, Section: organize,
+			TestID:   "txn-categorize-open",
+			OnSelect: func() { uistate.SetCatSuggest(props.ID) },
 		})
 	}
 	// SM-1: clean up / map this merchant name — a per-transaction entry to the payee
@@ -1538,9 +1734,14 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 	if len(items) == 0 {
 		return Fragment()
 	}
+	// Name the trigger after its row. Every other control in this cell already is
+	// — the checkbox says "Select transaction: Coffee", the pencil says "Edit
+	// Coffee" — but the kebab said "Transaction actions" on all 3,229 rows, so a
+	// screen-reader user tabbing the actions column heard one identical name over
+	// and over with nothing to say which row they were about to act on.
 	return uiw.OverflowMenu(uiw.OverflowMenuProps{
 		Items:         items,
-		TriggerLabel:  uistate.T("transactions.rowActions"),
+		TriggerLabel:  uistate.T("transactions.rowActionsFor", props.Desc),
 		TriggerTestID: "txn-kebab-" + props.ID,
 	})
 }

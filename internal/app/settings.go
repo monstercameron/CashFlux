@@ -444,9 +444,8 @@ func musicSettings() uic.Node {
 		}),
 		Div(css.Class("toggle-row"),
 			Span(uistate.T("settings.musicVolume")),
-			Input(Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
-				Attr("aria-label", uistate.T("settings.musicVolume")),
-				Value(strconv.Itoa(pct)), OnInput(onVol), OnChange(onVolCommit)),
+			ui.Field(strconv.Itoa(pct), Type("range"), css.Class("set-range"), Attr("min", "0"), Attr("max", "100"), Attr("step", "1"),
+				Attr("aria-label", uistate.T("settings.musicVolume")), OnInput(onVol), OnChange(onVolCommit)),
 		),
 	)
 }
@@ -689,7 +688,7 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		return Div(css.Class("toggle-row"),
 			Span(label),
 			// aria-label mirrors the visible Span so the number field has an accessible name (WCAG 4.1.2).
-			Input(css.Class("rate-in"), Type("number"), Attr("aria-label", label), Value(strconv.Itoa(f.Int(props.Cfg))), OnInput(on)),
+			ui.NumField(strconv.Itoa(f.Int(props.Cfg)), css.Class("rate-in"), Type("number"), Attr("aria-label", label), OnInput(on)),
 		)
 	case widgetcfg.Select:
 		on := uic.UseEvent(func(e uic.Event) { props.OnSet(f.Key, e.GetValue()) })
@@ -707,8 +706,8 @@ func widgetFieldRow(props widgetFieldRowProps) uic.Node {
 		on := uic.UseEvent(func(v string) { props.OnSet(f.Key, v) })
 		return Div(css.Class("toggle-row", tw.FlexCol, tw.ItemsStart, tw.Gap1),
 			Span(f.Label),
-			Input(css.Class("set-input", tw.WFull), Type("text"), Attr("aria-label", f.Label),
-				Attr("spellcheck", "false"), Value(f.Str(props.Cfg)), OnInput(on)),
+			ui.Field(f.Str(props.Cfg), css.Class("set-input", tw.WFull), Type("text"), Attr("aria-label", f.Label),
+				Attr("spellcheck", "false"), OnInput(on)),
 		)
 	default:
 		return Fragment()
@@ -748,7 +747,7 @@ func freshnessRow(props freshnessRowProps) uic.Node {
 	return Div(css.Class("rate-row"),
 		Span(Style(map[string]string{"width": "110px"}), props.Label),
 		// aria-label mirrors the row's type label so the staleness-window field has an accessible name.
-		Input(css.Class("rate-in"), Type("number"), Attr("aria-label", uistate.T("settings.freshnessAria", props.Label)), Value(strconv.Itoa(props.Days)), OnInput(on)),
+		ui.NumField(strconv.Itoa(props.Days), css.Class("rate-in"), Type("number"), Attr("aria-label", uistate.T("settings.freshnessAria", props.Label)), OnInput(on)),
 		Span(css.Class(tw.TextFaint), uistate.T("settings.freshNever")),
 	)
 }

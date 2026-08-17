@@ -7,6 +7,8 @@ package screens
 import (
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -87,11 +89,11 @@ func payeeAliasSection(_ struct{}) ui.Node {
 	}
 
 	addRow := Form(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2), OnSubmit(add),
-		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.rawLabel")),
-			Placeholder(uistate.T("payeealias.rawPlaceholder")), Value(rawS.Get()), OnInput(onRaw)),
+		uiw.Field(rawS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.rawLabel")),
+			Placeholder(uistate.T("payeealias.rawPlaceholder")), OnInput(onRaw)),
 		Span(css.Class("muted"), "→"),
-		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")),
-			Placeholder(uistate.T("payeealias.displayPlaceholder")), Value(dispS.Get()), OnInput(onDisp)),
+		uiw.Field(dispS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")),
+			Placeholder(uistate.T("payeealias.displayPlaceholder")), OnInput(onDisp)),
 		Button(css.Class("btn btn-tool"), Type("submit"), Attr("data-testid", "payeealias-add"), uistate.T("payeealias.addBtn")),
 	)
 
@@ -144,8 +146,7 @@ func payeeAliasRow(props payeeAliasRowProps) ui.Node {
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "payeealias-row"),
 		Span(css.Class(tw.Flex1, "t-caption"), props.Alias.RawPayee),
 		Span(css.Class("muted"), "→"),
-		Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")),
-			Value(dispS.Get()), OnInput(onDisp)),
+		uiw.Field(dispS.Get(), css.Class("field"), Type("text"), Attr("aria-label", uistate.T("payeealias.displayLabel")), OnInput(onDisp)),
 		If(dirty, Button(css.Class("btn btn-tool"), Type("button"), OnClick(save), uistate.T("action.save"))),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "payeealias-del"),
 			Attr("aria-label", uistate.T("action.delete")), OnClick(del), uistate.T("action.delete")),

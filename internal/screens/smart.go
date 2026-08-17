@@ -94,9 +94,8 @@ func smartInsightsTriage(props insightsPagerProps) ui.Node {
 	}
 
 	controls := Div(css.Class("filter-strip-controls", tw.FlexWrap), Attr("data-testid", "smart-triage"),
-		Input(css.Class("field"), Type("search"), Attr("data-testid", "smart-triage-search"),
-			Attr("aria-label", uistate.T("smart.triageSearch")), Placeholder(uistate.T("smart.triageSearch")),
-			Value(query.Get()), OnInput(onQuery)),
+		uiw.Field(query.Get(), css.Class("field"), Type("search"), Attr("data-testid", "smart-triage-search"),
+			Attr("aria-label", uistate.T("smart.triageSearch")), Placeholder(uistate.T("smart.triageSearch")), OnInput(onQuery)),
 		Select(css.Class("fctrl-select"), Attr("data-testid", "smart-triage-sev"),
 			Attr("aria-label", uistate.T("smart.triageSevLabel")), Title(uistate.T("smart.triageSevLabel")), OnChange(onSev),
 			Option(Value(""), SelectedIf(minSev.Get() == ""), uistate.T("smart.triageSevAll")),

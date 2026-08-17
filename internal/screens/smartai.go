@@ -405,11 +405,9 @@ func smartAIControl(props smartAIControlProps) ui.Node {
 	var control ui.Node
 	if props.Spec.input {
 		control = Div(ClassStr(tw.Fold(tw.Flex, tw.ItemsCenter, tw.Gap2)),
-			Input(css.Class("field field-wide"), Type("text"),
+			uiw.Field(question.Get(), css.Class("field field-wide"), Type("text"),
 				Attr("data-testid", "smart-ai-input-"+props.Code),
-				Attr("aria-label", props.Spec.placeholder), Placeholder(props.Spec.placeholder),
-				Value(question.Get()), OnInput(onInput),
-			),
+				Attr("aria-label", props.Spec.placeholder), Placeholder(props.Spec.placeholder), OnInput(onInput)),
 			Button(css.Class("btn btn-primary"), Type("button"),
 				Attr("data-testid", "smart-ai-btn-"+props.Code), OnClick(run), btnLabel,
 			),

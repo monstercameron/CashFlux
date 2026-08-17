@@ -296,8 +296,8 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	anchorVal := uistate.LoadPrefs().PayCycleAnchor
 	setup := Div(css.Class("bills-smart-setup"),
 		labeledField(uistate.T("bills.smartAnchorLabel"),
-			Input(css.Class("field"), Type("date"), Attr("data-testid", "bills-smart-anchor"),
-				Attr("aria-label", uistate.T("bills.smartAnchorLabel")), Value(anchorVal), OnInput(onAnchor), OnChange(onAnchorCommit))),
+			uiw.Field(anchorVal, css.Class("field"), Type("date"), Attr("data-testid", "bills-smart-anchor"),
+				Attr("aria-label", uistate.T("bills.smartAnchorLabel")), OnInput(onAnchor), OnChange(onAnchorCommit))),
 		labeledField(uistate.T("bills.smartFreq"),
 			uiw.Segmented(uiw.SegmentedProps{
 				Label:    uistate.T("bills.smartFreq"),
@@ -432,9 +432,8 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 			Attr("data-testid", "bills-smart-adv"), OnClick(toggleAdv), Text(uistate.T("bills.smartAdvanced"))),
 		If(advOpen.Get(), Fragment(
 			labeledField(uistate.T("bills.smartKeep", base),
-				Input(css.Class("field bills-smart-keep"), Type("number"), Attr("min", "0"), Step("0.01"),
-					Attr("aria-label", uistate.T("bills.smartKeep", base)), Attr("data-testid", "bills-smart-keep"),
-					Value(minorInput(plan.Cfg.MinKeepMinor, dec)), OnInput(onKeep), OnChange(onKeepCommit))),
+				uiw.NumField(minorInput(plan.Cfg.MinKeepMinor, dec), css.Class("field bills-smart-keep"), Type("number"), Attr("min", "0"), Step("0.01"),
+					Attr("aria-label", uistate.T("bills.smartKeep", base)), Attr("data-testid", "bills-smart-keep"), OnInput(onKeep), OnChange(onKeepCommit))),
 			labeledField(uistate.T("bills.smartVarsLabel"),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "bills-smart-vars"),
 					Span(css.Class("rec-flow-var"), Title(uistate.T("bills.smartVarHint")), "bills_even_gain"),

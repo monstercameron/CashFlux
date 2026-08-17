@@ -856,13 +856,13 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 	case budgeting.IncomeModePaychecks:
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbPaycheckMin")),
-			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-paycheck-min"),
-				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), Value(minorToMajorStr(d.PaycheckMin, props.Base)), OnInput(onThreshold)))
+			uiw.NumField(minorToMajorStr(d.PaycheckMin, props.Base), css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-paycheck-min"),
+				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), OnInput(onThreshold)))
 	case budgeting.IncomeModeFixed:
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbFixedAmount")),
-			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-fixed-amount"),
-				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), Value(minorToMajorStr(d.Fixed, props.Base)), OnInput(onFixed)))
+			uiw.NumField(minorToMajorStr(d.Fixed, props.Base), css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-fixed-amount"),
+				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), OnInput(onFixed)))
 	}
 
 	// The income-source ledger appears only in by-source mode.
@@ -1186,9 +1186,8 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 				Span(css.Class("zbb-savings-type", tw.TextDim), sa.Type)),
 			Div(css.Class("zbb-savings-edit"),
 				Span(css.Class("zbb-savings-cur", tw.TextDim), currency.Symbol(cur)),
-				Input(css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
-					Attr("data-testid", "budgets-savings-amt-"+sa.AccountID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria", sa.Name)),
-					Value(val), OnInput(onEdit), OnChange(onCommit)),
+				uiw.NumField(val, css.Class("field zbb-savings-input fig"), Type("number"), Step("1"), Attr("min", "0"),
+					Attr("data-testid", "budgets-savings-amt-"+sa.AccountID), Attr("aria-label", uistate.T("budgets.savingsMonthlyAria", sa.Name)), OnInput(onEdit), OnChange(onCommit)),
 				Span(css.Class("zbb-savings-per", tw.TextDim), uistate.T("budgets.savingsPerMonth")))),
 		goalNode,
 	)
@@ -1879,11 +1878,10 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		if len(v.Statuses) >= 6 {
 			searchBar = Div(css.Class("budget-search"),
 				uiw.Icon(icon.Search, css.Class("budget-search-icon", tw.ShrinkO, tw.W4, tw.H4)),
-				Input(css.Class("field budget-search-input"), Type("text"),
+				uiw.Field(search.Get(), css.Class("field budget-search-input"), Type("text"),
 					Attr("data-testid", "budgets-search"),
 					Attr("aria-label", uistate.T("budgets.searchLabel")),
-					Placeholder(uistate.T("budgets.searchPlaceholder")),
-					Value(search.Get()), OnInput(onSearch)))
+					Placeholder(uistate.T("budgets.searchPlaceholder")), OnInput(onSearch)))
 		}
 		var matchNote ui.Node = Fragment()
 		if q != "" && len(visible) == 0 {

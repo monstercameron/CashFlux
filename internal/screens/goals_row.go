@@ -282,9 +282,8 @@ func GoalRow(props goalRowProps) ui.Node {
 		case targetEditing.Get():
 			mainFig = Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(saveTargetEdit),
 				Span(css.Class("budget-spent"), fmtMoney(cov)), Span(" / "),
-				Input(css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
-					Attr("data-testid", "goal-target-input-"+g.ID), Attr("aria-label", uistate.T("goals.targetLabel")),
-					Value(targetDraft.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onTargetDraft)),
+				uiw.NumField(targetDraft.Get(), css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+					Attr("data-testid", "goal-target-input-"+g.ID), Attr("aria-label", uistate.T("goals.targetLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onTargetDraft)),
 				Button(css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "goal-target-save-"+g.ID),
 					Attr("aria-label", uistate.T("action.save")), Title(uistate.T("action.save")), uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))),
 				Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "goal-target-cancel-"+g.ID),

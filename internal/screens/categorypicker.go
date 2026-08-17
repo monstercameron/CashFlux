@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/catname"
@@ -199,10 +201,9 @@ func CategoryPicker(props CategoryPickerProps) ui.Node {
 	return Div(css.Class("catpick-back"), Attr("data-testid", "catpick"),
 		Div(css.Class("catpick"), Attr("role", "dialog"), Attr("aria-label", uistate.T("catpick.title")),
 			Div(css.Class("catpick-search"),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "catpick-search"),
+				uiw.Field(query.Get(), css.Class("field"), Type("text"), Attr("data-testid", "catpick-search"),
 					Attr("aria-label", uistate.T("catpick.searchPlaceholder")),
-					Attr("placeholder", uistate.T("catpick.searchPlaceholder")),
-					Value(query.Get()), OnInput(onQuery), OnKeyDown(onKey)),
+					Attr("placeholder", uistate.T("catpick.searchPlaceholder")), OnInput(onQuery), OnKeyDown(onKey)),
 			),
 			Div(css.Class("catpick-list"),
 				If(len(matches) == 0, P(css.Class("catpick-empty"), uistate.T("catpick.noMatch", typed))),

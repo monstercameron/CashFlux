@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -144,26 +146,24 @@ func PlanAddForm(props PlanAddFormProps) ui.Node {
 
 	form := Form(css.Class("plan-add-form"), OnSubmit(save),
 		P(css.Class("muted"), uistate.T("plans.hint")),
-		Input(append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"),
-			Placeholder(uistate.T("plans.namePlaceholder")), Value(name.Get()), OnInput(onName)}, errAttrs("plan-err", errS.Get())...)...),
+		uiw.Field(name.Get(), append([]any{css.Class("field"), Attr("id", "plan-add"), Type("text"), Attr("aria-required", "true"),
+			Placeholder(uistate.T("plans.namePlaceholder")), OnInput(onName)}, errAttrs("plan-err", errS.Get())...)...),
 		Div(css.Class("form-grid"),
 			labeledField(uistate.T("plans.horizonPlaceholder"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"),
-					Value(horizon.Get()), Step("1"), OnInput(onHorizon))),
+				uiw.NumField(horizon.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Attr("aria-required", "true"), Step("1"), OnInput(onHorizon))),
 			// Account prefill: selecting an account fills the start-balance input from that
 			// account's current balance so the user doesn't have to look it up.
 			Label(css.Class("field-label"), uistate.T("plans.prefillAccount"),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("plans.prefillAccount")),
 					Attr("data-testid", "plan-prefill-account"), OnChange(onAccount), acctOpts)),
 			labeledField(uistate.T("plans.startPlaceholder", base),
-				Input(css.Class("field"), Type("number"), Value(start.Get()), Step("0.01"), OnInput(onStart))),
+				uiw.NumField(start.Get(), css.Class("field"), Type("number"), Step("0.01"), OnInput(onStart))),
 			labeledField(uistate.T("plans.monthlyPlaceholder", base),
-				Input(css.Class("field"), Type("number"), Value(monthly.Get()), Step("0.01"), OnInput(onMonthly))),
+				uiw.NumField(monthly.Get(), css.Class("field"), Type("number"), Step("0.01"), OnInput(onMonthly))),
 			labeledField(uistate.T("plans.onceAmtPlaceholder", base),
-				Input(css.Class("field"), Type("number"), Value(onceAmt.Get()), Step("0.01"), OnInput(onOnceAmt))),
+				uiw.NumField(onceAmt.Get(), css.Class("field"), Type("number"), Step("0.01"), OnInput(onOnceAmt))),
 			labeledField(uistate.T("plans.onceMonthPlaceholder"),
-				Input(css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", horizon.Get()),
-					Value(onceMonth.Get()), Step("1"), OnInput(onOnceMonth))),
+				uiw.NumField(onceMonth.Get(), css.Class("field"), Type("number"), Attr("min", "1"), Attr("max", horizon.Get()), Step("1"), OnInput(onOnceMonth))),
 		),
 		errText("plan-err", errS.Get()),
 		If(errS.Get() == "" && savedS.Get() != "", P(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), savedS.Get())),

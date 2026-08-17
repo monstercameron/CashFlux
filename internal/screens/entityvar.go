@@ -19,6 +19,7 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -166,8 +167,8 @@ func entityVarField(kind entityVarKind, siblings []varEntity, selfID, inputID, w
 	base := entityVarBase(kind, varName, name)
 	warn := entityVarCollision(kind, siblings, selfID, varName, name)
 	return Div(css.Class("entity-var-block"),
-		Input(css.Class("field"), Attr("id", inputID), Type("text"),
-			Placeholder(entityVarPlaceholder(kind, name)), Value(varName), OnInput(onInput)),
+		uiw.Field(varName, css.Class("field"), Attr("id", inputID), Type("text"),
+			Placeholder(entityVarPlaceholder(kind, name)), OnInput(onInput)),
 		Div(css.Class("entity-var-preview"),
 			Span(css.Class("entity-var-preview-lead"), uistate.T("budgets.varNameGenerates")),
 			Span(ClassStr("entity-var-chip"), base+"_"+kind.ChipField),

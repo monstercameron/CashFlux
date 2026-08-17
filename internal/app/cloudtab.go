@@ -449,9 +449,9 @@ func CloudConnectionPane() uic.Node {
 	}
 
 	tokenField := Fragment(
-		Input(css.Class("set-input"), Type("password"),
+		ui.Field(serverToken.Get(), css.Class("set-input"), Type("password"),
 			Attr("aria-label", uistate.T("settings.backendToken")), Attr("data-testid", "sync-server-token"),
-			Placeholder(uistate.T("settings.backendToken")), Value(serverToken.Get()), OnInput(onToken)),
+			Placeholder(uistate.T("settings.backendToken")), OnInput(onToken)),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-test"), OnClick(onTest), uistate.T("settings.testBackend")),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "sync-now"), OnClick(onSyncNow), uistate.T("settings.syncNow")),
@@ -517,9 +517,9 @@ func CloudConnectionPane() uic.Node {
 			If(seg != "commercial" && manualAddressOpen.Get(), Fragment(
 				If(seg == "remote", P(css.Class(tw.Text12, tw.TextDanger), uistate.T("sync.remoteTrustDisclosure"))),
 				If(seg == "local", P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.serverAddressIntro"))),
-				Input(css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
+				ui.Field(serverURL.Get(), css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
 					Attr("data-testid", "sync-server-url"),
-					Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onURL)),
+					Placeholder(defaultBackendURL), OnInput(onURL)),
 			)),
 			If(seg != "commercial", Fragment(
 				If(phase == discoveryChecking, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-checking"), uistate.T("sync.discoveryChecking"))),
@@ -536,9 +536,9 @@ func CloudConnectionPane() uic.Node {
 			// Commercial: a fixed-shape backend — address field (defaults to
 			// whatever's saved, since CashFlux Cloud isn't a single hardcoded
 			// domain yet), then straight to sign-in, no capability probing.
-			If(commercial, Input(css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
+			If(commercial, ui.Field(serverURL.Get(), css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
 				Attr("data-testid", "sync-server-url"),
-				Placeholder(defaultBackendURL), Value(serverURL.Get()), OnInput(onURL))),
+				Placeholder(defaultBackendURL), OnInput(onURL))),
 			If(commercial && !signedIn,
 				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPricingTeaser", cloudPrice))),
 

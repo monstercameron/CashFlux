@@ -731,9 +731,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						// number swap on open doesn't read as a glitch (the capmath line below
 						// carries the arithmetic).
 						If(props.EffectiveCap != "", Span(css.Class("budget-limit-basetag"), Attr("data-testid", "budget-limit-basetag-"+s.Budget.ID), uistate.T("budgets.baseLimitTag"))),
-						Input(css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
-							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")),
-							Value(limitDraft.Get()), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)),
+						uiw.NumField(limitDraft.Get(), css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)),
 						Button(css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
 							Attr("aria-label", uistate.T("action.save")), Title(uistate.T("action.save")), uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))),
 						Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+s.Budget.ID),
