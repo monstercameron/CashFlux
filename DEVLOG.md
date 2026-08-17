@@ -1,3 +1,65 @@
+## 2026-08-16 — Transactions bug bash, stage 2: fixing the things that measured two populations
+
+Stage 2 of a staged bug bash of `/transactions`. Stage 1 read the transaction code end to end; this
+stage drove the served build and reviewed the files that actually paint the page. Sixteen findings
+survived adversarial verification and all sixteen are fixed (C648-C663, plus C629/C632/C634/C640
+carried over from stage 1).
+
+The first thing stage 2 produced was a scoping correction that should have come earlier. Stage 1's
+eight lanes included `transactions.go` and `transactions_row.go` — both **dead code**, reachable only
+from each other and kept compiling by `var _ = transactionsLegacy`. A whole lane audited a screen no
+user can open, and the two files that do render the ledger, `transactions_widget.go` and
+`transactions_tiles.go`, had no lane at all. Filed as C646. The lesson is cheap and I paid full price
+for it: establish the live render path before partitioning the review, not after.
+
+**The pattern under most of these bugs is one thing: a count and a money figure, printed side by
+side, measured against different populations.** It showed up five separate times.
+
+- The order-group badge took its item count from the link and its total from the visible rows, so a
+  filter that hid one member printed "3 items · $47.00" over a real $65.00 (C648).
+- The count line's net skipped rows that failed FX conversion while the count beside it included
+  them (C657) — the same defect as C630 in the upcoming strip, found independently in stage 1.
+- The duplicates badge counted the filtered view; the panel it opens scans the whole ledger (C655).
+- Select-all and Export CSV re-derived their own population and got a *different* one than the table:
+  no member lens, no payee-alias resolver (C649).
+- Bulk-delete's undo snapshot covered the ticked rows, but the delete also removes the reciprocal leg
+  of any selected transfer — so undo restored half a transfer (C656).
+
+Every one of these is the same failure of discipline: a second consumer recomputing "what are we
+looking at?" instead of being handed it. The fixes mostly delete the recomputation. `doExportCSV` and
+`selectAllFiltered` now take `props.Shown`, the exact slice the table and count line are built from,
+so they agree with the screen by construction rather than by two implementations staying in step.
+That is the version that cannot drift.
+
+**C629 is the one that mattered most.** A transfer is two independent rows and the edit form only ever
+wrote the one the user opened. Stage 2 reproduced it live: a $77 transfer edited to $120 left the
+other leg at $77 and moved the ledger's net by exactly $43 — money appearing from nowhere, in an app
+whose entire job is to be right about money. It also broke delete-both, since a pair is matched on
+equal dates and exactly opposite amounts, so an edited leg no longer looked reciprocal and deleting
+it silently orphaned its counterpart. `PutTransactionWithTransferPair` takes the pre-edit copy too,
+because the pair can only be located while the old values still match — the fix depends on
+information the obvious signature would have thrown away. Five tests, including the delete-both path
+afterwards, which is the half a narrower fix would have missed.
+
+**Three candidates I killed before they reached the report**, all mine, all from reading the DOM too
+early: "the count line ignores the filter" (read mid-debounce), "rows-per-page All is broken" (the
+table is virtualized — 601 unique row ids across a scroll, bottom lands on Aug 2021), and "Clear
+search does nothing" (it works). Filtering this ledger takes 1.5-3.6s per change with the main thread
+blocked in >1.2s chunks, which makes premature assertion the single most productive way to generate
+false findings here. I wrote the settle-helper I gave the stage 2 agents *after* being burned, and
+told them explicitly to poll for 20s before believing any staleness claim.
+
+Two notes on working in a shared tree. A concurrent session was bug-bashing the same page throughout
+(C620-C628), so these findings were deduped against theirs rather than duplicated — and their C626
+independently confirmed the virtualization I had already refuted. Their C628 says the served build
+lacks C619's pending-search indicator; the indicator *is* in the source, so the likelier diagnosis is
+that it never paints, because setting the pending flag itself triggers a full re-filter. Worth
+checking before someone re-implements it. Separately, an in-flight edit in
+`internal/app/settings_section.go` left the shared tree uncompilable for ~20 minutes (`internal/ui`
+imported as `ui` while new code called `uiw.`, and a `css.Rule` concatenated to a string `Class`).
+I unblocked it the only type-correct way — `uiw.` to `ui.`, `tw.Mt045` moved into `Extra` — without
+touching the migration itself.
+
 ## 2026-08-16 — I built a package that already existed (C381)
 
 Worth writing down because the mistake was entirely avoidable. The ticket says "from local recurring
@@ -163,6 +225,32 @@ are testable properties rather than two lines in a click handler.
 **C625/C626 are the same shape as C653 in a different surface.** Dimmed rows you can still click are
 not a busy state; a table that renders forty of 3,284 rows and declares nothing is lying about its own
 size. Both are cases of the interface knowing something it did not say.
+
+**The adversarial pass earned its keep, and the most galling finding was mine twice over.**
+Two reviewers ran against the finished change — one on correctness, one as the person using
+it. The correctness pass found a conditional hook in `reviewSingleView`: it is a plain
+function, not a component, so the `ui.UseEvent` on the category select belonged to the
+surface's fiber and ran only in single mode. It was inert purely because it happened to be
+the last hook in the render. What makes it worth recording is that I had extracted
+`reviewConfirmAll` into its own component three functions further down *specifically* to
+avoid that exact hazard, in the same sitting. Knowing a rule and applying it everywhere the
+rule applies are different skills.
+
+It also caught that removing the post-commit `advance()` traded one wrong assumption for
+another. `GroupByMerchant` ranks by group SIZE among other things, so a per-charge commit
+shrinks its own group and can push it behind a neighbour — holding position by index then
+lands on a merchant the user has never seen, which is the same "one click, unpredictable
+outcome" complaint C653 opened with. The card is held by merchant key now, index second.
+
+The UX pass found the one that would have embarrassed this whole ticket: the duplicate
+confirmation's "Removing: … / Keeping: …" was two lines separated by `
+`, rendered into a
+single `<p>`, which the browser collapses. The distinction C652 exists to draw was being
+thrown away by the layout engine, and every test I had written still passed — because the
+string was correct and the rendering was not.
+
+The general lesson from both: I checked the things I had just been thinking about. What
+survived were the things adjacent to them.
 
 ## 2026-08-16 — a preview that can drift is worse than no preview (C408)
 
