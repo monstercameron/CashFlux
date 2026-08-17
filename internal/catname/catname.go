@@ -210,7 +210,11 @@ func Path(cats []domain.Category, c domain.Category) string {
 	for _, x := range cats {
 		byID[x.ID] = x
 	}
-	parts := []string{c.Name}
+	// Normalize each segment for DISPLAY (C619): a name stored with stray or
+	// doubled whitespace is the same category to this package (EqualNames folds
+	// it), so rendering "Work >  travel " while treating it as "travel" would let
+	// the storage artefact leak onto the screen.
+	parts := []string{Normalize(c.Name)}
 	seen := map[string]bool{c.ID: true}
 	for id, steps := c.ParentID, 0; id != "" && steps <= len(cats); steps++ {
 		if seen[id] {
@@ -221,7 +225,7 @@ func Path(cats []domain.Category, c domain.Category) string {
 		if !ok {
 			break
 		}
-		parts = append([]string{p.Name}, parts...)
+		parts = append([]string{Normalize(p.Name)}, parts...)
 		id = p.ParentID
 	}
 	return strings.Join(parts, " > ")
