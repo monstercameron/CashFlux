@@ -1104,7 +1104,7 @@ deterministic + local-first (fits the house rules; the only exception is FP-T3d 
 bottom-up per SDLC.
 
 **Tier 1 — whole domains the comps own that CashFlux lacks:**
-- [~] **FP-T1a — Retirement / long-horizon projection engine.** Add a pure `internal/retirement` engine:
+- [x] **FP-T1a — Retirement / long-horizon projection engine.** Add a pure `internal/retirement` engine:
   compounding of balances + contributions to a retirement age, expected-return + inflation assumptions,
   real-vs-nominal output; then a `/planning` (or dedicated) surface.
   — ENGINE DONE (2026-08-16), `internal/retirement`. SURFACE STILL OPEN (see the note below).
@@ -1122,9 +1122,23 @@ bottom-up per SDLC.
 
   Bad inputs return `Known=false`, never a zero balance — a zero here reads as "you will have nothing".
 
-  REMAINING: the `/planning` surface. Left open rather than closed because the ticket names it and it
-  is a real piece of work, not a wiring detail.
-- [~] **FP-T1b — Retirement drawdown / "will it last" + FIRE number.** Decumulation engine (nest egg,
+  SURFACE DONE (2026-08-16): the `/planning` retirement card. It projects from the household's OWN
+  retirement accounts rather than a typed starting balance — asking someone to re-enter a number the
+  app already holds is how a projection comes to disagree with the accounts page beside it. Real
+  dollars lead and nominal sits beneath, deliberately smaller, because it is the figure that flatters
+  and means less. The assumptions are on screen, adjustable, and restated under the figures they
+  produced.
+
+  FOUND WHILE VERIFYING: the sample dataset typed its 401(k) and Roth IRA as generic
+  `TypeInvestment`, so the flagship feature had nothing to project on a first run. A 401(k) IS a
+  retirement account and `TypeRetirement` already exists; retyping them is safe because
+  `isInvestmentAccount` has always included `TypeRetirement`, so /investments still shows them.
+
+  VERIFIED IN A BROWSER: a Playwright probe drives the card and asserts the property the engine is
+  about — real BELOW nominal under inflation. 8/8, with the figures visible end-to-end
+  ("About $241,646.16 in today's money, in 25 years" against "$505,953.41 in the dollars of that
+  year").
+- [x] **FP-T1b — Retirement drawdown / "will it last" + FIRE number.** Decumulation engine (nest egg,
   withdrawal rate/amount, return, inflation → depletion age); FIRE target = annual-expenses ÷ SWR,
   solve years-to-FI at current savings rate.
   — ENGINE DONE (2026-08-16), same package as FP-T1a because accumulation and decumulation share a
@@ -1143,6 +1157,12 @@ bottom-up per SDLC.
   unreachable target rather than a large number, so "never" is never presented as "eventually" — and it
   takes a REAL return, because mixing a nominal growth path with a today's-money target is the easiest
   way to be cheerfully years wrong.
+
+  SURFACE DONE (2026-08-16), on the same `/planning` card as FP-T1a. One spending figure drives BOTH
+  the drawdown and the FIRE number, so the two cannot disagree about what the life costs. The 4%
+  withdrawal rate is stated as "a widely-used rule of thumb about one historical period, not a
+  guarantee" — it is the kind of number people plan a decade around, and presenting it as bare
+  arithmetic would be the app lending it authority it does not have.
 - [~] **FP-T1c — Investment performance (true return).** The `/investments` growth chart plots a *balance*
   line, not a return. Add money-/time-weighted return (IRR/TWR) over dated contributions + holding
   values. (`internal/portfolio` is the seam.)

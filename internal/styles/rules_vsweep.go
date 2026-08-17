@@ -757,4 +757,34 @@ func registerVSweep() {
 		gap("0.4rem"),
 	)
 
+	// ─── FP-T1a/T1b: the retirement card ─────────────────────────────────────
+	rule(".retire-inputs",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(9rem, 1fr))"),
+		gap("0.6rem"),
+		margin("0.6rem 0 0.8rem"),
+	)
+	rule(".retire-field",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.15rem"),
+	)
+	// The real-dollar figure is the headline; everything else supports it.
+	rule(".retire-headline",
+		margin("0"),
+		fontSize("1.1rem"),
+	)
+	rule(".retire-read",
+		margin("0.4rem 0 0"),
+		fontSize("0.9rem"),
+	)
+	// Running out is the one reading here that should raise its voice; lasting is
+	// stated calmly, because a good answer does not need emphasis to be believed.
+	rule(".retire-short",
+		color("var(--warn, var(--text))"),
+	)
+	rule(".retire-ok",
+		color("var(--text)"),
+	)
+
 }

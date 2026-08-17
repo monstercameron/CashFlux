@@ -497,6 +497,27 @@ var vSweepKeys = Catalog{
 	// DP1 — overdue rows are not "next 30 days".
 	"rhythm.agendaOverdue": "Overdue",
 
+	// FP-T1a/T1b — the retirement card on /planning. Real dollars lead; the
+	// assumptions are stated back under the figures they produced.
+	"retire.title":           "Retirement",
+	"retire.basis":           "Projected from %d retirement account(s), %s today.",
+	"retire.noAccounts":      "Mark an account as Retirement and this will project it forward.",
+	"retire.needsHorizon":    "Set how many years until you retire to see a projection.",
+	"retire.years":           "Years until you retire",
+	"retire.contribution":    "Added each year (%s)",
+	"retire.spend":           "Spending each year in retirement (%s)",
+	"retire.return":          "Expected return (%)",
+	"retire.inflation":       "Expected inflation (%)",
+	"retire.potReal":         "About %s in today's money, in %d years",
+	"retire.potNominal":      "%s in the dollars of that year",
+	"retire.split":           "%s of that is what you put in; %s is growth.",
+	"retire.lastsYears":      "At that spending it lasts about %d years.",
+	"retire.lastsBeyond":     "At that spending it outlasts %d years, ending around %s in today's money.",
+	"retire.fireYears":       "You would need about %s to stop working. At this rate, roughly %d years.",
+	"retire.fireUnreachable": "You would need about %s to stop working — the current rate does not get there.",
+	"retire.fireSource":      "Uses a %.0f%% withdrawal rate — a widely-used rule of thumb about one historical period, not a guarantee.",
+	"retire.assumptions":     "Assumes %.1f%% return and %.1f%% inflation — %.2f%% after inflation.",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

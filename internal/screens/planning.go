@@ -583,7 +583,12 @@ func Planning() ui.Node {
 
 	// C168: lead with the near-term liquid runway, then affordability, the 12-month forecast,
 	// and the saved what-if scenarios. Widgetized bento surface (like /debt, /investments).
-	tiles := []ui.Node{toolbar, runwayCard, affordCard, forecastCard, plansCard}
+	// FP-T1a/T1b: the long-horizon card. It sits after the near-term cards
+	// (runway, affordability, forecast) because it answers a different timescale —
+	// putting a thirty-year projection above "can I afford this" would bury the
+	// question people open /planning with.
+	tiles := []ui.Node{toolbar, runwayCard, affordCard, forecastCard, plansCard,
+		ui.CreateElement(retirementTile, base)}
 	if showFormulas.Get() {
 		tiles = append(tiles, planTile("plan-formula", Fragment(
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("planning.formulaHint")),

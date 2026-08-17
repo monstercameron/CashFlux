@@ -1,3 +1,40 @@
+## 2026-08-16 - the sample had no retirement accounts (FP-T1a/T1b surface)
+
+Building the card was routine. Verifying it was not, and the verification is the reason to write this
+down.
+
+The probe reported "Projected from 0 retirement account(s), $0.00 today". The card was correct - it
+showed its empty state and said which accounts would feed it - but the flagship long-horizon feature
+had nothing to show on a first run, which is close to having no feature at all for anyone evaluating
+the app.
+
+The cause: the sample dataset types "Marcus's 401(k)" and "Roth IRA" as `TypeInvestment`. A 401(k) is a
+retirement account, `TypeRetirement` exists, and the sample simply did not use it - presumably because
+until today nothing distinguished them. Retyping is safe: `isInvestmentAccount` has always included
+`TypeRetirement`, so both still appear on /investments unchanged.
+
+Worth noting as a pattern: a new feature that reads a field nobody previously depended on will find
+that field is not populated the way its name implies. The data was not wrong before, because nothing
+was asking.
+
+The design decisions in the card itself:
+
+**It projects from the accounts, not from a typed number.** A starting balance the user re-enters is
+one more thing to keep in sync, and the moment it drifts the projection disagrees with the accounts
+page next to it.
+
+**Real dollars lead, nominal sits beneath in smaller type.** The nominal figure is larger and means
+less, and putting the bigger number first would be the app flattering itself.
+
+**One spending figure drives both the drawdown and the FIRE number.** They answer different questions
+from the same input, and two inputs would eventually disagree about what the life costs.
+
+**The 4% rate is labelled as a rule of thumb about one historical period.** People plan a decade around
+that number. Presenting it as bare arithmetic lends it authority the app cannot back.
+
+Verified in a browser rather than reasoned: the probe drives the inputs and asserts real is BELOW
+nominal - the property the whole engine exists for. 8/8.
+
 ## 2026-08-16 - a doubled balance is not a return (FP-T1c)
 
 The chart plots a balance. A balance that doubled tells you nothing about performance, because it
